@@ -42,6 +42,7 @@ import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
@@ -154,6 +155,12 @@ public class ProtobufSchemaUtils {
       // the non-normalized schema to serialize message indexes
       for (TypeElement typeElement : protoFile.getTypes()) {
         if (typeElement instanceof MessageElement) {
+          if (normalize) {
+            TypeElementInfo typeInfo = ctx.getType(typeElement.getName(), true);
+            if (typeInfo != null && typeInfo.isMap()) {
+              continue;  // don't emit synthetic map message
+            }
+          }
           try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
             sb.append(toString(ctx, (MessageElement) typeElement, normalize));
           }
@@ -234,9 +241,6 @@ public class ProtobufSchemaUtils {
     String responseType = rpc.getResponseType();
     if (normalize) {
       responseType = resolve(ctx, responseType);
-      if (responseType == null) {
-        throw new IllegalArgumentException("Could not resolve type: " + rpc.getResponseType());
-      }
     }
     sb.append(responseType);
     sb.append(")");
@@ -407,6 +411,12 @@ public class ProtobufSchemaUtils {
       // the non-normalized schema to serialize message indexes
       for (TypeElement typeElement : type.getNestedTypes()) {
         if (typeElement instanceof MessageElement) {
+          if (normalize) {
+            TypeElementInfo typeInfo = ctx.getType(typeElement.getName(), true);
+            if (typeInfo != null && typeInfo.isMap()) {
+              continue;  // don't emit synthetic map message
+            }
+          }
           try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
             appendIndented(sb, toString(ctx, (MessageElement) typeElement, normalize));
           }
@@ -492,19 +502,35 @@ public class ProtobufSchemaUtils {
   private static String toString(Context ctx, FieldElement field, boolean normalize) {
     StringBuilder sb = new StringBuilder();
     Label label = field.getLabel();
+    String fieldType = field.getType();
+    ProtoType fieldProtoType = ProtoType.get(fieldType);
+    if (normalize) {
+      if (!fieldProtoType.isScalar() && !fieldProtoType.isMap()) {
+        // See if the fieldType resolves to a message representing a map
+        fieldType = resolve(ctx, fieldType);
+        TypeElementInfo typeInfo = ctx.getTypeForFullName(fieldType, true);
+        if (typeInfo != null && typeInfo.isMap()) {
+          fieldProtoType = typeInfo.getMapType();
+        } else {
+          fieldProtoType = ProtoType.get(fieldType);
+        }
+      }
+      ProtoType mapValueType = fieldProtoType.getValueType();
+      if (fieldProtoType.isMap() && mapValueType != null) {
+        String valueType = ctx.resolve(mapValueType.toString(), true);
+        if (valueType != null) {
+          fieldProtoType = ProtoType.get(
+              // Note we add a leading dot to valueType
+              "map<" + fieldProtoType.getKeyType() + ", ." + valueType + ">"
+          );
+        }
+        label = null;  // don't emit label for map
+      }
+      fieldType = fieldProtoType.toString();
+    }
     if (label != null) {
       sb.append(label.name().toLowerCase(Locale.US));
       sb.append(" ");
-    }
-    String fieldType = field.getType();
-    if (normalize) {
-      ProtoType protoType = ProtoType.get(fieldType);
-      if (!protoType.isScalar() && !protoType.isMap()) {
-        fieldType = resolve(ctx, fieldType);
-        if (fieldType == null) {
-          throw new IllegalArgumentException("Could not resolve type: " + field.getType());
-        }
-      }
     }
     sb.append(fieldType);
     sb.append(" ");
@@ -515,9 +541,8 @@ public class ProtobufSchemaUtils {
     List<OptionElement> optionsWithSpecialValues = new ArrayList<>(field.getOptions());
     String defaultValue = field.getDefaultValue();
     if (defaultValue != null) {
-      ProtoType protoType = ProtoType.get(field.getType());
       optionsWithSpecialValues.add(
-          OptionElement.Companion.create("default", toKind(protoType), defaultValue));
+          OptionElement.Companion.create("default", toKind(fieldProtoType), defaultValue));
     }
     String jsonName = field.getJsonName();
     if (jsonName != null) {

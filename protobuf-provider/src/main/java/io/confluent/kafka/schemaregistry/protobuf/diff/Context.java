@@ -136,10 +136,11 @@ public class Context {
     if (packageName != null && !packageName.isEmpty()) {
       name = packageName + "." + name;
     }
+    TypeElementInfo typeInfo = new TypeElementInfo(packageName, ref, type, isMap, key, value);
     if (isOriginal) {
-      originalTypes.put(name, new TypeElementInfo(packageName, ref, type, isMap, key, value));
+      originalTypes.put(name, typeInfo);
     } else {
-      updateTypes.put(name, new TypeElementInfo(packageName, ref, type, isMap, key, value));
+      updateTypes.put(name, typeInfo);
     }
   }
 
@@ -214,11 +215,15 @@ public class Context {
     return null;
   }
 
-  private TypeElementInfo getTypeForFullName(final String fullName, final boolean isOriginal) {
+  public TypeElementInfo getTypeForFullName(final String fullName, final boolean isOriginal) {
+    String name = fullName;
+    if (name.startsWith(".")) {
+      name = name.substring(1);
+    }
     if (isOriginal) {
-      return originalTypes.get(fullName);
+      return originalTypes.get(name);
     } else {
-      return updateTypes.get(fullName);
+      return updateTypes.get(name);
     }
   }
 
@@ -286,7 +291,7 @@ public class Context {
     }
   }
 
-  static class TypeElementInfo {
+  public static class TypeElementInfo {
     private final String packageName;
     private final SchemaReference ref;
     private final TypeElement type;
