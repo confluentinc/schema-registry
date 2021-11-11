@@ -49,6 +49,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
@@ -574,29 +575,35 @@ public class ProtobufSchemaUtils {
         break;
       case MAP:
         sb.append(" = {\n");
-        formatOptionMap(sb, (Map<String, Object>) value);
+        formatOptionMap(sb, (Map<String, Object>) value, normalize);
         sb.append('}');
         break;
       case LIST:
         sb.append(" = ");
         appendOptions(sb, (List<OptionElement>) value, normalize);
         break;
+      default:
+        break;
     }
     return sb.toString();
   }
 
-  private static void formatOptionMap(StringBuilder sb, Map<String, Object> valueMap) {
+  private static void formatOptionMap(
+      StringBuilder sb, Map<String, Object> valueMap, boolean normalize) {
     int lastIndex = valueMap.size() - 1;
     int index = 0;
-    List<String> keys = valueMap.keySet().stream()
-        .sorted()
-        .collect(Collectors.toList());
+    Collection<String> keys = valueMap.keySet();
+    if (normalize) {
+      keys = keys.stream()
+          .sorted()
+          .collect(Collectors.toList());
+    }
     for (String key : keys) {
       String endl = index != lastIndex ? "," : "";
       String kv = new StringBuilder()
           .append(key)
           .append(": ")
-          .append(formatOptionMapValue(valueMap.get(key)))
+          .append(formatOptionMapValue(valueMap.get(key), normalize))
           .append(endl)
           .toString();
       appendIndented(sb, kv);
@@ -605,7 +612,7 @@ public class ProtobufSchemaUtils {
   }
 
   @SuppressWarnings("unchecked")
-  private static String formatOptionMapValue(Object value) {
+  private static String formatOptionMapValue(Object value, boolean normalize) {
     StringBuilder sb = new StringBuilder();
     if (value instanceof  String) {
       sb.append("\"");
@@ -613,7 +620,7 @@ public class ProtobufSchemaUtils {
       sb.append("\"");
     } else if (value instanceof Map) {
       sb.append("{\n");
-      formatOptionMap(sb, (Map<String, Object>) value);
+      formatOptionMap(sb, (Map<String, Object>) value, normalize);
       sb.append('}');
     } else if (value instanceof List) {
       List<Object> list = (List<Object>) value;
@@ -622,7 +629,7 @@ public class ProtobufSchemaUtils {
       for (int i = 0; i < list.size(); i++) {
         String endl = i != lastIndex ? "," : "";
         String v = new StringBuilder()
-            .append(formatOptionMapValue(list.get(i)))
+            .append(formatOptionMapValue(list.get(i), normalize))
             .append(endl)
             .toString();
         appendIndented(sb, v);
