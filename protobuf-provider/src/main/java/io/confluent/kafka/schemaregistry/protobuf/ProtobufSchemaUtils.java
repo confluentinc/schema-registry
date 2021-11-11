@@ -517,6 +517,7 @@ public class ProtobufSchemaUtils {
       }
       ProtoType mapValueType = fieldProtoType.getValueType();
       if (fieldProtoType.isMap() && mapValueType != null) {
+        // Ensure the value of the map is fully resolved
         String valueType = ctx.resolve(mapValueType.toString(), true);
         if (valueType != null) {
           fieldProtoType = ProtoType.get(
@@ -609,9 +610,7 @@ public class ProtobufSchemaUtils {
     int index = 0;
     Collection<String> keys = valueMap.keySet();
     if (normalize) {
-      keys = keys.stream()
-          .sorted()
-          .collect(Collectors.toList());
+      keys = keys.stream().sorted().collect(Collectors.toList());
     }
     for (String key : keys) {
       String endl = index != lastIndex ? "," : "";
