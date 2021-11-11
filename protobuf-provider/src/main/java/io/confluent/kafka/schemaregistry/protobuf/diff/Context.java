@@ -96,11 +96,7 @@ public class Context {
       final ProtoFileElement protoFile,
       boolean isOriginal
   ) {
-    String packageName = protoFile.getPackageName();
-    if (packageName == null) {
-      packageName = "";
-    }
-    setPackageName(packageName, isOriginal);
+    setPackageName(protoFile.getPackageName(), isOriginal);
     collectTypeInfo(ref, protoFile.getTypes(), isOriginal);
   }
 
@@ -118,10 +114,12 @@ public class Context {
           MessageElement messageElement = (MessageElement) typeElement;
           isMap = ProtobufSchema.findOption("map_entry", messageElement.getOptions())
               .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(false);
-          key = findField(ProtobufSchema.KEY_FIELD,
-              messageElement.getFields());
-          value = findField(ProtobufSchema.VALUE_FIELD,
-              messageElement.getFields());
+          if (isMap) {
+            key = findField(ProtobufSchema.KEY_FIELD,
+                messageElement.getFields());
+            value = findField(ProtobufSchema.VALUE_FIELD,
+                messageElement.getFields());
+          }
         }
         addType(ref, typeElement, isMap, key.orElse(null), value.orElse(null), isOriginal);
         collectTypeInfo(ref, typeElement.getNestedTypes(), isOriginal);
@@ -133,7 +131,7 @@ public class Context {
       final FieldElement key, final FieldElement value, final boolean isOriginal) {
     String name = String.join(".", fullPath);
     String packageName = isOriginal ? originalPackageName : updatePackageName;
-    if (packageName != null && !packageName.isEmpty()) {
+    if (!packageName.isEmpty()) {
       name = packageName + "." + name;
     }
     TypeElementInfo typeInfo = new TypeElementInfo(packageName, ref, type, isMap, key, value);
@@ -154,10 +152,14 @@ public class Context {
   }
 
   public void setPackageName(final String packageName, final boolean isOriginal) {
+    String name = packageName;
+    if (name == null) {
+      name = "";
+    }
     if (isOriginal) {
-      originalPackageName = packageName;
+      originalPackageName = name;
     } else {
-      updatePackageName = packageName;
+      updatePackageName = name;
     }
   }
 
