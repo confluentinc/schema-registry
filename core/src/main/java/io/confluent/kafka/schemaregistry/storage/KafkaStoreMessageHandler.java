@@ -16,14 +16,14 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
-import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import java.util.Collections;
 import java.util.List;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
@@ -44,7 +44,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
     this.canonicalizeSchemaTypes = schemaRegistry.config().getList(
-        SchemaRegistryConfig.SCHEMA_CANONICALIZE_ON_STARTUP_CONFIG);
+        SchemaRegistryConfig.SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG);
   }
 
   /**
@@ -66,8 +66,12 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
-      if (canonicalizeSchemaTypes.contains(schemaObj.getSchemaType())) {
-        canonicalize(schemaObj);
+      String schemaType = schemaObj.getSchemaType();
+      if (canonicalizeSchemaTypes.contains(schemaType)) {
+        SchemaProvider schemaProvider = schemaRegistry.schemaProvider(schemaType);
+        if (schemaProvider != null) {
+          canonicalize(schemaProvider, schemaObj);
+        }
       }
       try {
         SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId(), schemaObj.getSubject());
@@ -99,23 +103,10 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   }
 
   @VisibleForTesting
-  protected static void canonicalize(SchemaValue schemaValue) {
+  protected static void canonicalize(SchemaProvider schemaProvider, SchemaValue schemaValue) {
     // Canonicalize the schema (due to changes in canonicalization)
-    String schema = schemaValue.getSchema();
-    switch (schemaValue.getSchemaType()) {
-      case AvroSchema.TYPE:
-        schema = new AvroSchema(schema).canonicalString();
-        break;
-      case JsonSchema.TYPE:
-        schema = new JsonSchema(schema).canonicalString();
-        break;
-      case ProtobufSchema.TYPE:
-        schema = new ProtobufSchema(schema).canonicalString();
-        break;
-      default:
-        break;
-    }
-    schemaValue.setSchema(schema);
+    schemaProvider.parseSchema(schemaValue.getSchema(), Collections.emptyList())
+        .ifPresent(parsedSchema -> schemaValue.setSchema(parsedSchema.canonicalString()));
   }
 
   /**

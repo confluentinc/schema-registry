@@ -428,6 +428,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return providers.keySet();
   }
 
+  public SchemaProvider schemaProvider(String schemaType) {
+    return providers.get(schemaType);
+  }
+
   @Override
   public int register(String subject,
                       Schema schema,
@@ -1038,7 +1042,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     if (schemaType == null) {
       schemaType = AvroSchema.TYPE;
     }
-    SchemaProvider provider = providers.get(schemaType);
+    SchemaProvider provider = schemaProvider(schemaType);
     if (provider == null) {
       String errMsg = "Invalid schema type " + schemaType;
       log.error(errMsg);
