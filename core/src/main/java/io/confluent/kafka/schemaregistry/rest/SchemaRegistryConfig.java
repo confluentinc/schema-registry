@@ -137,11 +137,18 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String SCHEMA_CACHE_SIZE_CONFIG = "schema.cache.size";
   public static final int SCHEMA_CACHE_SIZE_DEFAULT = 1000;
+
   /**
    * <code>schema.cache.expiry.secs</code>
    */
   public static final String SCHEMA_CACHE_EXPIRY_SECS_CONFIG = "schema.cache.expiry.secs";
   public static final int SCHEMA_CACHE_EXPIRY_SECS_DEFAULT = 300;
+
+  /**
+   * <code>schema.canonicalize.on.startup</code>
+   */
+  public static final String SCHEMA_CANONICALIZE_ON_STARTUP_CONFIG =
+      "schema.canonicalize.on.startup";
 
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
@@ -264,6 +271,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
       "The expiration in seconds for entries accessed in the cache.";
+  protected static final String SCHEMA_CANONICALIZE_ON_STARTUP_DOC =
+      "A list of schema types to canonicalize on startup, to be used if canonicalization changes.";
   protected static final String LEADER_ELIGIBILITY_DOC =
       "If true, this node can participate in leader election. In a multi-colo setup, turn this off "
       + "for clusters in the follower data center.";
@@ -423,6 +432,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_EXPIRY_SECS_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_EXPIRY_SECS_DOC
+    )
+    .define(SCHEMA_CANONICALIZE_ON_STARTUP_CONFIG, ConfigDef.Type.LIST, "",
+        ConfigDef.Importance.LOW, SCHEMA_CANONICALIZE_ON_STARTUP_DOC
     )
     .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, null,
         ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC

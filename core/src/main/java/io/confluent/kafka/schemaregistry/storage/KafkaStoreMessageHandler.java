@@ -18,10 +18,13 @@ package io.confluent.kafka.schemaregistry.storage;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import java.util.List;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +34,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
-  private IdGenerator idGenerator;
+  private final IdGenerator idGenerator;
+  private final List<String> canonicalizeSchemaTypes;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
                                   LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
@@ -39,6 +43,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
+    this.canonicalizeSchemaTypes = schemaRegistry.config().getList(
+        SchemaRegistryConfig.SCHEMA_CANONICALIZE_ON_STARTUP_CONFIG);
   }
 
   /**
@@ -60,7 +66,9 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
-      canonicalize(schemaObj);
+      if (canonicalizeSchemaTypes.contains(schemaObj.getSchemaType())) {
+        canonicalize(schemaObj);
+      }
       try {
         SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId(), schemaObj.getSubject());
         if (oldKey != null) {
@@ -92,11 +100,22 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
   @VisibleForTesting
   protected static void canonicalize(SchemaValue schemaValue) {
-    if (ProtobufSchema.TYPE.equals(schemaValue.getSchemaType())) {
-      // Canonicalize the schema if it is Protobuf (due to changes in Protobuf canonicalization)
-      String canonicalized = new ProtobufSchema(schemaValue.getSchema()).canonicalString();
-      schemaValue.setSchema(canonicalized);
+    // Canonicalize the schema (due to changes in canonicalization)
+    String schema = schemaValue.getSchema();
+    switch (schemaValue.getSchemaType()) {
+      case AvroSchema.TYPE:
+        schema = new AvroSchema(schema).canonicalString();
+        break;
+      case JsonSchema.TYPE:
+        schema = new JsonSchema(schema).canonicalString();
+        break;
+      case ProtobufSchema.TYPE:
+        schema = new ProtobufSchema(schema).canonicalString();
+        break;
+      default:
+        break;
     }
+    schemaValue.setSchema(schema);
   }
 
   /**
