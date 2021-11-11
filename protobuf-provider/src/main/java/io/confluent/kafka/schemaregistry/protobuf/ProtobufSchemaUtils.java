@@ -41,23 +41,20 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Deque;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import kotlin.ranges.IntRange;
 
@@ -99,12 +96,8 @@ public class ProtobufSchemaUtils {
 
   protected static String toNormalizedString(ProtobufSchema schema) {
     Context ctx = new Context();
-    for (ProtoFileElement protoFile : schema.dependenciesWithLogicalTypes().values()) {
-      collectContextInfo(ctx, protoFile);
-    }
-    ProtoFileElement protoFile = schema.rawSchema();
-    collectContextInfo(ctx, protoFile);
-    return toString(ctx, protoFile, true);
+    ctx.collectTypeInfo(schema, true);
+    return toString(ctx, schema.rawSchema(), true);
   }
 
   protected static String toString(ProtoFileElement protoFile) {
@@ -230,10 +223,7 @@ public class ProtobufSchemaUtils {
     }
     String requestType = rpc.getRequestType();
     if (normalize) {
-      requestType = ctx.resolve(requestType);
-      if (requestType == null) {
-        throw new IllegalArgumentException("Could not resolve type: " + rpc.getRequestType());
-      }
+      requestType = resolve(ctx, requestType);
     }
     sb.append(requestType);
     sb.append(") returns (");
@@ -243,7 +233,7 @@ public class ProtobufSchemaUtils {
     }
     String responseType = rpc.getResponseType();
     if (normalize) {
-      responseType = ctx.resolve(responseType);
+      responseType = resolve(ctx, responseType);
       if (responseType == null) {
         throw new IllegalArgumentException("Could not resolve type: " + rpc.getResponseType());
       }
@@ -510,7 +500,7 @@ public class ProtobufSchemaUtils {
     if (normalize) {
       ProtoType protoType = ProtoType.get(fieldType);
       if (!protoType.isScalar() && !protoType.isMap()) {
-        fieldType = ctx.resolve(fieldType);
+        fieldType = resolve(ctx, fieldType);
         if (fieldType == null) {
           throw new IllegalArgumentException("Could not resolve type: " + field.getType());
         }
@@ -745,74 +735,11 @@ public class ProtobufSchemaUtils {
     return buffer.toString();
   }
 
-  private static void collectContextInfo(final Context ctx, final ProtoFileElement protoFile) {
-    String packageName = protoFile.getPackageName();
-    if (packageName == null) {
-      packageName = "";
+  private static String resolve(Context ctx, String type) {
+    String resolved = ctx.resolve(type, true);
+    if (resolved == null) {
+      throw new IllegalArgumentException("Could not resolve type: " + type);
     }
-    ctx.setPackageName(packageName);
-    collectContextInfo(ctx, protoFile.getTypes());
-  }
-
-  private static void collectContextInfo(final Context ctx, final List<TypeElement> types) {
-    for (TypeElement typeElement : types) {
-      try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
-        collectContextInfo(ctx, typeElement.getNestedTypes());
-      }
-    }
-  }
-
-  public static class Context {
-    private String packageName;
-    private final Deque<String> fullPath = new ArrayDeque<>();
-    private final Set<String> fullNames = new HashSet<>();
-
-    public void setPackageName(String packageName) {
-      this.packageName = packageName;
-    }
-
-    public NamedScope enterName(final String name) {
-      return new NamedScope(name);
-    }
-
-    public String resolve(String name) {
-      if (name.startsWith(".")) {
-        if (fullNames.contains(name)) {
-          return name;
-        }
-      } else {
-        Deque<String> prefix = new ArrayDeque<>(fullPath);
-        if (!packageName.isEmpty()) {
-          prefix.addFirst(packageName);
-        }
-        while (!prefix.isEmpty()) {
-          String n = "." + String.join(".", prefix) + "." + name;
-          if (fullNames.contains(n)) {
-            return n;
-          }
-          prefix.removeLast();
-        }
-        String n = "." + name;
-        if (fullNames.contains(n)) {
-          return n;
-        }
-      }
-      return null;
-    }
-
-    public class NamedScope implements AutoCloseable {
-      public NamedScope(final String name) {
-        fullPath.addLast(name);
-        String n = "." + String.join(".", fullPath);
-        if (packageName != null) {
-          n = "." + packageName + n;
-        }
-        fullNames.add(n);
-      }
-
-      public void close() {
-        fullPath.removeLast();
-      }
-    }
+    return "." + resolved;
   }
 }
