@@ -86,7 +86,7 @@ public class SchemaRegistryClientConfig {
         : 0L;
   }
 
-  public static int getMaxCacheSize(Map<String, ?> configs) {
+  public static int getMaxMissingCacheSize(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MAX_MISSING_CACHE_SIZE_CONFIG)
         ? (int)configs.get(MAX_MISSING_CACHE_SIZE_CONFIG)
         : 10000;

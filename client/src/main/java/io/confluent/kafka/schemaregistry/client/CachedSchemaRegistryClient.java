@@ -189,15 +189,15 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
     long missingIdTTL = SchemaRegistryClientConfig.getMissingIdTTL(configs);
     long missingSchemaTTL = SchemaRegistryClientConfig.getMissingSchemaTTL(configs);
-    int maxCacheSize = SchemaRegistryClientConfig.getMaxCacheSize(configs);
+    int maxMissingCacheSize = SchemaRegistryClientConfig.getMaxMissingCacheSize(configs);
 
     this.missingSchemaCache = CacheBuilder.newBuilder()
-        .maximumSize(maxCacheSize)
+        .maximumSize(maxMissingCacheSize)
         .ticker(ticker)
         .expireAfterWrite(missingSchemaTTL, TimeUnit.SECONDS)
         .build();
     this.missingIdCache = CacheBuilder.newBuilder()
-        .maximumSize(maxCacheSize)
+        .maximumSize(maxMissingCacheSize)
         .ticker(ticker)
         .expireAfterWrite(missingIdTTL, TimeUnit.SECONDS)
         .build();
@@ -498,7 +498,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         return cachedVersion;
       }
 
-      int retrievedVersion = 0;
+      int retrievedVersion = -1;
       try {
         retrievedVersion = getVersionFromRegistry(subject, schema, normalize);
       } catch (RestClientException rce) {
@@ -543,7 +543,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         return cachedId;
       }
 
-      int retrievedId = 0;
+      int retrievedId = -1;
       try {
         retrievedId = getIdFromRegistry(subject, schema, normalize);
       } catch (RestClientException rce) {
