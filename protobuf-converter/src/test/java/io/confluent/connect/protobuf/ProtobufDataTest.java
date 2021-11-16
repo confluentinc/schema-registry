@@ -1490,6 +1490,46 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testToConnectFullyQualifiedSchema() {
+    String schema = "syntax = \"proto3\";\n"
+        + "\n"
+        + "package foo;\n"
+        + "\n"
+        + "message Event {\n"
+        + "  Action action = 1;\n"
+        + "  Target target = 2;\n"
+        + "\n"
+        + "  message Target {\n"
+        + "    oneof payload {\n"
+        + "      string payload_id = 1;\n"
+        + "      Action action = 2;\n"
+        + "    }\n"
+        + "    enum Action {\n"
+        + "      ON  = 0;\n"
+        + "      OFF = 1;\n"
+        + "    }\n"
+        + "  }\n"
+        + "\n"
+        + "  oneof payload {\n"
+        + "    string payload_id = 3;\n"
+        + "  }\n"
+        + "\n"
+        + "  enum Action {\n"
+        + "    ON  = 0;\n"
+        + "    OFF = 1;\n"
+        + "  }\n"
+        + "}";
+    ProtobufSchema protobufSchema = new ProtobufSchema(schema);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(ProtobufDataConfig.ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG, true);
+    ProtobufData protobufData = new ProtobufData(new ProtobufDataConfig(configs));
+    Schema actual = protobufData.toConnectSchema(protobufSchema);
+    assertEquals("io.confluent.connect.protobuf.Union.foo.Event.payload",
+        actual.field("payload_0").schema().name());
+    assertEquals("foo.Event.Action", actual.field("action").schema().name());
+  }
+
+  @Test
   public void testToConnectMultipleMapReferences() throws Exception {
     AttributeFieldEntry entry1 = AttributeFieldEntry.newBuilder()
         .setKey("key1").setValue("value1").build();
