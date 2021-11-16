@@ -35,7 +35,11 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   Set<String> schemaTypes();
 
-  int register(String subject, Schema schema) throws SchemaRegistryException;
+  default int register(String subject, Schema schema) throws SchemaRegistryException {
+    return register(subject, schema, false);
+  }
+
+  int register(String subject, Schema schema, boolean normalize) throws SchemaRegistryException;
 
   default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {
     try {
@@ -69,7 +73,14 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   List<Integer> deleteSubject(String subject, boolean permanentDelete)
       throws SchemaRegistryException;
 
-  Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
+  default Schema lookUpSchemaUnderSubject(
+      String subject, Schema schema, boolean lookupDeletedSchema)
+      throws SchemaRegistryException {
+    return lookUpSchemaUnderSubject(subject, schema, false, lookupDeletedSchema);
+  }
+
+  Schema lookUpSchemaUnderSubject(
+      String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
       throws SchemaRegistryException;
 
   List<String> isCompatible(String subject,

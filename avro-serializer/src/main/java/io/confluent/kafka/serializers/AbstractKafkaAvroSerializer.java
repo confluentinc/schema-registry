@@ -41,6 +41,7 @@ import org.apache.kafka.common.errors.SerializationException;
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSerDe {
 
   private final EncoderFactory encoderFactory = EncoderFactory.get();
+  protected boolean normalizeSchema;
   protected boolean autoRegisterSchema;
   protected boolean removeJavaProperties;
   protected int useSchemaId = -1;
@@ -53,6 +54,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
+    normalizeSchema = config.normalizeSchema();
     autoRegisterSchema = config.autoRegisterSchema();
     removeJavaProperties =
         config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
@@ -110,7 +112,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema";
-        id = schemaRegistry.register(subject, schema);
+        id = schemaRegistry.register(subject, schema, normalizeSchema);
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (AvroSchema)
@@ -119,10 +121,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version of Avro schema";
         schema = (AvroSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
-        id = schemaRegistry.getId(subject, schema);
+        id = schemaRegistry.getId(subject, schema, normalizeSchema);
       } else {
         restClientErrorMsg = "Error retrieving Avro schema";
-        id = schemaRegistry.getId(subject, schema);
+        id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);

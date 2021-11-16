@@ -171,6 +171,18 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
+  public AvroSchema normalize() {
+    String normalized = AvroSchemaUtils.toNormalizedString(this);
+    return new AvroSchema(
+        normalized,
+        this.references.stream().sorted().distinct().collect(Collectors.toList()),
+        this.resolvedReferences,
+        this.version,
+        this.isNew
+    );
+  }
+
+  @Override
   public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Collections.singletonList("Incompatible because of different schema type");

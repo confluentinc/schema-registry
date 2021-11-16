@@ -14,7 +14,6 @@
  */
 package io.confluent.kafka.schemaregistry.rest;
 
-import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -32,6 +31,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
+import org.apache.avro.Schema.Parser;
 import org.junit.Test;
 
 import java.util.*;
@@ -642,7 +642,7 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchema(schemas.get(1));
     SchemaReference ref = new SchemaReference("otherns.Subrecord", "reference", 1);
     request.setReferences(Collections.singletonList(ref));
-    int registeredId = restApp.restClient.registerSchema(request, "referrer");
+    int registeredId = restApp.restClient.registerSchema(request, "referrer", false);
     assertEquals("Registering a new schema should succeed", 2, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(2);
@@ -743,22 +743,22 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchema(ref1);
     SchemaReference ref = new SchemaReference("myavro.currencies.Currency", "shared", 1);
     request.setReferences(Collections.singletonList(ref));
-    int registeredId = restApp.restClient.registerSchema(request, "ref1");
+    int registeredId = restApp.restClient.registerSchema(request, "ref1", false);
     assertEquals("Registering a new schema should succeed", 2, registeredId);
 
     request = new RegisterSchemaRequest();
     request.setSchema(ref2);
     ref = new SchemaReference("myavro.currencies.Currency", "shared", 1);
     request.setReferences(Collections.singletonList(ref));
-    registeredId = restApp.restClient.registerSchema(request, "ref2");
+    registeredId = restApp.restClient.registerSchema(request, "ref2", false);
     assertEquals("Registering a new schema should succeed", 3, registeredId);
 
     request = new RegisterSchemaRequest();
     request.setSchema(root);
     SchemaReference r1 = new SchemaReference("myavro.BudgetDecreased", "ref1", 1);
     SchemaReference r2 = new SchemaReference("myavro.BudgetUpdated", "ref2", 1);
-    request.setReferences(ImmutableList.of(r1, r2));
-    registeredId = restApp.restClient.registerSchema(request, "root");
+    request.setReferences(Arrays.asList(r1, r2));
+    registeredId = restApp.restClient.registerSchema(request, "root", false);
     assertEquals("Registering a new schema should succeed", 4, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(4);
@@ -768,7 +768,7 @@ public class RestApiTest extends ClusterTestHarness {
         schemaString.getSchemaString());
 
     assertEquals("Schema references should be found",
-        ImmutableList.of(r1, r2),
+        Arrays.asList(r1, r2),
         schemaString.getReferences());
   }
 
@@ -779,7 +779,75 @@ public class RestApiTest extends ClusterTestHarness {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemas.get(1));
     request.setReferences(Collections.emptyList());
-    restApp.restClient.registerSchema(request, "referrer");
+    restApp.restClient.registerSchema(request, "referrer", false);
+  }
+
+  @Test
+  public void testSchemaNormalization() throws Exception {
+    String subject1 = "testSubject1";
+
+    String reference1 = "{\"type\":\"record\","
+        + "\"name\":\"Subrecord1\","
+        + "\"namespace\":\"otherns\","
+        + "\"fields\":"
+        + "[{\"name\":\"field1\",\"type\":\"string\"}]}";
+    TestUtils.registerAndVerifySchema(restApp.restClient, reference1, 1, "ref1");
+    String reference2 = "{\"type\":\"record\","
+        + "\"name\":\"Subrecord2\","
+        + "\"namespace\":\"otherns\","
+        + "\"fields\":"
+        + "[{\"name\":\"field2\",\"type\":\"string\"}]}";
+    TestUtils.registerAndVerifySchema(restApp.restClient, reference2, 2, "ref2");
+
+    SchemaReference ref1 = new SchemaReference("otherns.Subrecord1", "ref1", 1);
+    SchemaReference ref2 = new SchemaReference("otherns.Subrecord2", "ref2", 1);
+
+    // Two versions of same schema
+    String schemaString1 = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":{\"type\":\"int\"},\"name\":\"field0" + "\"},"
+        + "{\"name\":\"field1\",\"type\":\"otherns.Subrecord1\"},"
+        + "{\"name\":\"field2\",\"type\":\"otherns.Subrecord2\"}"
+        + "],"
+        + "\"extraMetadata\": {\"a\": 1, \"b\": 2}"
+        + "}";
+    String schemaString2 = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"int\",\"name\":\"field0" + "\"},"
+        + "{\"name\":\"field1\",\"type\":\"otherns.Subrecord1\"},"
+        + "{\"name\":\"field2\",\"type\":\"otherns.Subrecord2\"}"
+        + "],"
+        + "\"extraMetadata\": {\"b\": 2, \"a\": 1}"
+        + "}";
+
+    RegisterSchemaRequest registerRequest = new RegisterSchemaRequest();
+    registerRequest.setSchema(schemaString1);
+    registerRequest.setReferences(Arrays.asList(ref1, ref2));
+    int idOfRegisteredSchema1Subject1 =
+        restApp.restClient.registerSchema(registerRequest, subject1, true);
+    RegisterSchemaRequest lookUpRequest = new RegisterSchemaRequest();
+    lookUpRequest.setSchema(schemaString2);
+    lookUpRequest.setReferences(Arrays.asList(ref2, ref1));
+    int versionOfRegisteredSchema1Subject1 =
+        restApp.restClient.lookUpSubjectVersion(lookUpRequest, subject1, true, false).getVersion();
+    assertEquals("1st schema under subject1 should have version 1", 1,
+        versionOfRegisteredSchema1Subject1);
+    assertEquals("1st schema registered globally should have id 3", 3,
+        idOfRegisteredSchema1Subject1);
+
+    // send schema with all references resolved
+    lookUpRequest = new RegisterSchemaRequest();
+    Parser parser = new Parser();
+    parser.parse(reference1);
+    parser.parse(reference2);
+    AvroSchema resolvedSchema = new AvroSchema(parser.parse(schemaString2));
+    lookUpRequest.setSchema(resolvedSchema.canonicalString());
+    versionOfRegisteredSchema1Subject1 =
+        restApp.restClient.lookUpSubjectVersion(lookUpRequest, subject1, true, false).getVersion();
+    assertEquals("1st schema under subject1 should have version 1", 1,
+        versionOfRegisteredSchema1Subject1);
   }
 
   @Test
@@ -1024,7 +1092,8 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       RegisterSchemaRequest request = new RegisterSchemaRequest();
       request.setSchema(schemas.get(1));
-      restApp.restClient.lookUpSubjectVersion(new HashMap<String, String>(), request, subject);
+      restApp.restClient.lookUpSubjectVersion(
+          RestService.DEFAULT_REQUEST_PROPERTIES, request, subject, false, false);
       fail(String.format("Lookup Subject Version %s for subject %s should fail with %s", "2",
                          subject,
                          Errors.SCHEMA_NOT_FOUND_ERROR_CODE));
@@ -1115,7 +1184,8 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       RegisterSchemaRequest request = new RegisterSchemaRequest();
       request.setSchema(schemas.get(1));
-      restApp.restClient.lookUpSubjectVersion(new HashMap<String, String>(), request, subject);
+      restApp.restClient.lookUpSubjectVersion(
+          RestService.DEFAULT_REQUEST_PROPERTIES, request, subject, false, false);
       fail(String.format("Lookup Subject Version %s for subject %s should fail with %s", "2",
               subject,
               Errors.SCHEMA_NOT_FOUND_ERROR_CODE));

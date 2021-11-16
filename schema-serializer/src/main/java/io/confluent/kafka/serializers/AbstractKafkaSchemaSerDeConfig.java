@@ -61,6 +61,11 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String MAX_SCHEMAS_PER_SUBJECT_DOC =
       "Maximum number of schemas to create or cache locally.";
 
+  public static final String NORMALIZE_SCHEMA = "normalize.schema";
+  public static final boolean NORMALIZE_SCHEMA_DEFAULT = false;
+  public static final String NORMALIZE_SCHEMA_DOC =
+      "Whether to normalize the schema, which generally ignores ordering when it is not signficant";
+
   public static final String AUTO_REGISTER_SCHEMAS = "auto.register.schemas";
   public static final boolean AUTO_REGISTER_SCHEMAS_DEFAULT = true;
   public static final String AUTO_REGISTER_SCHEMAS_DOC =
@@ -188,6 +193,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
         .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
                 Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
+        .define(NORMALIZE_SCHEMA, Type.BOOLEAN, NORMALIZE_SCHEMA_DEFAULT,
+                Importance.MEDIUM, NORMALIZE_SCHEMA_DOC)
         .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
                 Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
         .define(USE_SCHEMA_ID, Type.INT, USE_SCHEMA_ID_DEFAULT,
@@ -247,6 +254,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public List<String> getSchemaRegistryUrls() {
     return this.getList(SCHEMA_REGISTRY_URL_CONFIG);
+  }
+
+  public boolean normalizeSchema() {
+    return this.getBoolean(NORMALIZE_SCHEMA);
   }
 
   public boolean autoRegisterSchema() {

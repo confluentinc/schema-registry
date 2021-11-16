@@ -49,6 +49,11 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public int register(String subject, ParsedSchema schema) throws IOException, RestClientException;
 
+  default int register(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   /**
    * @deprecated use {@link #register(String, ParsedSchema, int, int)} instead;
    *     for example, you can convert a {@link Schema} into a {@link ParsedSchema}
@@ -140,6 +145,11 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   public int getVersion(String subject, ParsedSchema schema)
       throws IOException, RestClientException;
 
+  default int getVersion(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public List<Integer> getAllVersions(String subject) throws IOException, RestClientException;
 
   @Deprecated
@@ -193,6 +203,11 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   }
 
   int getId(String subject, ParsedSchema schema) throws IOException, RestClientException;
+
+  default int getId(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   public default List<Integer> deleteSubject(String subject) throws IOException,
           RestClientException {
