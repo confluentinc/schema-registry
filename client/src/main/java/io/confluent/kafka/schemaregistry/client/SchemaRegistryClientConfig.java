@@ -39,8 +39,7 @@ public class SchemaRegistryClientConfig {
   public static final String PROXY_HOST = "proxy.host";
   public static final String PROXY_PORT = "proxy.port";
 
-  public static final String MAX_MISSING_CACHE_SIZE_CONFIG = "schema.registry.max.cache.size";
-  public static final String MISSING_ID_QUERY_RANGE_CONFIG = "missing.id.query.range";
+  public static final String MISSING_CACHE_SIZE_CONFIG = "missing.cache.size";
   public static final String MISSING_ID_CACHE_TTL_CONFIG = "missing.id.cache.ttl.sec";
   public static final String MISSING_SCHEMA_CACHE_TTL_CONFIG = "missing.schema.cache.ttl.sec";
 
@@ -81,8 +80,8 @@ public class SchemaRegistryClientConfig {
   }
 
   public static int getMaxMissingCacheSize(Map<String, ?> configs) {
-    return configs != null && configs.containsKey(MAX_MISSING_CACHE_SIZE_CONFIG)
-        ? (int)configs.get(MAX_MISSING_CACHE_SIZE_CONFIG)
+    return configs != null && configs.containsKey(MISSING_CACHE_SIZE_CONFIG)
+        ? (int)configs.get(MISSING_CACHE_SIZE_CONFIG)
         : 10000;
   }
 }

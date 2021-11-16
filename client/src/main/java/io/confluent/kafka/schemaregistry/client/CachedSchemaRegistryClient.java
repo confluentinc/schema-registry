@@ -268,7 +268,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   protected ParsedSchema getSchemaByIdFromRegistry(int id, String subject)
       throws IOException, RestClientException {
     if (missingIdCache.getIfPresent(new SubjectAndId(subject, id)) != null) {
-      throw new RestClientException("This ID is banned",
+      throw new RestClientException("Error while retrieving schema with id " + id
+          + " from the schema registry",
           HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
     }
 
@@ -291,10 +292,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private int getVersionFromRegistry(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    if (missingSchemaCache.getIfPresent(new SubjectAndSchema(subject, schema)) != null) {
-      throw new RestClientException("This ID is banned",
-          HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
-    }
+    checkMissingSchemaCache(subject, schema, normalize);
 
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
     try {
@@ -303,7 +301,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     } catch (RestClientException rce) {
       if (rce.getStatus() == HTTP_NOT_FOUND
           && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
-        missingSchemaCache.put(new SubjectAndSchema(subject, schema), System.currentTimeMillis());
+        missingSchemaCache.put(
+            new SubjectAndSchema(subject, schema, normalize), System.currentTimeMillis());
       }
       throw rce;
     }
@@ -313,10 +312,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private int getIdFromRegistry(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    if (missingSchemaCache.getIfPresent(new SubjectAndSchema(subject, schema)) != null) {
-      throw new RestClientException("This ID is banned",
-          HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
-    }
+    checkMissingSchemaCache(subject, schema, normalize);
 
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
     try {
@@ -325,7 +321,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     } catch (RestClientException rce) {
       if (rce.getStatus() == HTTP_NOT_FOUND
           && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
-        missingSchemaCache.put(new SubjectAndSchema(subject, schema), System.currentTimeMillis());
+        missingSchemaCache.put(
+            new SubjectAndSchema(subject, schema, normalize), System.currentTimeMillis());
       }
       throw rce;
     }
@@ -668,13 +665,24 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     missingIdCache.invalidateAll();
   }
 
+  private void checkMissingSchemaCache(String subject, ParsedSchema schema, boolean normalize)
+      throws RestClientException {
+    if (missingSchemaCache.getIfPresent(
+        new SubjectAndSchema(subject, schema, normalize)) != null) {
+      throw new RestClientException("Error while looking up schema under subject " + subject,
+          HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
+    }
+  }
+
   static class SubjectAndSchema {
     private final String subject;
     private final ParsedSchema schema;
+    private final boolean normalize;
 
-    public SubjectAndSchema(String subject, ParsedSchema schema) {
+    public SubjectAndSchema(String subject, ParsedSchema schema, boolean normalize) {
       this.subject = subject;
       this.schema = schema;
+      this.normalize = normalize;
     }
 
     public String subject() {
@@ -683,6 +691,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
     public ParsedSchema schema() {
       return schema;
+    }
+
+    public boolean normalize() {
+      return normalize;
     }
 
     @Override
@@ -694,17 +706,19 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         return false;
       }
       SubjectAndSchema that = (SubjectAndSchema) o;
-      return Objects.equals(subject, that.subject) && schema.equals(that.schema);
+      return Objects.equals(subject, that.subject) && schema.equals(that.schema)
+          && normalize == that.normalize;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(subject, schema);
+      return Objects.hash(subject, schema, normalize);
     }
 
     @Override
     public String toString() {
-      return "SubjectAndSchema{" + "subject='" + subject + '\'' + ", schema=" + schema + '}';
+      return "SubjectAndSchema{" + "subject='" + subject + '\'' + ", schema=" + schema
+          + ", normalize=" + normalize + '}';
     }
   }
 
@@ -744,7 +758,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
     @Override
     public String toString() {
-      return "SubjectAndSchema{" + "subject='" + subject + '\'' + ", id=" + id + '}';
+      return "SubjectAndId{" + "subject='" + subject + '\'' + ", id=" + id + '}';
     }
   }
 }
