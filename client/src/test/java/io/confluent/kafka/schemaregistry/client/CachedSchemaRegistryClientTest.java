@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
+import com.google.common.testing.FakeTicker;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -24,6 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -49,6 +51,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 public class CachedSchemaRegistryClientTest {
@@ -172,9 +175,12 @@ public class CachedSchemaRegistryClientTest {
         anyObject(List.class), eq(SUBJECT_0)))
         .andReturn(ID_25);
 
+    SchemaString schemaString = new SchemaString(SCHEMA_STR_0);
+    schemaString.setMaxId(ID_25);
+
     // Expect only one call to getId (the rest should hit the cache)
-    expect(restService.getId(ID_25, SUBJECT_0))
-        .andReturn(new SchemaString(SCHEMA_STR_0));
+    expect(restService.getId(ID_25, SUBJECT_0, true))
+        .andReturn(schemaString);
 
     replay(restService);
 
@@ -220,6 +226,8 @@ public class CachedSchemaRegistryClientTest {
   public void testIdenticalSchemas() throws Exception {
     SchemaString schemaStringOne = new SchemaString(SCHEMA_STR_0);
     SchemaString schemaStringTwo = new SchemaString(SCHEMA_STR_0);
+    schemaStringOne.setMaxId(ID_25);
+    schemaStringTwo.setMaxId(ID_25);
 
     String subjectOne = "subjectOne";
     String subjectTwo = "subjectTwo";
@@ -231,9 +239,9 @@ public class CachedSchemaRegistryClientTest {
         anyObject(List.class), eq(subjectTwo)))
         .andReturn(ID_25);
 
-    expect(restService.getId(ID_25, subjectOne))
+    expect(restService.getId(ID_25, subjectOne, true))
             .andReturn(schemaStringOne);
-    expect(restService.getId(ID_25, subjectTwo))
+    expect(restService.getId(ID_25, subjectTwo, true))
             .andReturn(schemaStringTwo);
 
     replay(restService);
@@ -387,8 +395,11 @@ public class CachedSchemaRegistryClientTest {
         .andReturn(ID_25)
         .anyTimes();
 
-    expect(restService.getId(ID_25, SUBJECT_0))
-        .andReturn(new SchemaString(SCHEMA_STR_0))
+    SchemaString schemaString = new SchemaString(SCHEMA_STR_0);
+    schemaString.setMaxId(ID_25);
+
+    expect(restService.getId(ID_25, SUBJECT_0, true))
+        .andReturn(schemaString)
         .anyTimes();
 
     expect(restService.lookUpSubjectVersion(eq(AVRO_SCHEMA_0.toString()), anyString(),
@@ -478,6 +489,43 @@ public class CachedSchemaRegistryClientTest {
 
     List<ParsedSchema> parsedSchemas = client.getSchemas(SUBJECT_0, false, true);
     assertEquals(0, parsedSchemas.size());
+  }
+
+  @Test
+  public void testMissingCache() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.MISSING_ID_CACHE_TTL_CONFIG, 60L);
+    configs.put(SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, 60L);
+    configs.put(SchemaRegistryClientConfig.MISSING_ID_QUERY_RANGE_CONFIG, 5);
+
+    FakeTicker fakeTicker = new FakeTicker();
+    client = new CachedSchemaRegistryClient(
+        restService,
+        CACHE_CAPACITY,
+        null,
+        configs,
+        null,
+        fakeTicker
+    );
+
+    SchemaString schemaString = new SchemaString(SCHEMA_STR_0);
+    schemaString.setMaxId(ID_25);
+    expect(restService.getId(ID_25, SUBJECT_0, true))
+        .andThrow(new RestClientException("This ID is banned", 404, 40403))
+        .andReturn(schemaString);
+
+    replay(restService);
+
+    try {
+      client.getSchemaBySubjectAndId(SUBJECT_0, ID_25);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals("This ID is banned; error code: 40403", rce.getMessage());
+    }
+
+    fakeTicker.advance(60, TimeUnit.SECONDS);
+    Thread.sleep(100);
+    assertNotNull(client.getSchemaBySubjectAndId(SUBJECT_0, ID_25));
   }
 
 

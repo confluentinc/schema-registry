@@ -87,6 +87,31 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       "Whether to check for backward compatibility between the latest subject version and "
       + " the schema of the object to be serialized";
 
+  public static final String MAX_CACHE_SIZE_CONFIG = SchemaRegistryClientConfig
+      .MAX_CACHE_SIZE_CONFIG;
+  public static final String MAX_CACHE_SIZE_DOC = "Maximum size of each LRU cache used to cache "
+      + "responses from the schema registry. There is one cache to hold the ID to schema mappings"
+      + " and another to hold the schemas that are registered to a subject.";
+  public static final int MAX_CACHE_SIZE_DEFAULT = 10000;
+
+  public static final String MISSING_ID_QUERY_RANGE_CONFIG = SchemaRegistryClientConfig
+      .MISSING_ID_QUERY_RANGE_CONFIG;
+  public static final String MISSING_ID_QUERY_RANGE_DOC = "The range above max schema ID to make"
+      + " calls to Schema Registry";
+  public static final int MISSING_ID_QUERY_RANGE_DEFAULT = 200;
+
+  public static final String MISSING_ID_CACHE_TTL_CONFIG = SchemaRegistryClientConfig
+      .MISSING_ID_CACHE_TTL_CONFIG;
+  public static final String MISSING_ID_CACHE_TTL_DOC = "The TTL in seconds for caching missing"
+      + " schema IDs";
+  public static final long MISSING_ID_CACHE_TTL_DEFAULT = 0L;
+
+  public static final String MISSING_SCHEMA_CACHE_TTL_CONFIG = SchemaRegistryClientConfig
+      .MISSING_SCHEMA_CACHE_TTL_CONFIG;
+  public static final String MISSING_SCHEMA_CACHE_TTL_DOC = "The TTL in seconds for caching"
+      + " missing schemas";
+  public static final long MISSING_SCHEMA_CACHE_TTL_DEFAULT = 0L;
+
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT = "URL";
@@ -173,6 +198,14 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, USE_LATEST_VERSION_DOC)
         .define(LATEST_COMPATIBILITY_STRICT, Type.BOOLEAN, LATEST_COMPATIBILITY_STRICT_DEFAULT,
                 Importance.LOW, LATEST_COMPATIBILITY_STRICT_DOC)
+        .define(MAX_CACHE_SIZE_CONFIG, Type.INT, MAX_CACHE_SIZE_DEFAULT,
+                Importance.MEDIUM, MAX_CACHE_SIZE_DOC)
+        .define(MISSING_ID_QUERY_RANGE_CONFIG, Type.INT, MISSING_ID_QUERY_RANGE_DEFAULT,
+                Importance.LOW, MISSING_ID_QUERY_RANGE_DOC)
+        .define(MISSING_ID_CACHE_TTL_CONFIG, Type.LONG, MISSING_ID_CACHE_TTL_DEFAULT,
+                Importance.LOW, MISSING_ID_CACHE_TTL_DOC)
+        .define(MISSING_SCHEMA_CACHE_TTL_CONFIG, Type.LONG, MISSING_SCHEMA_CACHE_TTL_DEFAULT,
+                Importance.LOW, MISSING_SCHEMA_CACHE_TTL_DOC)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
                 Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,

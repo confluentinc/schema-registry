@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.client;
 
 import org.apache.kafka.common.config.ConfigDef;
 
+import java.util.Map;
+
 public class SchemaRegistryClientConfig {
 
   public static final String CLIENT_NAMESPACE = "schema.registry.";
@@ -36,6 +38,11 @@ public class SchemaRegistryClientConfig {
 
   public static final String PROXY_HOST = "proxy.host";
   public static final String PROXY_PORT = "proxy.port";
+
+  public static final String MAX_CACHE_SIZE_CONFIG = "schema.registry.max.cache.size";
+  public static final String MISSING_ID_QUERY_RANGE_CONFIG = "missing.id.query.range";
+  public static final String MISSING_ID_CACHE_TTL_CONFIG = "missing.id.cache.ttl.sec";
+  public static final String MISSING_SCHEMA_CACHE_TTL_CONFIG = "missing.schema.cache.ttl.sec";
 
   public static void withClientSslSupport(ConfigDef configDef, String namespace) {
     org.apache.kafka.common.config.ConfigDef sslConfigDef = new org.apache.kafka.common.config
@@ -61,4 +68,39 @@ public class SchemaRegistryClientConfig {
     return ConfigDef.Importance.valueOf(importance.name());
   }
 
+  public static int getMissingIdQueryRange(Map<String, ?> configs) {
+    int missingIdQueryRange = 200;
+    if (configs != null && configs.containsKey(MISSING_ID_QUERY_RANGE_CONFIG)) {
+      missingIdQueryRange = (int)configs.get(MISSING_ID_QUERY_RANGE_CONFIG);
+    }
+
+    return missingIdQueryRange;
+  }
+
+  public static long getMissingIdTTL(Map<String, ?> configs) {
+    long missingIdTTL = 0L;
+    if (configs != null && configs.containsKey(MISSING_ID_CACHE_TTL_CONFIG)) {
+      missingIdTTL = (long)configs.get(MISSING_ID_CACHE_TTL_CONFIG);
+    }
+
+    return missingIdTTL;
+  }
+
+  public static long getMissingSchemaTTL(Map<String, ?> configs) {
+    long missingSchemaTTL = 0L;
+    if (configs != null && configs.containsKey(MISSING_SCHEMA_CACHE_TTL_CONFIG)) {
+      missingSchemaTTL = (long)configs.get(MISSING_SCHEMA_CACHE_TTL_CONFIG);
+    }
+
+    return missingSchemaTTL;
+  }
+
+  public static int getMaxCacheSize(Map<String, ?> configs) {
+    int maxCacheSize = 0;
+    if (configs != null && configs.containsKey(MAX_CACHE_SIZE_CONFIG)) {
+      maxCacheSize = (int)configs.get(MAX_CACHE_SIZE_CONFIG);
+    }
+
+    return maxCacheSize;
+  }
 }

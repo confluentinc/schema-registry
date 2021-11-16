@@ -83,5 +83,11 @@
             <artifactId>guava</artifactId>
             <version>${guava.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava-testlib</artifactId>
+            <version>28.1-jre</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
