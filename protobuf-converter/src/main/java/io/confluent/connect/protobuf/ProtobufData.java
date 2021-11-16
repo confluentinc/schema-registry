@@ -917,7 +917,8 @@ public class ProtobufData {
 
   private Schema toConnectSchema(ToConnectContext ctx, OneofDescriptor descriptor) {
     SchemaBuilder builder = SchemaBuilder.struct();
-    builder.name(PROTOBUF_TYPE_UNION_PREFIX + descriptor.getName());
+    String name = enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName();
+    builder.name(PROTOBUF_TYPE_UNION_PREFIX + name);
     List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
     for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
       builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
@@ -974,7 +975,9 @@ public class ProtobufData {
       case ENUM:
         builder = SchemaBuilder.string();
         EnumDescriptor enumDescriptor = descriptor.getEnumType();
-        builder.name(enumDescriptor.getName());
+        String name = enhancedSchemaSupport
+            ? enumDescriptor.getFullName() : enumDescriptor.getName();
+        builder.name(name);
         builder.parameter(PROTOBUF_TYPE_ENUM, enumDescriptor.getName());
         for (EnumValueDescriptor enumValueDesc : enumDescriptor.getValues()) {
           String enumSymbol = enumValueDesc.getName();
