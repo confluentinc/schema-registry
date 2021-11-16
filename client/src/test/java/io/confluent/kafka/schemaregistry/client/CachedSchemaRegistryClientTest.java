@@ -525,6 +525,8 @@ public class CachedSchemaRegistryClientTest {
       assertEquals("This ID is banned; error code: 40403", rce.getMessage());
     }
 
+    fakeTicker.advance(59, TimeUnit.SECONDS);
+
     // Should hit the cache
     try {
       client.getSchemaBySubjectAndId(SUBJECT_0, ID_25);
@@ -533,7 +535,7 @@ public class CachedSchemaRegistryClientTest {
       assertEquals("This ID is banned; error code: 40403", rce.getMessage());
     }
 
-    fakeTicker.advance(60, TimeUnit.SECONDS);
+    fakeTicker.advance(2, TimeUnit.SECONDS);
     Thread.sleep(100);
     assertNotNull(client.getSchemaBySubjectAndId(SUBJECT_0, ID_25));
   }

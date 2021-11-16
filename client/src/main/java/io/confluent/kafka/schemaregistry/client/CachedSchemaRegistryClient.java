@@ -281,7 +281,16 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
     }
 
-    SchemaString restSchema = restService.getId(id, subject, true);
+    SchemaString restSchema;
+    try {
+      restSchema = restService.getId(id, subject, true);
+    } catch (RestClientException rce) {
+      if (rce.getStatus() == HTTP_NOT_FOUND
+          && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
+        missingIdCache.put(new SubjectAndId(subject, id), System.currentTimeMillis());
+      }
+      throw rce;
+    }
     currentMaxSchemaId = restSchema.getMaxId();
     Optional<ParsedSchema> schema = parseSchema(
         restSchema.getSchemaType(), restSchema.getSchemaString(), restSchema.getReferences());
@@ -297,9 +306,18 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
     }
 
-    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
-        restService.lookUpSubjectVersion(schema.canonicalString(),
-            schema.schemaType(), schema.references(), subject, normalize, true);
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
+    try {
+      response = restService.lookUpSubjectVersion(schema.canonicalString(),
+              schema.schemaType(), schema.references(), subject, normalize, true);
+    } catch (RestClientException rce) {
+      if (rce.getStatus() == HTTP_NOT_FOUND
+          && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
+        missingSchemaCache.put(new SubjectAndSchema(subject, schema), System.currentTimeMillis());
+      }
+      throw rce;
+    }
+
     return response.getVersion();
   }
 
@@ -310,9 +328,17 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
     }
 
-    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
-        restService.lookUpSubjectVersion(schema.canonicalString(),
-            schema.schemaType(), schema.references(), subject, normalize, false);
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
+    try {
+      response = restService.lookUpSubjectVersion(schema.canonicalString(),
+              schema.schemaType(), schema.references(), subject, normalize, false);
+    } catch (RestClientException rce) {
+      if (rce.getStatus() == HTTP_NOT_FOUND
+          && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
+        missingSchemaCache.put(new SubjectAndSchema(subject, schema), System.currentTimeMillis());
+      }
+      throw rce;
+    }
     return response.getId();
   }
 
@@ -394,16 +420,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         return cachedSchema;
       }
 
-      final ParsedSchema retrievedSchema;
-      try {
-        retrievedSchema = getSchemaByIdFromRegistry(id, subject);
-      } catch (RestClientException rce) {
-        if (rce.getStatus() == HTTP_NOT_FOUND
-            && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
-          missingIdCache.put(new SubjectAndId(subject, id), System.currentTimeMillis());
-        }
-        throw rce;
-      }
+      final ParsedSchema retrievedSchema = getSchemaByIdFromRegistry(id, subject);
       idSchemaMap.put(id, retrievedSchema);
       return retrievedSchema;
     }
@@ -498,17 +515,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         return cachedVersion;
       }
 
-      int retrievedVersion = -1;
-      try {
-        retrievedVersion = getVersionFromRegistry(subject, schema, normalize);
-      } catch (RestClientException rce) {
-        if (rce.getStatus() == HTTP_NOT_FOUND
-            && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
-          missingSchemaCache.put(new SubjectAndSchema(subject, schema), System.currentTimeMillis());
-        }
-        throw rce;
-      }
-
+      int retrievedVersion = getVersionFromRegistry(subject, schema, normalize);
       schemaVersionMap.put(schema, retrievedVersion);
       return retrievedVersion;
     }
@@ -543,16 +550,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         return cachedId;
       }
 
-      int retrievedId = -1;
-      try {
-        retrievedId = getIdFromRegistry(subject, schema, normalize);
-      } catch (RestClientException rce) {
-        if (rce.getStatus() == HTTP_NOT_FOUND
-            && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
-          missingSchemaCache.put(new SubjectAndSchema(subject, schema), System.currentTimeMillis());
-        }
-        throw rce;
-      }
+      int retrievedId = getIdFromRegistry(subject, schema, normalize);
       schemaIdMap.put(schema, retrievedId);
       idCache.get(NO_SUBJECT).put(retrievedId, schema);
       return retrievedId;
