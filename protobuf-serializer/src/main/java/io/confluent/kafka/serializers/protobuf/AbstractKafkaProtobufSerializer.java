@@ -45,6 +45,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
 
   protected boolean normalizeSchema;
   protected boolean autoRegisterSchema;
+  protected boolean autoRegisterReferences;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
   protected boolean useLatestVersion;
@@ -56,6 +57,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     configureClientProperties(config, new ProtobufSchemaProvider());
     this.normalizeSchema = config.normalizeSchema();
     this.autoRegisterSchema = config.autoRegisterSchema();
+    this.autoRegisterReferences = config.autoRegisterReferences();
     this.useSchemaId = config.useSchemaId();
     this.idCompatStrict = config.getIdCompatibilityStrict();
     this.useLatestVersion = config.useLatestVersion();
@@ -90,7 +92,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     }
     String restClientErrorMsg = "";
     try {
-      schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterSchema,
+      boolean autoRegister = autoRegisterSchema && autoRegisterReferences;
+      schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegister,
           useLatestVersion, latestCompatStrict, latestVersions,
           skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
       int id;

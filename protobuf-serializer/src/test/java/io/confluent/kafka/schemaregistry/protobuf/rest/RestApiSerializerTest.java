@@ -15,8 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.rest;
 
+import com.acme.glup.CommonProto.Consent;
 import com.acme.glup.ExampleProtoAcme;
 import com.acme.glup.MetadataProto;
+import com.acme.glup.MetadataProto.DataSet;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
@@ -25,10 +27,13 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.subject.DefaultReferenceSubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -124,6 +129,14 @@ public class RestApiSerializerTest extends ClusterTestHarness {
       .setUid("myuid")
       .addControlMessage(WATERMARK_MESSAGE)
       .build();
+  private static final Consent CONSENT_MESSAGE =
+      Consent.newBuilder()
+          .setIdentificationForbidden(true)
+          .build();
+  private static final DataSet DATA_SET_MESSAGE =
+      DataSet.newBuilder()
+          .setId("1")
+          .build();
 
 
   public RestApiSerializerTest() {
@@ -185,6 +198,67 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     assertEquals(ProtobufSchemaUtils.getSchema(DEPENDENCY_MESSAGE).canonicalString(),
         schema.canonicalString()
     );
+  }
+
+  @Test
+  public void testDependencyPreregister() throws Exception {
+    Properties serializerConfig = new Properties();
+    serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_REFERENCES_CONFIG, false);
+    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    serializerConfig.put(KafkaProtobufSerializerConfig.SKIP_KNOWN_TYPES_CONFIG, true);
+    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
+        10,
+        Collections.singletonList(new ProtobufSchemaProvider()),
+        Collections.emptyMap(),
+        Collections.emptyMap()
+    );
+    KafkaProtobufSerializer protobufSerializer = new KafkaProtobufSerializer(schemaRegistry,
+        new HashMap(serializerConfig)
+    );
+    serializerConfig.put(AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY, TestReferenceNameStrategy.class);
+    KafkaProtobufSerializer referenceSerializer = new KafkaProtobufSerializer(schemaRegistry,
+        new HashMap(serializerConfig)
+    );
+
+    Properties deserializerConfig = new Properties();
+    deserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus"
+    );
+    KafkaProtobufDeserializer dataSetMessageDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(deserializerConfig),
+        DataSet.class
+    );
+    KafkaProtobufDeserializer consentMessageDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(deserializerConfig),
+        Consent.class
+    );
+
+    byte[] bytes;
+
+    // first manually register the reference
+    bytes = referenceSerializer.serialize(topic, DATA_SET_MESSAGE);
+    assertEquals(DATA_SET_MESSAGE, dataSetMessageDeserializer.deserialize(topic, bytes));
+
+    // specific -> specific
+    bytes = protobufSerializer.serialize(topic, CONSENT_MESSAGE);
+    assertEquals(CONSENT_MESSAGE, consentMessageDeserializer.deserialize(topic, bytes));
+  }
+
+  public static class TestReferenceNameStrategy implements SubjectNameStrategy {
+    public void configure(Map<String, ?> configs) {
+    }
+
+    public String subjectName(String topic, boolean isKey, ParsedSchema schema) {
+      if (schema.name().endsWith("DataSet")) {
+        return "metadata_proto.proto";
+      } else {
+        throw new IllegalArgumentException();
+      }
+    }
   }
 
   @Test

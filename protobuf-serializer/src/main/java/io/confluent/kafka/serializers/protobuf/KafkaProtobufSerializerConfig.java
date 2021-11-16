@@ -25,6 +25,10 @@ import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrat
 
 public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
 
+  public static final String AUTO_REGISTER_REFERENCES_CONFIG =
+      "auto.register.references";
+  public static final String AUTO_REGISTER_REFERENCES_DOC =
+      "If auto.register.schemas is true, whether to also automatically register references.";
   public static final String SKIP_KNOWN_TYPES_CONFIG =
       "skip.known.types";
   public static final String SKIP_KNOWN_TYPES_DOC =
@@ -40,6 +44,9 @@ public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfi
 
   static {
     config = baseConfigDef()
+        .define(AUTO_REGISTER_REFERENCES_CONFIG, ConfigDef.Type.BOOLEAN,
+            true, ConfigDef.Importance.MEDIUM,
+            AUTO_REGISTER_REFERENCES_DOC)
         .define(SKIP_KNOWN_TYPES_CONFIG, ConfigDef.Type.BOOLEAN,
             true, ConfigDef.Importance.LOW,
             SKIP_KNOWN_TYPES_DOC)
@@ -50,6 +57,10 @@ public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfi
 
   public KafkaProtobufSerializerConfig(Map<?, ?> props) {
     super(config, props);
+  }
+
+  public boolean autoRegisterReferences() {
+    return this.getBoolean(AUTO_REGISTER_REFERENCES_CONFIG);
   }
 
   public boolean skipKnownTypes() {
