@@ -92,10 +92,10 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     }
     String restClientErrorMsg = "";
     try {
-      boolean autoRegister = autoRegisterSchema && !onlyLookupReferencesBySchema;
-      boolean useLatest = useLatestVersion && !onlyLookupReferencesBySchema;
-      schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegister,
-          useLatest, latestCompatStrict, latestVersions,
+      boolean autoRegisterForDeps = autoRegisterSchema && !onlyLookupReferencesBySchema;
+      boolean useLatestForDeps = useLatestVersion && !onlyLookupReferencesBySchema;
+      schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
+          useLatestForDeps, latestCompatStrict, latestVersions,
           skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
       int id;
       if (autoRegisterSchema) {
