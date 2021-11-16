@@ -176,12 +176,9 @@ public class CachedSchemaRegistryClientTest {
         anyObject(List.class), eq(SUBJECT_0), anyBoolean()))
         .andReturn(ID_25);
 
-    SchemaString schemaString = new SchemaString(SCHEMA_STR_0);
-    schemaString.setMaxId(ID_25);
-
     // Expect only one call to getId (the rest should hit the cache)
-    expect(restService.getId(ID_25, SUBJECT_0, true))
-        .andReturn(schemaString);
+    expect(restService.getId(ID_25, SUBJECT_0))
+        .andReturn(new SchemaString(SCHEMA_STR_0));
 
     replay(restService);
 
@@ -227,8 +224,6 @@ public class CachedSchemaRegistryClientTest {
   public void testIdenticalSchemas() throws Exception {
     SchemaString schemaStringOne = new SchemaString(SCHEMA_STR_0);
     SchemaString schemaStringTwo = new SchemaString(SCHEMA_STR_0);
-    schemaStringOne.setMaxId(ID_25);
-    schemaStringTwo.setMaxId(ID_25);
 
     String subjectOne = "subjectOne";
     String subjectTwo = "subjectTwo";
@@ -240,9 +235,9 @@ public class CachedSchemaRegistryClientTest {
         anyObject(List.class), eq(subjectTwo), anyBoolean()))
         .andReturn(ID_25);
 
-    expect(restService.getId(ID_25, subjectOne, true))
+    expect(restService.getId(ID_25, subjectOne))
             .andReturn(schemaStringOne);
-    expect(restService.getId(ID_25, subjectTwo, true))
+    expect(restService.getId(ID_25, subjectTwo))
             .andReturn(schemaStringTwo);
 
     replay(restService);
@@ -396,11 +391,8 @@ public class CachedSchemaRegistryClientTest {
         .andReturn(ID_25)
         .anyTimes();
 
-    SchemaString schemaString = new SchemaString(SCHEMA_STR_0);
-    schemaString.setMaxId(ID_25);
-
-    expect(restService.getId(ID_25, SUBJECT_0, true))
-        .andReturn(schemaString)
+    expect(restService.getId(ID_25, SUBJECT_0))
+        .andReturn(new SchemaString(SCHEMA_STR_0))
         .anyTimes();
 
     expect(restService.lookUpSubjectVersion(eq(AVRO_SCHEMA_0.toString()), anyString(),
@@ -494,7 +486,7 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
-  public void testMissingCache() throws Exception {
+  public void testMissingIdCache() throws Exception {
     Map<String, Object> configs = new HashMap<>();
     configs.put(SchemaRegistryClientConfig.MISSING_ID_CACHE_TTL_CONFIG, 60L);
     configs.put(SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, 60L);
@@ -510,11 +502,9 @@ public class CachedSchemaRegistryClientTest {
         fakeTicker
     );
 
-    SchemaString schemaString = new SchemaString(SCHEMA_STR_0);
-    schemaString.setMaxId(ID_25);
-    expect(restService.getId(ID_25, SUBJECT_0, true))
+    expect(restService.getId(ID_25, SUBJECT_0))
         .andThrow(new RestClientException("This ID is banned", 404, 40403))
-        .andReturn(schemaString);
+        .andReturn(new SchemaString(SCHEMA_STR_0));
 
     replay(restService);
 
@@ -538,6 +528,55 @@ public class CachedSchemaRegistryClientTest {
     fakeTicker.advance(2, TimeUnit.SECONDS);
     Thread.sleep(100);
     assertNotNull(client.getSchemaBySubjectAndId(SUBJECT_0, ID_25));
+  }
+
+  @Test
+  public void testMissingSchemaCache() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.MISSING_ID_CACHE_TTL_CONFIG, 60L);
+    configs.put(SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, 60L);
+    configs.put(SchemaRegistryClientConfig.MISSING_ID_QUERY_RANGE_CONFIG, 5);
+
+    FakeTicker fakeTicker = new FakeTicker();
+    client = new CachedSchemaRegistryClient(
+        restService,
+        CACHE_CAPACITY,
+        null,
+        configs,
+        null,
+        fakeTicker
+    );
+
+    int version = 7;
+    expect(restService.lookUpSubjectVersion(anyString(), anyString(), anyObject(List.class),
+        eq(SUBJECT_0), anyBoolean(),
+        eq(false)))
+        .andThrow(new RestClientException("This ID is banned", 404, 40403))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, version,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+
+    replay(restService);
+
+    try {
+      client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals("This ID is banned; error code: 40403", rce.getMessage());
+    }
+
+    fakeTicker.advance(59, TimeUnit.SECONDS);
+
+    try {
+      client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals("This ID is banned; error code: 40403", rce.getMessage());
+    }
+
+    fakeTicker.advance(2, TimeUnit.SECONDS);
+    Thread.sleep(100);
+    client.getId(SUBJECT_0, AVRO_SCHEMA_0);
   }
 
 

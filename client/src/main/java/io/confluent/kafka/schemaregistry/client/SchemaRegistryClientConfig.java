@@ -68,12 +68,6 @@ public class SchemaRegistryClientConfig {
     return ConfigDef.Importance.valueOf(importance.name());
   }
 
-  public static int getMissingIdQueryRange(Map<String, ?> configs) {
-    return configs != null && configs.containsKey(MISSING_ID_QUERY_RANGE_CONFIG)
-        ? (int)configs.get(MISSING_ID_QUERY_RANGE_CONFIG)
-        : 200;
-  }
-
   public static long getMissingIdTTL(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_ID_CACHE_TTL_CONFIG)
         ? (long)configs.get(MISSING_ID_CACHE_TTL_CONFIG)

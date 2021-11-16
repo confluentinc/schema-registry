@@ -66,8 +66,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<ParsedSchema, Integer>> versionCache;
   private final Cache<SubjectAndSchema, Long> missingSchemaCache;
   private final Cache<SubjectAndId, Long> missingIdCache;
-  private int currentMaxSchemaId = -1;
-  private int missingIdQueryRange = 200;
   private final Map<String, SchemaProvider> providers;
 
   private static final String NO_SUBJECT = ":.:";
@@ -185,7 +183,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.versionCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.restService = restService;
     this.idCache.put(NO_SUBJECT, new BoundedConcurrentHashMap<>(cacheCapacity));
-    this.missingIdQueryRange = SchemaRegistryClientConfig.getMissingIdQueryRange(configs);
 
     long missingIdTTL = SchemaRegistryClientConfig.getMissingIdTTL(configs);
     long missingSchemaTTL = SchemaRegistryClientConfig.getMissingSchemaTTL(configs);
@@ -275,15 +272,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
     }
 
-    if (currentMaxSchemaId >= 0 && id > currentMaxSchemaId + missingIdQueryRange) {
-      missingIdCache.put(new SubjectAndId(subject, id), System.currentTimeMillis());
-      throw new RestClientException("This ID is banned",
-          HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
-    }
-
     SchemaString restSchema;
     try {
-      restSchema = restService.getId(id, subject, true);
+      restSchema = restService.getId(id, subject);
     } catch (RestClientException rce) {
       if (rce.getStatus() == HTTP_NOT_FOUND
           && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
@@ -291,7 +282,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       }
       throw rce;
     }
-    currentMaxSchemaId = restSchema.getMaxId();
     Optional<ParsedSchema> schema = parseSchema(
         restSchema.getSchemaType(), restSchema.getSchemaString(), restSchema.getReferences());
     return schema.orElseThrow(() -> new IOException("Invalid schema " + restSchema.getSchemaString()
