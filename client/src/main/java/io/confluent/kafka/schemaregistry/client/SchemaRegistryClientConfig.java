@@ -39,7 +39,7 @@ public class SchemaRegistryClientConfig {
   public static final String PROXY_HOST = "proxy.host";
   public static final String PROXY_PORT = "proxy.port";
 
-  public static final String MAX_CACHE_SIZE_CONFIG = "schema.registry.max.cache.size";
+  public static final String MAX_MISSING_CACHE_SIZE_CONFIG = "schema.registry.max.cache.size";
   public static final String MISSING_ID_QUERY_RANGE_CONFIG = "missing.id.query.range";
   public static final String MISSING_ID_CACHE_TTL_CONFIG = "missing.id.cache.ttl.sec";
   public static final String MISSING_SCHEMA_CACHE_TTL_CONFIG = "missing.schema.cache.ttl.sec";
@@ -69,38 +69,26 @@ public class SchemaRegistryClientConfig {
   }
 
   public static int getMissingIdQueryRange(Map<String, ?> configs) {
-    int missingIdQueryRange = 200;
-    if (configs != null && configs.containsKey(MISSING_ID_QUERY_RANGE_CONFIG)) {
-      missingIdQueryRange = (int)configs.get(MISSING_ID_QUERY_RANGE_CONFIG);
-    }
-
-    return missingIdQueryRange;
+    return configs != null && configs.containsKey(MISSING_ID_QUERY_RANGE_CONFIG)
+        ? (int)configs.get(MISSING_ID_QUERY_RANGE_CONFIG)
+        : 200;
   }
 
   public static long getMissingIdTTL(Map<String, ?> configs) {
-    long missingIdTTL = 0L;
-    if (configs != null && configs.containsKey(MISSING_ID_CACHE_TTL_CONFIG)) {
-      missingIdTTL = (long)configs.get(MISSING_ID_CACHE_TTL_CONFIG);
-    }
-
-    return missingIdTTL;
+    return configs != null && configs.containsKey(MISSING_ID_CACHE_TTL_CONFIG)
+        ? (long)configs.get(MISSING_ID_CACHE_TTL_CONFIG)
+        : 0L;
   }
 
   public static long getMissingSchemaTTL(Map<String, ?> configs) {
-    long missingSchemaTTL = 0L;
-    if (configs != null && configs.containsKey(MISSING_SCHEMA_CACHE_TTL_CONFIG)) {
-      missingSchemaTTL = (long)configs.get(MISSING_SCHEMA_CACHE_TTL_CONFIG);
-    }
-
-    return missingSchemaTTL;
+    return configs != null && configs.containsKey(MISSING_SCHEMA_CACHE_TTL_CONFIG)
+        ? (long)configs.get(MISSING_SCHEMA_CACHE_TTL_CONFIG)
+        : 0L;
   }
 
   public static int getMaxCacheSize(Map<String, ?> configs) {
-    int maxCacheSize = 0;
-    if (configs != null && configs.containsKey(MAX_CACHE_SIZE_CONFIG)) {
-      maxCacheSize = (int)configs.get(MAX_CACHE_SIZE_CONFIG);
-    }
-
-    return maxCacheSize;
+    return configs != null && configs.containsKey(MAX_MISSING_CACHE_SIZE_CONFIG)
+        ? (int)configs.get(MAX_MISSING_CACHE_SIZE_CONFIG)
+        : 10000;
   }
 }
