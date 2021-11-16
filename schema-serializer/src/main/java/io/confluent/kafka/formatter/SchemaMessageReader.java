@@ -126,8 +126,8 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     Serializer keySerializer = getKeySerializer(props);
 
     boolean normalizeSchema;
-    if (props.containsKey("normalize.schema")) {
-      normalizeSchema = Boolean.parseBoolean(props.getProperty("normalize.schema").trim());
+    if (props.containsKey("normalize.schemas")) {
+      normalizeSchema = Boolean.parseBoolean(props.getProperty("normalize.schemas").trim());
     } else {
       normalizeSchema = false;
     }
