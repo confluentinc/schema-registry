@@ -120,11 +120,11 @@ public class FieldSchemaDiff {
   ) {
     String originalFullName = ctx.resolve(original.toString(), true);
     if (originalFullName == null) {
-      throw new IllegalArgumentException("Could not resolve message type: " + original.toString());
+      throw new IllegalArgumentException("Could not resolve message type: " + original);
     }
     String updateFullName = ctx.resolve(update.toString(), false);
     if (updateFullName == null) {
-      throw new IllegalArgumentException("Could not resolve message type: " + update.toString());
+      throw new IllegalArgumentException("Could not resolve message type: " + update);
     }
     TypeElementInfo originalType = ctx.getType(originalFullName, true);
     TypeElementInfo updateType = ctx.getType(updateFullName, false);

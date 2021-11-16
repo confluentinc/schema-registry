@@ -43,6 +43,7 @@ import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrat
 public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
 
+  protected boolean normalizeSchema;
   protected boolean autoRegisterSchema;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
@@ -53,6 +54,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
 
   protected void configure(KafkaProtobufSerializerConfig config) {
     configureClientProperties(config, new ProtobufSchemaProvider());
+    this.normalizeSchema = config.normalizeSchema();
     this.autoRegisterSchema = config.autoRegisterSchema();
     this.useSchemaId = config.useSchemaId();
     this.idCompatStrict = config.getIdCompatibilityStrict();
@@ -88,13 +90,13 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     }
     String restClientErrorMsg = "";
     try {
-      schema = resolveDependencies(schemaRegistry, autoRegisterSchema,
+      schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterSchema,
           useLatestVersion, latestCompatStrict, latestVersions,
           skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Protobuf schema: ";
-        id = schemaRegistry.register(subject, schema);
+        id = schemaRegistry.register(subject, schema, normalizeSchema);
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (ProtobufSchema)
@@ -103,10 +105,10 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
         schema = (ProtobufSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
-        id = schemaRegistry.getId(subject, schema);
+        id = schemaRegistry.getId(subject, schema, normalizeSchema);
       } else {
         restClientErrorMsg = "Error retrieving Protobuf schema: ";
-        id = schemaRegistry.getId(subject, schema);
+        id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
@@ -192,11 +194,57 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean isKey,
       ProtobufSchema schema
   ) throws IOException, RestClientException {
+    return resolveDependencies(
+        schemaRegistry,
+        false,
+        autoRegisterSchema,
+        useLatestVersion,
+        latestCompatStrict,
+        latestVersions,
+        skipKnownTypes,
+        strategy,
+        topic,
+        isKey,
+        schema
+    );
+  }
+
+  /**
+   * Resolve schema dependencies recursively.
+   *
+   * @param schemaRegistry     schema registry client
+   * @param normalizeSchema    whether to normalized the schema
+   * @param autoRegisterSchema whether to automatically register schemas
+   * @param useLatestVersion   whether to use the latest subject version for serialization
+   * @param latestCompatStrict whether to check that the latest subject version is backward
+   *                           compatible with the schema of the object
+   * @param latestVersions     an optional cache of latest subject versions, may be null
+   * @param skipKnownTypes     whether to skip known types when resolving schema dependencies
+   * @param strategy           the strategy for determining the subject name for a reference
+   * @param topic              the topic
+   * @param isKey              whether the object is the record key
+   * @param schema             the schema
+   * @return the schema with resolved dependencies
+   */
+  public static ProtobufSchema resolveDependencies(
+      SchemaRegistryClient schemaRegistry,
+      boolean normalizeSchema,
+      boolean autoRegisterSchema,
+      boolean useLatestVersion,
+      boolean latestCompatStrict,
+      Map<SubjectSchema, ParsedSchema> latestVersions,
+      boolean skipKnownTypes,
+      ReferenceSubjectNameStrategy strategy,
+      String topic,
+      boolean isKey,
+      ProtobufSchema schema
+  ) throws IOException, RestClientException {
     if (schema.dependencies().isEmpty() || !schema.references().isEmpty()) {
       // Dependencies already resolved
       return schema;
     }
     Schema s = resolveDependencies(schemaRegistry,
+        normalizeSchema,
         autoRegisterSchema,
         useLatestVersion,
         latestCompatStrict,
@@ -214,6 +262,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
 
   private static Schema resolveDependencies(
       SchemaRegistryClient schemaRegistry,
+      boolean normalizeSchema,
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
@@ -232,6 +281,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         continue;
       }
       Schema subschema = resolveDependencies(schemaRegistry,
+          normalizeSchema,
           autoRegisterSchema,
           useLatestVersion,
           latestCompatStrict,
@@ -251,6 +301,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         continue;
       }
       Schema subschema = resolveDependencies(schemaRegistry,
+          normalizeSchema,
           autoRegisterSchema,
           useLatestVersion,
           latestCompatStrict,
@@ -271,15 +322,15 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     String subject = name != null ? strategy.subjectName(name, topic, isKey, schema) : null;
     if (subject != null) {
       if (autoRegisterSchema) {
-        id = schemaRegistry.register(subject, schema);
+        id = schemaRegistry.register(subject, schema, normalizeSchema);
       } else if (useLatestVersion) {
         schema = (ProtobufSchema) lookupLatestVersion(
             schemaRegistry, subject, schema, latestVersions, latestCompatStrict);
-        id = schemaRegistry.getId(subject, schema);
+        id = schemaRegistry.getId(subject, schema, normalizeSchema);
       } else {
-        id = schemaRegistry.getId(subject, schema);
+        id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
-      version = schemaRegistry.getVersion(subject, schema);
+      version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
     }
     return new Schema(
         subject,

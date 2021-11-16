@@ -199,6 +199,14 @@
     "compatible": false
   },
   {
+    "description": "Detect compatible name qualification in map",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    map<string, Status> test_map = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    map<string, TestMessage.Status> test_map = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect compatible field label change for message",
     "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    optional Status test_status = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
     "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    repeated Status test_status = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",

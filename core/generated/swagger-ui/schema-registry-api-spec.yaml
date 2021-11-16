@@ -767,6 +767,10 @@ paths:
         description: "Subject under which the schema will be registered"
         required: true
         type: "string"
+      - name: "normalize"
+        in: "query"
+        required: false
+        type: "boolean"
       - name: "deleted"
         in: "query"
         required: false
@@ -891,6 +895,10 @@ paths:
         description: "Name of the Subject"
         required: true
         type: "string"
+      - name: "normalize"
+        in: "query"
+        required: false
+        type: "boolean"
       - in: "body"
         name: "body"
         description: "Schema"

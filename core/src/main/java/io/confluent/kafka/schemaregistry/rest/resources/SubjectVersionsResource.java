@@ -255,6 +255,7 @@ public class SubjectVersionsResource {
       @Context HttpHeaders headers,
       @ApiParam(value = "Name of the Subject", required = true)
         @PathParam("subject") String subjectName,
+      @QueryParam("normalize") boolean normalize,
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
@@ -276,7 +277,7 @@ public class SubjectVersionsResource {
     );
     int id;
     try {
-      id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
+      id = schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {

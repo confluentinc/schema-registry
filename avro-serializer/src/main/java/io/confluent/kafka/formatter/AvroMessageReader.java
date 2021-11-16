@@ -92,21 +92,24 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
       String topic,
       boolean parseKey,
       BufferedReader reader,
+      boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest
   ) {
     super(schemaRegistryClient, new AvroSchema(keySchema), new AvroSchema(valueSchema), topic,
-        parseKey, reader, autoRegister, useLatest);
+        parseKey, reader, normalizeSchema, autoRegister, useLatest);
   }
 
   @Override
   protected SchemaMessageSerializer<Object> createSerializer(
       SchemaRegistryClient schemaRegistryClient,
+      boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest,
       Serializer keySerializer
   ) {
-    return new AvroMessageSerializer(schemaRegistryClient, autoRegister, useLatest, keySerializer);
+    return new AvroMessageSerializer(
+        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, keySerializer);
   }
 
   @Override
@@ -139,9 +142,10 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
 
     AvroMessageSerializer(
         SchemaRegistryClient schemaRegistryClient,
-        boolean autoRegister, boolean useLatest, Serializer keySerializer
+        boolean normalizeSchema, boolean autoRegister, boolean useLatest, Serializer keySerializer
     ) {
       this.schemaRegistry = schemaRegistryClient;
+      this.normalizeSchema = normalizeSchema;
       this.autoRegisterSchema = autoRegister;
       this.useLatestVersion = useLatest;
       this.keySerializer = keySerializer;

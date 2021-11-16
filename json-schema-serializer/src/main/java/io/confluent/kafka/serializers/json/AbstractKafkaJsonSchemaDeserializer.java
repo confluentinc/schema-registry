@@ -42,6 +42,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected Class<T> type;
   protected String typeProperty;
+  protected boolean normalizeSchema;
   protected boolean validate;
 
   /**
@@ -59,6 +60,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
         failUnknownProperties
     );
+    this.normalizeSchema = config.normalizeSchema();
     this.validate = config.getBoolean(KafkaJsonSchemaDeserializerConfig.FAIL_INVALID_SCHEMA);
     this.typeProperty = config.getString(KafkaJsonSchemaDeserializerConfig.TYPE_PROPERTY);
   }
@@ -205,10 +207,10 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     if (isDeprecatedSubjectNameStrategy(isKey)) {
       subject = getSubjectName(topic, isKey, value, schema);
       JsonSchema subjectSchema = (JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
-      version = schemaRegistry.getVersion(subject, subjectSchema);
+      version = schemaRegistry.getVersion(subject, subjectSchema, normalizeSchema);
     } else {
       //we already got the subject name
-      version = schemaRegistry.getVersion(subject, schema);
+      version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
     }
     return version;
   }
