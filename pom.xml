@@ -79,9 +79,9 @@
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.4.21</kotlin.version>
         <json-schema.version>1.12.2</json-schema.version>
-        <proto-google-common-protos.version>2.3.2</proto-google-common-protos.version>
+        <proto-google-common-protos.version>2.5.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
-        <wire.version>3.6.0</wire.version>
+        <wire.version>3.7.1</wire.version>
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.1.0-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>

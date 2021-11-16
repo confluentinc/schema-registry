@@ -87,6 +87,7 @@ public class SubjectsResource {
       final @Suspended AsyncResponse asyncResponse,
       @Parameter(description = "Subject under which the schema will be registered", required = true)
       @PathParam("subject") String subject,
+      @QueryParam("normalize") boolean normalize,
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
@@ -110,7 +111,7 @@ public class SubjectsResource {
         throw Errors.subjectNotFoundException(subject);
       }
       matchingSchema =
-          schemaRegistry.lookUpSchemaUnderSubject(subject, schema, lookupDeletedSchema);
+          schemaRegistry.lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);

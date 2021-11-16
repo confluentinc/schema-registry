@@ -22,6 +22,8 @@ import static io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema.t
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
+import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 
 import io.confluent.protobuf.MetaProto;
@@ -74,7 +76,8 @@ public class MessageDefinition {
         String doc,
         Map<String, String> params
     ) {
-      return addField(label, false, type, name, num, defaultVal, null, doc, params, null, null);
+      return addField(label, false, type, name, num, defaultVal,
+          null, doc, params, null, null, null, null);
     }
 
     public Builder addField(
@@ -87,12 +90,14 @@ public class MessageDefinition {
         String jsonName,
         String doc,
         Map<String, String> params,
+        CType ctype,
         Boolean isPacked,
+        JSType jstype,
         Boolean isDeprecated
     ) {
       FieldDescriptorProto.Label protoLabel = sLabelMap.get(label);
       doAddField(protoLabel, isProto3Optional, type, name, num,
-              defaultVal, jsonName, doc, params, isPacked, isDeprecated, null);
+              defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated, null);
       return this;
     }
 
@@ -127,10 +132,10 @@ public class MessageDefinition {
     }
 
     // Note: added
-    public Builder setMapEntry(boolean mapEntry) {
+    public Builder setNoStandardDescriptorAccessor(boolean noStandardDescriptorAccessor) {
       DescriptorProtos.MessageOptions.Builder optionsBuilder =
           DescriptorProtos.MessageOptions.newBuilder();
-      optionsBuilder.setMapEntry(mapEntry);
+      optionsBuilder.setNoStandardDescriptorAccessor(noStandardDescriptorAccessor);
       mMsgTypeBuilder.mergeOptions(optionsBuilder.build());
       return this;
     }
@@ -140,6 +145,15 @@ public class MessageDefinition {
       DescriptorProtos.MessageOptions.Builder optionsBuilder =
           DescriptorProtos.MessageOptions.newBuilder();
       optionsBuilder.setDeprecated(isDeprecated);
+      mMsgTypeBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setMapEntry(boolean mapEntry) {
+      DescriptorProtos.MessageOptions.Builder optionsBuilder =
+          DescriptorProtos.MessageOptions.newBuilder();
+      optionsBuilder.setMapEntry(mapEntry);
       mMsgTypeBuilder.mergeOptions(optionsBuilder.build());
       return this;
     }
@@ -177,7 +191,9 @@ public class MessageDefinition {
         String jsonName,
         String doc,
         Map<String, String> params,
+        CType ctype,
         Boolean isPacked,
+        JSType jstype,
         Boolean isDeprecated,
         OneofBuilder oneofBuilder
     ) {
@@ -203,10 +219,22 @@ public class MessageDefinition {
       if (jsonName != null) {
         fieldBuilder.setJsonName(jsonName);
       }
+      if (ctype != null) {
+        DescriptorProtos.FieldOptions.Builder optionsBuilder =
+            DescriptorProtos.FieldOptions.newBuilder();
+        optionsBuilder.setCtype(ctype);
+        fieldBuilder.mergeOptions(optionsBuilder.build());
+      }
       if (isPacked != null) {
         DescriptorProtos.FieldOptions.Builder optionsBuilder =
             DescriptorProtos.FieldOptions.newBuilder();
         optionsBuilder.setPacked(isPacked);
+        fieldBuilder.mergeOptions(optionsBuilder.build());
+      }
+      if (jstype != null) {
+        DescriptorProtos.FieldOptions.Builder optionsBuilder =
+            DescriptorProtos.FieldOptions.newBuilder();
+        optionsBuilder.setJstype(jstype);
         fieldBuilder.mergeOptions(optionsBuilder.build());
       }
       if (isDeprecated != null) {
@@ -247,7 +275,7 @@ public class MessageDefinition {
         String defaultVal,
         String doc,
         Map<String, String> params) {
-      return addField(type, name, num, defaultVal, null, doc, params, false);
+      return addField(type, name, num, defaultVal, null, doc, params, null, null, false);
     }
 
     public OneofBuilder addField(
@@ -258,6 +286,8 @@ public class MessageDefinition {
         String jsonName,
         String doc,
         Map<String, String> params,
+        CType ctype,
+        JSType jstype,
         Boolean deprecated
     ) {
       mMsgBuilder.doAddField(
@@ -270,7 +300,9 @@ public class MessageDefinition {
           jsonName,
           doc,
           params,
+          ctype,
           null,
+          jstype,
           deprecated,
           this
       );

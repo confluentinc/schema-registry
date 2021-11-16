@@ -388,31 +388,7 @@ public class RestService implements Configurable {
   // Visible for testing
   public Schema lookUpSubjectVersion(String schemaString, String subject)
       throws IOException, RestClientException {
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
-    return lookUpSubjectVersion(request, subject);
-  }
-
-  public Schema lookUpSubjectVersion(RegisterSchemaRequest registerSchemaRequest,
-                                     String subject)
-      throws IOException, RestClientException {
-    return lookUpSubjectVersion(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject, false);
-  }
-
-  public Schema lookUpSubjectVersion(Map<String, String> requestProperties,
-                                     RegisterSchemaRequest registerSchemaRequest,
-                                     String subject)
-      throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}");
-    String path = builder.build(subject).toString();
-    if (requestProperties.isEmpty()) {
-      requestProperties = DEFAULT_REQUEST_PROPERTIES;
-    }
-    Schema schema = httpRequest(path, "POST",
-                                registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
-                                requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
-
-    return schema;
+    return lookUpSubjectVersion(schemaString, subject, false);
   }
 
   // Visible for testing
@@ -420,11 +396,19 @@ public class RestService implements Configurable {
                                      String subject,
                                      boolean lookupDeletedSchema)
       throws IOException, RestClientException {
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
-    return lookUpSubjectVersion(DEFAULT_REQUEST_PROPERTIES, request, subject, lookupDeletedSchema);
+    return lookUpSubjectVersion(schemaString, subject, false, lookupDeletedSchema);
   }
 
+  public Schema lookUpSubjectVersion(String schemaString,
+                                     String subject,
+                                     boolean normalize,
+                                     boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    return lookUpSubjectVersion(
+        DEFAULT_REQUEST_PROPERTIES, request, subject, normalize, lookupDeletedSchema);
+  }
 
   public Schema lookUpSubjectVersion(String schemaString,
                                      String schemaType,
@@ -432,79 +416,129 @@ public class RestService implements Configurable {
                                      String subject,
                                      boolean lookupDeletedSchema)
       throws IOException, RestClientException {
+    return lookUpSubjectVersion(
+        schemaString, schemaType, references, subject, false, lookupDeletedSchema);
+  }
+
+  public Schema lookUpSubjectVersion(String schemaString,
+                                     String schemaType,
+                                     List<SchemaReference> references,
+                                     String subject,
+                                     boolean normalize,
+                                     boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setSchemaType(schemaType);
     request.setReferences(references);
-    return lookUpSubjectVersion(DEFAULT_REQUEST_PROPERTIES, request, subject, lookupDeletedSchema);
+    return lookUpSubjectVersion(
+        DEFAULT_REQUEST_PROPERTIES, request, subject, normalize, lookupDeletedSchema);
   }
 
+  public Schema lookUpSubjectVersion(RegisterSchemaRequest registerSchemaRequest,
+                                     String subject,
+                                     boolean normalize,
+                                     boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    return lookUpSubjectVersion(
+        DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject, normalize, lookupDeletedSchema);
+  }
 
   public Schema lookUpSubjectVersion(Map<String, String> requestProperties,
                                      RegisterSchemaRequest registerSchemaRequest,
                                      String subject,
+                                     boolean normalize,
                                      boolean lookupDeletedSchema)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}")
+        .queryParam("normalize", normalize)
         .queryParam("deleted", lookupDeletedSchema);
     String path = builder.build(subject).toString();
 
     Schema schema = httpRequest(path, "POST",
                                 registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
                                 requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
-
     return schema;
   }
 
   // Visible for testing
   public int registerSchema(String schemaString, String subject)
       throws IOException, RestClientException {
+    return registerSchema(schemaString, subject, false);
+  }
+
+  public int registerSchema(String schemaString, String subject, boolean normalize)
+      throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
-    return registerSchema(request, subject);
+    return registerSchema(request, subject, normalize);
   }
 
   public int registerSchema(String schemaString, String schemaType,
                             List<SchemaReference> references, String subject)
       throws IOException, RestClientException {
+    return registerSchema(schemaString, schemaType, references, subject, false);
+  }
+
+  public int registerSchema(String schemaString, String schemaType,
+                            List<SchemaReference> references, String subject, boolean normalize)
+      throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setSchemaType(schemaType);
     request.setReferences(references);
-    return registerSchema(request, subject);
+    return registerSchema(request, subject, normalize);
   }
 
   // Visible for testing
   public int registerSchema(String schemaString, String subject, int version, int id)
       throws IOException, RestClientException {
+    return registerSchema(schemaString, subject, version, id, false);
+  }
+
+  public int registerSchema(String schemaString, String subject,
+                            int version, int id, boolean normalize)
+      throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setVersion(version);
     request.setId(id);
-    return registerSchema(request, subject);
+    return registerSchema(request, subject, normalize);
   }
 
   public int registerSchema(String schemaString, String schemaType,
                             List<SchemaReference> references, String subject, int version, int id)
       throws IOException, RestClientException {
+    return registerSchema(schemaString, schemaType, references, subject, version, id, false);
+  }
+
+  public int registerSchema(String schemaString, String schemaType,
+                            List<SchemaReference> references, String subject, int version, int id,
+                            boolean normalize)
+                            throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setSchemaType(schemaType);
     request.setReferences(references);
     request.setVersion(version);
     request.setId(id);
-    return registerSchema(request, subject);
+    return registerSchema(request, subject, normalize);
   }
 
-  public int registerSchema(RegisterSchemaRequest registerSchemaRequest, String subject)
+  public int registerSchema(RegisterSchemaRequest registerSchemaRequest,
+                            String subject,
+                            boolean normalize)
       throws IOException, RestClientException {
-    return registerSchema(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject);
+    return registerSchema(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject, normalize);
   }
 
   public int registerSchema(Map<String, String> requestProperties,
-                            RegisterSchemaRequest registerSchemaRequest, String subject)
+                            RegisterSchemaRequest registerSchemaRequest,
+                            String subject,
+                            boolean normalize)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions");
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions")
+        .queryParam("normalize", normalize);
     String path = builder.build(subject).toString();
 
     RegisterSchemaResponse response = httpRequest(

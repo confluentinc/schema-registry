@@ -25,8 +25,14 @@ import com.google.protobuf.DescriptorProtos.DescriptorProto.ReservedRange;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
+import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FileOptions.OptimizeMode;
+import com.google.protobuf.DescriptorProtos.MethodDescriptorProto;
+import com.google.protobuf.DescriptorProtos.MethodOptions.IdempotencyLevel;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
+import com.google.protobuf.DescriptorProtos.ServiceDescriptorProto;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
@@ -65,10 +71,14 @@ import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import com.squareup.wire.schema.internal.parser.OneOfElement;
 import com.squareup.wire.schema.internal.parser.OptionElement;
+import com.squareup.wire.schema.internal.parser.OptionElement.Kind;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.ProtoParser;
 import com.squareup.wire.schema.internal.parser.ReservedElement;
+import com.squareup.wire.schema.internal.parser.RpcElement;
+import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
@@ -118,6 +128,43 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String MAP_ENTRY_SUFFIX = "Entry";  // Suffix used by protoc
   public static final String KEY_FIELD = "key";
   public static final String VALUE_FIELD = "value";
+
+  private static final String CONFLUENT_FILE_META = "confluent.file_meta";
+  private static final String CONFLUENT_MESSAGE_META = "confluent.message_meta";
+  private static final String CONFLUENT_FIELD_META = "confluent.field_meta";
+  private static final String CONFLUENT_ENUM_META = "confluent.enum_meta";
+  private static final String CONFLUENT_ENUM_VALUE_META = "confluent.enum_value_meta";
+
+  private static final String JAVA_PACKAGE = "java_package";
+  private static final String JAVA_OUTER_CLASSNAME = "java_outer_classname";
+  private static final String JAVA_MULTIPLE_FILES = "java_multiple_files";
+  private static final String JAVA_STRING_CHECK_UTF8 = "java_string_check_utf8";
+  private static final String OPTIMIZE_FOR = "optimize_for";
+  private static final String GO_PACKAGE = "go_package";
+  private static final String CC_GENERIC_SERVICES = "cc_generic_services";
+  private static final String JAVA_GENERIC_SERVICES = "java_generic_services";
+  private static final String PY_GENERIC_SERVICES = "py_generic_services";
+  private static final String PHP_GENERIC_SERVICES = "php_generic_services";
+  private static final String DEPRECATED = "deprecated";
+  private static final String CC_ENABLE_ARENAS = "cc_enable_arenas";
+  private static final String OBJC_CLASS_PREFIX = "objc_class_prefix";
+  private static final String CSHARP_NAMESPACE = "csharp_namespace";
+  private static final String SWIFT_PREFIX = "swift_prefix";
+  private static final String PHP_CLASS_PREFIX = "php_class_prefix";
+  private static final String PHP_NAMESPACE = "php_namespace";
+  private static final String PHP_METADATA_NAMESPACE = "php_metadata_namespace";
+  private static final String RUBY_PACKAGE = "ruby_package";
+
+  private static final String NO_STANDARD_DESCRIPTOR_ACCESSOR = "no_standard_descriptor_accessor";
+  private static final String MAP_ENTRY = "map_entry";
+
+  private static final String CTYPE = "ctype";
+  private static final String PACKED = "packed";
+  private static final String JSTYPE = "jstype";
+
+  private static final String ALLOW_ALIAS = "allow_alias";
+
+  private static final String IDEMPOTENCY_LEVEL = "idempotency_level";
 
   public static final Location DEFAULT_LOCATION = Location.get("");
 
@@ -431,7 +478,6 @@ public class ProtobufSchema implements ParsedSchema {
     if ("".equals(packageName)) {
       packageName = null;
     }
-
     Syntax syntax = null;
     switch (file.getSyntax()) {
       case PROTO2:
@@ -452,6 +498,11 @@ public class ProtobufSchema implements ParsedSchema {
       EnumElement enumer = toEnum(ed);
       types.add(enumer);
     }
+    ImmutableList.Builder<ServiceElement> services = ImmutableList.builder();
+    for (ServiceDescriptorProto sd : file.getServiceList()) {
+      ServiceElement service = toService(sd);
+      services.add(service);
+    }
     ImmutableList.Builder<String> imports = ImmutableList.builder();
     ImmutableList.Builder<String> publicImports = ImmutableList.builder();
     List<String> dependencyList = file.getDependencyList();
@@ -466,60 +517,96 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (file.getOptions().hasJavaPackage()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          "java_package",
-          kind,
-          file.getOptions().getJavaPackage(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          JAVA_PACKAGE, Kind.STRING, file.getOptions().getJavaPackage(), false));
     }
     if (file.getOptions().hasJavaOuterClassname()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          "java_outer_classname",
-          kind,
-          file.getOptions().getJavaOuterClassname(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          JAVA_OUTER_CLASSNAME, Kind.STRING, file.getOptions().getJavaOuterClassname(), false));
     }
     if (file.getOptions().hasJavaMultipleFiles()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement(
-          "java_multiple_files",
-          kind,
-          file.getOptions().getJavaMultipleFiles(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          JAVA_MULTIPLE_FILES, Kind.BOOLEAN, file.getOptions().getJavaMultipleFiles(), false));
+    }
+    if (file.getOptions().hasJavaStringCheckUtf8()) {
+      options.add(new OptionElement(
+          JAVA_STRING_CHECK_UTF8, Kind.BOOLEAN, file.getOptions().getJavaStringCheckUtf8(), false));
+    }
+    if (file.getOptions().hasOptimizeFor()) {
+      options.add(new OptionElement(
+          OPTIMIZE_FOR, Kind.ENUM, file.getOptions().getOptimizeFor(), false));
+    }
+    if (file.getOptions().hasGoPackage()) {
+      options.add(new OptionElement(
+          GO_PACKAGE, Kind.STRING, file.getOptions().getGoPackage(), false));
+    }
+    if (file.getOptions().hasCcGenericServices()) {
+      options.add(new OptionElement(
+          CC_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getCcGenericServices(), false));
+    }
+    if (file.getOptions().hasJavaGenericServices()) {
+      options.add(new OptionElement(
+          JAVA_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getJavaGenericServices(), false));
+    }
+    if (file.getOptions().hasPyGenericServices()) {
+      options.add(new OptionElement(
+          PY_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getPyGenericServices(), false));
+    }
+    if (file.getOptions().hasPhpGenericServices()) {
+      options.add(new OptionElement(
+          PHP_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getPhpGenericServices(), false));
     }
     if (file.getOptions().hasDeprecated()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement(
-          "deprecated",
-          kind,
-          file.getOptions().getDeprecated(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          DEPRECATED, Kind.BOOLEAN, file.getOptions().getDeprecated(), false));
+    }
+    if (file.getOptions().hasCcEnableArenas()) {
+      options.add(new OptionElement(
+          CC_ENABLE_ARENAS, Kind.BOOLEAN, file.getOptions().getCcEnableArenas(), false));
+    }
+    if (file.getOptions().hasObjcClassPrefix()) {
+      options.add(new OptionElement(
+          OBJC_CLASS_PREFIX, Kind.STRING, file.getOptions().getObjcClassPrefix(), false));
+    }
+    if (file.getOptions().hasCsharpNamespace()) {
+      options.add(new OptionElement(
+          CSHARP_NAMESPACE, Kind.STRING, file.getOptions().getCsharpNamespace(), false));
+    }
+    if (file.getOptions().hasSwiftPrefix()) {
+      options.add(new OptionElement(
+          SWIFT_PREFIX, Kind.STRING, file.getOptions().getSwiftPrefix(), false));
+    }
+    if (file.getOptions().hasPhpClassPrefix()) {
+      options.add(new OptionElement(
+          PHP_CLASS_PREFIX, Kind.STRING, file.getOptions().getPhpClassPrefix(), false));
+    }
+    if (file.getOptions().hasPhpNamespace()) {
+      options.add(new OptionElement(
+          PHP_NAMESPACE, Kind.STRING, file.getOptions().getPhpNamespace(), false));
+    }
+    if (file.getOptions().hasPhpMetadataNamespace()) {
+      options.add(new OptionElement(
+          PHP_METADATA_NAMESPACE, Kind.STRING, file.getOptions().getPhpMetadataNamespace(), false));
+    }
+    if (file.getOptions().hasRubyPackage()) {
+      options.add(new OptionElement(
+          RUBY_PACKAGE, Kind.STRING, file.getOptions().getRubyPackage(), false));
     }
     if (file.getOptions().hasExtension(MetaProto.fileMeta)) {
       Meta meta = file.getOptions().getExtension(MetaProto.fileMeta);
-      OptionElement option = toOption("confluent.file_meta", meta);
+      OptionElement option = toOption(CONFLUENT_FILE_META, meta);
       if (option != null) {
         options.add(option);
       }
     }
-    // NOTE: skip services, extensions, some options
+    // NOTE: skip extensions
     return new ProtoFileElement(DEFAULT_LOCATION,
         packageName,
         syntax,
         imports.build(),
         publicImports.build(),
         types.build(),
-        Collections.emptyList(),
+        services.build(),
         Collections.emptyList(),
         options.build()
     );
@@ -567,34 +654,35 @@ public class ProtobufSchema implements ParsedSchema {
       reserved.add(reservedElem);
     }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
-    if (descriptor.getOptions().hasMapEntry()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
+    if (descriptor.getOptions().hasNoStandardDescriptorAccessor()) {
       OptionElement option = new OptionElement(
-          "map_entry",
-          kind,
-          descriptor.getOptions().getMapEntry(),
-          false
+          NO_STANDARD_DESCRIPTOR_ACCESSOR, Kind.BOOLEAN,
+          descriptor.getOptions().getNoStandardDescriptorAccessor(), false
       );
       options.add(option);
     }
     if (descriptor.getOptions().hasDeprecated()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option = new OptionElement(
-          "deprecated",
-          kind,
-          descriptor.getOptions().getDeprecated(),
-          false
+          DEPRECATED, Kind.BOOLEAN,
+          descriptor.getOptions().getDeprecated(), false
+      );
+      options.add(option);
+    }
+    if (descriptor.getOptions().hasMapEntry()) {
+      OptionElement option = new OptionElement(
+          MAP_ENTRY, Kind.BOOLEAN,
+          descriptor.getOptions().getMapEntry(), false
       );
       options.add(option);
     }
     if (descriptor.getOptions().hasExtension(MetaProto.messageMeta)) {
       Meta meta = descriptor.getOptions().getExtension(MetaProto.messageMeta);
-      OptionElement option = toOption("confluent.message_meta", meta);
+      OptionElement option = toOption(CONFLUENT_MESSAGE_META, meta);
       if (option != null) {
         options.add(option);
       }
     }
-    // NOTE: skip some options, extensions, groups
+    // NOTE: skip extensions, groups
     return new MessageElement(DEFAULT_LOCATION,
         name,
         "",
@@ -627,8 +715,7 @@ public class ProtobufSchema implements ParsedSchema {
       }
       map.put(PARAMS_FIELD, keyValues);
     }
-    OptionElement.Kind kind = OptionElement.Kind.MAP;
-    return map.isEmpty() ? null : new OptionElement(name, kind, map, true);
+    return map.isEmpty() ? null : new OptionElement(name, Kind.MAP, map, true);
   }
 
   private static ReservedElement toReserved(ReservedRange range) {
@@ -653,23 +740,19 @@ public class ProtobufSchema implements ParsedSchema {
     for (EnumValueDescriptorProto ev : ed.getValueList()) {
       ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
       if (ev.getOptions().hasDeprecated()) {
-        OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
         OptionElement option = new OptionElement(
-            "deprecated",
-            kind,
-            ev.getOptions().getDeprecated(),
-            false
+            DEPRECATED, Kind.BOOLEAN,
+            ev.getOptions().getDeprecated(), false
         );
         options.add(option);
       }
       if (ev.getOptions().hasExtension(MetaProto.enumValueMeta)) {
         Meta meta = ev.getOptions().getExtension(MetaProto.enumValueMeta);
-        OptionElement option = toOption("confluent.enum_value_meta", meta);
+        OptionElement option = toOption(CONFLUENT_ENUM_VALUE_META, meta);
         if (option != null) {
           options.add(option);
         }
       }
-      // NOTE: skip some options
       constants.add(new EnumConstantElement(
           DEFAULT_LOCATION,
           ev.getName(),
@@ -680,34 +763,69 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (ed.getOptions().hasAllowAlias()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option = new OptionElement(
-          "allow_alias",
-          kind,
-          ed.getOptions().getAllowAlias(),
-          false
+          ALLOW_ALIAS, Kind.BOOLEAN,
+          ed.getOptions().getAllowAlias(), false
       );
       options.add(option);
     }
     if (ed.getOptions().hasDeprecated()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option = new OptionElement(
-          "deprecated",
-          kind,
-          ed.getOptions().getDeprecated(),
-          false
+          DEPRECATED, Kind.BOOLEAN,
+          ed.getOptions().getDeprecated(), false
       );
       options.add(option);
     }
     if (ed.getOptions().hasExtension(MetaProto.enumMeta)) {
       Meta meta = ed.getOptions().getExtension(MetaProto.enumMeta);
-      OptionElement option = toOption("confluent.enum_meta", meta);
+      OptionElement option = toOption(CONFLUENT_ENUM_META, meta);
       if (option != null) {
         options.add(option);
       }
     }
-    // NOTE: skip some options
     return new EnumElement(DEFAULT_LOCATION, name, "", options.build(), constants.build());
+  }
+
+  private static ServiceElement toService(ServiceDescriptorProto sd) {
+    String name = sd.getName();
+    log.trace("*** service name: {}", name);
+    ImmutableList.Builder<RpcElement> methods = ImmutableList.builder();
+    for (MethodDescriptorProto method : sd.getMethodList()) {
+      ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
+      if (method.getOptions().hasDeprecated()) {
+        OptionElement option = new OptionElement(
+            DEPRECATED, Kind.BOOLEAN,
+            method.getOptions().getDeprecated(), false
+        );
+        options.add(option);
+      }
+      if (method.getOptions().hasIdempotencyLevel()) {
+        OptionElement option = new OptionElement(
+            IDEMPOTENCY_LEVEL, Kind.ENUM,
+            method.getOptions().getIdempotencyLevel(), false
+        );
+        options.add(option);
+      }
+      methods.add(new RpcElement(
+          DEFAULT_LOCATION,
+          method.getName(),
+          "",
+          method.getInputType(),
+          method.getOutputType(),
+          method.getClientStreaming(),
+          method.getServerStreaming(),
+          options.build()
+      ));
+    }
+    ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
+    if (sd.getOptions().hasDeprecated()) {
+      OptionElement option = new OptionElement(
+          DEPRECATED, Kind.BOOLEAN,
+          sd.getOptions().getDeprecated(), false
+      );
+      options.add(option);
+    }
+    return new ServiceElement(DEFAULT_LOCATION, name, "", methods.build(), options.build());
   }
 
   private static FieldElement toField(
@@ -715,20 +833,28 @@ public class ProtobufSchema implements ParsedSchema {
     String name = fd.getName();
     log.trace("*** field name: {}", name);
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
+    if (fd.getOptions().hasCtype()) {
+      OptionElement option = new OptionElement(CTYPE, Kind.ENUM, fd.getOptions().getCtype(), false);
+      options.add(option);
+    }
     if (fd.getOptions().hasPacked()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement("packed", kind, fd.getOptions().getPacked(), false);
+      OptionElement option =
+          new OptionElement(PACKED, Kind.BOOLEAN, fd.getOptions().getPacked(), false);
+      options.add(option);
+    }
+    if (fd.getOptions().hasJstype()) {
+      OptionElement option =
+          new OptionElement(JSTYPE, Kind.ENUM, fd.getOptions().getJstype(), false);
       options.add(option);
     }
     if (fd.getOptions().hasDeprecated()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option =
-          new OptionElement("deprecated", kind, fd.getOptions().getDeprecated(), false);
+          new OptionElement(DEPRECATED, Kind.BOOLEAN, fd.getOptions().getDeprecated(), false);
       options.add(option);
     }
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
       Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
-      OptionElement option = toOption("confluent.field_meta", meta);
+      OptionElement option = toOption(CONFLUENT_FIELD_META, meta);
       if (option != null) {
         options.add(option);
       }
@@ -737,7 +863,6 @@ public class ProtobufSchema implements ParsedSchema {
     String defaultValue = !PROTO3.equals(file.getSyntax()) && fd.hasDefaultValue()
                           ? fd.getDefaultValue()
                           : null;
-    // NOTE: skip some options
     return new FieldElement(DEFAULT_LOCATION,
         inOneof ? null : label(file, fd),
         dataType(fd),
@@ -850,6 +975,10 @@ public class ProtobufSchema implements ParsedSchema {
           schema.addEnumDefinition(enumer);
         }
       }
+      for (ServiceElement serviceElement : rootElem.getServices()) {
+        ServiceDefinition service = toDynamicService(serviceElement);
+        schema.addServiceDefinition(service);
+      }
       for (String ref : rootElem.getImports()) {
         ProtoFileElement dep = dependencies.get(ref);
         if (dep != null) {
@@ -864,27 +993,88 @@ public class ProtobufSchema implements ParsedSchema {
           schema.addSchema(toDynamicSchema(ref, dep, dependencies));
         }
       }
-      String javaPackageName = findOption("java_package", rootElem.getOptions())
-          .map(o -> o.getValue().toString()).orElse(null);
+      Map<String, OptionElement> options = rootElem.getOptions().stream()
+          .collect(Collectors.toMap(OptionElement::getName, o -> o));
+      OptionElement javaPackageName = options.get(JAVA_PACKAGE);
       if (javaPackageName != null) {
-        schema.setJavaPackage(javaPackageName);
+        schema.setJavaPackage(javaPackageName.getValue().toString());
       }
-      String javaOuterClassname = findOption("java_outer_classname", rootElem.getOptions())
-          .map(o -> o.getValue().toString()).orElse(null);
+      OptionElement javaOuterClassname = options.get(JAVA_OUTER_CLASSNAME);
       if (javaOuterClassname != null) {
-        schema.setJavaOuterClassname(javaOuterClassname);
+        schema.setJavaOuterClassname(javaOuterClassname.getValue().toString());
       }
-      Boolean javaMultipleFiles = findOption("java_multiple_files", rootElem.getOptions())
-          .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+      OptionElement javaMultipleFiles = options.get(JAVA_MULTIPLE_FILES);
       if (javaMultipleFiles != null) {
-        schema.setJavaMultipleFiles(javaMultipleFiles);
+        schema.setJavaMultipleFiles(Boolean.parseBoolean(javaMultipleFiles.getValue().toString()));
       }
-      Boolean isDeprecated = findOption("deprecated", rootElem.getOptions())
-          .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+      OptionElement javaStringCheckUtf8 = options.get(JAVA_STRING_CHECK_UTF8);
+      if (javaStringCheckUtf8 != null) {
+        schema.setJavaStringCheckUtf8(
+            Boolean.parseBoolean(javaStringCheckUtf8.getValue().toString()));
+      }
+      OptionElement optimizeFor = options.get(OPTIMIZE_FOR);
+      if (optimizeFor != null) {
+        schema.setOptimizeFor(OptimizeMode.valueOf(optimizeFor.getValue().toString()));
+      }
+      OptionElement goPackage = options.get(GO_PACKAGE);
+      if (goPackage != null) {
+        schema.setGoPackage(goPackage.getValue().toString());
+      }
+      OptionElement ccGenericServices = options.get(CC_GENERIC_SERVICES);
+      if (ccGenericServices != null) {
+        schema.setCcGenericServices(Boolean.parseBoolean(ccGenericServices.getValue().toString()));
+      }
+      OptionElement javaGenericServices = options.get(JAVA_GENERIC_SERVICES);
+      if (javaGenericServices != null) {
+        schema.setJavaGenericServices(
+            Boolean.parseBoolean(javaGenericServices.getValue().toString()));
+      }
+      OptionElement pyGenericServices = options.get(PY_GENERIC_SERVICES);
+      if (pyGenericServices != null) {
+        schema.setPyGenericServices(Boolean.parseBoolean(pyGenericServices.getValue().toString()));
+      }
+      OptionElement phpGenericServices = options.get(PHP_GENERIC_SERVICES);
+      if (phpGenericServices != null) {
+        schema.setPhpGenericServices(
+            Boolean.parseBoolean(phpGenericServices.getValue().toString()));
+      }
+      OptionElement isDeprecated = options.get(DEPRECATED);
       if (isDeprecated != null) {
-        schema.setDeprecated(isDeprecated);
+        schema.setDeprecated(Boolean.parseBoolean(isDeprecated.getValue().toString()));
       }
-      Optional<OptionElement> meta = findOption("confluent.file_meta", rootElem.getOptions());
+      OptionElement ccEnableArenas = options.get(CC_ENABLE_ARENAS);
+      if (ccEnableArenas != null) {
+        schema.setCcEnableArenas(Boolean.parseBoolean(ccEnableArenas.getValue().toString()));
+      }
+      OptionElement objcClassPrefix = options.get(OBJC_CLASS_PREFIX);
+      if (objcClassPrefix != null) {
+        schema.setObjcClassPrefix(objcClassPrefix.getValue().toString());
+      }
+      OptionElement csharpNamespace = options.get(CSHARP_NAMESPACE);
+      if (csharpNamespace != null) {
+        schema.setCsharpNamespace(csharpNamespace.getValue().toString());
+      }
+      OptionElement swiftPrefix = options.get(SWIFT_PREFIX);
+      if (swiftPrefix != null) {
+        schema.setSwiftPrefix(swiftPrefix.getValue().toString());
+      }
+      OptionElement phpClassPrefix = options.get(PHP_CLASS_PREFIX);
+      if (phpClassPrefix != null) {
+        schema.setPhpClassPrefix(phpClassPrefix.getValue().toString());
+      }
+      OptionElement phpNamespace = options.get(PHP_NAMESPACE);
+      if (phpNamespace != null) {
+        schema.setPhpNamespace(phpNamespace.getValue().toString());
+      }
+      OptionElement phpMetadataNamespace = options.get(PHP_METADATA_NAMESPACE);
+      if (phpMetadataNamespace != null) {
+        schema.setPhpMetadataNamespace(phpMetadataNamespace.getValue().toString());
+      }
+      OptionElement rubyPackage = options.get(RUBY_PACKAGE);
+      if (rubyPackage != null) {
+        schema.setRubyPackage(rubyPackage.getValue().toString());
+      }
+      Optional<OptionElement> meta = findOption(CONFLUENT_FILE_META, rootElem.getOptions());
       String doc = findDoc(meta);
       Map<String, String> params = findParams(meta);
       schema.setMeta(doc, params);
@@ -914,9 +1104,13 @@ public class ProtobufSchema implements ParsedSchema {
       for (FieldElement field : oneof.getFields()) {
         String defaultVal = field.getDefaultValue();
         String jsonName = field.getJsonName();
-        Boolean isDeprecated = findOption("deprecated", field.getOptions())
+        CType ctype = findOption(CTYPE, field.getOptions())
+            .map(o -> CType.valueOf(o.getValue().toString())).orElse(null);
+        JSType jstype = findOption(JSTYPE, field.getOptions())
+            .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
+        Boolean isDeprecated = findOption(DEPRECATED, field.getOptions())
             .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-        Optional<OptionElement> meta = findOption("confluent.field_meta", field.getOptions());
+        Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, field.getOptions());
         String doc = findDoc(meta);
         Map<String, String> params = findParams(meta);
         oneofBuilder.addField(
@@ -927,6 +1121,8 @@ public class ProtobufSchema implements ParsedSchema {
             jsonName,
             doc,
             params,
+            ctype,
+            jstype,
             isDeprecated
         );
         added.add(field.getName());
@@ -943,11 +1139,15 @@ public class ProtobufSchema implements ParsedSchema {
       String fieldType = field.getType();
       String defaultVal = field.getDefaultValue();
       String jsonName = field.getJsonName();
-      Boolean isPacked = findOption("packed", field.getOptions())
+      CType ctype = findOption(CTYPE, field.getOptions())
+          .map(o -> CType.valueOf(o.getValue().toString())).orElse(null);
+      Boolean isPacked = findOption(PACKED, field.getOptions())
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      Boolean isDeprecated = findOption("deprecated", field.getOptions())
+      JSType jstype = findOption(JSTYPE, field.getOptions())
+          .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
+      Boolean isDeprecated = findOption(DEPRECATED, field.getOptions())
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      Optional<OptionElement> meta = findOption("confluent.field_meta", field.getOptions());
+      Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, field.getOptions());
       String doc = findDoc(meta);
       Map<String, String> params = findParams(meta);
       ProtoType protoType = ProtoType.get(fieldType);
@@ -973,7 +1173,9 @@ public class ProtobufSchema implements ParsedSchema {
           jsonName,
           doc,
           params,
+          ctype,
           isPacked,
+          jstype,
           isDeprecated
       );
     }
@@ -993,17 +1195,23 @@ public class ProtobufSchema implements ParsedSchema {
         }
       }
     }
-    Boolean isMapEntry = findOption("map_entry", messageElem.getOptions())
-        .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-    if (isMapEntry != null) {
-      message.setMapEntry(isMapEntry);
+    Boolean noStandardDescriptorAccessor =
+        findOption(NO_STANDARD_DESCRIPTOR_ACCESSOR, messageElem.getOptions())
+            .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+    if (noStandardDescriptorAccessor != null) {
+      message.setNoStandardDescriptorAccessor(noStandardDescriptorAccessor);
     }
-    Boolean isDeprecated = findOption("deprecated", messageElem.getOptions())
+    Boolean isDeprecated = findOption(DEPRECATED, messageElem.getOptions())
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
     if (isDeprecated != null) {
       message.setDeprecated(isDeprecated);
     }
-    Optional<OptionElement> meta = findOption("confluent.message_meta", messageElem.getOptions());
+    Boolean isMapEntry = findOption(MAP_ENTRY, messageElem.getOptions())
+        .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+    if (isMapEntry != null) {
+      message.setMapEntry(isMapEntry);
+    }
+    Optional<OptionElement> meta = findOption(CONFLUENT_MESSAGE_META, messageElem.getOptions());
     String doc = findDoc(meta);
     Map<String, String> params = findParams(meta);
     message.setMeta(doc, params);
@@ -1054,25 +1262,45 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   private static EnumDefinition toDynamicEnum(EnumElement enumElem) {
-    Boolean allowAlias = findOption("allow_alias", enumElem.getOptions())
+    Boolean allowAlias = findOption(ALLOW_ALIAS, enumElem.getOptions())
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-    Boolean isDeprecated = findOption("deprecated", enumElem.getOptions())
+    Boolean isDeprecated = findOption(DEPRECATED, enumElem.getOptions())
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
     EnumDefinition.Builder enumer =
         EnumDefinition.newBuilder(enumElem.getName(), allowAlias, isDeprecated);
     for (EnumConstantElement constant : enumElem.getConstants()) {
-      Boolean isConstDeprecated = findOption("deprecated", constant.getOptions())
+      Boolean isConstDeprecated = findOption(DEPRECATED, constant.getOptions())
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      Optional<OptionElement> meta = findOption("confluent.enum_value_meta", constant.getOptions());
+      Optional<OptionElement> meta = findOption(CONFLUENT_ENUM_VALUE_META, constant.getOptions());
       String doc = findDoc(meta);
       Map<String, String> params = findParams(meta);
       enumer.addValue(constant.getName(), constant.getTag(), doc, params, isConstDeprecated);
     }
-    Optional<OptionElement> meta = findOption("confluent.enum_meta", enumElem.getOptions());
+    Optional<OptionElement> meta = findOption(CONFLUENT_ENUM_META, enumElem.getOptions());
     String doc = findDoc(meta);
     Map<String, String> params = findParams(meta);
     enumer.setMeta(doc, params);
     return enumer.build();
+  }
+
+  private static ServiceDefinition toDynamicService(ServiceElement serviceElement) {
+    ServiceDefinition.Builder service =
+        ServiceDefinition.newBuilder(serviceElement.getName());
+    Boolean isDeprecated = findOption(DEPRECATED, serviceElement.getOptions())
+        .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+    if (isDeprecated != null) {
+      service.setDeprecated(isDeprecated);
+    }
+    for (RpcElement method : serviceElement.getRpcs()) {
+      Boolean isMethodDeprecated = findOption(DEPRECATED, method.getOptions())
+          .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+      IdempotencyLevel idempotencyLevel = findOption(IDEMPOTENCY_LEVEL, method.getOptions())
+          .map(o -> IdempotencyLevel.valueOf(o.getValue().toString())).orElse(null);
+      service.addMethod(method.getName(), method.getRequestType(), method.getResponseType(),
+          method.getRequestStreaming(), method.getResponseStreaming(),
+          isMethodDeprecated, idempotencyLevel);
+    }
+    return service.build();
   }
 
   @Override
@@ -1145,6 +1373,21 @@ public class ProtobufSchema implements ParsedSchema {
       }
     }
     return deps;
+  }
+
+  @Override
+  public ProtobufSchema normalize() {
+    String normalized = ProtobufSchemaUtils.toNormalizedString(this);
+    return new ProtobufSchema(
+        toProtoFile(normalized),
+        this.version,
+        this.name,
+        this.references.stream().sorted().distinct().collect(Collectors.toList()),
+        this.dependencies,
+        normalized,
+        null,
+        null
+    );
   }
 
   @Override

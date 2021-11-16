@@ -19,11 +19,13 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.joda.JodaModule;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
+import java.util.TreeMap;
 
 import static com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES;
 
@@ -39,9 +41,18 @@ public class Jackson {
    * Creates a new {@link ObjectMapper}.
    */
   public static ObjectMapper newObjectMapper() {
+    return newObjectMapper(false);
+  }
+
+  /**
+   * Creates a new {@link ObjectMapper}.
+   *
+   * @param sorted whether to sort object properties
+   */
+  public static ObjectMapper newObjectMapper(boolean sorted) {
     final ObjectMapper mapper = new ObjectMapper();
 
-    return configure(mapper);
+    return configure(mapper, sorted);
   }
 
   /**
@@ -54,10 +65,10 @@ public class Jackson {
   public static ObjectMapper newObjectMapper(JsonFactory jsonFactory) {
     final ObjectMapper mapper = new ObjectMapper(jsonFactory);
 
-    return configure(mapper);
+    return configure(mapper, false);
   }
 
-  private static ObjectMapper configure(ObjectMapper mapper) {
+  private static ObjectMapper configure(ObjectMapper mapper, boolean sorted) {
     mapper.registerModule(new GuavaModule());
     mapper.registerModule(new JodaModule());
     mapper.registerModule(new ParameterNamesModule());
@@ -66,8 +77,21 @@ public class Jackson {
     mapper.registerModule(new JsonOrgModule());
     mapper.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
     mapper.disable(FAIL_ON_UNKNOWN_PROPERTIES);
-    mapper.setNodeFactory(JsonNodeFactory.withExactBigDecimals(true));
+    mapper.setNodeFactory(sorted
+        ? new SortingNodeFactory(true)
+        : JsonNodeFactory.withExactBigDecimals(true));
 
     return mapper;
+  }
+
+  static class SortingNodeFactory extends JsonNodeFactory {
+    public SortingNodeFactory(boolean bigDecimalExact) {
+      super(bigDecimalExact);
+    }
+
+    @Override
+    public ObjectNode objectNode() {
+      return new ObjectNode(this, new TreeMap<>());
+    }
   }
 }
