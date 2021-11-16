@@ -505,7 +505,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         return cachedVersion;
       }
 
-      int retrievedVersion = getVersionFromRegistry(subject, schema, normalize);
+      final int retrievedVersion = getVersionFromRegistry(subject, schema, normalize);
       schemaVersionMap.put(schema, retrievedVersion);
       return retrievedVersion;
     }
@@ -540,7 +540,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         return cachedId;
       }
 
-      int retrievedId = getIdFromRegistry(subject, schema, normalize);
+      final int retrievedId = getIdFromRegistry(subject, schema, normalize);
       schemaIdMap.put(schema, retrievedId);
       idCache.get(NO_SUBJECT).put(retrievedId, schema);
       return retrievedId;
