@@ -204,7 +204,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
   public void testDependencyPreregister() throws Exception {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
-    serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_REFERENCES_CONFIG, false);
+    serializerConfig.put(KafkaProtobufSerializerConfig.REFERENCE_LOOKUP_ONLY_CONFIG, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     serializerConfig.put(KafkaProtobufSerializerConfig.SKIP_KNOWN_TYPES_CONFIG, true);
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,

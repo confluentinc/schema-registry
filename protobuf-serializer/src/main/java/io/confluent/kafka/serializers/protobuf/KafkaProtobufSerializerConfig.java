@@ -25,10 +25,11 @@ import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrat
 
 public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
 
-  public static final String AUTO_REGISTER_REFERENCES_CONFIG =
-      "auto.register.references";
-  public static final String AUTO_REGISTER_REFERENCES_DOC =
-      "If auto.register.schemas is true, whether to also automatically register references.";
+  public static final String REFERENCE_LOOKUP_ONLY_CONFIG =
+      "reference.lookup.only";
+  public static final String REFERENCE_LOOKUP_ONLY_DOC =
+      "Regardless of whether auto.register.schemas or use.latest.version is true, only look up "
+          + "the ID for references by using the schema.";
   public static final String SKIP_KNOWN_TYPES_CONFIG =
       "skip.known.types";
   public static final String SKIP_KNOWN_TYPES_DOC =
@@ -44,9 +45,9 @@ public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfi
 
   static {
     config = baseConfigDef()
-        .define(AUTO_REGISTER_REFERENCES_CONFIG, ConfigDef.Type.BOOLEAN,
-            true, ConfigDef.Importance.MEDIUM,
-            AUTO_REGISTER_REFERENCES_DOC)
+        .define(REFERENCE_LOOKUP_ONLY_CONFIG, ConfigDef.Type.BOOLEAN,
+            false, ConfigDef.Importance.MEDIUM,
+            REFERENCE_LOOKUP_ONLY_DOC)
         .define(SKIP_KNOWN_TYPES_CONFIG, ConfigDef.Type.BOOLEAN,
             true, ConfigDef.Importance.LOW,
             SKIP_KNOWN_TYPES_DOC)
@@ -59,8 +60,8 @@ public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfi
     super(config, props);
   }
 
-  public boolean autoRegisterReferences() {
-    return this.getBoolean(AUTO_REGISTER_REFERENCES_CONFIG);
+  public boolean onlyLookupReferencesBySchema() {
+    return this.getBoolean(REFERENCE_LOOKUP_ONLY_CONFIG);
   }
 
   public boolean skipKnownTypes() {
