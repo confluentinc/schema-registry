@@ -268,8 +268,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   protected ParsedSchema getSchemaByIdFromRegistry(int id, String subject)
       throws IOException, RestClientException {
     if (missingIdCache.getIfPresent(new SubjectAndId(subject, id)) != null) {
-      throw new RestClientException("Error while retrieving schema with id " + id
-          + " from the schema registry",
+      throw new RestClientException("Schema " + id + " not found",
           HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
     }
 
@@ -277,8 +276,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     try {
       restSchema = restService.getId(id, subject);
     } catch (RestClientException rce) {
-      if (rce.getStatus() == HTTP_NOT_FOUND
-          && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
+      if (isSchemaNotFoundException(rce)) {
         missingIdCache.put(new SubjectAndId(subject, id), System.currentTimeMillis());
       }
       throw rce;
@@ -299,8 +297,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       response = restService.lookUpSubjectVersion(schema.canonicalString(),
               schema.schemaType(), schema.references(), subject, normalize, true);
     } catch (RestClientException rce) {
-      if (rce.getStatus() == HTTP_NOT_FOUND
-          && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
+      if (isSchemaNotFoundException(rce)) {
         missingSchemaCache.put(
             new SubjectAndSchema(subject, schema, normalize), System.currentTimeMillis());
       }
@@ -319,8 +316,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       response = restService.lookUpSubjectVersion(schema.canonicalString(),
               schema.schemaType(), schema.references(), subject, normalize, false);
     } catch (RestClientException rce) {
-      if (rce.getStatus() == HTTP_NOT_FOUND
-          && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE) {
+      if (isSchemaNotFoundException(rce)) {
         missingSchemaCache.put(
             new SubjectAndSchema(subject, schema, normalize), System.currentTimeMillis());
       }
@@ -669,9 +665,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws RestClientException {
     if (missingSchemaCache.getIfPresent(
         new SubjectAndSchema(subject, schema, normalize)) != null) {
-      throw new RestClientException("Error while looking up schema under subject " + subject,
+      throw new RestClientException("Schema not found",
           HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
     }
+  }
+
+  private boolean isSchemaNotFoundException(RestClientException rce) {
+    return rce.getStatus() == HTTP_NOT_FOUND && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE;
   }
 
   static class SubjectAndSchema {

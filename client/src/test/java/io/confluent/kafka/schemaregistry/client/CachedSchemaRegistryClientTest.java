@@ -502,8 +502,7 @@ public class CachedSchemaRegistryClientTest {
     );
 
     expect(restService.getId(ID_25, SUBJECT_0))
-        .andThrow(new RestClientException("Error while retrieving schema with id 25"
-            + " from the schema registry", 404, 40403))
+        .andThrow(new RestClientException("Schema 25 not found", 404, 40403))
         .andReturn(new SchemaString(SCHEMA_STR_0));
 
     replay(restService);
@@ -512,8 +511,7 @@ public class CachedSchemaRegistryClientTest {
       client.getSchemaBySubjectAndId(SUBJECT_0, ID_25);
       fail();
     } catch (RestClientException rce) {
-      assertEquals("Error while retrieving schema with id 25"
-          + " from the schema registry; error code: 40403", rce.getMessage());
+      assertEquals("Schema 25 not found; error code: 40403", rce.getMessage());
     }
 
     fakeTicker.advance(59, TimeUnit.SECONDS);
@@ -523,8 +521,7 @@ public class CachedSchemaRegistryClientTest {
       client.getSchemaBySubjectAndId(SUBJECT_0, ID_25);
       fail();
     } catch (RestClientException rce) {
-      assertEquals("Error while retrieving schema with id 25"
-          + " from the schema registry; error code: 40403", rce.getMessage());
+      assertEquals("Schema 25 not found; error code: 40403", rce.getMessage());
     }
 
     fakeTicker.advance(2, TimeUnit.SECONDS);
@@ -552,7 +549,7 @@ public class CachedSchemaRegistryClientTest {
     expect(restService.lookUpSubjectVersion(anyString(), anyString(), anyObject(List.class),
         eq(SUBJECT_0), anyBoolean(),
         eq(false)))
-        .andThrow(new RestClientException("Error while looking up schema under subject foo",
+        .andThrow(new RestClientException("Schema not found",
             404, 40403))
         .andReturn(
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, version,
@@ -564,8 +561,7 @@ public class CachedSchemaRegistryClientTest {
       client.getId(SUBJECT_0, AVRO_SCHEMA_0);
       fail();
     } catch (RestClientException rce) {
-      assertEquals("Error while looking up schema under subject foo;"
-          + " error code: 40403", rce.getMessage());
+      assertEquals("Schema not found; error code: 40403", rce.getMessage());
     }
 
     fakeTicker.advance(59, TimeUnit.SECONDS);
@@ -574,8 +570,7 @@ public class CachedSchemaRegistryClientTest {
       client.getId(SUBJECT_0, AVRO_SCHEMA_0);
       fail();
     } catch (RestClientException rce) {
-      assertEquals("Error while looking up schema under subject foo;"
-          + " error code: 40403", rce.getMessage());
+      assertEquals("Schema not found; error code: 40403", rce.getMessage());
     }
 
     fakeTicker.advance(2, TimeUnit.SECONDS);
