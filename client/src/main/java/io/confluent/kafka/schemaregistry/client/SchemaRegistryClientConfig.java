@@ -69,19 +69,19 @@ public class SchemaRegistryClientConfig {
 
   public static long getMissingIdTTL(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_ID_CACHE_TTL_CONFIG)
-        ? (long)configs.get(MISSING_ID_CACHE_TTL_CONFIG)
+        ? (Long) configs.get(MISSING_ID_CACHE_TTL_CONFIG)
         : 0L;
   }
 
   public static long getMissingSchemaTTL(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_SCHEMA_CACHE_TTL_CONFIG)
-        ? (long)configs.get(MISSING_SCHEMA_CACHE_TTL_CONFIG)
+        ? (Long) configs.get(MISSING_SCHEMA_CACHE_TTL_CONFIG)
         : 0L;
   }
 
   public static int getMaxMissingCacheSize(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_CACHE_SIZE_CONFIG)
-        ? (int)configs.get(MISSING_CACHE_SIZE_CONFIG)
+        ? (Integer) configs.get(MISSING_CACHE_SIZE_CONFIG)
         : 10000;
   }
 }
