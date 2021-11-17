@@ -30,7 +30,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
 
   @Parameter(required = false)
-  boolean normalizeSchema = false;
+  boolean normalizeSchemas = false;
 
   @Override
   protected boolean processSchema(String subject,
@@ -45,8 +45,8 @@ public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
       );
     }
 
-    Integer id = this.client().register(subject, schema, normalizeSchema);
-    Integer version = this.client().getVersion(subject, schema, normalizeSchema);
+    Integer id = this.client().register(subject, schema, normalizeSchemas);
+    Integer version = this.client().getVersion(subject, schema, normalizeSchemas);
     getLog().info(
         String.format(
             "Registered subject(%s) with id %s version %s",
