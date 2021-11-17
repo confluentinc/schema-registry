@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
+import com.google.common.testing.FakeTicker;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -24,6 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -49,6 +51,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 public class CachedSchemaRegistryClientTest {
@@ -480,6 +483,99 @@ public class CachedSchemaRegistryClientTest {
 
     List<ParsedSchema> parsedSchemas = client.getSchemas(SUBJECT_0, false, true);
     assertEquals(0, parsedSchemas.size());
+  }
+
+  @Test
+  public void testMissingIdCache() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.MISSING_ID_CACHE_TTL_CONFIG, 60L);
+    configs.put(SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, 60L);
+
+    FakeTicker fakeTicker = new FakeTicker();
+    client = new CachedSchemaRegistryClient(
+        restService,
+        CACHE_CAPACITY,
+        null,
+        configs,
+        null,
+        fakeTicker
+    );
+
+    expect(restService.getId(ID_25, SUBJECT_0))
+        .andThrow(new RestClientException("Schema 25 not found", 404, 40403))
+        .andReturn(new SchemaString(SCHEMA_STR_0));
+
+    replay(restService);
+
+    try {
+      client.getSchemaBySubjectAndId(SUBJECT_0, ID_25);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals("Schema 25 not found; error code: 40403", rce.getMessage());
+    }
+
+    fakeTicker.advance(59, TimeUnit.SECONDS);
+
+    // Should hit the cache
+    try {
+      client.getSchemaBySubjectAndId(SUBJECT_0, ID_25);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals("Schema 25 not found; error code: 40403", rce.getMessage());
+    }
+
+    fakeTicker.advance(2, TimeUnit.SECONDS);
+    Thread.sleep(100);
+    assertNotNull(client.getSchemaBySubjectAndId(SUBJECT_0, ID_25));
+  }
+
+  @Test
+  public void testMissingSchemaCache() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.MISSING_ID_CACHE_TTL_CONFIG, 60L);
+    configs.put(SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, 60L);
+
+    FakeTicker fakeTicker = new FakeTicker();
+    client = new CachedSchemaRegistryClient(
+        restService,
+        CACHE_CAPACITY,
+        null,
+        configs,
+        null,
+        fakeTicker
+    );
+
+    int version = 7;
+    expect(restService.lookUpSubjectVersion(anyString(), anyString(), anyObject(List.class),
+        eq(SUBJECT_0), anyBoolean(),
+        eq(false)))
+        .andThrow(new RestClientException("Schema not found",
+            404, 40403))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, version,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+
+    replay(restService);
+
+    try {
+      client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals("Schema not found; error code: 40403", rce.getMessage());
+    }
+
+    fakeTicker.advance(59, TimeUnit.SECONDS);
+
+    try {
+      client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals("Schema not found; error code: 40403", rce.getMessage());
+    }
+
+    fakeTicker.advance(2, TimeUnit.SECONDS);
+    Thread.sleep(100);
+    client.getId(SUBJECT_0, AVRO_SCHEMA_0);
   }
 
 

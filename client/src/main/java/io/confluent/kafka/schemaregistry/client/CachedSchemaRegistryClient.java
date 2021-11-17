@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import com.google.common.base.Ticker;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -60,9 +64,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<ParsedSchema, Integer>> schemaCache;
   private final Map<String, Map<Integer, ParsedSchema>> idCache;
   private final Map<String, Map<ParsedSchema, Integer>> versionCache;
+  private final Cache<SubjectAndSchema, Long> missingSchemaCache;
+  private final Cache<SubjectAndId, Long> missingIdCache;
   private final Map<String, SchemaProvider> providers;
 
   private static final String NO_SUBJECT = ":.:";
+  private static final int HTTP_NOT_FOUND = 404;
+  private static final int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
@@ -159,12 +167,38 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       List<SchemaProvider> providers,
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
+    this(restService, cacheCapacity, providers, configs, httpHeaders, Ticker.systemTicker());
+  }
+
+  public CachedSchemaRegistryClient(
+      RestService restService,
+      int cacheCapacity,
+      List<SchemaProvider> providers,
+      Map<String, ?> configs,
+      Map<String, String> httpHeaders,
+      Ticker ticker) {
     this.cacheCapacity = cacheCapacity;
     this.schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.idCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.versionCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.restService = restService;
     this.idCache.put(NO_SUBJECT, new BoundedConcurrentHashMap<>(cacheCapacity));
+
+    long missingIdTTL = SchemaRegistryClientConfig.getMissingIdTTL(configs);
+    long missingSchemaTTL = SchemaRegistryClientConfig.getMissingSchemaTTL(configs);
+    int maxMissingCacheSize = SchemaRegistryClientConfig.getMaxMissingCacheSize(configs);
+
+    this.missingSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(maxMissingCacheSize)
+        .ticker(ticker)
+        .expireAfterWrite(missingSchemaTTL, TimeUnit.SECONDS)
+        .build();
+    this.missingIdCache = CacheBuilder.newBuilder()
+        .maximumSize(maxMissingCacheSize)
+        .ticker(ticker)
+        .expireAfterWrite(missingIdTTL, TimeUnit.SECONDS)
+        .build();
+
     this.providers = providers != null && !providers.isEmpty()
                      ? providers.stream().collect(Collectors.toMap(p -> p.schemaType(), p -> p))
                      : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
@@ -233,7 +267,20 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   protected ParsedSchema getSchemaByIdFromRegistry(int id, String subject)
       throws IOException, RestClientException {
-    SchemaString restSchema = restService.getId(id, subject);
+    if (missingIdCache.getIfPresent(new SubjectAndId(subject, id)) != null) {
+      throw new RestClientException("Schema " + id + " not found",
+          HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
+    }
+
+    SchemaString restSchema;
+    try {
+      restSchema = restService.getId(id, subject);
+    } catch (RestClientException rce) {
+      if (isSchemaNotFoundException(rce)) {
+        missingIdCache.put(new SubjectAndId(subject, id), System.currentTimeMillis());
+      }
+      throw rce;
+    }
     Optional<ParsedSchema> schema = parseSchema(
         restSchema.getSchemaType(), restSchema.getSchemaString(), restSchema.getReferences());
     return schema.orElseThrow(() -> new IOException("Invalid schema " + restSchema.getSchemaString()
@@ -243,17 +290,38 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private int getVersionFromRegistry(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
-        restService.lookUpSubjectVersion(schema.canonicalString(),
-            schema.schemaType(), schema.references(), subject, normalize, true);
+    checkMissingSchemaCache(subject, schema, normalize);
+
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
+    try {
+      response = restService.lookUpSubjectVersion(schema.canonicalString(),
+              schema.schemaType(), schema.references(), subject, normalize, true);
+    } catch (RestClientException rce) {
+      if (isSchemaNotFoundException(rce)) {
+        missingSchemaCache.put(
+            new SubjectAndSchema(subject, schema, normalize), System.currentTimeMillis());
+      }
+      throw rce;
+    }
+
     return response.getVersion();
   }
 
   private int getIdFromRegistry(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
-        restService.lookUpSubjectVersion(schema.canonicalString(),
-            schema.schemaType(), schema.references(), subject, normalize, false);
+    checkMissingSchemaCache(subject, schema, normalize);
+
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
+    try {
+      response = restService.lookUpSubjectVersion(schema.canonicalString(),
+              schema.schemaType(), schema.references(), subject, normalize, false);
+    } catch (RestClientException rce) {
+      if (isSchemaNotFoundException(rce)) {
+        missingSchemaCache.put(
+            new SubjectAndSchema(subject, schema, normalize), System.currentTimeMillis());
+      }
+      throw rce;
+    }
     return response.getId();
   }
 
@@ -589,5 +657,108 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     idCache.clear();
     versionCache.clear();
     idCache.put(NO_SUBJECT, new BoundedConcurrentHashMap<>(cacheCapacity));
+    missingSchemaCache.invalidateAll();
+    missingIdCache.invalidateAll();
+  }
+
+  private void checkMissingSchemaCache(String subject, ParsedSchema schema, boolean normalize)
+      throws RestClientException {
+    if (missingSchemaCache.getIfPresent(
+        new SubjectAndSchema(subject, schema, normalize)) != null) {
+      throw new RestClientException("Schema not found",
+          HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
+    }
+  }
+
+  private boolean isSchemaNotFoundException(RestClientException rce) {
+    return rce.getStatus() == HTTP_NOT_FOUND && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE;
+  }
+
+  static class SubjectAndSchema {
+    private final String subject;
+    private final ParsedSchema schema;
+    private final boolean normalize;
+
+    public SubjectAndSchema(String subject, ParsedSchema schema, boolean normalize) {
+      this.subject = subject;
+      this.schema = schema;
+      this.normalize = normalize;
+    }
+
+    public String subject() {
+      return subject;
+    }
+
+    public ParsedSchema schema() {
+      return schema;
+    }
+
+    public boolean normalize() {
+      return normalize;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      SubjectAndSchema that = (SubjectAndSchema) o;
+      return Objects.equals(subject, that.subject) && schema.equals(that.schema)
+          && normalize == that.normalize;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(subject, schema, normalize);
+    }
+
+    @Override
+    public String toString() {
+      return "SubjectAndSchema{" + "subject='" + subject + '\'' + ", schema=" + schema
+          + ", normalize=" + normalize + '}';
+    }
+  }
+
+  static class SubjectAndId {
+    private final String subject;
+    private final int id;
+
+    public SubjectAndId(String subject, int id) {
+      this.subject = subject;
+      this.id = id;
+    }
+
+    public String subject() {
+      return subject;
+    }
+
+    public int id() {
+      return id;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      SubjectAndId that = (SubjectAndId) o;
+      return Objects.equals(subject, that.subject) && id == that.id;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(subject, id);
+    }
+
+    @Override
+    public String toString() {
+      return "SubjectAndId{" + "subject='" + subject + '\'' + ", id=" + id + '}';
+    }
   }
 }
