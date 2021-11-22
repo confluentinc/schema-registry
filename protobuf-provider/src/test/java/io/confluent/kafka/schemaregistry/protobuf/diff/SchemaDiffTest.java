@@ -158,7 +158,7 @@ public class SchemaDiffTest {
     )));
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void checkCompatibilityUsingBadMessage() throws Exception {
     SchemaDiff.compare(badMessageSchema, badMessageSchema);
   }
