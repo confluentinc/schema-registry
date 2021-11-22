@@ -604,8 +604,8 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       // this is expected.
       assertEquals("Invalid subject shouldn't be registered",
-          RestInvalidSubjectException.ERROR_CODE,
-          e.getErrorCode());
+                   RestInvalidSubjectException.ERROR_CODE,
+                   e.getErrorCode());
     }
   }
 
