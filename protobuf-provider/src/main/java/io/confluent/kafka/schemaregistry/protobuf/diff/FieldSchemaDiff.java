@@ -89,7 +89,7 @@ public class FieldSchemaDiff {
     String originalFullName = ctx.resolve(original.toString(), true);
     String updateFullName = ctx.resolve(update.toString(), false);
     if (originalFullName == null || updateFullName == null) {
-      // Could not resolve full names, using original names
+      // Could not resolve full names, use simple names
       if (!Objects.equals(original.toString(), update.toString())) {
         ctx.addDifference(FIELD_NAMED_TYPE_CHANGED);
       }
