@@ -592,7 +592,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testGetInvalidSubject() throws Exception {
+  public void testRegisterInvalidSubject() throws Exception {
     // test invalid subject
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     String subject = "\rbad\nsubject\t";
