@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -89,6 +90,9 @@ public class ConfigResource {
       throw new RestInvalidCompatibilityException();
     }
 
+    if (subject != null && CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
+      throw Errors.invalidSubjectException(subject);
+    }
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     try {
