@@ -90,7 +90,7 @@ public class ConfigResource {
       throw new RestInvalidCompatibilityException();
     }
 
-    if (CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
+    if (subject != null && CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
       throw Errors.invalidSubjectException(subject);
     }
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);

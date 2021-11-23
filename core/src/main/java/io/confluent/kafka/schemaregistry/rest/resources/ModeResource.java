@@ -88,7 +88,7 @@ public class ModeResource {
       @QueryParam("force") boolean force
   ) {
 
-    if (CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
+    if (subject != null && CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
       throw Errors.invalidSubjectException(subject);
     }
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);

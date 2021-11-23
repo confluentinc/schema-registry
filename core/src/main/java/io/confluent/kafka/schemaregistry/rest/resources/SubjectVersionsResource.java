@@ -263,7 +263,7 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
-    if (CharMatcher.javaIsoControl().matchesAnyOf(subjectName)) {
+    if (subjectName != null && CharMatcher.javaIsoControl().matchesAnyOf(subjectName)) {
       throw Errors.invalidSubjectException(subjectName);
     }
     subjectName = QualifiedSubject.normalize(schemaRegistry.tenant(), subjectName);
