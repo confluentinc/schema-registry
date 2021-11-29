@@ -87,12 +87,13 @@ public class FieldSchemaDiff {
       final ProtoType update
   ) {
     String originalFullName = ctx.resolve(original.toString(), true);
-    if (originalFullName == null) {
-      throw new IllegalArgumentException("Could not resolve message type: " + original.toString());
-    }
     String updateFullName = ctx.resolve(update.toString(), false);
-    if (updateFullName == null) {
-      throw new IllegalArgumentException("Could not resolve message type: " + update.toString());
+    if (originalFullName == null || updateFullName == null) {
+      // Could not resolve full names, use simple names
+      if (!Objects.equals(original.toString(), update.toString())) {
+        ctx.addDifference(FIELD_NAMED_TYPE_CHANGED);
+      }
+      return;
     }
     TypeElementInfo originalType = ctx.getType(originalFullName, true);
     TypeElementInfo updateType = ctx.getType(updateFullName, false);
