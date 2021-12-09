@@ -294,6 +294,7 @@ public class ProtobufData {
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
   private boolean useWrapperForNullables;
+  private boolean useWrapperForRawPrimitives;
 
   public ProtobufData() {
     this(new ProtobufDataConfig.Builder().with(
@@ -312,6 +313,7 @@ public class ProtobufData {
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
     this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
     this.useWrapperForNullables = protobufDataConfig.useWrapperForNullables();
+    this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
   }
 
   /**
@@ -360,6 +362,8 @@ public class ProtobufData {
       }
     }
 
+    boolean isWrapper = isWrapper(protobufSchema)
+        || (useWrapperForNullables && schema.isOptional());
     final Schema.Type schemaType = schema.type();
     try {
       switch (schemaType) {
@@ -367,8 +371,7 @@ public class ProtobufData {
         case INT16:
         case INT32: {
           final int intValue = ((Number) value).intValue(); // Check for correct type
-          return useWrapperForNullables && schema.isOptional()
-              ? Int32Value.newBuilder().setValue(intValue).build() : intValue;
+          return isWrapper ? Int32Value.newBuilder().setValue(intValue).build() : intValue;
         }
 
         case INT64: {
@@ -376,31 +379,26 @@ public class ProtobufData {
               ? schema.parameters().get(PROTOBUF_TYPE_PROP) : null;
           if (Objects.equals(protobufType, "uint32") || Objects.equals(protobufType, "fixed32")) {
             final int intValue = (int) ((Number) value).longValue(); // Check for correct type
-            return useWrapperForNullables && schema.isOptional()
-                ? Int32Value.newBuilder().setValue(intValue).build() : intValue;
+            return isWrapper ? Int32Value.newBuilder().setValue(intValue).build() : intValue;
           } else {
             final long longValue = ((Number) value).longValue(); // Check for correct type
-            return useWrapperForNullables && schema.isOptional()
-                ? Int64Value.newBuilder().setValue(longValue).build() : longValue;
+            return isWrapper ? Int64Value.newBuilder().setValue(longValue).build() : longValue;
           }
         }
 
         case FLOAT32: {
           final float floatValue = ((Number) value).floatValue(); // Check for correct type
-          return useWrapperForNullables && schema.isOptional()
-              ? FloatValue.newBuilder().setValue(floatValue).build() : floatValue;
+          return isWrapper ? FloatValue.newBuilder().setValue(floatValue).build() : floatValue;
         }
 
         case FLOAT64: {
           final double doubleValue = ((Number) value).doubleValue(); // Check for correct type
-          return useWrapperForNullables && schema.isOptional()
-              ? DoubleValue.newBuilder().setValue(doubleValue).build() : doubleValue;
+          return isWrapper ? DoubleValue.newBuilder().setValue(doubleValue).build() : doubleValue;
         }
 
         case BOOLEAN: {
           final Boolean boolValue = (Boolean) value; // Check for correct type
-          return useWrapperForNullables && schema.isOptional()
-              ? BoolValue.newBuilder().setValue(boolValue).build() : boolValue;
+          return isWrapper ? BoolValue.newBuilder().setValue(boolValue).build() : boolValue;
         }
 
         case STRING: {
@@ -412,8 +410,7 @@ public class ProtobufData {
               return protobufSchema.getEnumValue(scope + enumType, Integer.parseInt(tag));
             }
           }
-          return useWrapperForNullables && schema.isOptional()
-              ? StringValue.newBuilder().setValue(stringValue).build() : stringValue;
+          return isWrapper ? StringValue.newBuilder().setValue(stringValue).build() : stringValue;
         }
 
         case BYTES: {
@@ -421,8 +418,7 @@ public class ProtobufData {
               ? ByteBuffer.wrap((byte[]) value)
               : (ByteBuffer) value;
           ByteString byteString = ByteString.copyFrom(bytesValue);
-          return useWrapperForNullables && schema.isOptional()
-              ? BytesValue.newBuilder().setValue(byteString).build() : byteString;
+          return isWrapper ? BytesValue.newBuilder().setValue(byteString).build() : byteString;
         }
         case ARRAY:
           final Collection<?> listValue = (Collection<?>) value;
@@ -530,6 +526,24 @@ public class ProtobufData {
     }
   }
 
+  private boolean isWrapper(ProtobufSchema protobufSchema) {
+    String name = protobufSchema.name();
+    switch (name) {
+      case PROTOBUF_DOUBLE_WRAPPER_TYPE:
+      case PROTOBUF_FLOAT_WRAPPER_TYPE:
+      case PROTOBUF_INT64_WRAPPER_TYPE:
+      case PROTOBUF_UINT64_WRAPPER_TYPE:
+      case PROTOBUF_INT32_WRAPPER_TYPE:
+      case PROTOBUF_UINT32_WRAPPER_TYPE:
+      case PROTOBUF_BOOL_WRAPPER_TYPE:
+      case PROTOBUF_STRING_WRAPPER_TYPE:
+      case PROTOBUF_BYTES_WRAPPER_TYPE:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   private Object getFieldType(Object ctx, String name) {
     FieldDescriptor field = ((Descriptor) ctx).findFieldByName(name);
     if (field == null) {
@@ -611,11 +625,42 @@ public class ProtobufData {
     String name = split[1];
     FromConnectContext ctx = new FromConnectContext();
     ctx.add(fullName);
-    ProtobufSchema resultSchema = new ProtobufSchema(
-        rawSchemaFromConnectSchema(ctx, namespace, name, schema).getMessageDescriptor(name)
-    );
+    Descriptor descriptor = descriptorFromConnectSchema(ctx, namespace, name, schema);
+    ProtobufSchema resultSchema = new ProtobufSchema(descriptor);
     fromConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
+  }
+
+  private Descriptor descriptorFromConnectSchema(
+      FromConnectContext ctx, String namespace, String name, Schema rootElem) {
+    Type type = rootElem.type();
+    switch (type) {
+      case INT8:
+        return typeToDescriptor(PROTOBUF_INT32_WRAPPER_TYPE);
+      case INT16:
+        return typeToDescriptor(PROTOBUF_INT32_WRAPPER_TYPE);
+      case INT32:
+        return typeToDescriptor(PROTOBUF_INT32_WRAPPER_TYPE);
+      case INT64:
+        return typeToDescriptor(PROTOBUF_INT64_WRAPPER_TYPE);
+      case FLOAT32:
+        return typeToDescriptor(PROTOBUF_FLOAT_WRAPPER_TYPE);
+      case FLOAT64:
+        return typeToDescriptor(PROTOBUF_DOUBLE_WRAPPER_TYPE);
+      case BOOLEAN:
+        return typeToDescriptor(PROTOBUF_BOOL_WRAPPER_TYPE);
+      case STRING:
+        return typeToDescriptor(PROTOBUF_STRING_WRAPPER_TYPE);
+      case BYTES:
+        return typeToDescriptor(PROTOBUF_BYTES_WRAPPER_TYPE);
+      case STRUCT:
+        DynamicSchema dynamicSchema = rawSchemaFromConnectSchema(ctx, namespace, name, rootElem);
+        return dynamicSchema.getMessageDescriptor(name);
+      case ARRAY:
+      case MAP:
+      default:
+        throw new IllegalArgumentException("Unsupported root schema of type " + type);
+    }
   }
 
   /*
@@ -765,6 +810,14 @@ public class ProtobufData {
         null,
         params
     );
+  }
+
+  private Descriptor typeToDescriptor(String type) {
+    DynamicSchema dynamicSchema = typeToDynamicSchema(type);
+    if (dynamicSchema == null) {
+      return null;
+    }
+    return dynamicSchema.getMessageDescriptor(type);
   }
 
   private DynamicSchema typeToDynamicSchema(String type) {
@@ -1067,19 +1120,19 @@ public class ProtobufData {
       Object converted = null;
       switch (schema.type()) {
         case INT8:
-          converted = useWrapperForNullables && schema.isOptional()
+          converted = value instanceof Message
               ? getWrappedValue((Message) value) : ((Number) value).byteValue();
           break;
         case INT16:
-          converted = useWrapperForNullables && schema.isOptional()
+          converted = value instanceof Message
               ? getWrappedValue((Message) value) : ((Number) value).shortValue();
           break;
         case INT32:
-          converted = useWrapperForNullables && schema.isOptional()
+          converted = value instanceof Message
               ? getWrappedValue((Message) value) : ((Number) value).intValue();
           break;
         case INT64:
-          if (useWrapperForNullables && schema.isOptional()) {
+          if (value instanceof Message) {
             converted = getWrappedValue((Message) value);
           } else {
             long longValue;
@@ -1092,19 +1145,19 @@ public class ProtobufData {
           }
           break;
         case FLOAT32:
-          converted = useWrapperForNullables && schema.isOptional()
+          converted = value instanceof Message
               ? getWrappedValue((Message) value) : ((Number) value).floatValue();
           break;
         case FLOAT64:
-          converted = useWrapperForNullables && schema.isOptional()
+          converted = value instanceof Message
               ? getWrappedValue((Message) value) : ((Number) value).doubleValue();
           break;
         case BOOLEAN:
-          converted = useWrapperForNullables && schema.isOptional()
+          converted = value instanceof Message
               ? getWrappedValue((Message) value) : (Boolean) value;
           break;
         case STRING:
-          if (useWrapperForNullables && schema.isOptional()) {
+          if (value instanceof Message) {
             converted = getWrappedValue((Message) value);
           } else if (value instanceof String) {
             converted = value;
@@ -1119,7 +1172,7 @@ public class ProtobufData {
           }
           break;
         case BYTES:
-          if (useWrapperForNullables && schema.isOptional()) {
+          if (value instanceof Message) {
             converted = ByteBuffer.wrap(
                 ((ByteString) getWrappedValue((Message) value)).toByteArray());
           } else if (value instanceof byte[]) {
@@ -1253,23 +1306,29 @@ public class ProtobufData {
 
   private SchemaBuilder toConnectSchema(
       ToConnectContext ctx, Descriptor descriptor, Integer version) {
-    SchemaBuilder builder = SchemaBuilder.struct();
-    ctx.put(descriptor.getFullName(), builder);
-    String name = enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName();
-    builder.name(name);
-    List<OneofDescriptor> oneOfDescriptors = descriptor.getOneofs();
-    for (OneofDescriptor oneOfDescriptor : oneOfDescriptors) {
-      String unionName = oneOfDescriptor.getName() + "_" + oneOfDescriptor.getIndex();
-      builder.field(unionName, toConnectSchema(ctx, oneOfDescriptor));
+    SchemaBuilder builder = null;
+    if (useWrapperForRawPrimitives) {
+      builder = toUnwrappedSchema(descriptor);
     }
-    List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
-    for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
-      OneofDescriptor oneOfDescriptor = fieldDescriptor.getContainingOneof();
-      if (oneOfDescriptor != null) {
-        // Already added field as oneof
-        continue;
+    if (builder == null) {
+      builder = SchemaBuilder.struct();
+      ctx.put(descriptor.getFullName(), builder);
+      String name = enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName();
+      builder.name(name);
+      List<OneofDescriptor> oneOfDescriptors = descriptor.getOneofs();
+      for (OneofDescriptor oneOfDescriptor : oneOfDescriptors) {
+        String unionName = oneOfDescriptor.getName() + "_" + oneOfDescriptor.getIndex();
+        builder.field(unionName, toConnectSchema(ctx, oneOfDescriptor));
       }
-      builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
+      List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
+      for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
+        OneofDescriptor oneOfDescriptor = fieldDescriptor.getContainingOneof();
+        if (oneOfDescriptor != null) {
+          // Already added field as oneof
+          continue;
+        }
+        builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
+      }
     }
 
     if (version != null) {
@@ -1441,7 +1500,12 @@ public class ProtobufData {
     if (!useWrapperForNullables) {
       return toStructSchema(ctx, descriptor);
     }
-    String fullName = descriptor.getMessageType().getFullName();
+    SchemaBuilder builder = toUnwrappedSchema(descriptor.getMessageType());
+    return builder != null ? builder : toStructSchema(ctx, descriptor);
+  }
+
+  private SchemaBuilder toUnwrappedSchema(Descriptor descriptor) {
+    String fullName = descriptor.getFullName();
     switch (fullName) {
       case PROTOBUF_DOUBLE_WRAPPER_TYPE:
         return SchemaBuilder.float64();
@@ -1462,7 +1526,7 @@ public class ProtobufData {
       case PROTOBUF_BYTES_WRAPPER_TYPE:
         return SchemaBuilder.bytes();
       default:
-        return toStructSchema(ctx, descriptor);
+        return null;
     }
   }
 
