@@ -81,7 +81,7 @@
         <json-schema.version>1.12.2</json-schema.version>
         <proto-google-common-protos.version>2.5.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
-        <wire.version>3.7.1</wire.version>
+        <wire.version>4.0.0</wire.version>
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.2.0-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
@@ -133,7 +133,18 @@
             </dependency>
             <dependency>
                 <groupId>com.squareup.wire</groupId>
-                <artifactId>wire-schema</artifactId>
+                <artifactId>wire-schema-jvm</artifactId>
+                <version>${wire.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.jetbrains.kotlin</groupId>
+                        <artifactId>kotlin-stdlib</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>com.squareup.wire</groupId>
+                <artifactId>wire-runtime-jvm</artifactId>
                 <version>${wire.version}</version>
                 <exclusions>
                     <exclusion>

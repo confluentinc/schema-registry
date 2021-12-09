@@ -326,6 +326,43 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testEnumOption() {
+    String optionSchemaString = "import \"google/protobuf/descriptor.proto\";\n"
+        + "enum FooParameterType {\n"
+        + "   NUMBER = 1;\n"
+        + "   STRING = 2;\n"
+        + "}\n"
+        + " \n"
+        + "message FooOptions {\n"
+        + "  optional string name = 1;\n"
+        + "  optional FooParameterType type = 2; \n"
+        + "} \n"
+        + "extend google.protobuf.MessageOptions {\n"
+        + "  repeated FooOptions foo = 12345;\n"
+        + "}\n"
+        + "\n"
+        + "message Message {\n"
+        + "  option (foo) = {\n"
+        + "    name: \"test\"\n"
+        + "    type: STRING\n"
+        + "  };\n"
+        + "  \n"
+        + "  option (foo) = {\n"
+        + "    name: \"test2\"\n"
+        + "    type: NUMBER\n"
+        + "  };\n"
+        + "  \n"
+        + "  optional int32 b = 2;\n"
+        + "}";
+
+    ProtobufSchema schema = new ProtobufSchema(optionSchemaString);
+    String parsed = schema.canonicalString();
+
+    assertTrue(parsed.contains("type: STRING"));
+    assertTrue(parsed.contains("type: NUMBER"));
+  }
+
+  @Test
   public void testRecordToJson() throws Exception {
     DynamicMessage.Builder builder = recordSchema.newMessageBuilder();
     Descriptor desc = builder.getDescriptorForType();
