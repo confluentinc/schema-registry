@@ -444,7 +444,14 @@ public class ProtobufDataTest {
   }
 
   private SchemaAndValue getSchemaAndValue(Message message) throws Exception {
-    ProtobufData protobufData = new ProtobufData();
+    return getSchemaAndValue(message, false);
+  }
+
+  private SchemaAndValue getSchemaAndValue(Message message, boolean wrapperForRootPrimitives) throws Exception {
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.WRAPPER_FOR_ROOT_PRIMITIVES_CONFIG, wrapperForRootPrimitives)
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
     return getSchemaAndValue(protobufData, message);
   }
 
@@ -530,6 +537,19 @@ public class ProtobufDataTest {
     BoolValue.Builder builder = BoolValue.newBuilder();
     builder.setValue(expectedValue);
     BoolValue message = builder.build();
+    SchemaAndValue result = getSchemaAndValue(message, true);
+    assertEquals(
+        new SchemaAndValue(Schema.BOOLEAN_SCHEMA, expectedValue),
+        result
+    );
+  }
+
+  @Test
+  public void testToConnectBooleanStruct() throws Exception {
+    Boolean expectedValue = true;
+    BoolValue.Builder builder = BoolValue.newBuilder();
+    builder.setValue(expectedValue);
+    BoolValue message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
     assertEquals(
         getExpectedSchemaAndValue(OPTIONAL_BOOLEAN_SCHEMA, message, expectedValue),
@@ -538,7 +558,7 @@ public class ProtobufDataTest {
   }
 
   @Test
-  public void testToConnectInt8() throws Exception {
+  public void testToConnectInt8Struct() throws Exception {
     Byte expectedValue = 12;
     Int8Value.Builder builder = Int8Value.newBuilder();
     builder.setValue(expectedValue);
@@ -548,7 +568,7 @@ public class ProtobufDataTest {
   }
 
   @Test
-  public void testToConnectInt16() throws Exception {
+  public void testToConnectInt16Struct() throws Exception {
     Short expectedValue = 12;
     Int16Value.Builder builder = Int16Value.newBuilder();
     builder.setValue(expectedValue);
@@ -563,6 +583,16 @@ public class ProtobufDataTest {
     Int32Value.Builder builder = Int32Value.newBuilder();
     builder.setValue(expectedValue);
     Int32Value message = builder.build();
+    SchemaAndValue result = getSchemaAndValue(message, true);
+    assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, expectedValue), result);
+  }
+
+  @Test
+  public void testToConnectInt32Struct() throws Exception {
+    Integer expectedValue = 12;
+    Int32Value.Builder builder = Int32Value.newBuilder();
+    builder.setValue(expectedValue);
+    Int32Value message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
     assertEquals(getExpectedSchemaAndValue(OPTIONAL_INT32_SCHEMA, message, expectedValue), result);
   }
@@ -573,12 +603,22 @@ public class ProtobufDataTest {
     Int32Value.Builder builder = Int32Value.newBuilder();
     builder.setValue(expectedValue);
     Int32Value message = builder.build();
+    SchemaAndValue result = getSchemaAndValue(message, true);
+    assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, expectedValue), result);
+  }
+
+  @Test
+  public void testToConnectInt32StructWith0() throws Exception {
+    Integer expectedValue = 0;
+    Int32Value.Builder builder = Int32Value.newBuilder();
+    builder.setValue(expectedValue);
+    Int32Value message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
     assertEquals(getExpectedSchemaAndValue(OPTIONAL_INT32_SCHEMA, message, expectedValue), result);
   }
 
   @Test
-  public void testToConnectInt32WithSint32() throws Exception {
+  public void testToConnectInt32StructWithSint32() throws Exception {
     int expectedValue = 12;
     SInt32ValueOuterClass.SInt32Value.Builder builder =
         SInt32ValueOuterClass.SInt32Value.newBuilder();
@@ -594,7 +634,7 @@ public class ProtobufDataTest {
   }
 
   @Test
-  public void testToConnectInt32WithUInt32() throws Exception {
+  public void testToConnectInt32StructWithUInt32() throws Exception {
     final Long UNSIGNED_RESULT = 4294967295L;
     Integer expectedValue = -1;
     UInt32ValueOuterClass.UInt32Value.Builder builder =
@@ -619,12 +659,22 @@ public class ProtobufDataTest {
     Int64Value.Builder builder = Int64Value.newBuilder();
     builder.setValue(expectedValue);
     Int64Value message = builder.build();
+    SchemaAndValue result = getSchemaAndValue(message, true);
+    assertEquals(new SchemaAndValue(Schema.INT64_SCHEMA, expectedValue), result);
+  }
+
+  @Test
+  public void testToConnectInt64Struct() throws Exception {
+    Long expectedValue = 12L;
+    Int64Value.Builder builder = Int64Value.newBuilder();
+    builder.setValue(expectedValue);
+    Int64Value message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
     assertEquals(getExpectedSchemaAndValue(OPTIONAL_INT64_SCHEMA, message, expectedValue), result);
   }
 
   @Test
-  public void testToConnectSInt64() throws Exception {
+  public void testToConnectSInt64Struct() throws Exception {
     Long expectedValue = 12L;
     SInt64ValueOuterClass.SInt64Value.Builder builder =
         SInt64ValueOuterClass.SInt64Value.newBuilder();
@@ -645,6 +695,19 @@ public class ProtobufDataTest {
     FloatValue.Builder builder = FloatValue.newBuilder();
     builder.setValue(expectedValue);
     FloatValue message = builder.build();
+    SchemaAndValue result = getSchemaAndValue(message, true);
+    assertEquals(
+        new SchemaAndValue(Schema.FLOAT32_SCHEMA, expectedValue),
+        result
+    );
+  }
+
+  @Test
+  public void testToConnectFloat32Struct() throws Exception {
+    Float expectedValue = 12.f;
+    FloatValue.Builder builder = FloatValue.newBuilder();
+    builder.setValue(expectedValue);
+    FloatValue message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
     assertEquals(
         getExpectedSchemaAndValue(OPTIONAL_FLOAT32_SCHEMA, message, expectedValue),
@@ -654,6 +717,19 @@ public class ProtobufDataTest {
 
   @Test
   public void testToConnectFloat64() throws Exception {
+    Double expectedValue = 12.0;
+    DoubleValue.Builder builder = DoubleValue.newBuilder();
+    builder.setValue(expectedValue);
+    DoubleValue message = builder.build();
+    SchemaAndValue result = getSchemaAndValue(message, true);
+    assertEquals(
+        new SchemaAndValue(Schema.FLOAT64_SCHEMA, expectedValue),
+        result
+    );
+  }
+
+  @Test
+  public void testToConnectFloat64Struct() throws Exception {
     Double expectedValue = 12.0;
     DoubleValue.Builder builder = DoubleValue.newBuilder();
     builder.setValue(expectedValue);
@@ -669,12 +745,28 @@ public class ProtobufDataTest {
   public void testToConnectString() throws Exception {
     String expectedValue = "Hello";
     StringValue message = createStringValueMessage(expectedValue);
+    SchemaAndValue result = getSchemaAndValue(message, true);
+    assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, expectedValue), result);
+  }
+
+  @Test
+  public void testToConnectStringStruct() throws Exception {
+    String expectedValue = "Hello";
+    StringValue message = createStringValueMessage(expectedValue);
     SchemaAndValue result = getSchemaAndValue(message);
     assertEquals(getExpectedSchemaAndValue(OPTIONAL_STRING_SCHEMA, message, expectedValue), result);
   }
 
   @Test
   public void testToConnectEmptyString() throws Exception {
+    String expectedValue = "";
+    StringValue message = createStringValueMessage(expectedValue);
+    SchemaAndValue result = getSchemaAndValue(message, true);
+    assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, expectedValue), result);
+  }
+
+  @Test
+  public void testToConnectEmptyStringStruct() throws Exception {
     String expectedValue = "";
     StringValue message = createStringValueMessage(expectedValue);
     SchemaAndValue result = getSchemaAndValue(message);
@@ -796,9 +888,9 @@ public class ProtobufDataTest {
 
   private byte[] getMessageBytes(ProtobufData protobufData, SchemaAndValue schemaAndValue) throws Exception {
     ProtobufSchemaAndValue protobufSchemaAndValue = protobufData.fromConnectData(schemaAndValue);
-    DynamicMessage dynamicMessage = (DynamicMessage) protobufSchemaAndValue.getValue();
+    Message message = (Message) protobufSchemaAndValue.getValue();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    dynamicMessage.writeTo(baos);
+    message.writeTo(baos);
     return baos.toByteArray();
   }
 
@@ -818,7 +910,7 @@ public class ProtobufDataTest {
     SchemaAndValue toConnectResult = getSchemaAndValue(originalMessage);
     ProtobufData protobufData = new ProtobufData();
     ProtobufSchemaAndValue fromConnectResult = protobufData.fromConnectData(toConnectResult.schema(), toConnectResult.value());
-    DynamicMessage message = (DynamicMessage) fromConnectResult.getValue();
+    Message message = (Message) fromConnectResult.getValue();
 
     MessageElement messageElem = (MessageElement) fromConnectResult.getSchema().rawSchema().getTypes().get(0);
     FieldElement fieldElem = messageElem.getFields().get(5);
@@ -889,7 +981,7 @@ public class ProtobufDataTest {
 
     ProtobufData protobufData = new ProtobufData();
     ProtobufSchemaAndValue converted = protobufData.fromConnectData(result.schema(), result.value());
-    DynamicMessage convertedValue = (DynamicMessage) converted.getValue();
+    Message convertedValue = (Message) converted.getValue();
 
     TestMessageProtos.TestMessage parsedMessage = TestMessageProtos.TestMessage.parseFrom(convertedValue.toByteArray());
 
@@ -967,7 +1059,7 @@ public class ProtobufDataTest {
 
     ProtobufSchemaAndValue convertedRecord = new ProtobufData().fromConnectData(schema, struct);
     ProtobufSchema protobufSchema = convertedRecord.getSchema();
-    DynamicMessage message = (DynamicMessage) convertedRecord.getValue();
+    Message message = (Message) convertedRecord.getValue();
 
     MessageElement messageElem = (MessageElement) protobufSchema.rawSchema().getTypes().get(0);
     FieldElement fieldElem = messageElem.getFields().get(0);
@@ -1095,7 +1187,7 @@ public class ProtobufDataTest {
   }
 
   @Test
-  public void testFromConnectInt8() throws Exception {
+  public void testFromConnectInt8Struct() throws Exception {
     Byte value = 15;
     byte[] messageBytes = getMessageBytes(OPTIONAL_INT8_SCHEMA, value);
     Message message = Int8Value.parseFrom(messageBytes);
@@ -1109,7 +1201,7 @@ public class ProtobufDataTest {
   }
 
   @Test
-  public void testFromConnectInt16() throws Exception {
+  public void testFromConnectInt16Struct() throws Exception {
     Short value = 15;
     byte[] messageBytes = getMessageBytes(OPTIONAL_INT16_SCHEMA, value);
     Message message = Int16Value.parseFrom(messageBytes);
@@ -1125,6 +1217,19 @@ public class ProtobufDataTest {
   @Test
   public void testFromConnectInt32() throws Exception {
     Integer value = 15;
+    byte[] messageBytes = getMessageBytes(new SchemaAndValue(Schema.INT32_SCHEMA, value));
+    Message message = Int32Value.parseFrom(messageBytes);
+
+    assertEquals(1, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(value, message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testFromConnectInt32Struct() throws Exception {
+    Integer value = 15;
     byte[] messageBytes = getMessageBytes(OPTIONAL_INT32_SCHEMA, value);
     Message message = Int32Value.parseFrom(messageBytes);
 
@@ -1137,6 +1242,19 @@ public class ProtobufDataTest {
 
   @Test
   public void testFromConnectInt64() throws Exception {
+    Long value = 15L;
+    byte[] messageBytes = getMessageBytes(new SchemaAndValue(Schema.INT64_SCHEMA, value));
+    Message message = Int64Value.parseFrom(messageBytes);
+
+    assertEquals(1, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(value, message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testFromConnectInt64Struct() throws Exception {
     Long value = 15L;
     byte[] messageBytes = getMessageBytes(OPTIONAL_INT64_SCHEMA, value);
     Message message = Int64Value.parseFrom(messageBytes);
@@ -1268,6 +1386,19 @@ public class ProtobufDataTest {
   @Test
   public void testFromConnectFloat32() throws Exception {
     Float value = 12.3f;
+    byte[] messageBytes = getMessageBytes(new SchemaAndValue(Schema.FLOAT32_SCHEMA, value));
+    Message message = FloatValue.parseFrom(messageBytes);
+
+    assertEquals(1, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(value, message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testFromConnectFloat32Struct() throws Exception {
+    Float value = 12.3f;
     byte[] messageBytes = getMessageBytes(OPTIONAL_FLOAT32_SCHEMA, value);
     Message message = FloatValue.parseFrom(messageBytes);
 
@@ -1280,6 +1411,19 @@ public class ProtobufDataTest {
 
   @Test
   public void testFromConnectFloat64() throws Exception {
+    Double value = 12.3;
+    byte[] messageBytes = getMessageBytes(new SchemaAndValue(Schema.FLOAT64_SCHEMA, value));
+    Message message = DoubleValue.parseFrom(messageBytes);
+
+    assertEquals(1, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(value, message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testFromConnectFloat64Struct() throws Exception {
     Double value = 12.3;
     byte[] messageBytes = getMessageBytes(OPTIONAL_FLOAT64_SCHEMA, value);
     Message message = DoubleValue.parseFrom(messageBytes);
@@ -1294,6 +1438,19 @@ public class ProtobufDataTest {
   @Test
   public void testFromConnectBoolean() throws Exception {
     Boolean value = true;
+    byte[] messageBytes = getMessageBytes(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, value));
+    Message message = BoolValue.parseFrom(messageBytes);
+
+    assertEquals(1, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(value, message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testFromConnectBooleanStruct() throws Exception {
+    Boolean value = true;
     byte[] messageBytes = getMessageBytes(OPTIONAL_BOOLEAN_SCHEMA, value);
     Message message = BoolValue.parseFrom(messageBytes);
 
@@ -1307,6 +1464,17 @@ public class ProtobufDataTest {
   @Test
   public void testFromConnectBooleanWithFalse() throws Exception {
     Boolean value = false;
+    byte[] messageBytes = getMessageBytes(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, value));
+    Message message = BoolValue.parseFrom(messageBytes);
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(value, message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testFromConnectBooleanStructWithFalse() throws Exception {
+    Boolean value = false;
     byte[] messageBytes = getMessageBytes(OPTIONAL_BOOLEAN_SCHEMA, value);
     Message message = BoolValue.parseFrom(messageBytes);
 
@@ -1317,6 +1485,19 @@ public class ProtobufDataTest {
 
   @Test
   public void testFromConnectString() throws Exception {
+    String value = "Hello";
+    byte[] messageBytes = getMessageBytes(new SchemaAndValue(Schema.STRING_SCHEMA, value));
+    Message message = StringValue.parseFrom(messageBytes);
+
+    assertEquals(1, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(value, message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testFromConnectStringStruct() throws Exception {
     String value = "Hello";
     byte[] messageBytes = getMessageBytes(OPTIONAL_STRING_SCHEMA, value);
     Message message = StringValue.parseFrom(messageBytes);
@@ -1331,6 +1512,20 @@ public class ProtobufDataTest {
   @Test
   public void testFromConnectEmptyString() throws Exception {
     String value = "";
+    byte[] messageBytes = getMessageBytes(new SchemaAndValue(Schema.STRING_SCHEMA, value));
+    Message message = StringValue.parseFrom(messageBytes);
+
+    // TODO verify that empty string is omitted in protobuf v3 spec
+    assertEquals(0, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(value, message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testFromConnectEmptyStringStruct() throws Exception {
+    String value = "";
     byte[] messageBytes = getMessageBytes(OPTIONAL_STRING_SCHEMA, value);
     Message message = StringValue.parseFrom(messageBytes);
 
@@ -1344,6 +1539,19 @@ public class ProtobufDataTest {
 
   @Test
   public void testFromConnectBytes() throws Exception {
+    byte[] value = ByteBuffer.wrap("foo".getBytes()).array();
+    byte[] messageBytes = getMessageBytes(new SchemaAndValue(Schema.BYTES_SCHEMA, value));
+    Message message = BytesValue.parseFrom(messageBytes);
+
+    assertEquals(1, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(ByteString.copyFrom(value), message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testFromConnectBytesStruct() throws Exception {
     byte[] value = ByteBuffer.wrap("foo".getBytes()).array();
     byte[] messageBytes = getMessageBytes(OPTIONAL_BYTES_SCHEMA, value);
     Message message = BytesValue.parseFrom(messageBytes);
@@ -1371,7 +1579,7 @@ public class ProtobufDataTest {
     ProtobufSchemaAndValue protobufSchemaAndValue = protobufData.fromConnectData(schemaAndValue);
     ProtobufSchema protobufSchema = protobufSchemaAndValue.getSchema();
     Descriptor descriptor = protobufSchema.toDescriptor();
-    DynamicMessage message = (DynamicMessage) protobufSchemaAndValue.getValue();
+    Message message = (Message) protobufSchemaAndValue.getValue();
     Descriptor messageDescriptor = message.getDescriptorForType();
     assertEquals("invalid_record_name", descriptor.getName());
     assertEquals("invalid_field_name", descriptor.getFields().get(0).getName());
