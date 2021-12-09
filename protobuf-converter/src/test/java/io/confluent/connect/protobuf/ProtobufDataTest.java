@@ -447,9 +447,9 @@ public class ProtobufDataTest {
     return getSchemaAndValue(message, false);
   }
 
-  private SchemaAndValue getSchemaAndValue(Message message, boolean wrapperForRootPrimitives) throws Exception {
+  private SchemaAndValue getSchemaAndValue(Message message, boolean wrapperForRawPrimitives) throws Exception {
     ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
-        .with(ProtobufDataConfig.WRAPPER_FOR_ROOT_PRIMITIVES_CONFIG, wrapperForRootPrimitives)
+        .with(ProtobufDataConfig.WRAPPER_FOR_RAW_PRIMITIVES_CONFIG, wrapperForRawPrimitives)
         .build();
     ProtobufData protobufData = new ProtobufData(protobufDataConfig);
     return getSchemaAndValue(protobufData, message);

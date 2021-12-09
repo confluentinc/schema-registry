@@ -294,7 +294,7 @@ public class ProtobufData {
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
   private boolean useWrapperForNullables;
-  private boolean useWrapperForRootPrimitives;
+  private boolean useWrapperForRawPrimitives;
 
   public ProtobufData() {
     this(new ProtobufDataConfig.Builder().with(
@@ -313,7 +313,7 @@ public class ProtobufData {
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
     this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
     this.useWrapperForNullables = protobufDataConfig.useWrapperForNullables();
-    this.useWrapperForRootPrimitives = protobufDataConfig.useWrapperForRootPrimitives();
+    this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
   }
 
   /**
@@ -1307,7 +1307,7 @@ public class ProtobufData {
   private SchemaBuilder toConnectSchema(
       ToConnectContext ctx, Descriptor descriptor, Integer version) {
     SchemaBuilder builder = null;
-    if (useWrapperForRootPrimitives) {
+    if (useWrapperForRawPrimitives) {
       builder = toUnwrappedSchema(descriptor);
     }
     if (builder == null) {

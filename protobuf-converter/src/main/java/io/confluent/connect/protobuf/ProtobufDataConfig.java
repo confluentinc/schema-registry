@@ -41,10 +41,10 @@ public class ProtobufDataConfig extends AbstractConfig {
   public static final String WRAPPER_FOR_NULLABLES_DOC = "Whether nullable fields should use "
       + "primitive wrapper messages";
 
-  public static final String WRAPPER_FOR_ROOT_PRIMITIVES_CONFIG = "wrapper.for.root.primitives";
-  public static final boolean WRAPPER_FOR_ROOT_PRIMITIVES_DEFAULT = true;
-  public static final String WRAPPER_FOR_ROOT_PRIMITIVES_DOC = "Whether a wrapper message "
-      + "should be interpreted as a root-level primitive";
+  public static final String WRAPPER_FOR_RAW_PRIMITIVES_CONFIG = "wrapper.for.raw.primitives";
+  public static final boolean WRAPPER_FOR_RAW_PRIMITIVES_DEFAULT = true;
+  public static final String WRAPPER_FOR_RAW_PRIMITIVES_DOC = "Whether a wrapper message "
+      + "should be interpreted as a raw primitive at the root level";
 
   public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.config";
   public static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
@@ -64,11 +64,11 @@ public class ProtobufDataConfig extends AbstractConfig {
             WRAPPER_FOR_NULLABLES_DEFAULT,
             ConfigDef.Importance.MEDIUM,
             WRAPPER_FOR_NULLABLES_DOC)
-        .define(WRAPPER_FOR_ROOT_PRIMITIVES_CONFIG,
+        .define(WRAPPER_FOR_RAW_PRIMITIVES_CONFIG,
             ConfigDef.Type.BOOLEAN,
-            WRAPPER_FOR_ROOT_PRIMITIVES_DEFAULT,
+            WRAPPER_FOR_RAW_PRIMITIVES_DEFAULT,
             ConfigDef.Importance.MEDIUM,
-            WRAPPER_FOR_ROOT_PRIMITIVES_DOC)
+            WRAPPER_FOR_RAW_PRIMITIVES_DOC)
         .define(SCHEMAS_CACHE_SIZE_CONFIG,
             ConfigDef.Type.INT,
             SCHEMAS_CACHE_SIZE_DEFAULT,
@@ -93,8 +93,8 @@ public class ProtobufDataConfig extends AbstractConfig {
     return this.getBoolean(WRAPPER_FOR_NULLABLES_CONFIG);
   }
 
-  public boolean useWrapperForRootPrimitives() {
-    return this.getBoolean(WRAPPER_FOR_ROOT_PRIMITIVES_CONFIG);
+  public boolean useWrapperForRawPrimitives() {
+    return this.getBoolean(WRAPPER_FOR_RAW_PRIMITIVES_CONFIG);
   }
 
   public int schemaCacheSize() {
