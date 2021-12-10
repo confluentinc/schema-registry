@@ -1443,6 +1443,60 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testCombinedSchemaAllOfRef() {
+    String schema = "{\n"
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"allOf\": [\n"
+        + "    { \"$ref\": \"#/definitions/MessageBase\" },\n"
+        + "    { \"$ref\": \"#/definitions/MessageBase2\" }\n"
+        + "  ],\n"
+        + "\n"
+        + "  \"title\": \"IdentifyUserMessage\",\n"
+        + "  \"description\": \"An IdentifyUser message\",\n"
+        + "  \"type\": \"object\",\n"
+        + "\n"
+        + "  \"properties\": {\n"
+        + "    \"prevUserId\": {\n"
+        + "      \"type\": \"string\"\n"
+        + "    },\n"
+        + "\n"
+        + "    \"newUserId\": {\n"
+        + "      \"type\": \"string\"\n"
+        + "    }\n"
+        + "  },\n"
+        + "\n"
+        + "  \"definitions\": {\n"
+        + "    \"MessageBase\": {\n"
+        + "      \"properties\": {\n"
+        + "        \"id\": {\n"
+        + "          \"type\": \"string\"\n"
+        + "        },\n"
+        + "\n"
+        + "        \"type\": {\n"
+        + "          \"type\": \"string\"\n"
+        + "        }\n"
+        + "      }\n"
+        + "    },\n"
+        + "    \"MessageBase2\": {\n"
+        + "      \"properties\": {\n"
+        + "        \"id2\": {\n"
+        + "          \"type\": \"string\"\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertNotNull(connectSchema.field("id"));
+    assertNotNull(connectSchema.field("type"));
+    assertNotNull(connectSchema.field("id2"));
+    assertNotNull(connectSchema.field("newUserId"));
+    assertNotNull(connectSchema.field("prevUserId"));
+  }
+
+  @Test
   public void testCombinedSchemaTitleAndObject() {
     String schema = "{\n"
         + "      \"title\": \"Product Identifier\",\n"

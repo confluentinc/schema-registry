@@ -1071,6 +1071,8 @@ public class JsonSchemaData {
     NumberSchema numberSchema = null;
     StringSchema stringSchema = null;
     CombinedSchema combinedSubschema = null;
+    Map<String, org.everit.json.schema.Schema> properties = new LinkedHashMap<>();
+    Map<String, Boolean> required = new HashMap<>();
     for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
       if (subSchema instanceof ConstSchema) {
         constSchema = (ConstSchema) subSchema;
@@ -1083,9 +1085,24 @@ public class JsonSchemaData {
       } else if (subSchema instanceof CombinedSchema) {
         combinedSubschema = (CombinedSchema) subSchema;
       }
+      collectPropertySchemas(subSchema, properties, required, new HashSet<>());
     }
-    if (combinedSubschema != null) {
-      // Any combined subschema takes precedence
+    if (!properties.isEmpty()) {
+      SchemaBuilder builder = SchemaBuilder.struct();
+      ctx.put(combinedSchema, builder);
+      for (Map.Entry<String, org.everit.json.schema.Schema> property : properties.entrySet()) {
+        String subFieldName = property.getKey();
+        org.everit.json.schema.Schema subSchema = property.getValue();
+        boolean isFieldOptional = config.useOptionalForNonRequiredProperties()
+            && !required.get(subFieldName);
+        builder.field(subFieldName, toConnectSchema(ctx, subSchema, null, isFieldOptional));
+      }
+      if (forceOptional) {
+        builder.optional();
+      }
+      return builder.build();
+    } else if (combinedSubschema != null) {
+      // Any combined subschema takes precedence over primitive subschemas
       return toConnectSchema(ctx, combinedSubschema, version, forceOptional);
     } else if (constSchema != null) {
       if (stringSchema != null) {
@@ -1111,6 +1128,37 @@ public class JsonSchemaData {
     }
     throw new IllegalArgumentException("Unsupported criterion "
         + combinedSchema.getCriterion() + " for " + combinedSchema);
+  }
+
+  private void collectPropertySchemas(
+      org.everit.json.schema.Schema schema,
+      Map<String, org.everit.json.schema.Schema> properties,
+      Map<String, Boolean> required,
+      Set<org.everit.json.schema.Schema> visited) {
+    if (visited.contains(schema)) {
+      return;
+    } else {
+      visited.add(schema);
+    }
+    if (schema instanceof CombinedSchema) {
+      CombinedSchema combinedSchema = (CombinedSchema) schema;
+      if (combinedSchema.getCriterion() == CombinedSchema.ALL_CRITERION) {
+        for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
+          collectPropertySchemas(subSchema, properties, required, visited);
+        }
+      }
+    } else if (schema instanceof ObjectSchema) {
+      ObjectSchema objectSchema = (ObjectSchema) schema;
+      for (Map.Entry<String, org.everit.json.schema.Schema> entry
+          : objectSchema.getPropertySchemas().entrySet()) {
+        String fieldName = entry.getKey();
+        properties.put(fieldName, entry.getValue());
+        required.put(fieldName, objectSchema.getRequiredProperties().contains(fieldName));
+      }
+    } else if (schema instanceof ReferenceSchema) {
+      ReferenceSchema refSchema = (ReferenceSchema) schema;
+      collectPropertySchemas(refSchema.getReferredSchema(), properties, required, visited);
+    }
   }
 
   private interface JsonToConnectTypeConverter {
