@@ -1030,7 +1030,7 @@ public class JsonSchemaData {
     }
 
     String title = jsonSchema.getTitle();
-    if (title != null) {
+    if (title != null && builder.name() == null) {
       builder.name(title);
     }
     // Included Kafka Connect version takes priority, fall back to schema registry version
