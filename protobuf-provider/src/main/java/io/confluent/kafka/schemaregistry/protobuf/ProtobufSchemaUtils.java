@@ -649,6 +649,17 @@ public class ProtobufSchemaUtils {
         appendIndented(sb, v);
       }
       sb.append("]");
+    } else if (value instanceof OptionElement.OptionPrimitive) {
+      OptionElement.OptionPrimitive primitive = (OptionElement.OptionPrimitive)value;
+      switch (primitive.getKind()) {
+        case BOOLEAN:
+        case ENUM:
+        case NUMBER:
+          sb.append(primitive.getValue());
+          break;
+        default:
+          sb.append(formatOptionMapValue(primitive.getValue(), normalize));
+      }
     } else {
       sb.append(value);
     }
