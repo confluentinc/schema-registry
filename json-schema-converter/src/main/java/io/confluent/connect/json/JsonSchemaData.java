@@ -1084,16 +1084,16 @@ public class JsonSchemaData {
         combinedSubschema = (CombinedSchema) subSchema;
       }
     }
-    if (constSchema != null) {
+    if (combinedSubschema != null) {
+      // Any combined subschema takes precedence
+      return toConnectSchema(ctx, combinedSubschema, version, forceOptional);
+    } else if (constSchema != null) {
       if (stringSchema != null) {
         // Ignore the const, return the string
         return toConnectSchema(ctx, stringSchema, version, forceOptional);
       } else if (numberSchema != null) {
         // Ignore the const, return the number or integer
         return toConnectSchema(ctx, numberSchema, version, forceOptional);
-      } else if (combinedSubschema != null) {
-        // Ignore the const, return the combined subschema
-        return toConnectSchema(ctx, combinedSubschema, version, forceOptional);
       }
     } else if (enumSchema != null) {
       if (stringSchema != null) {
@@ -1102,17 +1102,11 @@ public class JsonSchemaData {
       } else if (numberSchema != null) {
         // Ignore the enum, return the number or integer
         return toConnectSchema(ctx, numberSchema, version, forceOptional);
-      } else if (combinedSubschema != null) {
-        // Ignore the enum, return the combined subschema
-        return toConnectSchema(ctx, combinedSubschema, version, forceOptional);
       }
     } else if (stringSchema != null && stringSchema.getFormatValidator() != null) {
       if (numberSchema != null) {
         // This is a number or integer with a format
         return toConnectSchema(ctx, numberSchema, version, forceOptional);
-      } else if (combinedSubschema != null) {
-        // This is an optional number or integer with a format
-        return toConnectSchema(ctx, combinedSubschema, version, forceOptional);
       }
     }
     throw new IllegalArgumentException("Unsupported criterion "

@@ -1443,9 +1443,10 @@ public class JsonSchemaDataTest {
   }
 
   @Test
-  public void testCombinedSchemaTitle() {
+  public void testCombinedSchemaTitleAndObject() {
     String schema = "{\n"
         + "      \"title\": \"Product Identifier\",\n"
+        + "      \"type\": \"object\",\n"
         + "      \"anyOf\": [\n"
         + "        {\n"
         + "          \"type\": \"object\",\n"
