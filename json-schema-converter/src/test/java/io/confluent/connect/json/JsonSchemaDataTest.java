@@ -1443,6 +1443,36 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testCombinedSchemaTitleAndObject() {
+    String schema = "{\n"
+        + "      \"title\": \"Product Identifier\",\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"anyOf\": [\n"
+        + "        {\n"
+        + "          \"type\": \"object\",\n"
+        + "          \"properties\": {\n"
+        + "            \"keycode\": {\n"
+        + "              \"type\": \"string\"\n"
+        + "            }\n"
+        + "          }\n"
+        + "        },\n"
+        + "        {\n"
+        + "          \"type\": \"object\",\n"
+        + "          \"properties\": {\n"
+        + "            \"itemCode\": {\n"
+        + "              \"type\": \"string\"\n"
+        + "            }\n"
+        + "          }\n"
+        + "        }\n"
+        + "      ]\n"
+        + "    }";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertEquals("io.confluent.connect.json.OneOf", connectSchema.name());
+  }
+
+  @Test
   public void testNumericFormats() {
     String schema = "{\n"
         + "  \"title\": \"numerics with format\",\n"
