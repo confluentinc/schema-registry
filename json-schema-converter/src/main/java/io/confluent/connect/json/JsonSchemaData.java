@@ -1135,7 +1135,11 @@ public class JsonSchemaData {
       Map<String, org.everit.json.schema.Schema> properties,
       Map<String, Boolean> required,
       Set<org.everit.json.schema.Schema> visited) {
-    visited.add(schema);
+    if (visited.contains(schema)) {
+      return;
+    } else {
+      visited.add(schema);
+    }
     if (schema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) schema;
       if (combinedSchema.getCriterion() == CombinedSchema.ALL_CRITERION) {
@@ -1153,10 +1157,7 @@ public class JsonSchemaData {
       }
     } else if (schema instanceof ReferenceSchema) {
       ReferenceSchema refSchema = (ReferenceSchema) schema;
-      org.everit.json.schema.Schema referredSchema = refSchema.getReferredSchema();
-      if (!visited.contains(referredSchema)) {
-        collectPropertySchemas(referredSchema, properties, required, visited);
-      }
+      collectPropertySchemas(refSchema.getReferredSchema(), properties, required, visited);
     }
   }
 
