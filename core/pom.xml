@@ -66,6 +66,16 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>confluent-log4j</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-core</artifactId>
+                </exclusion>
+            </exclusions>
        </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
