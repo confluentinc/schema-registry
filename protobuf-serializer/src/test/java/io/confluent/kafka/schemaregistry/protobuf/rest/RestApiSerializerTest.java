@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.protobuf.rest;
 import com.acme.glup.ExampleProtoAcme;
 import com.acme.glup.MetadataProto;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
 import org.junit.Test;
@@ -30,6 +31,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
@@ -37,6 +39,8 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerConfig;
 import io.confluent.kafka.serializers.protobuf.test.DependencyTestProto.DependencyMessage;
+import io.confluent.kafka.serializers.protobuf.test.EnumReferenceOuter.EnumReference;
+import io.confluent.kafka.serializers.protobuf.test.EnumRootOuter.EnumRoot;
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.ComplexType;
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage;
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status;
@@ -115,6 +119,8 @@ public class RestApiSerializerTest extends ClusterTestHarness {
       .setUid("myuid")
       .addControlMessage(WATERMARK_MESSAGE)
       .build();
+  private static final EnumReference ENUM_REF =
+      EnumReference.newBuilder().setEnumRoot(EnumRoot.GOODBYE).build();
 
 
   public RestApiSerializerTest() {
@@ -220,6 +226,65 @@ public class RestApiSerializerTest extends ClusterTestHarness {
 
     ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 4);
     assertEquals(ProtobufSchemaUtils.getSchema(CLICK_CAS_MESSAGE).canonicalString(),
+        schema.canonicalString()
+    );
+  }
+
+  @Test
+  public void testEnumRoot() throws Exception {
+    Properties serializerConfig = new Properties();
+    serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
+        10,
+        Collections.singletonList(new ProtobufSchemaProvider()),
+        Collections.emptyMap(),
+        Collections.emptyMap()
+    );
+    KafkaProtobufSerializer protobufSerializer = new KafkaProtobufSerializer(schemaRegistry,
+        new HashMap(serializerConfig)
+    );
+
+    KafkaProtobufDeserializer protobufDeserializer = new KafkaProtobufDeserializer(schemaRegistry);
+
+    Properties enumRefDeserializerConfig = new Properties();
+    enumRefDeserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus"
+    );
+    KafkaProtobufDeserializer enumRefDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(enumRefDeserializerConfig),
+        EnumReference.class
+    );
+
+    byte[] bytes;
+
+    // specific -> specific
+    bytes = protobufSerializer.serialize(topic, ENUM_REF);
+    assertEquals(ENUM_REF, enumRefDeserializer.deserialize(topic, bytes));
+
+    // specific -> dynamic
+    bytes = protobufSerializer.serialize(topic, ENUM_REF);
+    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals(ENUM_REF.getEnumRoot().name(), ((EnumValueDescriptor) getField(message, "enum_root")).getName());
+
+    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 1);
+    assertEquals(new ProtobufSchema("syntax = \"proto3\";\n"
+            + "\n"
+            + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+            + "option java_outer_classname = \"EnumRootOuter\";\n"
+            + "\n"
+            + "enum EnumRoot {\n"
+            + "  HELLO = 0;\n"
+            + "  GOODBYE = 1;\n"
+            + "}").canonicalString(),
+        schema.canonicalString()
+    );
+    assertEquals("EnumRoot", schema.name());
+
+    schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 2);
+    assertEquals(ProtobufSchemaUtils.getSchema(ENUM_REF).canonicalString(),
         schema.canonicalString()
     );
   }
