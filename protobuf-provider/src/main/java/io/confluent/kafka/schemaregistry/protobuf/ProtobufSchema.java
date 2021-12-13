@@ -753,11 +753,11 @@ public class ProtobufSchema implements ParsedSchema {
     if (typeElement == null) {
       throw new IllegalArgumentException("Protobuf schema definition contains no type definitions");
     }
-    String name = typeElement.getName();
+    String typeName = typeElement.getName();
     String packageName = schemaObj.getPackageName();
     return packageName != null && !packageName.isEmpty()
-        ? packageName + '.' + name
-        : name;
+        ? packageName + '.' + typeName
+        : typeName;
   }
 
   @Override
