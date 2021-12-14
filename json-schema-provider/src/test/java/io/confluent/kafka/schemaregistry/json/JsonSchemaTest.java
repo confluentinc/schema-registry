@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
@@ -299,6 +298,42 @@ public class JsonSchemaTest {
     Object envelope = JsonSchemaUtils.envelope(schema, null);
     JsonSchema schema2 = JsonSchemaUtils.getSchema(envelope);
     assertEquals(schema, schema2);
+  }
+
+  @Test
+  public void testInlinedRef() throws Exception {
+    String child = "{\n"
+        + "      \"definitions\": {\n"
+        + "        \"unit\": {\n"
+        + "          \"$ref\": \"#/definitions/unit2\"\n"
+        + "        },\n"
+        + "        \"unit2\": {\n"
+        + "          \"type\": \"string\"\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"properties\": {\n"
+        + "        \"x\": {\n"
+        + "          \"$ref\": \"#/definitions/unit\"\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }";
+    String main = "{\n"
+        + "  \"oneOf\": [\n"
+        + "     { \"$ref\": \"ref.json\" }\n"
+        + "  ]\n"
+        + "}";
+    SchemaReference ref = new SchemaReference("ref.json", "reference", 1);
+    JsonSchema schema = new JsonSchema(main, Collections.singletonList(ref),
+        Collections.singletonMap("ref.json", child), null);
+    JsonNode x = objectMapper.readTree("{ \"x\": \"hi\" }");
+    schema.validate(x);
+    x = objectMapper.readTree("{ \"x\": 3 }");
+    try {
+      schema.validate(x);
+      fail("Validating invalid JSON should fail");
+    } catch (Exception e) {
+      // expected
+    }
   }
 
   @Test
