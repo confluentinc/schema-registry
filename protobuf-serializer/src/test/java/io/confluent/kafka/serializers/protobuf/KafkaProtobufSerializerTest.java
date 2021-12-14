@@ -16,6 +16,7 @@
 package io.confluent.kafka.serializers.protobuf;
 
 import com.google.protobuf.Descriptors;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
@@ -28,6 +29,8 @@ import java.util.Properties;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.protobuf.test.DependencyTestProto.DependencyMessage;
+import io.confluent.kafka.serializers.protobuf.test.EnumReferenceOuter.EnumReference;
+import io.confluent.kafka.serializers.protobuf.test.EnumRootOuter.EnumRoot;
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.ComplexType;
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage;
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status;
@@ -45,6 +48,7 @@ public class KafkaProtobufSerializerTest {
   private final KafkaProtobufDeserializer testMessageDeserializer;
   private final KafkaProtobufDeserializer nestedMessageDeserializer;
   private final KafkaProtobufDeserializer dependencyMessageDeserializer;
+  private final KafkaProtobufDeserializer enumRefDeserializer;
   private final KafkaProtobufDeserializer innerMessageDeserializer;
   private final String topic;
 
@@ -82,6 +86,8 @@ public class KafkaProtobufSerializerTest {
       .setIsActive(true)
       .setTestMesssage(HELLO_WORLD_MESSAGE)
       .build();
+  private static final EnumReference ENUM_REF =
+      EnumReference.newBuilder().setEnumRoot(EnumRoot.GOODBYE).build();
   private static final NestedMessage.InnerMessage INNER_MESSAGE =
       NestedMessage.InnerMessage.newBuilder().setId("inner").build();
 
@@ -141,6 +147,17 @@ public class KafkaProtobufSerializerTest {
         schemaRegistry,
         new HashMap(dependencyMessageDeserializerConfig),
         DependencyMessage.class
+    );
+
+    Properties enumRefDeserializerConfig = new Properties();
+    enumRefDeserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus"
+    );
+    enumRefDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(enumRefDeserializerConfig),
+        EnumReference.class
     );
 
     Properties innerMessageDeserializerConfig = new Properties();
@@ -271,6 +288,20 @@ public class KafkaProtobufSerializerTest {
             "user_id"
         ), "kafka_user_id")
     );
+  }
+
+  @Test
+  public void testEnumRoot() {
+    byte[] bytes;
+
+    // specific -> specific
+    bytes = protobufSerializer.serialize(topic, ENUM_REF);
+    assertEquals(ENUM_REF, enumRefDeserializer.deserialize(topic, bytes));
+
+    // specific -> dynamic
+    bytes = protobufSerializer.serialize(topic, ENUM_REF);
+    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals(ENUM_REF.getEnumRoot().name(), ((EnumValueDescriptor) getField(message, "enum_root")).getName());
   }
 
   @Test
