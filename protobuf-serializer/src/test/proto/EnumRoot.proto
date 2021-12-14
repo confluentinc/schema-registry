@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+option java_package = "io.confluent.kafka.serializers.protobuf.test";
+option java_outer_classname = "EnumRootOuter";
+
+enum EnumRoot {
+  HELLO = 0;
+  GOODBYE = 1;
+}
