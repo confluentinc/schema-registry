@@ -630,8 +630,16 @@ public class ProtobufSchema implements ParsedSchema {
         return (MessageElement) typeElement;
       }
     }
-    throw new IllegalArgumentException("Protobuf schema definition"
-        + " contains no message type definitions");
+    return null;
+  }
+
+  private EnumElement firstEnum() {
+    for (TypeElement typeElement : schemaObj.getTypes()) {
+      if (typeElement instanceof EnumElement) {
+        return (EnumElement) typeElement;
+      }
+    }
+    return null;
   }
 
   public DynamicSchema toDynamicSchema() {
@@ -889,11 +897,18 @@ public class ProtobufSchema implements ParsedSchema {
     if (name != null) {
       return name;
     }
-    String messageName = firstMessage().getName();
+    TypeElement typeElement = firstMessage();
+    if (typeElement == null) {
+      typeElement = firstEnum();
+    }
+    if (typeElement == null) {
+      throw new IllegalArgumentException("Protobuf schema definition contains no type definitions");
+    }
+    String typeName = typeElement.getName();
     String packageName = schemaObj.getPackageName();
     return packageName != null && !packageName.isEmpty()
-        ? packageName + '.' + messageName
-        : messageName;
+        ? packageName + '.' + typeName
+        : typeName;
   }
 
   @Override
