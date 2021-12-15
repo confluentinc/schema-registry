@@ -625,7 +625,7 @@ public class ProtobufSchema implements ParsedSchema {
     List<Map.Entry<String, ImmutableList.Builder<FieldElement>>> oneofs =
         new ArrayList<>(oneofsMap.entrySet());
     for (FieldDescriptorProto fd : descriptor.getFieldList()) {
-      if (fd.hasOneofIndex()) {
+      if (fd.hasOneofIndex() && !fd.getProto3Optional()) {
         FieldElement field = toField(file, fd, true);
         oneofs.get(fd.getOneofIndex()).getValue().add(field);
       } else {
@@ -692,6 +692,7 @@ public class ProtobufSchema implements ParsedSchema {
         fields.build(),
         oneofs.stream()
             .map(e -> toOneof(e.getKey(), e.getValue()))
+            .filter(e -> !e.getFields().isEmpty())
             .collect(Collectors.toList()),
         Collections.emptyList(),
         Collections.emptyList()
@@ -1122,6 +1123,7 @@ public class ProtobufSchema implements ParsedSchema {
         String doc = findDoc(meta);
         Map<String, String> params = findParams(meta);
         oneofBuilder.addField(
+            false,
             field.getType(),
             field.getName(),
             field.getTag(),
@@ -1171,21 +1173,38 @@ public class ProtobufSchema implements ParsedSchema {
         mapMessage.addField(null, valueType.toString(), VALUE_FIELD, 2, null, null, null);
         message.addMessageDefinition(mapMessage.build());
       }
-      message.addField(
-          label,
-          isProto3Optional,
-          fieldType,
-          field.getName(),
-          field.getTag(),
-          defaultVal,
-          jsonName,
-          doc,
-          params,
-          ctype,
-          isPacked,
-          jstype,
-          isDeprecated
-      );
+      if (isProto3Optional) {
+        // Add synthetic oneof after real oneofs
+        MessageDefinition.OneofBuilder oneofBuilder = message.addOneof("_" + field.getName());
+        oneofBuilder.addField(
+            true,
+            field.getType(),
+            field.getName(),
+            field.getTag(),
+            defaultVal,
+            jsonName,
+            doc,
+            params,
+            ctype,
+            jstype,
+            isDeprecated
+        );
+      } else {
+        message.addField(
+            label,
+            fieldType,
+            field.getName(),
+            field.getTag(),
+            defaultVal,
+            jsonName,
+            doc,
+            params,
+            ctype,
+            isPacked,
+            jstype,
+            isDeprecated
+        );
+      }
     }
     for (ReservedElement reserved : messageElem.getReserveds()) {
       for (Object elem : reserved.getValues()) {
