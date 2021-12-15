@@ -19,6 +19,7 @@ import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
+import io.confluent.kafka.serializers.protobuf.test.TestMessageOptionalProtos.TestMessageOptional;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -39,7 +40,6 @@ import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessag
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status;
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.UserId;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage;
-import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 
 import static org.junit.Assert.assertEquals;
 
@@ -97,6 +97,11 @@ public class KafkaProtobufSerializerTest {
       NestedMessage.InnerMessage.newBuilder().setId("inner").build();
   private static final TestMessageOptionalProtos.TestMessageOptional OPTIONAL_MESSAGE =
       TestMessageOptionalProtos.TestMessageOptional.newBuilder().setTestString("hi").build();
+  private static final TestMessageOptionalProtos.TestMessageOptional OPTIONAL_MESSAGE_DEFAULT =
+      TestMessageOptionalProtos.TestMessageOptional.newBuilder()
+          .setTestString("hi")
+          .setTestOptionalString("")
+          .build();
 
 
   public KafkaProtobufSerializerTest() {
@@ -377,6 +382,50 @@ public class KafkaProtobufSerializerTest {
     bytes = protobufSerializer.serialize(topic, OPTIONAL_MESSAGE);
     DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
     assertEquals(OPTIONAL_MESSAGE.getTestString(), getField(message, "test_string"));
-    assertEquals(OPTIONAL_MESSAGE.hasTestOptionalString(), false);
+    assertEquals(false, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+
+    // dynamic -> specific
+    bytes = protobufSerializer.serialize(topic, message);
+    assertEquals(OPTIONAL_MESSAGE, optionalMessageDeserializer.deserialize(topic, bytes));
+
+    // dynamic -> dynamic
+    bytes = protobufSerializer.serialize(topic, message);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals(OPTIONAL_MESSAGE.getTestString(), getField(message, "test_string"));
+    assertEquals(false, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+
+
+    // specific -> specific
+    bytes = protobufSerializer.serialize(topic, OPTIONAL_MESSAGE_DEFAULT);
+    assertEquals(OPTIONAL_MESSAGE_DEFAULT, optionalMessageDeserializer.deserialize(topic, bytes));
+
+    // specific -> dynamic
+    bytes = protobufSerializer.serialize(topic, OPTIONAL_MESSAGE_DEFAULT);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals(OPTIONAL_MESSAGE_DEFAULT.getTestString(), getField(message, "test_string"));
+    assertEquals(true, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+
+    // dynamic -> specific
+    bytes = protobufSerializer.serialize(topic, message);
+    assertEquals(OPTIONAL_MESSAGE_DEFAULT, optionalMessageDeserializer.deserialize(topic, bytes));
+
+    // dynamic -> dynamic
+    bytes = protobufSerializer.serialize(topic, message);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals(OPTIONAL_MESSAGE_DEFAULT.getTestString(), getField(message, "test_string"));
+    assertEquals(true, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+
+    DynamicMessage.Builder builder = schema.newMessageBuilder();
+    builder.setField(builder.getDescriptorForType().findFieldByName("test_string"), "hi");
+    message = builder.build();
+    assertEquals(OPTIONAL_MESSAGE.getTestString(), getField(message, "test_string"));
+    assertEquals(false, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+
+    builder = schema.newMessageBuilder();
+    builder.setField(builder.getDescriptorForType().findFieldByName("test_string"), "hi");
+    builder.setField(builder.getDescriptorForType().findFieldByName("test_optional_string"), "");
+    message = builder.build();
+    assertEquals(OPTIONAL_MESSAGE_DEFAULT.getTestString(), getField(message, "test_string"));
+    assertEquals(true, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
   }
 }
