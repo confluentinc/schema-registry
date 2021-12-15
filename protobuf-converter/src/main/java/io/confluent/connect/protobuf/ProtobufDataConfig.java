@@ -36,6 +36,11 @@ public class ProtobufDataConfig extends AbstractConfig {
   public static final String SCRUB_INVALID_NAMES_DOC =
       "Whether to scrub invalid names by replacing invalid characters with valid ones";
 
+  public static final String OPTIONAL_FOR_NULLABLES_CONFIG = "optional.for.nullables";
+  public static final boolean OPTIONAL_FOR_NULLABLES_DEFAULT = false;
+  public static final String OPTIONAL_FOR_NULLABLES_DOC = "Whether nullable fields should be "
+      + "specified with an optional label";
+
   public static final String WRAPPER_FOR_NULLABLES_CONFIG = "wrapper.for.nullables";
   public static final boolean WRAPPER_FOR_NULLABLES_DEFAULT = false;
   public static final String WRAPPER_FOR_NULLABLES_DOC = "Whether nullable fields should use "
@@ -59,6 +64,11 @@ public class ProtobufDataConfig extends AbstractConfig {
             ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DOC)
         .define(SCRUB_INVALID_NAMES_CONFIG, ConfigDef.Type.BOOLEAN, SCRUB_INVALID_NAMES_DEFAULT,
             ConfigDef.Importance.MEDIUM, SCRUB_INVALID_NAMES_DOC)
+        .define(OPTIONAL_FOR_NULLABLES_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            OPTIONAL_FOR_NULLABLES_DEFAULT,
+            ConfigDef.Importance.MEDIUM,
+            OPTIONAL_FOR_NULLABLES_DOC)
         .define(WRAPPER_FOR_NULLABLES_CONFIG,
             ConfigDef.Type.BOOLEAN,
             WRAPPER_FOR_NULLABLES_DEFAULT,
@@ -87,6 +97,10 @@ public class ProtobufDataConfig extends AbstractConfig {
 
   public boolean isScrubInvalidNames() {
     return this.getBoolean(SCRUB_INVALID_NAMES_CONFIG);
+  }
+
+  public boolean useOptionalForNullables() {
+    return this.getBoolean(OPTIONAL_FOR_NULLABLES_CONFIG);
   }
 
   public boolean useWrapperForNullables() {
