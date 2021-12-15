@@ -1299,14 +1299,20 @@ public class ProtobufData {
   ) {
     final String fieldName = fieldDescriptor.getName();
     final Field field = schema.field(fieldName);
-    if (fieldDescriptor.getType() != FieldDescriptor.Type.MESSAGE
-        || fieldDescriptor.isRepeated()
+    if ((isPrimitiveOrRepeated(fieldDescriptor) && !isProto3Optional(fieldDescriptor))
         || message.hasField(fieldDescriptor)) {
-      if (!fieldDescriptor.toProto().getProto3Optional() || message.hasField(fieldDescriptor)) {
-        Object obj = message.getField(fieldDescriptor);
-        result.put(fieldName, toConnectData(field.schema(), obj));
-      }
+      Object obj = message.getField(fieldDescriptor);
+      result.put(fieldName, toConnectData(field.schema(), obj));
     }
+  }
+
+  private boolean isPrimitiveOrRepeated(FieldDescriptor fieldDescriptor) {
+    return fieldDescriptor.getType() != FieldDescriptor.Type.MESSAGE
+        || fieldDescriptor.isRepeated();
+  }
+
+  private boolean isProto3Optional(FieldDescriptor fieldDescriptor) {
+    return fieldDescriptor.toProto().getProto3Optional();
   }
 
   public Schema toConnectSchema(ProtobufSchema schema) {
