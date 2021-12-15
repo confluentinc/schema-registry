@@ -285,6 +285,18 @@ public class MessageDefinition {
         String name,
         int num,
         String defaultVal,
+        String doc,
+        Map<String, String> params) {
+      return addField(
+          isProto3Optional, type, name, num, defaultVal, null, doc, params, null, null, false);
+    }
+
+    public OneofBuilder addField(
+        boolean isProto3Optional,
+        String type,
+        String name,
+        int num,
+        String defaultVal,
         String jsonName,
         String doc,
         Map<String, String> params,

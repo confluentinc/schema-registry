@@ -1178,7 +1178,7 @@ public class ProtobufSchema implements ParsedSchema {
         MessageDefinition.OneofBuilder oneofBuilder = message.addOneof("_" + field.getName());
         oneofBuilder.addField(
             true,
-            field.getType(),
+            fieldType,
             field.getName(),
             field.getTag(),
             defaultVal,
