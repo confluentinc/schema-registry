@@ -206,12 +206,9 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     Integer version;
     if (isDeprecatedSubjectNameStrategy(isKey)) {
       subject = getSubjectName(topic, isKey, value, schema);
-      JsonSchema subjectSchema = (JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
-      version = schemaRegistry.getVersion(subject, subjectSchema, normalizeSchema);
-    } else {
-      //we already got the subject name
-      version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
     }
+    JsonSchema subjectSchema = (JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+    version = schemaRegistry.getVersion(subject, subjectSchema, normalizeSchema);
     return version;
   }
 

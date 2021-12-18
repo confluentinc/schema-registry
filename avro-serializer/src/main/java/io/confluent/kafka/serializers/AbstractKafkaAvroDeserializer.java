@@ -123,12 +123,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     Integer version;
     if (isDeprecatedSubjectNameStrategy(isKey)) {
       subject = getSubjectName(topic, isKey, result, schema);
-      AvroSchema subjectSchema = (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
-      version = schemaRegistry.getVersion(subject, subjectSchema, normalizeSchema);
-    } else {
-      //we already got the subject name
-      version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
     }
+    AvroSchema subjectSchema = (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+    version = schemaRegistry.getVersion(subject, subjectSchema, normalizeSchema);
     return version;
   }
 

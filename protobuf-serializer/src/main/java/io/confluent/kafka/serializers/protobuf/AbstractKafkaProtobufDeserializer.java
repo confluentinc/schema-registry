@@ -211,15 +211,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     Integer version;
     if (isDeprecatedSubjectNameStrategy(isKey)) {
       subject = getSubjectName(topic, isKey, value, schema);
-      ProtobufSchema subjectSchema =
-          (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(subject,
-          id
-      );
-      version = schemaRegistry.getVersion(subject, subjectSchema, normalizeSchema);
-    } else {
-      //we already got the subject name
-      version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
     }
+    ProtobufSchema subjectSchema =
+        (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+    version = schemaRegistry.getVersion(subject, subjectSchema, normalizeSchema);
     return version;
   }
 
