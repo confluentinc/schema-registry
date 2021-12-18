@@ -48,7 +48,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
   protected boolean deriveType;
-  protected boolean normalizeSchema = false;
   private Map<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
@@ -68,7 +67,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         this.parseMethod = specificProtobufClass.getDeclaredMethod("parseFrom", ByteBuffer.class);
       }
       this.deriveType = config.getBoolean(KafkaProtobufDeserializerConfig.DERIVE_TYPE_CONFIG);
-      this.normalizeSchema = config.normalizeSchema();
     } catch (Exception e) {
       throw new ConfigException("Class " + specificProtobufClass.getCanonicalName()
           + " is not a valid protobuf message class", e);
@@ -211,15 +209,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     Integer version;
     if (isDeprecatedSubjectNameStrategy(isKey)) {
       subject = getSubjectName(topic, isKey, value, schema);
-      ProtobufSchema subjectSchema =
-          (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(subject,
-          id
-      );
-      version = schemaRegistry.getVersion(subject, subjectSchema, normalizeSchema);
-    } else {
-      //we already got the subject name
-      version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
     }
+    ProtobufSchema subjectSchema =
+        (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+    version = schemaRegistry.getVersion(subject, subjectSchema);
     return version;
   }
 
