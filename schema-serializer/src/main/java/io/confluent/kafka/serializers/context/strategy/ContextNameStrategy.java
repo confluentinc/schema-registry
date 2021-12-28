@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers.context.strategy;
 
+import java.util.Map;
 import org.apache.kafka.common.Configurable;
 
 /**
@@ -23,6 +24,10 @@ import org.apache.kafka.common.Configurable;
  * the context name used with the schema registry.
  */
 public interface ContextNameStrategy extends Configurable {
+
+  @Override
+  default void configure(Map<String, ?> var1) {
+  }
 
   /**
    * For a given topic, returns the context name to use.
