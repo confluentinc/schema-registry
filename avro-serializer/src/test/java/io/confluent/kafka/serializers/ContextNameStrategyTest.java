@@ -37,7 +37,7 @@ public class ContextNameStrategyTest {
     Properties config1 = new Properties();
     config1.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     config1.put(AbstractKafkaSchemaSerDeConfig.CONTEXT_NAME_STRATEGY,
-        CustomContextNameStrategy.class.getName());
+        CustomContextNameStrategy1.class.getName());
     avroSerializer1 = new KafkaAvroSerializer(schemaRegistry, new HashMap(config1));
 
     Properties config2 = new Properties();
@@ -74,7 +74,7 @@ public class ContextNameStrategyTest {
     assertEquals(":.customContext:subject1", avroSerializer4.getContextName("topic1", "subject1"));
   }
 
-  public static class CustomContextNameStrategy implements ContextNameStrategy {
+  public static class CustomContextNameStrategy1 implements ContextNameStrategy {
     @Override
     public String contextName(String topic) {
       return "customContext";
@@ -100,13 +100,6 @@ public class ContextNameStrategyTest {
     @Override
     public String contextName(String topic) {
       return ":customContext:";
-    }
-  }
-
-  public static class CustomContextNameStrategy5 implements ContextNameStrategy {
-    @Override
-    public String contextName(String topic) {
-      return "::.customContext::";
     }
   }
 }
