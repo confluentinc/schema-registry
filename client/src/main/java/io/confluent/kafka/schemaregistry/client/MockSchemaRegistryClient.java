@@ -158,10 +158,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       if (schema != null) {
         return schema;
       }
+    }
+    if (!NO_SUBJECT.equals(subject)) {
+      return getSchemaBySubjectAndIdFromRegistry(NO_SUBJECT, id);
     } else {
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
-    throw new IOException("Cannot get schema from schema registry!");
   }
 
   @Override

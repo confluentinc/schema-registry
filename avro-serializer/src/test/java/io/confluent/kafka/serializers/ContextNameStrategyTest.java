@@ -22,23 +22,31 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import java.util.HashMap;
 import java.util.Properties;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.Test;
 
 public class ContextNameStrategyTest {
 
+  private final String topic;
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer1;
+  private final KafkaAvroDeserializer avroDeserializer1;
   private final KafkaAvroSerializer avroSerializer2;
   private final KafkaAvroSerializer avroSerializer3;
   private final KafkaAvroSerializer avroSerializer4;
 
   public ContextNameStrategyTest() {
+    topic = "test";
     schemaRegistry = new MockSchemaRegistryClient();
     Properties config1 = new Properties();
     config1.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     config1.put(AbstractKafkaSchemaSerDeConfig.CONTEXT_NAME_STRATEGY,
         CustomContextNameStrategy1.class.getName());
     avroSerializer1 = new KafkaAvroSerializer(schemaRegistry, new HashMap(config1));
+    avroDeserializer1 = new KafkaAvroDeserializer(schemaRegistry, new HashMap(config1));
 
     Properties config2 = new Properties();
     config2.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
@@ -59,25 +67,49 @@ public class ContextNameStrategyTest {
     avroSerializer4 = new KafkaAvroSerializer(schemaRegistry, new HashMap(config4));
   }
 
+  private Schema createUserSchema() {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
+        "\"name\": \"User\"," +
+        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(userSchema);
+    return schema;
+  }
+
+  private IndexedRecord createUserRecord() {
+    Schema schema = createUserSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", "testUser");
+    return avroRecord;
+  }
+
   @Test
   public void testCustomContextNameStrategy() {
-    assertEquals(":.customContext:", avroSerializer1.getContextName("topic1"));
-    assertEquals(":.customContext:subject1", avroSerializer1.getContextName("topic1", "subject1"));
+    assertEquals(":.customContext_test:", avroSerializer1.getContextName(topic));
+    assertEquals(":.customContext_test:subject1", avroSerializer1.getContextName(topic, "subject1"));
 
-    assertEquals(":.customContext:", avroSerializer2.getContextName("topic1"));
-    assertEquals(":.customContext:subject1", avroSerializer2.getContextName("topic1", "subject1"));
+    assertEquals(":.customContext_test:", avroSerializer2.getContextName(topic));
+    assertEquals(":.customContext_test:subject1", avroSerializer2.getContextName(topic, "subject1"));
 
-    assertEquals(":.customContext:", avroSerializer3.getContextName("topic1"));
-    assertEquals(":.customContext:subject1", avroSerializer3.getContextName("topic1", "subject1"));
+    assertEquals(":.customContext_test:", avroSerializer3.getContextName(topic));
+    assertEquals(":.customContext_test:subject1", avroSerializer3.getContextName(topic, "subject1"));
 
-    assertEquals(":.customContext:", avroSerializer4.getContextName("topic1"));
-    assertEquals(":.customContext:subject1", avroSerializer4.getContextName("topic1", "subject1"));
+    assertEquals(":.customContext_test:", avroSerializer4.getContextName(topic));
+    assertEquals(":.customContext_test:subject1", avroSerializer4.getContextName(topic, "subject1"));
+  }
+
+  @Test
+  public void testSerialization() {
+    byte[] bytes;
+    IndexedRecord avroRecord = createUserRecord();
+    bytes = avroSerializer1.serialize(topic, avroRecord);
+    assertEquals(avroRecord, avroDeserializer1.deserialize(topic, bytes));
   }
 
   public static class CustomContextNameStrategy1 implements ContextNameStrategy {
     @Override
     public String contextName(String topic) {
-      return "customContext";
+      return "customContext_" + topic;
     }
   }
 
@@ -85,21 +117,21 @@ public class ContextNameStrategyTest {
   public static class CustomContextNameStrategy2 implements ContextNameStrategy {
     @Override
     public String contextName(String topic) {
-      return ".customContext";
+      return ".customContext_" + topic;
     }
   }
 
   public static class CustomContextNameStrategy3 implements ContextNameStrategy {
     @Override
     public String contextName(String topic) {
-      return ":.customContext:";
+      return ":.customContext_" + topic + ":";
     }
   }
 
   public static class CustomContextNameStrategy4 implements ContextNameStrategy {
     @Override
     public String contextName(String topic) {
-      return ":customContext:";
+      return ":customContext_" + topic + ":";
     }
   }
 }
