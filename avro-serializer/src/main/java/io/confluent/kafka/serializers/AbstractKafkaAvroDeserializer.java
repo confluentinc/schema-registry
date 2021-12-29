@@ -113,7 +113,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   private Integer schemaVersion(String topic,
-                                Boolean isKey,
+                                boolean isKey,
                                 int id,
                                 String subject,
                                 AvroSchema schema,
@@ -127,7 +127,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return version;
   }
 
-  private String subjectName(String topic, Boolean isKey, AvroSchema schemaFromRegistry) {
+  private String subjectName(String topic, boolean isKey, AvroSchema schemaFromRegistry) {
     return isDeprecatedSubjectNameStrategy(isKey)
         ? null
         : getSubjectName(topic, isKey, null, schemaFromRegistry);
@@ -357,7 +357,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
     String getSubject() {
-      boolean usesSchema = isKey != null && strategyUsesSchema(isKey);
+      boolean usesSchema = strategyUsesSchema(isKey);
       return subjectName(topic, isKey, usesSchema ? schemaFromRegistry() : null);
     }
 

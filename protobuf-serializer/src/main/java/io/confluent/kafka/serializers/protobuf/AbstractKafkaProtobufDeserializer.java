@@ -204,7 +204,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   }
 
   private Integer schemaVersion(
-      String topic, Boolean isKey, int id, String subject, ProtobufSchema schema, Object value
+      String topic, boolean isKey, int id, String subject, ProtobufSchema schema, Object value
   ) throws IOException, RestClientException {
     Integer version;
     if (isDeprecatedSubjectNameStrategy(isKey)) {
@@ -216,14 +216,14 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     return version;
   }
 
-  private String subjectName(String topic, Boolean isKey, ProtobufSchema schemaFromRegistry) {
+  private String subjectName(String topic, boolean isKey, ProtobufSchema schemaFromRegistry) {
     return isDeprecatedSubjectNameStrategy(isKey)
            ? null
            : getSubjectName(topic, isKey, null, schemaFromRegistry);
   }
 
   private ProtobufSchema schemaForDeserialize(
-      int id, ProtobufSchema schemaFromRegistry, String subject, Boolean isKey
+      int id, ProtobufSchema schemaFromRegistry, String subject, boolean isKey
   ) throws IOException, RestClientException {
     return isDeprecatedSubjectNameStrategy(isKey)
            ? ProtobufSchemaUtils.copyOf(schemaFromRegistry)
