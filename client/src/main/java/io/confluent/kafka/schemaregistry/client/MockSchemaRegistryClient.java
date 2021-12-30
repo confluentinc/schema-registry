@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.LinkedHashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
@@ -56,15 +57,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private String defaultCompatibility = "BACKWARD";
   private final Map<String, Map<ParsedSchema, Integer>> schemaCache;
-  private final Map<ParsedSchema, Integer> schemaIdCache;
+  private final Map<String, Map<ParsedSchema, Integer>> schemaIdCache;
   private final Map<String, Map<Integer, ParsedSchema>> idCache;
   private final Map<String, Map<ParsedSchema, Integer>> versionCache;
   private final Map<String, String> compatibilityCache;
   private final Map<String, String> modes;
-  private final AtomicInteger ids;
+  private final Map<String, AtomicInteger> ids;
   private final Map<String, SchemaProvider> providers;
 
-  private static final String NO_SUBJECT = ":.:";
+  private static final String NO_SUBJECT = "";
 
   public MockSchemaRegistryClient() {
     this(null);
@@ -77,8 +78,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     versionCache = new ConcurrentHashMap<>();
     compatibilityCache = new ConcurrentHashMap<>();
     modes = new ConcurrentHashMap<>();
-    ids = new AtomicInteger(0);
-    idCache.put(NO_SUBJECT, new ConcurrentHashMap<>());
+    ids = new ConcurrentHashMap<>();
     this.providers = providers != null && !providers.isEmpty()
                      ? providers.stream().collect(Collectors.toMap(p -> p.schemaType(), p -> p))
                      : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
@@ -126,8 +126,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       }
     }
     if (registerRequest) {
+      String context = toQualifiedContext(subject);
+      Map<ParsedSchema, Integer> schemaIdMap =
+          schemaIdCache.computeIfAbsent(context, k -> new ConcurrentHashMap<>());
       Integer schemaId =
-          schemaIdCache.computeIfAbsent(schema, k -> id >= 0 ? id : ids.incrementAndGet());
+          schemaIdMap.computeIfAbsent(schema, k -> id >= 0
+              ? id
+              : ids.computeIfAbsent(context, c -> new AtomicInteger(0)).incrementAndGet());
       checkId(id, schemaId);
       generateVersion(subject, schema);
       idSchemaMap.put(schemaId, schema);
@@ -158,10 +163,18 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       if (schema != null) {
         return schema;
       }
-    } else {
-      throw new RestClientException("Subject Not Found", 404, 40401);
     }
-    throw new IOException("Cannot get schema from schema registry!");
+    String context = toQualifiedContext(subject);
+    if (!context.equals(subject)) {
+      idSchemaMap = idCache.get(context);
+      if (idSchemaMap != null) {
+        ParsedSchema schema = idSchemaMap.get(id);
+        if (schema != null) {
+          return schema;
+        }
+      }
+    }
+    throw new RestClientException("Subject Not Found", 404, 40401);
   }
 
   @Override
@@ -205,7 +218,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
       int retrievedId = getIdFromRegistry(subject, schema, true, id);
       schemaIdMap.put(schema, retrievedId);
-      idCache.get(NO_SUBJECT).putIfAbsent(retrievedId, schema);
+      String context = toQualifiedContext(subject);
+      final Map<Integer, ParsedSchema> idSchemaMap = idCache.computeIfAbsent(
+          context, k -> new ConcurrentHashMap<>());
+      idSchemaMap.put(retrievedId, schema);
       return retrievedId;
     }
   }
@@ -479,7 +495,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
       int retrievedId = getIdFromRegistry(subject, schema, false, -1);
       schemaIdMap.put(schema, retrievedId);
-      idCache.get(NO_SUBJECT).putIfAbsent(retrievedId, schema);
+      String context = toQualifiedContext(subject);
+      final Map<Integer, ParsedSchema> idSchemaMap = idCache.computeIfAbsent(
+          context, k -> new ConcurrentHashMap<>());
+      idSchemaMap.put(retrievedId, schema);
       return retrievedId;
     }
   }
@@ -627,6 +646,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     schemaCache.clear();
     idCache.clear();
     versionCache.clear();
-    idCache.put(NO_SUBJECT, new ConcurrentHashMap<>());
+  }
+
+  private static String toQualifiedContext(String subject) {
+    QualifiedSubject qualifiedSubject =
+        QualifiedSubject.create(QualifiedSubject.DEFAULT_TENANT, subject);
+    return qualifiedSubject != null ? qualifiedSubject.toQualifiedContext() : NO_SUBJECT;
   }
 }

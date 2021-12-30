@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client;
 import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +69,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Cache<SubjectAndId, Long> missingIdCache;
   private final Map<String, SchemaProvider> providers;
 
-  private static final String NO_SUBJECT = ":.:";
+  private static final String NO_SUBJECT = "";
   private static final int HTTP_NOT_FOUND = 404;
   private static final int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
 
@@ -182,7 +183,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.idCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.versionCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.restService = restService;
-    this.idCache.put(NO_SUBJECT, new BoundedConcurrentHashMap<>(cacheCapacity));
 
     long missingIdTTL = SchemaRegistryClientConfig.getMissingIdTTL(configs);
     long missingSchemaTTL = SchemaRegistryClientConfig.getMissingSchemaTTL(configs);
@@ -365,7 +365,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           ? registerAndGetId(subject, schema, version, id, normalize)
           : registerAndGetId(subject, schema, normalize);
       schemaIdMap.put(schema, retrievedId);
-      idCache.get(NO_SUBJECT).put(retrievedId, schema);
+      String context = toQualifiedContext(subject);
+      final Map<Integer, ParsedSchema> idSchemaMap = idCache.computeIfAbsent(
+          context, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
+      idSchemaMap.put(retrievedId, schema);
       return retrievedId;
     }
   }
@@ -535,7 +538,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
       final int retrievedId = getIdFromRegistry(subject, schema, normalize);
       schemaIdMap.put(schema, retrievedId);
-      idCache.get(NO_SUBJECT).put(retrievedId, schema);
+      String context = toQualifiedContext(subject);
+      final Map<Integer, ParsedSchema> idSchemaMap = idCache.computeIfAbsent(
+          context, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
+      idSchemaMap.put(retrievedId, schema);
       return retrievedId;
     }
   }
@@ -656,7 +662,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     schemaCache.clear();
     idCache.clear();
     versionCache.clear();
-    idCache.put(NO_SUBJECT, new BoundedConcurrentHashMap<>(cacheCapacity));
     missingSchemaCache.invalidateAll();
     missingIdCache.invalidateAll();
   }
@@ -672,6 +677,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private boolean isSchemaNotFoundException(RestClientException rce) {
     return rce.getStatus() == HTTP_NOT_FOUND && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE;
+  }
+
+  private static String toQualifiedContext(String subject) {
+    QualifiedSubject qualifiedSubject =
+        QualifiedSubject.create(QualifiedSubject.DEFAULT_TENANT, subject);
+    return qualifiedSubject != null ? qualifiedSubject.toQualifiedContext() : NO_SUBJECT;
   }
 
   static class SubjectAndSchema {
