@@ -199,7 +199,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   private Integer schemaVersion(
-      String topic, Boolean isKey, int id, String subject, JsonSchema schema, Object value
+      String topic, boolean isKey, int id, String subject, JsonSchema schema, Object value
   ) throws IOException, RestClientException {
     Integer version;
     if (isDeprecatedSubjectNameStrategy(isKey)) {
@@ -210,14 +210,14 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return version;
   }
 
-  private String subjectName(String topic, Boolean isKey, JsonSchema schemaFromRegistry) {
+  private String subjectName(String topic, boolean isKey, JsonSchema schemaFromRegistry) {
     return isDeprecatedSubjectNameStrategy(isKey)
            ? null
            : getSubjectName(topic, isKey, null, schemaFromRegistry);
   }
 
   private JsonSchema schemaForDeserialize(
-      int id, JsonSchema schemaFromRegistry, String subject, Boolean isKey
+      int id, JsonSchema schemaFromRegistry, String subject, boolean isKey
   ) throws IOException, RestClientException {
     return isDeprecatedSubjectNameStrategy(isKey)
            ? JsonSchemaUtils.copyOf(schemaFromRegistry)
