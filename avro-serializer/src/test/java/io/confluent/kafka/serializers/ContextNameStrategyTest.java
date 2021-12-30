@@ -31,6 +31,7 @@ import org.junit.Test;
 public class ContextNameStrategyTest {
 
   private final String topic;
+  private final String topic2;
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer1;
   private final KafkaAvroDeserializer avroDeserializer1;
@@ -40,6 +41,7 @@ public class ContextNameStrategyTest {
 
   public ContextNameStrategyTest() {
     topic = "test";
+    topic2 = "test2";
     schemaRegistry = new MockSchemaRegistryClient();
     Properties config1 = new Properties();
     config1.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
@@ -104,6 +106,9 @@ public class ContextNameStrategyTest {
     IndexedRecord avroRecord = createUserRecord();
     bytes = avroSerializer1.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer1.deserialize(topic, bytes));
+
+    bytes = avroSerializer1.serialize(topic2, avroRecord);
+    assertEquals(avroRecord, avroDeserializer1.deserialize(topic2, bytes));
   }
 
   public static class CustomContextNameStrategy1 implements ContextNameStrategy {
