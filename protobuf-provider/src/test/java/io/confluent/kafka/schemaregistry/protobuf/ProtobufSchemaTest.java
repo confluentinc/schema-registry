@@ -493,7 +493,7 @@ public class ProtobufSchemaTest {
 
   @Test
   public void testRoundTrip() throws Exception {
-    ProtobufSchema schema = new ProtobufSchema(readFile("NestedTestNoMapProto.proto"),
+    ProtobufSchema schema = new ProtobufSchema(readFile("NestedNoMapTestProto.proto"),
         Collections.emptyList(), Collections.emptyMap(), null, null);
     String canonical = schema.canonicalString();
     assertEquals(canonical, new ProtobufSchema(schema.toDescriptor()).canonicalString());
