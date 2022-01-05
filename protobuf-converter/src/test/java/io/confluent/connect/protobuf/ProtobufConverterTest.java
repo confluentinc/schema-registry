@@ -19,12 +19,10 @@ package io.confluent.connect.protobuf;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.Descriptors.Descriptor;
-import com.google.protobuf.Descriptors.FieldDescriptor;
-import com.google.protobuf.Field;
 import com.google.protobuf.ListValue;
-import com.google.protobuf.NullValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
+import io.confluent.connect.protobuf.test.KeyValueOptional.KeyValueOptionalMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
@@ -84,6 +82,10 @@ public class ProtobufConverterTest {
       .build();
   private static final TimestampValue TIMESTAMP_VALUE = TimestampValue.newBuilder()
       .setValue(Timestamp.newBuilder().setSeconds(1000).build())
+      .build();
+  private static final KeyValueOptionalMessage KEY_VALUE_OPT = KeyValueOptionalMessage.newBuilder()
+      .setKey(123)
+      .setValue("")
       .build();
 
   private static final Map<String, ?> SR_CONFIG = Collections.singletonMap(
@@ -365,6 +367,41 @@ public class ProtobufConverterTest {
     Schema schema = builder.version(1).build();
     Struct struct = new Struct(schema);
     struct.put("value", getTimestampStruct(timestampSchema, 1000L, 0));
+    byte[] result = converter.fromConnectData("my-topic",
+        schema,
+        struct
+    );
+
+    assertArrayEquals(expected, Arrays.copyOfRange(result, PROTOBUF_BYTES_START, result.length));
+  }
+
+  @Test
+  public void testFromConnectDataWithOptionalForNullablesUsingLatest() throws Exception {
+    final byte[] expected = KEY_VALUE_OPT.toByteArray();
+
+    Map<String, Object> config = new HashMap<>();
+    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost");
+    config.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
+    config.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
+    config.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, "false");
+    config.put(ProtobufDataConfig.OPTIONAL_FOR_NULLABLES_CONFIG, "true");
+    converter.configure(config, false);
+    schemaRegistry.register("my-topic-value",
+        new ProtobufSchema(KeyValueOptionalMessage.getDescriptor(), Collections.emptyList()));
+
+    String fullName = "io.confluent.connect.protobuf.test.KeyValueOptional.KeyValueOptionalMessage";
+    SchemaBuilder builder = SchemaBuilder.struct();
+    builder.name(fullName);
+    builder.field("key",
+        SchemaBuilder.int32().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    builder.field("value",
+        SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    Schema schema = builder.version(1).build();
+    Struct struct = new Struct(schema);
+    struct.put("key", 123);
+    struct.put("value", "");
     byte[] result = converter.fromConnectData("my-topic",
         schema,
         struct
