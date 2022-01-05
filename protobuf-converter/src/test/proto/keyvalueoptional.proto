@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+option java_package = "io.confluent.connect.protobuf.test";
+option java_outer_classname = "KeyValueOptional";
+
+message KeyValueOptionalMessage {
+    int32 key = 1;
+    optional string value = 2;
+}
