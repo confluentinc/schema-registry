@@ -35,6 +35,7 @@ import com.google.protobuf.util.Timestamps;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
+import io.confluent.connect.protobuf.test.KeyValueOptional;
 import io.confluent.connect.protobuf.test.KeyValueWrapper;
 import io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry;
 import io.confluent.connect.protobuf.test.MapReferences.MapReferencesMessage;
@@ -1678,6 +1679,84 @@ public class ProtobufDataTest {
     Struct result = new Struct(schema.schema());
     result.put("key", 123);
     result.put("wrappedValue", "hi");
+    return result;
+  }
+
+  @Test
+  public void testRoundTripConnectNoOptionalForNullables() throws Exception {
+    KeyValueOptional.KeyValueOptionalMessage message =
+        KeyValueOptional.KeyValueOptionalMessage.newBuilder()
+            .setKey(123)
+            .setValue("hi")
+            .build();
+    SchemaAndValue schemaAndValue = getSchemaAndValue(message);
+    Schema expectedSchema = getExpectedNoOptionalForNullablesSchema();
+    assertSchemasEqual(expectedSchema, schemaAndValue.schema());
+    Struct expected = getExpectedNoOptionalForNullablesData();
+    assertEquals(expected, schemaAndValue.value());
+
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  private Schema getExpectedNoOptionalForNullablesSchema() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("KeyValueOptionalMessage");
+    schemaBuilder.field("key",
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    schemaBuilder.field("value",
+        SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    return schemaBuilder.build();
+  }
+
+  private Struct getExpectedNoOptionalForNullablesData() {
+    Schema schema = getExpectedNoOptionalForNullablesSchema();
+    Struct result = new Struct(schema.schema());
+    result.put("key", 123);
+    result.put("value", "hi");
+    return result;
+  }
+
+  @Test
+  public void testRoundTripConnectOptionalForNullables() throws Exception {
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.OPTIONAL_FOR_NULLABLES_CONFIG, true)
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    KeyValueOptional.KeyValueOptionalMessage message =
+        KeyValueOptional.KeyValueOptionalMessage.newBuilder()
+            .setKey(123)
+            .setValue("hi")
+            .build();
+    SchemaAndValue schemaAndValue = getSchemaAndValue(protobufData, message);
+    Schema expectedSchema = getExpectedOptionalForNullablesSchema();
+    assertSchemasEqual(expectedSchema, schemaAndValue.schema());
+    Struct expected = getExpectedOptionalForNullablesData();
+    assertEquals(expected, schemaAndValue.value());
+
+    byte[] messageBytes = getMessageBytes(protobufData, schemaAndValue);
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  private Schema getExpectedOptionalForNullablesSchema() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("KeyValueOptionalMessage");
+    schemaBuilder.field("key",
+        SchemaBuilder.int32().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    schemaBuilder.field("value",
+        SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    return schemaBuilder.build();
+  }
+
+  private Struct getExpectedOptionalForNullablesData() {
+    Schema schema = getExpectedOptionalForNullablesSchema();
+    Struct result = new Struct(schema.schema());
+    result.put("key", 123);
+    result.put("value", "hi");
     return result;
   }
 
