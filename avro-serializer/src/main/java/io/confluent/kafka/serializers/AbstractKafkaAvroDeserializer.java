@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import com.google.common.collect.MapMaker;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
@@ -46,7 +47,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean useSpecificAvroReader = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<>();
-  private final Map<SchemaPair, DatumReader<?>> datumReaderCache = new ConcurrentHashMap<>();
+  private final Map<SchemaPair, DatumReader<?>> datumReaderCache =
+      new MapMaker().weakKeys().makeMap();  // use identity (==) comparison for keys
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
