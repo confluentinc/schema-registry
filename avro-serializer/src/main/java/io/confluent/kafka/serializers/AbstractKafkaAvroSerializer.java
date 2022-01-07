@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import com.google.common.collect.MapMaker;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -32,7 +33,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
@@ -46,7 +46,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean removeJavaProperties;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
-  private final Map<Schema, DatumWriter<Object>> datumWriterCache = new ConcurrentHashMap<>();
+  private final Map<Schema, DatumWriter<Object>> datumWriterCache =
+      new MapMaker().weakKeys().makeMap();  // use identity (==) comparison for keys
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());

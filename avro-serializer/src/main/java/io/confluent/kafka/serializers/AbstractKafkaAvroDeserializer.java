@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import com.google.common.collect.MapMaker;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
@@ -46,7 +47,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean useSpecificAvroReader = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<>();
-  private final Map<SchemaPair, DatumReader<?>> datumReaderCache = new ConcurrentHashMap<>();
+  private final Map<Schema, Map<Schema, DatumReader<?>>> datumReaderCache =
+      new MapMaker().weakKeys().makeMap();  // use identity (==) comparison for keys
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
@@ -180,9 +182,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected DatumReader<?> getDatumReader(Schema writerSchema, Schema readerSchema) {
     // normalize reader schema
     final Schema finalReaderSchema = getReaderSchema(writerSchema, readerSchema);
-    SchemaPair cacheKey = new SchemaPair(writerSchema, finalReaderSchema);
 
-    return datumReaderCache.computeIfAbsent(cacheKey, schema -> {
+    Map<Schema, DatumReader<?>> readers = datumReaderCache.computeIfAbsent(writerSchema,
+        schema -> new MapMaker().weakKeys().makeMap());  // use identity (==) comparison for keys
+
+    return readers.computeIfAbsent(finalReaderSchema, schema -> {
       boolean writerSchemaIsPrimitive =
               AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
       if (writerSchemaIsPrimitive) {
