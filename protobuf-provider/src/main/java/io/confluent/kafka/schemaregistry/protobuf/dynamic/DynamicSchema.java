@@ -18,6 +18,8 @@
 package io.confluent.kafka.schemaregistry.protobuf.dynamic;
 
 import com.google.protobuf.DescriptorProtos;
+import com.google.protobuf.DescriptorProtos.DescriptorProto;
+import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
 import com.google.protobuf.DescriptorProtos.FileOptions;
@@ -389,9 +391,29 @@ public class DynamicSchema {
       return this;
     }
 
+    public boolean containsMessage(String name) {
+      List<DescriptorProto> messages = mFileDescProtoBuilder.getMessageTypeList();
+      for (DescriptorProto message : messages) {
+        if (message.getName().equals(name)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     public Builder addMessageDefinition(MessageDefinition msgDef) {
       mFileDescProtoBuilder.addMessageType(msgDef.getMessageType());
       return this;
+    }
+
+    public boolean containsEnum(String name) {
+      List<EnumDescriptorProto> enums = mFileDescProtoBuilder.getEnumTypeList();
+      for (EnumDescriptorProto enumer : enums) {
+        if (enumer.getName().equals(name)) {
+          return true;
+        }
+      }
+      return false;
     }
 
     public Builder addEnumDefinition(EnumDefinition enumDef) {
@@ -465,22 +487,11 @@ public class DynamicSchema {
     // Note: changed
     public Builder addSchema(DynamicSchema schema) {
       for (FileDescriptorProto file : schema.mFileDescSet.getFileList()) {
-        if (!contains(file)) {
+        if (!containsFile(file.getName())) {
           mFileDescSetBuilder.addFile(file);
         }
       }
       return this;
-    }
-
-    // Note: added
-    private boolean contains(FileDescriptorProto fileDesc) {
-      List<FileDescriptorProto> files = mFileDescSetBuilder.getFileList();
-      for (FileDescriptorProto file : files) {
-        if (file.getName().equals(fileDesc.getName())) {
-          return true;
-        }
-      }
-      return false;
     }
 
     // --- private ---
@@ -488,6 +499,17 @@ public class DynamicSchema {
     private Builder() {
       mFileDescProtoBuilder = FileDescriptorProto.newBuilder();
       mFileDescSetBuilder = FileDescriptorSet.newBuilder();
+    }
+
+    // Note: added
+    private boolean containsFile(String name) {
+      List<FileDescriptorProto> files = mFileDescSetBuilder.getFileList();
+      for (FileDescriptorProto file : files) {
+        if (file.getName().equals(name)) {
+          return true;
+        }
+      }
+      return false;
     }
 
     private FileDescriptorProto.Builder mFileDescProtoBuilder;
