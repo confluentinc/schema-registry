@@ -810,7 +810,10 @@ public class ProtobufData {
           mapDefinitionFromConnectSchema(ctx, schema, type, fieldSchema));
     } else if (fieldSchema.parameters() != null && fieldSchema.parameters()
         .containsKey(PROTOBUF_TYPE_ENUM)) {
-      message.addEnumDefinition(enumDefinitionFromConnectSchema(schema, fieldSchema));
+      String enumName = getUnqualifiedName(fieldSchema.name());
+      if (!message.containsEnum(enumName)) {
+        message.addEnumDefinition(enumDefinitionFromConnectSchema(schema, fieldSchema));
+      }
     } else {
       DynamicSchema dynamicSchema = typeToDynamicSchema(type);
       if (dynamicSchema != null) {
