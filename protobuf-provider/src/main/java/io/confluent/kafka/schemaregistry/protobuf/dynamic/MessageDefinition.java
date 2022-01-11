@@ -19,10 +19,12 @@ package io.confluent.kafka.schemaregistry.protobuf.dynamic;
 
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
+import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -84,9 +86,29 @@ public class MessageDefinition {
       return new OneofBuilder(this, mOneofIndex++);
     }
 
+    public boolean containsMessage(String name) {
+      List<DescriptorProto> messages = mMsgTypeBuilder.getNestedTypeList();
+      for (DescriptorProto message : messages) {
+        if (message.getName().equals(name)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     public Builder addMessageDefinition(MessageDefinition msgDef) {
       mMsgTypeBuilder.addNestedType(msgDef.getMessageType());
       return this;
+    }
+
+    public boolean containsEnum(String name) {
+      List<EnumDescriptorProto> enums = mMsgTypeBuilder.getEnumTypeList();
+      for (EnumDescriptorProto enumer : enums) {
+        if (enumer.getName().equals(name)) {
+          return true;
+        }
+      }
+      return false;
     }
 
     public Builder addEnumDefinition(EnumDefinition enumDef) {
