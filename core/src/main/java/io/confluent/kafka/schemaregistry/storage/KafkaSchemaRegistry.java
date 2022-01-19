@@ -103,6 +103,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    * Schema versions under a particular subject are indexed from MIN_VERSION.
    */
   public static final int MIN_VERSION = 1;
+  // Subject name under which global permissions are stored.
+  public static final String GLOBAL_RESOURCE_NAME = "__GLOBAL";
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
@@ -587,6 +589,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                boolean normalize,
                                Map<String, String> headerProperties)
       throws SchemaRegistryException {
+
+    if(subject.equals(GLOBAL_RESOURCE_NAME)){
+      throw new OperationNotPermittedException(GLOBAL_RESOURCE_NAME + " subject name is not allowed");
+    }
+
     Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
     if (existingSchema != null) {
       if (schema.getId() != null
