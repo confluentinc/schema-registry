@@ -93,7 +93,8 @@ public class ModeResource {
   ) {
 
     if (subject != null && CharMatcher.javaIsoControl().matchesAnyOf(subject) ||
-        QualifiedSubject.create(this.schemaRegistry.tenant(), subject).getSubject().equals(GLOBAL_RESOURCE_NAME)) {
+        QualifiedSubject.create(this.schemaRegistry.tenant(), subject).getSubject()
+            .equals(GLOBAL_RESOURCE_NAME)) {
       throw Errors.invalidSubjectException(subject);
     }
 
