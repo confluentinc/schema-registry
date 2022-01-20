@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOBAL_RESOURCE_NAME;
+
 import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
@@ -91,9 +93,11 @@ public class ConfigResource {
       throw new RestInvalidCompatibilityException();
     }
 
-    if (subject != null && CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
+    if (subject != null && (CharMatcher.javaIsoControl().matchesAnyOf(subject) ||
+        QualifiedSubject.create(this.schemaRegistry.tenant(), subject).getSubject().equals(GLOBAL_RESOURCE_NAME))) {
       throw Errors.invalidSubjectException(subject);
     }
+
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     try {

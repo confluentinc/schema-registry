@@ -589,11 +589,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                boolean normalize,
                                Map<String, String> headerProperties)
       throws SchemaRegistryException {
-
-    if(QualifiedSubject.create(this.tenant(), subject).getSubject().equals(GLOBAL_RESOURCE_NAME)){
-      throw new OperationNotPermittedException(GLOBAL_RESOURCE_NAME + " subject name is not allowed");
-    }
-
     Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
     if (existingSchema != null) {
       if (schema.getId() != null
