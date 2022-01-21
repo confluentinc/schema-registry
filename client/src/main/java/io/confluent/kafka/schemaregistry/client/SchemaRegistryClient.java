@@ -38,7 +38,7 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   /**
    * @deprecated use {@link #register(String, ParsedSchema)} instead;
-   *     for example, you can convert a {@link Schema} into a {@link ParsedSchema} 
+   *     for example, you can convert a {@link Schema} into a {@link ParsedSchema}
    *     via {@code new AvroSchema(schema)}
    */
   @Deprecated
@@ -125,6 +125,7 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
+
   @Override
   default Schema getByVersion(String subject, int version, boolean lookupDeletedSchema) {
     throw new UnsupportedOperationException();
@@ -135,6 +136,11 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public SchemaMetadata getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException;
+
+  default SchemaMetadata getSchemaMetadata(String subject, int version,
+      boolean lookupDeletedSchema) throws IOException, RestClientException{
+    throw new UnsupportedOperationException();
+  };
 
   @Deprecated
   default int getVersion(String subject, org.apache.avro.Schema schema)
@@ -152,6 +158,10 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public List<Integer> getAllVersions(String subject) throws IOException, RestClientException;
 
+  default List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
   @Deprecated
   default boolean testCompatibility(String subject, org.apache.avro.Schema schema)
       throws IOException, RestClientException {
@@ -162,7 +172,7 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
       throws IOException, RestClientException;
 
   default List<String> testCompatibilityVerbose(String subject, ParsedSchema schema)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
@@ -191,6 +201,11 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
 
+  default Collection<String> getAllSubjects(boolean lookupDeletedSubject) throws IOException,
+      RestClientException{
+    throw new UnsupportedOperationException();
+  }
+
   default Collection<String> getAllSubjectsByPrefix(String subjectPrefix) throws IOException,
       RestClientException {
     throw new UnsupportedOperationException();
@@ -210,12 +225,12 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   }
 
   public default List<Integer> deleteSubject(String subject) throws IOException,
-          RestClientException {
+      RestClientException {
     return deleteSubject(subject, false);
   }
 
   public default List<Integer> deleteSubject(String subject, boolean isPermanent)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
@@ -225,8 +240,8 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   }
 
   public default List<Integer> deleteSubject(Map<String,
-          String> requestProperties, String subject, boolean isPermanent)
-          throws IOException, RestClientException {
+      String> requestProperties, String subject, boolean isPermanent)
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
@@ -236,10 +251,10 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   }
 
   public default Integer deleteSchemaVersion(
-          String subject,
-          String version,
-          boolean isPermanent)
-          throws IOException, RestClientException {
+      String subject,
+      String version,
+      boolean isPermanent)
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
