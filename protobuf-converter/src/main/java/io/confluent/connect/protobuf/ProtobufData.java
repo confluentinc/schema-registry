@@ -293,6 +293,7 @@ public class ProtobufData {
   private final Map<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
+  private boolean useIntForEnums;
   private boolean useOptionalForNullables;
   private boolean useWrapperForNullables;
   private boolean useWrapperForRawPrimitives;
@@ -313,6 +314,7 @@ public class ProtobufData {
     toConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
     this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
+    this.useIntForEnums = protobufDataConfig.useIntForEnums();
     this.useOptionalForNullables = protobufDataConfig.useOptionalForNullables();
     this.useWrapperForNullables = protobufDataConfig.useWrapperForNullables();
     this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
@@ -1150,8 +1152,15 @@ public class ProtobufData {
               ? getWrappedValue((Message) value) : ((Number) value).shortValue();
           break;
         case INT32:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : ((Number) value).intValue();
+          if (value instanceof Message) {
+            converted = getWrappedValue((Message) value);
+          } else if (value instanceof Number) {
+            converted = ((Number) value).intValue();
+          } else if (value instanceof Enum) {
+            converted = ((Enum) value).ordinal();
+          } else if (value instanceof EnumValueDescriptor) {
+            converted = ((EnumValueDescriptor) value).getNumber();
+          }
           break;
         case INT64:
           if (value instanceof Message) {
@@ -1446,7 +1455,7 @@ public class ProtobufData {
         break;
 
       case ENUM:
-        builder = SchemaBuilder.string();
+        builder = useIntForEnums ? SchemaBuilder.int32() : SchemaBuilder.string();
         EnumDescriptor enumDescriptor = descriptor.getEnumType();
         String name = enhancedSchemaSupport
             ? enumDescriptor.getFullName() : enumDescriptor.getName();
