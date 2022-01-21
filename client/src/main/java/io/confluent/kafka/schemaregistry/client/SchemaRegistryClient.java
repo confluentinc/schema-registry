@@ -136,6 +136,11 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   public SchemaMetadata getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException;
 
+  default SchemaMetadata getSchemaMetadata(String subject, int version,
+      boolean lookupDeletedSchema) throws IOException, RestClientException{
+    throw new UnsupportedOperationException();
+  };
+
   @Deprecated
   default int getVersion(String subject, org.apache.avro.Schema schema)
       throws IOException, RestClientException {
@@ -152,6 +157,10 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public List<Integer> getAllVersions(String subject) throws IOException, RestClientException;
 
+  default List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
   @Deprecated
   default boolean testCompatibility(String subject, org.apache.avro.Schema schema)
       throws IOException, RestClientException {
@@ -190,6 +199,11 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   }
 
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
+
+  default Collection<String> getAllSubjects(boolean lookupDeletedSubject) throws IOException,
+      RestClientException{
+    throw new UnsupportedOperationException();
+  }
 
   default Collection<String> getAllSubjectsByPrefix(String subjectPrefix) throws IOException,
       RestClientException {

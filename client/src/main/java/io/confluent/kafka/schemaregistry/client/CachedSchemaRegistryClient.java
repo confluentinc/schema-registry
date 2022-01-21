@@ -464,6 +464,17 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     List<SchemaReference> references = response.getReferences();
     return new SchemaMetadata(id, version, schemaType, references, schema);
   }
+  @Override
+  public SchemaMetadata getSchemaMetadata(String subject, int version, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
+        = restService.getVersion(subject, version, lookupDeletedSchema);
+    int id = response.getId();
+    String schemaType = response.getSchemaType();
+    String schema = response.getSchema();
+    List<SchemaReference> references = response.getReferences();
+    return new SchemaMetadata(id, version, schemaType, references, schema);
+  }
 
   @Override
   public SchemaMetadata getLatestSchemaMetadata(String subject)
@@ -511,6 +522,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public List<Integer> getAllVersions(String subject)
       throws IOException, RestClientException {
     return restService.getAllVersions(subject);
+  }
+  @Override
+  public List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    return restService.getAllVersions(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject,lookupDeletedSchema);
   }
 
   @Override
@@ -649,6 +666,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public Collection<String> getAllSubjects() throws IOException, RestClientException {
     return restService.getAllSubjects();
+  }
+
+  @Override
+  public Collection<String> getAllSubjects(boolean lookupDeletedSubject)
+      throws IOException, RestClientException {
+    return restService.getAllSubjects(lookupDeletedSubject);
   }
 
   @Override
