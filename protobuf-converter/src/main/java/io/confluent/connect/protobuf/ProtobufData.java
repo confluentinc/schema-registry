@@ -375,6 +375,10 @@ public class ProtobufData {
         case INT16:
         case INT32: {
           final int intValue = ((Number) value).intValue(); // Check for correct type
+          if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
+            String enumType = schema.parameters().get(PROTOBUF_TYPE_ENUM);
+            return protobufSchema.getEnumValue(scope + enumType, intValue);
+          }
           return isWrapper ? Int32Value.newBuilder().setValue(intValue).build() : intValue;
         }
 
@@ -1040,6 +1044,9 @@ public class ProtobufData {
         return useWrapperForNullables && schema.isOptional()
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT32:
+        if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
+          return schema.parameters().get(PROTOBUF_TYPE_ENUM);
+        }
         defaultType = FieldDescriptor.Type.INT32.toString().toLowerCase();
         if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_PROP)) {
           defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
