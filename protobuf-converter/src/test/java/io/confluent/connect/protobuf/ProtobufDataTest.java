@@ -208,12 +208,12 @@ public class ProtobufDataTest {
     return message.build();
   }
 
-  private Schema getExpectedNestedTestProtoSchemaStringUserId() {
-    return getExpectedNestedTestProtoSchema();
+  private Schema getExpectedNestedTestProtoSchemaStringUserId(boolean useIntForEnums) {
+    return getExpectedNestedTestProtoSchema(useIntForEnums);
   }
 
-  private Schema getExpectedNestedTestProtoSchemaIntUserId() {
-    return getExpectedNestedTestProtoSchema();
+  private Schema getExpectedNestedTestProtoSchemaIntUserId(boolean useIntForEnums) {
+    return getExpectedNestedTestProtoSchema(useIntForEnums);
   }
 
   private SchemaBuilder getEnumUnionSchemaBuilder() {
@@ -312,6 +312,10 @@ public class ProtobufDataTest {
   }
 
   private Schema getExpectedNestedTestProtoSchema() {
+    return getExpectedNestedTestProtoSchema(false);
+  }
+
+  private Schema getExpectedNestedTestProtoSchema(boolean useIntForEnums) {
     final SchemaBuilder builder = SchemaBuilder.struct();
     builder.name("NestedMessage");
     final SchemaBuilder userIdBuilder = SchemaBuilder.struct();
@@ -359,8 +363,9 @@ public class ProtobufDataTest {
             .parameter(PROTOBUF_TYPE_TAG, String.valueOf(4))
             .build()
     );
+    SchemaBuilder enumBuilder = useIntForEnums ? SchemaBuilder.int32() : SchemaBuilder.string();
     builder.field("status",
-        SchemaBuilder.string()
+        enumBuilder
             .name("Status")
             .optional()
             .parameter(PROTOBUF_TYPE_TAG, String.valueOf(5))
@@ -399,8 +404,8 @@ public class ProtobufDataTest {
     return result;
   }
 
-  private Struct getExpectedNestedProtoResultStringUserId() throws ParseException {
-    Schema schema = getExpectedNestedTestProtoSchemaStringUserId();
+  private Struct getExpectedNestedProtoResultStringUserId(boolean useIntForEnums) throws ParseException {
+    Schema schema = getExpectedNestedTestProtoSchemaStringUserId(useIntForEnums);
     Struct result = new Struct(schema.schema());
     Struct userId = new Struct(schema.field("user_id").schema());
     Struct union = new Struct(schema.field("user_id").schema().field("user_id_0").schema());
@@ -418,7 +423,7 @@ public class ProtobufDataTest {
     experiments.add("second experiment");
     result.put("experiments_active", experiments);
 
-    result.put("status", "INACTIVE");
+    result.put("status", useIntForEnums ? 1 : "INACTIVE");
     result.put("map_type", getTestKeyValueMap());
 
     Struct inner = new Struct(schema.field("inner").schema());
@@ -428,8 +433,8 @@ public class ProtobufDataTest {
     return result;
   }
 
-  private Struct getExpectedNestedTestProtoResultIntUserId() throws ParseException {
-    Schema schema = getExpectedNestedTestProtoSchemaIntUserId();
+  private Struct getExpectedNestedTestProtoResultIntUserId(boolean useIntForEnums) throws ParseException {
+    Schema schema = getExpectedNestedTestProtoSchemaIntUserId(useIntForEnums);
     Struct result = new Struct(schema.schema());
     Struct userId = new Struct(schema.field("user_id").schema());
     Struct union = new Struct(schema.field("user_id").schema().field("user_id_0").schema());
@@ -447,7 +452,7 @@ public class ProtobufDataTest {
     experiments.add("second experiment");
     result.put("experiments_active", experiments);
 
-    result.put("status", "INACTIVE");
+    result.put("status", useIntForEnums ? 1 : "INACTIVE");
     result.put("map_type", getTestKeyValueMap());
 
     Struct inner = new Struct(schema.field("inner").schema());
@@ -549,9 +554,23 @@ public class ProtobufDataTest {
   public void testToConnectDataWithNestedProtobufMessageAndStringUserId() throws Exception {
     NestedMessage message = createNestedTestProtoStringUserId();
     SchemaAndValue result = getSchemaAndValue(message);
-    Schema expectedSchema = getExpectedNestedTestProtoSchemaStringUserId();
+    Schema expectedSchema = getExpectedNestedTestProtoSchemaStringUserId(false);
     assertSchemasEqual(expectedSchema, result.schema());
-    Struct expected = getExpectedNestedProtoResultStringUserId();
+    Struct expected = getExpectedNestedProtoResultStringUserId(false);
+    assertEquals(expected, result.value());
+  }
+
+  @Test
+  public void testToConnectDataWithNestedProtobufMessageAndStringUserIdWithIntEnums() throws Exception {
+    NestedMessage message = createNestedTestProtoStringUserId();
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.INT_FOR_ENUMS_CONFIG, true)
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue result = getSchemaAndValue(protobufData, message);
+    Schema expectedSchema = getExpectedNestedTestProtoSchemaStringUserId(true);
+    assertSchemasEqual(expectedSchema, result.schema());
+    Struct expected = getExpectedNestedProtoResultStringUserId(true);
     assertEquals(expected, result.value());
   }
 
@@ -559,9 +578,25 @@ public class ProtobufDataTest {
   public void testToConnectDataWithNestedProtobufMessageAndIntUserId() throws Exception {
     NestedMessage message = createNestedTestProtoIntUserId();
     SchemaAndValue result = getSchemaAndValue(message);
-    Schema expectedSchema = getExpectedNestedTestProtoSchemaIntUserId();
+    Schema expectedSchema = getExpectedNestedTestProtoSchemaIntUserId(false);
     assertSchemasEqual(expectedSchema, result.schema());
-    Struct expected = getExpectedNestedTestProtoResultIntUserId();
+    Struct expected = getExpectedNestedTestProtoResultIntUserId(false);
+    assertSchemasEqual(expected.schema(), ((Struct) result.value()).schema());
+    assertEquals(expected.schema(), ((Struct) result.value()).schema());
+    assertEquals(expected, result.value());
+  }
+
+  @Test
+  public void testToConnectDataWithNestedProtobufMessageAndIntUserIdWithIntEnums() throws Exception {
+    NestedMessage message = createNestedTestProtoIntUserId();
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.INT_FOR_ENUMS_CONFIG, true)
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue result = getSchemaAndValue(protobufData, message);
+    Schema expectedSchema = getExpectedNestedTestProtoSchemaIntUserId(true);
+    assertSchemasEqual(expectedSchema, result.schema());
+    Struct expected = getExpectedNestedTestProtoResultIntUserId(true);
     assertSchemasEqual(expected.schema(), ((Struct) result.value()).schema());
     assertEquals(expected.schema(), ((Struct) result.value()).schema());
     assertEquals(expected, result.value());
@@ -1087,6 +1122,7 @@ public class ProtobufDataTest {
     assertTrue(parsedMessage.toString().contains("test_uint32: " + UNSIGNED_RESULT));
   }
 
+  @Test
   public void testFromConnectEnumUnionWithString() throws Exception {
     EnumUnion message = createEnumUnionWithString();
     SchemaAndValue schemaAndValue = getSchemaAndValue(message);
@@ -1114,9 +1150,35 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testFromConnectDataWithNestedProtobufMessageAndStringUserIdWithIntEnums() throws Exception {
+    NestedMessage nestedMessage = createNestedTestProtoStringUserId();
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.INT_FOR_ENUMS_CONFIG, true)
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue schemaAndValue = getSchemaAndValue(protobufData, nestedMessage);
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+
+    assertArrayEquals(messageBytes, nestedMessage.toByteArray());
+  }
+
+  @Test
   public void testFromConnectDataWithNestedProtobufMessageAndIntUserId() throws Exception {
     NestedMessage nestedMessage = createNestedTestProtoIntUserId();
     SchemaAndValue schemaAndValue = getSchemaAndValue(nestedMessage);
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+
+    assertArrayEquals(messageBytes, nestedMessage.toByteArray());
+  }
+
+  @Test
+  public void testFromConnectDataWithNestedProtobufMessageAndIntUserIdWithIntEnums() throws Exception {
+    NestedMessage nestedMessage = createNestedTestProtoIntUserId();
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.INT_FOR_ENUMS_CONFIG, true)
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue schemaAndValue = getSchemaAndValue(protobufData, nestedMessage);
     byte[] messageBytes = getMessageBytes(schemaAndValue);
 
     assertArrayEquals(messageBytes, nestedMessage.toByteArray());
