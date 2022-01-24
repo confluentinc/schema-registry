@@ -281,8 +281,8 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
-    if (subjectName != null && (CharMatcher.javaIsoControl().matchesAnyOf(subjectName) ||
-        QualifiedSubject.create(this.schemaRegistry.tenant(), subjectName).getSubject()
+    if (subjectName != null && (CharMatcher.javaIsoControl().matchesAnyOf(subjectName)
+        || QualifiedSubject.create(this.schemaRegistry.tenant(), subjectName).getSubject()
             .equals(GLOBAL_RESOURCE_NAME))) {
       throw Errors.invalidSubjectException(subjectName);
     }
