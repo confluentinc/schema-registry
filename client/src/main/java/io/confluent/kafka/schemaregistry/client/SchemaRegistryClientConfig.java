@@ -38,6 +38,8 @@ public class SchemaRegistryClientConfig {
 
   public static final String PROXY_HOST = "proxy.host";
   public static final String PROXY_PORT = "proxy.port";
+  public static final String PROXY_USER = "proxy.user";
+  public static final String PROXY_PASSWORD = "proxy.password";
 
   public static final String MISSING_CACHE_SIZE_CONFIG = "missing.cache.size";
   public static final String MISSING_ID_CACHE_TTL_CONFIG = "missing.id.cache.ttl.sec";
