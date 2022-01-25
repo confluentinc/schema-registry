@@ -464,6 +464,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     List<SchemaReference> references = response.getReferences();
     return new SchemaMetadata(id, version, schemaType, references, schema);
   }
+
   @Override
   public SchemaMetadata getSchemaMetadata(String subject, int version, boolean lookupDeletedSchema)
       throws IOException, RestClientException {
@@ -523,6 +524,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     return restService.getAllVersions(subject);
   }
+
   @Override
   public List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
       throws IOException, RestClientException {
