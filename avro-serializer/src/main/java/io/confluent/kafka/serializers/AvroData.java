@@ -22,6 +22,16 @@ import org.apache.avro.generic.GenericData;
 
 public class AvroData {
 
+  private static final GenericData INSTANCE = new GenericData();
+
+  static {
+    addLogicalTypeConversion(INSTANCE);
+  }
+
+  public static GenericData getGenericData() {
+    return INSTANCE;
+  }
+
   public static void addLogicalTypeConversion(GenericData avroData) {
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.UUIDConversion());

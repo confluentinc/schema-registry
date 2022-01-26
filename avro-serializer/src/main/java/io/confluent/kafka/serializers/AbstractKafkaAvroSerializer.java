@@ -27,7 +27,6 @@ import java.util.Map;
 import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
@@ -78,9 +77,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       return new ReflectDatumWriter<>(schema);
     } else {
       if (avroUseLogicalTypeConverters) {
-        GenericData genericData = new GenericData();
-        AvroData.addLogicalTypeConversion(genericData);
-        return new GenericDatumWriter<>(schema, genericData);
+        return new GenericDatumWriter<>(schema, AvroData.getGenericData());
       } else {
         return new GenericDatumWriter<>(schema);
       }
