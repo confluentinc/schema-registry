@@ -77,11 +77,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     } else if (useSchemaReflection) {
       return new ReflectDatumWriter<>(schema);
     } else {
-      GenericData genericData = new GenericData();
       if (avroUseLogicalTypeConverters) {
+        GenericData genericData = new GenericData();
         AvroData.addLogicalTypeConversion(genericData);
+        return new GenericDatumWriter<>(schema, genericData);
+      } else {
+        return new GenericDatumWriter<>(schema);
       }
-      return new GenericDatumWriter<>(schema, genericData);
     }
   }
 

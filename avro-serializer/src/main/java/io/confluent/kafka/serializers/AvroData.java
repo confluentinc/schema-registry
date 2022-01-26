@@ -24,6 +24,7 @@ public class AvroData {
 
   public static void addLogicalTypeConversion(GenericData avroData) {
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+    avroData.addLogicalTypeConversion(new Conversions.UUIDConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.DateConversion());
 
@@ -35,7 +36,5 @@ public class AvroData {
 
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMicrosConversion());
-
   }
-
 }

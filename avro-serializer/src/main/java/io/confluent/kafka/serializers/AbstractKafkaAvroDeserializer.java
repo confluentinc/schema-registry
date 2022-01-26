@@ -197,21 +197,25 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       boolean writerSchemaIsPrimitive =
               AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
       if (writerSchemaIsPrimitive) {
-        GenericData genericData = new GenericData();
         if (avroUseLogicalTypeConverters) {
+          GenericData genericData = new GenericData();
           AvroData.addLogicalTypeConversion(genericData);
+          return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
+        } else {
+          return new GenericDatumReader<>(writerSchema, finalReaderSchema);
         }
-        return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
       } else if (useSchemaReflection) {
         return new ReflectDatumReader<>(writerSchema, finalReaderSchema);
       } else if (useSpecificAvroReader) {
         return new SpecificDatumReader<>(writerSchema, finalReaderSchema);
       } else {
-        GenericData genericData = new GenericData();
         if (avroUseLogicalTypeConverters) {
+          GenericData genericData = new GenericData();
           AvroData.addLogicalTypeConversion(genericData);
+          return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
+        } else {
+          return new GenericDatumReader<>(writerSchema, finalReaderSchema);
         }
-        return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
       }
     });
   }
