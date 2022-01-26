@@ -738,11 +738,63 @@ public class AvroDataTest {
     assertNotNull(schemaAndValue);
   }
 
+  @Test
+  public void testFromConnectStructsWithNullName() {
+    Schema innerSchema = SchemaBuilder.struct()
+        .field("value", Schema.INT64_SCHEMA).optional().build();
+    Schema outerSchema = SchemaBuilder.struct()
+        .field("struct", innerSchema)
+        .field("array", SchemaBuilder.array(innerSchema).build())
+        .build();
+    Struct innerStruct = new Struct(innerSchema)
+        .put("value", 46421L);
+    Struct outerStruct = new Struct(outerSchema)
+        .put("struct", innerStruct)
+        .put("array", Collections.singletonList(innerStruct));
+
+    org.apache.avro.Schema int64Schema = org.apache.avro.SchemaBuilder.builder().longType();
+    org.apache.avro.Schema recordSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("ConnectDefault2")
+        .namespace("io.confluent.connect.avro")
+        .fields().name("value").type(int64Schema).noDefault()
+        .endRecord();
+    org.apache.avro.Schema unionSchema = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().nullType().and()
+        .type(recordSchema)
+        .endUnion();
+    org.apache.avro.Schema arraySchema = org.apache.avro.SchemaBuilder.builder()
+        .array().items(unionSchema);
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+        .record("ConnectDefault")
+        .namespace("io.confluent.connect.avro")
+        .fields()
+        .name("struct").type(unionSchema).withDefault(null)
+        .name("array").type(arraySchema).noDefault()
+        .endRecord();
+
+    org.apache.avro.generic.GenericRecord innerRecord
+        = new org.apache.avro.generic.GenericRecordBuilder(recordSchema)
+        .set("value", 46421L)
+        .build();
+    org.apache.avro.generic.GenericRecord avroRecord
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
+        .set("struct", innerRecord)
+        .set("array", Collections.singletonList(innerRecord))
+        .build();
+    SchemaAndValue schemaAndValue = new SchemaAndValue(outerSchema, outerStruct);
+    schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
+    assertNotNull(schemaAndValue);
+  }
+
   protected SchemaAndValue convertToConnect(
       org.apache.avro.Schema expectedAvroSchema,
       org.apache.avro.generic.GenericRecord expectedAvroRecord,
       SchemaAndValue connectSchemaAndValue
   ) {
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(connectSchemaAndValue.schema());
+    // Validate the schema
+    assertEquals(avroSchema.toString(), new AvroSchema(avroSchema.toString()).toString());
+
     Object convertedRecord = avroData.fromConnectData(
         connectSchemaAndValue.schema(),
         connectSchemaAndValue.value()
