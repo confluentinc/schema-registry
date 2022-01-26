@@ -1,5 +1,6 @@
 #!/usr/bin/env groovy
 common {
+  nodeLabel = 'docker-debian-10-jdk8'
   slackChannel = '#data-governance-eng'
   downStreamRepos = ["kafka-rest", "ksql",
     "confluent-security-plugins", "kafka-connect-replicator",
