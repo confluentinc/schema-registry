@@ -20,7 +20,6 @@ import com.google.common.collect.MapMaker;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
@@ -197,21 +196,23 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       boolean writerSchemaIsPrimitive =
               AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
       if (writerSchemaIsPrimitive) {
-        GenericData genericData = new GenericData();
         if (avroUseLogicalTypeConverters) {
-          AvroData.addLogicalTypeConversion(genericData);
+          return new GenericDatumReader<>(writerSchema, finalReaderSchema,
+              AvroData.getGenericData());
+        } else {
+          return new GenericDatumReader<>(writerSchema, finalReaderSchema);
         }
-        return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
       } else if (useSchemaReflection) {
         return new ReflectDatumReader<>(writerSchema, finalReaderSchema);
       } else if (useSpecificAvroReader) {
         return new SpecificDatumReader<>(writerSchema, finalReaderSchema);
       } else {
-        GenericData genericData = new GenericData();
         if (avroUseLogicalTypeConverters) {
-          AvroData.addLogicalTypeConversion(genericData);
+          return new GenericDatumReader<>(writerSchema, finalReaderSchema,
+              AvroData.getGenericData());
+        } else {
+          return new GenericDatumReader<>(writerSchema, finalReaderSchema);
         }
-        return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
       }
     });
   }
