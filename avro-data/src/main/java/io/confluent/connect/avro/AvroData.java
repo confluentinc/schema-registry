@@ -801,7 +801,7 @@ public class AvroData {
               symbols.add(entry.getValue());
             }
           }
-          Pair<String, String> names = getNameOrDefault(fromConnectContext, schema);
+          Pair<String, String> names = getNameOrDefault(fromConnectContext, schema.name());
           String name = names.getValue();
           String enumDoc = schema.parameters().get(AVRO_ENUM_DOC_PREFIX_PROP + name);
           String enumDefault = schema.parameters().get(AVRO_ENUM_DEFAULT_PREFIX_PROP + name);
@@ -857,7 +857,7 @@ public class AvroData {
                 false
             );
           } else {
-            Pair<String, String> names = getNameOrDefault(fromConnectContext, schema);
+            Pair<String, String> names = getNameOrDefault(fromConnectContext, schema.name());
             String namespace = names.getKey();
             String name = names.getValue();
             mapSchema = org.apache.avro.Schema.createRecord(name, null, namespace, false);
@@ -897,7 +897,7 @@ public class AvroData {
               fromConnectSchemaWithCycle(nonOptional(schema), fromConnectContext, false));
           baseSchema = org.apache.avro.Schema.createUnion(unionSchemas);
         } else {
-          Pair<String, String> names = getNameOrDefault(fromConnectContext, schema);
+          Pair<String, String> names = getNameOrDefault(fromConnectContext, schema.name());
           String namespace = names.getKey();
           String name = names.getValue();
           String doc = schema.parameters() != null
@@ -1043,14 +1043,13 @@ public class AvroData {
     return finalSchema;
   }
 
-  private Pair<String, String> getNameOrDefault(FromConnectContext ctx, Schema schema) {
-    if (schema.name() != null) {
-      String[] split = splitName(schema.name());
+  private Pair<String, String> getNameOrDefault(FromConnectContext ctx, String name) {
+    if (name != null) {
+      String[] split = splitName(name);
       return new Pair<>(split[0], split[1]);
     } else {
       int nameIndex = ctx.incrementAndGetNameIndex();
-      String name = DEFAULT_SCHEMA_NAME + (nameIndex > 1 ? nameIndex : "");
-      return new Pair<>(NAMESPACE, name);
+      return new Pair<>(NAMESPACE, DEFAULT_SCHEMA_NAME + (nameIndex > 1 ? nameIndex : ""));
     }
   }
 
