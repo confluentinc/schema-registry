@@ -836,6 +836,9 @@ public class AvroData {
         break;
       case BYTES:
         if (isFixedSchema(schema)) {
+          Pair<String, String> names = getNameOrDefault(fromConnectContext, schema.name());
+          String namespace = names.getKey();
+          String name = names.getValue();
           baseSchema = org.apache.avro.SchemaBuilder.builder()
                   .fixed(name)
                   .namespace(namespace)
