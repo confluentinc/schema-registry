@@ -668,7 +668,7 @@ public class AvroData {
     String fullName = scrubFullName(schema.name(), scrubInvalidNames);
     return Objects.equals(avroSchema.getFullName(), fullName)
         || Objects.equals(avroSchema.getType().getName(), schema.type().getName())
-        || (schema.name() == null && avroSchema.getFullName().equals(DEFAULT_SCHEMA_FULL_NAME));
+        || (schema.name() == null && avroSchema.getFullName().startsWith(DEFAULT_SCHEMA_FULL_NAME));
   }
 
   /**
@@ -779,14 +779,6 @@ public class AvroData {
       return cached;
     }
 
-    String namespace = NAMESPACE;
-    String name = DEFAULT_SCHEMA_NAME;
-    if (schema.name() != null) {
-      String[] split = splitName(schema.name());
-      namespace = split[0];
-      name = split[1];
-    }
-
     // Extra type annotation information for otherwise lossy conversions
     String connectType = null;
 
@@ -824,6 +816,8 @@ public class AvroData {
               symbols.add(entry.getValue());
             }
           }
+          Pair<String, String> names = getNameOrDefault(fromConnectContext, schema.name());
+          String name = names.getValue();
           String enumDoc = schema.parameters().get(AVRO_ENUM_DOC_PREFIX_PROP + name);
           String enumDefault = schema.parameters().get(AVRO_ENUM_DEFAULT_PREFIX_PROP + name);
           baseSchema = discardTypeDocDefault
@@ -881,10 +875,13 @@ public class AvroData {
             mapSchema = org.apache.avro.Schema.createRecord(
                 MAP_ENTRY_TYPE_NAME,
                 null,
-                namespace,
+                NAMESPACE,
                 false
             );
           } else {
+            Pair<String, String> names = getNameOrDefault(fromConnectContext, schema.name());
+            String namespace = names.getKey();
+            String name = names.getValue();
             mapSchema = org.apache.avro.Schema.createRecord(name, null, namespace, false);
             mapSchema.addProp(CONNECT_INTERNAL_TYPE_NAME, MAP_ENTRY_TYPE_NAME);
           }
@@ -922,12 +919,14 @@ public class AvroData {
               fromConnectSchemaWithCycle(nonOptional(schema), fromConnectContext, false));
           baseSchema = org.apache.avro.Schema.createUnion(unionSchemas);
         } else {
+          Pair<String, String> names = getNameOrDefault(fromConnectContext, schema.name());
+          String namespace = names.getKey();
+          String name = names.getValue();
           String doc = schema.parameters() != null
                        ? schema.parameters()
                        .get(discardTypeDocDefault ? CONNECT_RECORD_DOC_PROP : AVRO_RECORD_DOC_PROP)
                        : null;
-          baseSchema = org.apache.avro.Schema.createRecord(
-              name != null ? name : DEFAULT_SCHEMA_NAME, doc, namespace, false);
+          baseSchema = org.apache.avro.Schema.createRecord(name, doc, namespace, false);
           if (schema.name() != null) {
             fromConnectContext.cycleReferences.put(schema.name(), baseSchema);
           }
@@ -1064,6 +1063,16 @@ public class AvroData {
     }
     fromConnectSchemaCache.put(schema, finalSchema);
     return finalSchema;
+  }
+
+  private Pair<String, String> getNameOrDefault(FromConnectContext ctx, String name) {
+    if (name != null) {
+      String[] split = splitName(name);
+      return new Pair<>(split[0], split[1]);
+    } else {
+      int nameIndex = ctx.incrementAndGetNameIndex();
+      return new Pair<>(NAMESPACE, DEFAULT_SCHEMA_NAME + (nameIndex > 1 ? nameIndex : ""));
+    }
   }
 
   private org.apache.avro.Schema maybeMakeOptional(
@@ -1962,7 +1971,7 @@ public class AvroData {
         || schema.getType() == org.apache.avro.Schema.Type.FIXED) {
       name = schema.getFullName();
     }
-    if (name != null && !name.equals(DEFAULT_SCHEMA_FULL_NAME)) {
+    if (name != null && !name.startsWith(DEFAULT_SCHEMA_FULL_NAME)) {
       if (builder.name() != null) {
         if (!name.equals(builder.name())) {
           throw new DataException("Mismatched names: name already added to SchemaBuilder ("
@@ -2298,7 +2307,7 @@ public class AvroData {
   }
 
   private static boolean fieldListEquals(List<Field> one, List<Field> two,
-                                         Map<SchemaPair, Boolean> cache) {
+                                         Map<Pair<Schema, Schema>, Boolean> cache) {
     if (one == two) {
       return true;
     } else if (one == null || two == null) {
@@ -2315,7 +2324,8 @@ public class AvroData {
     }
   }
 
-  private static boolean fieldEquals(Field one, Field two, Map<SchemaPair, Boolean> cache) {
+  private static boolean fieldEquals(
+      Field one, Field two, Map<Pair<Schema, Schema>, Boolean> cache) {
     if (one == two) {
       return true;
     } else if (one == null || two == null) {
@@ -2328,13 +2338,21 @@ public class AvroData {
     }
   }
 
-  private static class SchemaPair {
-    public Schema one;
-    public Schema two;
+  static class Pair<K, V> {
+    private K key;
+    private V value;
 
-    public SchemaPair(Schema one, Schema two) {
-      this.one = one;
-      this.two = two;
+    public Pair(K key, V value) {
+      this.key = key;
+      this.value = value;
+    }
+
+    public K getKey() {
+      return key;
+    }
+
+    public V getValue() {
+      return value;
     }
 
     @Override
@@ -2345,14 +2363,22 @@ public class AvroData {
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      SchemaPair that = (SchemaPair) o;
-      return Objects.equals(one, that.one)
-              && Objects.equals(two, that.two);
+      Pair<?, ?> pair = (Pair<?, ?>) o;
+      return Objects.equals(key, pair.key)
+          && Objects.equals(value, pair.value);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(one, two);
+      return Objects.hash(key, value);
+    }
+
+    @Override
+    public String toString() {
+      return "Pair{"
+          + "key=" + key
+          + ", value=" + value
+          + '}';
     }
   }
 
@@ -2360,7 +2386,8 @@ public class AvroData {
     return schemaEquals(src, that, new HashMap<>());
   }
 
-  private static boolean schemaEquals(Schema src, Schema that, Map<SchemaPair, Boolean> cache) {
+  private static boolean schemaEquals(
+      Schema src, Schema that, Map<Pair<Schema, Schema>, Boolean> cache) {
     if (src == that) {
       return true;
     } else if (src == null || that == null) {
@@ -2370,7 +2397,7 @@ public class AvroData {
     // Add a temporary value to the cache to avoid cycles. As long as we recurse only at the end of
     // the method, we can safely default to true here. The cache is updated at the end of the method
     // with the actual comparison result.
-    SchemaPair sp = new SchemaPair(src, that);
+    Pair<Schema, Schema> sp = new Pair<>(src, that);
     Boolean cacheHit = cache.putIfAbsent(sp, true);
     if (cacheHit != null) {
       return cacheHit;
@@ -2522,11 +2549,15 @@ public class AvroData {
     private final Map<Schema, org.apache.avro.Schema> schemaMap;
     //schema name to Schema reference to resolve cycles
     private final Map<String, org.apache.avro.Schema> cycleReferences;
+    private int defaultSchemaNameIndex = 0;
 
     private FromConnectContext(Map<Schema, org.apache.avro.Schema> schemaMap) {
       this.schemaMap = schemaMap;
       this.cycleReferences = new IdentityHashMap<>();
     }
 
+    public int incrementAndGetNameIndex() {
+      return ++defaultSchemaNameIndex;
+    }
   }
 }

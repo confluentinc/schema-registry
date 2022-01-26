@@ -359,8 +359,6 @@ public class JsonSchemaData {
     });
   }
 
-  private int idIndex = 0;
-
   private JsonSchemaDataConfig config;
   private Map<Schema, org.everit.json.schema.Schema> fromConnectSchemaCache;
   private Map<JsonSchema, Schema> toConnectSchemaCache;
@@ -1016,7 +1014,7 @@ public class JsonSchemaData {
       ReferenceSchema refSchema = (ReferenceSchema) jsonSchema;
       SchemaBuilder refBuilder = ctx.get(refSchema.getReferredSchema());
       if (refBuilder != null) {
-        refBuilder.parameter(JSON_ID_PROP, DEFAULT_ID_PREFIX + (++idIndex));
+        refBuilder.parameter(JSON_ID_PROP, DEFAULT_ID_PREFIX + ctx.incrementAndGetIdIndex());
         return new SchemaWrapper(refBuilder, forceOptional);
       } else {
         return toConnectSchema(ctx, refSchema.getReferredSchema(), version, forceOptional);
@@ -1320,6 +1318,7 @@ public class JsonSchemaData {
    */
   private static class ToConnectContext {
     private final Map<org.everit.json.schema.Schema, SchemaBuilder> schemaToStructMap;
+    private int idIndex = 0;
 
     public ToConnectContext() {
       this.schemaToStructMap = new IdentityHashMap<>();
@@ -1331,6 +1330,10 @@ public class JsonSchemaData {
 
     public void put(org.everit.json.schema.Schema schema, SchemaBuilder builder) {
       schemaToStructMap.put(schema, builder);
+    }
+
+    public int incrementAndGetIdIndex() {
+      return ++idIndex;
     }
   }
 
