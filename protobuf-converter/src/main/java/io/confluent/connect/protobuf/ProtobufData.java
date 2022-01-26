@@ -287,8 +287,6 @@ public class ProtobufData {
   private static Pattern NAME_START_CHAR = Pattern.compile("^[A-Za-z]");  // underscore not allowed
   private static Pattern NAME_INVALID_CHARS = Pattern.compile("[^A-Za-z0-9_]");
 
-  private int defaultSchemaNameIndex = 0;
-
   private final Map<Schema, ProtobufSchema> fromConnectSchemaCache;
   private final Map<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean enhancedSchemaSupport;
@@ -627,11 +625,11 @@ public class ProtobufData {
     if (cachedSchema != null) {
       return cachedSchema;
     }
-    String fullName = getNameOrDefault(schema.name());
+    FromConnectContext ctx = new FromConnectContext();
+    String fullName = getNameOrDefault(ctx, schema.name());
     String[] split = splitName(fullName);
     String namespace = split[0];
     String name = split[1];
-    FromConnectContext ctx = new FromConnectContext();
     ctx.add(fullName);
     Descriptor descriptor = descriptorFromConnectSchema(ctx, namespace, name, schema);
     ProtobufSchema resultSchema = new ProtobufSchema(descriptor);
@@ -791,13 +789,13 @@ public class ProtobufData {
       label = "optional";
     }
     Map<String, String> params = new HashMap<>();
-    String type = dataTypeFromConnectSchema(fieldSchema, name, params);
+    String type = dataTypeFromConnectSchema(ctx, fieldSchema, name, params);
     Object defaultVal = null;
     if (fieldSchema.type() == Schema.Type.STRUCT) {
       String fieldSchemaName = fieldSchema.name();
       if (fieldSchemaName != null && fieldSchemaName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
         String unionName =
-            getUnqualifiedName(fieldSchemaName.substring(PROTOBUF_TYPE_UNION_PREFIX.length()));
+            getUnqualifiedName(ctx, fieldSchemaName.substring(PROTOBUF_TYPE_UNION_PREFIX.length()));
         oneofDefinitionFromConnectSchema(ctx, schema, message, fieldSchema, unionName);
         return null;
       } else {
@@ -816,9 +814,9 @@ public class ProtobufData {
           mapDefinitionFromConnectSchema(ctx, schema, type, fieldSchema));
     } else if (fieldSchema.parameters() != null && fieldSchema.parameters()
         .containsKey(PROTOBUF_TYPE_ENUM)) {
-      String enumName = getUnqualifiedName(fieldSchema.name());
+      String enumName = getUnqualifiedName(ctx, fieldSchema.name());
       if (!message.containsEnum(enumName)) {
-        message.addEnumDefinition(enumDefinitionFromConnectSchema(schema, fieldSchema));
+        message.addEnumDefinition(enumDefinitionFromConnectSchema(ctx, schema, fieldSchema));
       }
     } else {
       DynamicSchema dynamicSchema = typeToDynamicSchema(type);
@@ -997,10 +995,11 @@ public class ProtobufData {
   }
 
   private EnumDefinition enumDefinitionFromConnectSchema(
+      FromConnectContext ctx,
       DynamicSchema.Builder schema,
       Schema enumElem
   ) {
-    String enumName = getUnqualifiedName(enumElem.name());
+    String enumName = getUnqualifiedName(ctx, enumElem.name());
     EnumDefinition.Builder enumer = EnumDefinition.newBuilder(enumName);
     for (Map.Entry<String, String> entry : enumElem.parameters().entrySet()) {
       if (entry.getKey().startsWith(PROTOBUF_TYPE_ENUM_PREFIX)) {
@@ -1013,7 +1012,7 @@ public class ProtobufData {
   }
 
   private String dataTypeFromConnectSchema(
-      Schema schema, String fieldName, Map<String, String> params) {
+      FromConnectContext ctx, Schema schema, String fieldName, Map<String, String> params) {
     if (isDecimalSchema(schema)) {
       if (schema.parameters() != null) {
         String precision = schema.parameters().get(CONNECT_PRECISION_PROP);
@@ -1095,9 +1094,9 @@ public class ProtobufData {
         // Array should not occur here
         throw new IllegalArgumentException("Array cannot be nested");
       case MAP:
-        return ProtobufSchema.toMapEntry(getUnqualifiedName(schema.name()));
+        return ProtobufSchema.toMapEntry(getUnqualifiedName(ctx, schema.name()));
       case STRUCT:
-        String name = getUnqualifiedName(schema.name());
+        String name = getUnqualifiedName(ctx, schema.name());
         if (name.equals(fieldName)) {
           // Can't have message types and fields with same name, add suffix to message type
           name += "Message";
@@ -1638,8 +1637,8 @@ public class ProtobufData {
   /**
    * Strip the namespace from a name.
    */
-  private String getUnqualifiedName(String name) {
-    String fullName = getNameOrDefault(name);
+  private String getUnqualifiedName(FromConnectContext ctx, String name) {
+    String fullName = getNameOrDefault(ctx, name);
     int indexLastDot = fullName.lastIndexOf('.');
     String result;
     if (indexLastDot >= 0) {
@@ -1671,10 +1670,10 @@ public class ProtobufData {
     }
   }
 
-  private String getNameOrDefault(String name) {
+  private String getNameOrDefault(FromConnectContext ctx, String name) {
     return name != null && !name.isEmpty()
            ? name
-           : DEFAULT_SCHEMA_NAME + (++defaultSchemaNameIndex);
+           : DEFAULT_SCHEMA_NAME + ctx.incrementAndGetNameIndex();
   }
 
   /**
@@ -1848,6 +1847,7 @@ public class ProtobufData {
    */
   private static class FromConnectContext {
     private final Set<String> structNames;
+    private int defaultSchemaNameIndex = 0;
 
     public FromConnectContext() {
       this.structNames = new HashSet<>();
@@ -1861,6 +1861,10 @@ public class ProtobufData {
       if (structName != null) {
         structNames.add(structName);
       }
+    }
+
+    public int incrementAndGetNameIndex() {
+      return ++defaultSchemaNameIndex;
     }
   }
 }
