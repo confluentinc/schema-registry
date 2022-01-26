@@ -27,7 +27,6 @@ import java.util.Map;
 import java.util.Properties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
@@ -83,11 +82,11 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     } else if (useSchemaReflection) {
       return new ReflectDatumWriter<>(schema);
     } else {
-      GenericData genericData = new GenericData();
       if (avroUseLogicalTypeConverters) {
-        AvroData.addLogicalTypeConversion(genericData);
+        return new GenericDatumWriter<>(schema, AvroData.getGenericData());
+      } else {
+        return new GenericDatumWriter<>(schema);
       }
-      return new GenericDatumWriter<>(schema, genericData);
     }
   }
 
