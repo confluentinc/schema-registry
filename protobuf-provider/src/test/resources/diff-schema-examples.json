@@ -34,6 +34,15 @@
     "compatible": true
   },
   {
+    "description": "Detect added required field",
+    "original_schema": "syntax = \"proto2\";\nmessage TestMessage {\n    optional string test_string = 1;\n}",
+    "update_schema": "syntax = \"proto2\";\nmessage TestMessage {\n    optional string test_string = 1;\n    required string test_string2 = 2;\n}",
+    "changes": [
+      "REQUIRED_FIELD_ADDED #/TestMessage/2"
+    ],
+    "compatible": false
+  },
+  {
     "description": "Detect added field to nested type",
     "original_schema": "syntax = \"proto3\";\nmessage Wrapper {\n    int32 wrapperInt = 1;\n    message TestMessage {\n    string test_string = 1;\n}\n}",
     "update_schema": "syntax = \"proto3\";\nmessage Wrapper {\n    int32 wrapperInt = 1;\n    message TestMessage {\n    string test_string = 1;\n    string test_string2 = 2;\n}\n}",
@@ -50,6 +59,15 @@
       "FIELD_REMOVED #/TestMessage/2"
     ],
     "compatible": true
+  },
+  {
+    "description": "Detect removed required field",
+    "original_schema": "syntax = \"proto2\";\nmessage TestMessage {\n    optional string test_string = 1;\n    required string test_string2 = 2;\n}",
+    "update_schema": "syntax = \"proto2\";\nmessage TestMessage {\n    optional string test_string = 1;\n}\n",
+    "changes": [
+      "REQUIRED_FIELD_REMOVED #/TestMessage/2"
+    ],
+    "compatible": false
   },
   {
     "description": "Detect changed field number",

@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
+import com.squareup.wire.schema.Field.Label;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import com.squareup.wire.schema.internal.parser.OneOfElement;
@@ -30,6 +31,8 @@ import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FI
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.MULTIPLE_FIELDS_MOVED_TO_ONEOF;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_REMOVED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.REQUIRED_FIELD_ADDED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.REQUIRED_FIELD_REMOVED;
 
 public class MessageSchemaDiff {
   static void compare(
@@ -98,9 +101,17 @@ public class MessageSchemaDiff {
             FieldElement originalField = originalByTag.get(tag);
             FieldElement updateField = updateByTag.get(tag);
             if (updateField == null) {
-              ctx.addDifference(FIELD_REMOVED);
+              if (originalField.getLabel() == Label.REQUIRED) {
+                ctx.addDifference(REQUIRED_FIELD_REMOVED);
+              } else {
+                ctx.addDifference(FIELD_REMOVED);
+              }
             } else if (originalField == null) {
-              ctx.addDifference(FIELD_ADDED);
+              if (updateField.getLabel() == Label.REQUIRED) {
+                ctx.addDifference(REQUIRED_FIELD_ADDED);
+              } else {
+                ctx.addDifference(FIELD_ADDED);
+              }
             } else {
               FieldSchemaDiff.compare(ctx, originalField, updateField);
             }

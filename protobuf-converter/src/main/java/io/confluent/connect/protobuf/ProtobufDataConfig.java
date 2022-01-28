@@ -36,6 +36,10 @@ public class ProtobufDataConfig extends AbstractConfig {
   public static final String SCRUB_INVALID_NAMES_DOC =
       "Whether to scrub invalid names by replacing invalid characters with valid ones";
 
+  public static final String INT_FOR_ENUMS_CONFIG = "int.for.enums";
+  public static final boolean INT_FOR_ENUMS_DEFAULT = false;
+  public static final String INT_FOR_ENUMS_DOC = "Whether to represent enums as integers";
+
   public static final String OPTIONAL_FOR_NULLABLES_CONFIG = "optional.for.nullables";
   public static final boolean OPTIONAL_FOR_NULLABLES_DEFAULT = false;
   public static final String OPTIONAL_FOR_NULLABLES_DOC = "Whether nullable fields should be "
@@ -64,6 +68,11 @@ public class ProtobufDataConfig extends AbstractConfig {
             ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DOC)
         .define(SCRUB_INVALID_NAMES_CONFIG, ConfigDef.Type.BOOLEAN, SCRUB_INVALID_NAMES_DEFAULT,
             ConfigDef.Importance.MEDIUM, SCRUB_INVALID_NAMES_DOC)
+        .define(INT_FOR_ENUMS_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            INT_FOR_ENUMS_DEFAULT,
+            ConfigDef.Importance.MEDIUM,
+            INT_FOR_ENUMS_DOC)
         .define(OPTIONAL_FOR_NULLABLES_CONFIG,
             ConfigDef.Type.BOOLEAN,
             OPTIONAL_FOR_NULLABLES_DEFAULT,
@@ -97,6 +106,10 @@ public class ProtobufDataConfig extends AbstractConfig {
 
   public boolean isScrubInvalidNames() {
     return this.getBoolean(SCRUB_INVALID_NAMES_CONFIG);
+  }
+
+  public boolean useIntForEnums() {
+    return this.getBoolean(INT_FOR_ENUMS_CONFIG);
   }
 
   public boolean useOptionalForNullables() {
