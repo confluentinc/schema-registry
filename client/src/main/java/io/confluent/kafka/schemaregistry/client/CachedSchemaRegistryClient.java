@@ -529,7 +529,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
       throws IOException, RestClientException {
     return restService.getAllVersions(RestService.DEFAULT_REQUEST_PROPERTIES,
-        subject,lookupDeletedSchema);
+        subject, lookupDeletedSchema);
   }
 
   @Override
