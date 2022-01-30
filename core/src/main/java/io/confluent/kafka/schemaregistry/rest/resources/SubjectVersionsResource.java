@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOBAL_RESOURCE_NAME;
+
 import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
@@ -279,9 +281,12 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
-    if (subjectName != null && CharMatcher.javaIsoControl().matchesAnyOf(subjectName)) {
+    if (subjectName != null && (CharMatcher.javaIsoControl().matchesAnyOf(subjectName)
+        || QualifiedSubject.create(this.schemaRegistry.tenant(), subjectName).getSubject()
+            .equals(GLOBAL_RESOURCE_NAME))) {
       throw Errors.invalidSubjectException(subjectName);
     }
+
     subjectName = QualifiedSubject.normalize(schemaRegistry.tenant(), subjectName);
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
