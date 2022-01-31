@@ -679,8 +679,8 @@ public class RestService implements Configurable {
 
   public Config deleteSubjectConfig(Map<String, String> requestProperties, String subject)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/config/{subject}");
-    String path = builder.build(subject).toString();
+    String path = subject != null
+        ? UriBuilder.fromPath("/config/{subject}").build(subject).toString() : "/config";
 
     Config response = httpRequest(path, "DELETE", null, requestProperties,
         DELETE_SUBJECT_CONFIG_RESPONSE_TYPE);
