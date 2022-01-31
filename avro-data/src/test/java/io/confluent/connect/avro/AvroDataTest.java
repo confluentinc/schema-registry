@@ -2783,4 +2783,69 @@ public class AvroDataTest {
     return follower;
   }
 
+  @Test
+  public void testRecordUnionSingleCycle() {
+    String schemaStr = "{\n" +
+        "  \"fields\": [\n" +
+        "    {\n" +
+        "      \"default\": \"\",\n" +
+        "      \"name\": \"field1\",\n" +
+        "      \"type\": [\n" +
+        "        \"string\"\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  ],\n" +
+        "  \"name\": \"TestRecord\",\n" +
+        "  \"type\": \"record\"\n" +
+        "}";
+
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(schemaStr);
+    Schema connectSchema = avroData.toConnectSchema(avroSchema);
+    avroData.fromConnectSchema(connectSchema);
+
+    Integer version = 1;
+    GenericRecord record = new GenericRecordBuilder(avroSchema).set("field1", "value1").build();
+    SchemaAndValue sv = graphAvroData.toConnectData(avroSchema, record, version);
+    assertEquals(sv, graphAvroData.toConnectData(avroSchema, record, version));
+    assertEquals(record, graphAvroData.fromConnectData(sv.schema(), sv.value()));
+  }
+
+  @Test
+  public void testRecordUnionMultipleCycle() {
+    String schemaStr = "{\n" +
+        "  \"fields\": [\n" +
+        "    {\n" +
+        "      \"default\": \"\",\n" +
+        "      \"name\": \"field1\",\n" +
+        "      \"type\": [\n" +
+        "        \"string\",\n" +
+        "        \"int\",\n" +
+        "        \"float\"\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  ],\n" +
+        "  \"name\": \"TestRecord\",\n" +
+        "  \"type\": \"record\"\n" +
+        "}";
+
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(schemaStr);
+    Schema connectSchema = avroData.toConnectSchema(avroSchema);
+    avroData.fromConnectSchema(connectSchema);
+
+    Integer version = 1;
+    GenericRecord record = new GenericRecordBuilder(avroSchema).set("field1", "value1").build();
+    SchemaAndValue sv = graphAvroData.toConnectData(avroSchema, record, version);
+    assertEquals(sv, graphAvroData.toConnectData(avroSchema, record, version));
+    assertEquals(record, graphAvroData.fromConnectData(sv.schema(), sv.value()));
+  }
 }
