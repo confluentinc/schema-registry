@@ -363,6 +363,38 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testIgnoreComplexCustomOption() {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "\n"
+        + "import \"common/extensions.proto\";\n"
+        + "\n"
+        + "package com.custom.example.v0;\n"
+        + "\n"
+        + "option go_package = \"example/v0;example\";\n"
+        + "option java_multiple_files = true;\n"
+        + "option (com.custom.map).subject = 'user-value';\n"
+        + "option (com.custom.map).compatibility_mode = FULL;\n"
+        + "\n"
+        + "message User {\n"
+        + "  string first_name = 1;\n"
+        + "  string last_name = 2;\n"
+        + "}";
+    String expectedSchemaString = "syntax = \"proto3\";\n"
+        + "package com.custom.example.v0;\n"
+        + "\n"
+        + "option java_multiple_files = true;\n"
+        + "option go_package = \"example/v0;example\";\n"
+        + "\n"
+        + "message User {\n"
+        + "  string first_name = 1;\n"
+        + "  string last_name = 2;\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    ProtobufSchema schema2 = new ProtobufSchema(schema.toDescriptor());
+    assertEquals(expectedSchemaString, schema2.canonicalString());
+  }
+
+  @Test
   public void testRecordToJson() throws Exception {
     DynamicMessage.Builder builder = recordSchema.newMessageBuilder();
     Descriptor desc = builder.getDescriptorForType();

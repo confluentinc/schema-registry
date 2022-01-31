@@ -1003,7 +1003,11 @@ public class ProtobufSchema implements ParsedSchema {
         }
       }
       Map<String, OptionElement> options = rootElem.getOptions().stream()
-          .collect(Collectors.toMap(OptionElement::getName, o -> o));
+          .collect(Collectors.toMap(
+              OptionElement::getName,
+              o -> o,
+              // ignore complex options as we are only retrieving standard options
+              (existing, replacement) -> replacement));
       OptionElement javaPackageName = options.get(JAVA_PACKAGE);
       if (javaPackageName != null) {
         schema.setJavaPackage(javaPackageName.getValue().toString());
