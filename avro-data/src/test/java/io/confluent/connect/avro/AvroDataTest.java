@@ -2784,7 +2784,7 @@ public class AvroDataTest {
   }
 
   @Test
-  public void testRecordUnionSingleCycle() {
+  public void testRecordUnionSingleTypeCycle() {
     String schemaStr = "{\n" +
         "  \"fields\": [\n" +
         "    {\n" +
@@ -2802,21 +2802,20 @@ public class AvroDataTest {
     AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
         .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
         .build();
-    AvroData graphAvroData = new AvroData(avroDataConfig);
+    AvroData testAvroData = new AvroData(avroDataConfig);
 
     org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(schemaStr);
-    Schema connectSchema = avroData.toConnectSchema(avroSchema);
-    avroData.fromConnectSchema(connectSchema);
+    avroData.fromConnectSchema(testAvroData.toConnectSchema(avroSchema));
 
     Integer version = 1;
     GenericRecord record = new GenericRecordBuilder(avroSchema).set("field1", "value1").build();
-    SchemaAndValue sv = graphAvroData.toConnectData(avroSchema, record, version);
-    assertEquals(sv, graphAvroData.toConnectData(avroSchema, record, version));
-    assertEquals(record, graphAvroData.fromConnectData(sv.schema(), sv.value()));
+    SchemaAndValue sv = testAvroData.toConnectData(avroSchema, record, version);
+    assertEquals(sv, testAvroData.toConnectData(avroSchema, record, version));
+    assertEquals(record, testAvroData.fromConnectData(sv.schema(), sv.value()));
   }
 
   @Test
-  public void testRecordUnionMultipleCycle() {
+  public void testRecordUnionMultipleTypeCycle() {
     String schemaStr = "{\n" +
         "  \"fields\": [\n" +
         "    {\n" +
@@ -2836,16 +2835,15 @@ public class AvroDataTest {
     AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
         .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
         .build();
-    AvroData graphAvroData = new AvroData(avroDataConfig);
+    AvroData testAvroData = new AvroData(avroDataConfig);
 
     org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(schemaStr);
-    Schema connectSchema = avroData.toConnectSchema(avroSchema);
-    avroData.fromConnectSchema(connectSchema);
+    avroData.fromConnectSchema(testAvroData.toConnectSchema(avroSchema));
 
     Integer version = 1;
     GenericRecord record = new GenericRecordBuilder(avroSchema).set("field1", "value1").build();
-    SchemaAndValue sv = graphAvroData.toConnectData(avroSchema, record, version);
-    assertEquals(sv, graphAvroData.toConnectData(avroSchema, record, version));
-    assertEquals(record, graphAvroData.fromConnectData(sv.schema(), sv.value()));
+    SchemaAndValue sv = testAvroData.toConnectData(avroSchema, record, version);
+    assertEquals(sv, testAvroData.toConnectData(avroSchema, record, version));
+    assertEquals(record, testAvroData.fromConnectData(sv.schema(), sv.value()));
   }
 }
