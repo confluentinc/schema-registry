@@ -397,8 +397,8 @@ public class ProtobufSchemaTest {
         + "  doc: \"file meta\",\n"
         + "  params: [\n"
         + "    {\n"
-        + "      value: \"my_value\",\n"
-        + "      key: \"my_key\"\n"
+        + "      key: \"my_key\",\n"
+        + "      value: \"my_value\"\n"
         + "    }\n"
         + "  ]\n"
         + "};\n"
@@ -544,8 +544,8 @@ public class ProtobufSchemaTest {
     ProtoFileElement decimal = resourceLoader.readObj(decimalName);
     SchemaReference decimalRef = new SchemaReference(decimalName, decimalName, 1);
 
-    String descriptorName = "google/protobuf/decriptor.proto";
-    ProtoFileElement descriptor = resourceLoader.readObj(decimalName);
+    String descriptorName = "google/protobuf/descriptor.proto";
+    ProtoFileElement descriptor = resourceLoader.readObj(descriptorName);
     SchemaReference descriptorRef = new SchemaReference(descriptorName, descriptorName, 1);
 
     ProtoFileElement original = resourceLoader.readObj(
@@ -576,8 +576,8 @@ public class ProtobufSchemaTest {
         + "\n"
         + "message DecimalValue {\n"
         + "  confluent.type.Decimal value = 1 [(confluent.field_meta) = { params: [\n"
-        + "    { value: \"8\", key: \"precision\" },\n"
-        + "    { value: \"3\", key: \"scale\" }\n"
+        + "    { key: \"precision\", value: \"8\" },\n"
+        + "    { key: \"scale\", value: \"3\" }\n"
         + "  ]}];\n"
         + "}";
 
