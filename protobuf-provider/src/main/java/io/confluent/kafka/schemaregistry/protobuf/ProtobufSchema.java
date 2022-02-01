@@ -1286,6 +1286,11 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public static Optional<OptionElement> findOption(
+      String name, List<OptionElement> options) {
+    return findOption(name, mergeOptions(options));
+  }
+
+  public static Optional<OptionElement> findOption(
       String name, Map<String, OptionElement> options) {
     return Optional.ofNullable(options.get(name));
   }
