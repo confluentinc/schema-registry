@@ -17,12 +17,12 @@ message DecimalValue {
     doc: "field",
     params: [
       {
-        value: "8",
         key: "precision"
+        value: "8"
       },
       {
-        value: "3",
-        key: "scale"
+        key: "scale",
+        value: "3"
       }
     ]
   }];
@@ -35,8 +35,8 @@ enum Status {
     doc: "enum_value",
     params: [
       {
-        value: "enum",
-        key: "type"
+        key: "type",
+        value: "enum"
       }
     ]
   }];

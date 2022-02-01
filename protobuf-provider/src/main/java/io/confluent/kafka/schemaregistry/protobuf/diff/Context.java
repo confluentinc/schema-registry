@@ -20,6 +20,7 @@ import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 
+import com.squareup.wire.schema.internal.parser.OptionElement;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -112,7 +113,9 @@ public class Context {
         Optional<FieldElement> value = Optional.empty();
         if (typeElement instanceof MessageElement) {
           MessageElement messageElement = (MessageElement) typeElement;
-          isMap = ProtobufSchema.findOption("map_entry", messageElement.getOptions())
+          Map<String, OptionElement> options =
+              ProtobufSchema.mergeOptions(messageElement.getOptions());
+          isMap = ProtobufSchema.findOption("map_entry", options)
               .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(false);
           if (isMap) {
             key = findField(ProtobufSchema.KEY_FIELD,
