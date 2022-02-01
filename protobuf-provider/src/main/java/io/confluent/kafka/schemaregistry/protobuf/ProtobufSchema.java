@@ -700,7 +700,7 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   private static OptionElement toOption(String name, Meta meta) {
-    Map<String, Object> map = new HashMap<>();
+    Map<String, Object> map = new LinkedHashMap<>();
     String doc = meta.getDoc();
     if (doc != null && !doc.isEmpty()) {
       map.put(DOC_FIELD, doc);
@@ -709,7 +709,7 @@ public class ProtobufSchema implements ParsedSchema {
     if (params != null && !params.isEmpty()) {
       List<Map<String, String>> keyValues = new ArrayList<>();
       for (Map.Entry<String, String> entry : params.entrySet()) {
-        Map<String, String> keyValue = new HashMap<>();
+        Map<String, String> keyValue = new LinkedHashMap<>();
         keyValue.put(KEY_FIELD, entry.getKey());
         keyValue.put(VALUE_FIELD, entry.getValue());
         keyValues.add(keyValue);
@@ -1110,7 +1110,7 @@ public class ProtobufSchema implements ParsedSchema {
     if (existing.getKind() == Kind.MAP && replacement.getKind() == Kind.MAP) {
       Map<String, ?> existingMap = (Map<String, ?>) existing.getValue();
       Map<String, ?> replacementMap = (Map<String, ?>) replacement.getValue();
-      Map<String, Object> mergedMap = new HashMap<>(existingMap);
+      Map<String, Object> mergedMap = new LinkedHashMap<>(existingMap);
       mergedMap.putAll(replacementMap);
       return new OptionElement(
           replacement.getName(), Kind.MAP, mergedMap, replacement.isParenthesized());
@@ -1300,7 +1300,7 @@ public class ProtobufSchema implements ParsedSchema {
     if (keyValues == null) {
       return null;
     }
-    Map<String, String> params = new HashMap<>();
+    Map<String, String> params = new LinkedHashMap<>();
     for (Map<String, String> keyValue : keyValues) {
       String key = keyValue.get(KEY_FIELD);
       String value = keyValue.get(VALUE_FIELD);
