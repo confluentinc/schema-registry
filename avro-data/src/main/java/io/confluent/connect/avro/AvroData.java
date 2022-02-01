@@ -1233,11 +1233,15 @@ public class AvroData {
             return array;
           }
         case STRUCT: {
+          boolean isUnion = AVRO_TYPE_UNION.equals(schema.name());
           ObjectNode node = JsonNodeFactory.instance.objectNode();
           Struct struct = ((Struct) defaultVal);
           for (Field field : (schema.fields())) {
             String fieldName = scrubName(field.name());
             JsonNode fieldDef = defaultValueFromConnect(field.schema(), struct.get(field));
+            if (isUnion) {
+              return fieldDef;
+            }
             node.put(fieldName, fieldDef);
           }
           return node;
