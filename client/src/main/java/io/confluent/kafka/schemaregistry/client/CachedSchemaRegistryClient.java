@@ -631,7 +631,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public void deleteCompatibility(String subject) throws IOException, RestClientException {
-    restService.deleteSubjectConfig(subject);
+    restService.deleteConfig(subject);
   }
 
   @Override

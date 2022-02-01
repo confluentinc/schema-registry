@@ -219,7 +219,7 @@ public class ConfigResource {
       CompatibilityLevel currentCompatibility = schemaRegistry.getCompatibilityLevel(null);
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteSubjectCompatibilityConfigOrForward(null, headerProperties);
+      schemaRegistry.deleteCompatibilityConfigOrForward(null, headerProperties);
       deletedConfig = new Config(currentCompatibility.name);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
@@ -262,7 +262,7 @@ public class ConfigResource {
 
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteSubjectCompatibilityConfigOrForward(subject, headerProperties);
+      schemaRegistry.deleteCompatibilityConfigOrForward(subject, headerProperties);
       deletedConfig = new Config(currentCompatibility.name);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());

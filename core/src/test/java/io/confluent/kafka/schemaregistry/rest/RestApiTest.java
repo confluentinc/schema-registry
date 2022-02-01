@@ -480,7 +480,7 @@ public class RestApiTest extends ClusterTestHarness {
                  restApp.restClient.getConfig(subject).getCompatibilityLevel());
 
     // delete subject compatibility
-    restApp.restClient.deleteSubjectConfig(subject);
+    restApp.restClient.deleteConfig(subject);
 
     assertEquals("Compatibility level for this subject should be reverted to none",
         NONE.name,
@@ -508,7 +508,7 @@ public class RestApiTest extends ClusterTestHarness {
         restApp.restClient.getConfig(null).getCompatibilityLevel());
 
     // delete Global compatibility
-    restApp.restClient.deleteSubjectConfig(null);
+    restApp.restClient.deleteConfig(null);
     assertEquals("Compatibility level for this subject should be reverted to none",
         NONE.name,
         restApp.restClient
