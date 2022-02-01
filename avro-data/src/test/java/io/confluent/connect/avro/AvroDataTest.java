@@ -2897,4 +2897,67 @@ public class AvroDataTest {
     return follower;
   }
 
+  @Test
+  public void testRecordUnionSingleTypeCycle() {
+    String schemaStr = "{\n" +
+        "  \"fields\": [\n" +
+        "    {\n" +
+        "      \"default\": \"\",\n" +
+        "      \"name\": \"field1\",\n" +
+        "      \"type\": [\n" +
+        "        \"string\"\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  ],\n" +
+        "  \"name\": \"TestRecord\",\n" +
+        "  \"type\": \"record\"\n" +
+        "}";
+
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData testAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(schemaStr);
+    avroData.fromConnectSchema(testAvroData.toConnectSchema(avroSchema));
+
+    Integer version = 1;
+    GenericRecord record = new GenericRecordBuilder(avroSchema).set("field1", "value1").build();
+    SchemaAndValue sv = testAvroData.toConnectData(avroSchema, record, version);
+    assertEquals(sv, testAvroData.toConnectData(avroSchema, record, version));
+    assertEquals(record, testAvroData.fromConnectData(sv.schema(), sv.value()));
+  }
+
+  @Test
+  public void testRecordUnionMultipleTypeCycle() {
+    String schemaStr = "{\n" +
+        "  \"fields\": [\n" +
+        "    {\n" +
+        "      \"default\": \"\",\n" +
+        "      \"name\": \"field1\",\n" +
+        "      \"type\": [\n" +
+        "        \"string\",\n" +
+        "        \"int\",\n" +
+        "        \"float\"\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  ],\n" +
+        "  \"name\": \"TestRecord\",\n" +
+        "  \"type\": \"record\"\n" +
+        "}";
+
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData testAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(schemaStr);
+    avroData.fromConnectSchema(testAvroData.toConnectSchema(avroSchema));
+
+    Integer version = 1;
+    GenericRecord record = new GenericRecordBuilder(avroSchema).set("field1", "value1").build();
+    SchemaAndValue sv = testAvroData.toConnectData(avroSchema, record, version);
+    assertEquals(sv, testAvroData.toConnectData(avroSchema, record, version));
+    assertEquals(record, testAvroData.fromConnectData(sv.schema(), sv.value()));
+  }
 }
