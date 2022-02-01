@@ -497,19 +497,19 @@ public class RestApiTest extends ClusterTestHarness {
 
     // change subject compatibility to forward
     restApp.restClient.updateCompatibility(CompatibilityLevel.FORWARD.name, null);
-    assertEquals("New compatibility level for this subject should be forward",
+    assertEquals("New Global compatibility level should be forward",
         FORWARD.name,
         restApp.restClient.getConfig(null).getCompatibilityLevel());
 
     // change subject compatibility to backward
     restApp.restClient.updateCompatibility(BACKWARD.name, null);
-    assertEquals("New compatibility level for this subject should be forward",
+    assertEquals("New Global compatibility level should be backward",
         BACKWARD.name,
         restApp.restClient.getConfig(null).getCompatibilityLevel());
 
     // delete Global compatibility
     restApp.restClient.deleteConfig(null);
-    assertEquals("Compatibility level for this subject should be reverted to none",
+    assertEquals("Global compatibility level should be reverted to none",
         NONE.name,
         restApp.restClient
             .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true)
