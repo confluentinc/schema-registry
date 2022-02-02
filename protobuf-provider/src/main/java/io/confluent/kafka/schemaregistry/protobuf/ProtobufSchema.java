@@ -123,6 +123,8 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final String DOC_FIELD = "doc";
   public static final String PARAMS_FIELD = "params";
+  public static final String PRECISION_KEY = "precision";
+  public static final String SCALE_KEY = "scale";
 
   public static final String DEFAULT_NAME = "default";
   public static final String MAP_ENTRY_SUFFIX = "Entry";  // Suffix used by protoc
@@ -710,9 +712,15 @@ public class ProtobufSchema implements ParsedSchema {
       List<Map<String, String>> keyValues = new ArrayList<>();
       for (Map.Entry<String, String> entry : params.entrySet()) {
         Map<String, String> keyValue = new LinkedHashMap<>();
-        // For backward compatibility, we emit the value first
-        keyValue.put(VALUE_FIELD, entry.getValue());
-        keyValue.put(KEY_FIELD, entry.getKey());
+        String key = entry.getKey();
+        if (PRECISION_KEY.equals(key) || SCALE_KEY.equals(key)) {
+          // For backward compatibility, we emit the value first
+          keyValue.put(VALUE_FIELD, entry.getValue());
+          keyValue.put(KEY_FIELD, key);
+        } else {
+          keyValue.put(KEY_FIELD, key);
+          keyValue.put(VALUE_FIELD, entry.getValue());
+        }
         keyValues.add(keyValue);
       }
       map.put(PARAMS_FIELD, keyValues);
@@ -1308,9 +1316,8 @@ public class ProtobufSchema implements ParsedSchema {
     }
     Map<String, String> params = new LinkedHashMap<>();
     for (Map<String, String> keyValue : keyValues) {
-      // For backward compatibility, we emit the value first
-      String value = keyValue.get(VALUE_FIELD);
       String key = keyValue.get(KEY_FIELD);
+      String value = keyValue.get(VALUE_FIELD);
       params.put(key, value);
     }
     return params;
