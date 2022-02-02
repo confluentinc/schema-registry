@@ -710,8 +710,9 @@ public class ProtobufSchema implements ParsedSchema {
       List<Map<String, String>> keyValues = new ArrayList<>();
       for (Map.Entry<String, String> entry : params.entrySet()) {
         Map<String, String> keyValue = new LinkedHashMap<>();
-        keyValue.put(KEY_FIELD, entry.getKey());
+        // For backward compatibility, we emit the value first
         keyValue.put(VALUE_FIELD, entry.getValue());
+        keyValue.put(KEY_FIELD, entry.getKey());
         keyValues.add(keyValue);
       }
       map.put(PARAMS_FIELD, keyValues);
@@ -1307,8 +1308,9 @@ public class ProtobufSchema implements ParsedSchema {
     }
     Map<String, String> params = new LinkedHashMap<>();
     for (Map<String, String> keyValue : keyValues) {
-      String key = keyValue.get(KEY_FIELD);
+      // For backward compatibility, we emit the value first
       String value = keyValue.get(VALUE_FIELD);
+      String key = keyValue.get(KEY_FIELD);
       params.put(key, value);
     }
     return params;

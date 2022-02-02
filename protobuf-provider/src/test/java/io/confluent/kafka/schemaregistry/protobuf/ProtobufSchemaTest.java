@@ -397,8 +397,8 @@ public class ProtobufSchemaTest {
         + "  doc: \"file meta\",\n"
         + "  params: [\n"
         + "    {\n"
-        + "      key: \"my_key\",\n"
-        + "      value: \"my_value\"\n"
+        + "      value: \"my_value\",\n"
+        + "      key: \"my_key\"\n"
         + "    }\n"
         + "  ]\n"
         + "};\n"
@@ -576,8 +576,8 @@ public class ProtobufSchemaTest {
         + "\n"
         + "message DecimalValue {\n"
         + "  confluent.type.Decimal value = 1 [(confluent.field_meta) = { params: [\n"
-        + "    { key: \"precision\", value: \"8\" },\n"
-        + "    { key: \"scale\", value: \"3\" }\n"
+        + "    { value: \"8\", key: \"precision\" },\n"
+        + "    { value: \"3\", key: \"scale\" }\n"
         + "  ]}];\n"
         + "}";
 
