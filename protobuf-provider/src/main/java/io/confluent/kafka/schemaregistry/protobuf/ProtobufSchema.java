@@ -1093,7 +1093,7 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
-  public static Map<String, OptionElement> mergeOptions(List<OptionElement> options) {
+  private static Map<String, OptionElement> mergeOptions(List<OptionElement> options) {
     // This method is mainly used to merge Confluent meta options
     // which may not be using the alternative aggregate syntax
     return options.stream()
@@ -1283,6 +1283,11 @@ public class ProtobufSchema implements ParsedSchema {
     Map<String, String> params = findParams(meta);
     message.setMeta(doc, params);
     return message.build();
+  }
+
+  public static Optional<OptionElement> findOption(
+      String name, List<OptionElement> options) {
+    return findOption(name, mergeOptions(options));
   }
 
   public static Optional<OptionElement> findOption(
