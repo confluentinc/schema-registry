@@ -42,6 +42,11 @@
             <artifactId>kafka-avro-serializer</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-converter</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>com.google.guava</groupId>
