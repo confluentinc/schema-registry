@@ -1376,18 +1376,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public Schema getLatestVersion(String subject) throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
-      return getLatestVersionFromSubjectSchemas(allVersions, false);
+      return getLatestVersionFromSubjectSchemas(allVersions);
     }
   }
 
-  private Schema getLatestVersionFromSubjectSchemas(CloseableIterator<SchemaRegistryValue> schemas,
-                                                    boolean returnDeletedSchema) {
+  private Schema getLatestVersionFromSubjectSchemas(CloseableIterator<SchemaRegistryValue> schemas) {
     int latestVersionId = -1;
     SchemaValue latestSchemaValue = null;
 
     while (schemas.hasNext()) {
       SchemaValue schemaValue = (SchemaValue) schemas.next();
-      if (!returnDeletedSchema && schemaValue.isDeleted()) {
+      if (schemaValue.isDeleted()) {
         continue;
       }
       if (schemaValue.getVersion() > latestVersionId) {
