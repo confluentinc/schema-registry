@@ -457,8 +457,8 @@ public class ProtobufSchemaTest {
     ProtoFileElement decimal = resourceLoader.readObj(decimalName);
     SchemaReference decimalRef = new SchemaReference(decimalName, decimalName, 1);
 
-    String descriptorName = "google/protobuf/decriptor.proto";
-    ProtoFileElement descriptor = resourceLoader.readObj(decimalName);
+    String descriptorName = "google/protobuf/descriptor.proto";
+    ProtoFileElement descriptor = resourceLoader.readObj(descriptorName);
     SchemaReference descriptorRef = new SchemaReference(descriptorName, descriptorName, 1);
 
     ProtoFileElement original = resourceLoader.readObj(
