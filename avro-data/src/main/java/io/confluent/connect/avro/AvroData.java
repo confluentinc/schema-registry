@@ -1273,7 +1273,7 @@ public class AvroData {
             return array;
           }
         case STRUCT: {
-          boolean isUnion = AVRO_TYPE_UNION.equals(schema.name());
+          boolean isUnion = isUnionSchema(schema);
           ObjectNode node = JsonNodeFactory.instance.objectNode();
           Struct struct = ((Struct) defaultVal);
           for (Field field : (schema.fields())) {
