@@ -1380,7 +1380,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private Schema getLatestVersionFromSubjectSchemas(CloseableIterator<SchemaRegistryValue> schemas) {
+  private Schema getLatestVersionFromSubjectSchemas(
+          CloseableIterator<SchemaRegistryValue> schemas) {
     int latestVersionId = -1;
     SchemaValue latestSchemaValue = null;
 
