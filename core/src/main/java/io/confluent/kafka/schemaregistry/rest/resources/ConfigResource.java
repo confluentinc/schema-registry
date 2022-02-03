@@ -202,7 +202,7 @@ public class ConfigResource {
   }
 
   @DELETE
-  @Operation(summary = "Deletes the specified Global-level compatibility level config and "
+  @Operation(summary = "Deletes the Global-level compatibility level config and "
       + "revert to the global default.", responses = {
         @ApiResponse(content = @Content(
             schema = @Schema(implementation = CompatibilityLevel.class))),
