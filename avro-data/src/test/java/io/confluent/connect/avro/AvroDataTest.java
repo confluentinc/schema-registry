@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
@@ -774,11 +775,63 @@ public class AvroDataTest {
     assertNotNull(schemaAndValue);
   }
 
+  @Test
+  public void testFromConnectStructsWithNullName() {
+    Schema innerSchema = SchemaBuilder.struct()
+        .field("value", Schema.INT64_SCHEMA).optional().build();
+    Schema outerSchema = SchemaBuilder.struct()
+        .field("struct", innerSchema)
+        .field("array", SchemaBuilder.array(innerSchema).build())
+        .build();
+    Struct innerStruct = new Struct(innerSchema)
+        .put("value", 46421L);
+    Struct outerStruct = new Struct(outerSchema)
+        .put("struct", innerStruct)
+        .put("array", Collections.singletonList(innerStruct));
+
+    org.apache.avro.Schema int64Schema = org.apache.avro.SchemaBuilder.builder().longType();
+    org.apache.avro.Schema recordSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("ConnectDefault2")
+        .namespace("io.confluent.connect.avro")
+        .fields().name("value").type(int64Schema).noDefault()
+        .endRecord();
+    org.apache.avro.Schema unionSchema = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().nullType().and()
+        .type(recordSchema)
+        .endUnion();
+    org.apache.avro.Schema arraySchema = org.apache.avro.SchemaBuilder.builder()
+        .array().items(unionSchema);
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+        .record("ConnectDefault")
+        .namespace("io.confluent.connect.avro")
+        .fields()
+        .name("struct").type(unionSchema).withDefault(null)
+        .name("array").type(arraySchema).noDefault()
+        .endRecord();
+
+    org.apache.avro.generic.GenericRecord innerRecord
+        = new org.apache.avro.generic.GenericRecordBuilder(recordSchema)
+        .set("value", 46421L)
+        .build();
+    org.apache.avro.generic.GenericRecord avroRecord
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
+        .set("struct", innerRecord)
+        .set("array", Collections.singletonList(innerRecord))
+        .build();
+    SchemaAndValue schemaAndValue = new SchemaAndValue(outerSchema, outerStruct);
+    schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
+    assertNotNull(schemaAndValue);
+  }
+
   protected SchemaAndValue convertToConnect(
       org.apache.avro.Schema expectedAvroSchema,
       org.apache.avro.generic.GenericRecord expectedAvroRecord,
       SchemaAndValue connectSchemaAndValue
   ) {
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(connectSchemaAndValue.schema());
+    // Validate the schema
+    assertEquals(avroSchema.toString(), new AvroSchema(avroSchema.toString()).toString());
+
     Object convertedRecord = avroData.fromConnectData(
         connectSchemaAndValue.schema(),
         connectSchemaAndValue.value()
@@ -2844,4 +2897,67 @@ public class AvroDataTest {
     return follower;
   }
 
+  @Test
+  public void testRecordUnionSingleTypeCycle() {
+    String schemaStr = "{\n" +
+        "  \"fields\": [\n" +
+        "    {\n" +
+        "      \"default\": \"\",\n" +
+        "      \"name\": \"field1\",\n" +
+        "      \"type\": [\n" +
+        "        \"string\"\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  ],\n" +
+        "  \"name\": \"TestRecord\",\n" +
+        "  \"type\": \"record\"\n" +
+        "}";
+
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData testAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(schemaStr);
+    avroData.fromConnectSchema(testAvroData.toConnectSchema(avroSchema));
+
+    Integer version = 1;
+    GenericRecord record = new GenericRecordBuilder(avroSchema).set("field1", "value1").build();
+    SchemaAndValue sv = testAvroData.toConnectData(avroSchema, record, version);
+    assertEquals(sv, testAvroData.toConnectData(avroSchema, record, version));
+    assertEquals(record, testAvroData.fromConnectData(sv.schema(), sv.value()));
+  }
+
+  @Test
+  public void testRecordUnionMultipleTypeCycle() {
+    String schemaStr = "{\n" +
+        "  \"fields\": [\n" +
+        "    {\n" +
+        "      \"default\": \"\",\n" +
+        "      \"name\": \"field1\",\n" +
+        "      \"type\": [\n" +
+        "        \"string\",\n" +
+        "        \"int\",\n" +
+        "        \"float\"\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  ],\n" +
+        "  \"name\": \"TestRecord\",\n" +
+        "  \"type\": \"record\"\n" +
+        "}";
+
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData testAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(schemaStr);
+    avroData.fromConnectSchema(testAvroData.toConnectSchema(avroSchema));
+
+    Integer version = 1;
+    GenericRecord record = new GenericRecordBuilder(avroSchema).set("field1", "value1").build();
+    SchemaAndValue sv = testAvroData.toConnectData(avroSchema, record, version);
+    assertEquals(sv, testAvroData.toConnectData(avroSchema, record, version));
+    assertEquals(record, testAvroData.fromConnectData(sv.schema(), sv.value()));
+  }
 }

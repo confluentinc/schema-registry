@@ -123,6 +123,8 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final String DOC_FIELD = "doc";
   public static final String PARAMS_FIELD = "params";
+  public static final String PRECISION_KEY = "precision";
+  public static final String SCALE_KEY = "scale";
 
   public static final String DEFAULT_NAME = "default";
   public static final String MAP_ENTRY_SUFFIX = "Entry";  // Suffix used by protoc
@@ -700,7 +702,7 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   private static OptionElement toOption(String name, Meta meta) {
-    Map<String, Object> map = new HashMap<>();
+    Map<String, Object> map = new LinkedHashMap<>();
     String doc = meta.getDoc();
     if (doc != null && !doc.isEmpty()) {
       map.put(DOC_FIELD, doc);
@@ -709,9 +711,16 @@ public class ProtobufSchema implements ParsedSchema {
     if (params != null && !params.isEmpty()) {
       List<Map<String, String>> keyValues = new ArrayList<>();
       for (Map.Entry<String, String> entry : params.entrySet()) {
-        Map<String, String> keyValue = new HashMap<>();
-        keyValue.put(KEY_FIELD, entry.getKey());
-        keyValue.put(VALUE_FIELD, entry.getValue());
+        Map<String, String> keyValue = new LinkedHashMap<>();
+        String key = entry.getKey();
+        if (PRECISION_KEY.equals(key) || SCALE_KEY.equals(key)) {
+          // For backward compatibility, we emit the value first
+          keyValue.put(VALUE_FIELD, entry.getValue());
+          keyValue.put(KEY_FIELD, key);
+        } else {
+          keyValue.put(KEY_FIELD, key);
+          keyValue.put(VALUE_FIELD, entry.getValue());
+        }
         keyValues.add(keyValue);
       }
       map.put(PARAMS_FIELD, keyValues);
@@ -1002,8 +1011,7 @@ public class ProtobufSchema implements ParsedSchema {
           schema.addSchema(toDynamicSchema(ref, dep, dependencies));
         }
       }
-      Map<String, OptionElement> options = rootElem.getOptions().stream()
-          .collect(Collectors.toMap(OptionElement::getName, o -> o));
+      Map<String, OptionElement> options = mergeOptions(rootElem.getOptions());
       OptionElement javaPackageName = options.get(JAVA_PACKAGE);
       if (javaPackageName != null) {
         schema.setJavaPackage(javaPackageName.getValue().toString());
@@ -1083,7 +1091,7 @@ public class ProtobufSchema implements ParsedSchema {
       if (rubyPackage != null) {
         schema.setRubyPackage(rubyPackage.getValue().toString());
       }
-      Optional<OptionElement> meta = findOption(CONFLUENT_FILE_META, rootElem.getOptions());
+      Optional<OptionElement> meta = findOption(CONFLUENT_FILE_META, options);
       String doc = findDoc(meta);
       Map<String, String> params = findParams(meta);
       schema.setMeta(doc, params);
@@ -1091,6 +1099,44 @@ public class ProtobufSchema implements ParsedSchema {
       return schema.build();
     } catch (Descriptors.DescriptorValidationException e) {
       throw new IllegalStateException(e);
+    }
+  }
+
+  private static Map<String, OptionElement> mergeOptions(List<OptionElement> options) {
+    // This method is mainly used to merge Confluent meta options
+    // which may not be using the alternative aggregate syntax
+    return options.stream()
+        .collect(Collectors.toMap(
+            OptionElement::getName,
+            o -> o,
+            ProtobufSchema::merge));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static OptionElement merge(OptionElement existing, OptionElement replacement) {
+    existing = transform(existing);
+    replacement = transform(replacement);
+    if (existing.getKind() == Kind.MAP && replacement.getKind() == Kind.MAP) {
+      Map<String, ?> existingMap = (Map<String, ?>) existing.getValue();
+      Map<String, ?> replacementMap = (Map<String, ?>) replacement.getValue();
+      Map<String, Object> mergedMap = new LinkedHashMap<>(existingMap);
+      mergedMap.putAll(replacementMap);
+      return new OptionElement(
+          replacement.getName(), Kind.MAP, mergedMap, replacement.isParenthesized());
+    } else {
+      // Discard existing option
+      // This should only happen with custom options which are ignored
+      return replacement;
+    }
+  }
+
+  private static OptionElement transform(OptionElement option) {
+    if (option.getKind() == Kind.OPTION) {
+      OptionElement value = (OptionElement) option.getValue();
+      Map<String, ?> map = Collections.singletonMap(value.getName(), value.getValue());
+      return new OptionElement(option.getName(), Kind.MAP, map, option.isParenthesized());
+    } else {
+      return option;
     }
   }
 
@@ -1113,13 +1159,14 @@ public class ProtobufSchema implements ParsedSchema {
       for (FieldElement field : oneof.getFields()) {
         String defaultVal = field.getDefaultValue();
         String jsonName = field.getJsonName();
-        CType ctype = findOption(CTYPE, field.getOptions())
+        Map<String, OptionElement> options = mergeOptions(field.getOptions());
+        CType ctype = findOption(CTYPE, options)
             .map(o -> CType.valueOf(o.getValue().toString())).orElse(null);
-        JSType jstype = findOption(JSTYPE, field.getOptions())
+        JSType jstype = findOption(JSTYPE, options)
             .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
-        Boolean isDeprecated = findOption(DEPRECATED, field.getOptions())
+        Boolean isDeprecated = findOption(DEPRECATED, options)
             .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-        Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, field.getOptions());
+        Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
         String doc = findDoc(meta);
         Map<String, String> params = findParams(meta);
         oneofBuilder.addField(
@@ -1149,15 +1196,16 @@ public class ProtobufSchema implements ParsedSchema {
       String fieldType = field.getType();
       String defaultVal = field.getDefaultValue();
       String jsonName = field.getJsonName();
-      CType ctype = findOption(CTYPE, field.getOptions())
+      Map<String, OptionElement> options = mergeOptions(field.getOptions());
+      CType ctype = findOption(CTYPE, options)
           .map(o -> CType.valueOf(o.getValue().toString())).orElse(null);
-      Boolean isPacked = findOption(PACKED, field.getOptions())
+      Boolean isPacked = findOption(PACKED, options)
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      JSType jstype = findOption(JSTYPE, field.getOptions())
+      JSType jstype = findOption(JSTYPE, options)
           .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
-      Boolean isDeprecated = findOption(DEPRECATED, field.getOptions())
+      Boolean isDeprecated = findOption(DEPRECATED, options)
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, field.getOptions());
+      Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
       String doc = findDoc(meta);
       Map<String, String> params = findParams(meta);
       ProtoType protoType = ProtoType.get(fieldType);
@@ -1222,43 +1270,51 @@ public class ProtobufSchema implements ParsedSchema {
         }
       }
     }
+    Map<String, OptionElement> options = mergeOptions(messageElem.getOptions());
     Boolean noStandardDescriptorAccessor =
-        findOption(NO_STANDARD_DESCRIPTOR_ACCESSOR, messageElem.getOptions())
+        findOption(NO_STANDARD_DESCRIPTOR_ACCESSOR, options)
             .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
     if (noStandardDescriptorAccessor != null) {
       message.setNoStandardDescriptorAccessor(noStandardDescriptorAccessor);
     }
-    Boolean isDeprecated = findOption(DEPRECATED, messageElem.getOptions())
+    Boolean isDeprecated = findOption(DEPRECATED, options)
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
     if (isDeprecated != null) {
       message.setDeprecated(isDeprecated);
     }
-    Boolean isMapEntry = findOption(MAP_ENTRY, messageElem.getOptions())
+    Boolean isMapEntry = findOption(MAP_ENTRY, options)
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
     if (isMapEntry != null) {
       message.setMapEntry(isMapEntry);
     }
-    Optional<OptionElement> meta = findOption(CONFLUENT_MESSAGE_META, messageElem.getOptions());
+    Optional<OptionElement> meta = findOption(CONFLUENT_MESSAGE_META, options);
     String doc = findDoc(meta);
     Map<String, String> params = findParams(meta);
     message.setMeta(doc, params);
     return message.build();
   }
 
-  public static Optional<OptionElement> findOption(String name, List<OptionElement> options) {
-    return options.stream().filter(o -> o.getName().equals(name)).findFirst();
+  public static Optional<OptionElement> findOption(
+      String name, List<OptionElement> options) {
+    return findOption(name, mergeOptions(options));
+  }
+
+  public static Optional<OptionElement> findOption(
+      String name, Map<String, OptionElement> options) {
+    return Optional.ofNullable(options.get(name));
   }
 
   public static String findDoc(Optional<OptionElement> meta) {
     return (String) findMeta(meta, DOC_FIELD);
   }
 
+  @SuppressWarnings("unchecked")
   public static Map<String, String> findParams(Optional<OptionElement> meta) {
     List<Map<String, String>> keyValues = (List<Map<String, String>>) findMeta(meta, PARAMS_FIELD);
     if (keyValues == null) {
       return null;
     }
-    Map<String, String> params = new HashMap<>();
+    Map<String, String> params = new LinkedHashMap<>();
     for (Map<String, String> keyValue : keyValues) {
       String key = keyValue.get(KEY_FIELD);
       String value = keyValue.get(VALUE_FIELD);
@@ -1267,6 +1323,7 @@ public class ProtobufSchema implements ParsedSchema {
     return params;
   }
 
+  @SuppressWarnings("unchecked")
   public static Object findMeta(Optional<OptionElement> meta, String name) {
     if (!meta.isPresent()) {
       return null;
@@ -1289,21 +1346,23 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   private static EnumDefinition toDynamicEnum(EnumElement enumElem) {
-    Boolean allowAlias = findOption(ALLOW_ALIAS, enumElem.getOptions())
+    Map<String, OptionElement> enumOptions = mergeOptions(enumElem.getOptions());
+    Boolean allowAlias = findOption(ALLOW_ALIAS, enumOptions)
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-    Boolean isDeprecated = findOption(DEPRECATED, enumElem.getOptions())
+    Boolean isDeprecated = findOption(DEPRECATED, enumOptions)
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
     EnumDefinition.Builder enumer =
         EnumDefinition.newBuilder(enumElem.getName(), allowAlias, isDeprecated);
     for (EnumConstantElement constant : enumElem.getConstants()) {
-      Boolean isConstDeprecated = findOption(DEPRECATED, constant.getOptions())
+      Map<String, OptionElement> constantOptions = mergeOptions(constant.getOptions());
+      Boolean isConstDeprecated = findOption(DEPRECATED, constantOptions)
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      Optional<OptionElement> meta = findOption(CONFLUENT_ENUM_VALUE_META, constant.getOptions());
+      Optional<OptionElement> meta = findOption(CONFLUENT_ENUM_VALUE_META, constantOptions);
       String doc = findDoc(meta);
       Map<String, String> params = findParams(meta);
       enumer.addValue(constant.getName(), constant.getTag(), doc, params, isConstDeprecated);
     }
-    Optional<OptionElement> meta = findOption(CONFLUENT_ENUM_META, enumElem.getOptions());
+    Optional<OptionElement> meta = findOption(CONFLUENT_ENUM_META, enumOptions);
     String doc = findDoc(meta);
     Map<String, String> params = findParams(meta);
     enumer.setMeta(doc, params);
@@ -1313,15 +1372,17 @@ public class ProtobufSchema implements ParsedSchema {
   private static ServiceDefinition toDynamicService(ServiceElement serviceElement) {
     ServiceDefinition.Builder service =
         ServiceDefinition.newBuilder(serviceElement.getName());
-    Boolean isDeprecated = findOption(DEPRECATED, serviceElement.getOptions())
+    Map<String, OptionElement> serviceOptions = mergeOptions(serviceElement.getOptions());
+    Boolean isDeprecated = findOption(DEPRECATED, serviceOptions)
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
     if (isDeprecated != null) {
       service.setDeprecated(isDeprecated);
     }
     for (RpcElement method : serviceElement.getRpcs()) {
-      Boolean isMethodDeprecated = findOption(DEPRECATED, method.getOptions())
+      Map<String, OptionElement> methodOptions = mergeOptions(method.getOptions());
+      Boolean isMethodDeprecated = findOption(DEPRECATED, methodOptions)
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      IdempotencyLevel idempotencyLevel = findOption(IDEMPOTENCY_LEVEL, method.getOptions())
+      IdempotencyLevel idempotencyLevel = findOption(IDEMPOTENCY_LEVEL, methodOptions)
           .map(o -> IdempotencyLevel.valueOf(o.getValue().toString())).orElse(null);
       service.addMethod(method.getName(), method.getRequestType(), method.getResponseType(),
           method.getRequestStreaming(), method.getResponseStreaming(),

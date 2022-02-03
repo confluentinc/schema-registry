@@ -363,6 +363,56 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testComplexCustomOptions() {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "\n"
+        + "import \"common/extensions.proto\";\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "\n"
+        + "package com.custom.example.v0;\n"
+        + "\n"
+        + "option go_package = \"example/v0;example\";\n"
+        + "option java_multiple_files = true;\n"
+        + "option (com.custom.map).subject = 'user-value';\n"
+        + "option (com.custom.map).compatibility_mode = FULL;\n"
+        + "option (confluent.file_meta).doc = \"file meta\";\n"
+        + "option (confluent.file_meta).params = [\n"
+        + "      {\n"
+        + "        value: \"my_value\",\n"
+        + "        key: \"my_key\"\n"
+        + "      }\n"
+        + "    ];\n"
+        + "message User {\n"
+        + "  string first_name = 1;\n"
+        + "  string last_name = 2;\n"
+        + "}";
+    String expectedSchemaString = "syntax = \"proto3\";\n"
+        + "package com.custom.example.v0;\n"
+        + "\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "\n"
+        + "option java_multiple_files = true;\n"
+        + "option go_package = \"example/v0;example\";\n"
+        + "option (confluent.file_meta) = {\n"
+        + "  doc: \"file meta\",\n"
+        + "  params: [\n"
+        + "    {\n"
+        + "      key: \"my_key\",\n"
+        + "      value: \"my_value\"\n"
+        + "    }\n"
+        + "  ]\n"
+        + "};\n"
+        + "\n"
+        + "message User {\n"
+        + "  string first_name = 1;\n"
+        + "  string last_name = 2;\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    ProtobufSchema schema2 = new ProtobufSchema(schema.toDescriptor());
+    assertEquals(expectedSchemaString, schema2.canonicalString());
+  }
+
+  @Test
   public void testRecordToJson() throws Exception {
     DynamicMessage.Builder builder = recordSchema.newMessageBuilder();
     Descriptor desc = builder.getDescriptorForType();
@@ -494,8 +544,8 @@ public class ProtobufSchemaTest {
     ProtoFileElement decimal = resourceLoader.readObj(decimalName);
     SchemaReference decimalRef = new SchemaReference(decimalName, decimalName, 1);
 
-    String descriptorName = "google/protobuf/decriptor.proto";
-    ProtoFileElement descriptor = resourceLoader.readObj(decimalName);
+    String descriptorName = "google/protobuf/descriptor.proto";
+    ProtoFileElement descriptor = resourceLoader.readObj(descriptorName);
     SchemaReference descriptorRef = new SchemaReference(descriptorName, descriptorName, 1);
 
     ProtoFileElement original = resourceLoader.readObj(
