@@ -1280,7 +1280,7 @@ public class RestApiTest extends ClusterTestHarness {
 
   @Test
   public void testDeleteLatestVersion() throws Exception {
-    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(3);
     String subject = "test";
 
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
@@ -1306,6 +1306,45 @@ public class RestApiTest extends ClusterTestHarness {
                    Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
                    rce.getErrorCode());
     }
+
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(2), 3, subject);
+    assertEquals("Latest version available after subject re-registration",
+            schemas.get(2),
+            restApp.restClient.getLatestVersion(subject).getSchema());
+  }
+
+  @Test
+  public void testGetLatestVersionNonExistentSubject() throws Exception {
+    String subject = "non_existent_subject";
+
+    try {
+      restApp.restClient.getLatestVersion(subject);
+      fail("Getting latest versions from non-existing subject should fail with "
+              + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
+              + " (subject not found).");
+    } catch (RestClientException rce) {
+      assertEquals("Should get a 404 status for non-existing subject",
+              Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+              rce.getErrorCode());
+    }
+  }
+
+  @Test
+  public void testGetLatestVersionDeleteOlder() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    String subject = "test";
+
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
+
+    assertEquals("Latest Version Schema", schemas.get(1), restApp.restClient.getLatestVersion(subject).getSchema());
+
+    assertEquals("Deleting Schema Older Version Success", (Integer) 1, restApp.restClient
+            .deleteSchemaVersion
+                    (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
+    assertEquals("Latest Version Schema Still Same",
+            schemas.get(1),
+            restApp.restClient.getLatestVersion(subject).getSchema());
   }
 
   @Test
