@@ -32,7 +32,7 @@ public final class EnumReferenceOuter {
   /**
    * Protobuf type {@code EnumReference}
    */
-  public  static final class EnumReference extends
+  public static final class EnumReference extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:EnumReference)
       EnumReferenceOrBuilder {
@@ -119,14 +119,14 @@ public final class EnumReferenceOuter {
      * <code>.EnumRoot enum_root = 1;</code>
      * @return The enum numeric value on the wire for enumRoot.
      */
-    public int getEnumRootValue() {
+    @java.lang.Override public int getEnumRootValue() {
       return enumRoot_;
     }
     /**
      * <code>.EnumRoot enum_root = 1;</code>
      * @return The enumRoot.
      */
-    public io.confluent.kafka.serializers.protobuf.test.EnumRootOuter.EnumRoot getEnumRoot() {
+    @java.lang.Override public io.confluent.kafka.serializers.protobuf.test.EnumRootOuter.EnumRoot getEnumRoot() {
       @SuppressWarnings("deprecation")
       io.confluent.kafka.serializers.protobuf.test.EnumRootOuter.EnumRoot result = io.confluent.kafka.serializers.protobuf.test.EnumRootOuter.EnumRoot.valueOf(enumRoot_);
       return result == null ? io.confluent.kafka.serializers.protobuf.test.EnumRootOuter.EnumRoot.UNRECOGNIZED : result;
@@ -438,7 +438,7 @@ public final class EnumReferenceOuter {
        * <code>.EnumRoot enum_root = 1;</code>
        * @return The enum numeric value on the wire for enumRoot.
        */
-      public int getEnumRootValue() {
+      @java.lang.Override public int getEnumRootValue() {
         return enumRoot_;
       }
       /**
@@ -447,6 +447,7 @@ public final class EnumReferenceOuter {
        * @return This builder for chaining.
        */
       public Builder setEnumRootValue(int value) {
+        
         enumRoot_ = value;
         onChanged();
         return this;
@@ -455,6 +456,7 @@ public final class EnumReferenceOuter {
        * <code>.EnumRoot enum_root = 1;</code>
        * @return The enumRoot.
        */
+      @java.lang.Override
       public io.confluent.kafka.serializers.protobuf.test.EnumRootOuter.EnumRoot getEnumRoot() {
         @SuppressWarnings("deprecation")
         io.confluent.kafka.serializers.protobuf.test.EnumRootOuter.EnumRoot result = io.confluent.kafka.serializers.protobuf.test.EnumRootOuter.EnumRoot.valueOf(enumRoot_);
