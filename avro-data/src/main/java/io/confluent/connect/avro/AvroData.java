@@ -1678,11 +1678,9 @@ public class AvroData {
       case FIXED:
         if (AVRO_LOGICAL_DECIMAL.equalsIgnoreCase(logicalType)) {
           Object scaleNode = schema.getObjectProp(AVRO_LOGICAL_DECIMAL_SCALE_PROP);
-          if (null == scaleNode || !(scaleNode instanceof Number)) {
-            throw new DataException("scale must be specified and must be a number.");
-          }
-          Number scale = (Number) scaleNode;
-          builder = Decimal.builder(scale.intValue());
+          // In Avro the scale is optional and should default to 0
+          int scale = scaleNode instanceof Number ? ((Number) scaleNode).intValue() : 0;
+          builder = Decimal.builder(scale);
 
           Object precisionNode = schema.getObjectProp(AVRO_LOGICAL_DECIMAL_PRECISION_PROP);
           if (null != precisionNode) {
@@ -1692,9 +1690,9 @@ public class AvroData {
                   + " https://avro.apache.org/docs/1.9.1/spec.html#Decimal");
             }
             // Capture the precision as a parameter only if it is not the default
-            Integer precision = ((Number) precisionNode).intValue();
+            int precision = ((Number) precisionNode).intValue();
             if (precision != CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT) {
-              builder.parameter(CONNECT_AVRO_DECIMAL_PRECISION_PROP, precision.toString());
+              builder.parameter(CONNECT_AVRO_DECIMAL_PRECISION_PROP, String.valueOf(precision));
             }
           }
         } else {
