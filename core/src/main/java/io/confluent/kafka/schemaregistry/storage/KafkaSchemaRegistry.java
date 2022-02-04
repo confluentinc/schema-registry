@@ -646,7 +646,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             deleteMode(subject);
           }
           if (getCompatibilityLevel(subject) != null) {
-            deleteSubjectCompatibility(subject);
+            deleteCompatibility(subject);
           }
         }
       } else {
@@ -719,7 +719,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           deleteMode(subject);
         }
         if (getCompatibilityLevel(subject) != null) {
-          deleteSubjectCompatibility(subject);
+          deleteCompatibility(subject);
         }
       } else {
         for (Integer version : deletedVersions) {
@@ -914,7 +914,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private void forwardDeleteSubjectCompatibilityConfigToLeader(
+  private void forwardDeleteCompatibilityConfigToLeader(
       Map<String, String> requestProperties,
       String subject
   ) throws SchemaRegistryRequestForwardingException {
@@ -923,7 +923,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     log.debug(String.format("Forwarding delete subject compatibility config request %s to %s",
         subject, baseUrl));
     try {
-      leaderRestService.deleteSubjectConfig(requestProperties, subject);
+      leaderRestService.deleteConfig(requestProperties, subject);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(
@@ -1472,32 +1472,32 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public void deleteSubjectCompatibilityConfig(String subject)
+  public void deleteCompatibilityConfig(String subject)
       throws SchemaRegistryStoreException, OperationNotPermittedException {
     if (isReadOnlyMode(subject)) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-      deleteSubjectCompatibility(subject);
+      deleteCompatibility(subject);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to delete subject config value from store",
           e);
     }
   }
 
-  public void deleteSubjectCompatibilityConfigOrForward(String subject,
+  public void deleteCompatibilityConfigOrForward(String subject,
                                                         Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownLeaderException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        deleteSubjectCompatibilityConfig(subject);
+        deleteCompatibilityConfig(subject);
       } else {
         // forward delete subject config request to the leader
         if (leaderIdentity != null) {
-          forwardDeleteSubjectCompatibilityConfigToLeader(headerProperties, subject);
+          forwardDeleteCompatibilityConfigToLeader(headerProperties, subject);
         } else {
           throw new UnknownLeaderException("Delete config request failed since leader is "
               + "unknown");
@@ -1599,7 +1599,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.kafkaStore.delete(modeKey);
   }
 
-  private void deleteSubjectCompatibility(String subject) throws StoreException {
+  private void deleteCompatibility(String subject) throws StoreException {
     ConfigKey configKey = new ConfigKey(subject);
     this.kafkaStore.delete(configKey);
   }

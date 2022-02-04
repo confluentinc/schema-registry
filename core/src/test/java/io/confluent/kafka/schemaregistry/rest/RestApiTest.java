@@ -39,6 +39,7 @@ import java.util.*;
 import java.net.URL;
 import java.net.HttpURLConnection;
 
+import static io.confluent.kafka.schemaregistry.CompatibilityLevel.BACKWARD;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
@@ -479,12 +480,39 @@ public class RestApiTest extends ClusterTestHarness {
                  restApp.restClient.getConfig(subject).getCompatibilityLevel());
 
     // delete subject compatibility
-    restApp.restClient.deleteSubjectConfig(subject);
+    restApp.restClient.deleteConfig(subject);
 
     assertEquals("Compatibility level for this subject should be reverted to none",
         NONE.name,
         restApp.restClient
             .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, subject, true)
+            .getCompatibilityLevel());
+  }
+
+  @Test
+  public void testGlobalConfigChange() throws Exception{
+    assertEquals("Default compatibility level should be none for this test instance",
+        NONE.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel());
+
+    // change subject compatibility to forward
+    restApp.restClient.updateCompatibility(CompatibilityLevel.FORWARD.name, null);
+    assertEquals("New Global compatibility level should be forward",
+        FORWARD.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel());
+
+    // change subject compatibility to backward
+    restApp.restClient.updateCompatibility(BACKWARD.name, null);
+    assertEquals("New Global compatibility level should be backward",
+        BACKWARD.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel());
+
+    // delete Global compatibility
+    restApp.restClient.deleteConfig(null);
+    assertEquals("Global compatibility level should be reverted to none",
+        NONE.name,
+        restApp.restClient
+            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true)
             .getCompatibilityLevel());
   }
 
