@@ -1811,6 +1811,26 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testToConnectDecimalAvroDefaultScale() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DECIMAL);
+    avroSchema.addProp("precision", 50);
+
+    final SchemaAndValue expected = new SchemaAndValue(
+        Decimal.builder(0).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "50").build(),
+        new BigDecimal(new BigInteger("156"), 0)
+    );
+
+    final SchemaAndValue actual = avroData.toConnectData(avroSchema, TEST_DECIMAL_BYTES);
+    assertThat("schema.parameters() does not match.",
+        actual.schema().parameters(),
+        IsEqual.equalTo(expected.schema().parameters())
+    );
+    assertEquals("schema does not match.", expected.schema(), actual.schema());
+    assertEquals("value does not match.", expected.value(), actual.value());
+  }
+
+  @Test
   public void testToConnectDate() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Date");
