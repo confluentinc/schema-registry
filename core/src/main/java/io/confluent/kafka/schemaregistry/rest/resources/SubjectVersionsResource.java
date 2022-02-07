@@ -118,7 +118,15 @@ public class SubjectVersionsResource {
           + version
           + " from the schema registry";
     try {
-      schema = schemaRegistry.validateAndGetSchema(subject, versionId, lookupDeletedSchema);
+      schema = schemaRegistry.getUsingContexts(
+          subject, versionId.getVersionId(), lookupDeletedSchema);
+      if (schema == null) {
+        if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
+          throw Errors.subjectNotFoundException(subject);
+        } else {
+          throw Errors.versionNotFoundException(versionId.getVersionId());
+        }
+      }
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -357,7 +365,14 @@ public class SubjectVersionsResource {
           throw Errors.schemaVersionSoftDeletedException(subject, version);
         }
       }
-      schema = schemaRegistry.validateAndGetSchema(subject, versionId, true);
+      schema = schemaRegistry.get(subject, versionId.getVersionId(), true);
+      if (schema == null) {
+        if (!schemaRegistry.hasSubjects(subject, true)) {
+          throw Errors.subjectNotFoundException(subject);
+        } else {
+          throw Errors.versionNotFoundException(versionId.getVersionId());
+        }
+      }
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
