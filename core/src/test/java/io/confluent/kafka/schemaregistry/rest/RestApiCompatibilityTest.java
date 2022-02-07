@@ -22,7 +22,9 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaE
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
 import org.junit.Test;
 
+import static org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class RestApiCompatibilityTest extends ClusterTestHarness {
@@ -59,6 +61,8 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
       assertEquals("Should get a conflict status",
                    RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
                    e.getStatus());
+      assertTrue("Verifying error message verbosity",
+              e.getMessage().contains(READER_FIELD_MISSING_DEFAULT_VALUE.toString()));
     }
 
     // register a non-avro

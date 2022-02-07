@@ -318,9 +318,9 @@ public class SubjectVersionsResource {
       throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
                                                     + " to the leader", e);
     } catch (IncompatibleSchemaException e) {
-      throw Errors.incompatibleSchemaException("Schema being registered is incompatible with an"
-                                               + " earlier schema for subject "
-                                               + "\"" + subjectName + "\"", e);
+      throw Errors.incompatibleSchemaException("Schema being registered is incompatible with"
+              + " an earlier schema for subject \"" + subjectName + "\", details: "
+              + e.getMessage(), e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {

@@ -488,8 +488,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
       Collections.reverse(undeletedVersions);
 
-      final boolean isCompatible =
-              isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions).isEmpty();
+      final List<String> compatibilityErrorLogs = isCompatibleWithPrevious(
+              subject, parsedSchema, undeletedVersions);
+      final boolean isCompatible = compatibilityErrorLogs.isEmpty();
+
       if (normalize) {
         parsedSchema = parsedSchema.normalize();
       }
@@ -548,8 +550,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
         return schema.getId();
       } else {
-        throw new IncompatibleSchemaException(
-            "New schema is incompatible with an earlier schema.");
+        throw new IncompatibleSchemaException(compatibilityErrorLogs.toString());
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
