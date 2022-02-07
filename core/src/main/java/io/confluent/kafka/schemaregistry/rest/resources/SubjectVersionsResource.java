@@ -56,6 +56,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
@@ -276,7 +277,8 @@ public class SubjectVersionsResource {
       @PathParam("subject") String subjectName,
       @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Schema", required = true)
-      @NotNull RegisterSchemaRequest request) {
+      @NotNull RegisterSchemaRequest request,
+      @DefaultValue("false") @QueryParam("verbose") boolean verbose) {
     log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
@@ -318,9 +320,12 @@ public class SubjectVersionsResource {
       throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
                                                     + " to the leader", e);
     } catch (IncompatibleSchemaException e) {
-      throw Errors.incompatibleSchemaException("Schema being registered is incompatible with an"
-                                               + " earlier schema for subject "
-                                               + "\"" + subjectName + "\"", e);
+      StringBuilder errorMessage = new StringBuilder("Schema being registered is incompatible with"
+              + " an earlier schema for subject \"" + subjectName + "\"");
+      if (verbose) {
+        errorMessage.append(e.getMessage());
+      }
+      throw Errors.incompatibleSchemaException(errorMessage.toString(), e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
