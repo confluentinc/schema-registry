@@ -319,7 +319,8 @@ public class SubjectVersionsResource {
                                                     + " to the leader", e);
     } catch (IncompatibleSchemaException e) {
       throw Errors.incompatibleSchemaException("Schema being registered is incompatible with"
-              + " an earlier schema for subject \"" + subjectName + "\"" + e.getMessage(), e);
+              + " an earlier schema for subject \"" + subjectName + "\" Details : "
+              + e.getMessage(), e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
