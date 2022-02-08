@@ -128,7 +128,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     // test getAllSubjects with existing data
     assertEquals("Getting all subjects should match no registered subjects",
                  Collections.emptyList(),
-                 restApp.restClient.getAllSubjects());
+                 restApp.restClient.getAllSubjects("", false));
 
     // test getAllSubjectsWithPrefix with context wildcard
     assertEquals("Getting all subjects should match all registered subjects",
@@ -259,7 +259,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     // test getAllSubjects with existing data
     assertEquals("Getting all subjects should match all registered subjects",
         Collections.singletonList(subject3),
-        noCtxRestClient3.getAllSubjects());
+        noCtxRestClient3.getAllSubjects("", false));
   }
 
   static void registerAndVerifySchema(RestService restService, String schemaString,
