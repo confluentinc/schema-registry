@@ -1087,10 +1087,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
     final String type = schemaType;
 
-    ParsedSchema parsedSchema = provider.parseSchema(schema, references, isNew)
-        .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
-            + " with refs " + references + " of type " + type));
-    return parsedSchema;
+    try {
+      return provider.parseSchemaOrElseThrow(schema, references, isNew);
+    } catch(Exception e) {
+      throw new InvalidSchemaException("Invalid schema " + schema
+              + " with refs " + references + " of type " + type + " , details: " + e.getMessage());
+    }
   }
 
   public Schema getUsingContexts(String subject, int version, boolean
