@@ -107,17 +107,18 @@ public class SubjectsResource {
     );
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
     try {
-      if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
-        throw Errors.subjectNotFoundException(subject);
+      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
+          subject, schema, normalize, lookupDeletedSchema);
+      if (matchingSchema == null) {
+        if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
+          throw Errors.subjectNotFoundException(subject);
+        } else {
+          throw Errors.schemaNotFoundException();
+        }
       }
-      matchingSchema =
-          schemaRegistry.lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);
-    }
-    if (matchingSchema == null) {
-      throw Errors.schemaNotFoundException();
     }
     asyncResponse.resume(matchingSchema);
   }
@@ -130,12 +131,14 @@ public class SubjectsResource {
   })
   @PerformanceMetric("subjects.list")
   public Set<String> list(
-      @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
+      @DefaultValue(QualifiedSubject.CONTEXT_WILDCARD)
+      @QueryParam("subjectPrefix") String subjectPrefix,
       @QueryParam("deleted") boolean lookupDeletedSubjects
   ) {
     try {
       return schemaRegistry.listSubjectsWithPrefix(
-          subjectPrefix != null ? subjectPrefix : "", lookupDeletedSubjects);
+          subjectPrefix != null ? subjectPrefix : QualifiedSubject.CONTEXT_WILDCARD,
+          lookupDeletedSubjects);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {
