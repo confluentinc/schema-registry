@@ -1089,7 +1089,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
     try {
       return provider.parseSchemaOrElseThrow(schema, references, isNew);
-    } catch(Exception e) {
+    } catch (Exception e) {
       throw new InvalidSchemaException("Invalid schema " + schema
               + " with refs " + references + " of type " + type + " , details: " + e.getMessage());
     }
