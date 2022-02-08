@@ -227,7 +227,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("2nd schema registered in second context should have id 1", 1,
         id2);
 
-    List<String> subjects = restApp.restClient.getAllSubjects();
+    List<String> subjects = restApp.restClient.getAllSubjects("", false);
     assertEquals(Collections.singletonList(subject), subjects);
 
     List<Schema> schemas = restApp.restClient.getSchemas(null, false, false);
