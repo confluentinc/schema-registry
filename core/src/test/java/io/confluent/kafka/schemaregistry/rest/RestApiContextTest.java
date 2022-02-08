@@ -21,6 +21,7 @@ import static org.junit.Assert.fail;
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
@@ -128,7 +129,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     // test getAllSubjects with existing data
     assertEquals("Getting all subjects should match no registered subjects",
                  Collections.emptyList(),
-                 restApp.restClient.getAllSubjects());
+                 restApp.restClient.getAllSubjects("", false));
 
     // test getAllSubjectsWithPrefix with context wildcard
     assertEquals("Getting all subjects should match all registered subjects",
@@ -139,6 +140,16 @@ public class RestApiContextTest extends ClusterTestHarness {
     assertEquals("Getting all schemas should match all registered subjects",
         schemasInSubject1 + schemasInSubject2,
         restApp.restClient.getSchemas(":*:", false, false).size());
+
+    Schema schema = restApp.restClient.getVersion("testTopic1", 1);
+    assertEquals("Getting schema by version w/o context should succeed",
+        1,
+        schema.getVersion().intValue());
+
+    schema = restApp.restClient.lookUpSubjectVersion(schema.getSchema(), "testTopic1");
+    assertEquals("Getting schema by schema w/o context should succeed",
+        1,
+        schema.getVersion().intValue());
   }
 
   @Test
@@ -259,7 +270,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     // test getAllSubjects with existing data
     assertEquals("Getting all subjects should match all registered subjects",
         Collections.singletonList(subject3),
-        noCtxRestClient3.getAllSubjects());
+        noCtxRestClient3.getAllSubjects("", false));
   }
 
   static void registerAndVerifySchema(RestService restService, String schemaString,
