@@ -22,6 +22,7 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
+import java.util.Collections;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -167,11 +168,13 @@ public class SubjectVersionsResource {
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
 
-    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
-
+    Schema schema = getSchemaByVersion(subject, version, true);
+    if (schema == null) {
+      return new ArrayList<>();
+    }
     VersionId versionId = null;
     try {
-      versionId = new VersionId(version);
+      versionId = new VersionId(schema.getVersion());
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     }
@@ -181,7 +184,7 @@ public class SubjectVersionsResource {
         + version
         + " from the schema registry";
     try {
-      return schemaRegistry.getReferencedBy(subject, versionId);
+      return schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
