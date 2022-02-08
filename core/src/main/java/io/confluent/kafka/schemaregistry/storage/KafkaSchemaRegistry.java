@@ -55,7 +55,6 @@ import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
@@ -758,6 +757,41 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
+  public Schema lookUpSchemaUnderSubjectUsingContexts(
+      String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
+      throws SchemaRegistryException {
+    Schema matchingSchema =
+        lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema);
+    if (matchingSchema != null) {
+      return matchingSchema;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
+    if (isQualifiedSubject) {
+      return null;
+    }
+    // Try qualifying the subject with each known context
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        ContextValue v = (ContextValue) iter.next();
+        QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), subject);
+        Schema qualSchema = new Schema(
+            qualSub.toQualifiedSubject(),
+            schema.getVersion(),
+            schema.getId(),
+            schema.getSchemaType(),
+            schema.getReferences(),
+            schema.getSchema()
+        );
+        matchingSchema = lookUpSchemaUnderSubject(
+            qualSub.toQualifiedSubject(), qualSchema, normalize, lookupDeletedSchema);
+        if (matchingSchema != null) {
+          return matchingSchema;
+        }
+      }
+    }
+    return null;
+  }
 
   /**
    * Checks if given schema was ever registered under a subject. If found, it returns the version of
@@ -787,14 +821,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Collections.reverse(allVersions);
 
       for (SchemaValue schemaValue : allVersions) {
-        if (!schemaValue.isDeleted()
+        if ((lookupDeletedSchema || !schemaValue.isDeleted())
             && parsedSchema.references().isEmpty()
             && !schemaValue.getReferences().isEmpty()) {
-          Schema undeleted = getSchemaEntityFromSchemaValue(schemaValue);
-          ParsedSchema undeletedSchema = parseSchema(undeleted);
-          if (parsedSchema.deepEquals(undeletedSchema)) {
+          Schema prev = getSchemaEntityFromSchemaValue(schemaValue);
+          ParsedSchema prevSchema = parseSchema(prev);
+          if (parsedSchema.deepEquals(prevSchema)) {
             // This handles the case where a schema is sent with all references resolved
-            return undeleted;
+            return prev;
           }
         }
       }
@@ -1056,18 +1090,29 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return parsedSchema;
   }
 
-  public Schema validateAndGetSchema(String subject, VersionId versionId, boolean
+  public Schema getUsingContexts(String subject, int version, boolean
       returnDeletedSchema) throws SchemaRegistryException {
-    final int version = versionId.getVersionId();
-    Schema schema = this.get(subject, version, returnDeletedSchema);
-    if (schema == null) {
-      if (!this.hasSubjects(subject, returnDeletedSchema)) {
-        throw Errors.subjectNotFoundException(subject);
-      } else {
-        throw Errors.versionNotFoundException(version);
+    Schema schema = get(subject, version, returnDeletedSchema);
+    if (schema != null) {
+      return schema;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
+    if (isQualifiedSubject) {
+      return null;
+    }
+    // Try qualifying the subject with each known context
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        ContextValue v = (ContextValue) iter.next();
+        QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), subject);
+        schema = get(qualSub.toQualifiedSubject(), version, returnDeletedSchema);
+        if (schema != null) {
+          return schema;
+        }
       }
     }
-    return schema;
+    return null;
   }
 
   public boolean schemaVersionExists(String subject, VersionId versionId, boolean
@@ -1374,9 +1419,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public Schema getLatestVersion(String subject) throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
-      List<Schema> sortedVersions = sortSchemasByVersion(allVersions, false);
-      return sortedVersions.size() > 0 ? sortedVersions.get(sortedVersions.size() - 1) : null;
+      return getLatestVersionFromSubjectSchemas(allVersions);
     }
+  }
+
+  private Schema getLatestVersionFromSubjectSchemas(
+          CloseableIterator<SchemaRegistryValue> schemas) {
+    int latestVersionId = -1;
+    SchemaValue latestSchemaValue = null;
+
+    while (schemas.hasNext()) {
+      SchemaValue schemaValue = (SchemaValue) schemas.next();
+      if (schemaValue.isDeleted()) {
+        continue;
+      }
+      if (schemaValue.getVersion() > latestVersionId) {
+        latestVersionId = schemaValue.getVersion();
+        latestSchemaValue = schemaValue;
+      }
+    }
+
+    return latestSchemaValue != null ? getSchemaEntityFromSchemaValue(latestSchemaValue) : null;
   }
 
   private CloseableIterator<SchemaRegistryValue> allVersions(

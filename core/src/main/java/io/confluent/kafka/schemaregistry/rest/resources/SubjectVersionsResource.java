@@ -118,7 +118,15 @@ public class SubjectVersionsResource {
           + version
           + " from the schema registry";
     try {
-      schema = schemaRegistry.validateAndGetSchema(subject, versionId, lookupDeletedSchema);
+      schema = schemaRegistry.getUsingContexts(
+          subject, versionId.getVersionId(), lookupDeletedSchema);
+      if (schema == null) {
+        if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
+          throw Errors.subjectNotFoundException(subject);
+        } else {
+          throw Errors.versionNotFoundException(versionId.getVersionId());
+        }
+      }
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -159,11 +167,13 @@ public class SubjectVersionsResource {
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
 
-    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
-
+    Schema schema = getSchemaByVersion(subject, version, true);
+    if (schema == null) {
+      return new ArrayList<>();
+    }
     VersionId versionId = null;
     try {
-      versionId = new VersionId(version);
+      versionId = new VersionId(schema.getVersion());
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     }
@@ -173,7 +183,7 @@ public class SubjectVersionsResource {
         + version
         + " from the schema registry";
     try {
-      return schemaRegistry.getReferencedBy(subject, versionId);
+      return schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -357,7 +367,14 @@ public class SubjectVersionsResource {
           throw Errors.schemaVersionSoftDeletedException(subject, version);
         }
       }
-      schema = schemaRegistry.validateAndGetSchema(subject, versionId, true);
+      schema = schemaRegistry.get(subject, versionId.getVersionId(), true);
+      if (schema == null) {
+        if (!schemaRegistry.hasSubjects(subject, true)) {
+          throw Errors.subjectNotFoundException(subject);
+        } else {
+          throw Errors.versionNotFoundException(versionId.getVersionId());
+        }
+      }
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
