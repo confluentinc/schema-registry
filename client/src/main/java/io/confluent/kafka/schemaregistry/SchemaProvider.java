@@ -62,4 +62,16 @@ public interface SchemaProvider extends Configurable {
                                              List<SchemaReference> references) {
     return parseSchema(schemaString, references, false);
   }
+
+  /**
+   * Parses a string representing a schema.
+   *
+   * @param schemaString the schema
+   * @param references a list of schema references
+   * @param isNew whether the schema is new
+   * @return a parsed schema or throw an error
+   */
+  ParsedSchema parseSchemaOrElseThrow(String schemaString,
+                                      List<SchemaReference> references,
+                                      boolean isNew);
 }

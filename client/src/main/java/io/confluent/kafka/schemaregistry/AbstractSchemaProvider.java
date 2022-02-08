@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -37,6 +38,17 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
 
   public SchemaVersionFetcher schemaVersionFetcher() {
     return schemaVersionFetcher;
+  }
+
+  @Override
+  public Optional<ParsedSchema> parseSchema(String schemaString,
+                                            List<SchemaReference> references,
+                                            boolean isNew) {
+    try {
+      return Optional.of(parseSchemaOrElseThrow(schemaString, references, isNew));
+    } catch (Exception e) {
+      return Optional.empty();
+    }
   }
 
   protected Map<String, String> resolveReferences(List<SchemaReference> references) {
