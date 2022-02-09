@@ -54,9 +54,15 @@ public interface SchemaProvider extends Configurable {
    * @param isNew whether the schema is new
    * @return an optional parsed schema
    */
-  Optional<ParsedSchema> parseSchema(String schemaString,
-                                     List<SchemaReference> references,
-                                     boolean isNew);
+  default Optional<ParsedSchema> parseSchema(String schemaString,
+                                            List<SchemaReference> references,
+                                            boolean isNew) {
+    try {
+      return Optional.of(parseSchemaOrElseThrow(schemaString, references, isNew));
+    } catch (Exception e) {
+      return Optional.empty();
+    }
+  }
 
   default Optional<ParsedSchema> parseSchema(String schemaString,
                                              List<SchemaReference> references) {
