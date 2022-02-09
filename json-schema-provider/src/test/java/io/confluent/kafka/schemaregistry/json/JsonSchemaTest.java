@@ -22,8 +22,9 @@ import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
@@ -36,9 +37,12 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -322,6 +326,36 @@ public class JsonSchemaTest {
     JsonSchema jsonSchema = new JsonSchema(schema);
     List<Difference> diff = SchemaDiff.compare(jsonSchema.rawSchema(), jsonSchema.rawSchema());
     assertEquals(0, diff.size());
+  }
+
+  @Test
+  public void testParseSchema() {
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(recordSchemaString,
+            new ArrayList<>(), false);
+    Optional<ParsedSchema> parsedSchemaOptional = jsonSchemaProvider.parseSchema(recordSchemaString,
+            new ArrayList<>(), false);
+
+    assertNotNull(parsedSchema);
+    assertTrue(parsedSchemaOptional.isPresent());
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testParseSchemaThrowException() {
+    String invalidSchemaString = "{\"properties\": {\n"
+            + "  \"string\": {\"type\": \"str\"}\n"
+            + "  }"
+            + "  \"additionalProperties\": false\n"
+            + "}";
+
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    Optional<ParsedSchema> parsedSchema = jsonSchemaProvider.parseSchema(invalidSchemaString,
+            new ArrayList<>(), false);
+    assertFalse(parsedSchema.isPresent());
+
+    //throws exception
+    jsonSchemaProvider.parseSchemaOrElseThrow(invalidSchemaString,
+            new ArrayList<>(), false);
   }
 
   private static Map<String, String> getJsonSchemaWithReferences() {
