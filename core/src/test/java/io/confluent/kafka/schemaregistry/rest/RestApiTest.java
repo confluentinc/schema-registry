@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionExcep
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import org.apache.avro.Schema.Parser;
+import org.apache.avro.SchemaParseException;
 import org.junit.Test;
 
 import java.util.*;
@@ -179,6 +180,34 @@ public class RestApiTest extends ClusterTestHarness {
           + " (invalid schema)");
     } catch (RestClientException rce) {
       assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+  }
+
+  @Test
+  public void testRegisterInvalidSchemaBadType() throws Exception {
+    String subject = "testSubject";
+
+    //Invalid Field Type 'str'
+    String badSchemaString = "{\"type\":\"record\","
+            + "\"name\":\"myrecord\","
+            + "\"fields\":"
+            + "[{\"type\":\"str\",\"name\":\"field1\"}]}";
+
+    String expectedErrorMessage = "Expected Error String";
+    try {
+        new Parser().parse(badSchemaString);
+    } catch (SchemaParseException spe) {
+        expectedErrorMessage = spe.getMessage();
+    }
+
+    try {
+        restApp.restClient.registerSchema(badSchemaString, subject);
+        fail("Registering schema with invalid field type should fail with "
+                + Errors.INVALID_SCHEMA_ERROR_CODE
+                + " (invalid schema)");
+    } catch (RestClientException rce) {
+        assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+        assertTrue("Verify error message verbosity", rce.getMessage().contains(expectedErrorMessage));
     }
   }
 
