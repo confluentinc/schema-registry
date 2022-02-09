@@ -212,6 +212,28 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testRegisterInvalidSchemaBadReference() throws Exception {
+    String subject = "testSubject";
+
+    //Invalid Reference
+    SchemaReference invalidReference = new SchemaReference("invalid.schema", "badSubject", 1);
+    String schemaString = "{\"type\":\"record\","
+            + "\"name\":\"myrecord\","
+            + "\"fields\":"
+            + "[{\"type\":\"string\",\"name\":\"field1\"}]}";
+
+    try {
+      restApp.restClient.registerSchema(schemaString, "AVRO",
+              Collections.singletonList(invalidReference), subject);
+      fail("Registering schema with invalid reference should fail with "
+              + Errors.INVALID_SCHEMA_ERROR_CODE
+              + " (invalid schema)");
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+  }
+
+  @Test
   public void testRegisterDiffSchemaType() throws Exception {
     String subject = "testSubject";
     String avroSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
