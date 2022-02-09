@@ -80,6 +80,12 @@ public class JsonSchemaTest {
 
   private static final JsonSchema enumSchema = new JsonSchema(enumSchemaString);
 
+  private static final String invalidSchemaString = "{\"properties\": {\n"
+      + "  \"string\": {\"type\": \"str\"}\n"
+      + "  }"
+      + "  \"additionalProperties\": false\n"
+      + "}";
+
   @Test
   public void testPrimitiveTypesToJsonSchema() throws Exception {
     Object envelope = JsonSchemaUtils.toObject((String) null, createPrimitiveSchema("null"));
@@ -342,20 +348,17 @@ public class JsonSchemaTest {
 
   @Test(expected = IllegalArgumentException.class)
   public void testParseSchemaThrowException() {
-    String invalidSchemaString = "{\"properties\": {\n"
-            + "  \"string\": {\"type\": \"str\"}\n"
-            + "  }"
-            + "  \"additionalProperties\": false\n"
-            + "}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    jsonSchemaProvider.parseSchemaOrElseThrow(invalidSchemaString,
+            new ArrayList<>(), false);
+  }
 
+  @Test
+  public void testParseSchemaSuppressException() {
     SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
     Optional<ParsedSchema> parsedSchema = jsonSchemaProvider.parseSchema(invalidSchemaString,
             new ArrayList<>(), false);
     assertFalse(parsedSchema.isPresent());
-
-    //throws exception
-    jsonSchemaProvider.parseSchemaOrElseThrow(invalidSchemaString,
-            new ArrayList<>(), false);
   }
 
   private static Map<String, String> getJsonSchemaWithReferences() {

@@ -193,7 +193,7 @@ public class RestApiTest extends ClusterTestHarness {
             + "\"fields\":"
             + "[{\"type\":\"str\",\"name\":\"field1\"}]}";
 
-    String expectedErrorMessage = "Expected Error String";
+    String expectedErrorMessage = null;
     try {
         new Parser().parse(badSchemaString);
     } catch (SchemaParseException spe) {
@@ -207,6 +207,7 @@ public class RestApiTest extends ClusterTestHarness {
                 + " (invalid schema)");
     } catch (RestClientException rce) {
         assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+        assertNotNull(expectedErrorMessage);
         assertTrue("Verify error message verbosity", rce.getMessage().contains(expectedErrorMessage));
     }
   }

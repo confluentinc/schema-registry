@@ -174,6 +174,18 @@ public class ProtobufSchemaTest {
   private static final ProtobufSchema enumBeforeMessageSchema =
       new ProtobufSchema(enumBeforeMessageSchemaString);
 
+  private static final String invalidSchemaString = "syntax = \"proto3\";\n"
+      + "\n"
+      + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+      + "option java_outer_classname = \"TestMessageProtos\";\n"
+      + "\n"
+      + "import \"google/protobuf/descriptor.proto\";\n"
+      + "\n"
+      + "message TestMessage {\n"
+      + "    string test_string = 1 [json_name = \"test_str\"];\n"
+      + "    int32 test_int32 = 8.01;\n"
+      + "}\n";
+
   @Test
   public void testRecordToProtobuf() throws Exception {
     String json = "{\n"
@@ -986,26 +998,17 @@ public class ProtobufSchemaTest {
 
   @Test(expected = IllegalArgumentException.class)
   public void testParseSchemaThrowException() {
-    String invalidSchemaString = "syntax = \"proto3\";\n"
-            + "\n"
-            + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
-            + "option java_outer_classname = \"TestMessageProtos\";\n"
-            + "\n"
-            + "import \"google/protobuf/descriptor.proto\";\n"
-            + "\n"
-            + "message TestMessage {\n"
-            + "    string test_string = 1 [json_name = \"test_str\"];\n"
-            + "    int32 test_int32 = 8.01;\n"
-            + "}\n";
+    SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
+    protobufSchemaProvider.parseSchemaOrElseThrow(invalidSchemaString,
+            new ArrayList<>(), false);
+  }
 
+  @Test
+  public void testParseSchemaSuppressException() {
     SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
     Optional<ParsedSchema> parsedSchema = protobufSchemaProvider.parseSchema(invalidSchemaString,
             new ArrayList<>(), false);
     assertFalse(parsedSchema.isPresent());
-
-    //throws exception
-    protobufSchemaProvider.parseSchemaOrElseThrow(invalidSchemaString,
-            new ArrayList<>(), false);
   }
 
   private static JsonNode jsonTree(String jsonData) {
