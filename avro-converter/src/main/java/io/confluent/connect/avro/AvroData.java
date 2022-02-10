@@ -1479,8 +1479,7 @@ public class AvroData {
               }
             }
             if (converted == null) {
-              throw new DataException(
-                  "Did not find matching union field for data: " + value.toString());
+              throw new DataException("Did not find matching union field for data");
             }
           } else {
             IndexedRecord original = (IndexedRecord) value;
@@ -1935,7 +1934,7 @@ public class AvroData {
 
       case ARRAY: {
         if (!jsonValue.isArray()) {
-          throw new DataException("Invalid JSON for array default value: " + jsonValue.toString());
+          throw new DataException("Invalid JSON for array default value");
         }
         List<Object> result = new ArrayList<>(jsonValue.size());
         for (JsonNode elem : jsonValue) {
@@ -1948,7 +1947,7 @@ public class AvroData {
 
       case MAP: {
         if (!jsonValue.isObject()) {
-          throw new DataException("Invalid JSON for map default value: " + jsonValue.toString());
+          throw new DataException("Invalid JSON for map default value");
         }
         Map<String, Object> result = new HashMap<>(jsonValue.size());
         Iterator<Map.Entry<String, JsonNode>> fieldIt = jsonValue.getFields();
@@ -1963,7 +1962,7 @@ public class AvroData {
 
       case RECORD: {
         if (!jsonValue.isObject()) {
-          throw new DataException("Invalid JSON for record default value: " + jsonValue.toString());
+          throw new DataException("Invalid JSON for record default value");
         }
 
         Struct result = new Struct(schema);
