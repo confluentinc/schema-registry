@@ -2068,8 +2068,7 @@ public class AvroData {
 
       case ARRAY: {
         if (!jsonValue.isArray()) {
-          throw new DataException(
-              "Invalid JSON for array default value: <redacted>");
+          throw new DataException("Invalid JSON for array default value: <redacted>");
         }
         List<Object> result = new ArrayList<>(jsonValue.size());
         for (JsonNode elem : jsonValue) {
@@ -2097,8 +2096,7 @@ public class AvroData {
 
       case RECORD: {
         if (!jsonValue.isObject()) {
-          throw new DataException(
-              "Invalid JSON for record default value: <redacted>");
+          throw new DataException("Invalid JSON for record default value: <redacted>");
         }
 
         Struct result = new Struct(schema);
