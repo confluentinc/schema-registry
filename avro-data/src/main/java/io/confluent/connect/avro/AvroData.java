@@ -1558,8 +1558,7 @@ public class AvroData {
               }
             }
             if (converted == null) {
-              throw new DataException(
-                  "Did not find matching union field for data");
+              throw new DataException("Did not find matching union field for data");
             }
           } else if (value instanceof Map) {
             // Default values from Avro are returned as Map
