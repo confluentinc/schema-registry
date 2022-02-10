@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.protobuf;
 
 import java.util.List;
-import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -35,20 +34,20 @@ public class ProtobufSchemaProvider extends AbstractSchemaProvider {
   }
 
   @Override
-  public Optional<ParsedSchema> parseSchema(String schemaString,
-                                            List<SchemaReference> references,
-                                            boolean isNew) {
+  public ParsedSchema parseSchemaOrElseThrow(String schemaString,
+                                             List<SchemaReference> references,
+                                             boolean isNew) {
     try {
-      return Optional.of(new ProtobufSchema(
-          schemaString,
-          references,
-          resolveReferences(references),
-          null,
-          null
-      ));
+      return new ProtobufSchema(
+              schemaString,
+              references,
+              resolveReferences(references),
+              null,
+              null
+      );
     } catch (Exception e) {
       log.error("Could not parse Protobuf schema", e);
-      return Optional.empty();
+      throw e;
     }
   }
 }

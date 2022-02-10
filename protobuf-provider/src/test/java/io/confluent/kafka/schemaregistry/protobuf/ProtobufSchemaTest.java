@@ -24,6 +24,8 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
@@ -35,6 +37,7 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.protobuf.diff.ResourceLoader;
@@ -42,6 +45,7 @@ import io.confluent.kafka.schemaregistry.protobuf.diff.ResourceLoader;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.PROTO3;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -169,6 +173,18 @@ public class ProtobufSchemaTest {
 
   private static final ProtobufSchema enumBeforeMessageSchema =
       new ProtobufSchema(enumBeforeMessageSchemaString);
+
+  private static final String invalidSchemaString = "syntax = \"proto3\";\n"
+      + "\n"
+      + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+      + "option java_outer_classname = \"TestMessageProtos\";\n"
+      + "\n"
+      + "import \"google/protobuf/descriptor.proto\";\n"
+      + "\n"
+      + "message TestMessage {\n"
+      + "    string test_string = 1 [json_name = \"test_str\"];\n"
+      + "    int32 test_int32 = 8.01;\n"
+      + "}\n";
 
   @Test
   public void testRecordToProtobuf() throws Exception {
@@ -966,6 +982,33 @@ public class ProtobufSchemaTest {
     assertEquals(enumAfterMessageSchemaString, enumBeforeMessageSchema.canonicalString());
     assertEquals(enumAfterMessageSchemaString,
         new ProtobufSchema(enumBeforeMessageSchema.toDescriptor()).canonicalString());
+  }
+
+  @Test
+  public void testParseSchema() {
+    SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
+    ParsedSchema parsedSchema = protobufSchemaProvider.parseSchemaOrElseThrow(recordSchemaString,
+            new ArrayList<>(), false);
+    Optional<ParsedSchema> parsedSchemaOptional = protobufSchemaProvider.parseSchema(recordSchemaString,
+            new ArrayList<>(), false);
+
+    assertNotNull(parsedSchema);
+    assertTrue(parsedSchemaOptional.isPresent());
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testParseSchemaThrowException() {
+    SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
+    protobufSchemaProvider.parseSchemaOrElseThrow(invalidSchemaString,
+            new ArrayList<>(), false);
+  }
+
+  @Test
+  public void testParseSchemaSuppressException() {
+    SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
+    Optional<ParsedSchema> parsedSchema = protobufSchemaProvider.parseSchema(invalidSchemaString,
+            new ArrayList<>(), false);
+    assertFalse(parsedSchema.isPresent());
   }
 
   private static JsonNode jsonTree(String jsonData) {

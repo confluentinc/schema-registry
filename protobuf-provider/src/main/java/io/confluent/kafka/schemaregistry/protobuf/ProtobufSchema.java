@@ -459,7 +459,7 @@ public class ProtobufSchema implements ParsedSchema {
         byte[] bytes = base64Decoder.decode(schema);
         return toProtoFile(FileDescriptorProto.parseFrom(bytes));
       } catch (Exception pe) {
-        throw new IllegalArgumentException("Could not parse Protobuf", e);
+        throw new IllegalArgumentException("Could not parse Protobuf - " + e.getMessage(), e);
       }
     }
   }

@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionExcep
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import org.apache.avro.Schema.Parser;
+import org.apache.avro.SchemaParseException;
 import org.junit.Test;
 
 import java.util.*;
@@ -177,6 +178,57 @@ public class RestApiTest extends ClusterTestHarness {
       fail("Registering schema with invalid default should fail with "
           + Errors.INVALID_SCHEMA_ERROR_CODE
           + " (invalid schema)");
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+  }
+
+  @Test
+  public void testRegisterInvalidSchemaBadType() throws Exception {
+    String subject = "testSubject";
+
+    //Invalid Field Type 'str'
+    String badSchemaString = "{\"type\":\"record\","
+            + "\"name\":\"myrecord\","
+            + "\"fields\":"
+            + "[{\"type\":\"str\",\"name\":\"field1\"}]}";
+
+    String expectedErrorMessage = null;
+    try {
+        new Parser().parse(badSchemaString);
+        fail("Parsing invalid schema string should fail with SchemaParseException");
+    } catch (SchemaParseException spe) {
+        expectedErrorMessage = spe.getMessage();
+    }
+
+    try {
+        restApp.restClient.registerSchema(badSchemaString, subject);
+        fail("Registering schema with invalid field type should fail with "
+                + Errors.INVALID_SCHEMA_ERROR_CODE
+                + " (invalid schema)");
+    } catch (RestClientException rce) {
+        assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+        assertTrue("Verify error message verbosity", rce.getMessage().contains(expectedErrorMessage));
+    }
+  }
+
+  @Test
+  public void testRegisterInvalidSchemaBadReference() throws Exception {
+    String subject = "testSubject";
+
+    //Invalid Reference
+    SchemaReference invalidReference = new SchemaReference("invalid.schema", "badSubject", 1);
+    String schemaString = "{\"type\":\"record\","
+            + "\"name\":\"myrecord\","
+            + "\"fields\":"
+            + "[{\"type\":\"string\",\"name\":\"field1\"}]}";
+
+    try {
+      restApp.restClient.registerSchema(schemaString, "AVRO",
+              Collections.singletonList(invalidReference), subject);
+      fail("Registering schema with invalid reference should fail with "
+              + Errors.INVALID_SCHEMA_ERROR_CODE
+              + " (invalid schema)");
     } catch (RestClientException rce) {
       assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
     }
