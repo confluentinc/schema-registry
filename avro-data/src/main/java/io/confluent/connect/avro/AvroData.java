@@ -1558,8 +1558,9 @@ public class AvroData {
               }
             }
             if (converted == null) {
+              log.trace("Did not find matching union field for data: " + value.toString());
               throw new DataException(
-                  "Did not find matching union field for data: " + value.toString());
+                  "Did not find matching union field for data: <enable log.trace to see>");
             }
           } else if (value instanceof Map) {
             // Default values from Avro are returned as Map
@@ -2068,7 +2069,9 @@ public class AvroData {
 
       case ARRAY: {
         if (!jsonValue.isArray()) {
-          throw new DataException("Invalid JSON for array default value: " + jsonValue.toString());
+          log.trace("Invalid JSON for array default value: " + jsonValue.toString());
+          throw new DataException(
+              "Invalid JSON for array default value: <enable log.trace to see>");
         }
         List<Object> result = new ArrayList<>(jsonValue.size());
         for (JsonNode elem : jsonValue) {
@@ -2081,7 +2084,8 @@ public class AvroData {
 
       case MAP: {
         if (!jsonValue.isObject()) {
-          throw new DataException("Invalid JSON for map default value: " + jsonValue.toString());
+          log.trace("Invalid JSON for map default value: " + jsonValue.toString());
+          throw new DataException("Invalid JSON for map default value: <enable log.trace to see>");
         }
         Map<String, Object> result = new HashMap<>(jsonValue.size());
         Iterator<Map.Entry<String, JsonNode>> fieldIt = jsonValue.fields();
@@ -2096,7 +2100,9 @@ public class AvroData {
 
       case RECORD: {
         if (!jsonValue.isObject()) {
-          throw new DataException("Invalid JSON for record default value: " + jsonValue.toString());
+          log.trace("Invalid JSON for record default value: " + jsonValue.toString());
+          throw new DataException(
+              "Invalid JSON for record default value: <enable log.trace to see>");
         }
 
         Struct result = new Struct(schema);

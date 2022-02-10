@@ -200,7 +200,7 @@ public class JsonSchemaData {
               toConnectData(matchingField.schema(), value)
           );
         }
-        throw new DataException("Did not find matching oneof field for data: " + value.toString());
+        throw new DataException("Did not find matching oneof field");
       } else {
         if (!value.isObject()) {
           throw new DataException("Structs should be encoded as JSON objects, but found "
@@ -531,7 +531,7 @@ public class JsonSchemaData {
           break;
       }
 
-      throw new DataException("Couldn't convert " + value + " to JSON.");
+      throw new DataException("Couldn't convert value to JSON.");
     } catch (ClassCastException e) {
       String schemaTypeStr = (schema != null) ? schema.type().toString() : "unknown schema";
       throw new DataException("Invalid type for " + schemaTypeStr + ": " + value.getClass());
