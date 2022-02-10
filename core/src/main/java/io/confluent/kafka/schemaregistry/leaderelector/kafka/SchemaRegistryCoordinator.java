@@ -211,11 +211,16 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   }
 
   @Override
-  protected void onJoinPrepare(int generation, String memberId) {
+  protected boolean onJoinPrepare(int generation, String memberId) {
     log.debug("Revoking previous assignment {}", assignmentSnapshot);
     if (assignmentSnapshot != null) {
       listener.onRevoked();
     }
+    // return true if the cleanup succeeds or if it fails with a non-retriable exception.
+    // return false otherwise.
+    // listener.onRevoked() called above removes this instance as the leader
+    // and even if we got an exception, it wouldn't help retrying.
+    return true;
   }
 
   @Override
