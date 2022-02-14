@@ -87,7 +87,7 @@ public class ModeResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Update Request", required = true)
       @NotNull ModeUpdateRequest request,
-      @Parameter(description = "Whether to force update if setting mode to IMPORT and schemas currently exist under the specified subject")
+      @Parameter(description = "Whether to force update if setting mode to IMPORT and schemas currently exist")
       @QueryParam("force") boolean force
   ) {
 
