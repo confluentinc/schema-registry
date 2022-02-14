@@ -101,7 +101,7 @@ public class CompatibilityResource {
              + "under the specified subject", required = true) @PathParam("version") String version,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request,
-      @QueryParam("verbose") boolean verbose) {
+      @Parameter(description = "Whether to return detailed error messages.") @QueryParam("verbose") boolean verbose) {
     log.info("Testing schema subject {} compatibility between existing version {} and "
              + "specified version {}, id {}, type {}",
              subject, version, request.getVersion(), request.getId(), request.getSchemaType());
@@ -189,7 +189,7 @@ public class CompatibilityResource {
           required = true) @PathParam("subject") String subject,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request,
-      @QueryParam("verbose") boolean verbose) {
+      @Parameter(description = "Whether to return detailed error messages.") @QueryParam("verbose") boolean verbose) {
     log.info("Testing schema subject {} compatibility with specified version {}, id {}, type {}",
         subject, request.getVersion(), request.getId(), request.getSchemaType());
 

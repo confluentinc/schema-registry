@@ -122,7 +122,8 @@ public class ConfigResource {
           + "data store")
   })
   public Config getSubjectLevelConfig(
-      @PathParam("subject") String subject,
+      @Parameter(description = "Name of the Subject", required = true) @PathParam("subject") String subject,
+      @Parameter(description = "Whether to return the global compatibility level if subject specific compatibility level not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -209,7 +210,7 @@ public class ConfigResource {
   public void deleteSubjectConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @Parameter(description = "the name of the subject", required = true)
+      @Parameter(description = "Name of the Subject", required = true)
       @PathParam("subject") String subject) {
     log.info("Deleting compatibility setting for subject {}", subject);
 
