@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -88,8 +87,6 @@ public class CompatibilityResource {
   @PerformanceMetric("compatibility.subjects.versions.verify")
   public void testCompatibilityBySubjectName(
       final @Suspended AsyncResponse asyncResponse,
-      final @HeaderParam("Content-Type") String contentType,
-      final @HeaderParam("Accept") String accept,
       @ApiParam(value = "Subject of the schema version against which compatibility is to be tested",
           required = true)@PathParam("subject") String subject,
       @ApiParam(value = "Version of the subject's schema against which compatibility is to be "
@@ -175,8 +172,6 @@ public class CompatibilityResource {
   @PerformanceMetric("compatibility.subjects.versions.verify")
   public void testCompatibilityForSubject(
       final @Suspended AsyncResponse asyncResponse,
-      final @HeaderParam("Content-Type") String contentType,
-      final @HeaderParam("Accept") String accept,
       @ApiParam(value = "Subject of the schema version against which compatibility is to be tested",
           required = true) @PathParam("subject") String subject,
       @ApiParam(value = "Schema", required = true)
