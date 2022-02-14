@@ -99,10 +99,11 @@ public class SubjectVersionsResource {
               + "backend data store")
       })
   public Schema getSchemaByVersion(
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version,
+      @Parameter(description = "Whether to include deleted schema")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -153,10 +154,11 @@ public class SubjectVersionsResource {
               + "backend data store")
       })
   public String getSchemaOnly(
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version,
+      @Parameter(description = "Whether to include deleted schema")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
     return getSchemaByVersion(subject, version, lookupDeletedSchema).getSchema();
   }
@@ -171,7 +173,7 @@ public class SubjectVersionsResource {
           description = "Error code 50001 -- Error in the backend data store"
       )})
   public List<Integer> getReferencedBy(
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version) {
@@ -211,8 +213,9 @@ public class SubjectVersionsResource {
           @ApiResponse(responseCode = "500", description =
               "Error code 50001 -- Error in the backend data store")})
   public List<Integer> listVersions(
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
+      @Parameter(description = "Whether to include deleted schemas")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -280,8 +283,9 @@ public class SubjectVersionsResource {
   public void register(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subjectName,
+      @Parameter(description = "Whether to register the normalized schema")
       @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
@@ -356,10 +360,11 @@ public class SubjectVersionsResource {
   public void deleteSchemaVersion(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version,
+      @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
     log.info("Deleting schema version {} from subject {}", version, subject);
 

@@ -87,7 +87,9 @@ public class SubjectsResource {
       final @Suspended AsyncResponse asyncResponse,
       @Parameter(description = "Subject under which the schema will be registered", required = true)
       @PathParam("subject") String subject,
+      @Parameter(description = "Whether to lookup the normalized schema")
       @QueryParam("normalize") boolean normalize,
+      @Parameter(description = "Whether to lookup deleted schemas")
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
@@ -161,8 +163,9 @@ public class SubjectsResource {
   public void deleteSubject(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @Parameter(description = "the name of the subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
+      @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
     log.info("Deleting subject {}", subject);
 
