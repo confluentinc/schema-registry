@@ -69,7 +69,8 @@ public class SchemasResource {
       @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
       @Parameter(description = "Whether to return soft deleted schemas")
       @DefaultValue("false") @QueryParam("deleted") boolean lookupDeletedSchema,
-      @Parameter(description = "Whether to return latest schema versions only for each matching subject")
+      @Parameter(description =
+          "Whether to return latest schema versions only for each matching subject")
       @DefaultValue("false") @QueryParam("latestOnly") boolean latestOnly,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
