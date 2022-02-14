@@ -123,7 +123,7 @@ public class ConfigResource {
   })
   public Config getSubjectLevelConfig(
       @Parameter(description = "Name of the Subject", required = true) @PathParam("subject") String subject,
-      @Parameter(description = "Whether to return the global compatibility level if subject specific compatibility level not found")
+      @Parameter(description = "Whether to return the global compatibility level if subject compatibility level not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
