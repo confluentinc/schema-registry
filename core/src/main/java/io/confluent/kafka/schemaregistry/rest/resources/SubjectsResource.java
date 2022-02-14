@@ -163,7 +163,7 @@ public class SubjectsResource {
   public void deleteSubject(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {

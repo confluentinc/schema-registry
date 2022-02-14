@@ -110,11 +110,11 @@ public class SchemasResource {
   public SchemaString getSchema(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
-      @Parameter(description = "Name of the Subject")
+      @Parameter(description = "Name of the subject")
       @QueryParam("subject") String subject,
       @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
-      @Parameter(description = "Whether to fetch the maximum schema identifier generated")
+      @Parameter(description = "Whether to fetch the maximum schema identifier that exists")
       @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
     SchemaString schema;
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
