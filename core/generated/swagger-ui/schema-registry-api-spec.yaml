@@ -229,14 +229,14 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
       - name: defaultToGlobal
         in: query
-        description: Whether to return the global compatibility level if subject specific
-          compatibility level not found
+        description: Whether to return the global compatibility level if subject compatibility
+          level not found
         schema:
           type: boolean
       responses:
@@ -250,7 +250,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -286,7 +286,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -351,7 +351,7 @@ paths:
       - name: force
         in: query
         description: Whether to force update if setting mode to IMPORT and schemas
-          currently exist under any subject
+          currently exist
         schema:
           type: boolean
       requestBody:
@@ -387,14 +387,13 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
       - name: defaultToGlobal
         in: query
-        description: Whether to return the global mode if subject specific mode not
-          found
+        description: Whether to return the global mode if subject mode not found
         schema:
           type: boolean
       responses:
@@ -408,14 +407,14 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
       - name: force
         in: query
         description: Whether to force update if setting mode to IMPORT and schemas
-          currently exist under the specified subject
+          currently exist
         schema:
           type: boolean
       requestBody:
@@ -450,7 +449,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -541,7 +540,7 @@ paths:
           format: int32
       - name: subject
         in: query
-        description: Name of the Subject
+        description: Name of the subject
         schema:
           type: string
       - name: format
@@ -552,7 +551,7 @@ paths:
           default: ""
       - name: fetchMaxId
         in: query
-        description: Whether to fetch the maximum schema identifier generated
+        description: Whether to fetch the maximum schema identifier that exists
         schema:
           type: boolean
           default: false
@@ -711,7 +710,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -752,7 +751,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -786,7 +785,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -839,7 +838,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -878,7 +877,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -927,7 +926,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -958,7 +957,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string

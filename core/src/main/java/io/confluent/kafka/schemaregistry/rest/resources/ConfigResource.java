@@ -80,7 +80,7 @@ public class ConfigResource {
               + "Error code 50003 -- Error while forwarding the request to the primary")
   })
   public ConfigUpdateRequest updateSubjectLevelConfig(
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)

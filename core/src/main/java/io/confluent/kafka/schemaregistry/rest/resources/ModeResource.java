@@ -82,7 +82,7 @@ public class ModeResource {
   })
 
   public ModeUpdateRequest updateMode(
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Context HttpHeaders headers,
       @Parameter(description = "Update Request", required = true)
@@ -129,7 +129,7 @@ public class ModeResource {
           description = "Error code 50001 -- Error in the backend data store")
   })
   public Mode getMode(
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = "Whether to return the global mode if subject mode not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
