@@ -210,7 +210,7 @@ public class ConfigResource {
   public void deleteSubjectConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.info("Deleting compatibility setting for subject {}", subject);
 
