@@ -65,10 +65,15 @@ public class SchemasResource {
   })
   @PerformanceMetric("schemas.get-schemas")
   public List<Schema> getSchemas(
+      @Parameter(description = "Filters results by the respective subject prefix")
       @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
+      @Parameter(description = "Whether to return soft deleted schemas")
       @DefaultValue("false") @QueryParam("deleted") boolean lookupDeletedSchema,
+      @Parameter(description = "Whether to return latest schema versions only for each matching subject")
       @DefaultValue("false") @QueryParam("latestOnly") boolean latestOnly,
+      @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
     Iterator<Schema> schemas;
     List<Schema> filteredSchemas = new ArrayList<>();
@@ -105,8 +110,11 @@ public class SchemasResource {
   public SchemaString getSchema(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
+      @Parameter(description = "Name of the Subject")
       @QueryParam("subject") String subject,
+      @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Whether to fetch the maximum schema identifier generated")
       @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
     SchemaString schema;
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
@@ -135,7 +143,9 @@ public class SchemasResource {
   public Set<String> getSubjects(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
+      @Parameter(description = "Filters results by the respective subject")
       @QueryParam("subject") String subject,
+      @Parameter(description = "Whether to include subjects where the schema was deleted")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
     Set<String> subjects;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
@@ -169,7 +179,9 @@ public class SchemasResource {
   public List<SubjectVersion> getVersions(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
+      @Parameter(description = "Filters results by the respective subject")
       @QueryParam("subject") String subject,
+      @Parameter(description = "Whether to include subject versions where the schema was deleted")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
     List<SubjectVersion> versions;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
