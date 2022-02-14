@@ -131,7 +131,7 @@ public class ModeResource {
   public Mode getMode(
       @Parameter(description = "Name of the Subject", required = true)
       @PathParam("subject") String subject,
-      @Parameter(description = "Whether to return the global mode if subject specific mode not found")
+      @Parameter(description = "Whether to return the global mode if subject mode not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
