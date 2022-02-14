@@ -85,6 +85,7 @@ public class ModeResource {
       @PathParam("subject") String subject,
       @Context HttpHeaders headers,
       @ApiParam(value = "Update Request", required = true) @NotNull ModeUpdateRequest request,
+      @ApiParam(value = "Whether to force update if setting mode to IMPORT and schemas currently exist under the specified subject")
       @QueryParam("force") boolean force
   ) {
 
@@ -127,6 +128,7 @@ public class ModeResource {
   public Mode getMode(
       @ApiParam(value = "Name of the Subject", required = true)
       @PathParam("subject") String subject,
+      @ApiParam(value = "Whether to return the global mode if subject specific mode not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -156,6 +158,7 @@ public class ModeResource {
   public ModeUpdateRequest updateTopLevelMode(
       @Context HttpHeaders headers,
       @ApiParam(value = "Update Request", required = true) @NotNull ModeUpdateRequest request,
+      @ApiParam(value = "Whether to force update if setting mode to IMPORT and schemas currently exist under any subject")
       @QueryParam("force") boolean force) {
     return updateMode(null, headers, request, force);
   }

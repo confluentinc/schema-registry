@@ -121,7 +121,7 @@ public class ConfigResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
   public Config getSubjectLevelConfig(
       @ApiParam(value = "Name of the Subject", required = true) @PathParam("subject") String subject,
-      @ApiParam(value = "Whether to return the global compatibility level if subject specific config not found")
+      @ApiParam(value = "Whether to return the global compatibility level if subject specific compatibility level not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
