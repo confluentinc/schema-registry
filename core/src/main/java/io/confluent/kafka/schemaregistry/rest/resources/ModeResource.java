@@ -179,7 +179,7 @@ public class ModeResource {
   public void deleteSubjectMode(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @ApiParam(value = "the name of the subject", required = true)
+      @ApiParam(value = "Name of the Subject", required = true)
       @PathParam("subject") String subject) {
     log.info("Deleting mode for subject {}", subject);
 

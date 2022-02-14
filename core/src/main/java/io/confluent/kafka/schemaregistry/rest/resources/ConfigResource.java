@@ -120,7 +120,8 @@ public class ConfigResource {
       @ApiResponse(code = 404, message = "Subject not found"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
   public Config getSubjectLevelConfig(
-      @PathParam("subject") String subject,
+      @ApiParam(value = "Name of the Subject", required = true) @PathParam("subject") String subject,
+      @ApiParam(value = "Whether to return the global compatibility level if subject specific config not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -204,7 +205,7 @@ public class ConfigResource {
   public void deleteSubjectConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @ApiParam(value = "the name of the subject", required = true)
+      @ApiParam(value = "Name of the Subject", required = true)
       @PathParam("subject") String subject) {
     log.info("Deleting compatibility setting for subject {}", subject);
 
