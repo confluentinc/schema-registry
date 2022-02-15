@@ -25,6 +25,7 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@io.swagger.v3.oas.annotations.media.Schema(description = "Subject version pair")
 public class SubjectVersion implements Comparable<SubjectVersion> {
 
   private String subject;
