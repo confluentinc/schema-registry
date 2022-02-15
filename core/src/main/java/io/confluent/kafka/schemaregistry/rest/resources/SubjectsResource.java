@@ -136,7 +136,7 @@ public class SubjectsResource {
       @DefaultValue(QualifiedSubject.CONTEXT_WILDCARD)
       @Parameter(description = "Subject name prefix")
       @QueryParam("subjectPrefix") String subjectPrefix,
-      @Parameter(description = "Whether to lookup deleted subjects")
+      @Parameter(description = "Whether to look up deleted subjects")
       @QueryParam("deleted") boolean lookupDeletedSubjects
   ) {
     try {
