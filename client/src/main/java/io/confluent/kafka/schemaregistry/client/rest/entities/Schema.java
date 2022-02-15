@@ -29,13 +29,27 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@io.swagger.v3.oas.annotations.media.Schema(description = "Schema")
 public class Schema implements Comparable<Schema> {
 
+  public static final String SUBJECT_DESC = "Name of the subject";
+  public static final String VERSION_DESC = "Version number";
+  public static final String ID_DESC = "Globally unique identifier of the schema";
+  public static final String TYPE_DESC = "Schema type";
+  public static final String REFERENCES_DESC = "References to other schemas";
+  public static final String SCHEMA_DESC = "Schema definition string";
+
+  @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC)
   private String subject;
+  @io.swagger.v3.oas.annotations.media.Schema(description = VERSION_DESC)
   private Integer version;
+  @io.swagger.v3.oas.annotations.media.Schema(description = ID_DESC)
   private Integer id;
+  @io.swagger.v3.oas.annotations.media.Schema(description = TYPE_DESC)
   private String schemaType;
+  @io.swagger.v3.oas.annotations.media.Schema(description = REFERENCES_DESC)
   private List<SchemaReference> references;
+  @io.swagger.v3.oas.annotations.media.Schema(description = SCHEMA_DESC)
   private String schema;
 
   @JsonCreator

@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Objects;
 
@@ -27,8 +28,11 @@ import java.util.Objects;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SchemaReference implements Comparable<SchemaReference> {
 
+  @Schema(description = "The reference name")
   private String name;
+  @Schema(description = "The name of the referenced subject")
   private String subject;
+  @Schema(description = "The version number of the referenced subject")
   private Integer version;
 
   @JsonCreator

@@ -22,13 +22,19 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.io.IOException;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = "Mode update request")
 public class ModeUpdateRequest {
 
+  @Schema(description = Mode.MODE_DESC,
+          allowableValues = "READWRITE, READONLY, READONLY_OVERRIDE, IMPORT")
   private String mode;
 
   public static ModeUpdateRequest fromJson(String json) throws IOException {

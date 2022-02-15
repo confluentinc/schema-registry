@@ -23,15 +23,19 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.IOException;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = "Compatibility check response")
 public class CompatibilityCheckResponse {
 
+  @Schema(description = "Whether the compared schemas are compatible")
   private boolean isCompatible;
+  @Schema(description = "Error messages")
   private List<String> messages = null;
 
   public static CompatibilityCheckResponse fromJson(String json) throws IOException {

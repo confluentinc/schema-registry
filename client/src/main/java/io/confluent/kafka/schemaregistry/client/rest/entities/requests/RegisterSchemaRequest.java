@@ -25,18 +25,26 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
+
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@io.swagger.v3.oas.annotations.media.Schema(description = "Schema register request")
 public class RegisterSchemaRequest {
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.VERSION_DESC)
   private Integer version;
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.ID_DESC)
   private Integer id;
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC)
   private String schemaType;
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.REFERENCES_DESC)
   private List<SchemaReference> references = null;
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.SCHEMA_DESC)
   private String schema;
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
