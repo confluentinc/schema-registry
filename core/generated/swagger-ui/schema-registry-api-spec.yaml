@@ -13,14 +13,6 @@ paths:
         \ compatibility level applies (http:get:: /config)."
       operationId: testCompatibilityBySubjectName
       parameters:
-      - name: Content-Type
-        in: header
-        schema:
-          type: string
-      - name: Accept
-        in: header
-        schema:
-          type: string
       - name: subject
         in: path
         description: Subject of the schema version against which compatibility is
@@ -39,6 +31,7 @@ paths:
           type: string
       - name: verbose
         in: query
+        description: Whether to return detailed error messages
         schema:
           type: boolean
       requestBody:
@@ -150,14 +143,6 @@ paths:
         \ compatibility level applies (http:get:: /config)."
       operationId: testCompatibilityForSubject
       parameters:
-      - name: Content-Type
-        in: header
-        schema:
-          type: string
-      - name: Accept
-        in: header
-        schema:
-          type: string
       - name: subject
         in: path
         description: Subject of the schema version against which compatibility is
@@ -167,6 +152,7 @@ paths:
           type: string
       - name: verbose
         in: query
+        description: Whether to return detailed error messages
         schema:
           type: boolean
       requestBody:
@@ -272,11 +258,14 @@ paths:
       parameters:
       - name: subject
         in: path
+        description: Name of the subject
         required: true
         schema:
           type: string
       - name: defaultToGlobal
         in: query
+        description: Whether to return the global compatibility level if subject compatibility
+          level not found
         schema:
           type: boolean
       responses:
@@ -290,7 +279,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -326,7 +315,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: the name of the subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -390,6 +379,8 @@ paths:
       parameters:
       - name: force
         in: query
+        description: Whether to force update if setting mode to IMPORT and schemas
+          currently exist
         schema:
           type: boolean
       requestBody:
@@ -425,12 +416,13 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
       - name: defaultToGlobal
         in: query
+        description: Whether to return the global mode if subject mode not found
         schema:
           type: boolean
       responses:
@@ -444,12 +436,14 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
       - name: force
         in: query
+        description: Whether to force update if setting mode to IMPORT and schemas
+          currently exist
         schema:
           type: boolean
       requestBody:
@@ -484,7 +478,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: the name of the subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -526,27 +520,33 @@ paths:
       parameters:
       - name: subjectPrefix
         in: query
+        description: Filters results by the respective subject prefix
         schema:
           type: string
           default: ""
       - name: deleted
         in: query
+        description: Whether to return soft deleted schemas
         schema:
           type: boolean
           default: false
       - name: latestOnly
         in: query
+        description: Whether to return latest schema versions only for each matching
+          subject
         schema:
           type: boolean
           default: false
       - name: offset
         in: query
+        description: Pagination offset for results
         schema:
           type: integer
           format: int32
           default: 0
       - name: limit
         in: query
+        description: Pagination size for results. Ignored if negative
         schema:
           type: integer
           format: int32
@@ -569,15 +569,18 @@ paths:
           format: int32
       - name: subject
         in: query
+        description: Name of the subject
         schema:
           type: string
       - name: format
         in: query
+        description: "Desired output format, dependent on schema type"
         schema:
           type: string
           default: ""
       - name: fetchMaxId
         in: query
+        description: Whether to fetch the maximum schema identifier that exists
         schema:
           type: boolean
           default: false
@@ -602,10 +605,12 @@ paths:
           format: int32
       - name: subject
         in: query
+        description: Filters results by the respective subject
         schema:
           type: string
       - name: deleted
         in: query
+        description: Whether to include subjects where the schema was deleted
         schema:
           type: boolean
       responses:
@@ -629,10 +634,12 @@ paths:
           format: int32
       - name: subject
         in: query
+        description: Filters results by the respective subject
         schema:
           type: string
       - name: deleted
         in: query
+        description: Whether to include subject versions where the schema was deleted
         schema:
           type: boolean
       responses:
@@ -659,7 +666,7 @@ paths:
         in: query
         schema:
           type: string
-          default: ""
+          default: ':*:'
       - name: deleted
         in: query
         schema:
@@ -682,10 +689,12 @@ paths:
           type: string
       - name: normalize
         in: query
+        description: Whether to lookup the normalized schema
         schema:
           type: boolean
       - name: deleted
         in: query
+        description: Whether to lookup deleted schemas
         schema:
           type: boolean
       requestBody:
@@ -730,12 +739,13 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: the name of the subject
+        description: Name of the subject
         required: true
         schema:
           type: string
       - name: permanent
         in: query
+        description: Whether to perform a permanent delete
         schema:
           type: boolean
       responses:
@@ -770,12 +780,13 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
       - name: deleted
         in: query
+        description: Whether to include deleted schemas
         schema:
           type: boolean
       responses:
@@ -803,12 +814,13 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
       - name: normalize
         in: query
+        description: Whether to register the normalized schema
         schema:
           type: boolean
       requestBody:
@@ -855,7 +867,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -871,6 +883,7 @@ paths:
           type: string
       - name: deleted
         in: query
+        description: Whether to include deleted schema
         schema:
           type: boolean
       responses:
@@ -893,7 +906,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -909,6 +922,7 @@ paths:
           type: string
       - name: permanent
         in: query
+        description: Whether to perform a permanent delete
         schema:
           type: boolean
       responses:
@@ -941,7 +955,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -972,7 +986,7 @@ paths:
       parameters:
       - name: subject
         in: path
-        description: Name of the Subject
+        description: Name of the subject
         required: true
         schema:
           type: string
@@ -988,6 +1002,7 @@ paths:
           type: string
       - name: deleted
         in: query
+        description: Whether to include deleted schema
         schema:
           type: boolean
       responses:
