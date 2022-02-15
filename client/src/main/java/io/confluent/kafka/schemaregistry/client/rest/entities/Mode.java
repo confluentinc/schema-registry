@@ -24,7 +24,6 @@ import java.io.IOException;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
-import org.graalvm.compiler.phases.common.NodeCounterPhase_OptionDescriptors;
 
 import java.util.Objects;
 
