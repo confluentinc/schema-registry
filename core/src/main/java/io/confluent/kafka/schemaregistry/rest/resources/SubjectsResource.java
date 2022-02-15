@@ -134,7 +134,9 @@ public class SubjectsResource {
   @PerformanceMetric("subjects.list")
   public Set<String> list(
       @DefaultValue(QualifiedSubject.CONTEXT_WILDCARD)
+      @Parameter(description = "Subject name prefix")
       @QueryParam("subjectPrefix") String subjectPrefix,
+      @Parameter(description = "Whether to look up deleted subjects")
       @QueryParam("deleted") boolean lookupDeletedSubjects
   ) {
     try {

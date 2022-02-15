@@ -22,11 +22,15 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.io.IOException;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = "Mode update request")
 public class ModeUpdateRequest {
 
   private String mode;
@@ -35,6 +39,8 @@ public class ModeUpdateRequest {
     return JacksonMapper.INSTANCE.readValue(json, ModeUpdateRequest.class);
   }
 
+  @Schema(description = Mode.MODE_DESC,
+          allowableValues = "READWRITE, READONLY, READONLY_OVERRIDE, IMPORT")
   @JsonProperty("mode")
   public String getMode() {
     return this.mode;

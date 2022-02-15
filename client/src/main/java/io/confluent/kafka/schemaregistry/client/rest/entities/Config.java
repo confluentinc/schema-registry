@@ -23,6 +23,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = "Config")
 public class Config {
 
   private String compatibilityLevel;
@@ -35,7 +36,7 @@ public class Config {
     compatibilityLevel = null;
   }
 
-  @Schema(description = "Compatability Level",
+  @Schema(description = "Compatibility Level",
       allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
           + "FULL_TRANSITIVE, NONE")
   @JsonProperty("compatibilityLevel")
