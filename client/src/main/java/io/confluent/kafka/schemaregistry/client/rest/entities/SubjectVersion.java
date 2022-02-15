@@ -49,7 +49,6 @@ public class SubjectVersion implements Comparable<SubjectVersion> {
     this.subject = subject;
   }
 
-
   @io.swagger.v3.oas.annotations.media.Schema(description = Schema.VERSION_DESC)
   @JsonProperty("version")
   public Integer getVersion() {
