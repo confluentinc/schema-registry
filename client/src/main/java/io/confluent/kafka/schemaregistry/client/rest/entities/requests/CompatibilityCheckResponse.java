@@ -33,15 +33,14 @@ import java.util.Objects;
 @Schema(description = "Compatibility check response")
 public class CompatibilityCheckResponse {
 
-  @Schema(description = "Whether the compared schemas are compatible")
   private boolean isCompatible;
-  @Schema(description = "Error messages")
   private List<String> messages = null;
 
   public static CompatibilityCheckResponse fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, CompatibilityCheckResponse.class);
   }
 
+  @Schema(description = "Whether the compared schemas are compatible")
   @JsonProperty("is_compatible")
   public boolean getIsCompatible() {
     return isCompatible;
@@ -56,6 +55,7 @@ public class CompatibilityCheckResponse {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
+  @Schema(description = "Error messages")
   @JsonProperty("messages")
   public List<String> getMessages() {
     return messages;

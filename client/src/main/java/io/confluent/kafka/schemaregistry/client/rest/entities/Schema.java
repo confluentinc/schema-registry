@@ -39,17 +39,11 @@ public class Schema implements Comparable<Schema> {
   public static final String REFERENCES_DESC = "References to other schemas";
   public static final String SCHEMA_DESC = "Schema definition string";
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC)
   private String subject;
-  @io.swagger.v3.oas.annotations.media.Schema(description = VERSION_DESC)
   private Integer version;
-  @io.swagger.v3.oas.annotations.media.Schema(description = ID_DESC)
   private Integer id;
-  @io.swagger.v3.oas.annotations.media.Schema(description = TYPE_DESC)
   private String schemaType;
-  @io.swagger.v3.oas.annotations.media.Schema(description = REFERENCES_DESC)
   private List<SchemaReference> references;
-  @io.swagger.v3.oas.annotations.media.Schema(description = SCHEMA_DESC)
   private String schema;
 
   @JsonCreator
@@ -67,6 +61,7 @@ public class Schema implements Comparable<Schema> {
     this.schema = schema;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC)
   @JsonProperty("subject")
   public String getSubject() {
     return subject;
@@ -77,6 +72,7 @@ public class Schema implements Comparable<Schema> {
     this.subject = subject;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = VERSION_DESC)
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
@@ -87,6 +83,7 @@ public class Schema implements Comparable<Schema> {
     this.version = version;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = ID_DESC)
   @JsonProperty("id")
   public Integer getId() {
     return this.id;
@@ -97,6 +94,7 @@ public class Schema implements Comparable<Schema> {
     this.id = id;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = TYPE_DESC)
   @JsonProperty("schemaType")
   @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
@@ -108,6 +106,7 @@ public class Schema implements Comparable<Schema> {
     this.schemaType = schemaType;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = REFERENCES_DESC)
   @JsonProperty("references")
   public List<SchemaReference> getReferences() {
     return this.references;
@@ -118,6 +117,7 @@ public class Schema implements Comparable<Schema> {
     this.references = references;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = SCHEMA_DESC)
   @JsonProperty("schema")
   public String getSchema() {
     return this.schema;

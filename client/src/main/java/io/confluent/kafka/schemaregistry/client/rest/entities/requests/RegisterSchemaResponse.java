@@ -32,13 +32,13 @@ import java.util.Objects;
 @io.swagger.v3.oas.annotations.media.Schema(description = "Schema register response")
 public class RegisterSchemaResponse {
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.ID_DESC)
   private int id;
 
   public static RegisterSchemaResponse fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, RegisterSchemaResponse.class);
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.ID_DESC)
   @JsonProperty("id")
   public int getId() {
     return id;

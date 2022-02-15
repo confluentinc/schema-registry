@@ -30,15 +30,15 @@ import java.util.Objects;
 @Schema(description = "Config update request")
 public class ConfigUpdateRequest {
 
-  @Schema(description = "Compatibility Level",
-          allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
-                  + "FULL_TRANSITIVE, NONE")
   private String compatibilityLevel;
 
   public static ConfigUpdateRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, ConfigUpdateRequest.class);
   }
 
+  @Schema(description = "Compatibility Level",
+          allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
+                  + "FULL_TRANSITIVE, NONE")
   @JsonProperty("compatibility")
   public String getCompatibilityLevel() {
     return this.compatibilityLevel;

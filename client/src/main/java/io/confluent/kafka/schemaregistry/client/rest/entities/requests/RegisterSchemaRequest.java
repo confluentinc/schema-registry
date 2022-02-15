@@ -36,21 +36,17 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 @io.swagger.v3.oas.annotations.media.Schema(description = "Schema register request")
 public class RegisterSchemaRequest {
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.VERSION_DESC)
   private Integer version;
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.ID_DESC)
   private Integer id;
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC)
   private String schemaType;
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.REFERENCES_DESC)
   private List<SchemaReference> references = null;
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.SCHEMA_DESC)
   private String schema;
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, RegisterSchemaRequest.class);
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.VERSION_DESC)
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
@@ -61,6 +57,7 @@ public class RegisterSchemaRequest {
     this.version = version;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.ID_DESC)
   @JsonProperty("id")
   public Integer getId() {
     return this.id;
@@ -71,6 +68,7 @@ public class RegisterSchemaRequest {
     this.id = id;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC)
   @JsonProperty("schemaType")
   @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
@@ -82,6 +80,7 @@ public class RegisterSchemaRequest {
     this.schemaType = schemaType;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.REFERENCES_DESC)
   @JsonProperty("references")
   public List<SchemaReference> getReferences() {
     return this.references;
@@ -92,6 +91,7 @@ public class RegisterSchemaRequest {
     this.references = references;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.SCHEMA_DESC)
   @JsonProperty("schema")
   public String getSchema() {
     return this.schema;

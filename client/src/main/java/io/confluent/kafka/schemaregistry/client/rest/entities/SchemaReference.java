@@ -26,13 +26,11 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = "Schema reference")
 public class SchemaReference implements Comparable<SchemaReference> {
 
-  @Schema(description = "The reference name")
   private String name;
-  @Schema(description = "The name of the referenced subject")
   private String subject;
-  @Schema(description = "The version number of the referenced subject")
   private Integer version;
 
   @JsonCreator
@@ -44,6 +42,7 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.version = version;
   }
 
+  @Schema(description = "Reference name")
   @JsonProperty("name")
   public String getName() {
     return name;
@@ -54,6 +53,7 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.name = name;
   }
 
+  @Schema(description = "Name of the referenced subject")
   @JsonProperty("subject")
   public String getSubject() {
     return subject;
@@ -64,6 +64,7 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.subject = subject;
   }
 
+  @Schema(description = "Version number of the referenced subject")
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;

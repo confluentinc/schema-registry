@@ -26,9 +26,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Config")
 public class Config {
 
-  @Schema(description = "Compatibility Level",
-          allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
-                  + "FULL_TRANSITIVE, NONE")
   private String compatibilityLevel;
 
   public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel) {
@@ -39,6 +36,9 @@ public class Config {
     compatibilityLevel = null;
   }
 
+  @Schema(description = "Compatibility Level",
+          allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
+                  + "FULL_TRANSITIVE, NONE")
   @JsonProperty("compatibilityLevel")
   public String getCompatibilityLevel() {
     return compatibilityLevel;

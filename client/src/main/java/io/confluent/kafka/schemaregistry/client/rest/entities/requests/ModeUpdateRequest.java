@@ -33,14 +33,14 @@ import java.util.Objects;
 @Schema(description = "Mode update request")
 public class ModeUpdateRequest {
 
-  @Schema(description = Mode.MODE_DESC,
-          allowableValues = "READWRITE, READONLY, READONLY_OVERRIDE, IMPORT")
   private String mode;
 
   public static ModeUpdateRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, ModeUpdateRequest.class);
   }
 
+  @Schema(description = Mode.MODE_DESC,
+          allowableValues = "READWRITE, READONLY, READONLY_OVERRIDE, IMPORT")
   @JsonProperty("mode")
   public String getMode() {
     return this.mode;
