@@ -70,12 +70,22 @@ public class SslFactory {
   private final SSLContext sslContext;
   private final SecureRandom secureRandomImplementation;
   private String protocol;
+  private String keystoreType;
+  private String truststoreType;
 
 
   public SslFactory(Map<String, ?> configs) {
     this.protocol = (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
     if (this.protocol == null) {
       this.protocol = SslConfigs.DEFAULT_SSL_PROTOCOL;
+    }
+    this.keystoreType = (String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG);
+    if (this.keystoreType == null) {
+      this.keystoreType = SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE;
+    }
+    this.truststoreType = (String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG);
+    if (this.truststoreType == null) {
+      this.truststoreType = SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE;
     }
     this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
 
@@ -88,7 +98,8 @@ public class SslFactory {
         configs.get(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG));
 
     try {
-      this.keystore = createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
+      this.keystore = createKeystore(
+          keystoreType,
           (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
           passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG)),
           passwordOf(configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)),
@@ -96,7 +107,7 @@ public class SslFactory {
           passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)));
 
       this.truststore = createTruststore(
-          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
+          truststoreType,
           (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
           passwordOf(configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)),
           passwordOf(configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)));
@@ -249,9 +260,6 @@ public class SslFactory {
       if (password == null) {
         throw new InvalidConfigurationException(
             "SSL key store is specified, but key store password is not specified.");
-      } else if (isEmpty(type)) {
-        throw new InvalidConfigurationException(
-            "SSL key store is specified, but store type is null or empty");
       }
       return new FileBasedStore(type, path, password, keyPassword, true);
     } else {
