@@ -27,6 +27,7 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = "Config update request")
 public class ConfigUpdateRequest {
 
   private String compatibilityLevel;
@@ -35,7 +36,7 @@ public class ConfigUpdateRequest {
     return JacksonMapper.INSTANCE.readValue(json, ConfigUpdateRequest.class);
   }
 
-  @Schema(description = "Compatability Level",
+  @Schema(description = "Compatibility Level",
       allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
           + "FULL_TRANSITIVE, NONE")
   @JsonProperty("compatibility")

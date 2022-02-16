@@ -223,8 +223,8 @@ public final class NestedTestProto {
               break;
             }
             case 16: {
-              userIdCase_ = 2;
               userId_ = input.readInt32();
+              userIdCase_ = 2;
               break;
             }
             case 26: {
@@ -1293,7 +1293,7 @@ public final class NestedTestProto {
     @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      if (!getIdBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(id_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, id_);
       }
       unknownFields.writeTo(output);
@@ -1305,7 +1305,7 @@ public final class NestedTestProto {
       if (size != -1) return size;
 
       size = 0;
-      if (!getIdBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(id_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, id_);
       }
       size += unknownFields.getSerializedSize();
@@ -1801,8 +1801,8 @@ public final class NestedTestProto {
               break;
             }
             case 16: {
-              someValCase_ = 2;
               someVal_ = input.readInt32();
+              someValCase_ = 2;
               break;
             }
             case 24: {
@@ -3229,7 +3229,7 @@ public final class NestedTestProto {
       public void writeTo(com.google.protobuf.CodedOutputStream output)
                           throws java.io.IOException {
         getSerializedSize();
-        if (!getIdBytes().isEmpty()) {
+        if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(id_)) {
           com.google.protobuf.GeneratedMessageV3.writeString(output, 1, id_);
         }
         if (getIdsList().size() > 0) {
@@ -3248,7 +3248,7 @@ public final class NestedTestProto {
         if (size != -1) return size;
 
         size = 0;
-        if (!getIdBytes().isEmpty()) {
+        if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(id_)) {
           size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, id_);
         }
         {
@@ -3946,7 +3946,7 @@ public final class NestedTestProto {
     @java.lang.Override
     public boolean containsMapType(
         java.lang.String key) {
-      if (key == null) { throw new java.lang.NullPointerException(); }
+      if (key == null) { throw new NullPointerException("map key"); }
       return internalGetMapType().getMap().containsKey(key);
     }
     /**
@@ -3973,7 +3973,7 @@ public final class NestedTestProto {
     public java.lang.String getMapTypeOrDefault(
         java.lang.String key,
         java.lang.String defaultValue) {
-      if (key == null) { throw new java.lang.NullPointerException(); }
+      if (key == null) { throw new NullPointerException("map key"); }
       java.util.Map<java.lang.String, java.lang.String> map =
           internalGetMapType().getMap();
       return map.containsKey(key) ? map.get(key) : defaultValue;
@@ -3985,7 +3985,7 @@ public final class NestedTestProto {
 
     public java.lang.String getMapTypeOrThrow(
         java.lang.String key) {
-      if (key == null) { throw new java.lang.NullPointerException(); }
+      if (key == null) { throw new NullPointerException("map key"); }
       java.util.Map<java.lang.String, java.lang.String> map =
           internalGetMapType().getMap();
       if (!map.containsKey(key)) {
@@ -5133,7 +5133,7 @@ public final class NestedTestProto {
       @java.lang.Override
       public boolean containsMapType(
           java.lang.String key) {
-        if (key == null) { throw new java.lang.NullPointerException(); }
+        if (key == null) { throw new NullPointerException("map key"); }
         return internalGetMapType().getMap().containsKey(key);
       }
       /**
@@ -5160,7 +5160,7 @@ public final class NestedTestProto {
       public java.lang.String getMapTypeOrDefault(
           java.lang.String key,
           java.lang.String defaultValue) {
-        if (key == null) { throw new java.lang.NullPointerException(); }
+        if (key == null) { throw new NullPointerException("map key"); }
         java.util.Map<java.lang.String, java.lang.String> map =
             internalGetMapType().getMap();
         return map.containsKey(key) ? map.get(key) : defaultValue;
@@ -5172,7 +5172,7 @@ public final class NestedTestProto {
 
       public java.lang.String getMapTypeOrThrow(
           java.lang.String key) {
-        if (key == null) { throw new java.lang.NullPointerException(); }
+        if (key == null) { throw new NullPointerException("map key"); }
         java.util.Map<java.lang.String, java.lang.String> map =
             internalGetMapType().getMap();
         if (!map.containsKey(key)) {
@@ -5192,7 +5192,7 @@ public final class NestedTestProto {
 
       public Builder removeMapType(
           java.lang.String key) {
-        if (key == null) { throw new java.lang.NullPointerException(); }
+        if (key == null) { throw new NullPointerException("map key"); }
         internalGetMutableMapType().getMutableMap()
             .remove(key);
         return this;
@@ -5211,8 +5211,11 @@ public final class NestedTestProto {
       public Builder putMapType(
           java.lang.String key,
           java.lang.String value) {
-        if (key == null) { throw new java.lang.NullPointerException(); }
-        if (value == null) { throw new java.lang.NullPointerException(); }
+        if (key == null) { throw new NullPointerException("map key"); }
+        if (value == null) {
+  throw new NullPointerException("map value");
+}
+
         internalGetMutableMapType().getMutableMap()
             .put(key, value);
         return this;

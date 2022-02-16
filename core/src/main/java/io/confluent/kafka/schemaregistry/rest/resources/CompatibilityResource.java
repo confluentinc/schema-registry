@@ -38,7 +38,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -90,8 +89,6 @@ public class CompatibilityResource {
   @PerformanceMetric("compatibility.subjects.versions.verify")
   public void testCompatibilityBySubjectName(
       final @Suspended AsyncResponse asyncResponse,
-      final @HeaderParam("Content-Type") String contentType,
-      final @HeaderParam("Accept") String accept,
       @Parameter(description = "Subject of the schema version against which compatibility is to "
           + "be tested",
           required = true) @PathParam("subject") String subject,
@@ -104,6 +101,7 @@ public class CompatibilityResource {
              + "under the specified subject", required = true) @PathParam("version") String version,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request,
+      @Parameter(description = "Whether to return detailed error messages")
       @QueryParam("verbose") boolean verbose) {
     log.info("Testing schema subject {} compatibility between existing version {} and "
              + "specified version {}, id {}, type {}",
@@ -187,13 +185,12 @@ public class CompatibilityResource {
   @PerformanceMetric("compatibility.subjects.versions.verify")
   public void testCompatibilityForSubject(
       final @Suspended AsyncResponse asyncResponse,
-      final @HeaderParam("Content-Type") String contentType,
-      final @HeaderParam("Accept") String accept,
       @Parameter(description = "Subject of the schema version against which compatibility is to "
           + "be tested",
           required = true) @PathParam("subject") String subject,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request,
+      @Parameter(description = "Whether to return detailed error messages")
       @QueryParam("verbose") boolean verbose) {
     log.info("Testing schema subject {} compatibility with specified version {}, id {}, type {}",
         subject, request.getVersion(), request.getId(), request.getSchemaType());
