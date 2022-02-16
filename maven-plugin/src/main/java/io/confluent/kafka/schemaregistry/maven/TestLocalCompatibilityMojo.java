@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Confluent Inc.
+ * Copyright 2022 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,17 +21,12 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -51,7 +46,7 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
   ArrayList<File> previousSchemaPaths;
 
   @Parameter(defaultValue = "BACKWARD")
-  String compatibilityLevel;
+  CompatibilityLevel compatibilityLevel;
 
   @Parameter(defaultValue = AvroSchema.TYPE)
   String schemaType;
@@ -79,7 +74,7 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
 
     String schemaString;
     try {
-      schemaString = readFile(path);
+      schemaString = SchemaUtils.readFile(path, StandardCharsets.UTF_8);
     } catch (IOException e) {
       throw new MojoExecutionException(
           String.format("File cannot be found at: %s", path));
@@ -98,10 +93,9 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
 
   public void execute() throws MojoExecutionException {
 
-    List<SchemaProvider> providers = defaultSchemaProviders();
-    Map<String, SchemaProvider> schemaProviders = !providers.isEmpty()
-        ? providers.stream().collect(Collectors.toMap(SchemaProvider::schemaType, p -> p))
-        : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
+    List<SchemaProvider> providers = SchemaUtils.defaultSchemaProviders();
+    Map<String, SchemaProvider> schemaProviders = providers.stream()
+        .collect(Collectors.toMap(SchemaProvider::schemaType, p -> p));
 
     getLog().debug(String.format("Loading Schema at %s", schemaPath));
     ParsedSchema schema = loadSchema(schemaPath, schemaProviders);
@@ -112,16 +106,14 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
       previousSchemas.add(loadSchema(previousSchemaPath, schemaProviders));
     }
 
-    CompatibilityChecker checker = CompatibilityChecker.checker(
-        CompatibilityLevel.forName(compatibilityLevel));
+    CompatibilityChecker checker = CompatibilityChecker.checker(compatibilityLevel);
 
     List<String> errorMessages = checker.isCompatible(schema, previousSchemas);
 
-    compatibilityLevel = compatibilityLevel.toUpperCase();
     if (previousSchemas.size() > 1
-        && (compatibilityLevel.equals("BACKWARD")
-        || compatibilityLevel.equals("FORWARD")
-        || compatibilityLevel.equals("FULL"))) {
+        && (compatibilityLevel == CompatibilityLevel.BACKWARD
+        || compatibilityLevel == CompatibilityLevel.FORWARD
+        || compatibilityLevel == CompatibilityLevel.FULL)) {
 
       getLog().info(String.format("Checking only with latest Schema at %s",
           previousSchemaPaths.get(previousSchemaPaths.size() - 1)));
@@ -131,24 +123,13 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
 
     if (success) {
       getLog().info(String.format("Schema is %s compatible with previous schemas",
-          compatibilityLevel.toLowerCase()));
+          compatibilityLevel.name.toLowerCase()));
     } else {
       String errorLog = String.format("Schema is not %s compatible with previous schemas %n",
-          compatibilityLevel.toLowerCase()) + errorMessages.get(0);
+          compatibilityLevel.name.toLowerCase()) + errorMessages.get(0);
       getLog().error(errorLog);
     }
 
-  }
-
-  private static String readFile(File file) throws IOException {
-    byte[] encoded = Files.readAllBytes(file.toPath());
-    return new String(encoded, StandardCharsets.UTF_8);
-  }
-
-  private List<SchemaProvider> defaultSchemaProviders() {
-    return Arrays.asList(
-        new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
-    );
   }
 
 }

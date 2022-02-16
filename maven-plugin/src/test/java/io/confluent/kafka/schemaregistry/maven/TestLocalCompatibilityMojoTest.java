@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Confluent Inc.
+ * Copyright 2022 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.maven;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -214,7 +215,7 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   @Test
   public void testBasicBackwardsCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = "backward";
+    this.mojo.compatibilityLevel = CompatibilityLevel.BACKWARD;
     fileExtension = ".avsc";
     this.mojo.schemaType = "avro";
 
@@ -243,7 +244,7 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
         isCompatible(schema10, Collections.singletonList(schema11)));
 
     assertTrue("adding property of string type (same as additional properties type) is "
-            + "a backward compatible change", isCompatible(schema13,
+        + "a backward compatible change", isCompatible(schema13,
         Collections.singletonList(schema12)));
 
     assertTrue("adding property of string or int type (string is additional properties type) is "
@@ -254,7 +255,7 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   @Test
   public void testBasicBackwardsTransitiveCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = "backward_transitive";
+    this.mojo.compatibilityLevel = CompatibilityLevel.BACKWARD_TRANSITIVE;
     fileExtension = ".avsc";
     this.mojo.schemaType = "avro";
 
@@ -278,7 +279,7 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   @Test
   public void testBasicForwardsCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = "forward";
+    this.mojo.compatibilityLevel = CompatibilityLevel.FORWARD;
 
     fileExtension = ".avsc";
     this.mojo.schemaType = "avro";
@@ -303,7 +304,7 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
         isCompatible(schema11, Collections.singletonList(schema10)));
 
     assertTrue("removing property of string type (same as additional properties type)"
-            + " is a backward compatible change", isCompatible(schema13,
+        + " is a backward compatible change", isCompatible(schema13,
         Collections.singletonList(schema12)));
 
     assertTrue("removing property of string or int type (string is additional properties type) is "
@@ -319,7 +320,7 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   @Test
   public void testBasicForwardsTransitiveCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = "forward_transitive";
+    this.mojo.compatibilityLevel = CompatibilityLevel.FORWARD_TRANSITIVE;
     fileExtension = ".avsc";
     this.mojo.schemaType = "avro";
 
@@ -342,7 +343,7 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   @Test
   public void testBasicFullCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = "full";
+    this.mojo.compatibilityLevel = CompatibilityLevel.FULL;
     fileExtension = ".avsc";
     this.mojo.schemaType = "avro";
 
@@ -365,7 +366,7 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   @Test
   public void testBasicFullTransitiveCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = "full_transitive";
+    this.mojo.compatibilityLevel = CompatibilityLevel.FULL_TRANSITIVE;
     fileExtension = ".avsc";
     this.mojo.schemaType = "avro";
 
