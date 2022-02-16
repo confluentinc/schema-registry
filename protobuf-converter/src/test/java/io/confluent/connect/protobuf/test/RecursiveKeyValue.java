@@ -245,7 +245,7 @@ public final class RecursiveKeyValue {
       if (key_ != 0) {
         output.writeInt32(1, key_);
       }
-      if (!getValueBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(value_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 2, value_);
       }
       if (keyValue_ != null) {
@@ -264,7 +264,7 @@ public final class RecursiveKeyValue {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(1, key_);
       }
-      if (!getValueBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(value_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, value_);
       }
       if (keyValue_ != null) {
