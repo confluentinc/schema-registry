@@ -34,9 +34,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -50,47 +52,32 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
   List<String> subjectPatterns = new ArrayList<>();
 
   @Parameter(required = true)
-  List<String> versions = new ArrayList<>();
-
-  @Parameter(required = true)
   File outputDirectory;
 
-  Map<String, ParsedSchema> downloadSchemas(List<String> subjects, List<String> versionsToDownload)
+  Map<String, ParsedSchema> downloadSchemas(Collection<String> subjects)
       throws MojoExecutionException {
     Map<String, ParsedSchema> results = new LinkedHashMap<>();
 
-    for (int i = 0; i < subjects.size(); i++) {
+    for (String subject : subjects) {
       SchemaMetadata schemaMetadata;
       try {
-        getLog().info(String.format("Downloading metadata "
-            + "for %s.for version %s", subjects.get(i), versionsToDownload.get(i)));
-        schemaMetadata = this.client().getLatestSchemaMetadata(subjects.get(i));
-        if (!versionsToDownload.get(i).equalsIgnoreCase("latest")) {
-          Integer maxVersion = schemaMetadata.getVersion();
-          if (maxVersion < Integer.parseInt(versionsToDownload.get(i))) {
-            throw new MojoExecutionException(
-                String.format("Max possible version "
-                    + "for %s is %d", subjects.get(i), maxVersion));
-          } else {
-            schemaMetadata = this.client().getSchemaMetadata(subjects.get(i),
-                Integer.parseInt(versionsToDownload.get(i)));
-          }
-        }
+        getLog().info(String.format("Downloading latest metadata for %s.", subject));
+        schemaMetadata = this.client().getLatestSchemaMetadata(subject);
         Optional<ParsedSchema> schema =
             this.client().parseSchema(
                 schemaMetadata.getSchemaType(),
                 schemaMetadata.getSchema(),
                 schemaMetadata.getReferences());
         if (schema.isPresent()) {
-          results.put(subjects.get(i), schema.get());
+          results.put(subject, schema.get());
         } else {
           throw new MojoExecutionException(
-              String.format("Error while parsing schema for %s", subjects.get(i))
+              String.format("Error while parsing schema for %s", subject)
           );
         }
       } catch (Exception ex) {
         throw new MojoExecutionException(
-            String.format("Exception thrown while downloading metadata for %s.", subjects.get(i)),
+            String.format("Exception thrown while downloading metadata for %s.", subject),
             ex
         );
       }
@@ -149,33 +136,29 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
     }
 
     getLog().info(String.format("Schema Registry has %s subject(s).", allSubjects.size()));
-    List<String> subjectsToDownload = new ArrayList<>();
-    List<String> versionsToDownload = new ArrayList<>();
-
+    Set<String> subjectsToDownload = new LinkedHashSet<>();
 
     for (String subject : allSubjects) {
-      for (int i = 0 ; i < patterns.size() ; i++) {
+      for (Pattern pattern : patterns) {
         getLog()
-            .debug(String.format("Checking '%s' against pattern '%s'",
-                subject, patterns.get(i).pattern()));
-        Matcher matcher = patterns.get(i).matcher(subject);
+            .debug(String.format("Checking '%s' against pattern '%s'", subject, pattern.pattern()));
+        Matcher matcher = pattern.matcher(subject);
 
         if (matcher.matches()) {
           getLog().debug(String.format("'%s' matches pattern '%s' so downloading.", subject,
-                                       patterns.get(i).pattern()));
-          versionsToDownload.add(versions.get(i));
+                                       pattern.pattern()));
           subjectsToDownload.add(subject);
           break;
         }
       }
     }
 
-    Map<String, ParsedSchema> subjectToSchema =
-        downloadSchemas(subjectsToDownload,versionsToDownload);
+    Map<String, ParsedSchema> subjectToSchema = downloadSchemas(subjectsToDownload);
 
     for (Map.Entry<String, ParsedSchema> kvp : subjectToSchema.entrySet()) {
       String fileName = String.format("%s%s", kvp.getKey(), getExtension(kvp.getValue()));
       File outputFile = new File(this.outputDirectory, fileName);
+
       getLog().info(
           String.format("Writing schema for Subject(%s) to %s.", kvp.getKey(), outputFile)
       );
