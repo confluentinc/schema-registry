@@ -583,7 +583,7 @@ public final class ExampleProtoAcme {
       if (partition_ != null) {
         output.writeMessage(2, getPartition());
       }
-      if (!getUidBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(uid_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 5, uid_);
       }
       com.google.protobuf.GeneratedMessageV3
@@ -612,7 +612,7 @@ public final class ExampleProtoAcme {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(2, getPartition());
       }
-      if (!getUidBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(uid_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(5, uid_);
       }
       for (java.util.Map.Entry<java.lang.Integer, java.lang.Boolean> entry
