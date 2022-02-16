@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Confluent Inc.
+ * Copyright 2022 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
   @Parameter(required = true)
   List<String> subjectPatterns = new ArrayList<>();
 
-  @Parameter(required = true)
+  @Parameter(required = false)
   List<String> versions = new ArrayList<>();
 
   @Parameter(required = true)
@@ -161,9 +161,14 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
         Matcher matcher = patterns.get(i).matcher(subject);
 
         if (matcher.matches()) {
-          getLog().debug(String.format("'%s' matches pattern '%s' so downloading.", subject,
+          getLog().debug(String.format("'%s' matches "
+                  + "pattern '%s' so downloading.", subject,
                                        patterns.get(i).pattern()));
-          versionsToDownload.add(versions.get(i));
+          if (versions.isEmpty()) {
+            versionsToDownload.add("latest");
+          } else {
+            versionsToDownload.add(versions.get(i));
+          }
           subjectsToDownload.add(subject);
           break;
         }
