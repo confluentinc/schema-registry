@@ -759,6 +759,10 @@ public class AvroData {
 
   public org.apache.avro.Schema fromConnectSchema(Schema schema,
                                                   Map<Schema, org.apache.avro.Schema> schemaMap) {
+    if (schema == null) {
+      return ANYTHING_SCHEMA;
+    }
+
     org.apache.avro.Schema cached = fromConnectSchemaCache.get(schema);
     if (cached != null) {
       return cached;
