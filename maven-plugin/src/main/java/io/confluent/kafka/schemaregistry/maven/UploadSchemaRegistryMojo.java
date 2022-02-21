@@ -107,7 +107,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
         }
         return;
       }
-      String schemaString = SchemaUtils.readFile(file, StandardCharsets.UTF_8);
+      String schemaString = MojoUtils.readFile(file, StandardCharsets.UTF_8);
       Optional<ParsedSchema> schema = client().parseSchema(
           schemaType, schemaString, schemaReferences);
       if (schema.isPresent()) {

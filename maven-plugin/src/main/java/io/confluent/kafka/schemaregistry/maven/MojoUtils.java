@@ -27,7 +27,7 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 
-public class SchemaUtils {
+public class MojoUtils {
 
   public static String readFile(File file, Charset encoding) throws IOException {
     byte[] encoded = Files.readAllBytes(file.toPath());

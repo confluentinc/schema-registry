@@ -74,7 +74,7 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
 
     String schemaString;
     try {
-      schemaString = SchemaUtils.readFile(path, StandardCharsets.UTF_8);
+      schemaString = MojoUtils.readFile(path, StandardCharsets.UTF_8);
     } catch (IOException e) {
       throw new MojoExecutionException(
           String.format("File cannot be found at: %s", path));
@@ -93,7 +93,7 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
 
   public void execute() throws MojoExecutionException {
 
-    List<SchemaProvider> providers = SchemaUtils.defaultSchemaProviders();
+    List<SchemaProvider> providers = MojoUtils.defaultSchemaProviders();
     Map<String, SchemaProvider> schemaProviders = providers.stream()
         .collect(Collectors.toMap(SchemaProvider::schemaType, p -> p));
 
