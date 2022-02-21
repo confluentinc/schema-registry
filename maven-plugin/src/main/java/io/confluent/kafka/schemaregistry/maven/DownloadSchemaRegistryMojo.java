@@ -59,6 +59,10 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       throws MojoExecutionException {
     Map<String, ParsedSchema> results = new LinkedHashMap<>();
 
+    if (versionsToDownload.size() != subjects.size()) {
+      throw new MojoExecutionException("Number of versions specified should "
+          + "be same as number of subjects");
+    }
     for (int i = 0; i < subjects.size(); i++) {
       SchemaMetadata schemaMetadata;
       try {
@@ -105,26 +109,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       getLog().info("Plugin execution has been skipped");
       return;
     }
-
-    try {
-      getLog().debug(
-          String.format("Checking if '%s' exists and is not a directory.", this.outputDirectory));
-      if (outputDirectory.exists() && !outputDirectory.isDirectory()) {
-        throw new IllegalStateException("outputDirectory must be a directory");
-      }
-      getLog()
-          .debug(String.format("Checking if outputDirectory('%s') exists.", this.outputDirectory));
-      if (!outputDirectory.isDirectory()) {
-        getLog().debug(String.format("Creating outputDirectory('%s').", this.outputDirectory));
-        if (!outputDirectory.mkdirs()) {
-          throw new IllegalStateException(
-              "Could not create output directory " + this.outputDirectory);
-        }
-      }
-    } catch (Exception ex) {
-      throw new MojoExecutionException("Exception thrown while creating outputDirectory", ex);
-    }
-
+    outputDirValidation();
     List<Pattern> patterns = new ArrayList<>();
 
     for (String subject : subjectPatterns) {
@@ -139,7 +124,6 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
         );
       }
     }
-
     Collection<String> allSubjects;
     try {
       getLog().info("Getting all subjects on schema registry...");
@@ -147,12 +131,15 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
     } catch (Exception ex) {
       throw new MojoExecutionException("Exception thrown", ex);
     }
-
     getLog().info(String.format("Schema Registry has %s subject(s).", allSubjects.size()));
     List<String> subjectsToDownload = new ArrayList<>();
     List<String> versionsToDownload = new ArrayList<>();
 
-
+    if (!versions.isEmpty()) {
+      if (versions.size() != subjectPatterns.size()) {
+        throw new IllegalStateException("versions size should be same as subjectPatterns size");
+      }
+    }
     for (String subject : allSubjects) {
       for (int i = 0 ; i < patterns.size() ; i++) {
         getLog()
@@ -174,7 +161,6 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
         }
       }
     }
-
     Map<String, ParsedSchema> subjectToSchema =
         downloadSchemas(subjectsToDownload,versionsToDownload);
 
@@ -196,6 +182,27 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
             ex
         );
       }
+    }
+  }
+
+  public void outputDirValidation() throws MojoExecutionException, MojoFailureException {
+    try {
+      getLog().debug(
+          String.format("Checking if '%s' exists and is not a directory.", this.outputDirectory));
+      if (outputDirectory.exists() && !outputDirectory.isDirectory()) {
+        throw new IllegalStateException("outputDirectory must be a directory");
+      }
+      getLog()
+          .debug(String.format("Checking if outputDirectory('%s') exists.", this.outputDirectory));
+      if (!outputDirectory.isDirectory()) {
+        getLog().debug(String.format("Creating outputDirectory('%s').", this.outputDirectory));
+        if (!outputDirectory.mkdirs()) {
+          throw new IllegalStateException(
+              "Could not create output directory " + this.outputDirectory);
+        }
+      }
+    } catch (Exception ex) {
+      throw new MojoExecutionException("Exception thrown while creating outputDirectory", ex);
     }
   }
 
