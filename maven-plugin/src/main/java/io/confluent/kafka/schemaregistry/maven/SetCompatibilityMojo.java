@@ -30,7 +30,7 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
   @Parameter(required = false, defaultValue = "false")
   boolean delete;
 
-  @Parameter(required = true)
+  @Parameter()
   String subject;
 
   @Parameter(defaultValue = "BACKWARD")
@@ -39,6 +39,10 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
   public void execute() throws MojoExecutionException {
 
     if (delete) {
+      if (subject == null) {
+        throw new MojoExecutionException("Global level compatibility cannot be "
+            + "deleted. Provide subject.");
+      }
       deleteConfig(subject);
     } else {
       updateConfig(subject, compatibility);
@@ -50,8 +54,13 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
     try {
       String updatedCompatibility =
           this.client().updateCompatibility(subject, compatibility.toString());
-      getLog().info("Compatibility of " + subject
-          + " set to " + updatedCompatibility);
+      if (subject == null) {
+        getLog().info("Global Compatibility set to "
+            + updatedCompatibility);
+      } else {
+        getLog().info("Compatibility of " + subject
+            + " set to " + updatedCompatibility);
+      }
     } catch (RestClientException | IOException e) {
       getLog().error(e.getMessage());
       e.printStackTrace();
@@ -65,7 +74,7 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
     }
     try {
       this.client().deleteCompatibility(subject);
-      getLog().info(String.format("Deleting compatibility of %s", subject));
+      getLog().info(String.format("Deleted compatibility of %s", subject));
     } catch (IOException | RestClientException e) {
       e.printStackTrace();
     }
