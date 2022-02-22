@@ -231,6 +231,7 @@ public class AvroSchema implements ParsedSchema {
             break;
           }
         }
+        break;
       default:
         break;
     }
