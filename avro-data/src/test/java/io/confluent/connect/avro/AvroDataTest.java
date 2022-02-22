@@ -1998,6 +1998,28 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testToConnectUnionDocChange() {
+    org.apache.avro.Schema oldSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("FirstRecord").doc("old doc").fields().requiredInt("int1").endRecord();
+    org.apache.avro.Schema newSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("FirstRecord").doc("new doc").fields().requiredInt("int1").endRecord();
+    org.apache.avro.Schema irrelevant = org.apache.avro.SchemaBuilder.builder()
+        .record("placeholder").doc("old doc").fields().requiredInt("holder").endRecord();
+
+    org.apache.avro.Schema unionAvroSchema = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().type(oldSchema).and().type(irrelevant)
+        .endUnion();
+    org.apache.avro.Schema unionAvroSchemaNew = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().type(newSchema).and().type(irrelevant)
+        .endUnion();
+    GenericRecord record1Test = new GenericRecordBuilder(oldSchema).set("int1", 12).build();
+    GenericRecord record2Test = new GenericRecordBuilder(newSchema).set("int1", 12).build();
+    // Cache the old schema
+    assertNotNull(avroData.toConnectData(unionAvroSchema, record1Test));
+    assertNotNull(avroData.toConnectData(unionAvroSchemaNew, record2Test));
+  }
+
+  @Test
   public void testToConnectEnum() {
     // Enums are just converted to strings, original enum is preserved in parameters
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
