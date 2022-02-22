@@ -201,6 +201,17 @@ public class AvroSchema implements ParsedSchema {
       case FIXED:
         return Objects.equals(schema1.getAliases(), schema2.getAliases())
             && Objects.equals(schema1.getDoc(), schema2.getDoc());
+      case UNION:
+        List<Schema> types1 = schema1.getTypes();
+        List<Schema> types2 = schema2.getTypes();
+        if (types1.size() != types2.size()) {
+          return false;
+        }
+        for (int i = 0; i < types1.size(); i++) {
+          if (!metaEqual(types1.get(i), types2.get(i))) {
+            return false;
+          }
+        }
       default:
         return true;
     }
