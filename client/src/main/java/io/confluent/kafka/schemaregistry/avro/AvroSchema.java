@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.avro;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
+import java.util.HashMap;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
@@ -200,35 +201,70 @@ public class AvroSchema implements ParsedSchema {
     }
     AvroSchema that = (AvroSchema) o;
     return Objects.equals(schemaObj, that.schemaObj)
-        && metaEqual(schemaObj, that.schemaObj)
+        && metaEqual(schemaObj, that.schemaObj, new HashMap<>())
         && Objects.equals(references, that.references)
         && Objects.equals(version, that.version);
   }
 
-  private boolean metaEqual(Schema schema1, Schema schema2) {
+  private boolean metaEqual(
+      Schema schema1, Schema schema2, Map<IdentityPair<Schema, Schema>, Boolean> cache) {
     if (schema1 == null) {
       return schema2 == null;
     }
+
+    // Add a temporary value to the cache to avoid cycles. As long as we recurse only at the end of
+    // the method, we can safely default to true here. The cache is updated at the end of the method
+    // with the actual comparison result.
+    IdentityPair<Schema, Schema> sp = new IdentityPair<>(schema1, schema2);
+    Boolean cacheHit = cache.putIfAbsent(sp, true);
+    if (cacheHit != null) {
+      return cacheHit;
+    }
+
     Schema.Type type1 = schema1.getType();
     Schema.Type type2 = schema2.getType();
     if (type1 != type2) {
+      cache.put(sp, false);
       return false;
     }
+
+    boolean equals = true;
     switch (type1) {
       case RECORD:
-        return Objects.equals(schema1.getAliases(), schema2.getAliases())
+        equals = Objects.equals(schema1.getAliases(), schema2.getAliases())
             && Objects.equals(schema1.getDoc(), schema2.getDoc())
-            && fieldMetaEqual(schema1.getFields(), schema2.getFields());
+            && fieldMetaEqual(schema1.getFields(), schema2.getFields(), cache);
+        break;
       case ENUM:
       case FIXED:
-        return Objects.equals(schema1.getAliases(), schema2.getAliases())
+        equals = Objects.equals(schema1.getAliases(), schema2.getAliases())
             && Objects.equals(schema1.getDoc(), schema2.getDoc());
+        break;
+      case UNION:
+        List<Schema> types1 = schema1.getTypes();
+        List<Schema> types2 = schema2.getTypes();
+        if (types1.size() != types2.size()) {
+          equals = false;
+          break;
+        }
+        for (int i = 0; i < types1.size(); i++) {
+          if (!metaEqual(types1.get(i), types2.get(i), cache)) {
+            equals = false;
+            break;
+          }
+        }
+        break;
       default:
-        return true;
+        break;
     }
+    cache.put(sp, equals);
+    return equals;
   }
 
-  private boolean fieldMetaEqual(List<Schema.Field> fields1, List<Schema.Field> fields2) {
+  private boolean fieldMetaEqual(
+      List<Schema.Field> fields1,
+      List<Schema.Field> fields2,
+      Map<IdentityPair<Schema, Schema>, Boolean> cache) {
     if (fields1.size() != fields2.size()) {
       return false;
     }
@@ -239,7 +275,7 @@ public class AvroSchema implements ParsedSchema {
           || !Objects.equals(field1.doc(), field2.doc())) {
         return false;
       }
-      boolean fieldSchemaMetaEqual = metaEqual(field1.schema(), field2.schema());
+      boolean fieldSchemaMetaEqual = metaEqual(field1.schema(), field2.schema(), cache);
       if (!fieldSchemaMetaEqual) {
         return false;
       }
@@ -255,5 +291,49 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public String toString() {
     return canonicalString();
+  }
+
+  static class IdentityPair<K, V> {
+    private final K key;
+    private final V value;
+
+    public IdentityPair(K key, V value) {
+      this.key = key;
+      this.value = value;
+    }
+
+    public K getKey() {
+      return key;
+    }
+
+    public V getValue() {
+      return value;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      IdentityPair<?, ?> pair = (IdentityPair<?, ?>) o;
+      // Only perform identity check
+      return key == pair.key && value == pair.value;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(key, value);
+    }
+
+    @Override
+    public String toString() {
+      return "IdentityPair{"
+          + "key=" + key
+          + ", value=" + value
+          + '}';
+    }
   }
 }
