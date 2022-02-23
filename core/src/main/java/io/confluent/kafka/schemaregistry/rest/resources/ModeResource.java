@@ -84,11 +84,13 @@ public class ModeResource {
   })
 
   public ModeUpdateRequest updateMode(
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Context HttpHeaders headers,
       @Parameter(description = "Update Request", required = true)
       @NotNull ModeUpdateRequest request,
+      @Parameter(description =
+          "Whether to force update if setting mode to IMPORT and schemas currently exist")
       @QueryParam("force") boolean force
   ) {
 
@@ -133,8 +135,9 @@ public class ModeResource {
           description = "Error code 50001 -- Error in the backend data store")
   })
   public Mode getMode(
-      @Parameter(description = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
+      @Parameter(description = "Whether to return the global mode if subject mode not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -165,6 +168,8 @@ public class ModeResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Update Request", required = true)
       @NotNull ModeUpdateRequest request,
+      @Parameter(description =
+          "Whether to force update if setting mode to IMPORT and schemas currently exist")
       @QueryParam("force") boolean force) {
     return updateMode(null, headers, request, force);
   }
@@ -192,7 +197,7 @@ public class ModeResource {
   public void deleteSubjectMode(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @Parameter(description = "the name of the subject", required = true)
+      @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.info("Deleting mode for subject {}", subject);
 

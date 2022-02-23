@@ -20,11 +20,13 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = "Schema reference")
 public class SchemaReference implements Comparable<SchemaReference> {
 
   private String name;
@@ -40,6 +42,7 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.version = version;
   }
 
+  @Schema(description = "Reference name")
   @JsonProperty("name")
   public String getName() {
     return name;
@@ -50,6 +53,7 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.name = name;
   }
 
+  @Schema(description = "Name of the referenced subject")
   @JsonProperty("subject")
   public String getSubject() {
     return subject;
@@ -60,6 +64,7 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.subject = subject;
   }
 
+  @Schema(description = "Version number of the referenced subject")
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;

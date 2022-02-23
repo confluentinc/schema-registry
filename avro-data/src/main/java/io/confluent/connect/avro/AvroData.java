@@ -759,8 +759,19 @@ public class AvroData {
 
   public org.apache.avro.Schema fromConnectSchema(Schema schema,
                                                   Map<Schema, org.apache.avro.Schema> schemaMap) {
+    if (schema == null) {
+      return ANYTHING_SCHEMA;
+    }
+
+    org.apache.avro.Schema cached = fromConnectSchemaCache.get(schema);
+    if (cached != null) {
+      return cached;
+    }
+
     FromConnectContext fromConnectContext = new FromConnectContext(schemaMap);
-    return fromConnectSchema(schema, fromConnectContext, false);
+    org.apache.avro.Schema finalSchema = fromConnectSchema(schema, fromConnectContext, false);
+    fromConnectSchemaCache.put(schema, finalSchema);
+    return finalSchema;
   }
 
   /**
@@ -782,13 +793,11 @@ public class AvroData {
       return ANYTHING_SCHEMA;
     }
 
-    org.apache.avro.Schema cached = fromConnectSchemaCache.get(schema);
-
-    if (cached == null && !isUnionSchema(schema) && !schema.isOptional()) {
-      cached = fromConnectContext.schemaMap.get(schema);
-    }
-    if (cached != null) {
-      return cached;
+    if (!isUnionSchema(schema) && !schema.isOptional()) {
+      org.apache.avro.Schema cached = fromConnectContext.schemaMap.get(schema);
+      if (cached != null) {
+        return cached;
+      }
     }
 
     // Extra type annotation information for otherwise lossy conversions
@@ -1079,7 +1088,6 @@ public class AvroData {
     if (!schema.isOptional()) {
       fromConnectContext.schemaMap.put(schema, finalSchema);
     }
-    fromConnectSchemaCache.put(schema, finalSchema);
     return finalSchema;
   }
 
