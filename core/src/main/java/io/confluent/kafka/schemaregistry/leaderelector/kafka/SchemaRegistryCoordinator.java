@@ -149,7 +149,15 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     listener.onAssigned(assignmentSnapshot, generation);
   }
 
-  @Override
+  // todo: to be removed
+  protected Map<String, ByteBuffer> performAssignment(
+      String kafkaLeaderId, // Kafka group "leader" who does assignment, *not* the SR leader
+      String protocol,
+      List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata
+  ) {
+    return onLeaderElected(kafkaLeaderId, protocol, allMemberMetadata, false);
+  }
+
   protected Map<String, ByteBuffer> onLeaderElected(
       String kafkaLeaderId, // Kafka group "leader" who does assignment, *not* the SR leader
       String protocol,
