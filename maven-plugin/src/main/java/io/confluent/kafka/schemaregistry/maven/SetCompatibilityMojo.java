@@ -37,12 +37,7 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
   CompatibilityLevel compatibility;
 
   public void execute() throws MojoExecutionException {
-
     if (delete) {
-      if (subject == null) {
-        throw new MojoExecutionException("Global level compatibility cannot be "
-            + "deleted. Provide subject.");
-      }
       deleteConfig(subject);
     } else {
       updateConfig(subject, compatibility);
@@ -70,11 +65,16 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
 
   public void deleteConfig(String subject) {
     if (getLog().isDebugEnabled()) {
-      getLog().info(String.format("Deleting compatibility of %s", subject));
+      getLog().info("Deleting compatibility");
     }
     try {
       this.client().deleteCompatibility(subject);
-      getLog().info(String.format("Deleted compatibility of %s", subject));
+      if (subject == null) {
+        getLog().info("Deleted global compatibility");
+      } else {
+        getLog().info(String.format("Deleted compatibility of %s", subject));
+      }
+
     } catch (IOException | RestClientException e) {
       e.printStackTrace();
     }
