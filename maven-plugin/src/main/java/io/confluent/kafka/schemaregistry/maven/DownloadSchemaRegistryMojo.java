@@ -162,7 +162,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       }
     }
     Map<String, ParsedSchema> subjectToSchema =
-        downloadSchemas(subjectsToDownload,versionsToDownload);
+        downloadSchemas(subjectsToDownload, versionsToDownload);
 
     for (Map.Entry<String, ParsedSchema> kvp : subjectToSchema.entrySet()) {
       String fileName = String.format("%s%s", kvp.getKey(), getExtension(kvp.getValue()));
