@@ -22,11 +22,14 @@ import org.apache.avro.Schema;
 import org.junit.Before;
 import org.junit.Test;
 
+import javax.security.auth.Subject;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
+import java.util.regex.Matcher;
 
 public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
   DownloadSchemaRegistryMojo mojo;
@@ -55,12 +58,11 @@ public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
       File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
 
       if (i % 10 == 0) {
-        String subjectPattern = String.format("^TestSubject%03d-(Key|Value)$", i);
-        files.add(keySchemaFile);
-        files.add(valueSchemaFile);
-        this.mojo.subjectPatterns.add(subjectPattern);
+        this.mojo.client().getSchemaMetadata(keySubject,1);
+        this.mojo.client().getLatestSchemaMetadata(keySubject);
+        this.mojo.client().getSchemaMetadata(valueSubject,1);
+        this.mojo.client().getLatestSchemaMetadata(valueSubject);
       }
     }
   }
-
 }
