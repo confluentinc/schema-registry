@@ -774,7 +774,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
       while (iter.hasNext()) {
         ContextValue v = (ContextValue) iter.next();
-        QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), subject);
+        QualifiedSubject qualSub =
+            new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
         Schema qualSchema = new Schema(
             qualSub.toQualifiedSubject(),
             schema.getVersion(),
@@ -1105,7 +1106,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
       while (iter.hasNext()) {
         ContextValue v = (ContextValue) iter.next();
-        QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), subject);
+        QualifiedSubject qualSub =
+            new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
         schema = get(qualSub.toQualifiedSubject(), version, returnDeletedSchema);
         if (schema != null) {
           return schema;
@@ -1214,7 +1216,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
       while (iter.hasNext()) {
         ContextValue v = (ContextValue) iter.next();
-        QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), subject);
+        QualifiedSubject qualSub =
+            new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
         SchemaKey key = lookupCache.schemaKeyById(id, qualSub.toQualifiedSubject());
         if (key != null) {
           return key;
