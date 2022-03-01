@@ -1821,6 +1821,47 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testOptionalObjectOrArray() {
+    // From https://stackoverflow.com/questions/36413015/json-schema-which-allows-either-an-object-or-an-array-of-those-objects
+    String schema = "{\n"
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"assetMetadata\": {\n"
+        + "      \"anyOf\": [\n"
+        + "        { \"$ref\": \"#/definitions/assetMetadata\" },\n"
+        + "        {\n"
+        + "          \"type\": \"array\",\n"
+        + "          \"items\": { \"$ref\": \"#/definitions/assetMetadata\" }\n"
+        + "        },\n"
+        + "        {\n"
+        + "          \"type\": \"null\"\n"
+        + "        }\n"
+        + "      ]\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"definitions\": {\n"
+        + "    \"assetMetadata\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"additionalProperties\": false,\n"
+        + "      \"properties\": {\n"
+        + "        \"id\": {\n"
+        + "          \"type\": \"string\"\n"
+        + "        },\n"
+        + "        \"type\": {\n"
+        + "          \"type\": \"string\"\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertTrue(connectSchema.field("assetMetadata").schema().isOptional());
+  }
+  
+  @Test
   public void testToConnectRecursiveSchema() {
     JsonSchema jsonSchema = getRecursiveJsonSchema();
     JsonSchemaData jsonSchemaData = new JsonSchemaData();
