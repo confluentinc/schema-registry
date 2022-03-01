@@ -27,6 +27,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -91,6 +93,38 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
         + "with schema type as %s", path, schemaType));
   }
 
+  protected ArrayList<File> getFiles() {
+
+    ArrayList<File> previousSchemaFiles = new ArrayList<>();
+
+    for (File previousSchemaPath : previousSchemaPaths) {
+
+      // Add all files inside a directory, inside directories are skipped
+      if (previousSchemaPath.isDirectory()) {
+
+        File[] fileList = previousSchemaPath.listFiles();
+        if (fileList == null) {
+          continue;
+        }
+
+        // Sorting files by last modified
+        Arrays.sort(fileList, Comparator.comparingLong(File::lastModified));
+
+        for (File f : fileList) {
+          if (!f.isDirectory()) {
+            previousSchemaFiles.add(f);
+          }
+        }
+
+      } else {
+        previousSchemaFiles.add(previousSchemaPath);
+      }
+
+    }
+
+    return previousSchemaFiles;
+  }
+
   public void execute() throws MojoExecutionException {
 
     List<SchemaProvider> providers = MojoUtils.defaultSchemaProviders();
@@ -102,21 +136,22 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
 
     getLog().debug("Loading Previous Schemas");
     ArrayList<ParsedSchema> previousSchemas = new ArrayList<>();
-    for (File previousSchemaPath : previousSchemaPaths) {
-      previousSchemas.add(loadSchema(previousSchemaPath, schemaProviders));
+    ArrayList<File> previousSchemaFiles = getFiles();
+
+    for (File previousSchemaFile : previousSchemaFiles) {
+      previousSchemas.add(loadSchema(previousSchemaFile, schemaProviders));
     }
 
     CompatibilityChecker checker = CompatibilityChecker.checker(compatibilityLevel);
-
     List<String> errorMessages = checker.isCompatible(schema, previousSchemas);
 
-    if (previousSchemas.size() > 1
+    if (previousSchemaFiles.size() > 1
         && (compatibilityLevel == CompatibilityLevel.BACKWARD
         || compatibilityLevel == CompatibilityLevel.FORWARD
         || compatibilityLevel == CompatibilityLevel.FULL)) {
 
       getLog().info(String.format("Checking only with latest Schema at %s",
-          previousSchemaPaths.get(previousSchemaPaths.size() - 1)));
+          previousSchemaFiles.get(previousSchemaFiles.size() - 1)));
     }
 
     success = errorMessages.isEmpty();

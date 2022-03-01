@@ -58,7 +58,7 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
     makeFiles();
   }
 
-  private void makeFile(String schemaString, String name){
+  private void makeFile(String schemaString, String name) {
 
     try (FileWriter writer = new FileWriter(this.tempDirectory+"/"+name)) {
       writer.write(schemaString);
@@ -66,9 +66,31 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
       e.printStackTrace();
     }
 
+    if (name.contains("1.avsc") || name.contains("2.avsc")) {
+
+      try (FileWriter writer = new FileWriter(this.tempDirectory+"/avro/"+name)) {
+        writer.write(schemaString);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+
+      // To differentiate between last modified time
+      try {
+        Thread.sleep(10);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+
+    }
+
   }
 
   private void makeFiles(){
+
+    File newFolder = new File(this.tempDirectory.toString() + "/avro");
+    if( newFolder.mkdir()) {
+      System.out.println("New Folder avro created successfully.");
+    }
 
     String schemaString1 = "{\"type\":\"record\","
         + "\"name\":\"myrecord\","
@@ -117,14 +139,6 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
         + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]},"
         + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"bar\"}]}";
     makeFile(schemaString8, "schema8.avsc");
-
-    String badDefaultNullString = "{\"type\":\"record\","
-        + "\"name\":\"myrecord\","
-        + "\"fields\":"
-        + "[{\"type\":[\"null\", \"string\"],\"name\":\"f1\", \"default\": \"null\"},"
-        + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"},"
-        + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"bar\"}]}";
-    makeFile(badDefaultNullString, "schema9.avsc");
 
     String schemaString10 = "{\n"
         + "  \"type\": \"object\",\n"
@@ -252,6 +266,7 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
         Collections.singletonList(schema12)));
 
   }
+
   @Test
   public void testBasicBackwardsTransitiveCompatibility() throws MojoExecutionException {
 
@@ -263,13 +278,26 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
     assertTrue("iteratively adding fields with defaults is a compatible change",
         isCompatible(schema8, Arrays.asList(schema1, schema2)));
 
-//     1 == 2, 2 == 3, 3 != 1
+    // 1 == 2, 2 == 3, 3 != 1
     assertTrue("adding a field with default is a backward compatible change",
         isCompatible(schema2, Collections.singletonList(schema1)));
     assertTrue("removing a default is a compatible change, but not transitively",
         isCompatible(schema3, Collections.singletonList(schema2)));
     assertFalse("removing a default is not a transitively compatible change",
         isCompatible(schema3, Arrays.asList(schema2, schema1)));
+
+    // Test for passing directories in previousSchemaPaths
+    String directory = this.tempDirectory.toString() + "/avro";
+    File dir = new File(directory);
+    this.mojo.previousSchemaPaths = new ArrayList<>(Collections.singletonList(dir));
+    this.mojo.schemaPath = new File(this.tempDirectory + "/" + schema8 + fileExtension);
+    this.mojo.success = false;
+    this.mojo.execute();
+
+    assertTrue("Checking if schema8 is backward compatible with schema1 and schema2 present in avro folder"
+        , this.mojo.success);
+
+
   }
 
   /*
@@ -296,6 +324,20 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
     // Only schema 2 is checked
     assertTrue("removing a default is not a transitively compatible change",
         isCompatible(schema1, Arrays.asList(schema3, schema2)));
+
+    // Test for passing directories in previousSchemaPaths
+    String directory = this.tempDirectory.toString() + "/avro";
+    File dir = new File(directory);
+    this.mojo.previousSchemaPaths = new ArrayList<>(Collections.singletonList(dir));
+    this.mojo.schemaPath = new File(this.tempDirectory + "/" + schema1 + fileExtension);
+    this.mojo.success = false;
+    this.mojo.execute();
+
+    // As last element in previousSchemaPaths is a folder
+    // the last modified file schema2 is used for checking backward compatibility
+    assertTrue("Checking if schema1 is forward compatible with schema2"
+        , this.mojo.success);
+
 
     fileExtension = ".json";
     this.mojo.schemaType = "json";
