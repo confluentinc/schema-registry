@@ -254,6 +254,7 @@ public class AvroSchemaUtils {
     }
   }
 
+  // Adapted from SchemaNormalization.java in Avro
   private static Appendable build(Map<String, String> env, Schema s, Appendable o)
       throws IOException {
     boolean firstTime = true;
@@ -374,7 +375,7 @@ public class AvroSchemaUtils {
 
   private static void setComplexProps(Appendable o, Schema s) throws IOException {
     if (s.getDoc() != null && !s.getDoc().isEmpty()) {
-      o.append(",\"doc\":\"").append(s.getDoc()).append("\"");
+      o.append(",\"doc\":").append(toJsonNode(s.getDoc()).toString());
     }
     if (s.getAliases() != null && !s.getAliases().isEmpty()) {
       o.append(",\"aliases\":").append(toJsonNode(new TreeSet<>(s.getAliases())).toString());
@@ -389,7 +390,7 @@ public class AvroSchemaUtils {
       o.append(",\"order\":\"").append(f.order().toString()).append("\"");
     }
     if (f.doc() != null) {
-      o.append(",\"doc\":\"").append(f.doc()).append("\"");
+      o.append(",\"doc\":").append(toJsonNode(f.doc()).toString());
     }
     if (!f.aliases().isEmpty()) {
       o.append(",\"aliases\":").append(toJsonNode(new TreeSet<>(f.aliases())).toString());
