@@ -43,6 +43,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -359,6 +360,39 @@ public class JsonSchemaTest {
     Optional<ParsedSchema> parsedSchema = jsonSchemaProvider.parseSchema(invalidSchemaString,
             new ArrayList<>(), false);
     assertFalse(parsedSchema.isPresent());
+  }
+
+  @Test
+  public void testSchemasDifferentFieldOrder() {
+    String schema1 = "{\n"
+        + "  \"title\": \"Person\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"lastName\": {\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"description\": \"The person's last name.\"\n"
+        + "    },\n"
+        + "    \"firstName\": {\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"description\": \"The person's first name.\"\n"
+        + "    }\n" + "  }\n"
+        + "}";
+    String schema2 = "{\n"
+        + "  \"title\": \"Person\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"firstName\": {\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"description\": \"The person's first name.\"\n"
+        + "    },\n"
+        + "    \"lastName\": {\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"description\": \"The person's last name.\"\n"
+        + "    }\n" + "  }\n"
+        + "}";
+    JsonSchema jsonSchema1 = new JsonSchema(schema1);
+    JsonSchema jsonSchema2 = new JsonSchema(schema2);
+    assertNotEquals(jsonSchema1, jsonSchema2);
   }
 
   private static Map<String, String> getJsonSchemaWithReferences() {
