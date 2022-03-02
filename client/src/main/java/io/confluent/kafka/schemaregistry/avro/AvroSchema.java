@@ -271,6 +271,7 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
+      // Use an IdentityHashMap as a cache
       hashCode = Objects.hash(schemaObj, references, version)
           + metaHash(schemaObj, new IdentityHashMap<>());
     }
