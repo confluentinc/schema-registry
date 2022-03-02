@@ -362,7 +362,7 @@ public class JsonSchema implements ParsedSchema {
       return false;
     }
     JsonSchema that = (JsonSchema) o;
-    return Objects.equals(jsonNode, that.jsonNode)
+    return Objects.equals(canonicalString, that.canonicalString)
         && Objects.equals(references, that.references)
         && Objects.equals(version, that.version);
   }
