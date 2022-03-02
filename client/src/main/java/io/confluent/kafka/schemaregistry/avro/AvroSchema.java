@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.SchemaCompatibility.SchemaCompatibilityType;
@@ -44,6 +45,10 @@ public class AvroSchema implements ParsedSchema {
   private final Integer version;
   private final List<SchemaReference> references;
   private final Map<String, String> resolvedReferences;
+
+  private transient int hashCode = NO_HASHCODE;
+
+  private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
   public AvroSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null);
@@ -186,57 +191,56 @@ public class AvroSchema implements ParsedSchema {
 
   private boolean metaEqual(
       Schema schema1, Schema schema2, Map<IdentityPair<Schema, Schema>, Boolean> cache) {
-    if (schema1 == null) {
-      return schema2 == null;
+    if (schema1 == schema2) {
+      return true;
     }
 
-    // Add a temporary value to the cache to avoid cycles. As long as we recurse only at the end of
-    // the method, we can safely default to true here. The cache is updated at the end of the method
-    // with the actual comparison result.
-    IdentityPair<Schema, Schema> sp = new IdentityPair<>(schema1, schema2);
-    Boolean cacheHit = cache.putIfAbsent(sp, true);
-    if (cacheHit != null) {
-      return cacheHit;
+    if (schema1 == null) {
+      return false;
     }
 
     Schema.Type type1 = schema1.getType();
     Schema.Type type2 = schema2.getType();
     if (type1 != type2) {
-      cache.put(sp, false);
       return false;
     }
 
-    boolean equals = true;
     switch (type1) {
       case RECORD:
-        equals = Objects.equals(schema1.getAliases(), schema2.getAliases())
+        // Add a temporary value to the cache to avoid cycles.
+        // As long as we recurse only at the end of the method, we can safely default to true here.
+        // The cache is updated at the end of the method with the actual comparison result.
+        IdentityPair<Schema, Schema> sp = new IdentityPair<>(schema1, schema2);
+        Boolean cacheHit = cache.putIfAbsent(sp, true);
+        if (cacheHit != null) {
+          return cacheHit;
+        }
+
+        boolean equals = Objects.equals(schema1.getAliases(), schema2.getAliases())
             && Objects.equals(schema1.getDoc(), schema2.getDoc())
             && fieldMetaEqual(schema1.getFields(), schema2.getFields(), cache);
-        break;
+
+        cache.put(sp, equals);
+        return equals;
       case ENUM:
       case FIXED:
-        equals = Objects.equals(schema1.getAliases(), schema2.getAliases())
+        return Objects.equals(schema1.getAliases(), schema2.getAliases())
             && Objects.equals(schema1.getDoc(), schema2.getDoc());
-        break;
       case UNION:
         List<Schema> types1 = schema1.getTypes();
         List<Schema> types2 = schema2.getTypes();
         if (types1.size() != types2.size()) {
-          equals = false;
-          break;
+          return false;
         }
         for (int i = 0; i < types1.size(); i++) {
           if (!metaEqual(types1.get(i), types2.get(i), cache)) {
-            equals = false;
-            break;
+            return false;
           }
         }
-        break;
+        return true;
       default:
-        break;
+        return true;
     }
-    cache.put(sp, equals);
-    return equals;
   }
 
   private boolean fieldMetaEqual(
@@ -249,6 +253,9 @@ public class AvroSchema implements ParsedSchema {
     for (int i = 0; i < fields1.size(); i++) {
       Schema.Field field1 = fields1.get(i);
       Schema.Field field2 = fields2.get(i);
+      if (field1 == field2) {
+        continue;
+      }
       if (!Objects.equals(field1.aliases(), field2.aliases())
           || !Objects.equals(field1.doc(), field2.doc())) {
         return false;
@@ -263,7 +270,51 @@ public class AvroSchema implements ParsedSchema {
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaObj, references, version);
+    if (hashCode == NO_HASHCODE) {
+      hashCode = Objects.hash(schemaObj, references, version)
+          + metaHash(schemaObj, new IdentityHashMap<>());
+    }
+    return hashCode;
+  }
+
+  private int metaHash(Schema schema, Map<Schema, Integer> cache) {
+    switch (schema.getType()) {
+      case RECORD:
+        // Add a temporary value to the cache to avoid cycles.
+        // As long as we recurse only at the end of the method, we can safely default to 0 here.
+        // The cache is updated at the end of the method with the actual comparison result.
+        Integer cacheHit = cache.putIfAbsent(schema, 0);
+        if (cacheHit != null) {
+          return cacheHit;
+        }
+
+        int result = Objects.hash(schema.getAliases(), schema.getDoc())
+            + fieldMetaHash(schema.getFields(), cache);
+
+        cache.put(schema, result);
+        return result;
+      case ENUM:
+      case FIXED:
+        return Objects.hash(schema.getAliases(), schema.getDoc());
+      case UNION:
+        int hash = 0;
+        List<Schema> types = schema.getTypes();
+        for (int i = 0; i < types.size(); i++) {
+          hash += metaHash(types.get(i), cache);
+        }
+        return hash;
+      default:
+        return 0;
+    }
+  }
+
+  private int fieldMetaHash(List<Schema.Field> fields, Map<Schema, Integer> cache) {
+    int hash = 0;
+    for (int i = 0; i < fields.size(); i++) {
+      Schema.Field field = fields.get(i);
+      hash += Objects.hash(field.aliases(), field.doc()) + metaHash(field.schema(), cache);
+    }
+    return hash;
   }
 
   @Override
@@ -303,7 +354,7 @@ public class AvroSchema implements ParsedSchema {
 
     @Override
     public int hashCode() {
-      return Objects.hash(key, value);
+      return System.identityHashCode(key) + System.identityHashCode(value);
     }
 
     @Override
