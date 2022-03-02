@@ -183,10 +183,10 @@ public class AvroSchema implements ParsedSchema {
       return false;
     }
     AvroSchema that = (AvroSchema) o;
-    return Objects.equals(schemaObj, that.schemaObj)
-        && metaEqual(schemaObj, that.schemaObj, new HashMap<>())
+    return Objects.equals(version, that.version)
         && Objects.equals(references, that.references)
-        && Objects.equals(version, that.version);
+        && Objects.equals(schemaObj, that.schemaObj)
+        && metaEqual(schemaObj, that.schemaObj, new HashMap<>());
   }
 
   private boolean metaEqual(
@@ -271,7 +271,6 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      // Use an IdentityHashMap as a cache
       hashCode = Objects.hash(schemaObj, references, version)
           + metaHash(schemaObj, new IdentityHashMap<>());
     }
@@ -300,8 +299,8 @@ public class AvroSchema implements ParsedSchema {
       case UNION:
         int hash = 0;
         List<Schema> types = schema.getTypes();
-        for (int i = 0; i < types.size(); i++) {
-          hash += metaHash(types.get(i), cache);
+        for (Schema type : types) {
+          hash += metaHash(type, cache);
         }
         return hash;
       default:
@@ -311,8 +310,7 @@ public class AvroSchema implements ParsedSchema {
 
   private int fieldMetaHash(List<Schema.Field> fields, Map<Schema, Integer> cache) {
     int hash = 0;
-    for (int i = 0; i < fields.size(); i++) {
-      Schema.Field field = fields.get(i);
+    for (Schema.Field field : fields) {
       hash += Objects.hash(field.aliases(), field.doc()) + metaHash(field.schema(), cache);
     }
     return hash;
