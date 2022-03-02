@@ -527,6 +527,26 @@ public class AvroSchemaTest {
     assertNotEquals(schema, schema4);
   }
 
+  @Test
+  public void testNormalization() throws Exception {
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"doc\":\"hi\\\"there\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\",\"doc\":\"bye\\\"now\"}]"
+        + "}";
+    String normalized = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"doc\":\"hi\\\"there\","
+        + "\"fields\":"
+        + "[{\"name\":\"f1\",\"type\":\"string\",\"doc\":\"bye\\\"now\"}]"
+        + "}";
+    AvroSchema schema = new AvroSchema(schemaString);
+    assertEquals(normalized, schema.canonicalString());
+    AvroSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+  }
+
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {
     try {
       AvroSchemaUtils.toObject(obj, schema);
