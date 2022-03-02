@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
@@ -235,18 +236,18 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
 
     assertTrue("adding a field with default is a backward compatible change",
         isCompatible(schema2, Collections.singletonList(schema1)));
-    assertFalse("adding a field w/o default is not a backward compatible change",
-        isCompatible(schema3, Collections.singletonList(schema1)));
+    assertThrows("adding a field w/o default is not a backward compatible change",
+        MojoExecutionException.class, () -> isCompatible(schema3, Collections.singletonList(schema1)));
     assertTrue("changing field name with alias is a backward compatible change",
         isCompatible(schema4, Collections.singletonList(schema1)));
     assertTrue("evolving a field type to a union is a backward compatible change",
         isCompatible(schema6, Collections.singletonList(schema1)));
-    assertFalse("removing a type from a union is not a backward compatible change",
-        isCompatible(schema1, Collections.singletonList(schema6)));
+    assertThrows("removing a type from a union is not a backward compatible change",
+        MojoExecutionException.class, () -> isCompatible(schema1, Collections.singletonList(schema6)));
     assertTrue("adding a new type in union is a backward compatible change",
         isCompatible(schema7, Collections.singletonList(schema6)));
-    assertFalse("removing a type from a union is not a backward compatible change",
-        isCompatible(schema6, Collections.singletonList(schema7)));
+    assertThrows("removing a type from a union is not a backward compatible change",
+        MojoExecutionException.class, () -> isCompatible(schema6, Collections.singletonList(schema7)));
 
     // Only schema 2 is checked
     assertTrue("removing a default is not a transitively compatible change",
@@ -283,8 +284,8 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
         isCompatible(schema2, Collections.singletonList(schema1)));
     assertTrue("removing a default is a compatible change, but not transitively",
         isCompatible(schema3, Collections.singletonList(schema2)));
-    assertFalse("removing a default is not a transitively compatible change",
-        isCompatible(schema3, Arrays.asList(schema2, schema1)));
+    assertThrows("removing a default is not a transitively compatible change",
+        MojoExecutionException.class, () ->isCompatible(schema3, Arrays.asList(schema2, schema1)));
 
     // Test for passing directories in previousSchemaPaths
     String directory = this.tempDirectory.toString() + "/avro";
@@ -375,8 +376,8 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
         isCompatible(schema2, Collections.singletonList(schema3)));
     assertTrue("removing a field with a default is a compatible change",
         isCompatible(schema1, Collections.singletonList(schema2)));
-    assertFalse("removing a default is not a transitively compatible change",
-        isCompatible(schema1, Arrays.asList(schema2, schema3)));
+    assertThrows("removing a default is not a transitively compatible change",
+        MojoExecutionException.class, () -> isCompatible(schema1, Arrays.asList(schema2, schema3)));
   }
 
   /*
@@ -428,9 +429,10 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
     assertTrue("removing a default from a field compatible change",
         isCompatible(schema3, Collections.singletonList(schema2)));
 
-    assertFalse("transitively adding a field without a default is not a compatible change",
-        isCompatible(schema3, Arrays.asList(schema2, schema1)));
-    assertFalse("transitively removing a field without a default is not a compatible change",
-        isCompatible(schema1, Arrays.asList(schema2, schema3)));
+    assertThrows( "transitively adding a field without a default is not a compatible change",
+        MojoExecutionException.class, () -> isCompatible(schema3, Arrays.asList(schema2, schema1)));
+    assertThrows("transitively removing a field without a default is not a compatible change",
+        MojoExecutionException.class, () -> isCompatible(schema1, Arrays.asList(schema2, schema3)));
+
   }
 }

@@ -160,9 +160,9 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
       getLog().info(String.format("Schema is %s compatible with previous schemas",
           compatibilityLevel.name.toLowerCase()));
     } else {
-      String errorLog = String.format("Schema is not %s compatible with previous schemas %n",
+      String errorLog = String.format("Schema is not %s compatible with previous schemas. ",
           compatibilityLevel.name.toLowerCase()) + errorMessages.get(0);
-      getLog().error(errorLog);
+      throw new MojoExecutionException(errorLog);
     }
 
   }
