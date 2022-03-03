@@ -312,6 +312,9 @@ public class AvroSchema implements ParsedSchema {
   }
 
   private int metaHash(Schema schema, Map<Schema, Integer> cache) {
+    if (schema == null) {
+      return 0;
+    }
     switch (schema.getType()) {
       case RECORD:
         // Add a temporary value to the cache to avoid cycles.
