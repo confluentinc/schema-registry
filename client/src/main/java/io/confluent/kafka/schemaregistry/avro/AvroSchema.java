@@ -217,7 +217,7 @@ public class AvroSchema implements ParsedSchema {
       return true;
     }
 
-    if (schema1 == null) {
+    if (schema1 == null || schema2 == null) {
       return false;
     }
 
