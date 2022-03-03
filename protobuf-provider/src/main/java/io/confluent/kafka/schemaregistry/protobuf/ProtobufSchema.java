@@ -847,9 +847,9 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ProtobufSchema that = (ProtobufSchema) o;
     // Can't use schemaObj as locations may differ
-    return Objects.equals(canonicalString(), that.canonicalString())
+    return Objects.equals(version, that.version)
         && Objects.equals(references, that.references)
-        && Objects.equals(version, that.version);
+        && Objects.equals(canonicalString(), that.canonicalString());
   }
 
   @Override
