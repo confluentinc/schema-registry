@@ -336,9 +336,9 @@ public class JsonSchema implements ParsedSchema {
       return false;
     }
     JsonSchema that = (JsonSchema) o;
-    return Objects.equals(canonicalString(), that.canonicalString())
+    return Objects.equals(version, that.version)
         && Objects.equals(references, that.references)
-        && Objects.equals(version, that.version);
+        && Objects.equals(canonicalString(), that.canonicalString());
   }
 
   @Override
