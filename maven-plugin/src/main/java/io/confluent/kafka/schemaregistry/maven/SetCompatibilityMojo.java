@@ -24,24 +24,22 @@ import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 @Mojo(name = "set-compatibility",  configurator = "custom-basic")
 public class SetCompatibilityMojo extends SchemaRegistryMojo {
 
-  @Parameter(required = false, defaultValue = "false")
-  boolean delete;
-
-  @Parameter()
-  String subject;
-
-  @Parameter(defaultValue = "BACKWARD")
-  CompatibilityLevel compatibility;
+  @Parameter(required = true)
+  Map<String, String> compatibilityLevels = new HashMap<>();
 
   public void execute() throws MojoExecutionException {
-    if (delete) {
-      deleteConfig(subject);
-    } else {
-      updateConfig(subject, compatibility);
+    for (Map.Entry<String, String> entry : compatibilityLevels.entrySet()) {
+      if (entry.getValue().equalsIgnoreCase("null")) {
+        deleteConfig(entry.getKey());
+      } else {
+        updateConfig(entry.getKey(), CompatibilityLevel.valueOf(entry.getValue()));
+      }
     }
   }
 
@@ -49,9 +47,10 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
       throws MojoExecutionException {
 
     try {
-      String updatedCompatibility =
-          this.client().updateCompatibility(subject, compatibility.toString());
-      if (subject == null) {
+      String updatedCompatibility;
+
+      if (subject.equalsIgnoreCase("null") || subject.equals("__GLOBAL")) {
+        updatedCompatibility = this.client().updateCompatibility(null, compatibility.toString());
         getLog().info("Global Compatibility set to "
             + updatedCompatibility);
       } else {
@@ -61,6 +60,7 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
               "Subject not found"
           );
         }
+        updatedCompatibility = this.client().updateCompatibility(subject, compatibility.toString());
         getLog().info("Compatibility of " + subject
             + " set to " + updatedCompatibility);
       }
@@ -80,7 +80,7 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
     }
     try {
       this.client().deleteCompatibility(subject);
-      if (subject == null) {
+      if (subject.equalsIgnoreCase("null")) {
         getLog().info("Deleted global compatibility");
       } else {
         getLog().info(String.format("Deleted compatibility of %s", subject));
