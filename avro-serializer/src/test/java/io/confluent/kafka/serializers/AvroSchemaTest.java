@@ -222,6 +222,12 @@ public class AvroSchemaTest {
       + "  \"symbols\" : [\"SPADES\", \"HEARTS\", \"DIAMONDS\"]\n"
       + "}");
 
+  private static final Schema enumSchemaDefault = new Schema.Parser().parse("{ \"type\": \"enum\",\n"
+      + "  \"name\": \"Suit\",\n"
+      + "  \"symbols\" : [\"SPADES\", \"HEARTS\", \"DIAMONDS\", \"CLUBS\"],\n"
+      + "  \"default\" : \"HEARTS\"\n"
+      + "}");
+
   @Test
   public void testPrimitiveTypesToAvro() throws Exception {
     Object result = AvroSchemaUtils.toObject((JsonNode) null, createPrimitiveSchema("null"));
@@ -545,6 +551,11 @@ public class AvroSchemaTest {
     assertEquals(normalized, schema.canonicalString());
     AvroSchema normalizedSchema = schema.normalize();
     assertEquals(normalized, normalizedSchema.canonicalString());
+  }
+
+  @Test
+  public void testEnumDefault() throws Exception {
+    assertNotEquals(new AvroSchema(enumSchema), new AvroSchema(enumSchemaDefault));
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {
