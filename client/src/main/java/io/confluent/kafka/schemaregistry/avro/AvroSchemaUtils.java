@@ -30,6 +30,7 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.avro.AvroRuntimeException;
@@ -377,8 +378,9 @@ public class AvroSchemaUtils {
     if (s.getDoc() != null && !s.getDoc().isEmpty()) {
       o.append(",\"doc\":").append(toJsonNode(s.getDoc()).toString());
     }
-    if (s.getAliases() != null && !s.getAliases().isEmpty()) {
-      o.append(",\"aliases\":").append(toJsonNode(new TreeSet<>(s.getAliases())).toString());
+    Set<String> aliases = s.getAliases();
+    if (!aliases.isEmpty()) {
+      o.append(",\"aliases\":").append(toJsonNode(new TreeSet<>(aliases)).toString());
     }
     if (s.getType() == Schema.Type.ENUM && s.getEnumDefault() != null) {
       o.append(",\"default\":").append(toJsonNode(s.getEnumDefault()).toString());
@@ -392,8 +394,9 @@ public class AvroSchemaUtils {
     if (f.doc() != null) {
       o.append(",\"doc\":").append(toJsonNode(f.doc()).toString());
     }
-    if (!f.aliases().isEmpty()) {
-      o.append(",\"aliases\":").append(toJsonNode(new TreeSet<>(f.aliases())).toString());
+    Set<String> aliases = f.aliases();
+    if (!aliases.isEmpty()) {
+      o.append(",\"aliases\":").append(toJsonNode(new TreeSet<>(aliases)).toString());
     }
     if (f.defaultVal() != null) {
       o.append(",\"default\":").append(toJsonNode(f.defaultVal()).toString());
