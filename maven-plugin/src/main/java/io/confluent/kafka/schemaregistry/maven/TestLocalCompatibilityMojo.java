@@ -27,11 +27,11 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -42,18 +42,16 @@ import org.apache.maven.plugins.annotations.Parameter;
 public class TestLocalCompatibilityMojo extends AbstractMojo {
 
   @Parameter(required = true)
-  File schemaPath;
+  Map<String, File> schemas = new HashMap<>();
 
   @Parameter(required = true)
-  ArrayList<File> previousSchemaPaths;
+  Map<String, String> schemaTypes = new HashMap<>();
 
-  @Parameter(defaultValue = "BACKWARD")
-  CompatibilityLevel compatibilityLevel;
+  @Parameter(required = true)
+  Map<String, File> previousSchemaPaths = new HashMap<>();
 
-  @Parameter(defaultValue = AvroSchema.TYPE)
-  String schemaType;
-
-  boolean success = false;
+  @Parameter(required = true)
+  Map<String, CompatibilityLevel> compatibilityLevels = new HashMap<>();
 
   protected Optional<ParsedSchema> parseSchema(
       String schemaType,
@@ -71,8 +69,8 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
 
   }
 
-  protected ParsedSchema loadSchema(File path, Map<String,
-      SchemaProvider> schemaProviders) throws MojoExecutionException {
+  protected ParsedSchema loadSchema(File path, String schemaType,
+      Map<String, SchemaProvider> schemaProviders) throws MojoExecutionException {
 
     String schemaString;
     try {
@@ -93,68 +91,74 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
         + "with schema type as %s", path, schemaType));
   }
 
-  protected ArrayList<File> getFiles() {
+  protected ArrayList<File> getFiles(File previousSchemaPath) {
 
     ArrayList<File> previousSchemaFiles = new ArrayList<>();
 
-    for (File previousSchemaPath : previousSchemaPaths) {
+    getLog().debug(String.format("Loading File %s", previousSchemaPath));
+    // Add all files inside a directory, inside directories are skipped
+    if (previousSchemaPath.isDirectory()) {
 
-      // Add all files inside a directory, inside directories are skipped
-      if (previousSchemaPath.isDirectory()) {
-
-        File[] fileList = previousSchemaPath.listFiles();
-        if (fileList == null) {
-          continue;
-        }
-
-        // Sorting files by last modified
-        Arrays.sort(fileList, Comparator.comparingLong(File::lastModified));
-
-        for (File f : fileList) {
-          if (!f.isDirectory()) {
-            previousSchemaFiles.add(f);
-          }
-        }
-
-      } else {
-        previousSchemaFiles.add(previousSchemaPath);
+      File[] fileList = previousSchemaPath.listFiles();
+      if (fileList == null) {
+        return previousSchemaFiles;
       }
 
+      for (File f : fileList) {
+        if (!f.isDirectory()) {
+          previousSchemaFiles.add(f);
+        }
+      }
+
+    } else {
+      previousSchemaFiles.add(previousSchemaPath);
     }
 
     return previousSchemaFiles;
   }
 
-  public void execute() throws MojoExecutionException {
 
-    List<SchemaProvider> providers = MojoUtils.defaultSchemaProviders();
-    Map<String, SchemaProvider> schemaProviders = providers.stream()
-        .collect(Collectors.toMap(SchemaProvider::schemaType, p -> p));
+  protected void testSchema(String key, Map<String, SchemaProvider> schemaProviders)
+      throws MojoExecutionException {
 
-    getLog().debug(String.format("Loading Schema at %s", schemaPath));
-    ParsedSchema schema = loadSchema(schemaPath, schemaProviders);
+    File schemaPath = schemas.get(key);
 
-    getLog().debug("Loading Previous Schemas");
-    ArrayList<ParsedSchema> previousSchemas = new ArrayList<>();
-    ArrayList<File> previousSchemaFiles = getFiles();
-
-    for (File previousSchemaFile : previousSchemaFiles) {
-      previousSchemas.add(loadSchema(previousSchemaFile, schemaProviders));
+    if (!previousSchemaPaths.containsKey(key)) {
+      throw new MojoExecutionException(String.format("Previous schemas not found for %s",key));
     }
 
-    CompatibilityChecker checker = CompatibilityChecker.checker(compatibilityLevel);
-    List<String> errorMessages = checker.isCompatible(schema, previousSchemas);
+    File previousSchemaPath = previousSchemaPaths.get(key);
+    String schemaType = schemaTypes.getOrDefault(key, AvroSchema.TYPE);
+
+    if (!compatibilityLevels.containsKey(key)) {
+      throw new MojoExecutionException(String.format("Compatibility Level not found for %s",key));
+    }
+
+    CompatibilityLevel compatibilityLevel = compatibilityLevels.get(key);
+
+    ArrayList<File> previousSchemaFiles = getFiles(previousSchemaPath);
 
     if (previousSchemaFiles.size() > 1
         && (compatibilityLevel == CompatibilityLevel.BACKWARD
         || compatibilityLevel == CompatibilityLevel.FORWARD
         || compatibilityLevel == CompatibilityLevel.FULL)) {
 
-      getLog().info(String.format("Checking only with latest Schema at %s",
-          previousSchemaFiles.get(previousSchemaFiles.size() - 1)));
+      throw new MojoExecutionException(String.format("Provide exactly one file for %s check "
+              + "for schema %s", compatibilityLevel.name.toLowerCase(), schemaPath));
+
     }
 
-    success = errorMessages.isEmpty();
+    ParsedSchema schema = loadSchema(schemaPath, schemaType, schemaProviders);
+    ArrayList<ParsedSchema> previousSchemas = new ArrayList<>();
+
+    for (File previousSchemaFile : previousSchemaFiles) {
+      previousSchemas.add(loadSchema(previousSchemaFile, schemaType, schemaProviders));
+    }
+
+    CompatibilityChecker checker = CompatibilityChecker.checker(compatibilityLevel);
+    List<String> errorMessages = checker.isCompatible(schema, previousSchemas);
+
+    boolean success = errorMessages.isEmpty();
 
     if (success) {
       getLog().info(String.format("Schema is %s compatible with previous schemas",
@@ -163,6 +167,20 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
       String errorLog = String.format("Schema is not %s compatible with previous schemas. ",
           compatibilityLevel.name.toLowerCase()) + errorMessages.get(0);
       throw new MojoExecutionException(errorLog);
+    }
+
+  }
+
+  public void execute() throws MojoExecutionException {
+
+    List<SchemaProvider> providers = MojoUtils.defaultSchemaProviders();
+    Map<String, SchemaProvider> schemaProviders = providers.stream()
+        .collect(Collectors.toMap(SchemaProvider::schemaType, p -> p));
+
+    Set<String> keys = schemas.keySet();
+
+    for (String key : keys) {
+      testSchema(key, schemaProviders);
     }
 
   }
