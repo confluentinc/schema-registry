@@ -257,6 +257,9 @@ public class AvroSchema implements ParsedSchema {
         cache.put(sp, equals);
         return equals;
       case ENUM:
+        return Objects.equals(schema1.getAliases(), schema2.getAliases())
+            && Objects.equals(schema1.getDoc(), schema2.getDoc())
+            && Objects.equals(schema1.getEnumDefault(), schema2.getEnumDefault());
       case FIXED:
         return Objects.equals(schema1.getAliases(), schema2.getAliases())
             && Objects.equals(schema1.getDoc(), schema2.getDoc());
@@ -331,6 +334,7 @@ public class AvroSchema implements ParsedSchema {
         cache.put(schema, result);
         return result;
       case ENUM:
+        return Objects.hash(schema.getAliases(), schema.getDoc(), schema.getEnumDefault());
       case FIXED:
         return Objects.hash(schema.getAliases(), schema.getDoc());
       case UNION:
