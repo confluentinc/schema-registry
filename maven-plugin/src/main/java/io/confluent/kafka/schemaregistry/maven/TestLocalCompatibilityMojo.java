@@ -44,7 +44,7 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
   @Parameter(required = true)
   Map<String, File> schemas = new HashMap<>();
 
-  @Parameter(required = true)
+  @Parameter(required = false)
   Map<String, String> schemaTypes = new HashMap<>();
 
   @Parameter(required = true)
