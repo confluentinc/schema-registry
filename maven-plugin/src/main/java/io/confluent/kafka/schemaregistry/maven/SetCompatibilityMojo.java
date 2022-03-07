@@ -80,7 +80,7 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
     }
     try {
       this.client().deleteCompatibility(subject);
-      if (subject.equalsIgnoreCase("null")) {
+      if (subject.equalsIgnoreCase("null") || subject.equals("__GLOBAL")) {
         getLog().info("Deleted global compatibility");
       } else {
         getLog().info(String.format("Deleted compatibility of %s", subject));
