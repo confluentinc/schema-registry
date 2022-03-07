@@ -124,14 +124,14 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
     File schemaPath = schemas.get(key);
 
     if (!previousSchemaPaths.containsKey(key)) {
-      throw new MojoExecutionException(String.format("Previous schemas not found for %s",key));
+      throw new MojoExecutionException(String.format("Previous schemas not found for %s", key));
     }
 
     File previousSchemaPath = previousSchemaPaths.get(key);
     String schemaType = schemaTypes.getOrDefault(key, AvroSchema.TYPE);
 
     if (!compatibilityLevels.containsKey(key)) {
-      throw new MojoExecutionException(String.format("Compatibility Level not found for %s",key));
+      throw new MojoExecutionException(String.format("Compatibility Level not found for %s", key));
     }
 
     CompatibilityLevel compatibilityLevel = compatibilityLevels.get(key);
