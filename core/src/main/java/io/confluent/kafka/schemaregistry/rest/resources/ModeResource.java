@@ -72,8 +72,8 @@ public class ModeResource {
 
   @Path("/{subject}")
   @PUT
-  @Operation(summary = "Update mode for the specified subject. " +
-          "On success, echoes the original request back to the client.", responses = {
+  @Operation(summary = "Update mode for the specified subject. "
+          + "On success, echoes the original request back to the client.", responses = {
       @ApiResponse(responseCode = "200", description = "The original request"),
       @ApiResponse(responseCode = "422", description = "Error code 42204 -- Invalid mode\n"
           + "Error code 42205 -- Operation not permitted"),
@@ -154,8 +154,8 @@ public class ModeResource {
   }
 
   @PUT
-  @Operation(summary = "Update global mode. " +
-          "On success, echoes the original request back to the client.", responses = {
+  @Operation(summary = "Update global mode. "
+          + "On success, echoes the original request back to the client.", responses = {
       @ApiResponse(responseCode = "200", description = "The original request"),
       @ApiResponse(responseCode = "422", description = "Error code 42204 -- Invalid mode\n"
           + "Error code 42205 -- Operation not permitted"),
