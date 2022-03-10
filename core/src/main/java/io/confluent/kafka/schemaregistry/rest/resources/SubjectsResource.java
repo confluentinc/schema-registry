@@ -76,7 +76,7 @@ public class SubjectsResource {
   @Operation(summary = "Check if a schema has already been registered under the specified subject."
       + " If so, this returns the schema string along with its globally unique identifier, its "
       + "version under this subject and the subject name.", responses = {
-        @ApiResponse(content = @Content(schema =
+        @ApiResponse(responseCode = "200", content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(implementation = Schema.class))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40403 -- Schema not found"),
@@ -128,6 +128,7 @@ public class SubjectsResource {
   @GET
   @Valid
   @Operation(summary = "Get a list of registered subjects.", responses = {
+      @ApiResponse(responseCode = "200", description = "The subjects matching the specified parameters"),
       @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "datastore")
   })
@@ -155,7 +156,7 @@ public class SubjectsResource {
   @Operation(summary = "Deletes the specified subject and its associated compatibility level if "
       + "registered. It is recommended to use this API only when a topic needs to be recycled or "
       + "in development environment.", responses = {
-        @ApiResponse(content = @Content(array = @ArraySchema(schema =
+        @ApiResponse(responseCode = "200", content = @Content(array = @ArraySchema(schema =
           @io.swagger.v3.oas.annotations.media.Schema(implementation = Integer.class)))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
         @ApiResponse(responseCode = "500",
