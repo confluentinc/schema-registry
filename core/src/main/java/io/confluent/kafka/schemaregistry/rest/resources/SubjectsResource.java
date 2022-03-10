@@ -128,7 +128,8 @@ public class SubjectsResource {
   @GET
   @Valid
   @Operation(summary = "Get a list of registered subjects.", responses = {
-      @ApiResponse(responseCode = "200", description = "The subjects matching the specified parameters"),
+      @ApiResponse(responseCode = "200",
+          description = "The subjects matching the specified parameters"),
       @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "datastore")
   })

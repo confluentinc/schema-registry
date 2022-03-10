@@ -168,7 +168,8 @@ public class SubjectVersionsResource {
   @GET
   @Path("/{version}/referencedby")
   @Operation(summary = "Get the schemas that reference the specified schema.", responses = {
-      @ApiResponse(responseCode = "200", description = "The IDs of schemas that reference the specified schema"),
+      @ApiResponse(responseCode = "200",
+          description = "The IDs of schemas that reference the specified schema"),
       @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),
       @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
@@ -212,7 +213,8 @@ public class SubjectVersionsResource {
   @PerformanceMetric("subjects.versions.list")
   @Operation(summary = "Get a list of versions registered under the specified subject.",
       responses = {
-          @ApiResponse(responseCode = "200", description = "The version numbers matching the specified parameters"),
+          @ApiResponse(responseCode = "200",
+              description = "The version numbers matching the specified parameters"),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
           @ApiResponse(responseCode = "500", description =
               "Error code 50001 -- Error in the backend data store")})
