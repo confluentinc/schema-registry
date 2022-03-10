@@ -73,6 +73,7 @@ public class ModeResource {
   @Path("/{subject}")
   @PUT
   @Operation(summary = "Update mode for the specified subject.", responses = {
+      @ApiResponse(responseCode = "200", description = "FIXME - The request"),
       @ApiResponse(responseCode = "422", description = "Error code 42204 -- Invalid mode\n"
           + "Error code 42205 -- Operation not permitted"),
       @ApiResponse(responseCode = "500",
@@ -125,6 +126,7 @@ public class ModeResource {
   @Path("/{subject}")
   @GET
   @Operation(summary = "Get mode for a subject.", responses = {
+      @ApiResponse(responseCode = "200", description = "The subject mode"),
       @ApiResponse(responseCode = "404", description = "Subject not found"),
       @ApiResponse(responseCode = "500",
           description = "Error code 50001 -- Error in the backend data store")
@@ -152,6 +154,7 @@ public class ModeResource {
 
   @PUT
   @Operation(summary = "Update global mode.", responses = {
+      @ApiResponse(responseCode = "200", description = "FIXME - The request"),
       @ApiResponse(responseCode = "422", description = "Error code 42204 -- Invalid mode\n"
           + "Error code 42205 -- Operation not permitted"),
       @ApiResponse(responseCode = "500", description =
@@ -171,6 +174,7 @@ public class ModeResource {
 
   @GET
   @Operation(summary = "Get global mode.", responses = {
+      @ApiResponse(responseCode = "200", description = "The global mode"),
       @ApiResponse(responseCode = "500",
           description = "Error code 50001 -- Error in the backend data store")
   })
@@ -182,7 +186,7 @@ public class ModeResource {
   @Path("/{subject}")
   @Operation(summary = "Deletes the specified subject-level mode and revert to "
       + "the global default.", responses = {
-        @ApiResponse(content = @Content(
+        @ApiResponse(responseCode = "200", content = @Content(
           schema = @Schema(implementation = io.confluent.kafka.schemaregistry.storage.Mode.class))
           ),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
