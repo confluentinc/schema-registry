@@ -167,7 +167,7 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}/referencedby")
-  @Operation(summary = "Get the schemas that reference the specified schema.", responses = {
+  @Operation(summary = "Get the IDs of schemas that reference the specified schema.", responses = {
       @ApiResponse(responseCode = "200",
           description = "The IDs of schemas that reference the specified schema"),
       @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
