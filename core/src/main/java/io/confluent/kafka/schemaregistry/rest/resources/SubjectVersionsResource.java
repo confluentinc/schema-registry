@@ -92,6 +92,7 @@ public class SubjectVersionsResource {
   @PerformanceMetric("subjects.versions.get-schema")
   @Operation(summary = "Get a specific version of the schema registered under this subject.",
       responses = {
+          @ApiResponse(responseCode = "200", description = "The schema"),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
               + "Error code 40402 -- Version not found"),
           @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
@@ -147,6 +148,7 @@ public class SubjectVersionsResource {
   @Operation(summary = "Get the schema for the specified version of this subject. "
       + "The unescaped schema only is returned.",
       responses = {
+          @ApiResponse(responseCode = "200", description = "The schema string"),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
               + "Error code 40402 -- Version not found"),
           @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
@@ -166,6 +168,7 @@ public class SubjectVersionsResource {
   @GET
   @Path("/{version}/referencedby")
   @Operation(summary = "Get the schemas that reference the specified schema.", responses = {
+      @ApiResponse(responseCode = "200", description = "The IDs of schemas that reference the specified schema"),
       @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),
       @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
@@ -209,6 +212,7 @@ public class SubjectVersionsResource {
   @PerformanceMetric("subjects.versions.list")
   @Operation(summary = "Get a list of versions registered under the specified subject.",
       responses = {
+          @ApiResponse(responseCode = "200", description = "The version numbers matching the specified parameters"),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
           @ApiResponse(responseCode = "500", description =
               "Error code 50001 -- Error in the backend data store")})
@@ -268,7 +272,7 @@ public class SubjectVersionsResource {
       + "schema registration request will be forwarded to one of the instances designated as "
       + "the primary. If the primary is not available, the client will get an error code "
       + "indicating that the forwarding has failed.", responses = {
-        @ApiResponse(content = @Content(schema =
+        @ApiResponse(responseCode = "200", content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(
              implementation = RegisterSchemaResponse.class))),
         @ApiResponse(responseCode = "409", description = "Incompatible schema"),
@@ -349,7 +353,7 @@ public class SubjectVersionsResource {
       + "development environments or under extreme circumstances where-in, its required to delete "
       + "a previously registered schema for compatibility purposes or re-register previously "
       + "registered schema.", responses = {
-        @ApiResponse(content = @Content(schema =
+        @ApiResponse(responseCode = "200", content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),
