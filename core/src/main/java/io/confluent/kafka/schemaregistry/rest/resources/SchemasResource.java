@@ -60,6 +60,7 @@ public class SchemasResource {
 
   @GET
   @Operation(summary = "Get the schemas.", responses = {
+      @ApiResponse(responseCode = "200", description = "The schemas matching the specified parameters"),
       @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store\n")
   })
@@ -103,6 +104,7 @@ public class SchemasResource {
   @GET
   @Path("/ids/{id}")
   @Operation(summary = "Get the schema string identified by the input ID.", responses = {
+      @ApiResponse(responseCode = "200", description = "The schema string"),
       @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not found\n"),
       @ApiResponse(responseCode = "500",
           description = "Error code 50001 -- Error in the backend data store\n")
@@ -137,6 +139,7 @@ public class SchemasResource {
   @GET
   @Path("/ids/{id}/subjects")
   @Operation(summary = "Get all the subjects associated with the input ID.", responses = {
+      @ApiResponse(responseCode = "200", description = "The subjects matching the specified parameters"),
       @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not found\n"),
       @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store\n")
@@ -172,6 +175,7 @@ public class SchemasResource {
   @Path("/ids/{id}/versions")
   @Operation(summary = "Get all the subject-version pairs associated with the input ID.",
       responses = {
+          @ApiResponse(responseCode = "200", description = "The subject versions matching the specified parameters"),
           @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not "
               + "found\n"),
           @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
@@ -207,6 +211,7 @@ public class SchemasResource {
   @GET
   @Path("/types")
   @Operation(summary = "Get the schema types supported by this registry.", responses = {
+      @ApiResponse(responseCode = "200", description = "The supported schema types"),
       @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store\n")
   })
