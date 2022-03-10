@@ -72,15 +72,14 @@ public class ConfigResource {
   @Path("/{subject}")
   @PUT
   @Operation(summary = "Update compatibility level for the specified subject. "
-          + "On success, echoes the original request back to the client.", responses = {
-      @ApiResponse(responseCode = "200", description = "The original request"),
-      @ApiResponse(responseCode = "422", description =
-          "Error code 42203 -- Invalid compatibility level\n"
-              + "Error code 40402 -- Version not found"),
-      @ApiResponse(responseCode = "500", description =
-          "Error code 50001 -- Error in the backend data store\n"
-              + "Error code 50003 -- Error while forwarding the request to the primary")
-  })
+      + "On success, echoes the original request back to the client.", responses = {
+        @ApiResponse(responseCode = "200", description = "The original request"),
+        @ApiResponse(responseCode = "422", description =
+            "Error code 42203 -- Invalid compatibility level\n"
+                + "Error code 40402 -- Version not found"),
+        @ApiResponse(responseCode = "500", description =
+           "Error code 50001 -- Error in the backend data store\n"
+                + "Error code 50003 -- Error while forwarding the request to the primary")})
   public ConfigUpdateRequest updateSubjectLevelConfig(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -154,14 +153,13 @@ public class ConfigResource {
 
   @PUT
   @Operation(summary = "Update global compatibility level. "
-          + "On success, echoes the original request back to the client.", responses = {
-      @ApiResponse(responseCode = "200", description = "The original request"),
-      @ApiResponse(responseCode = "422", description = "Error code 42203 -- Invalid compatibility"
-          + " level"),
-      @ApiResponse(responseCode = "500", description =
-          "Error code 50001 -- Error in the backend data store\n"
-              + "Error code 50003 -- Error while forwarding the request to the primary\n")
-  })
+      + "On success, echoes the original request back to the client.", responses = {
+        @ApiResponse(responseCode = "200", description = "The original request"),
+        @ApiResponse(responseCode = "422", description = "Error code 42203 -- Invalid compatibility"
+            + " level"),
+        @ApiResponse(responseCode = "500", description =
+            "Error code 50001 -- Error in the backend data store\n"
+               + "Error code 50003 -- Error while forwarding the request to the primary\n")})
   public ConfigUpdateRequest updateTopLevelConfig(
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
