@@ -71,8 +71,9 @@ public class ConfigResource {
 
   @Path("/{subject}")
   @PUT
-  @Operation(summary = "Update compatibility level for the specified subject.", responses = {
-      @ApiResponse(responseCode = "200", description = "FIXME - The request"),
+  @Operation(summary = "Update compatibility level for the specified subject. " +
+          "On success, echoes the original request back to the client.", responses = {
+      @ApiResponse(responseCode = "200", description = "The original request"),
       @ApiResponse(responseCode = "422", description =
           "Error code 42203 -- Invalid compatibility level\n"
               + "Error code 40402 -- Version not found"),
@@ -152,8 +153,9 @@ public class ConfigResource {
   }
 
   @PUT
-  @Operation(summary = "Update global compatibility level.", responses = {
-      @ApiResponse(responseCode = "200", description = "FIXME -- The request"),
+  @Operation(summary = "Update global compatibility level. " +
+          "On success, echoes the original request back to the client.", responses = {
+      @ApiResponse(responseCode = "200", description = "The original request"),
       @ApiResponse(responseCode = "422", description = "Error code 42203 -- Invalid compatibility"
           + " level"),
       @ApiResponse(responseCode = "500", description =
