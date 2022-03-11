@@ -73,14 +73,15 @@ public class ConfigResource {
 
   @Path("/{subject}")
   @PUT
-  @Operation(summary = "Update compatibility level for the specified subject.", responses = {
-      @ApiResponse(responseCode = "422", description =
-          "Error code 42203 -- Invalid compatibility level\n"
-              + "Error code 40402 -- Version not found"),
-      @ApiResponse(responseCode = "500", description =
-          "Error code 50001 -- Error in the backend data store\n"
-              + "Error code 50003 -- Error while forwarding the request to the primary")
-  })
+  @Operation(summary = "Update compatibility level for the specified subject. "
+      + "On success, echoes the original request back to the client.", responses = {
+        @ApiResponse(responseCode = "200", description = "The original request"),
+        @ApiResponse(responseCode = "422", description =
+            "Error code 42203 -- Invalid compatibility level\n"
+                + "Error code 40402 -- Version not found"),
+        @ApiResponse(responseCode = "500", description =
+           "Error code 50001 -- Error in the backend data store\n"
+                + "Error code 50003 -- Error while forwarding the request to the primary")})
   public ConfigUpdateRequest updateSubjectLevelConfig(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -122,6 +123,7 @@ public class ConfigResource {
   @Path("/{subject}")
   @GET
   @Operation(summary = "Get compatibility level for a subject.", responses = {
+      @ApiResponse(responseCode = "200", description = "The subject compatibility level"),
       @ApiResponse(responseCode = "404", description = "Subject not found"),
       @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store")
@@ -155,13 +157,14 @@ public class ConfigResource {
   }
 
   @PUT
-  @Operation(summary = "Update global compatibility level.", responses = {
-      @ApiResponse(responseCode = "422", description = "Error code 42203 -- Invalid compatibility"
-          + " level"),
-      @ApiResponse(responseCode = "500", description =
-          "Error code 50001 -- Error in the backend data store\n"
-              + "Error code 50003 -- Error while forwarding the request to the primary\n")
-  })
+  @Operation(summary = "Update global compatibility level. "
+      + "On success, echoes the original request back to the client.", responses = {
+        @ApiResponse(responseCode = "200", description = "The original request"),
+        @ApiResponse(responseCode = "422", description = "Error code 42203 -- Invalid compatibility"
+            + " level"),
+        @ApiResponse(responseCode = "500", description =
+            "Error code 50001 -- Error in the backend data store\n"
+               + "Error code 50003 -- Error while forwarding the request to the primary\n")})
   public ConfigUpdateRequest updateTopLevelConfig(
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
@@ -191,6 +194,7 @@ public class ConfigResource {
 
   @GET
   @Operation(summary = "Get global compatibility level.", responses = {
+      @ApiResponse(responseCode = "200", description = "The global compatibility level"),
       @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store")
   })
@@ -242,7 +246,7 @@ public class ConfigResource {
   @Path("/{subject}")
   @Operation(summary = "Deletes the specified subject-level compatibility level config and "
       + "revert to the global default.", responses = {
-        @ApiResponse(content = @Content(
+        @ApiResponse(responseCode = "200", content = @Content(
             schema = @Schema(implementation = CompatibilityLevel.class))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
         @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
