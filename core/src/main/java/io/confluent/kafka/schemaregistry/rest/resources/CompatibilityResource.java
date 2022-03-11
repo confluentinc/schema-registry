@@ -75,7 +75,7 @@ public class CompatibilityResource {
               + "compatibility level was never changed, then the global compatibility level "
               + "applies (http:get:: /config).",
       responses = {
-          @ApiResponse(content = @Content(schema =
+          @ApiResponse(responseCode = "200", content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(implementation =
               CompatibilityCheckResponse.class))),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
@@ -172,7 +172,7 @@ public class CompatibilityResource {
               + "compatibility level was never changed, then the global compatibility level "
               + "applies (http:get:: /config).",
       responses = {
-          @ApiResponse(content = @Content(schema =
+          @ApiResponse(responseCode = "200", content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(implementation =
               CompatibilityCheckResponse.class))),
           @ApiResponse(responseCode = "422", description =
