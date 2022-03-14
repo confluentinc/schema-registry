@@ -15,10 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.exceptions;
 
-/**
- * Indicates an error while performing an operation on the underlying data store that
- * stores all schemas in the registry
- */
 public class SchemaTooLargeException extends SchemaRegistryException {
 
   public SchemaTooLargeException(String message, Throwable cause) {

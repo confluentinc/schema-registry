@@ -17,10 +17,6 @@ package io.confluent.kafka.schemaregistry.rest.exceptions;
 
 import io.confluent.rest.exceptions.RestServerErrorException;
 
-/**
- * Indicates an error while performing an operation on the underlying data store that
- * stores all schemas in the registry
- */
 public class RestSchemaTooLargeException extends RestServerErrorException {
 
   private static final int ERROR_CODE = Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
