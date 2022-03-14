@@ -59,6 +59,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -296,6 +297,8 @@ public class SubjectVersionsResource {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
+    } catch (SchemaTooLargeException e) {
+      throw Errors.schemaTooLargeException("Register operation failed because schema is too large");
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
