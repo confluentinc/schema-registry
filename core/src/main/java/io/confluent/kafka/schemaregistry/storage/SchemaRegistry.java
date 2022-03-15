@@ -108,6 +108,10 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   default void setTenant(String tenant) {
   }
 
+  default Registry getRegistry(SchemaRegistryConfig config) {
+    return null;
+  }
+
   SchemaRegistryConfig config();
 
   // Can be used to pass values between extensions
