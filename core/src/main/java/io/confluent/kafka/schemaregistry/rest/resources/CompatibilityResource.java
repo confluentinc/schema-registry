@@ -75,8 +75,8 @@ public class CompatibilityResource {
               + "compatibility level was never changed, then the global compatibility level "
               + "applies (http:get:: /config).",
       responses = {
-          @ApiResponse(responseCode = "200", content = @Content(schema =
-          @io.swagger.v3.oas.annotations.media.Schema(implementation =
+          @ApiResponse(responseCode = "200", description = "Compatibility check result",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
               CompatibilityCheckResponse.class))),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
               + "Error code 40402 -- Version not found"),
@@ -172,8 +172,8 @@ public class CompatibilityResource {
               + "compatibility level was never changed, then the global compatibility level "
               + "applies (http:get:: /config).",
       responses = {
-          @ApiResponse(responseCode = "200", content = @Content(schema =
-          @io.swagger.v3.oas.annotations.media.Schema(implementation =
+          @ApiResponse(responseCode = "200", description = "Compatibility check result",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
               CompatibilityCheckResponse.class))),
           @ApiResponse(responseCode = "422", description =
               "Error code 42201 -- Invalid schema or schema type\n"

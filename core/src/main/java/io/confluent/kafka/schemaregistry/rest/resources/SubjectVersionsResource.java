@@ -275,7 +275,7 @@ public class SubjectVersionsResource {
       + "schema registration request will be forwarded to one of the instances designated as "
       + "the primary. If the primary is not available, the client will get an error code "
       + "indicating that the forwarding has failed.", responses = {
-        @ApiResponse(responseCode = "200", content = @Content(schema =
+        @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(
              implementation = RegisterSchemaResponse.class))),
         @ApiResponse(responseCode = "409", description = "Incompatible schema"),

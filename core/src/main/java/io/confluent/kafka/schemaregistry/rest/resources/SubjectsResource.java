@@ -76,7 +76,7 @@ public class SubjectsResource {
   @Operation(summary = "Check if a schema has already been registered under the specified subject."
       + " If so, this returns the schema string along with its globally unique identifier, its "
       + "version under this subject and the subject name.", responses = {
-        @ApiResponse(responseCode = "200", content = @Content(schema =
+        @ApiResponse(responseCode = "200", description = "The schema", content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(implementation = Schema.class))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40403 -- Schema not found"),
