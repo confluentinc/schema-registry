@@ -91,7 +91,8 @@ public class SubjectVersionsResource {
   @GET
   @Path("/{version}")
   @PerformanceMetric("subjects.versions.get-schema")
-  @Operation(summary = "Get a specific version of the schema registered under this subject.",
+  @Operation(summary = "Get schema by version",
+      description = "Retrieves a specific version of the schema registered under this subject.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The schema"),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
@@ -146,8 +147,9 @@ public class SubjectVersionsResource {
   @GET
   @Path("/{version}/schema")
   @PerformanceMetric("subjects.versions.get-schema.only")
-  @Operation(summary = "Get the schema for the specified version of this subject. "
-      + "The unescaped schema only is returned.",
+  @Operation(summary = "Get schema string by version",
+      description = "Retrieves the schema for the specified version of this subject. "
+        + "Only the unescaped schema string is returned.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The schema string"),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
@@ -168,15 +170,17 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}/referencedby")
-  @Operation(summary = "Get the IDs of schemas that reference the specified schema.", responses = {
-      @ApiResponse(responseCode = "200",
+  @Operation(summary = "List schemas referencing a schema",
+      description = "Retrieves the IDs of schemas that reference the specified schema.",
+      responses = {
+        @ApiResponse(responseCode = "200",
           description = "The IDs of schemas that reference the specified schema"),
-      @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
+        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),
-      @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
-      @ApiResponse(responseCode = "500",
+        @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
+        @ApiResponse(responseCode = "500",
           description = "Error code 50001 -- Error in the backend data store"
-      )})
+        )})
   public List<Integer> getReferencedBy(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -212,7 +216,8 @@ public class SubjectVersionsResource {
 
   @GET
   @PerformanceMetric("subjects.versions.list")
-  @Operation(summary = "Get a list of versions registered under the specified subject.",
+  @Operation(summary = "List versions under subject",
+      description = "Retrieves a list of versions registered under the specified subject.",
       responses = {
           @ApiResponse(responseCode = "200",
               description = "The version numbers matching the specified parameters"),
@@ -261,20 +266,22 @@ public class SubjectVersionsResource {
 
   @POST
   @PerformanceMetric("subjects.versions.register")
-  @Operation(summary = "Register a new schema under the specified subject. If successfully "
-      + "registered, this returns the unique identifier of this schema in the registry. The "
-      + "returned identifier should be used to retrieve this schema from the schemas resource and "
-      + "is different from the schema's version which is associated with the subject. If the same "
-      + "schema is registered under a different subject, the same identifier will be returned. "
-      + "However, the version of the schema may be different under different subjects.\n"
-      + "A schema should be compatible with the previously registered schema or schemas (if there "
-      + "are any) as per the configured compatibility level. The configured compatibility level "
-      + "can be obtained by issuing a GET http:get:: /config/(string: subject). If that returns "
-      + "null, then GET http:get:: /config\n"
-      + "When there are multiple instances of Schema Registry running in the same cluster, the "
-      + "schema registration request will be forwarded to one of the instances designated as "
-      + "the primary. If the primary is not available, the client will get an error code "
-      + "indicating that the forwarding has failed.", responses = {
+  @Operation(summary = "Register schema under a subject",
+      description = "Register a new schema under the specified subject. If successfully "
+        + "registered, this returns the unique identifier of this schema in the registry. The "
+        + "returned identifier should be used to retrieve this schema from the schemas resource "
+        + "and is different from the schema's version which is associated with the subject. If the "
+        + "same schema is registered under a different subject, the same identifier will be "
+        + "returned. However, the version of the schema may be different under different subjects."
+        + "\nA schema should be compatible with the previously registered schema or schemas (if "
+        + "there are any) as per the configured compatibility level. The configured compatibility "
+        + "level can be obtained by issuing a GET http:get:: /config/(string: subject). If that "
+        + "returns null, then GET http:get:: /config\n"
+        + "When there are multiple instances of Schema Registry running in the same cluster, the "
+        + "schema registration request will be forwarded to one of the instances designated as "
+        + "the primary. If the primary is not available, the client will get an error code "
+        + "indicating that the forwarding has failed.",
+      responses = {
         @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(
              implementation = RegisterSchemaResponse.class))),
@@ -285,7 +292,6 @@ public class SubjectVersionsResource {
           "Error code 50001 -- Error in the backend data store\n"
               + "Error code 50002 -- Operation timed out\n"
               + "Error code 50003 -- Error while forwarding the request to the primary")
-
       })
   public void register(
       final @Suspended AsyncResponse asyncResponse,
@@ -352,12 +358,14 @@ public class SubjectVersionsResource {
   @DELETE
   @Path("/{version}")
   @PerformanceMetric("subjects.versions.deleteSchemaVersion-schema")
-  @Operation(summary = "Deletes a specific version of the schema registered under this subject. "
-      + "This only deletes the version and the schema ID remains intact making it still possible "
-      + "to decode data using the schema ID. This API is recommended to be used only in "
-      + "development environments or under extreme circumstances where-in, its required to delete "
-      + "a previously registered schema for compatibility purposes or re-register previously "
-      + "registered schema.", responses = {
+  @Operation(summary = "Delete schema version",
+      description = "Deletes a specific version of the schema registered under this subject. "
+        + "This only deletes the version and the schema ID remains intact making it still possible "
+        + "to decode data using the schema ID. This API is recommended to be used only in "
+        + "development environments or under extreme circumstances where-in, its required to "
+        + "delete a previously registered schema for compatibility purposes or re-register "
+        + "previously registered schema.",
+      responses = {
         @ApiResponse(responseCode = "200", description = "Operation succeeded. "
           + "Returns the schema version", content = @Content(schema =
             @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class))),
