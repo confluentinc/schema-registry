@@ -71,7 +71,7 @@ public class ConfigResource {
 
   @Path("/{subject}")
   @PUT
-  @Operation(summary = "Update subject compatibility level.",
+  @Operation(summary = "Update subject compatibility level",
       description = "Update compatibility level for the specified subject. "
         + "On success, echoes the original request back to the client.",
       responses = {
@@ -119,10 +119,12 @@ public class ConfigResource {
 
   @Path("/{subject}")
   @GET
-  @Operation(summary = "Get subject compatibility level.", responses = {
-      @ApiResponse(responseCode = "200", description = "The subject compatibility level"),
-      @ApiResponse(responseCode = "404", description = "Subject not found"),
-      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+  @Operation(summary = "Get subject compatibility level",
+      description = "Retrieves compatibility level for a subject.",
+      responses = {
+        @ApiResponse(responseCode = "200", description = "The subject compatibility level"),
+        @ApiResponse(responseCode = "404", description = "Subject not found"),
+        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store")
   })
   public Config getSubjectLevelConfig(
