@@ -275,7 +275,7 @@ public class SubjectVersionsResource {
       + "schema registration request will be forwarded to one of the instances designated as "
       + "the primary. If the primary is not available, the client will get an error code "
       + "indicating that the forwarding has failed.", responses = {
-        @ApiResponse(responseCode = "200", content = @Content(schema =
+        @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(
              implementation = RegisterSchemaResponse.class))),
         @ApiResponse(responseCode = "409", description = "Incompatible schema"),
@@ -358,8 +358,9 @@ public class SubjectVersionsResource {
       + "development environments or under extreme circumstances where-in, its required to delete "
       + "a previously registered schema for compatibility purposes or re-register previously "
       + "registered schema.", responses = {
-        @ApiResponse(responseCode = "200", content = @Content(schema =
-          @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class))),
+        @ApiResponse(responseCode = "200", description = "Operation succeeded. "
+          + "Returns the schema version", content = @Content(schema =
+            @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),
         @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
