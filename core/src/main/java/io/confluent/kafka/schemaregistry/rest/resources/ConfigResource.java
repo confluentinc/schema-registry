@@ -126,7 +126,7 @@ public class ConfigResource {
         @ApiResponse(responseCode = "404", description = "Subject not found"),
         @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store")
-  })
+      })
   public Config getSubjectLevelConfig(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,

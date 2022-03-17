@@ -133,7 +133,7 @@ public class ModeResource {
         @ApiResponse(responseCode = "404", description = "Subject not found"),
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store")
-  })
+      })
   public Mode getMode(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -184,7 +184,7 @@ public class ModeResource {
         @ApiResponse(responseCode = "200", description = "The global mode"),
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store")
-  })
+      })
   public Mode getTopLevelMode() {
     return getMode(null, false);
   }

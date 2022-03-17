@@ -179,8 +179,8 @@ public class SubjectVersionsResource {
           + "Error code 40402 -- Version not found"),
         @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
         @ApiResponse(responseCode = "500",
-          description = "Error code 50001 -- Error in the backend data store"
-        )})
+          description = "Error code 50001 -- Error in the backend data store")
+      })
   public List<Integer> getReferencedBy(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,

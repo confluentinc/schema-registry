@@ -136,7 +136,7 @@ public class SubjectsResource {
             description = "The subjects matching the specified parameters"),
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend datastore")
-  })
+      })
   @PerformanceMetric("subjects.list")
   public Set<String> list(
       @DefaultValue(QualifiedSubject.CONTEXT_WILDCARD)
@@ -159,7 +159,7 @@ public class SubjectsResource {
   @DELETE
   @Path("/{subject}")
   @Operation(summary = "Delete subject",
-      description= "Deletes the specified subject and its associated compatibility level if "
+      description = "Deletes the specified subject and its associated compatibility level if "
         + "registered. It is recommended to use this API only when a topic needs to be recycled or "
         + "in development environment.",
       responses = {

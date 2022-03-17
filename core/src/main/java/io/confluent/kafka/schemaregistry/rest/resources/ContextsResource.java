@@ -52,7 +52,7 @@ public class ContextsResource {
         @ApiResponse(responseCode = "200", description = "The contexts"),
         @ApiResponse(responseCode = "500",
                      description = "Error code 50001 -- Error in the backend datastore")
-  })
+      })
   @PerformanceMetric("contexts.list")
   public List<String> listContexts() {
     try {

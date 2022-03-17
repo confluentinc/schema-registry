@@ -66,7 +66,7 @@ public class SchemasResource {
           description = "The schemas matching the specified parameters"),
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store\n")
-  })
+      })
   @PerformanceMetric("schemas.get-schemas")
   public List<Schema> getSchemas(
       @Parameter(description = "Filters results by the respective subject prefix")
@@ -113,7 +113,7 @@ public class SchemasResource {
         @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not found\n"),
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store\n")
-  })
+      })
   @PerformanceMetric("schemas.ids.get-schema")
   public SchemaString getSchema(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
@@ -151,7 +151,7 @@ public class SchemasResource {
         @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not found\n"),
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store\n")
-  })
+      })
   public Set<String> getSubjects(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
@@ -226,7 +226,7 @@ public class SchemasResource {
         @ApiResponse(responseCode = "200", description = "The supported schema types"),
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store\n")
-  })
+      })
   public Set<String> getSchemaTypes() {
     return schemaRegistry.schemaTypes();
   }
