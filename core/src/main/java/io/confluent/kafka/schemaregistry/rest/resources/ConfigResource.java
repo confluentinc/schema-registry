@@ -208,8 +208,8 @@ public class ConfigResource {
   @Path("/{subject}")
   @Operation(summary = "Deletes the specified subject-level compatibility level config and "
       + "revert to the global default.", responses = {
-        @ApiResponse(responseCode = "200", content = @Content(
-            schema = @Schema(implementation = CompatibilityLevel.class))),
+        @ApiResponse(responseCode = "200", description = "Operation succeeded. Returns old compatibility level",
+          content = @Content(schema = @Schema(implementation = CompatibilityLevel.class))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
         @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "datastore")

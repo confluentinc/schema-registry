@@ -358,7 +358,8 @@ public class SubjectVersionsResource {
       + "development environments or under extreme circumstances where-in, its required to delete "
       + "a previously registered schema for compatibility purposes or re-register previously "
       + "registered schema.", responses = {
-        @ApiResponse(responseCode = "200", content = @Content(schema =
+        @ApiResponse(responseCode = "200", description = "Operation succeeded. Returns the schema version",
+          content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),

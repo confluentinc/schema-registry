@@ -157,7 +157,8 @@ public class SubjectsResource {
   @Operation(summary = "Deletes the specified subject and its associated compatibility level if "
       + "registered. It is recommended to use this API only when a topic needs to be recycled or "
       + "in development environment.", responses = {
-        @ApiResponse(responseCode = "200", content = @Content(array = @ArraySchema(schema =
+        @ApiResponse(responseCode = "200", description = "Operation succeeded. Returns list of schema versions deleted",
+          content = @Content(array = @ArraySchema(schema =
           @io.swagger.v3.oas.annotations.media.Schema(implementation = Integer.class)))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
         @ApiResponse(responseCode = "500",
