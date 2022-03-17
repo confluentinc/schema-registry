@@ -67,8 +67,7 @@ public class CompatibilityResource {
 
   @POST
   @Path("/subjects/{subject}/versions/{version}")
-  @Operation(summary = "Test input schema against a particular version of a subject's schema for "
-      + "compatibility.",
+  @Operation(summary = "Test schema compatibility against a particular schema subject-version",
       description =
           "Test input schema against a particular version of a subject's schema for compatibility. "
               + "The compatibility level applied for the check is the configured compatibility "
@@ -164,7 +163,7 @@ public class CompatibilityResource {
 
   @POST
   @Path("/subjects/{subject}/versions")
-  @Operation(summary = "Test input schema against a subject's schemas for compatibility.",
+  @Operation(summary = "Test schema compatibility against all schemas under a subject",
       description =
           "Test input schema against a subject's schemas for compatibility, "
               + "based on the configured compatibility level of the subject. In other words, "

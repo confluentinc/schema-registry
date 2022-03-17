@@ -71,8 +71,10 @@ public class ConfigResource {
 
   @Path("/{subject}")
   @PUT
-  @Operation(summary = "Update compatibility level for the specified subject. "
-      + "On success, echoes the original request back to the client.", responses = {
+  @Operation(summary = "Update subject compatibility level.",
+      description = "Update compatibility level for the specified subject. "
+        + "On success, echoes the original request back to the client.",
+      responses = {
         @ApiResponse(responseCode = "200", description = "The original request"),
         @ApiResponse(responseCode = "422", description =
             "Error code 42203 -- Invalid compatibility level\n"
@@ -117,7 +119,7 @@ public class ConfigResource {
 
   @Path("/{subject}")
   @GET
-  @Operation(summary = "Get compatibility level for a subject.", responses = {
+  @Operation(summary = "Get subject compatibility level.", responses = {
       @ApiResponse(responseCode = "200", description = "The subject compatibility level"),
       @ApiResponse(responseCode = "404", description = "Subject not found"),
       @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
