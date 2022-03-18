@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
@@ -108,6 +109,9 @@ public class SubjectsResource {
       }
       matchingSchema =
           schemaRegistry.lookUpSchemaUnderSubject(subject, schema, lookupDeletedSchema);
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException("Either the input schema or"
+          + " one its references is invalid", e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);
