@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -94,12 +95,20 @@ public class SubjectVersionsResource {
   @Operation(summary = "Get schema by version",
       description = "Retrieves a specific version of the schema registered under this subject.",
       responses = {
-          @ApiResponse(responseCode = "200", description = "The schema"),
+          @ApiResponse(responseCode = "200", description = "The schema",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = Schema.class))),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
-              + "Error code 40402 -- Version not found"),
-          @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
+              + "Error code 40402 -- Version not found",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
           @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
-              + "backend data store")
+              + "backend data store",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class)))
       })
   public Schema getSchemaByVersion(
       @Parameter(description = "Name of the subject", required = true)
