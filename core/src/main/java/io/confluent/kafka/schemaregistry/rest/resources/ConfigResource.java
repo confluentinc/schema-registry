@@ -77,7 +77,8 @@ public class ConfigResource {
       description = "Update compatibility level for the specified subject. "
         + "On success, echoes the original request back to the client.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The original request"),
+        @ApiResponse(responseCode = "200", description = "The original request", content = @Content(
+            schema = @Schema(implementation = ConfigUpdateRequest.class))),
         @ApiResponse(responseCode = "422", description =
             "Error code 42203 -- Invalid compatibility level\n"
                 + "Error code 40402 -- Version not found"),
@@ -127,7 +128,8 @@ public class ConfigResource {
   @Operation(summary = "Get subject compatibility level",
       description = "Retrieves compatibility level for a subject.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The subject compatibility level"),
+        @ApiResponse(responseCode = "200", description = "The subject compatibility level",
+            content = @Content(schema = @Schema(implementation = Config.class))),
         @ApiResponse(responseCode = "404", description = "Subject not found"),
         @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store")
@@ -163,7 +165,8 @@ public class ConfigResource {
   @PUT
   @Operation(summary = "Update global compatibility level. "
       + "On success, echoes the original request back to the client.", responses = {
-        @ApiResponse(responseCode = "200", description = "The original request"),
+        @ApiResponse(responseCode = "200", description = "The original request",
+            content = @Content(schema = @Schema(implementation = ConfigUpdateRequest.class))),
         @ApiResponse(responseCode = "422", description = "Error code 42203 -- Invalid compatibility"
             + " level"),
         @ApiResponse(responseCode = "500", description =
@@ -198,7 +201,8 @@ public class ConfigResource {
 
   @GET
   @Operation(summary = "Get global compatibility level.", responses = {
-      @ApiResponse(responseCode = "200", description = "The global compatibility level"),
+      @ApiResponse(responseCode = "200", description = "The global compatibility level",
+          content = @Content(schema = @Schema(implementation = Config.class))),
       @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store")
   })

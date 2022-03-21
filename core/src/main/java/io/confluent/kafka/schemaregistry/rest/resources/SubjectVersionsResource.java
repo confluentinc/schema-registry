@@ -20,6 +20,7 @@ import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOB
 import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -43,6 +44,7 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.slf4j.Logger;
@@ -96,12 +98,20 @@ public class SubjectVersionsResource {
   @Operation(summary = "Get schema by version",
       description = "Retrieves a specific version of the schema registered under this subject.",
       responses = {
-          @ApiResponse(responseCode = "200", description = "The schema"),
+          @ApiResponse(responseCode = "200", description = "The schema",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = Schema.class))),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
-              + "Error code 40402 -- Version not found"),
-          @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
+              + "Error code 40402 -- Version not found",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
           @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
-              + "backend data store")
+              + "backend data store",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class)))
       })
   public Schema getSchemaByVersion(
       @Parameter(description = "Name of the subject", required = true)
@@ -153,7 +163,8 @@ public class SubjectVersionsResource {
       description = "Retrieves the schema for the specified version of this subject. "
         + "Only the unescaped schema string is returned.",
       responses = {
-          @ApiResponse(responseCode = "200", description = "The schema string"),
+          @ApiResponse(responseCode = "200", description = "The schema string", content = @Content(
+              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class))),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
               + "Error code 40402 -- Version not found"),
           @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
@@ -176,7 +187,9 @@ public class SubjectVersionsResource {
       description = "Retrieves the IDs of schemas that reference the specified schema.",
       responses = {
         @ApiResponse(responseCode = "200",
-          description = "The IDs of schemas that reference the specified schema"),
+          description = "The IDs of schemas that reference the specified schema",
+          content = @Content(array = @ArraySchema(
+              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class)))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),
         @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
@@ -222,7 +235,10 @@ public class SubjectVersionsResource {
       description = "Retrieves a list of versions registered under the specified subject.",
       responses = {
           @ApiResponse(responseCode = "200",
-              description = "The version numbers matching the specified parameters"),
+              description = "The version numbers matching the specified parameters",
+              content = @Content(array = @ArraySchema(
+                  schema = @io.swagger.v3.oas.annotations.media.Schema(
+                      implementation = int.class)))),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
           @ApiResponse(responseCode = "500", description =
               "Error code 50001 -- Error in the backend data store")})
