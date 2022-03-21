@@ -138,7 +138,9 @@ public class SubjectsResource {
       description = "Retrieves a list of registered subjects matching specified parameters.",
       responses = {
         @ApiResponse(responseCode = "200",
-            description = "The subjects matching the specified parameters"),
+            description = "The subjects matching the specified parameters", content = @Content(
+                array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                    implementation = String.class)))),
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend datastore")
       })
