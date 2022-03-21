@@ -162,7 +162,7 @@ public class SubjectVersionsResource {
         + "Only the unescaped schema string is returned.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The schema string", content = @Content(
-              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = Schema.class))),
+              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class))),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
               + "Error code 40402 -- Version not found"),
           @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
@@ -234,8 +234,9 @@ public class SubjectVersionsResource {
       responses = {
           @ApiResponse(responseCode = "200",
               description = "The version numbers matching the specified parameters",
-              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
-                  implementation = int.class))),
+              content = @Content(array = @ArraySchema(
+                  schema = @io.swagger.v3.oas.annotations.media.Schema(
+                      implementation = int.class)))),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
           @ApiResponse(responseCode = "500", description =
               "Error code 50001 -- Error in the backend data store")})
