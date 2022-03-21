@@ -22,6 +22,9 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 
 import javax.ws.rs.Consumes;
@@ -49,7 +52,8 @@ public class ContextsResource {
   @Operation(summary = "List contexts",
       description = "Retrieves a list of contexts.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The contexts"),
+        @ApiResponse(responseCode = "200", description = "The contexts", content = @Content(
+            array = @ArraySchema(schema = @Schema(implementation = String.class)))),
         @ApiResponse(responseCode = "500",
                      description = "Error code 50001 -- Error in the backend data store")
       })
