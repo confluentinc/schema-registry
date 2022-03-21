@@ -42,6 +42,7 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.slf4j.Logger;
@@ -160,7 +161,8 @@ public class SubjectVersionsResource {
       description = "Retrieves the schema for the specified version of this subject. "
         + "Only the unescaped schema string is returned.",
       responses = {
-          @ApiResponse(responseCode = "200", description = "The schema string"),
+          @ApiResponse(responseCode = "200", description = "The schema string", content = @Content(
+              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = Schema.class))),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
               + "Error code 40402 -- Version not found"),
           @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
@@ -183,7 +185,10 @@ public class SubjectVersionsResource {
       description = "Retrieves the IDs of schemas that reference the specified schema.",
       responses = {
         @ApiResponse(responseCode = "200",
-          description = "The IDs of schemas that reference the specified schema"),
+          description = "The IDs of schemas that reference the specified schema",
+          content = @Content(array = @ArraySchema(
+              schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = Integer.class)))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),
         @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
@@ -229,7 +234,9 @@ public class SubjectVersionsResource {
       description = "Retrieves a list of versions registered under the specified subject.",
       responses = {
           @ApiResponse(responseCode = "200",
-              description = "The version numbers matching the specified parameters"),
+              description = "The version numbers matching the specified parameters",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = int.class))),
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
           @ApiResponse(responseCode = "500", description =
               "Error code 50001 -- Error in the backend data store")})
