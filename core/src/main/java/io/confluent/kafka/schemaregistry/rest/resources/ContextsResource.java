@@ -51,7 +51,7 @@ public class ContextsResource {
       responses = {
         @ApiResponse(responseCode = "200", description = "The contexts"),
         @ApiResponse(responseCode = "500",
-                     description = "Error code 50001 -- Error in the backend datastore")
+                     description = "Error code 50001 -- Error in the backend data store")
       })
   @PerformanceMetric("contexts.list")
   public List<String> listContexts() {
