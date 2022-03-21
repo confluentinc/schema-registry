@@ -74,8 +74,10 @@ public class ModeResource {
 
   @Path("/{subject}")
   @PUT
-  @Operation(summary = "Update mode for the specified subject. "
-      + "On success, echoes the original request back to the client.", responses = {
+  @Operation(summary = "Update subject mode",
+      description = "Update mode for the specified subject. "
+        + "On success, echoes the original request back to the client.",
+      responses = {
         @ApiResponse(responseCode = "200", description = "The original request"),
         @ApiResponse(responseCode = "422", description = "Error code 42204 -- Invalid mode\n"
             + "Error code 42205 -- Operation not permitted"),
@@ -129,12 +131,14 @@ public class ModeResource {
 
   @Path("/{subject}")
   @GET
-  @Operation(summary = "Get mode for a subject.", responses = {
-      @ApiResponse(responseCode = "200", description = "The subject mode"),
-      @ApiResponse(responseCode = "404", description = "Subject not found"),
-      @ApiResponse(responseCode = "500",
-          description = "Error code 50001 -- Error in the backend data store")
-  })
+  @Operation(summary = "Get subject mode",
+      description = "Retrieves the subject mode.",
+      responses = {
+        @ApiResponse(responseCode = "200", description = "The subject mode"),
+        @ApiResponse(responseCode = "404", description = "Subject not found"),
+        @ApiResponse(responseCode = "500",
+            description = "Error code 50001 -- Error in the backend data store")
+      })
   public Mode getMode(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -157,8 +161,10 @@ public class ModeResource {
   }
 
   @PUT
-  @Operation(summary = "Update global mode. "
-      + "On success, echoes the original request back to the client.", responses = {
+  @Operation(summary = "Update global mode",
+      description = "Update global mode. "
+        + "On success, echoes the original request back to the client.",
+      responses = {
         @ApiResponse(responseCode = "200", description = "The original request"),
         @ApiResponse(responseCode = "422", description = "Error code 42204 -- Invalid mode\n"
             + "Error code 42205 -- Operation not permitted"),
@@ -177,19 +183,23 @@ public class ModeResource {
   }
 
   @GET
-  @Operation(summary = "Get global mode.", responses = {
-      @ApiResponse(responseCode = "200", description = "The global mode"),
-      @ApiResponse(responseCode = "500",
-          description = "Error code 50001 -- Error in the backend data store")
-  })
+  @Operation(summary = "Get global mode",
+      description = "Retrieves global mode.",
+      responses = {
+        @ApiResponse(responseCode = "200", description = "The global mode"),
+        @ApiResponse(responseCode = "500",
+            description = "Error code 50001 -- Error in the backend data store")
+      })
   public Mode getTopLevelMode() {
     return getMode(null, false);
   }
 
   @DELETE
   @Path("/{subject}")
-  @Operation(summary = "Deletes the specified subject-level mode and revert to "
-      + "the global default.", responses = {
+  @Operation(summary = "Delete subject mode",
+      description = "Deletes the specified subject-level mode and reverts to "
+        + "the global default.",
+      responses = {
         @ApiResponse(responseCode = "200", description = "Operation succeeded. Returns old mode",
           content = @Content(schema = @Schema(
             implementation = io.confluent.kafka.schemaregistry.storage.Mode.class))),

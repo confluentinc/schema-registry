@@ -67,11 +67,11 @@ public class CompatibilityResource {
 
   @POST
   @Path("/subjects/{subject}/versions/{version}")
-  @Operation(summary = "Test input schema against a particular version of a subject's schema for "
-      + "compatibility.",
+  @Operation(summary = "Test schema compatibility against a particular schema subject-version",
       description =
-          "the compatibility level applied for the check is the configured compatibility level "
-              + "for the subject (http:get:: /config/(string: subject)). If this subject's "
+          "Test input schema against a particular version of a subject's schema for compatibility. "
+              + "The compatibility level applied for the check is the configured compatibility "
+              + "level for the subject (http:get:: /config/(string: subject)). If this subject's "
               + "compatibility level was never changed, then the global compatibility level "
               + "applies (http:get:: /config).",
       responses = {
@@ -163,12 +163,13 @@ public class CompatibilityResource {
 
   @POST
   @Path("/subjects/{subject}/versions")
-  @Operation(summary = "Test input schema against a subject's schemas for compatibility, "
-      + "based on the compatibility level of the subject configured. In other word, "
-      + "it will perform the same compatibility check as register for that subject",
+  @Operation(summary = "Test schema compatibility against all schemas under a subject",
       description =
-          "the compatibility level applied for the check is the configured compatibility level "
-              + "for the subject (http:get:: /config/(string: subject)). If this subject's "
+          "Test input schema against a subject's schemas for compatibility, "
+              + "based on the configured compatibility level of the subject. In other words, "
+              + "it will perform the same compatibility check as register for that subject. "
+              + "The compatibility level applied for the check is the configured compatibility "
+              + "level for the subject (http:get:: /config/(string: subject)). If this subject's "
               + "compatibility level was never changed, then the global compatibility level "
               + "applies (http:get:: /config).",
       responses = {
