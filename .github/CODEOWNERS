@@ -1,0 +1,4 @@
+# See go/codeowners - automatically generated for confluentinc/schema-registry:
+*	@confluentinc/data-governance
+*	@confluentinc/devx
+*	@confluentinc/security
