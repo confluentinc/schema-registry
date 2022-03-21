@@ -187,8 +187,7 @@ public class SubjectVersionsResource {
         @ApiResponse(responseCode = "200",
           description = "The IDs of schemas that reference the specified schema",
           content = @Content(array = @ArraySchema(
-              schema = @io.swagger.v3.oas.annotations.media.Schema(
-                  implementation = Integer.class)))),
+              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class)))),
         @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),
         @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
