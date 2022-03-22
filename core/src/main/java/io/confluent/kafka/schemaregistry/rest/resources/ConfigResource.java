@@ -158,7 +158,8 @@ public class ConfigResource {
   }
 
   @PUT
-  @Operation(summary = "Update global compatibility level. "
+  @Operation(summary = "Update global compatibility level",
+      description = "Updates the global compatibility level. "
       + "On success, echoes the original request back to the client.", responses = {
         @ApiResponse(responseCode = "200", description = "The original request",
             content = @Content(schema = @Schema(implementation = ConfigUpdateRequest.class))),
@@ -214,8 +215,9 @@ public class ConfigResource {
 
   @DELETE
   @Path("/{subject}")
-  @Operation(summary = "Deletes the specified subject-level compatibility level config and "
-      + "revert to the global default.", responses = {
+  @Operation(summary = "Delete subject compatibility level",
+      description = "Deletes the specified subject-level compatibility level config and "
+      + "reverts to the global default.", responses = {
         @ApiResponse(responseCode = "200", description = "Operation succeeded. "
           + "Returns old compatibility level",
           content = @Content(schema = @Schema(implementation = CompatibilityLevel.class))),
