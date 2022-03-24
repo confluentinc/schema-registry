@@ -54,6 +54,10 @@ public class KafkaJsonSerializer<T> implements Serializer<T> {
         SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, !writeDatesAsIso8601);
   }
 
+  public ObjectMapper objectMapper() {
+    return objectMapper;
+  }
+
   @Override
   public byte[] serialize(String topic, T data) {
     if (data == null) {
