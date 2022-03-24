@@ -86,7 +86,6 @@
         <swagger.version>1.6.2</swagger.version>
         <io.confluent.schema-registry.version>7.0.2-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
-        <snake.yaml.version>1.27</snake.yaml.version>
     </properties>
 
     <repositories>
@@ -205,31 +204,6 @@
                 <groupId>uk.co.jemos.podam</groupId>
                 <artifactId>podam</artifactId>
                 <version>${podam.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.swagger</groupId>
-                <artifactId>swagger-annotations</artifactId>
-                <version>${swagger.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.swagger</groupId>
-                <artifactId>swagger-core</artifactId>
-                <version>${swagger.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>javax.validation</groupId>
-                        <artifactId>validation-api</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>com.google.guava</groupId>
-                        <artifactId>guava</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-                <version>${snake.yaml.version}</version>
             </dependency>
 
             <!--children-->
