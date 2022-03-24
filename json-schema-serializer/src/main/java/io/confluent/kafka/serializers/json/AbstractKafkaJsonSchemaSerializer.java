@@ -80,7 +80,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     }
   }
 
-  public ObjectMapper getObjectMapper() {
+  public ObjectMapper objectMapper() {
     return objectMapper;
   }
 

@@ -65,7 +65,7 @@ public class KafkaJsonDeserializer<T> implements Deserializer<T> {
     }
   }
 
-  public ObjectMapper getObjectMapper() {
+  public ObjectMapper objectMapper() {
     return objectMapper;
   }
 

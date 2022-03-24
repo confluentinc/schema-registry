@@ -75,7 +75,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return new KafkaJsonSchemaDeserializerConfig(props);
   }
 
-  public ObjectMapper getObjectMapper() {
+  public ObjectMapper objectMapper() {
     return objectMapper;
   }
 
