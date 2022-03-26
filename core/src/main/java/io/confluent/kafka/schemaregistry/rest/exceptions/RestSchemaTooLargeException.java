@@ -15,17 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-import io.confluent.rest.exceptions.RestServerErrorException;
+import io.confluent.rest.exceptions.RestConstraintViolationException;
 
-public class RestSchemaTooLargeException extends RestServerErrorException {
+public class RestSchemaTooLargeException extends RestConstraintViolationException {
 
   private static final int ERROR_CODE = Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
 
   public RestSchemaTooLargeException(String message) {
     super(message, ERROR_CODE);
-  }
-
-  public RestSchemaTooLargeException(String message, Throwable cause) {
-    super(message, ERROR_CODE, cause);
   }
 }
