@@ -14,6 +14,7 @@
  */
 package io.confluent.kafka.schemaregistry.rest;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
@@ -60,7 +61,8 @@ public class RestApiSchemaTooLargeTest extends ClusterTestHarness {
       restApp.restClient.registerSchema(schema, subject);
       fail("Registering a schema should return " + Errors.SUBJECT_NOT_FOUND_ERROR_CODE);
     } catch (RestClientException e) {
-      assert(e.getErrorCode() == Errors.SCHEMA_TOO_LARGE_ERROR_CODE);
+      assertEquals(422, e.getStatus());
+      assertEquals(Errors.SCHEMA_TOO_LARGE_ERROR_CODE, e.getErrorCode());
     }
   }
 
