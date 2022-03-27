@@ -159,7 +159,7 @@ public class Errors {
     return new RestSchemaRegistryStoreException(message, cause);
   }
 
-  public static RestException schemaTooLargeException(String message) {
+  public static RestSchemaTooLargeException schemaTooLargeException(String message) {
     return new RestSchemaTooLargeException(message);
   }
 
