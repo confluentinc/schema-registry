@@ -156,7 +156,7 @@ public class RestApiContextTest extends ClusterTestHarness {
   public void testContextPaths() throws Exception {
     RestService restClient1 = new RestService(restApp.restConnect + "/contexts/.ctx1");
     RestService restClient2 = new RestService(restApp.restConnect + "/contexts/.ctx2");
-    RestService restClient3 = new RestService(restApp.restConnect + "/contexts/.");
+    RestService restClient3 = new RestService(restApp.restConnect + "/contexts/:.:");
     RestService noCtxRestClient3 = new RestService(restApp.restConnect);
 
     String subject1 = "testTopic1";
@@ -219,6 +219,15 @@ public class RestApiContextTest extends ClusterTestHarness {
 
     // reset the schema id counter due to a different context
     schemaIdCounter = 1;
+
+    try {
+      restClient3.getId(schemaIdCounter);
+      fail("Registered schema should not be found in default context");
+    } catch (RestClientException rce) {
+      assertEquals("Should get a 404 status for non-existing schema",
+          Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode());
+    }
 
     // test registering schemas in subject3
     for (int i = 0; i < schemasInSubject3; i++) {
