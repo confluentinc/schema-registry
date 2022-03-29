@@ -1208,7 +1208,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     if (subjectVersionKey != null) {
       return subjectVersionKey;
     }
-    if (subject == null) {
+    if (subject == null || subject.isEmpty()) {
       return null;
     }
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
