@@ -16,17 +16,15 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
+import java.util.HashMap;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,9 +54,18 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   public void createMojoAndFiles() {
     this.mojo = new TestLocalCompatibilityMojo();
     makeFiles();
+
+    for(int i=1;i<=9;i++) {
+      this.mojo.schemaTypes.put("schema"+i, "AVRO");
+    }
+
+    this.mojo.schemaTypes.put(schema10, "JSON");
+    this.mojo.schemaTypes.put(schema13, "JSON");
+    this.mojo.schemaTypes.put(schema14, "JSON");
+
   }
 
-  private void makeFile(String schemaString, String name){
+  private void makeFile(String schemaString, String name) {
 
     try (FileWriter writer = new FileWriter(this.tempDirectory+"/"+name)) {
       writer.write(schemaString);
@@ -66,9 +73,24 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
       e.printStackTrace();
     }
 
+    if (name.contains("1.avsc") || name.contains("2.avsc")) {
+
+      try (FileWriter writer = new FileWriter(this.tempDirectory+"/schema12Folder/"+name)) {
+        writer.write(schemaString);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+
+    }
+
   }
 
   private void makeFiles(){
+
+    File newFolder = new File(this.tempDirectory.toString() + "/schema12Folder");
+    if( newFolder.mkdir()) {
+      System.out.println("New Folder avro created successfully.");
+    }
 
     String schemaString1 = "{\"type\":\"record\","
         + "\"name\":\"myrecord\","
@@ -117,14 +139,6 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
         + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]},"
         + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"bar\"}]}";
     makeFile(schemaString8, "schema8.avsc");
-
-    String badDefaultNullString = "{\"type\":\"record\","
-        + "\"name\":\"myrecord\","
-        + "\"fields\":"
-        + "[{\"type\":[\"null\", \"string\"],\"name\":\"f1\", \"default\": \"null\"},"
-        + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"},"
-        + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"bar\"}]}";
-    makeFile(badDefaultNullString, "schema9.avsc");
 
     String schemaString10 = "{\n"
         + "  \"type\": \"object\",\n"
@@ -185,28 +199,28 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   }
 
 
-  private void setMojo(String schema, List<String> previousSchemas){
+  private void setMojo(String schema, String previousSchemas){
 
-    this.mojo.schemaPath = new File(this.tempDirectory + "/" + schema + fileExtension);
-    this.mojo.previousSchemaPaths = new ArrayList<>();
+    this.mojo.schemas = Collections.singletonMap(schema, new File(this.tempDirectory + "/" + schema + fileExtension));
+    this.mojo.previousSchemaPaths = new HashMap<>();
 
-    for (String path : previousSchemas) {
-      this.mojo.previousSchemaPaths.add(new File(this.tempDirectory + "/" + path + fileExtension));
-    }
-    this.mojo.success = false;
+    File temp = new File(this.tempDirectory + "/" + previousSchemas);
+    if(temp.isDirectory())
+      this.mojo.previousSchemaPaths.put(schema, new File(this.tempDirectory + "/" + previousSchemas));
+    else
+      this.mojo.previousSchemaPaths.put(schema, new File(this.tempDirectory + "/" + previousSchemas + fileExtension));
 
   }
 
-  private boolean isCompatible(String schema, List<String> previousSchemas)
+  private boolean isCompatible(String schema, String previousSchemas, CompatibilityLevel compatibilityLevel)
       throws MojoExecutionException {
 
     setMojo(schema, previousSchemas);
+    this.mojo.compatibilityLevels.put(schema, compatibilityLevel);
     this.mojo.execute();
-    return this.mojo.success;
+    return true;
 
   }
-
-
 
   /*
    * Backward compatibility: A new schema is backward compatible if it can be used to read the data
@@ -215,61 +229,59 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   @Test
   public void testBasicBackwardsCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = CompatibilityLevel.BACKWARD;
     fileExtension = ".avsc";
-    this.mojo.schemaType = "avro";
 
     assertTrue("adding a field with default is a backward compatible change",
-        isCompatible(schema2, Collections.singletonList(schema1)));
-    assertFalse("adding a field w/o default is not a backward compatible change",
-        isCompatible(schema3, Collections.singletonList(schema1)));
+        isCompatible(schema2, (schema1), CompatibilityLevel.BACKWARD));
+    assertThrows("adding a field w/o default is not a backward compatible change",
+        MojoExecutionException.class, () -> isCompatible(schema3, (schema1), CompatibilityLevel.BACKWARD));
     assertTrue("changing field name with alias is a backward compatible change",
-        isCompatible(schema4, Collections.singletonList(schema1)));
+        isCompatible(schema4, (schema1), CompatibilityLevel.BACKWARD));
     assertTrue("evolving a field type to a union is a backward compatible change",
-        isCompatible(schema6, Collections.singletonList(schema1)));
-    assertFalse("removing a type from a union is not a backward compatible change",
-        isCompatible(schema1, Collections.singletonList(schema6)));
+        isCompatible(schema6, (schema1), CompatibilityLevel.BACKWARD));
+    assertThrows("removing a type from a union is not a backward compatible change",
+        MojoExecutionException.class, () -> isCompatible(schema1, (schema6), CompatibilityLevel.BACKWARD));
     assertTrue("adding a new type in union is a backward compatible change",
-        isCompatible(schema7, Collections.singletonList(schema6)));
-    assertFalse("removing a type from a union is not a backward compatible change",
-        isCompatible(schema6, Collections.singletonList(schema7)));
+        isCompatible(schema7, (schema6), CompatibilityLevel.BACKWARD));
+    assertThrows("removing a type from a union is not a backward compatible change",
+        MojoExecutionException.class, () -> isCompatible(schema6, (schema7), CompatibilityLevel.BACKWARD));
 
-    // Only schema 2 is checked
-    assertTrue("removing a default is not a transitively compatible change",
-        isCompatible(schema3, Arrays.asList(schema1, schema2)));
+
+    this.mojo.schemaTypes.put(schema10, "JSON");
+    this.mojo.schemaTypes.put(schema13, "JSON");
+    this.mojo.schemaTypes.put(schema14, "JSON");
 
     fileExtension = ".json";
-    this.mojo.schemaType = "json";
     assertTrue("setting additional properties to true from false is a backward compatible change",
-        isCompatible(schema10, Collections.singletonList(schema11)));
+        isCompatible(schema10, schema11, CompatibilityLevel.BACKWARD));
 
     assertTrue("adding property of string type (same as additional properties type) is "
-        + "a backward compatible change", isCompatible(schema13,
-        Collections.singletonList(schema12)));
+        + "a backward compatible change", isCompatible(schema13, schema12, CompatibilityLevel.BACKWARD));
 
     assertTrue("adding property of string or int type (string is additional properties type) is "
-        + "a backward compatible change", isCompatible(schema14,
-        Collections.singletonList(schema12)));
+        + "a backward compatible change", isCompatible(schema14, schema12, CompatibilityLevel.BACKWARD));
 
   }
+
   @Test
   public void testBasicBackwardsTransitiveCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = CompatibilityLevel.BACKWARD_TRANSITIVE;
     fileExtension = ".avsc";
-    this.mojo.schemaType = "avro";
 
-    // All compatible
-    assertTrue("iteratively adding fields with defaults is a compatible change",
-        isCompatible(schema8, Arrays.asList(schema1, schema2)));
-
-//     1 == 2, 2 == 3, 3 != 1
+    // 1 == 2, 2 == 3, 3 != 1
     assertTrue("adding a field with default is a backward compatible change",
-        isCompatible(schema2, Collections.singletonList(schema1)));
+        isCompatible(schema2, (schema1), CompatibilityLevel.BACKWARD_TRANSITIVE));
     assertTrue("removing a default is a compatible change, but not transitively",
-        isCompatible(schema3, Collections.singletonList(schema2)));
-    assertFalse("removing a default is not a transitively compatible change",
-        isCompatible(schema3, Arrays.asList(schema2, schema1)));
+        isCompatible(schema3, (schema2), CompatibilityLevel.BACKWARD_TRANSITIVE));
+
+    // Not compatible throws error
+    assertThrows("removing a default is not a transitively compatible change",
+        MojoExecutionException.class, () ->isCompatible(schema3, "schema12Folder", CompatibilityLevel.BACKWARD_TRANSITIVE));
+
+    assertTrue("Checking if schema8 is backward compatible with schema1 and schema2 present in avro folder"
+        , isCompatible(schema8, "schema12Folder", CompatibilityLevel.BACKWARD_TRANSITIVE ));
+
+
   }
 
   /*
@@ -279,37 +291,38 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   @Test
   public void testBasicForwardsCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = CompatibilityLevel.FORWARD;
+    fileExtension = ".avsc";
+
+    assertTrue("adding a field is a forward compatible change",
+        isCompatible(schema2, (schema1), CompatibilityLevel.FORWARD));
+    assertTrue("adding a field is a forward compatible change",
+        isCompatible(schema3, (schema1), CompatibilityLevel.FORWARD));
+    assertTrue("adding a field is a forward compatible change",
+        isCompatible(schema3, (schema2), CompatibilityLevel.FORWARD));
+    assertTrue("adding a field is a forward compatible change",
+        isCompatible(schema2, (schema3), CompatibilityLevel.FORWARD));
 
     fileExtension = ".avsc";
-    this.mojo.schemaType = "avro";
-
-    assertTrue("adding a field is a forward compatible change",
-        isCompatible(schema2, Collections.singletonList(schema1)));
-    assertTrue("adding a field is a forward compatible change",
-        isCompatible(schema3, Collections.singletonList(schema1)));
-    assertTrue("adding a field is a forward compatible change",
-        isCompatible(schema3, Collections.singletonList(schema2)));
-    assertTrue("adding a field is a forward compatible change",
-        isCompatible(schema2, Collections.singletonList(schema3)));
 
     // Only schema 2 is checked
-    assertTrue("removing a default is not a transitively compatible change",
-        isCompatible(schema1, Arrays.asList(schema3, schema2)));
+    assertThrows( MojoExecutionException.class, () ->
+        isCompatible(schema1, "schema12Folder", CompatibilityLevel.FORWARD));
 
     fileExtension = ".json";
-    this.mojo.schemaType = "json";
+    this.mojo.schemaTypes.put(schema11, "JSON");
+    this.mojo.schemaTypes.put(schema12, "JSON");
+    this.mojo.schemaTypes.put(schema13, "JSON");
 
     assertTrue("setting additional properties to false from true is a forward compatible change",
-        isCompatible(schema11, Collections.singletonList(schema10)));
+        isCompatible(schema11, schema10, CompatibilityLevel.FORWARD));
 
     assertTrue("removing property of string type (same as additional properties type)"
         + " is a backward compatible change", isCompatible(schema13,
-        Collections.singletonList(schema12)));
+        schema12, CompatibilityLevel.FORWARD));
 
     assertTrue("removing property of string or int type (string is additional properties type) is "
         + "a backward compatible change", isCompatible(schema12,
-        Collections.singletonList(schema14)));
+        schema14, CompatibilityLevel.FORWARD));
 
   }
 
@@ -320,21 +333,13 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   @Test
   public void testBasicForwardsTransitiveCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = CompatibilityLevel.FORWARD_TRANSITIVE;
     fileExtension = ".avsc";
-    this.mojo.schemaType = "avro";
-
-    // All compatible
-    assertTrue("iteratively removing fields with defaults is a compatible change",
-        isCompatible(schema1, Arrays.asList(schema8, schema2)));
 
     // 1 == 2, 2 == 3, 3 != 1
     assertTrue("adding default to a field is a compatible change",
-        isCompatible(schema2, Collections.singletonList(schema3)));
+        isCompatible(schema2, (schema3), CompatibilityLevel.FORWARD_TRANSITIVE));
     assertTrue("removing a field with a default is a compatible change",
-        isCompatible(schema1, Collections.singletonList(schema2)));
-    assertFalse("removing a default is not a transitively compatible change",
-        isCompatible(schema1, Arrays.asList(schema2, schema3)));
+        isCompatible(schema1, (schema2), CompatibilityLevel.FORWARD_TRANSITIVE));
   }
 
   /*
@@ -343,19 +348,14 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   @Test
   public void testBasicFullCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = CompatibilityLevel.FULL;
     fileExtension = ".avsc";
-    this.mojo.schemaType = "avro";
 
     assertTrue("adding a field with default is a backward and a forward compatible change",
-        isCompatible(schema2, Collections.singletonList(schema1)));
+        isCompatible(schema2, (schema1), CompatibilityLevel.FULL));
 
-    // Only schema 2 is checked!
-    assertTrue("transitively adding a field without a default is not a compatible change",
-        isCompatible(schema3, Arrays.asList(schema1, schema2)));
-    // Only schema 2 is checked!
-    assertTrue("transitively removing a field without a default is not a compatible change",
-        isCompatible(schema1, Arrays.asList(schema3, schema2)));
+    // Throws error, provide exactly one file for checking full compatibility
+    assertThrows(MojoExecutionException.class, () ->
+        isCompatible(schema3, "schema12Folder", CompatibilityLevel.FULL));
 
   }
 
@@ -366,29 +366,22 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
   @Test
   public void testBasicFullTransitiveCompatibility() throws MojoExecutionException {
 
-    this.mojo.compatibilityLevel = CompatibilityLevel.FULL_TRANSITIVE;
     fileExtension = ".avsc";
-    this.mojo.schemaType = "avro";
 
-    // Simple check
     assertTrue("iteratively adding fields with defaults is a compatible change",
-        isCompatible(schema8, Arrays.asList(schema1, schema2)));
-    assertTrue("iteratively removing fields with defaults is a compatible change",
-        isCompatible(schema1, Arrays.asList(schema8, schema2)));
-
+        isCompatible(schema8, "schema12Folder", CompatibilityLevel.FULL_TRANSITIVE));
     assertTrue("adding default to a field is a compatible change",
-        isCompatible(schema2, Collections.singletonList(schema3)));
+        isCompatible(schema2, (schema3), CompatibilityLevel.FULL_TRANSITIVE));
     assertTrue("removing a field with a default is a compatible change",
-        isCompatible(schema1, Collections.singletonList(schema2)));
+        isCompatible(schema1, (schema2), CompatibilityLevel.FULL_TRANSITIVE));
 
     assertTrue("adding a field with default is a compatible change",
-        isCompatible(schema2, Collections.singletonList(schema1)));
+        isCompatible(schema2, (schema1), CompatibilityLevel.FULL_TRANSITIVE));
     assertTrue("removing a default from a field compatible change",
-        isCompatible(schema3, Collections.singletonList(schema2)));
+        isCompatible(schema3, (schema2), CompatibilityLevel.FULL_TRANSITIVE));
 
-    assertFalse("transitively adding a field without a default is not a compatible change",
-        isCompatible(schema3, Arrays.asList(schema2, schema1)));
-    assertFalse("transitively removing a field without a default is not a compatible change",
-        isCompatible(schema1, Arrays.asList(schema2, schema3)));
+    assertThrows( "transitively adding a field without a default is not a compatible change",
+        MojoExecutionException.class, () -> isCompatible(schema3, "schema12Folder", CompatibilityLevel.FULL_TRANSITIVE));
+
   }
 }
