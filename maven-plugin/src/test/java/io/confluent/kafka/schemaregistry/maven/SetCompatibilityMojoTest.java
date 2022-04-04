@@ -33,22 +33,19 @@ public class SetCompatibilityMojoTest extends SchemaRegistryTest{
 				RestClientException.class, () -> this.mojo.client().getCompatibility(keySubject));
 
 		// Setting compatibility & checking if it matches
-
-		this.mojo.subject = keySubject;
-		this.mojo.compatibility = CompatibilityLevel.BACKWARD;
+		this.mojo.compatibilityLevels.put(keySubject,"BACKWARD");
 		this.mojo.execute();
 
 		assert(this.mojo.getConfig(keySubject).equals("BACKWARD"));
 
 		//Updating to a different compatibility
-		this.mojo.compatibility = CompatibilityLevel.FULL;
+		this.mojo.compatibilityLevels.replace(keySubject, "BACKWARD", "FULL");
 		this.mojo.execute();
 
 		assert(this.mojo.getConfig(keySubject).equals("FULL"));
 
 		//Checking for Global Compatibility
-		this.mojo.subject = null;
-		this.mojo.compatibility = CompatibilityLevel.BACKWARD_TRANSITIVE;
+		this.mojo.compatibilityLevels.put("__GLOBAL", "BACKWARD_TRANSITIVE");
 		this.mojo.execute();
 		assert(this.mojo.getConfig(null).equals("BACKWARD_TRANSITIVE"));
 
