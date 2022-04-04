@@ -67,7 +67,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
 
   protected SchemaRegistry initSchemaRegistry(SchemaRegistryConfig config) {
-    KafkaSchemaRegistry kafkaSchemaRegistry = null;
+    SchemaRegistry kafkaSchemaRegistry = null;
     try {
       kafkaSchemaRegistry = new KafkaSchemaRegistry(
           config,

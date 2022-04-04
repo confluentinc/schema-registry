@@ -98,16 +98,6 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
 
     <Match>
         <Class name="~io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap.*"/>
-	<Bug pattern="UUF_UNUSED_FIELD"/>
-    </Match>
-   <Match>
-        <Class name="io.confluent.kafka.schemaregistry.storage.KafkaStoreReaderThread"/>
-        <Bug pattern="UUF_UNUSED_FIELD"/>
-   </Match>
-
-    <Match>
-        <Class name="~io.confluent.connect.*"/>
-        <Bug pattern="UUF_UNUSED_FIELD"/>
     </Match>
 
     <!-- exclude generated code -->

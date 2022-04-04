@@ -32,11 +32,15 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 
 public interface SchemaRegistry extends SchemaVersionFetcher {
 
   String DEFAULT_TENANT = QualifiedSubject.DEFAULT_TENANT;
+  
+  // Subject name under which global permissions are stored.
+  public static final String GLOBAL_RESOURCE_NAME = "__GLOBAL";
 
   void init() throws SchemaRegistryException;
 
@@ -127,13 +131,10 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   CompatibilityLevel getCompatibilityLevelInScope(String subject)
               throws SchemaRegistryStoreException;
   
-  void deleteSubjectCompatibilityConfig(String subject)
-          throws SchemaRegistryStoreException, OperationNotPermittedException;
-  
-  void deleteSubjectCompatibilityConfigOrForward(String subject,
-          Map<String, String> headerProperties)
-        throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
-        OperationNotPermittedException, UnknownLeaderException;
+  public void deleteCompatibilityConfigOrForward(String subject,
+          Map<String, String> headerProperties) 
+                  throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
+                  OperationNotPermittedException, UnknownLeaderException;
 
   boolean hasSubjects(String subject,
           boolean lookupDeletedSubjects)
@@ -154,23 +155,33 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   List<Integer> getReferencedBy(String subject, VersionId versionId)
           throws SchemaRegistryException;
   
-  Schema validateAndGetSchema(String subject, VersionId versionId, boolean
-          returnDeletedSchema) throws SchemaRegistryException;
+  public List<String> listContexts() throws SchemaRegistryException;
   
-  int registerOrForward(String subject,
+  public Schema lookUpSchemaUnderSubjectUsingContexts(
+          String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
+          throws SchemaRegistryException;
+
+  public Set<String> listSubjectsWithPrefix(String prefix, boolean returnDeletedSubjects)
+          throws SchemaRegistryException;
+  
+  public String getGroupId();
+  
+  public int registerOrForward(String subject,
           Schema schema,
+          boolean normalize,
           Map<String, String> headerProperties)
-                  throws SchemaRegistryException;
+          throws SchemaRegistryException;
   
-  void setModeOrForward(String subject, Mode mode, Map<String, String> headerProperties)
+  public void setModeOrForward(String subject, Mode mode, boolean force,
+          Map<String, String> headerProperties)
           throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
-          OperationNotPermittedException, UnknownLeaderException;
+          OperationNotPermittedException, UnknownLeaderException; 
   
   Mode getModeInScope(String subject) throws SchemaRegistryStoreException;
   
   Mode getMode(String subject) throws SchemaRegistryStoreException;
   
-  String getKafkaClusterId();
+  //String getKafkaClusterId();
   
   boolean schemaVersionExists(String subject, VersionId versionId, boolean
           returnDeletedSchema) throws SchemaRegistryException;
@@ -191,6 +202,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return DEFAULT_TENANT;
   }
 
+  public Schema getUsingContexts(String subject, int version, boolean
+          returnDeletedSchema) throws SchemaRegistryException;
    
 
   /**
