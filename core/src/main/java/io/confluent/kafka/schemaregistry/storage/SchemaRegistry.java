@@ -23,7 +23,14 @@ import java.util.Set;
 import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
+import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 
@@ -53,6 +60,9 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       throws SchemaRegistryException;
 
   SchemaString get(int id, String subject) throws SchemaRegistryException;
+  
+  SchemaString get(int id, String subject, String format, boolean fetchMaxId)
+          throws SchemaRegistryException;
 
   default Set<String> listSubjects() throws SchemaRegistryException {
     return listSubjects(false);
@@ -60,7 +70,12 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   Set<String> listSubjects(boolean returnDeletedSubjects)
           throws SchemaRegistryException;
-
+  
+  Set<String> listSubjectsForId(int id, String subject) throws SchemaRegistryException;
+  
+  Set<String> listSubjectsForId(int id, String subject, boolean returnDeleted) 
+          throws SchemaRegistryException;
+  
   Iterator<Schema> getAllVersions(String subject, boolean returnDeletedSchemas)
       throws SchemaRegistryException;
 
@@ -96,9 +111,87 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   void deleteSchemaVersion(String subject, Schema schema,
                            boolean permanentDelete) throws SchemaRegistryException;
 
+  
+  void updateConfigOrForward(String subject, CompatibilityLevel newCompatibilityLevel,
+                           Map<String, String> headerProperties)
+              throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
+                     UnknownLeaderException, OperationNotPermittedException;
+
+  void updateCompatibilityLevel(String subject, CompatibilityLevel newCompatibilityLevel)
+              throws SchemaRegistryStoreException, OperationNotPermittedException,
+               UnknownLeaderException;
+  
+  CompatibilityLevel getCompatibilityLevel(String subject)
+              throws SchemaRegistryStoreException;
+  
+  CompatibilityLevel getCompatibilityLevelInScope(String subject)
+              throws SchemaRegistryStoreException;
+  
+  void deleteSubjectCompatibilityConfig(String subject)
+          throws SchemaRegistryStoreException, OperationNotPermittedException;
+  
+  void deleteSubjectCompatibilityConfigOrForward(String subject,
+          Map<String, String> headerProperties)
+        throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
+        OperationNotPermittedException, UnknownLeaderException;
+
+  boolean hasSubjects(String subject,
+          boolean lookupDeletedSubjects)
+        throws SchemaRegistryStoreException;
+  
+  
+  void deleteSubjectModeOrForward(String subject, Map<String, String> headerProperties)
+          throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
+          OperationNotPermittedException, UnknownLeaderException;
+          
+  List<Integer> deleteSubjectOrForward(
+          Map<String, String> requestProperties,
+          String subject,
+          boolean permanentDelete) throws SchemaRegistryException;
+  
+
+  
+  List<Integer> getReferencedBy(String subject, VersionId versionId)
+          throws SchemaRegistryException;
+  
+  Schema validateAndGetSchema(String subject, VersionId versionId, boolean
+          returnDeletedSchema) throws SchemaRegistryException;
+  
+  int registerOrForward(String subject,
+          Schema schema,
+          Map<String, String> headerProperties)
+                  throws SchemaRegistryException;
+  
+  void setModeOrForward(String subject, Mode mode, Map<String, String> headerProperties)
+          throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
+          OperationNotPermittedException, UnknownLeaderException;
+  
+  Mode getModeInScope(String subject) throws SchemaRegistryStoreException;
+  
+  Mode getMode(String subject) throws SchemaRegistryStoreException;
+  
+  String getKafkaClusterId();
+  
+  boolean schemaVersionExists(String subject, VersionId versionId, boolean
+          returnDeletedSchema) throws SchemaRegistryException;
+
+  List<SubjectVersion> listVersionsForId(int id, String subject)
+          throws SchemaRegistryException;
+  
+  List<SubjectVersion> listVersionsForId(int id, String subject, boolean lookupDeleted)
+          throws SchemaRegistryException;
+  
+  void deleteSchemaVersionOrForward(
+          Map<String, String> headerProperties, String subject,
+          Schema schema, boolean permanentDelete) throws SchemaRegistryException;
+  
+  MetricsContainer getMetricsContainer(); // TODO maybe move to abstract class
+
   default String tenant() {
     return DEFAULT_TENANT;
   }
+
+   
 
   /**
    * Can be used by subclasses to implement multi-tenancy

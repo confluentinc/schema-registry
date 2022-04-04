@@ -26,7 +26,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -59,9 +59,9 @@ import java.util.List;
 public class CompatibilityResource {
 
   private static final Logger log = LoggerFactory.getLogger(CompatibilityResource.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
-  public CompatibilityResource(KafkaSchemaRegistry schemaRegistry) {
+  public CompatibilityResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
