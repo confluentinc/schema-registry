@@ -793,7 +793,7 @@ public class JsonSchemaData {
         }
       }
       if (schema.defaultValue() != null) {
-        builder.defaultValue(schema.defaultValue());
+        builder.defaultValue(fromConnectData(schema, schema.defaultValue()));
       }
 
       if (!ignoreOptional) {
