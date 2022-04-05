@@ -23,6 +23,7 @@ import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.DescriptorProto.ReservedRange;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
+import com.google.protobuf.DescriptorProtos.EnumDescriptorProto.EnumReservedRange;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
@@ -728,14 +729,6 @@ public class ProtobufSchema implements ParsedSchema {
     return map.isEmpty() ? null : new OptionElement(name, Kind.MAP, map, true);
   }
 
-  private static ReservedElement toReserved(ReservedRange range) {
-    List<Object> values = new ArrayList<>();
-    int start = range.getStart();
-    int end = range.getEnd();
-    values.add(start == end - 1 ? start : new IntRange(start, end - 1));
-    return new ReservedElement(DEFAULT_LOCATION, "", values);
-  }
-
   private static OneOfElement toOneof(String name, ImmutableList.Builder<FieldElement> fields) {
     log.trace("*** oneof name: {}", name);
     // NOTE: skip groups
@@ -771,6 +764,19 @@ public class ProtobufSchema implements ParsedSchema {
           options.build()
       ));
     }
+    ImmutableList.Builder<ReservedElement> reserved = ImmutableList.builder();
+    for (EnumReservedRange range : ed.getReservedRangeList()) {
+      ReservedElement reservedElem = toReserved(range);
+      reserved.add(reservedElem);
+    }
+    for (String reservedName : ed.getReservedNameList()) {
+      ReservedElement reservedElem = new ReservedElement(
+          DEFAULT_LOCATION,
+          "",
+          Collections.singletonList(reservedName)
+      );
+      reserved.add(reservedElem);
+    }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (ed.getOptions().hasAllowAlias()) {
       OptionElement option = new OptionElement(
@@ -793,7 +799,24 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    return new EnumElement(DEFAULT_LOCATION, name, "", options.build(), constants.build());
+    return new EnumElement(DEFAULT_LOCATION, name, "",
+        options.build(), constants.build(), reserved.build());
+  }
+
+  private static ReservedElement toReserved(ReservedRange range) {
+    List<Object> values = new ArrayList<>();
+    int start = range.getStart();
+    int end = range.getEnd();
+    values.add(start == end - 1 ? start : new IntRange(start, end - 1));
+    return new ReservedElement(DEFAULT_LOCATION, "", values);
+  }
+
+  private static ReservedElement toReserved(EnumReservedRange range) {
+    List<Object> values = new ArrayList<>();
+    int start = range.getStart();
+    int end = range.getEnd();
+    values.add(start == end - 1 ? start : new IntRange(start, end - 1));
+    return new ReservedElement(DEFAULT_LOCATION, "", values);
   }
 
   private static ServiceElement toService(ServiceDescriptorProto sd) {
@@ -1353,6 +1376,22 @@ public class ProtobufSchema implements ParsedSchema {
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
     EnumDefinition.Builder enumer =
         EnumDefinition.newBuilder(enumElem.getName(), allowAlias, isDeprecated);
+    for (ReservedElement reserved : enumElem.getReserveds()) {
+      for (Object elem : reserved.getValues()) {
+        if (elem instanceof String) {
+          enumer.addReservedName((String) elem);
+        } else if (elem instanceof Integer) {
+          int tag = (Integer) elem;
+          enumer.addReservedRange(tag, tag + 1);
+        } else if (elem instanceof IntRange) {
+          IntRange range = (IntRange) elem;
+          enumer.addReservedRange(range.getStart(), range.getEndInclusive() + 1);
+        } else {
+          throw new IllegalStateException("Unsupported reserved type: " + elem.getClass()
+              .getName());
+        }
+      }
+    }
     for (EnumConstantElement constant : enumElem.getConstants()) {
       Map<String, OptionElement> constantOptions = mergeOptions(constant.getOptions());
       Boolean isConstDeprecated = findOption(DEPRECATED, constantOptions)
