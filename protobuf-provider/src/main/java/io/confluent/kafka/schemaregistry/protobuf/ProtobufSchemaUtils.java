@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
+import static com.squareup.wire.schema.internal.UtilKt.MAX_TAG_VALUE;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Ascii;
@@ -268,7 +270,38 @@ public class ProtobufSchemaUtils {
     sb.append(type.getName());
     sb.append(" {");
 
-    if (!type.getOptions().isEmpty() || !type.getConstants().isEmpty()) {
+    if (!type.getReserveds().isEmpty()) {
+      sb.append('\n');
+      List<ReservedElement> reserveds = type.getReserveds();
+      if (normalize) {
+        reserveds = reserveds.stream()
+            .flatMap(r -> r.getValues().stream()
+                .map(o -> new ReservedElement(
+                    r.getLocation(),
+                    r.getDocumentation(),
+                    Collections.singletonList(o))
+                )
+            )
+            .collect(Collectors.toList());
+        Comparator<Object> cmp = Comparator.comparing(r -> {
+          Object o = ((ReservedElement)r).getValues().get(0);
+          if (o instanceof IntRange) {
+            return ((IntRange) o).getStart();
+          } else if (o instanceof Integer) {
+            return (Integer) o;
+          } else {
+            return Integer.MAX_VALUE;
+          }
+        }).thenComparing(r -> ((ReservedElement) r).getValues().get(0).toString());
+        reserveds.sort(cmp);
+      }
+      for (ReservedElement reserved : reserveds) {
+        appendIndented(sb, toString(ctx, reserved, normalize));
+      }
+    }
+
+    if (type.getReserveds().isEmpty()
+        && (!type.getOptions().isEmpty() || !type.getConstants().isEmpty())) {
       sb.append('\n');
     }
 
@@ -455,7 +488,12 @@ public class ProtobufSchemaUtils {
         IntRange range = (IntRange) value;
         sb.append(range.getStart());
         sb.append(" to ");
-        sb.append(range.getEndInclusive());
+        int last = range.getEndInclusive();
+        if (last < MAX_TAG_VALUE) {
+          sb.append(last);
+        } else {
+          sb.append("max");
+        }
       } else {
         throw new IllegalArgumentException();
       }

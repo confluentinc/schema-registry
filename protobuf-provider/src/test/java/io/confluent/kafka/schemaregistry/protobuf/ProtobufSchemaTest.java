@@ -379,6 +379,46 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testEnumReserved() {
+    String schemaString = "\nimport \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "message FooOptions {\n"
+        + "  optional string name = 1;\n"
+        + "  optional FooParameterType type = 2;\n"
+        + "}\n"
+        + "enum FooParameterType {\n"
+        + "  reserved 20, 100 to max;\n"
+        + "  reserved 10;\n"
+        + "  reserved \"BAD\", \"OLD\";\n"
+        + "  NUMBER = 1;\n"
+        + "  STRING = 2;\n"
+        + "}\n";
+
+    String normalizedSchemaString = "\nimport \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "message FooOptions {\n"
+        + "  optional string name = 1;\n"
+        + "  optional .FooParameterType type = 2;\n"
+        + "}\n"
+        + "enum FooParameterType {\n"
+        + "  reserved 10;\n"
+        + "  reserved 20;\n"
+        + "  reserved 100 to max;\n"
+        + "  reserved \"BAD\";\n"
+        + "  reserved \"OLD\";\n"
+        + "  NUMBER = 1;\n"
+        + "  STRING = 2;\n"
+        + "}\n";
+
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    String parsed = schema.canonicalString();
+    assertEquals(schemaString, parsed);
+
+    String normalized = schema.normalize().canonicalString();
+    assertEquals(normalizedSchemaString, normalized);
+  }
+
+  @Test
   public void testComplexCustomOptions() {
     String schemaString = "syntax = \"proto3\";\n"
         + "\n"
