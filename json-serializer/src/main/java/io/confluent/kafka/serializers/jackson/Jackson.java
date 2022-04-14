@@ -16,7 +16,9 @@
 package io.confluent.kafka.serializers.jackson;
 
 import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
@@ -33,7 +35,9 @@ public class Jackson {
    * Creates a new {@link ObjectMapper}.
    */
   public static ObjectMapper newObjectMapper() {
-    final ObjectMapper mapper = new ObjectMapper();
+    final ObjectMapper mapper = JsonMapper.builder()
+        .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
+        .build();
 
     return configure(mapper);
   }
@@ -46,7 +50,9 @@ public class Jackson {
    *     for the created {@link ObjectMapper} instance.
    */
   public static ObjectMapper newObjectMapper(JsonFactory jsonFactory) {
-    final ObjectMapper mapper = new ObjectMapper(jsonFactory);
+    final ObjectMapper mapper = JsonMapper.builder(jsonFactory)
+        .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
+        .build();
 
     return configure(mapper);
   }
