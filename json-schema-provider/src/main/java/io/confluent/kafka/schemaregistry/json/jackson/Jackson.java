@@ -16,8 +16,10 @@
 package io.confluent.kafka.schemaregistry.json.jackson;
 
 import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.guava.GuavaModule;
@@ -50,7 +52,9 @@ public class Jackson {
    * @param sorted whether to sort object properties
    */
   public static ObjectMapper newObjectMapper(boolean sorted) {
-    final ObjectMapper mapper = new ObjectMapper();
+    final ObjectMapper mapper = JsonMapper.builder()
+        .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
+        .build();
 
     return configure(mapper, sorted);
   }
@@ -63,7 +67,9 @@ public class Jackson {
    *     for the created {@link com.fasterxml.jackson.databind.ObjectMapper} instance.
    */
   public static ObjectMapper newObjectMapper(JsonFactory jsonFactory) {
-    final ObjectMapper mapper = new ObjectMapper(jsonFactory);
+    final ObjectMapper mapper = JsonMapper.builder(jsonFactory)
+        .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
+        .build();
 
     return configure(mapper, false);
   }
