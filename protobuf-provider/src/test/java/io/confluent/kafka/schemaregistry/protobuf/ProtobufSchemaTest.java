@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
@@ -1049,6 +1050,14 @@ public class ProtobufSchemaTest {
     Optional<ParsedSchema> parsedSchema = protobufSchemaProvider.parseSchema(invalidSchemaString,
             new ArrayList<>(), false);
     assertFalse(parsedSchema.isPresent());
+  }
+
+  @Test
+  public void testEnumMethods() {
+    EnumDescriptor enumDescriptor = enumSchema.getEnumDescriptor("TestEnum.Suit");
+    ProtobufSchema enumSchema2 = new ProtobufSchema(enumDescriptor);
+    EnumDescriptor enumDescriptor2 = enumSchema2.getEnumDescriptor("TestEnum.Suit");
+    assertEquals(enumDescriptor.getFullName(), enumDescriptor2.getFullName());
   }
 
   private static JsonNode jsonTree(String jsonData) {
