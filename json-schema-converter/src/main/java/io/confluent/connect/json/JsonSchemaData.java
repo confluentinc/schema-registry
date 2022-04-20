@@ -29,7 +29,6 @@ import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import org.apache.avro.data.Json;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -605,6 +604,9 @@ public class JsonSchemaData {
 
   public JsonSchema fromConnectSchema(Schema schema) {
     FromConnectContext ctx = new FromConnectContext();
+    if (schema == null) {
+      return new JsonSchema(rawSchemaFromConnectSchema(ctx, null));
+    }
     // using the name as the cache key, example:cdc_marqeta_jcard_trancache.Envelope
     JsonSchema cachedJsonSchema = jsonSchemaCache.get(schema.name());
     if (cachedJsonSchema != null) {
