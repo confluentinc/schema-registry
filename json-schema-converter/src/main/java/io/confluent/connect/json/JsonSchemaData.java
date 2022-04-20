@@ -28,6 +28,8 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 import java.util.Set;
+
+import org.apache.avro.data.Json;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -362,6 +364,7 @@ public class JsonSchemaData {
   private JsonSchemaDataConfig config;
   private Map<Schema, org.everit.json.schema.Schema> fromConnectSchemaCache;
   private Map<JsonSchema, Schema> toConnectSchemaCache;
+  private Map<String, JsonSchema> jsonSchemaCache;
 
   public JsonSchemaData() {
     this(new JsonSchemaDataConfig.Builder().with(
@@ -374,6 +377,7 @@ public class JsonSchemaData {
     this.config = jsonSchemaDataConfig;
     fromConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
     toConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
+    jsonSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
   }
 
   /**
@@ -601,7 +605,14 @@ public class JsonSchemaData {
 
   public JsonSchema fromConnectSchema(Schema schema) {
     FromConnectContext ctx = new FromConnectContext();
-    return new JsonSchema(rawSchemaFromConnectSchema(ctx, schema));
+    // using the name as the cache key, example:cdc_marqeta_jcard_trancache.Envelope
+    JsonSchema cachedJsonSchema = jsonSchemaCache.get(schema.name());
+    if (cachedJsonSchema != null) {
+      return cachedJsonSchema;
+    }
+    JsonSchema resultJsonSchema = new JsonSchema(rawSchemaFromConnectSchema(ctx, schema));
+    jsonSchemaCache.put(schema.name(), resultJsonSchema);
+    return resultJsonSchema;
   }
 
   private org.everit.json.schema.Schema rawSchemaFromConnectSchema(
