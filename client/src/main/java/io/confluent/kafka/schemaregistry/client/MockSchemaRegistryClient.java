@@ -637,15 +637,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   public Collection<String> getAllSubjectsByPrefix(String subjectPrefix)
       throws IOException, RestClientException {
     Stream<String> validSubjects = getAllSubjects().stream()
-        .filter(subject -> subject.startsWith(subjectPrefix));
+        .filter(subject -> subjectPrefix == null || subject.startsWith(subjectPrefix));
     return validSubjects.collect(Collectors.toCollection(LinkedHashSet::new));
   }
 
   @Override
   public synchronized void reset() {
     schemaCache.clear();
+    schemaIdCache.clear();
     idCache.clear();
     versionCache.clear();
+    compatibilityCache.clear();
+    modes.clear();
+    ids.clear();
   }
 
   private static String toQualifiedContext(String subject) {
