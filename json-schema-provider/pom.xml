@@ -56,6 +56,11 @@
             <artifactId>jackson-module-parameter-names</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.fasterxml.jackson.module</groupId>
+            <artifactId>jackson-module-blackbird</artifactId>
+            <version>2.13.1</version>
+        </dependency>
+        <dependency>
             <groupId>com.kjetland</groupId>
             <artifactId>mbknor-jackson-jsonschema_${kafka.scala.version}</artifactId>
         </dependency>

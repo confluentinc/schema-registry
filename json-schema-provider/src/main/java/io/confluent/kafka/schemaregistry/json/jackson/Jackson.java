@@ -24,6 +24,7 @@ import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.joda.JodaModule;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.module.blackbird.BlackbirdModule;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import java.util.TreeMap;
 
@@ -75,6 +76,7 @@ public class Jackson {
     mapper.registerModule(new Jdk8Module());
     mapper.registerModule(new JavaTimeModule());
     mapper.registerModule(new JsonOrgModule());
+    mapper.registerModule(new BlackbirdModule());
     mapper.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
     mapper.disable(FAIL_ON_UNKNOWN_PROPERTIES);
     mapper.setNodeFactory(sorted
