@@ -31,6 +31,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -200,6 +201,8 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           while (!stopped.get()) {
             coordinator.poll(Integer.MAX_VALUE);
           }
+        } catch (WakeupException we) {
+          // do nothing because the thread is closing -- see stop()
         } catch (Throwable t) {
           log.error("Unexpected exception in schema registry group processing thread", t);
         }
