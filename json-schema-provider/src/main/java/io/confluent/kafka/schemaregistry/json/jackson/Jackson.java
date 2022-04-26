@@ -89,7 +89,8 @@ public class Jackson {
 
   static class DefaultSerializerProviderImpl extends DefaultSerializerProvider {
     private static final long serialVersionUID = 1L;
-    protected static final JsonSerializer<Object> DEFAULT_UNKNOWN_SERIALIZER = new UnknownSerializerImpl();
+    protected static final JsonSerializer<Object> DEFAULT_UNKNOWN_SERIALIZER
+        = new UnknownSerializerImpl();
 
     public DefaultSerializerProviderImpl() {
       super();
@@ -101,16 +102,20 @@ public class Jackson {
       _unknownTypeSerializer = DEFAULT_UNKNOWN_SERIALIZER;
     }
 
-    protected DefaultSerializerProviderImpl(SerializerProvider src, SerializationConfig config, SerializerFactory f) {
+    protected DefaultSerializerProviderImpl(
+        SerializerProvider src, SerializationConfig config, SerializerFactory f) {
       super(src, config, f);
       _unknownTypeSerializer = DEFAULT_UNKNOWN_SERIALIZER;
     }
 
     public DefaultSerializerProvider copy() {
-      return this.getClass() != DefaultSerializerProviderImpl.class ? super.copy() : new DefaultSerializerProviderImpl(this);
+      return this.getClass() != DefaultSerializerProviderImpl.class
+          ? super.copy()
+          : new DefaultSerializerProviderImpl(this);
     }
 
-    public DefaultSerializerProviderImpl createInstance(SerializationConfig config, SerializerFactory jsf) {
+    public DefaultSerializerProviderImpl createInstance(
+        SerializationConfig config, SerializerFactory jsf) {
       return new DefaultSerializerProviderImpl(this, config, jsf);
     }
   }
@@ -130,7 +135,8 @@ public class Jackson {
      * until mbknor-jackson-jsonSchema ever changes it's behavior w.r.t. Jackson 2.13
      * See https://github.com/FasterXML/jackson-dataformats-binary/issues/281
      */
-    public void acceptJsonFormatVisitor(JsonFormatVisitorWrapper visitor, JavaType typeHint) throws JsonMappingException {
+    public void acceptJsonFormatVisitor(JsonFormatVisitorWrapper visitor, JavaType typeHint)
+        throws JsonMappingException {
       visitor.expectAnyFormat(typeHint);
     }
   }
