@@ -20,6 +20,7 @@ import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import org.apache.kafka.common.config.SslConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +52,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdat
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+
+import javax.net.ssl.HostnameVerifier;
 
 
 /**
@@ -200,8 +203,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         .build();
 
     this.providers = providers != null && !providers.isEmpty()
-                     ? providers.stream().collect(Collectors.toMap(p -> p.schemaType(), p -> p))
-                     : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
+        ? providers.stream().collect(Collectors.toMap(SchemaProvider::schemaType, p -> p))
+        : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
     Map<String, Object> schemaProviderConfigs = new HashMap<>();
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
     for (SchemaProvider provider : this.providers.values()) {
@@ -228,6 +231,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       SslFactory sslFactory = new SslFactory(sslConfigs);
       if (sslFactory.sslContext() != null) {
         restService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
+        restService.setHostnameVerifier(getHostnameVerifier(sslConfigs));
       }
     }
   }
@@ -250,6 +254,19 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   public Map<String, SchemaProvider> getSchemaProviders() {
     return providers;
+  }
+
+  private HostnameVerifier getHostnameVerifier(Map<String, Object> config) {
+    String sslEndpointIdentificationAlgo =
+        (String) config.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
+
+    if (sslEndpointIdentificationAlgo == null
+        || sslEndpointIdentificationAlgo.equals("none")
+        || sslEndpointIdentificationAlgo.isEmpty()) {
+      return (hostname, session) -> true;
+    }
+
+    return null;
   }
 
   private int registerAndGetId(String subject, ParsedSchema schema, boolean normalize)
@@ -466,6 +483,18 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public SchemaMetadata getSchemaMetadata(String subject, int version, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
+        = restService.getVersion(subject, version, lookupDeletedSchema);
+    int id = response.getId();
+    String schemaType = response.getSchemaType();
+    String schema = response.getSchema();
+    List<SchemaReference> references = response.getReferences();
+    return new SchemaMetadata(id, version, schemaType, references, schema);
+  }
+
+  @Override
   public SchemaMetadata getLatestSchemaMetadata(String subject)
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
@@ -511,6 +540,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public List<Integer> getAllVersions(String subject)
       throws IOException, RestClientException {
     return restService.getAllVersions(subject);
+  }
+
+  @Override
+  public List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    return restService.getAllVersions(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject, lookupDeletedSchema);
   }
 
   @Override
@@ -612,7 +648,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public void deleteCompatibility(String subject) throws IOException, RestClientException {
-    restService.deleteSubjectConfig(subject);
+    restService.deleteConfig(subject);
   }
 
   @Override
@@ -649,6 +685,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public Collection<String> getAllSubjects() throws IOException, RestClientException {
     return restService.getAllSubjects();
+  }
+
+  @Override
+  public Collection<String> getAllSubjects(boolean lookupDeletedSubject)
+      throws IOException, RestClientException {
+    return restService.getAllSubjects(lookupDeletedSubject);
   }
 
   @Override
