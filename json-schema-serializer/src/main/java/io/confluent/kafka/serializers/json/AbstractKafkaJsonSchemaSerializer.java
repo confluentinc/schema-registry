@@ -116,7 +116,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
         schema = (JsonSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
-        id = schemaRegistry.getId(subject, schema, normalizeSchema);
+        id = schemaRegistry.getId(subject, schema);
       } else {
         restClientErrorMsg = "Error retrieving JSON schema: ";
         id = schemaRegistry.getId(subject, schema, normalizeSchema);

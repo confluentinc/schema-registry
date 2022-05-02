@@ -109,7 +109,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
         schema = (ProtobufSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
-        id = schemaRegistry.getId(subject, schema, normalizeSchema);
+        id = schemaRegistry.getId(subject, schema);
       } else {
         restClientErrorMsg = "Error retrieving Protobuf schema: ";
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
@@ -327,14 +327,16 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     if (subject != null) {
       if (autoRegisterSchema) {
         id = schemaRegistry.register(subject, schema, normalizeSchema);
+        version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
       } else if (useLatestVersion) {
         schema = (ProtobufSchema) lookupLatestVersion(
             schemaRegistry, subject, schema, latestVersions, latestCompatStrict);
-        id = schemaRegistry.getId(subject, schema, normalizeSchema);
+        id = schemaRegistry.getId(subject, schema);
+        version = schemaRegistry.getVersion(subject, schema);
       } else {
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
+        version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
       }
-      version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
     }
     return new Schema(
         subject,
