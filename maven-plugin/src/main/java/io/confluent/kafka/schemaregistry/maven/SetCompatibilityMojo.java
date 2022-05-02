@@ -23,64 +23,78 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 @Mojo(name = "set-compatibility",  configurator = "custom-basic")
 public class SetCompatibilityMojo extends SchemaRegistryMojo {
 
-  @Parameter(required = false, defaultValue = "false")
-  boolean delete;
-
-  @Parameter()
-  String subject;
-
-  @Parameter(defaultValue = "BACKWARD")
-  CompatibilityLevel compatibility;
+  @Parameter(required = true)
+  Map<String, String> compatibilityLevels = new HashMap<>();
 
   public void execute() throws MojoExecutionException {
-    if (delete) {
-      deleteConfig(subject);
-    } else {
-      updateConfig(subject, compatibility);
+    for (Map.Entry<String, String> entry : compatibilityLevels.entrySet()) {
+      if (entry.getValue().equalsIgnoreCase("null")) {
+        deleteConfig(entry.getKey());
+      } else {
+        updateConfig(entry.getKey(), CompatibilityLevel.valueOf(entry.getValue()));
+      }
     }
   }
 
-  public void updateConfig(String subject, CompatibilityLevel compatibility) {
+  public void updateConfig(String subject, CompatibilityLevel compatibility)
+      throws MojoExecutionException {
 
     try {
-      String updatedCompatibility =
-          this.client().updateCompatibility(subject, compatibility.toString());
-      if (subject == null) {
+      String updatedCompatibility;
+
+      if (subject.equalsIgnoreCase("null") || subject.equals("__GLOBAL")) {
+        updatedCompatibility = this.client().updateCompatibility(null, compatibility.toString());
         getLog().info("Global Compatibility set to "
             + updatedCompatibility);
       } else {
+        Collection<String> allSubjects = this.client().getAllSubjects();
+        if (!allSubjects.contains(subject)) {
+          throw new MojoExecutionException(
+              "Subject not found"
+          );
+        }
+        updatedCompatibility = this.client().updateCompatibility(subject, compatibility.toString());
         getLog().info("Compatibility of " + subject
             + " set to " + updatedCompatibility);
       }
     } catch (RestClientException | IOException e) {
-      getLog().error(e.getMessage());
       e.printStackTrace();
+      throw new MojoExecutionException(
+          "Exception thrown while updating config",
+          e
+      );
     }
 
   }
 
-  public void deleteConfig(String subject) {
+  public void deleteConfig(String subject) throws MojoExecutionException {
     if (getLog().isDebugEnabled()) {
       getLog().info("Deleting compatibility");
     }
     try {
       this.client().deleteCompatibility(subject);
-      if (subject == null) {
+      if (subject.equalsIgnoreCase("null") || subject.equals("__GLOBAL")) {
         getLog().info("Deleted global compatibility");
       } else {
         getLog().info(String.format("Deleted compatibility of %s", subject));
       }
 
     } catch (IOException | RestClientException e) {
-      e.printStackTrace();
+      throw new MojoExecutionException(
+          "Exception thrown while updating config",
+          e
+      );
     }
   }
 
-  public String getConfig(String subject) {
+  public String getConfig(String subject) throws MojoExecutionException {
     if (getLog().isDebugEnabled()) {
       getLog().info(String.format("Getting compatibility of %s", subject));
     }
@@ -88,7 +102,10 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
       return String.format(this.client().getCompatibility(subject));
     } catch (IOException | RestClientException e) {
       e.printStackTrace();
+      throw new MojoExecutionException(
+          "Exception thrown while getting config",
+          e
+      );
     }
-    return "";
   }
 }
