@@ -524,7 +524,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     idCache.remove(subject);
     Map<ParsedSchema, Integer> versions = versionCache.remove(subject);
     compatibilityCache.remove(subject);
-    return versions.values().stream().sorted().collect(Collectors.toList());
+    return versions != null
+        ? versions.values().stream().sorted().collect(Collectors.toList())
+        : Collections.emptyList();
   }
 
   @Override
