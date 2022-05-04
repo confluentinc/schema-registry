@@ -51,7 +51,9 @@ public class ServerClusterId {
 
   public static ServerClusterId of(String kafkaClusterId, String schemaRegistryClusterId) {
     Map<String, Object> clusters = new HashMap<>();
-    clusters.put(KAFKA_CLUSTER, kafkaClusterId);
+    if (kafkaClusterId != null) {
+      clusters.put(KAFKA_CLUSTER, kafkaClusterId);
+    }
     clusters.put(SCHEMA_REGISTRY_CLUSTER, schemaRegistryClusterId);
     Map<String, Object> serverClusterId = new HashMap<>();
     serverClusterId.put("path", Collections.emptyList());

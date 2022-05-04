@@ -43,8 +43,8 @@ public class ErrorMessage {
   }
 
   @JsonProperty("error_code")
-  public void setErrorCode(int error_code) {
-    this.errorCode = error_code;
+  public void setErrorCode(int errorCode) {
+    this.errorCode = errorCode;
   }
 
   @JsonProperty

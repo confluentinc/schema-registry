@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOBAL_RESOURCE_NAME;
+import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.GLOBAL_RESOURCE_NAME;
 
 import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
@@ -28,7 +28,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -63,11 +63,11 @@ import java.util.Map;
 public class ConfigResource {
 
   private static final Logger log = LoggerFactory.getLogger(ConfigResource.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
-  public ConfigResource(KafkaSchemaRegistry schemaRegistry) {
+  public ConfigResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
