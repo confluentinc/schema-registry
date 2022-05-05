@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.Objects;
 import java.util.Optional;
@@ -38,10 +39,8 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
@@ -69,20 +68,14 @@ public abstract class AbstractKafkaSchemaSerDe {
     List<String> urls = config.getSchemaRegistryUrls();
     int maxSchemaObject = config.getMaxSchemasPerSubject();
     Map<String, Object> originals = config.originalsWithPrefix("");
-    if (null == schemaRegistry) {
-      String mockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(urls);
-      List<SchemaProvider> providers = Collections.singletonList(provider);
-      if (mockScope != null) {
-        schemaRegistry = MockSchemaRegistry.getClientForScope(mockScope, providers);
-      } else {
-        schemaRegistry = new CachedSchemaRegistryClient(
-            urls,
-            maxSchemaObject,
-            providers,
-            originals,
-            config.requestHeaders()
-        );
-      }
+    if (schemaRegistry == null) {
+      schemaRegistry = SchemaRegistryClientFactory.newClient(
+          urls,
+          maxSchemaObject,
+          Collections.singletonList(provider),
+          originals,
+          config.requestHeaders()
+      );
     }
 
     contextNameStrategy = config.contextNameStrategy();
