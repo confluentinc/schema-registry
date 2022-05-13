@@ -77,8 +77,8 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
   }
 
   @Override
-  public T deserialize(String ignored, byte[] bytes) {
-    return deserialize(bytes);
+  public T deserialize(String topic, byte[] bytes) {
+    return (T) deserialize(false, topic, null, bytes);
   }
 
   @Override

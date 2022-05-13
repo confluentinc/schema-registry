@@ -29,6 +29,15 @@ import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 public interface SubjectNameStrategy extends Configurable {
 
   /**
+   * Whether the strategy depends on the schema.
+   *
+   * @return Whether the strategy depends on the schema.
+   */
+  default boolean usesSchema() {
+    return false;
+  }
+
+  /**
    * For a given topic and message, returns the subject name under which the
    * schema should be registered in the schema registry.
    *

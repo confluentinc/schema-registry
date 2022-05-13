@@ -71,8 +71,8 @@ public class KafkaProtobufDeserializer<T extends Message>
   }
 
   @Override
-  public T deserialize(String s, byte[] bytes) {
-    return deserialize(bytes);
+  public T deserialize(String topic, byte[] bytes) {
+    return (T) deserialize(false, topic, null, bytes);
   }
 
   @Override

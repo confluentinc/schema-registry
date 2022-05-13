@@ -51,15 +51,15 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
   }
 
   @Override
-  public Object deserialize(String s, byte[] bytes) {
-    return deserialize(bytes);
+  public Object deserialize(String topic, byte[] bytes) {
+    return deserialize(topic, null, bytes, null);
   }
 
   /**
    * Pass a reader schema to get an Avro projection
    */
-  public Object deserialize(String s, byte[] bytes, Schema readerSchema) {
-    return deserialize(bytes, readerSchema);
+  public Object deserialize(String topic, byte[] bytes, Schema readerSchema) {
+    return deserialize(topic, null, bytes, readerSchema);
   }
 
   @Override

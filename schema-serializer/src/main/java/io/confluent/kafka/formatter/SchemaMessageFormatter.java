@@ -17,8 +17,8 @@
 package io.confluent.kafka.formatter;
 
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
-import kafka.common.MessageFormatter;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.record.TimestampType;
@@ -75,6 +75,12 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
   );
 
   @Override
+  public void configure(Map<String, ?> configs) {
+    Properties properties = new Properties();
+    properties.putAll(configs);
+    this.init(properties);
+  }
+
   public void init(Properties props) {
     if (props == null) {
       throw new ConfigException("Missing schema registry url!");

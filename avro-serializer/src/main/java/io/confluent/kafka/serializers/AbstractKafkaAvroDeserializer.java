@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import com.google.common.collect.MapMaker;
+import java.util.Properties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
@@ -41,7 +42,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import kafka.utils.VerifiableProperties;
 
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaSerDe {
   private final DecoderFactory decoderFactory = DecoderFactory.get();
@@ -70,8 +70,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return new KafkaAvroDeserializerConfig(props);
   }
 
-  protected KafkaAvroDeserializerConfig deserializerConfig(VerifiableProperties props) {
-    return new KafkaAvroDeserializerConfig(props.props());
+  protected KafkaAvroDeserializerConfig deserializerConfig(Properties props) {
+    return new KafkaAvroDeserializerConfig(props);
   }
 
   /**
@@ -100,6 +100,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   protected Object deserialize(String topic, Boolean isKey, byte[] payload, Schema readerSchema)
           throws SerializationException {
+    if (schemaRegistry == null) {
+      throw new InvalidConfigurationException(
+          "SchemaRegistryClient not found. You need to configure the deserializer "
+              + "or use deserializer constructor with SchemaRegistryClient.");
+    }
     if (payload == null) {
       return null;
     }
@@ -109,7 +114,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   private Integer schemaVersion(String topic,
-                                Boolean isKey,
+                                boolean isKey,
                                 int id,
                                 String subject,
                                 AvroSchema schema,
@@ -117,16 +122,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     Integer version;
     if (isDeprecatedSubjectNameStrategy(isKey)) {
       subject = getSubjectName(topic, isKey, result, schema);
-      AvroSchema subjectSchema = (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
-      version = schemaRegistry.getVersion(subject, subjectSchema);
-    } else {
-      //we already got the subject name
-      version = schemaRegistry.getVersion(subject, schema);
     }
+    AvroSchema subjectSchema = (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+    version = schemaRegistry.getVersion(subject, subjectSchema);
     return version;
   }
 
-  private String subjectName(String topic, Boolean isKey, AvroSchema schemaFromRegistry) {
+  private String subjectName(String topic, boolean isKey, AvroSchema schemaFromRegistry) {
     return isDeprecatedSubjectNameStrategy(isKey)
         ? null
         : getSubjectName(topic, isKey, null, schemaFromRegistry);
@@ -323,7 +325,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
     AvroSchema schemaFromRegistry() {
       try {
-        return (AvroSchema) schemaRegistry.getSchemaById(schemaId);
+        String subjectName = isKey == null || strategyUsesSchema(isKey)
+            ? getContext() : getSubject();
+        return (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subjectName, schemaId);
       } catch (IOException e) {
         throw new SerializationException("Error retrieving Avro "
                                          + getSchemaType(isKey)
@@ -358,7 +362,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
     String getSubject() {
-      return subjectName(topic, isKey, schemaFromRegistry());
+      boolean usesSchema = strategyUsesSchema(isKey);
+      return subjectName(topic, isKey, usesSchema ? schemaFromRegistry() : null);
+    }
+
+    String getContext() {
+      return getContextName(topic);
     }
 
     String getTopic() {

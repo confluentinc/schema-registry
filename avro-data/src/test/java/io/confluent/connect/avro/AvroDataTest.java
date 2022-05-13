@@ -32,7 +32,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.util.Utf8;
-import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
@@ -67,16 +66,7 @@ import foo.bar.EnumTest;
 import foo.bar.Kind;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
-import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
-import static io.confluent.connect.avro.AvroData.AVRO_ENUM_DOC_PREFIX_PROP;
-import static io.confluent.connect.avro.AvroData.CONNECT_INTERNAL_TYPE_NAME;
-import static io.confluent.connect.avro.AvroData.AVRO_FIELD_DEFAULT_FLAG_PROP;
-import static io.confluent.connect.avro.AvroData.CONNECT_NAME_PROP;
-import static io.confluent.connect.avro.AvroData.AVRO_FIELD_DOC_PREFIX_PROP;
-import static io.confluent.connect.avro.AvroData.KEY_FIELD;
-import static io.confluent.connect.avro.AvroData.MAP_ENTRY_TYPE_NAME;
-import static io.confluent.connect.avro.AvroData.NAMESPACE;
-import static io.confluent.connect.avro.AvroData.VALUE_FIELD;
+import static io.confluent.connect.avro.AvroData.*;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.*;
@@ -264,6 +254,53 @@ public class AvroDataTest {
     assertThat(avroData.fromConnectSchema(NAMED_MAP_SCHEMA), equalTo(NAMED_AVRO_MAP_SCHEMA));
   }
 
+  @Test
+  public void testFromConnectBytesFixed() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().fixed("sample").size(4);
+    GenericData.Fixed avroObj = new GenericData.Fixed(avroSchema, "foob".getBytes());
+    avroSchema.addProp("connect.parameters", ImmutableMap.of("connect.fixed.size", "4"));
+    avroSchema.addProp("connect.name", "sample");
+    SchemaAndValue schemaAndValue = avroData.toConnectData(avroSchema, avroObj);
+    checkNonRecordConversion(avroSchema, avroObj, schemaAndValue.schema(), schemaAndValue.value(), avroData);
+  }
+
+  @Test
+  public void testFromConnectFixedUnion() {
+    org.apache.avro.Schema sampleSchema = org.apache.avro.SchemaBuilder.builder().fixed("sample")
+        .size(4);
+    org.apache.avro.Schema otherSchema = org.apache.avro.SchemaBuilder.builder().fixed("other")
+        .size(6);
+    org.apache.avro.Schema sameOtherSchema = org.apache.avro.SchemaBuilder.builder()
+        .fixed("sameOther").size(6);
+    org.apache.avro.Schema unionSchema = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().type(sampleSchema).and().type(otherSchema).and().type(sameOtherSchema)
+        .endUnion();
+    Schema union = SchemaBuilder.struct()
+        .name(AVRO_TYPE_UNION)
+        .field("sample",
+            SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "4").optional()
+                .build())
+        .field("other",
+            SchemaBuilder.bytes().name("other").parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional()
+                .build())
+        .field("sameOther",
+            SchemaBuilder.bytes().name("sameOther").parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "6")
+                .optional().build())
+        .build();
+    Struct unionSample = new Struct(union).put("sample", ByteBuffer.wrap("foob".getBytes()));
+    Struct unionOther = new Struct(union).put("other", ByteBuffer.wrap("foobar".getBytes()));
+    Struct unionSameOther = new Struct(union)
+        .put("sameOther", ByteBuffer.wrap("foobar".getBytes()));
+
+    GenericData genericData = GenericData.get();
+    assertEquals(0,
+        genericData.resolveUnion(unionSchema, avroData.fromConnectData(union, unionSample)));
+    assertEquals(1,
+        genericData.resolveUnion(unionSchema, avroData.fromConnectData(union, unionOther)));
+    assertEquals(2,
+        genericData.resolveUnion(unionSchema, avroData.fromConnectData(union, unionSameOther)));
+  }
+  
   @Test
   public void testFromConnectWithInvalidName() {
     AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
@@ -1258,7 +1295,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaFromConnectConversion() {
-    Cache<org.apache.avro.Schema, Schema> cache =
+    Map<org.apache.avro.Schema, Schema> cache =
         Whitebox.getInternalState(avroData, "fromConnectSchemaCache");
     assertEquals(0, cache.size());
 
@@ -1859,19 +1896,96 @@ public class AvroDataTest {
 
   @Test
   public void testToConnectFixed() {
-    // Our conversion simply loses the fixed size information.
+    Schema connectSchema = SchemaBuilder.bytes().name("sample").parameter(
+        CONNECT_AVRO_FIXED_SIZE_PROP, "4").build();
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .fixed("sample").size(4);
-    assertEquals(new SchemaAndValue(Schema.BYTES_SCHEMA, ByteBuffer.wrap("foob".getBytes())),
+    assertEquals(new SchemaAndValue(connectSchema, ByteBuffer.wrap("foob".getBytes())),
                  avroData.toConnectData(avroSchema, "foob".getBytes()));
 
-    assertEquals(new SchemaAndValue(Schema.BYTES_SCHEMA, ByteBuffer.wrap("foob".getBytes())),
+    assertEquals(new SchemaAndValue(connectSchema, ByteBuffer.wrap("foob".getBytes())),
                  avroData.toConnectData(avroSchema, ByteBuffer.wrap("foob".getBytes())));
 
     // test with actual fixed type
-    assertEquals(new SchemaAndValue(Schema.BYTES_SCHEMA, ByteBuffer.wrap("foob".getBytes())),
+    assertEquals(new SchemaAndValue(connectSchema, ByteBuffer.wrap("foob".getBytes())),
             avroData.toConnectData(avroSchema, new GenericData.Fixed(avroSchema, "foob".getBytes())));
   }
+
+  @Test
+  public void testToConnectFixedUnion() {
+    org.apache.avro.Schema sampleSchema = org.apache.avro.SchemaBuilder.builder().fixed("sample").size(4);
+    org.apache.avro.Schema otherSchema = org.apache.avro.SchemaBuilder.builder().fixed("other").size(6);
+    org.apache.avro.Schema sameOtherSchema = org.apache.avro.SchemaBuilder.builder().fixed("sameOther").size(6);
+    org.apache.avro.Schema unionAvroSchema = org.apache.avro.SchemaBuilder.builder()
+            .unionOf().type(sampleSchema).and().type(otherSchema).and().type(sameOtherSchema)
+            .endUnion();
+    Schema unionConnectSchema = SchemaBuilder.struct()
+            .name(AVRO_TYPE_UNION)
+            .field("sample", SchemaBuilder.bytes().name("sample").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "4").optional().build())
+            .field("other", SchemaBuilder.bytes().name("other").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
+            .field("sameOther", SchemaBuilder.bytes().name("sameOther").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
+            .build();
+    GenericData.Fixed valueSample = new GenericData.Fixed(sampleSchema, "foob".getBytes());
+    GenericData.Fixed valueOther = new GenericData.Fixed(otherSchema, "foobar".getBytes());
+    GenericData.Fixed valueSameOther = new GenericData.Fixed(sameOtherSchema, "foobar".getBytes());
+    Schema generatedSchema = avroData.toConnectSchema(unionAvroSchema);
+
+    assertEquals(unionConnectSchema, generatedSchema);
+    Struct unionSame = new Struct(unionConnectSchema).put("sample", ByteBuffer.wrap("foob".getBytes()));
+    assertEquals(new SchemaAndValue(unionConnectSchema, unionSame),
+            avroData.toConnectData(unionAvroSchema, valueSample));
+    Struct unionOther = new Struct(unionConnectSchema).put("other", ByteBuffer.wrap("foobar".getBytes()));
+    assertEquals(new SchemaAndValue(unionConnectSchema, unionOther),
+            avroData.toConnectData(unionAvroSchema, valueOther));
+    Struct unionSameOther = new Struct(unionConnectSchema).put("sameOther",
+            ByteBuffer.wrap("foobar".getBytes()));
+    assertEquals(new SchemaAndValue(unionConnectSchema, unionSameOther),
+            avroData.toConnectData(unionAvroSchema, valueSameOther));
+  }
+
+  @Test
+  public void testToConnectFixedUnionWithEnhanced() {
+    avroData = new AvroData(new AvroDataConfig.Builder()
+            .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 2)
+            .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+            .build());
+
+    org.apache.avro.Schema sampleSchema = org.apache.avro.SchemaBuilder.builder().fixed("sample").size(4);
+    org.apache.avro.Schema otherSchema = org.apache.avro.SchemaBuilder.builder().fixed("other").size(6);
+    org.apache.avro.Schema sameOtherSchema = org.apache.avro.SchemaBuilder.builder().fixed("sameOther").size(6);
+    org.apache.avro.Schema unionAvroSchema = org.apache.avro.SchemaBuilder.builder()
+            .unionOf().type(sampleSchema).and().type(otherSchema).and().type(sameOtherSchema)
+            .endUnion();
+    Schema unionConnectSchema = SchemaBuilder.struct()
+            .name("io.confluent.connect.avro.Union")
+            .field("sample", SchemaBuilder.bytes().name("sample").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "4").optional().build())
+            .field("other", SchemaBuilder.bytes().name("other").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
+            .field("sameOther", SchemaBuilder.bytes().name("sameOther").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
+            .build();
+    GenericData.Fixed valueSample = new GenericData.Fixed(sampleSchema, "foob".getBytes());
+    GenericData.Fixed valueOther = new GenericData.Fixed(otherSchema, "foobar".getBytes());
+    GenericData.Fixed valueSameOther = new GenericData.Fixed(sameOtherSchema, "foobar".getBytes());
+    Schema generatedSchema = avroData.toConnectSchema(unionAvroSchema);
+
+    assertEquals(unionConnectSchema, generatedSchema);
+    Struct unionSame = new Struct(unionConnectSchema).put("sample", ByteBuffer.wrap("foob".getBytes()));
+    assertEquals(new SchemaAndValue(unionConnectSchema, unionSame),
+            avroData.toConnectData(unionAvroSchema, valueSample));
+    Struct unionOther = new Struct(unionConnectSchema).put("other", ByteBuffer.wrap("foobar".getBytes()));
+    assertEquals(new SchemaAndValue(unionConnectSchema, unionOther),
+            avroData.toConnectData(unionAvroSchema, valueOther));
+    Struct unionSameOther = new Struct(unionConnectSchema).put("sameOther",
+            ByteBuffer.wrap("foobar".getBytes()));
+    assertEquals(new SchemaAndValue(unionConnectSchema, unionSameOther),
+            avroData.toConnectData(unionAvroSchema, valueSameOther));
+  }
+
 
   @Test
   public void testToConnectUnion() {
@@ -2232,7 +2346,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaToConnectConversion() {
-    Cache<Schema, org.apache.avro.Schema> cache =
+    Map<Schema, org.apache.avro.Schema> cache =
         Whitebox.getInternalState(avroData, "toConnectSchemaCache");
     assertEquals(0, cache.size());
 

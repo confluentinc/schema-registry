@@ -14,6 +14,8 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -34,6 +36,7 @@ import java.util.Arrays;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 
+import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.CONTEXT_NAME_STRATEGY;
 import static org.junit.Assert.assertArrayEquals;
 
 public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
@@ -164,6 +167,76 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     Consumer<String, Object> consumer = createConsumer(consumerProps);
     ArrayList<Object> recordList = consume(consumer, topic, objects.length);
     assertArrayEquals(objects, recordList.toArray());
+  }
+
+  @Test
+  public void testAvroNewProducerUsingContextUrl() {
+    String topic = "testAvro";
+    IndexedRecord avroRecord = createAvroRecord();
+    Object[] objects = new Object[]
+        {avroRecord, true, 130, 345L, 1.23f, 2.34d, "abc", "def".getBytes()};
+    Properties producerProps = createNewProducerProps();
+    producerProps.put(SCHEMA_REGISTRY_URL, restApp.restConnect + "/contexts/.ctx1" );
+    KafkaProducer producer = createNewProducer(producerProps);
+    newProduce(producer, topic, objects);
+
+    Properties consumerProps = createConsumerProps();
+    consumerProps.put(SCHEMA_REGISTRY_URL, restApp.restConnect + "/contexts/.ctx1" );
+    Consumer<String, Object> consumer = createConsumer(consumerProps);
+    ArrayList<Object> recordList = consume(consumer, topic, objects.length);
+    assertArrayEquals(objects, recordList.toArray());
+  }
+
+  @Test
+  public void testAvroNewProducerUsingContextStrategy() {
+    String topic = "testAvro";
+    IndexedRecord avroRecord = createAvroRecord();
+    Object[] objects = new Object[]
+        {avroRecord, true, 130, 345L, 1.23f, 2.34d, "abc", "def".getBytes()};
+    Properties producerProps = createNewProducerProps();
+    producerProps.put(CONTEXT_NAME_STRATEGY, CustomContextNameStrategy.class.getName());
+    KafkaProducer producer = createNewProducer(producerProps);
+    newProduce(producer, topic, objects);
+
+    Properties consumerProps = createConsumerProps();
+    consumerProps.put(CONTEXT_NAME_STRATEGY, CustomContextNameStrategy.class.getName());
+    Consumer<String, Object> consumer = createConsumer(consumerProps);
+    ArrayList<Object> recordList = consume(consumer, topic, objects.length);
+    assertArrayEquals(objects, recordList.toArray());
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testAvroNewProducerUsingInvalidContextStrategy() {
+    String topic = "testAvro";
+    IndexedRecord avroRecord = createAvroRecord();
+    Object[] objects = new Object[]
+        {avroRecord, true, 130, 345L, 1.23f, 2.34d, "abc", "def".getBytes()};
+    Properties producerProps = createNewProducerProps();
+    producerProps.put(CONTEXT_NAME_STRATEGY, InvalidContextNameStrategy.class.getName());
+    KafkaProducer producer = createNewProducer(producerProps);
+    newProduce(producer, topic, objects);
+
+    Properties consumerProps = createConsumerProps();
+    consumerProps.put(CONTEXT_NAME_STRATEGY, InvalidContextNameStrategy.class.getName());
+    Consumer<String, Object> consumer = createConsumer(consumerProps);
+    ArrayList<Object> recordList = consume(consumer, topic, objects.length);
+    assertArrayEquals(objects, recordList.toArray());
+  }
+
+  public static class CustomContextNameStrategy implements ContextNameStrategy {
+    public void configure(Map<String, ?> configs) {
+    }
+    public String contextName(String topic) {
+      return ".ctx1";
+    }
+  }
+
+  public static class InvalidContextNameStrategy implements ContextNameStrategy {
+    public void configure(Map<String, ?> configs) {
+    }
+    public String contextName(String topic) {
+      return "foo:bar";
+    }
   }
 }
 
