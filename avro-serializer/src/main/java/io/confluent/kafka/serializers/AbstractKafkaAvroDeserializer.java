@@ -45,6 +45,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaSerDe {
   private final DecoderFactory decoderFactory = DecoderFactory.get();
+  protected boolean isKey;
   protected boolean useSpecificAvroReader = false;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
@@ -84,7 +85,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    * @return the deserialized object
    */
   protected Object deserialize(byte[] payload) throws SerializationException {
-    return deserialize(null, null, payload, null);
+    return deserialize(null, isKey, payload, null);
   }
 
   /**
@@ -95,7 +96,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    * @return the deserialized object
    */
   protected Object deserialize(byte[] payload, Schema readerSchema) throws SerializationException {
-    return deserialize(null, null, payload, readerSchema);
+    return deserialize(null, isKey, payload, readerSchema);
   }
 
   protected Object deserialize(String topic, Boolean isKey, byte[] payload, Schema readerSchema)

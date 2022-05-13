@@ -57,6 +57,7 @@ public class KafkaProtobufDeserializer<T extends Message>
 
   @SuppressWarnings("unchecked")
   protected void configure(KafkaProtobufDeserializerConfig config, boolean isKey) {
+    this.isKey = isKey;
     if (isKey) {
       configure(
           config,
@@ -72,7 +73,7 @@ public class KafkaProtobufDeserializer<T extends Message>
 
   @Override
   public T deserialize(String topic, byte[] bytes) {
-    return (T) deserialize(false, topic, null, bytes);
+    return (T) deserialize(false, topic, isKey, bytes);
   }
 
   @Override

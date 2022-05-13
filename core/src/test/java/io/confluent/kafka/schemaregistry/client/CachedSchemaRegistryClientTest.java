@@ -43,14 +43,15 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
   private final String SCHEMA_REGISTRY_URL = "schema.registry.url";
 
+  private String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
+                        "\"name\": \"User\"," +
+                        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}";
+
   public CachedSchemaRegistryClientTest() {
     super(1, true);
   }
 
   private IndexedRecord createAvroRecord() {
-    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
-                        "\"name\": \"User\"," +
-                        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}";
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
     GenericRecord avroRecord = new GenericData.Record(schema);
@@ -182,6 +183,25 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
     Properties consumerProps = createConsumerProps();
     consumerProps.put(SCHEMA_REGISTRY_URL, restApp.restConnect + "/contexts/.ctx1" );
+    Consumer<String, Object> consumer = createConsumer(consumerProps);
+    ArrayList<Object> recordList = consume(consumer, topic, objects.length);
+    assertArrayEquals(objects, recordList.toArray());
+  }
+
+  @Test
+  public void testAvroNewProducerWithContext() throws Exception {
+    String topic = "testAvro";
+    restApp.restClient.registerSchema(userSchema, ":.context02:" + topic + "-value");
+
+    IndexedRecord avroRecord = createAvroRecord();
+    Object[] objects = new Object[]{avroRecord};
+    Properties producerProps = createNewProducerProps();
+    producerProps.put("auto.register.schemas", false);
+    producerProps.put("use.latest.version", true);
+    KafkaProducer producer = createNewProducer(producerProps);
+    newProduce(producer, topic, objects);
+
+    Properties consumerProps = createConsumerProps();
     Consumer<String, Object> consumer = createConsumer(consumerProps);
     ArrayList<Object> recordList = consume(consumer, topic, objects.length);
     assertArrayEquals(objects, recordList.toArray());
