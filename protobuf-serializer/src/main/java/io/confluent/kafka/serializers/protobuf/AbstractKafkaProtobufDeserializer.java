@@ -45,6 +45,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
+  protected boolean isKey;
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
   protected boolean deriveType;
@@ -96,7 +97,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    */
   protected T deserialize(byte[] payload)
       throws SerializationException, InvalidConfigurationException {
-    return (T) deserialize(false, null, null, payload);
+    return (T) deserialize(false, null, isKey, payload);
   }
 
   // The Object return type is a bit messy, but this is the simplest way to have
