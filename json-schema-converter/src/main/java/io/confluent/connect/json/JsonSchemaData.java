@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
@@ -66,6 +67,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import org.json.JSONObject;
 
 import static io.confluent.connect.json.JsonSchemaDataConfig.SCHEMAS_CACHE_SIZE_CONFIG;
 import static io.confluent.connect.json.JsonSchemaDataConfig.SCHEMAS_CACHE_SIZE_DEFAULT;
@@ -1045,7 +1047,10 @@ public class JsonSchemaData {
       builder.parameters(parameters);
     }
     if (jsonSchema.hasDefaultValue()) {
-      JsonNode jsonNode = OBJECT_MAPPER.convertValue(jsonSchema.getDefaultValue(), JsonNode.class);
+      Object defaultVal = jsonSchema.getDefaultValue();
+      JsonNode jsonNode = defaultVal == JSONObject.NULL
+          ? NullNode.getInstance()
+          : OBJECT_MAPPER.convertValue(defaultVal, JsonNode.class);
       builder.defaultValue(toConnectData(builder, jsonNode));
     }
 
