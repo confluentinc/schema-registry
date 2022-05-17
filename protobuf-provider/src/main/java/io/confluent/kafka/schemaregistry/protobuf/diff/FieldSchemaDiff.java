@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
+import com.squareup.wire.schema.Field;
 import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
@@ -28,42 +29,51 @@ import java.util.Objects;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_KIND_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_NAMED_TYPE_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_NAME_CHANGED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_NUMERIC_LABEL_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_SCALAR_KIND_CHANGED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_STRING_OR_BYTES_LABEL_CHANGED;
 
 public class FieldSchemaDiff {
   static void compare(final Context ctx, final FieldElement original, final FieldElement update) {
     if (!Objects.equals(original.getName(), update.getName())) {
       ctx.addDifference(FIELD_NAME_CHANGED);
     }
+    Field.Label originalLabel = original != null ? original.getLabel() : null;
+    Field.Label updateLabel = update != null ? update.getLabel() : null;
     ProtoType originalType = ProtoType.get(original.getType());
     ProtoType updateType = ProtoType.get(update.getType());
-    compareTypes(ctx, originalType, updateType);
+    compareLabelsAndTypes(ctx, originalLabel, updateLabel, originalType, updateType);
   }
 
-  static void compareTypes(final Context ctx, ProtoType original, ProtoType update) {
-    TypeElementInfo originalType = ctx.getType(original.toString(), true);
-    if (originalType != null && originalType.isMap()) {
-      original = originalType.getMapType();
+  static void compareLabelsAndTypes(
+      final Context ctx,
+      Field.Label originalLabel,
+      Field.Label updateLabel,
+      ProtoType originalType,
+      ProtoType updateType) {
+    TypeElementInfo originalTypeInfo = ctx.getType(originalType.toString(), true);
+    if (originalTypeInfo != null && originalTypeInfo.isMap()) {
+      originalType = originalTypeInfo.getMapType();
     }
-    TypeElementInfo updateType = ctx.getType(update.toString(), false);
-    if (updateType != null && updateType.isMap()) {
-      update = updateType.getMapType();
+    TypeElementInfo updateTypeInfo = ctx.getType(updateType.toString(), false);
+    if (updateTypeInfo != null && updateTypeInfo.isMap()) {
+      updateType = updateTypeInfo.getMapType();
     }
 
-    Kind originalKind = kind(ctx, original, true);
-    Kind updateKind = kind(ctx, update, false);
+    Kind originalKind = kind(ctx, originalType, true);
+    Kind updateKind = kind(ctx, updateType, false);
     if (!Objects.equals(originalKind, updateKind)) {
       ctx.addDifference(FIELD_KIND_CHANGED);
     } else {
       switch (originalKind) {
         case SCALAR:
-          compareScalarTypes(ctx, original, update);
+          compareScalarTypes(ctx, originalLabel, updateLabel, originalType, updateType);
           break;
         case MESSAGE:
-          compareMessageTypes(ctx, original, update);
+          compareMessageTypes(ctx, originalType, updateType);
           break;
         case MAP:
-          compareMapTypes(ctx, original, update);
+          compareMapTypes(ctx, originalType, updateType);
           break;
         default:
           break;
@@ -73,11 +83,33 @@ public class FieldSchemaDiff {
 
   static void compareScalarTypes(
       final Context ctx,
-      final ProtoType original,
-      final ProtoType update
+      final Field.Label originalLabel,
+      final Field.Label updateLabel,
+      final ProtoType originalType,
+      final ProtoType updateType
   ) {
-    if (!Objects.equals(scalarKind(ctx, original, true), scalarKind(ctx, update, false))) {
+    ScalarKind originalKind = scalarKind(ctx, originalType, true);
+    ScalarKind updateKind = scalarKind(ctx, updateType, false);
+    if (!Objects.equals(originalKind, updateKind)) {
       ctx.addDifference(FIELD_SCALAR_KIND_CHANGED);
+    } else {
+      if (originalLabel != null && updateLabel != null && originalLabel != updateLabel) {
+        switch (originalKind) {
+          case GENERAL_NUMBER:
+          case SIGNED_NUMBER:
+          case FIXED32:
+          case FIXED64:
+          case FLOAT:
+          case DOUBLE:
+            ctx.addDifference(FIELD_NUMERIC_LABEL_CHANGED);
+            break;
+          case STRING_OR_BYTES:
+            ctx.addDifference(FIELD_STRING_OR_BYTES_LABEL_CHANGED);
+            break;
+          default:
+            break;
+        }
+      }
     }
   }
 
@@ -127,8 +159,8 @@ public class FieldSchemaDiff {
   }
 
   static void compareMapTypes(final Context ctx, final ProtoType original, final ProtoType update) {
-    compareTypes(ctx, original.getKeyType(), update.getKeyType());
-    compareTypes(ctx, original.getValueType(), update.getValueType());
+    compareLabelsAndTypes(ctx, null, null, original.getKeyType(), update.getKeyType());
+    compareLabelsAndTypes(ctx, null, null, original.getValueType(), update.getValueType());
   }
 
   static Kind kind(final Context ctx, ProtoType type, boolean isOriginal) {

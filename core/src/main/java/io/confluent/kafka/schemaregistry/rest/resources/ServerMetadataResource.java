@@ -17,7 +17,6 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.annotations.ApiOperation;
@@ -42,12 +41,9 @@ public class ServerMetadataResource {
 
   private static final Logger log = LoggerFactory.getLogger(ServerMetadataResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
-  private final SchemaRegistryConfig schemaRegistryConfig;
 
-  public ServerMetadataResource(KafkaSchemaRegistry schemaRegistry,
-                                SchemaRegistryConfig schemaRegistryConfig) {
+  public ServerMetadataResource(KafkaSchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
-    this.schemaRegistryConfig = schemaRegistryConfig;
   }
 
   @GET
@@ -58,8 +54,7 @@ public class ServerMetadataResource {
   @PerformanceMetric("metadata.id")
   public ServerClusterId getClusterId() {
     String kafkaClusterId = schemaRegistry.getKafkaClusterId();
-    String schemaRegistryClusterId =
-            schemaRegistryConfig.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
+    String schemaRegistryClusterId = schemaRegistry.getGroupId();
     return ServerClusterId.of(kafkaClusterId, schemaRegistryClusterId);
   }
 }

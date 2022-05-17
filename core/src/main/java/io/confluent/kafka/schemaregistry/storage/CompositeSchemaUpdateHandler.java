@@ -38,9 +38,16 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
    * Invoked after the cache is initialized.
    */
   @Override
-  public void cacheInitialized() {
+  public void cacheInitialized(Map<TopicPartition, Long> checkpoints) {
     for (SchemaUpdateHandler handler : handlers) {
-      handler.cacheInitialized();
+      handler.cacheInitialized(checkpoints);
+    }
+  }
+
+  @Override
+  public void startBatch(int count) {
+    for (SchemaUpdateHandler handler : handlers) {
+      handler.startBatch(count);
     }
   }
 
@@ -97,6 +104,13 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
       }
     }
     return result;
+  }
+
+  @Override
+  public void endBatch(int count) {
+    for (SchemaUpdateHandler handler : handlers) {
+      handler.endBatch(count);
+    }
   }
 
   @Override

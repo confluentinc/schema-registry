@@ -148,6 +148,16 @@ public class RestApiModeTest extends ClusterTestHarness {
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
           e.getStatus());
     }
+
+    // set subject mode to import with force=true
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode, subject, true).getMode());
+
+    // set global mode to import with force=true
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode, null, true).getMode());
   }
 
   @Test
