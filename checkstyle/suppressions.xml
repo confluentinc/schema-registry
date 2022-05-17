@@ -10,10 +10,10 @@
               files="ErrorMessage.java"/>
 
     <suppress checks="ParameterNumber"
-              files="SchemaRegistryCoordinator.java"/>
+              files="(AbstractKafkaProtobufSerializer|SchemaRegistryCoordinator).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(AbstractKafkaAvroDeserializer|AvroMessageReader|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroData|KafkaGroupMasterElector).java"/>
+              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroConverter|AvroData|KafkaGroupMasterElector|ProtobufSchema|ProtobufData|JsonSchemaData|InMemoryCache|SchemaMessageReader|JsonSchemaConverter).java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(RestService|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|AvroData|KafkaGroupMasterElector).java"/>
@@ -22,24 +22,27 @@
               files="(Errors|AvroMessageReader).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|AvroSchemaUtils|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter|MockSchemaRegistryClient|SchemaRegistrySerializer|SubjectVersionsResource).java"/>
+              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|AvroSchema|AvroSchemaUtils|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|MockSchemaRegistryClient|SchemaRegistrySerializer|SchemaValue|SubjectVersionsResource|ProtobufSchema|SchemaDiff|FieldSchemaDiff|MessageSchemaDiff|DynamicSchema|SchemaMessageFormatter|ProtobufData|JsonSchema|JSON.*|AbstractKafkaJsonSchemaDeserializer|JsonSchemaData|JsonSchemaUtils|ProtobufSchemaUtils|SchemaMessageReader).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter|KafkaSchemaRegistry).java"/>
+              files="(AvroData|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|AbstractKafkaJsonSchemaDeserializer|ProtobufData|ProtobufSchemaUtils|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader|SubjectVersionsResource).java"/>
 
     <suppress checks="JavaNCSS"
-              files="AvroData.java"/>
+              files="(AvroData|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaData|KafkaSchemaRegistry|ProtobufSchema).java"/>
 
     <suppress checks="MethodLength"
               files="AvroData.java"/>
 
     <suppress checks="AbbreviationAsWordInName"
-              files=".*SchemaRegistryClient.java"/>
+              files="(.*SchemaRegistryClient|JSON.*).java"/>
 
     <suppress checks="MethodLength"
-              files="SchemaRegistryConfig.java"/>
+              files="(SchemaRegistryConfig|ProtobufData|JsonSchemaData).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
-              files="AvroData.java"/>
+              files="(AvroData|ProtobufData).java"/>
+
+    <suppress checks="MemberName"
+              files="(DynamicSchema|EnumDefinition|MessageDefinition).java"/>
 
 </suppressions>

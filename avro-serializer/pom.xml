@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>5.4.8-SNAPSHOT</version>
+        <version>5.5.9-SNAPSHOT</version>
     </parent>
 
     <licenses>
@@ -38,6 +38,10 @@
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-serializer</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client</artifactId>
         </dependency>
         <dependency>
@@ -45,6 +49,11 @@
             <artifactId>common-config</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>

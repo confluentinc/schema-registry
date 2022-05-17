@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+option java_package = "io.confluent.connect.protobuf.test";
+option java_outer_classname = "KeyValue";
+
+import "google/protobuf/descriptor.proto";
+
+message KeyValueMessage {
+    int32 key = 1;
+    string value = 2;
+}

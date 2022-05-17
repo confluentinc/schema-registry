@@ -1,0 +1,29 @@
+syntax = "proto3";
+package Acme.Glup;
+option java_package = "com.acme.glup";
+
+import "metadata_proto.proto";
+import "common_proto.proto";
+
+message ClickCas {
+  option (contains_nullable_fields) = true;
+
+  option (glup).producers = {
+    kafka: true
+  };
+
+  option (glup).kafka = {
+    topic: "glup_click_cas"
+  };
+
+  Origin glup_origin = 1;
+  Partition partition = 2;
+  string uid = 5;
+  // Schema field
+  // (...)
+  map<int32, bool> set_fields = 50010; // nullable tracking special field
+  repeated ControlMessage.Watermark control_message = 2097151 [ (json).name = "__metadata" ]; // standard glup field
+
+  reserved 70 to 73, 75;
+  reserved "obsolete", "obsolete2";
+}

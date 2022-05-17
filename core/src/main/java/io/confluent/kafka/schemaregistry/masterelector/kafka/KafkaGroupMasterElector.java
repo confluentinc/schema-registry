@@ -23,6 +23,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -123,7 +124,10 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       this.metadata.bootstrap(addresses);
       String metricGrpPrefix = "kafka.schema.registry";
 
-      ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig, time);
+      ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(
+          clientConfig,
+          time,
+          logContext);
       long maxIdleMs = clientConfig.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
 
       NetworkClient netClient = new NetworkClient(
@@ -193,6 +197,8 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           while (!stopped.get()) {
             coordinator.poll(Integer.MAX_VALUE);
           }
+        } catch (WakeupException we) {
+          // do nothing because the thread is closing -- see stop()
         } catch (Throwable t) {
           log.error("Unexpected exception in schema registry group processing thread", t);
         }

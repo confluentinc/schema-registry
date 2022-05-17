@@ -15,12 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -48,10 +49,12 @@ public class KafkaStoreMessageHandler
    * @param key   Key associated with the data
    * @param value Data written to the store
    */
+  @Override
   public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
       if (schemaObj != null) {
+        normalize(schemaObj);
         SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
         if (oldKey != null) {
           SchemaValue oldSchema;
@@ -73,6 +76,15 @@ public class KafkaStoreMessageHandler
     return true;
   }
 
+  @VisibleForTesting
+  protected static void normalize(SchemaValue schemaValue) {
+    if (ProtobufSchema.TYPE.equals(schemaValue.getSchemaType())) {
+      // Normalize the schema if it is Protobuf (due to changes in Protobuf canonicalization)
+      String normalized = new ProtobufSchema(schemaValue.getSchema()).canonicalString();
+      schemaValue.setSchema(normalized);
+    }
+  }
+
   /**
    * Invoked on every new schema written to the Kafka store
    *
@@ -80,10 +92,13 @@ public class KafkaStoreMessageHandler
    * @param value Value written to the Kafka lookupCache
    */
   @Override
-  public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
+  public void handleUpdate(SchemaRegistryKey key,
+                           SchemaRegistryValue value,
+                           SchemaRegistryValue oldValue) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
-          (SchemaValue) value);
+          (SchemaValue) value,
+          (SchemaValue) oldValue);
     } else if (value == null) {
       // ignore non-schema tombstone
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
@@ -108,7 +123,7 @@ public class KafkaStoreMessageHandler
           lookupCache.schemaDeleted(schemaKey, schemaValue);
         }
       } catch (StoreException e) {
-        log.error("Failed to delete subject {} in the local cache", subject);
+        log.error("Failed to delete subject {} in the local cache", subject, e);
       }
     }
   }
@@ -118,14 +133,16 @@ public class KafkaStoreMessageHandler
     try {
       lookupCache.clearSubjects(subject);
     } catch (StoreException e) {
-      log.error("Failed to clear subject {} in the local cache", subject);
+      log.error("Failed to clear subject {} in the local cache", subject, e);
     }
   }
 
-  private void handleSchemaUpdate(SchemaKey schemaKey, SchemaValue schemaObj) {
-    if (schemaObj != null) {
+  private void handleSchemaUpdate(SchemaKey schemaKey,
+                                  SchemaValue schemaValue,
+                                  SchemaValue oldSchemaValue) {
+    if (schemaValue != null) {
       // Update the maximum id seen so far
-      idGenerator.schemaRegistered(schemaKey, schemaObj);
+      idGenerator.schemaRegistered(schemaKey, schemaValue);
 
       // If the schema is marked to be deleted, we store it in an internal datastructure
       // that holds all deleted schema keys for an id.
@@ -134,35 +151,13 @@ public class KafkaStoreMessageHandler
       // This helps optimize the storage. The main reason we only allow soft deletes in SR is that
       // consumers should be able to access the schemas by id. This is guaranteed when the schema is
       // re-registered again and hence we can tombstone the record.
-      if (schemaObj.isDeleted()) {
-        this.lookupCache.schemaDeleted(schemaKey, schemaObj);
+      if (schemaValue.isDeleted()) {
+        this.lookupCache.schemaDeleted(schemaKey, schemaValue);
       } else {
-        lookupCache.schemaRegistered(schemaKey, schemaObj);
-        List<SchemaKey> schemaKeys = lookupCache.deletedSchemaKeys(schemaObj);
-        schemaKeys.stream().filter(v ->
-            v.getSubject().equals(schemaObj.getSubject())
-                && v.getVersion() != schemaObj.getVersion())
-            .forEach(this::tombstoneSchemaKey);
+        lookupCache.schemaRegistered(schemaKey, schemaValue);
       }
     } else {
-      lookupCache.schemaTombstoned(schemaKey);
-    }
-  }
-
-  private void tombstoneSchemaKey(SchemaKey schemaKey) {
-    if (schemaRegistry.getKafkaStore().initialized()) {
-      tombstoneExecutor.execute(() -> {
-            try {
-              schemaRegistry.getKafkaStore().waitForInit();
-              schemaRegistry.getKafkaStore().delete(schemaKey);
-              log.debug("Tombstoned {}", schemaKey);
-            } catch (InterruptedException e) {
-              log.error("Interrupted while waiting for the tombstone thread to be initialized ", e);
-            } catch (StoreException e) {
-              log.error("Failed to tombstone {}", schemaKey, e);
-            }
-          }
-      );
+      lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
     }
   }
 }

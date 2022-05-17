@@ -19,45 +19,63 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
-public interface SchemaRegistry {
+public interface SchemaRegistry extends SchemaVersionFetcher {
 
   void init() throws SchemaRegistryException;
 
+  Set<String> schemaTypes();
+
   int register(String subject, Schema schema) throws SchemaRegistryException;
+
+  default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {
+    try {
+      return get(subject, version, returnDeletedSchema);
+    } catch (SchemaRegistryException e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   Schema get(String subject, int version, boolean returnDeletedSchema)
       throws SchemaRegistryException;
 
   SchemaString get(int id) throws SchemaRegistryException;
 
-  Set<String> listSubjects() throws SchemaRegistryException;
+  default Set<String> listSubjects() throws SchemaRegistryException {
+    return listSubjects(false);
+  }
+
+  Set<String> listSubjects(boolean returnDeletedSubjects)
+          throws SchemaRegistryException;
 
   Iterator<Schema> getAllVersions(String subject, boolean filterDeletes)
       throws SchemaRegistryException;
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
 
-  List<Integer> deleteSubject(String subject) throws SchemaRegistryException;
+  List<Integer> deleteSubject(String subject, boolean permanentDelete)
+      throws SchemaRegistryException;
 
   Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException;
 
   boolean isCompatible(String subject,
-                       String inputSchema,
-                       String targetSchema) throws SchemaRegistryException;
+                       Schema newSchema,
+                       Schema targetSchema) throws SchemaRegistryException;
 
   boolean isCompatible(String subject,
-                       String newSchema,
-                       List<String> previousSchemas) throws SchemaRegistryException;
+                       Schema newSchema,
+                       List<Schema> previousSchemas) throws SchemaRegistryException;
 
   void close();
 
-  void deleteSchemaVersion(String subject, Schema schema) throws SchemaRegistryException;
+  void deleteSchemaVersion(String subject, Schema schema,
+                           boolean permanentDelete) throws SchemaRegistryException;
 
   SchemaRegistryConfig config();
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component-set>
+    <components>
+        <component>
+            <role>org.codehaus.plexus.component.configurator.ComponentConfigurator</role>
+            <role-hint>custom-basic</role-hint>
+            <implementation>io.confluent.kafka.schemaregistry.maven.CustomBasicComponentConfigurator</implementation>
+        </component>
+    </components>
+</component-set>

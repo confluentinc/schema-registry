@@ -38,6 +38,11 @@ public class SchemaIdAndSubjects {
     this.id = id;
   }
 
+  public SchemaIdAndSubjects(int id, Map<String, Integer> subjectsAndVersions) {
+    this.subjectsAndVersions = subjectsAndVersions;
+    this.id = id;
+  }
+
   public void addSubjectAndVersion(String subject, int version) {
     this.subjectsAndVersions.put(subject, version);
   }
@@ -68,6 +73,10 @@ public class SchemaIdAndSubjects {
 
   public Set<String> allSubjects() {
     return subjectsAndVersions.keySet();
+  }
+
+  public Map<String, Integer> allSubjectVersions() {
+    return subjectsAndVersions;
   }
 
   public void removeIf(Predicate<SchemaKey> filter) {

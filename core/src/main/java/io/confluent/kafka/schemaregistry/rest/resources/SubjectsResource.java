@@ -15,6 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
@@ -41,9 +45,11 @@ import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -85,15 +91,27 @@ public class SubjectsResource {
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
+    log.info("Schema lookup under subject {}, deleted {}, type {}",
+             subject, lookupDeletedSchema, request.getSchemaType());
     // returns version if the schema exists. Otherwise returns 404
-    Schema schema = new Schema(subject, 0, -1, request.getSchema());
+    Schema schema = new Schema(
+        subject,
+        0,
+        -1,
+        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
+        request.getReferences(),
+        request.getSchema()
+    );
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema = null;
     try {
-      if (!schemaRegistry.hasSubjects(subject)) {
-        throw Errors.subjectNotFoundException();
+      if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
+        throw Errors.subjectNotFoundException(subject);
       }
       matchingSchema =
           schemaRegistry.lookUpSchemaUnderSubject(subject, schema, lookupDeletedSchema);
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException("Either the input schema or"
+          + " one its references is invalid", e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);
@@ -104,17 +122,17 @@ public class SubjectsResource {
     asyncResponse.resume(matchingSchema);
   }
 
-
-
   @GET
   @Valid
   @ApiOperation(value = "Get a list of registered subjects.")
   @ApiResponses(value = {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")})
   @PerformanceMetric("subjects.list")
-  public Set<String> list() {
+  public Set<String> list(
+          @QueryParam("deleted") boolean lookupDeletedSubjects
+  ) {
     try {
-      return schemaRegistry.listSubjects();
+      return schemaRegistry.listSubjects(lookupDeletedSubjects);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {
@@ -136,15 +154,30 @@ public class SubjectsResource {
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
       @ApiParam(value = "the name of the subject", required = true)
-        @PathParam("subject") String subject) {
+      @PathParam("subject") String subject,
+      @QueryParam("permanent") boolean permanentDelete) {
+    log.info("Deleting subject {}", subject);
     List<Integer> deletedVersions;
     try {
-      if (!schemaRegistry.hasSubjects(subject)) {
-        throw Errors.subjectNotFoundException();
+      if (!schemaRegistry.hasSubjects(subject, true)) {
+        throw Errors.subjectNotFoundException(subject);
+      }
+      if (!permanentDelete && !schemaRegistry.hasSubjects(subject, false)) {
+        throw Errors.subjectSoftDeletedException(subject);
       }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties, subject);
+      deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties,
+              subject,
+              permanentDelete);
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
+    } catch (SubjectNotSoftDeletedException e) {
+      throw Errors.subjectNotSoftDeletedException(subject);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
+    } catch (SchemaRegistryTimeoutException e) {
+      throw Errors.operationTimeoutException("Delete subject operation timed out", e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting the subject " + subject,
                                            e);

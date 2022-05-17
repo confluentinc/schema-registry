@@ -34,7 +34,7 @@ public class StringMessageHandler implements StoreUpdateHandler<String, String> 
    * @param value Data written to the store
    */
   @Override
-  public void handleUpdate(String key, String value) {
+  public void handleUpdate(String key, String value, String oldValue) {
 
   }
 }

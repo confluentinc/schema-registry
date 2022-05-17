@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.schemaregistry.maven;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
@@ -48,8 +49,8 @@ public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
       String valueSubject = String.format("TestSubject%03d-value", i);
       Schema keySchema = Schema.create(Schema.Type.STRING);
       Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
-      this.mojo.client().register(keySubject, keySchema);
-      this.mojo.client().register(valueSubject, valueSchema);
+      this.mojo.client().register(keySubject, new AvroSchema(keySchema));
+      this.mojo.client().register(valueSubject, new AvroSchema(valueSchema));
       File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
       File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
 

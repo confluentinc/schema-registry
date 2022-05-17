@@ -1,0 +1,7 @@
+syntax = "proto3";
+package io.confluent.kafka.serializers.protobuf.test;
+
+message ReferencedMessage {
+    string ref_id = 1;
+    bool is_active = 2;
+}

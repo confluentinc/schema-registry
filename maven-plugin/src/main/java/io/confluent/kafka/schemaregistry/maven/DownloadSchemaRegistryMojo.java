@@ -16,11 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaParseException;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -28,7 +29,6 @@ import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -37,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,36 +45,39 @@ import java.util.regex.Pattern;
 @Mojo(name = "download")
 public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
 
-  @Parameter(required = false, defaultValue = ".avsc")
+  @Parameter(required = false)
   String schemaExtension;
+
   @Parameter(required = true)
   List<String> subjectPatterns = new ArrayList<>();
+
   @Parameter(required = true)
   File outputDirectory;
 
-
-  @Parameter(required = false, defaultValue = "true")
-  boolean prettyPrintSchemas;
-
-  Map<String, Schema> downloadSchemas(Collection<String> subjects) throws MojoExecutionException {
-    Map<String, Schema> results = new LinkedHashMap<>();
+  Map<String, ParsedSchema> downloadSchemas(Collection<String> subjects)
+      throws MojoExecutionException {
+    Map<String, ParsedSchema> results = new LinkedHashMap<>();
 
     for (String subject : subjects) {
-      Schema.Parser parser = new Schema.Parser();
       SchemaMetadata schemaMetadata;
       try {
         getLog().info(String.format("Downloading latest metadata for %s.", subject));
         schemaMetadata = this.client().getLatestSchemaMetadata(subject);
-        Schema schema = parser.parse(schemaMetadata.getSchema());
-        results.put(subject, schema);
-      } catch (RestClientException | IOException ex) {
+        Optional<ParsedSchema> schema =
+            this.client().parseSchema(
+                schemaMetadata.getSchemaType(),
+                schemaMetadata.getSchema(),
+                schemaMetadata.getReferences());
+        if (schema.isPresent()) {
+          results.put(subject, schema.get());
+        } else {
+          throw new MojoExecutionException(
+              String.format("Error while parsing schema for %s", subject)
+          );
+        }
+      } catch (Exception ex) {
         throw new MojoExecutionException(
             String.format("Exception thrown while downloading metadata for %s.", subject),
-            ex
-        );
-      } catch (SchemaParseException ex) {
-        throw new MojoExecutionException(
-            String.format("Exception thrown while parsing avro schema for %s.", subject),
             ex
         );
       }
@@ -144,10 +148,10 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       }
     }
 
-    Map<String, Schema> subjectToSchema = downloadSchemas(subjectsToDownload);
+    Map<String, ParsedSchema> subjectToSchema = downloadSchemas(subjectsToDownload);
 
-    for (Map.Entry<String, Schema> kvp : subjectToSchema.entrySet()) {
-      String fileName = String.format("%s%s", kvp.getKey(), this.schemaExtension);
+    for (Map.Entry<String, ParsedSchema> kvp : subjectToSchema.entrySet()) {
+      String fileName = String.format("%s%s", kvp.getKey(), getExtension(kvp.getValue()));
       File outputFile = new File(this.outputDirectory, fileName);
 
       getLog().info(
@@ -157,14 +161,30 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       try (OutputStreamWriter writer = new OutputStreamWriter(
           new FileOutputStream(outputFile), StandardCharsets.UTF_8)
       ) {
-        writer.write(kvp.getValue().toString(this.prettyPrintSchemas));
-      } catch (IOException ex) {
+        writer.write(kvp.getValue().toString());
+      } catch (Exception ex) {
         throw new MojoExecutionException(
             String.format("Exception thrown while writing subject('%s') schema to %s", kvp.getKey(),
                           outputFile),
             ex
         );
       }
+    }
+  }
+
+  private String getExtension(ParsedSchema parsedSchema) {
+    if (this.schemaExtension != null) {
+      return schemaExtension;
+    }
+    switch (parsedSchema.schemaType()) {
+      case AvroSchema.TYPE:
+        return ".avsc";
+      case JsonSchema.TYPE:
+        return ".schema.json";
+      case ProtobufSchema.TYPE:
+        return ".proto";
+      default:
+        return ".txt";
     }
   }
 }

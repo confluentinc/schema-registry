@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
-import org.apache.avro.Schema;
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.avro.SchemaParseException;
 
 public class AvroUtils {
@@ -26,13 +26,10 @@ public class AvroUtils {
    * @return A schema object and a canonical representation of the schema string. Return null if
    *     there is any parsing error.
    */
+  @VisibleForTesting
   public static AvroSchema parseSchema(String schemaString) {
     try {
-      Schema.Parser parser1 = new Schema.Parser();
-      parser1.setValidateDefaults(false);
-      Schema schema = parser1.parse(schemaString);
-      //TODO: schema.toString() is not canonical (issue-28)
-      return new AvroSchema(schema, schema.toString());
+      return new AvroSchema(schemaString);
     } catch (SchemaParseException e) {
       return null;
     }

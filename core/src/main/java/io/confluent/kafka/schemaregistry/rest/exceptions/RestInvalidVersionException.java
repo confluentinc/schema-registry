@@ -24,13 +24,12 @@ import io.confluent.rest.exceptions.RestConstraintViolationException;
 public class RestInvalidVersionException extends RestConstraintViolationException {
 
   public static final int ERROR_CODE = Errors.INVALID_VERSION_ERROR_CODE;
+  public static final String INVALID_VERSION_MESSAGE_FORMAT = "The specified version '%s' "
+          + "is not a valid version id. "
+          + "Allowed values are between [1, 2^31-1] and the string \"latest\"";
 
-  public RestInvalidVersionException() {
-    this("The specified version is not a valid version id. Allowed values are between "
-         + "[1, 2^31-1] and the string \"latest\"");
+  public RestInvalidVersionException(String version) {
+    super(String.format(INVALID_VERSION_MESSAGE_FORMAT, version), ERROR_CODE);
   }
 
-  public RestInvalidVersionException(String message) {
-    super(message, ERROR_CODE);
-  }
 }

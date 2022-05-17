@@ -20,19 +20,17 @@ import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.hamcrest.core.IsEqual;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest{
+public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
   RegisterSchemaRegistryMojo mojo;
 
   @Before
@@ -68,6 +66,63 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest{
     Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
   }
 
+  @Test
+  public void registerSubjectWithSlash() throws IOException, MojoFailureException, MojoExecutionException {
+    Map<String, Integer> expectedVersions = new LinkedHashMap<>();
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    int version = 1;
+    for (int i = 0; i < 100; i++) {
+      // Slash is _x2F
+      String keySubject = String.format("TestSubject%03d_x2Fkey", i);
+      String valueSubject = String.format("TestSubject%03d_x2Fvalue", i);
+      Schema keySchema = Schema.create(Schema.Type.STRING);
+      Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+      File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
+      File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
+      writeSchema(keySchemaFile, keySchema);
+      writeSchema(valueSchemaFile, valueSchema);
+      subjectToFile.put(keySubject, keySchemaFile);
+      expectedVersions.put(UploadSchemaRegistryMojo.decode(keySubject), version);
+      subjectToFile.put(valueSubject, valueSchemaFile);
+      expectedVersions.put(UploadSchemaRegistryMojo.decode(valueSubject), version);
+    }
+
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+
+    Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
+  }
+
+  @Test
+  public void registerSubjectWithSlashDontDecode() throws IOException, MojoFailureException, MojoExecutionException {
+    Map<String, Integer> expectedVersions = new LinkedHashMap<>();
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    int version = 1;
+    for (int i = 0; i < 100; i++) {
+      // Slash is _x2F
+      String keySubject = String.format("TestSubject%03d_x2Fkey", i);
+      String valueSubject = String.format("TestSubject%03d_x2Fvalue", i);
+      Schema keySchema = Schema.create(Schema.Type.STRING);
+      Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+      File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
+      File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
+      writeSchema(keySchemaFile, keySchema);
+      writeSchema(valueSchemaFile, valueSchema);
+      subjectToFile.put(keySubject, keySchemaFile);
+      expectedVersions.put(keySubject, version);
+      subjectToFile.put(valueSubject, valueSchemaFile);
+      expectedVersions.put(valueSubject, version);
+    }
+
+    this.mojo.subjects = subjectToFile;
+    this.mojo.decodeSubject = false;
+    this.mojo.execute();
+
+    Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
+  }
+
   @Test(expected = IllegalStateException.class)
   public void malformedSchema() throws IOException, MojoFailureException, MojoExecutionException {
     Map<String, Integer> expectedVersions = new LinkedHashMap<>();
@@ -84,6 +139,9 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest{
       if (i % 7 == 0) {
         writeMalformedFile(keySchemaFile);
         writeMalformedFile(valueSchemaFile);
+      } else {
+        writeSchema(keySchemaFile, keySchema);
+        writeSchema(valueSchemaFile, valueSchema);
       }
       subjectToFile.put(keySubject, keySchemaFile);
       expectedVersions.put(keySubject, version);

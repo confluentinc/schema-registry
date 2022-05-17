@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package io.confluent.kafka.serializers.protobuf.test;
+
+option java_package = "io.confluent.kafka.serializers.protobuf.test";
+option java_outer_classname = "EnumUnionOuter";
+option java_multiple_files = false;
+
+enum Status {
+    ACTIVE = 0;
+    INACTIVE = 1;
+}
+
+message EnumUnion {
+    oneof some_val {
+        string one_id = 1;
+        int32 other_id = 2;
+        Status some_status = 3;
+    }
+    Status status = 4;
+}

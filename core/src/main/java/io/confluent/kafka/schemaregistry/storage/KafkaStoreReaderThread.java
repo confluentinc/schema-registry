@@ -186,12 +186,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                       + ") to the local store");
             boolean valid = this.storeUpdateHandler.validateUpdate(messageKey, message);
             if (valid) {
+              V oldMessage;
               if (message == null) {
-                localStore.delete(messageKey);
+                oldMessage = localStore.delete(messageKey);
               } else {
-                localStore.put(messageKey, message);
+                oldMessage = localStore.put(messageKey, message);
               }
-              this.storeUpdateHandler.handleUpdate(messageKey, message);
+              this.storeUpdateHandler.handleUpdate(messageKey, message, oldMessage);
             } else {
               V oldMessage = localStore.get(messageKey);
               try {
@@ -213,10 +214,10 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             } finally {
               offsetUpdateLock.unlock();
             }
-          } catch (StoreException se) {
+          } catch (Exception se) {
             log.error("Failed to add record from the Kafka topic"
                       + topic
-                      + " the local store");
+                      + " the local store", se);
           }
         }
       }
@@ -227,7 +228,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           "Consumer threw RecordTooLargeException. A schema has been written that "
           + "exceeds the default maximum fetch size.", rtle);
     } catch (RuntimeException e) {
-      log.error("KafkaStoreReader thread has died for an unknown reason.");
+      log.error("KafkaStoreReader thread has died for an unknown reason.", e);
       throw new RuntimeException(e);
     }
   }
@@ -244,7 +245,9 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       localStore.close();
     }
     super.awaitShutdown();
-    consumer.close();
+    if (consumer != null) {
+      consumer.close();
+    }
     log.info("KafkaStoreReaderThread shutdown complete.");
   }
 

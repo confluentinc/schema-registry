@@ -15,10 +15,12 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Simple wrapper for 16 byte MD5 hash.
@@ -43,10 +45,17 @@ public class MD5 {
   /**
    * Factory method converts String into MD5 object.
    */
-  public static MD5 ofString(String str) {
+  public static MD5 ofString(String str, List<SchemaReference> references) {
     try {
       MessageDigest md = MessageDigest.getInstance("MD5");
       md.update(str.getBytes(StandardCharsets.UTF_8));
+      if (references != null) {
+        for (SchemaReference reference : references) {
+          md.update(reference.getName().getBytes(StandardCharsets.UTF_8));
+          md.update(reference.getSubject().getBytes(StandardCharsets.UTF_8));
+          md.update(ByteBuffer.allocate(4).putInt(reference.getVersion()).array());
+        }
+      }
       return new MD5(md.digest());
     } catch (NoSuchAlgorithmException e) {
       throw new RuntimeException(e);

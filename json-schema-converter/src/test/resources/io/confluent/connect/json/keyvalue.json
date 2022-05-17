@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "integer"
+    },
+    "value": {
+      "type": ["null", "string"],
+      "default": null
+    }
+  }
+}

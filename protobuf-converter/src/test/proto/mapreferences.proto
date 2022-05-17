@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option java_package = "io.confluent.connect.protobuf.test";
+option java_outer_classname = "MapReferences";
+
+message MapReferencesMessage {
+    repeated AttributeFieldEntry map1 = 1;
+    repeated AttributeFieldEntry map2 = 2;
+    AttributeFieldEntry notAMap1 = 3;
+    AttributeFieldEntry notAMap2 = 4;
+}
+
+message AttributeFieldEntry {
+    string key = 1;
+    string value = 2;
+}

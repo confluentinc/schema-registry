@@ -15,6 +15,24 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
+import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
+import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
+import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
+import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -28,17 +46,17 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Vector;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import io.confluent.common.metrics.JmxReporter;
 import io.confluent.common.metrics.MetricConfig;
@@ -48,34 +66,27 @@ import io.confluent.common.metrics.MetricsReporter;
 import io.confluent.common.metrics.Sensor;
 import io.confluent.common.metrics.stats.Gauge;
 import io.confluent.common.utils.SystemTime;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
-import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
-import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
-import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
-import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
-import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
-import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
 import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
 import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -99,12 +110,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
   private final SchemaRegistryConfig config;
+  private final LoadingCache<Schema, ParsedSchema> schemaCache;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
-  private final AvroCompatibilityLevel defaultCompatibilityLevel;
+  private final CompatibilityLevel defaultCompatibilityLevel;
   private final Mode defaultMode;
   private final int kafkaStoreTimeoutMs;
   private final int initTimeout;
@@ -118,6 +130,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private MasterElector masterElector = null;
   private Metrics metrics;
   private Sensor masterNodeSensor;
+  private final Map<String, SchemaProvider> providers;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -146,6 +159,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.defaultMode = Mode.READWRITE;
+    this.schemaCache = CacheBuilder.newBuilder()
+        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
+        .expireAfterAccess(
+            config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
+        .build(new CacheLoader<Schema, ParsedSchema>() {
+          @Override
+          public ParsedSchema load(Schema s) throws Exception {
+            return loadSchema(s.getSchemaType(), s.getSchema(), s.getReferences());
+          }
+        });
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
@@ -160,6 +183,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     reporters.add(new JmxReporter(jmxPrefix));
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
     this.masterNodeSensor = metrics.sensor("master-slave-role");
+    this.providers = initProviders(config);
 
     Map<String, String> configuredTags = Application.parseListToMap(
         config.getList(RestConfig.METRICS_TAGS_CONFIG)
@@ -170,6 +194,39 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                            + " node where all register schema and config update requests are "
                            + "served.", configuredTags);
     this.masterNodeSensor.add(m, new Gauge());
+  }
+
+  private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
+    Map<String, Object> schemaProviderConfigs = new HashMap<>();
+    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
+    List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
+        new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
+    );
+    for (SchemaProvider provider : defaultSchemaProviders) {
+      provider.configure(schemaProviderConfigs);
+    }
+    Map<String ,SchemaProvider> providerMap = new HashMap<>();
+    registerProviders(providerMap, defaultSchemaProviders);
+    List<SchemaProvider> customSchemaProviders =
+        config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
+            SchemaProvider.class,
+            schemaProviderConfigs);
+    // Allow custom providers to override default providers
+    registerProviders(providerMap, customSchemaProviders);
+    return providerMap;
+  }
+
+  private void registerProviders(
+      Map<String, SchemaProvider> providerMap,
+      List<SchemaProvider> schemaProviders
+  ) {
+    for (SchemaProvider schemaProvider : schemaProviders) {
+      log.info("Registering schema provider for {}: {}",
+          schemaProvider.schemaType(),
+          schemaProvider.getClass().getName()
+      );
+      providerMap.put(schemaProvider.schemaType(), schemaProvider);
+    }
   }
 
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
@@ -356,6 +413,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
+  public Set<String> schemaTypes() {
+    return providers.keySet();
+  }
+
   @Override
   public int register(String subject,
                       Schema schema)
@@ -365,6 +426,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
       // Ensure cache is up-to-date before any potential writes
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
+
+      ParsedSchema parsedSchema = canonicalizeSchema(schema);
 
       // see if the schema to be registered already exists
       int schemaId = schema.getId();
@@ -384,24 +447,36 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       }
 
       // determine the latest version of the schema in the subject
-      Iterator<Schema> allVersions = getAllVersions(subject, true);
-      Iterator<Schema> undeletedVersions = getAllVersions(subject, false);
+      List<SchemaValue> allVersions = getAllSchemaValues(subject);
+      Collections.reverse(allVersions);
 
-      List<String> undeletedSchemasList = new ArrayList<>();
-      Schema latestSchema = null;
+      List<SchemaValue> deletedVersions = new ArrayList<>();
+      List<ParsedSchema> undeletedVersions = new ArrayList<>();
       int newVersion = MIN_VERSION;
-      while (allVersions.hasNext()) {
-        newVersion = allVersions.next().getVersion() + 1;
+      for (SchemaValue schemaValue : allVersions) {
+        newVersion = Math.max(newVersion, schemaValue.getVersion() + 1);
+        if (schemaValue.isDeleted()) {
+          deletedVersions.add(schemaValue);
+        } else {
+          ParsedSchema undeletedSchema = parseSchema(getSchemaEntityFromSchemaValue(schemaValue));
+          if (parsedSchema.references().isEmpty()
+              && !undeletedSchema.references().isEmpty()
+              && parsedSchema.deepEquals(undeletedSchema)) {
+            // This handles the case where a schema is sent with all references resolved
+            return schemaValue.getId();
+          }
+          undeletedVersions.add(undeletedSchema);
+        }
       }
-      while (undeletedVersions.hasNext()) {
-        latestSchema = undeletedVersions.next();
-        undeletedSchemasList.add(latestSchema.getSchema());
-      }
+      Collections.reverse(undeletedVersions);
 
-      AvroSchema avroSchema = canonicalizeSchema(schema);
-      // assign a guid and put the schema in the kafka store
-      if (latestSchema == null || isCompatible(subject, avroSchema.canonicalString,
-                                               undeletedSchemasList)) {
+      boolean isCompatible = isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions);
+      // Allow schema providers to modify the schema during compatibility checks
+      schema.setSchema(parsedSchema.canonicalString());
+      schema.setReferences(parsedSchema.references());
+
+      if (isCompatible) {
+        // assign a guid and put the schema in the kafka store
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
         }
@@ -428,6 +503,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           if (retries >= kafkaStoreMaxRetries) {
             throw new SchemaRegistryStoreException("Error while registering the schema due "
                 + "to generating an ID that is already in use.");
+          }
+        }
+        for (SchemaValue schemaValue : deletedVersions) {
+          if (schemaValue.getId().equals(schema.getId())
+                  && schemaValue.getVersion().compareTo(schema.getVersion()) < 0) {
+            // Tombstone previous version with the same ID
+            SchemaKey key = new SchemaKey(schemaValue.getSubject(), schemaValue.getVersion());
+            kafkaStore.delete(key);
           }
         }
         return schema.getId();
@@ -498,45 +581,60 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   @Override
   public void deleteSchemaVersion(String subject,
-                                  Schema schema)
+                                  Schema schema,
+                                  boolean permanentDelete)
       throws SchemaRegistryException {
     try {
       if (getModeInScope(subject) == Mode.READONLY) {
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
+      SchemaKey key = new SchemaKey(subject, schema.getVersion());
+      if (!lookupCache.referencesSchema(key).isEmpty()) {
+        throw new ReferenceExistsException(key.toString());
+      }
+      SchemaValue schemaValue = (SchemaValue) lookupCache.get(key);
+      if (permanentDelete && !schemaValue.isDeleted()) {
+        throw new SchemaVersionNotSoftDeletedException(subject, schema.getVersion().toString());
+      }
       // Ensure cache is up-to-date before any potential writes
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-      SchemaValue schemaValue = new SchemaValue(schema);
-      schemaValue.setDeleted(true);
-      kafkaStore.put(new SchemaKey(subject, schema.getVersion()), schemaValue);
-      if (!getAllVersions(subject, false).hasNext()) {
-        if (getMode(subject) != null) {
-          deleteMode(subject);
+      if (!permanentDelete) {
+        schemaValue = new SchemaValue(schema);
+        schemaValue.setDeleted(true);
+        kafkaStore.put(key, schemaValue);
+        if (!getAllVersions(subject, false).hasNext()) {
+          if (getMode(subject) != null) {
+            deleteMode(subject);
+          }
+          if (getCompatibilityLevel(subject) != null) {
+            deleteSubjectCompatibility(subject);
+          }
         }
-        if (getCompatibilityLevel(subject) != null) {
-          deleteSubjectCompatibility(subject);
-        }
+      } else {
+
+        kafkaStore.put(key, null);
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
     } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Error while deleting the schema in the"
-                                             + " backend Kafka store", e);
+      throw new SchemaRegistryStoreException("Error while deleting the schema for subject '"
+                                            + subject + "' in the backend Kafka store", e);
     }
   }
 
   public void deleteSchemaVersionOrForward(
       Map<String, String> headerProperties, String subject,
-      Schema schema) throws SchemaRegistryException {
+      Schema schema, boolean permanentDelete) throws SchemaRegistryException {
 
     kafkaStore.lockFor(subject).lock();
     try {
       if (isMaster()) {
-        deleteSchemaVersion(subject, schema);
+        deleteSchemaVersion(subject, schema, permanentDelete);
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {
-          forwardDeleteSchemaVersionRequestToMaster(headerProperties, subject, schema.getVersion());
+          forwardDeleteSchemaVersionRequestToMaster(headerProperties, subject,
+                  schema.getVersion(), permanentDelete);
         } else {
           throw new UnknownMasterException("Register schema request failed since master is "
                                            + "unknown");
@@ -548,7 +646,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   @Override
-  public List<Integer> deleteSubject(String subject) throws SchemaRegistryException {
+  public List<Integer> deleteSubject(String subject,
+                                     boolean permanentDelete) throws SchemaRegistryException {
     // Ensure cache is up-to-date before any potential writes
     try {
       if (getModeInScope(subject) == Mode.READONLY) {
@@ -557,19 +656,36 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       List<Integer> deletedVersions = new ArrayList<>();
       int deleteWatermarkVersion = 0;
-      Iterator<Schema> schemasToBeDeleted = getAllVersions(subject, false);
+      Iterator<Schema> schemasToBeDeleted = getAllVersions(subject, permanentDelete);
       while (schemasToBeDeleted.hasNext()) {
         deleteWatermarkVersion = schemasToBeDeleted.next().getVersion();
+        SchemaKey key = new SchemaKey(subject, deleteWatermarkVersion);
+        if (!lookupCache.referencesSchema(key).isEmpty()) {
+          throw new ReferenceExistsException(key.toString());
+        }
+        if (permanentDelete) {
+          SchemaValue schemaValue = (SchemaValue) lookupCache.get(key);
+          if (!schemaValue.isDeleted()) {
+            throw new SubjectNotSoftDeletedException(subject);
+          }
+        }
         deletedVersions.add(deleteWatermarkVersion);
       }
-      DeleteSubjectKey key = new DeleteSubjectKey(subject);
-      DeleteSubjectValue value = new DeleteSubjectValue(subject, deleteWatermarkVersion);
-      kafkaStore.put(key, value);
-      if (getMode(subject) != null) {
-        deleteMode(subject);
-      }
-      if (getCompatibilityLevel(subject) != null) {
-        deleteSubjectCompatibility(subject);
+
+      if (!permanentDelete) {
+        DeleteSubjectKey key = new DeleteSubjectKey(subject);
+        DeleteSubjectValue value = new DeleteSubjectValue(subject, deleteWatermarkVersion);
+        kafkaStore.put(key, value);
+        if (getMode(subject) != null) {
+          deleteMode(subject);
+        }
+        if (getCompatibilityLevel(subject) != null) {
+          deleteSubjectCompatibility(subject);
+        }
+      } else {
+        for (Integer version : deletedVersions) {
+          kafkaStore.put(new SchemaKey(subject, version), null);
+        }
       }
       return deletedVersions;
 
@@ -583,15 +699,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   public List<Integer> deleteSubjectOrForward(
       Map<String, String> requestProperties,
-      String subject) throws SchemaRegistryException {
+      String subject,
+      boolean permanentDelete) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isMaster()) {
-        return deleteSubject(subject);
+        return deleteSubject(subject, permanentDelete);
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {
-          return forwardDeleteSubjectRequestToMaster(requestProperties, subject);
+          return forwardDeleteSubjectRequestToMaster(requestProperties,
+                  subject,
+                  permanentDelete);
         } else {
           throw new UnknownMasterException("Register schema request failed since master is "
                                            + "unknown");
@@ -609,7 +728,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
    */
   public Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
-    canonicalizeSchema(schema);
+    ParsedSchema parsedSchema = canonicalizeSchema(schema);
     SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
     if (schemaIdAndSubjects != null) {
       if (schemaIdAndSubjects.hasSubject(subject)
@@ -618,16 +737,30 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         Schema matchingSchema = new Schema(subject,
                                            schemaIdAndSubjects.getVersion(subject),
                                            schemaIdAndSubjects.getSchemaId(),
+                                           schema.getSchemaType(),
+                                           schema.getReferences(),
                                            schema.getSchema());
         return matchingSchema;
-      } else {
-        // this schema was never registered under the input subject
-        return null;
       }
-    } else {
-      // this schema was never registered in the registry under any subject
-      return null;
     }
+
+    List<SchemaValue> allVersions = getAllSchemaValues(subject);
+    Collections.reverse(allVersions);
+
+    for (SchemaValue schemaValue : allVersions) {
+      if (!schemaValue.isDeleted()
+          && parsedSchema.references().isEmpty()
+          && !schemaValue.getReferences().isEmpty()) {
+        Schema undeleted = getSchemaEntityFromSchemaValue(schemaValue);
+        ParsedSchema undeletedSchema = parseSchema(undeleted);
+        if (parsedSchema.deepEquals(undeletedSchema)) {
+          // This handles the case where a schema is sent with all references resolved
+          return undeleted;
+        }
+      }
+    }
+
+    return null;
   }
 
   public void checkIfSchemaWithIdExist(int id, Schema schema)
@@ -652,6 +785,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
     RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
     registerSchemaRequest.setSchema(schema.getSchema());
+    registerSchemaRequest.setSchemaType(schema.getSchemaType());
+    registerSchemaRequest.setReferences(schema.getReferences());
     registerSchemaRequest.setVersion(schema.getVersion());
     registerSchemaRequest.setId(schema.getId());
     log.debug(String.format("Forwarding registering schema request %s to %s",
@@ -670,7 +805,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   private void forwardUpdateCompatibilityLevelRequestToMaster(
-      String subject, AvroCompatibilityLevel compatibilityLevel,
+      String subject, CompatibilityLevel compatibilityLevel,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = masterRestService.getBaseUrls();
@@ -694,13 +829,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private void forwardDeleteSchemaVersionRequestToMaster(
       Map<String, String> headerProperties,
       String subject,
-      Integer version) throws SchemaRegistryRequestForwardingException {
+      Integer version,
+      boolean permanentDelete) throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = masterRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding deleteSchemaVersion schema version request %s-%s to %s",
                             subject, version, baseUrl));
     try {
-      masterRestService.deleteSchemaVersion(headerProperties, subject, String.valueOf(version));
+      masterRestService.deleteSchemaVersion(headerProperties, subject,
+              String.valueOf(version), permanentDelete);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(
@@ -713,13 +850,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   private List<Integer> forwardDeleteSubjectRequestToMaster(
       Map<String, String> requestProperties,
-      String subject) throws SchemaRegistryRequestForwardingException {
+      String subject,
+      boolean permanentDelete) throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = masterRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding delete subject request for  %s to %s",
                             subject, baseUrl));
     try {
-      return masterRestService.deleteSubject(requestProperties, subject);
+      return masterRestService.deleteSubject(requestProperties, subject, permanentDelete);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(
@@ -752,26 +890,90 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private AvroSchema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
-    AvroSchema avroSchema = Optional.ofNullable(schema.getSchema())
-            .filter(json -> !json.isEmpty())
-            .map(AvroUtils::parseSchema)
-            .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema));
-    schema.setSchema(avroSchema.canonicalString);
-    return avroSchema;
+  private ParsedSchema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
+    if (schema == null
+        || schema.getSchema() == null
+        || schema.getSchema().trim().isEmpty()) {
+      log.error("Empty schema");
+      throw new InvalidSchemaException("Empty schema");
+    }
+    ParsedSchema parsedSchema = parseSchema(schema);
+    try {
+      parsedSchema.validate();
+    } catch (Exception e) {
+      String errMsg = "Invalid schema " + schema;
+      log.error(errMsg, e);
+      throw new InvalidSchemaException(errMsg, e);
+    }
+    schema.setSchema(parsedSchema.canonicalString());
+    schema.setReferences(parsedSchema.references());
+    return parsedSchema;
+  }
+
+  private ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
+    return parseSchema(schema.getSchemaType(), schema.getSchema(), schema.getReferences());
+  }
+
+  private ParsedSchema parseSchema(
+      String schemaType,
+      String schema,
+      List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references)
+      throws InvalidSchemaException {
+    try {
+      return schemaCache.get(new Schema("", 0, -1, schemaType, references, schema));
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof InvalidSchemaException) {
+        throw (InvalidSchemaException) cause;
+      } else if (cause instanceof RuntimeException) {
+        throw (RuntimeException) cause;
+      } else {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  private ParsedSchema loadSchema(
+      String schemaType,
+      String schema,
+      List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references)
+      throws InvalidSchemaException {
+    if (schemaType == null) {
+      schemaType = AvroSchema.TYPE;
+    }
+    SchemaProvider provider = providers.get(schemaType);
+    if (provider == null) {
+      String errMsg = "Invalid schema type " + schemaType;
+      log.error(errMsg);
+      throw new InvalidSchemaException(errMsg);
+    }
+    final String type = schemaType;
+
+    ParsedSchema parsedSchema = provider.parseSchema(schema, references)
+        .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
+            + " with refs " + references + " of type " + type));
+    return parsedSchema;
   }
 
   public Schema validateAndGetSchema(String subject, VersionId versionId, boolean
       returnDeletedSchema) throws SchemaRegistryException {
-    Schema schema = this.get(subject, versionId.getVersionId(), returnDeletedSchema);
+    final int version = versionId.getVersionId();
+    Schema schema = this.get(subject, version, returnDeletedSchema);
     if (schema == null) {
-      if (!this.hasSubjects(subject)) {
-        throw Errors.subjectNotFoundException();
+      if (!this.hasSubjects(subject, returnDeletedSchema)) {
+        throw Errors.subjectNotFoundException(subject);
       } else {
-        throw Errors.versionNotFoundException();
+        throw Errors.versionNotFoundException(version);
       }
     }
     return schema;
+  }
+
+  public boolean schemaVersionExists(String subject, VersionId versionId, boolean
+          returnDeletedSchema) throws SchemaRegistryException {
+    final int version = versionId.getVersionId();
+    Schema schema = this.get(subject, version, returnDeletedSchema);
+    return (schema != null);
   }
 
   @Override
@@ -799,10 +1001,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   @Override
   public SchemaString get(int id) throws SchemaRegistryException {
-    return get(id, false);
+    return get(id, null, false);
   }
 
-  public SchemaString get(int id, boolean fetchMaxId) throws SchemaRegistryException {
+  public SchemaString get(
+      int id,
+      String format,
+      boolean fetchMaxId
+  ) throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
       SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
@@ -821,18 +1027,46 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           + " store", e);
     }
     SchemaString schemaString = new SchemaString();
-    schemaString.setSchemaString(schema.getSchema());
+    schemaString.setSchemaType(schema.getSchemaType());
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs =
+        schema.getReferences() != null
+        ? schema.getReferences().stream()
+            .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
+                ref.getName(), ref.getSubject(), ref.getVersion()))
+          .collect(Collectors.toList())
+        : null;
+    schemaString.setReferences(refs);
+    if (format != null && !format.trim().isEmpty()) {
+      ParsedSchema parsedSchema = parseSchema(schema.getSchemaType(), schema.getSchema(), refs);
+      schemaString.setSchemaString(parsedSchema.formattedString(format));
+    } else {
+      schemaString.setSchemaString(schema.getSchema());
+    }
     if (fetchMaxId) {
       schemaString.setMaxId(idGenerator.getMaxId(id));
     }
     return schemaString;
   }
 
+  public List<Integer> getReferencedBy(String subject, VersionId versionId)
+      throws SchemaRegistryException {
+    int version = versionId.getVersionId();
+    if (versionId.isLatest()) {
+      version = getLatestVersion(subject).getVersion();
+    }
+    SchemaKey key = new SchemaKey(subject, version);
+    List<Integer> ids = new ArrayList<>(lookupCache.referencesSchema(key));
+    Collections.sort(ids);
+    return ids;
+  }
+
   @Override
-  public Set<String> listSubjects() throws SchemaRegistryException {
+  public Set<String> listSubjects(boolean returnDeletedSubjects)
+          throws SchemaRegistryException {
     try {
       Iterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys();
-      return extractUniqueSubjects(allKeys);
+      return extractUniqueSubjects(allKeys,
+              returnDeletedSubjects);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
@@ -852,15 +1086,56 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       }
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while retrieving schema with id "
+          + id + " from the backend Kafka store", e);
+    }
+
+    return lookupCache.schemaIdAndSubjects(new Schema(
+        schema.getSubject(),
+        schema.getVersion(),
+        schema.getId(),
+        schema.getSchemaType(),
+        schema.getReferences().stream()
+            .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
+                ref.getName(), ref.getSubject(), ref.getVersion()))
+            .collect(Collectors.toList()),
+        schema.getSchema()
+    )).allSubjects();
+  }
+
+  public List<SubjectVersion> listVersionsForId(int id) throws SchemaRegistryException {
+    SchemaValue schema = null;
+    try {
+      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
+      if (subjectVersionKey == null) {
+        return null;
+      }
+      schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
+      if (schema == null) {
+        return null;
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with id "
                                               + id + " from the backend Kafka store", e);
     }
 
     return lookupCache.schemaIdAndSubjects(new Schema(
-        schema.getSubject(), schema.getVersion(), schema.getId(), schema.getSchema()
-    )).allSubjects();
+        schema.getSubject(),
+        schema.getVersion(),
+        schema.getId(),
+        schema.getSchemaType(),
+        schema.getReferences().stream()
+            .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
+                ref.getName(), ref.getSubject(), ref.getVersion()))
+            .collect(Collectors.toList()),
+        schema.getSchema()
+    )).allSubjectVersions().entrySet()
+        .stream()
+        .map(e -> new SubjectVersion(e.getKey(), e.getValue()))
+        .collect(Collectors.toList());
   }
 
-  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys)
+  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys,
+                                            boolean returnDeletedSubjects)
       throws StoreException {
     Set<String> subjects = new HashSet<String>();
     while (allKeys.hasNext()) {
@@ -868,7 +1143,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       if (k instanceof SchemaKey) {
         SchemaKey key = (SchemaKey) k;
         SchemaValue value = (SchemaValue) kafkaStore.get(key);
-        if (value != null && !value.isDeleted()) {
+        if (value != null
+                && (!value.isDeleted() || returnDeletedSubjects)) {
           subjects.add(key.getSubject());
         }
       }
@@ -876,9 +1152,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return subjects;
   }
 
-  public boolean hasSubjects(String subject) throws SchemaRegistryStoreException {
+  public boolean hasSubjects(String subject,
+                             boolean lookupDeletedSubjects)
+          throws SchemaRegistryStoreException {
     try {
-      return lookupCache.hasSubjects(subject);
+      return lookupCache.hasSubjects(subject, lookupDeletedSubjects);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
@@ -888,29 +1166,34 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   @Override
   public Iterator<Schema> getAllVersions(String subject, boolean returnDeletedSchemas)
       throws SchemaRegistryException {
-    try {
-      SchemaKey key1 = new SchemaKey(subject, MIN_VERSION);
-      SchemaKey key2 = new SchemaKey(subject, MAX_VERSION);
-      Iterator<SchemaRegistryValue> allVersions = kafkaStore.getAll(key1, key2);
-      return sortSchemasByVersion(allVersions, returnDeletedSchemas).iterator();
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException(
-          "Error from the backend Kafka store", e);
-    }
+    return sortSchemasByVersion(allVersions(subject, false), returnDeletedSchemas).iterator();
+  }
+
+  // Can be used by extensions as a simple subject search
+  public Iterator<Schema> getAllVersionsWithPrefix(String prefix, boolean returnDeletedSchemas)
+      throws SchemaRegistryException {
+    return sortSchemasByVersion(allVersions(prefix, true), returnDeletedSchemas).iterator();
+  }
+
+  private List<SchemaValue> getAllSchemaValues(String subject)
+      throws SchemaRegistryException {
+    return sortSchemaValuesByVersion(allVersions(subject, false));
   }
 
   @Override
   public Schema getLatestVersion(String subject) throws SchemaRegistryException {
+    List<Schema> sortedVersions = sortSchemasByVersion(allVersions(subject, false), false);
+    return sortedVersions.size() > 0 ? sortedVersions.get(sortedVersions.size() - 1) : null;
+  }
+
+  private Iterator<SchemaRegistryValue> allVersions(String subjectOrPrefix, boolean isPrefix)
+      throws SchemaRegistryException {
     try {
-      SchemaKey key1 = new SchemaKey(subject, MIN_VERSION);
-      SchemaKey key2 = new SchemaKey(subject, MAX_VERSION);
-      Iterator<SchemaRegistryValue> allVersions = kafkaStore.getAll(key1, key2);
-      Vector<Schema> sortedVersions = sortSchemasByVersion(allVersions, false);
-      Schema latestSchema = null;
-      if (sortedVersions.size() > 0) {
-        latestSchema = sortedVersions.lastElement();
-      }
-      return latestSchema;
+      String start = subjectOrPrefix;
+      String end = isPrefix ? subjectOrPrefix + Character.MAX_VALUE : subjectOrPrefix;
+      SchemaKey key1 = new SchemaKey(start, MIN_VERSION);
+      SchemaKey key2 = new SchemaKey(end, MAX_VERSION);
+      return kafkaStore.getAll(key1, key2);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
@@ -926,8 +1209,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  public void updateCompatibilityLevel(String subject, AvroCompatibilityLevel newCompatibilityLevel)
-      throws SchemaRegistryStoreException, UnknownMasterException, OperationNotPermittedException {
+  public void updateCompatibilityLevel(String subject, CompatibilityLevel newCompatibilityLevel)
+      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownMasterException {
     if (getModeInScope(subject) == Mode.READONLY) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
@@ -943,7 +1226,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  public void updateConfigOrForward(String subject, AvroCompatibilityLevel newCompatibilityLevel,
+  public void updateConfigOrForward(String subject, CompatibilityLevel newCompatibilityLevel,
                                     Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
              UnknownMasterException, OperationNotPermittedException {
@@ -984,26 +1267,26 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return kafkaClusterId;
   }
 
-  public AvroCompatibilityLevel getCompatibilityLevel(String subject)
+  public CompatibilityLevel getCompatibilityLevel(String subject)
       throws SchemaRegistryStoreException {
     return lookupCache.compatibilityLevel(subject, false, defaultCompatibilityLevel);
   }
 
-  public AvroCompatibilityLevel getCompatibilityLevelInScope(String subject)
+  public CompatibilityLevel getCompatibilityLevelInScope(String subject)
       throws SchemaRegistryStoreException {
     return lookupCache.compatibilityLevel(subject, true, defaultCompatibilityLevel);
   }
 
   @Override
   public boolean isCompatible(String subject,
-                              String newSchemaObj,
-                              String latestSchema)
+                              Schema newSchema,
+                              Schema latestSchema)
       throws SchemaRegistryException {
     if (latestSchema == null) {
-      throw new InvalidSchemaException(
-          "Latest schema not provided");
+      log.error("Lastest schema not provided");
+      throw new InvalidSchemaException("Latest schema not provided");
     }
-    return isCompatible(subject, newSchemaObj, Collections.singletonList(latestSchema));
+    return isCompatible(subject, newSchema, Collections.singletonList(latestSchema));
   }
 
   /**
@@ -1011,28 +1294,31 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
    */
   @Override
   public boolean isCompatible(String subject,
-                              String newSchemaObj,
-                              List<String> previousSchemas)
+                              Schema newSchema,
+                              List<Schema> previousSchemas)
       throws SchemaRegistryException {
 
-    if (previousSchemas == null || previousSchemas.isEmpty()) {
-      throw new InvalidSchemaException(
-          "Previous schema not provided");
+    if (previousSchemas == null) {
+      log.error("Previous schema not provided");
+      throw new InvalidSchemaException("Previous schema not provided");
     }
 
-    List<org.apache.avro.Schema> previousAvroSchemas = new ArrayList<>(previousSchemas.size());
-    for (String previousSchema : previousSchemas) {
-      if (previousSchema == null) {
-        throw new InvalidSchemaException(
-            "Existing schema " + previousSchema + " is not a valid Avro schema");
-      }
-      AvroSchema previousAvroSchema = AvroUtils.parseSchema(previousSchema);
-      previousAvroSchemas.add(previousAvroSchema.schemaObj);
+    List<ParsedSchema> prevParsedSchemas = new ArrayList<>(previousSchemas.size());
+    for (Schema previousSchema : previousSchemas) {
+      ParsedSchema prevParsedSchema = parseSchema(previousSchema);
+      prevParsedSchemas.add(prevParsedSchema);
     }
 
-    AvroCompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
-    return compatibility.compatibilityChecker
-        .isCompatible(AvroUtils.parseSchema(newSchemaObj).schemaObj, previousAvroSchemas);
+    return isCompatibleWithPrevious(subject, parseSchema(newSchema), prevParsedSchemas);
+  }
+
+  private boolean isCompatibleWithPrevious(String subject,
+                                           ParsedSchema parsedSchema,
+                                           List<ParsedSchema> previousSchemas)
+      throws SchemaRegistryException {
+
+    CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
+    return parsedSchema.isCompatible(compatibility, previousSchemas);
   }
 
   private void deleteMode(String subject) throws StoreException {
@@ -1063,7 +1349,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT) {
         // Changing to import mode requires that no schemas exist with matching subjects.
-        if (hasSubjects(subject)) {
+        if (hasSubjects(subject, false)) {
           throw new OperationNotPermittedException("Cannot import since found existing subjects");
         }
         // At this point no schemas should exist with matching subjects.
@@ -1103,25 +1389,45 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return this.kafkaStore;
   }
 
-  private Vector<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas,
-                                              boolean returnDeletedSchemas) {
-    Vector<Schema> schemaVector = new Vector<Schema>();
+  private List<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas,
+                                            boolean returnDeletedSchemas) {
+    List<Schema> schemaList = new ArrayList<>();
     while (schemas.hasNext()) {
       SchemaValue schemaValue = (SchemaValue) schemas.next();
       if (returnDeletedSchemas || !schemaValue.isDeleted()) {
-        schemaVector.add(getSchemaEntityFromSchemaValue(schemaValue));
+        schemaList.add(getSchemaEntityFromSchemaValue(schemaValue));
       }
     }
-    Collections.sort(schemaVector);
-    return schemaVector;
+    Collections.sort(schemaList);
+    return schemaList;
+  }
+
+  private List<SchemaValue> sortSchemaValuesByVersion(Iterator<SchemaRegistryValue> schemas) {
+    List<SchemaValue> schemaList = new ArrayList<>();
+    while (schemas.hasNext()) {
+      SchemaValue schemaValue = (SchemaValue) schemas.next();
+      schemaList.add(schemaValue);
+    }
+    Collections.sort(schemaList);
+    return schemaList;
   }
 
   private Schema getSchemaEntityFromSchemaValue(SchemaValue schemaValue) {
     if (schemaValue == null) {
       return null;
     }
-    return new Schema(schemaValue.getSubject(), schemaValue.getVersion(),
-                      schemaValue.getId(), schemaValue.getSchema());
+    List<SchemaReference> refs = schemaValue.getReferences();
+    return new Schema(
+        schemaValue.getSubject(),
+        schemaValue.getVersion(),
+        schemaValue.getId(),
+        schemaValue.getSchemaType(),
+        refs == null ? null : refs.stream()
+            .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
+                ref.getName(), ref.getSubject(), ref.getVersion()))
+            .collect(Collectors.toList()),
+        schemaValue.getSchema()
+    );
   }
 
   private boolean isSubjectVersionDeleted(String subject, int version)

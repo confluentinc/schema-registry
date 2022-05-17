@@ -33,7 +33,7 @@ import java.util.Properties;
 import java.util.Set;
 
 import io.confluent.common.config.AbstractConfig;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.utils.ZkUtils;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
@@ -119,10 +119,26 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>host.name</code>
    */
   public static final String HOST_NAME_CONFIG = "host.name";
+
+  public static final String SCHEMA_PROVIDERS_CONFIG = "schema.providers";
+
   /**
-   * <code>avro.compatibility.level</code>
+   * <code>schema.compatibility.level</code>
    */
+  @Deprecated
   public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
+  public static final String SCHEMA_COMPATIBILITY_CONFIG = "schema.compatibility.level";
+
+  /**
+   * <code>schema.cache.size</code>
+   */
+  public static final String SCHEMA_CACHE_SIZE_CONFIG = "schema.cache.size";
+  public static final int SCHEMA_CACHE_SIZE_DEFAULT = 1000;
+  /**
+   * <code>schema.cache.expiry.secs</code>
+   */
+  public static final String SCHEMA_CACHE_EXPIRY_SECS_CONFIG = "schema.cache.expiry.secs";
+  public static final int SCHEMA_CACHE_EXPIRY_SECS_DEFAULT = 300;
 
   public static final String ZOOKEEPER_SET_ACL_CONFIG = "zookeeper.set.acl";
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
@@ -248,9 +264,12 @@ public class SchemaRegistryConfig extends RestConfig {
       + "authentication is "
       + "configured. IMPORTANT: if set to `true`, the SASL principal must be the same as the Kafka"
       + " brokers.";
+  protected static final String SCHEMA_PROVIDERS_DOC =
+      "  A list of classes to use as SchemaProvider. Implementing the interface "
+          + "<code>SchemaProvider</code> allows you to add custom schema types to Schema Registry.";
   protected static final String COMPATIBILITY_DOC =
-      "The Avro compatibility type. Valid values are: "
-      + "none (new schema can be any valid Avro schema), "
+      "The compatibility type. Valid values are: "
+      + "none (new schema can be any valid schema), "
       + "backward (new schema can read data produced by latest registered schema), "
       + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema), "
@@ -258,6 +277,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "forward_transitive (new schema is forward compatible with all previous versions), "
       + "full_transitive (new schema is backward and forward compatible with all previous "
       + "versions)";
+  protected static final String SCHEMA_CACHE_SIZE_DOC =
+      "The maximum size of the schema cache.";
+  protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
+      "The expiration in seconds for entries accessed in the cache.";
   protected static final String MASTER_ELIGIBILITY_DOC =
       "If true, this node can participate in master election. In a multi-colo setup, turn this off "
       + "for clusters in the slave data center.";
@@ -406,8 +429,20 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
         ConfigDef.Importance.HIGH, HOST_DOC
     )
-    .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
+    .define(SCHEMA_PROVIDERS_CONFIG, ConfigDef.Type.LIST, "",
+        ConfigDef.Importance.LOW, SCHEMA_PROVIDERS_DOC
+    )
+    .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, "",
         ConfigDef.Importance.HIGH, COMPATIBILITY_DOC
+    )
+    .define(SCHEMA_COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
+        ConfigDef.Importance.HIGH, COMPATIBILITY_DOC
+    )
+    .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
+    )
+    .define(SCHEMA_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_EXPIRY_SECS_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_CACHE_EXPIRY_SECS_DOC
     )
     .define(ZOOKEEPER_SET_ACL_CONFIG, ConfigDef.Type.BOOLEAN, ZOOKEEPER_SET_ACL_DEFAULT,
         ConfigDef.Importance.HIGH, ZOOKEEPER_SET_ACL_DOC
@@ -520,7 +555,7 @@ public class SchemaRegistryConfig extends RestConfig {
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC);
   }
 
-  private final AvroCompatibilityLevel compatibilityType;
+  private final CompatibilityLevel compatibilityType;
 
   public SchemaRegistryConfig(String propsFile) throws RestConfigException {
     this(AbstractConfig.getPropsFromFile(propsFile));
@@ -533,10 +568,13 @@ public class SchemaRegistryConfig extends RestConfig {
   public SchemaRegistryConfig(ConfigDef configDef, Properties props) throws RestConfigException {
     super(configDef, props);
     this.originalProperties = props;
-    String compatibilityTypeString = getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG);
-    compatibilityType = AvroCompatibilityLevel.forName(compatibilityTypeString);
+    String compatibilityTypeString = getString(COMPATIBILITY_CONFIG);
+    if (compatibilityTypeString == null || compatibilityTypeString.isEmpty()) {
+      compatibilityTypeString = getString(SCHEMA_COMPATIBILITY_CONFIG);
+    }
+    compatibilityType = CompatibilityLevel.forName(compatibilityTypeString);
     if (compatibilityType == null) {
-      throw new RestConfigException("Unknown Avro compatibility level: " + compatibilityTypeString);
+      throw new RestConfigException("Unknown compatibility level: " + compatibilityTypeString);
     }
   }
 
@@ -552,7 +590,7 @@ public class SchemaRegistryConfig extends RestConfig {
     return originalProperties;
   }
 
-  public AvroCompatibilityLevel compatibilityType() {
+  public CompatibilityLevel compatibilityType() {
     return compatibilityType;
   }
 
@@ -565,7 +603,7 @@ public class SchemaRegistryConfig extends RestConfig {
           + KAFKASTORE_CONNECTION_URL_CONFIG + " or " + KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
       );
     }
-    return !haveStoreConnectionUrl;
+    return haveBootstrapServers;
   }
 
   public String bootstrapBrokers() {
@@ -606,7 +644,7 @@ public class SchemaRegistryConfig extends RestConfig {
    * returns whether or not the user has enabled ZooKeeper ACLs.
    */
   public boolean checkZkAclConfig() {
-    if (getBoolean(ZOOKEEPER_SET_ACL_CONFIG) && !JaasUtils.isZkSecurityEnabled()) {
+    if (getBoolean(ZOOKEEPER_SET_ACL_CONFIG) && !JaasUtils.isZkSaslEnabled()) {
       throw new ConfigException(ZOOKEEPER_SET_ACL_CONFIG
                                 + " is set to true but ZooKeeper's "
                                 + "JAAS SASL configuration is not configured.");

@@ -24,7 +24,7 @@ import java.util.Map;
 import io.confluent.kafka.example.User;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -40,7 +40,7 @@ public class SpecificAvroSerdeTest {
     SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
     SpecificAvroSerde<T> serde = new SpecificAvroSerde<>(schemaRegistryClient);
     Map<String, Object> serdeConfig = new HashMap<>();
-    serdeConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
+    serdeConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
     serde.configure(serdeConfig, false);
     return serde;
   }
@@ -96,7 +96,8 @@ public class SpecificAvroSerdeTest {
     SpecificAvroSerde<User> serde = createConfiguredSerdeForRecordValues();
     User record = User.newBuilder().setName("alice").build();
     Map<String, Object> serdeConfig = new HashMap<>();
-    serdeConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+    serdeConfig.put(
+        AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "fake-to-satisfy-checks");
     serdeConfig.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
 

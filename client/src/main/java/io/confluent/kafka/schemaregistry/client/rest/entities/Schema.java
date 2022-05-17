@@ -16,22 +16,38 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class Schema implements Comparable<Schema> {
 
   private String subject;
   private Integer version;
   private Integer id;
+  private String schemaType;
+  private List<SchemaReference> references;
   private String schema;
 
+  @JsonCreator
   public Schema(@JsonProperty("subject") String subject,
                 @JsonProperty("version") Integer version,
                 @JsonProperty("id") Integer id,
+                @JsonProperty("schemaType") String schemaType,
+                @JsonProperty("references") List<SchemaReference> references,
                 @JsonProperty("schema") String schema) {
     this.subject = subject;
     this.version = version;
     this.id = id;
+    this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
+    this.references = references != null ? references : Collections.emptyList();
     this.schema = schema;
   }
 
@@ -65,6 +81,27 @@ public class Schema implements Comparable<Schema> {
     this.id = id;
   }
 
+  @JsonProperty("schemaType")
+  @JsonSerialize(converter = SchemaTypeConverter.class)
+  public String getSchemaType() {
+    return this.schemaType;
+  }
+
+  @JsonProperty("schemaType")
+  public void setSchemaType(String schemaType) {
+    this.schemaType = schemaType;
+  }
+
+  @JsonProperty("references")
+  public List<SchemaReference> getReferences() {
+    return this.references;
+  }
+
+  @JsonProperty("references")
+  public void setReferences(List<SchemaReference> references) {
+    this.references = references;
+  }
+
   @JsonProperty("schema")
   public String getSchema() {
     return this.schema;
@@ -83,32 +120,18 @@ public class Schema implements Comparable<Schema> {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-
-    Schema that = (Schema) o;
-
-    if (!this.subject.equals(that.subject)) {
-      return false;
-    }
-    if (!this.version.equals(that.version)) {
-      return false;
-    }
-    if (!this.id.equals(that.getId())) {
-      return false;
-    }
-    if (!this.schema.equals(that.schema)) {
-      return false;
-    }
-
-    return true;
+    Schema schema1 = (Schema) o;
+    return Objects.equals(subject, schema1.subject)
+        && Objects.equals(version, schema1.version)
+        && Objects.equals(id, schema1.id)
+        && Objects.equals(schemaType, schema1.schemaType)
+        && Objects.equals(references, schema1.references)
+        && Objects.equals(schema, schema1.schema);
   }
 
   @Override
   public int hashCode() {
-    int result = subject.hashCode();
-    result = 31 * result + version;
-    result = 31 * result + id.intValue();
-    result = 31 * result + schema.hashCode();
-    return result;
+    return Objects.hash(subject, version, id, schemaType, references, schema);
   }
 
   @Override
@@ -117,6 +140,8 @@ public class Schema implements Comparable<Schema> {
     sb.append("{subject=" + this.subject + ",");
     sb.append("version=" + this.version + ",");
     sb.append("id=" + this.id + ",");
+    sb.append("schemaType=" + this.schemaType + ",");
+    sb.append("references=" + this.references + ",");
     sb.append("schema=" + this.schema + "}");
     return sb.toString();
   }

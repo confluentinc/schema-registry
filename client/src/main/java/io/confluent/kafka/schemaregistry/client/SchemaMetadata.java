@@ -16,17 +16,38 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import java.util.Collections;
+import java.util.List;
+
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+
 public class SchemaMetadata {
 
   private int id;
   private int version;
+  private String schemaType;
   private String schema;
+  private List<SchemaReference> references;
 
-  public SchemaMetadata(int id, int version, String schema) {
+  public SchemaMetadata(int id,
+                        int version,
+                        String schema
+  ) {
+    this(id, version, AvroSchema.TYPE, Collections.emptyList(), schema);
+  }
+
+  public SchemaMetadata(int id,
+                        int version,
+                        String schemaType,
+                        List<SchemaReference> references,
+                        String schema
+  ) {
     this.id = id;
     this.version = version;
+    this.schemaType = schemaType;
     this.schema = schema;
-
+    this.references = references;
   }
 
   public int getId() {
@@ -37,7 +58,15 @@ public class SchemaMetadata {
     return version;
   }
 
+  public String getSchemaType() {
+    return schemaType;
+  }
+
   public String getSchema() {
     return schema;
+  }
+
+  public List<SchemaReference> getReferences() {
+    return references;
   }
 }

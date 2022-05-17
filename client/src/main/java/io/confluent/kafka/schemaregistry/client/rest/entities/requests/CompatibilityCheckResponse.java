@@ -17,16 +17,17 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 public class CompatibilityCheckResponse {
 
   private boolean isCompatible;
 
   public static CompatibilityCheckResponse fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, CompatibilityCheckResponse.class);
+    return JacksonMapper.INSTANCE.readValue(json, CompatibilityCheckResponse.class);
   }
 
   @JsonProperty("is_compatible")
@@ -40,7 +41,7 @@ public class CompatibilityCheckResponse {
   }
 
   public String toJson() throws IOException {
-    return new ObjectMapper().writeValueAsString(this);
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
 }

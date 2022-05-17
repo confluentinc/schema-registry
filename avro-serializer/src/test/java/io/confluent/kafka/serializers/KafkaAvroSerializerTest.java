@@ -15,10 +15,13 @@
  */
 package io.confluent.kafka.serializers;
 
+import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.example.ExtendedWidget;
 import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import java.util.Arrays;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -35,6 +38,9 @@ import java.util.Properties;
 
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.User;
+import io.confluent.kafka.example.Grant;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -102,23 +108,40 @@ public class KafkaAvroSerializerTest {
             schemaRegistry, new VerifiableProperties(reflectionDecoderProps));
   }
 
-  private IndexedRecord createAvroRecord() {
+  private Schema createUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
-                        "\"name\": \"User\"," +
-                        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}";
+        "\"name\": \"User\"," +
+        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}";
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
+    return schema;
+  }
+
+  private IndexedRecord createUserRecord() {
+    Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
     return avroRecord;
   }
 
-  private IndexedRecord createAccountRecord() {
+  private IndexedRecord createUserRecordUtf8() {
+    Schema schema = createUserSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", new Utf8("testUser"));
+    return avroRecord;
+  }
+
+  private Schema createAccountSchema() {
     String accountSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
-                           "\"name\": \"Account\"," +
-                           "\"fields\": [{\"name\": \"accountNumber\", \"type\": \"string\"}]}";
+        "\"name\": \"Account\"," +
+        "\"fields\": [{\"name\": \"accountNumber\", \"type\": \"string\"}]}";
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(accountSchema);
+    return schema;
+  }
+
+  private IndexedRecord createAccountRecord() {
+    Schema schema = createAccountSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("accountNumber", "0123456789");
     return avroRecord;
@@ -135,6 +158,10 @@ public class KafkaAvroSerializerTest {
         .build();
   }
 
+  private IndexedRecord createAnnotatedUserRecord() {
+    return io.confluent.kafka.example.annotated.User.newBuilder().setName("testUser").build();
+  }
+
   private IndexedRecord createInvalidAvroRecord() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
                         "\"name\": \"User\"," +
@@ -149,10 +176,30 @@ public class KafkaAvroSerializerTest {
     return avroRecord;
   }
 
+  private static final Schema arraySchema = new Schema.Parser().parse(
+      "{\"namespace\": \"namespace\",\n"
+          + " \"type\": \"array\",\n"
+          + " \"name\": \"test\",\n"
+          + " \"items\": {\n"
+          + "\"type\": \"record\",\n"
+          + "\"namespace\": \"example.avro\",\n"
+          + "\"name\": \"User\",\n"
+          + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}}");
+
+  private static final Schema mapSchema = new Schema.Parser().parse(
+      "{\"namespace\": \"namespace\",\n"
+          + " \"type\": \"map\",\n"
+          + " \"name\": \"test\",\n"
+          + " \"values\": {\n"
+          + "\"type\": \"record\",\n"
+          + "\"namespace\": \"example.avro\",\n"
+          + "\"name\": \"User\",\n"
+          + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}}");
+
   @Test
   public void testKafkaAvroSerializer() {
     byte[] bytes;
-    IndexedRecord avroRecord = createAvroRecord();
+    IndexedRecord avroRecord = createUserRecord();
     bytes = avroSerializer.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
     assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
@@ -203,7 +250,7 @@ public class KafkaAvroSerializerTest {
         false
     );
     avroSerializer.configure(configs, false);
-    IndexedRecord avroRecord = createAvroRecord();
+    IndexedRecord avroRecord = createUserRecord();
     avroSerializer.serialize(topic, avroRecord);
   }
 
@@ -216,11 +263,61 @@ public class KafkaAvroSerializerTest {
         false
     );
     avroSerializer.configure(configs, false);
-    IndexedRecord avroRecord = createAvroRecord();
-    schemaRegistry.register(topic + "-value", avroRecord.getSchema());
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
     assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithPreRegisteredUseLatest()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
+    IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithPreRegisteredRemoveJavaProperties()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG,
+        true
+    );
+    avroSerializer.configure(configs, false);
+    String schema = "{\n"
+        + "  \"namespace\": \"io.confluent.kafka.example.annotated\",\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"User\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"name\",\n"
+        + "      \"type\": \"string\"\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+    schemaRegistry.register(topic + "-value", new AvroSchema(schema));
+    IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
+    assertEquals(annotatedUserRecord, specificAvroDeserializer.deserialize(topic, bytes));
+    assertEquals(annotatedUserRecord, specificAvroDecoder.fromBytes(bytes));
   }
 
   @Test
@@ -232,7 +329,7 @@ public class KafkaAvroSerializerTest {
         TopicRecordNameStrategy.class.getName()
     );
     avroSerializer.configure(configs, false);
-    IndexedRecord record1 = createAvroRecord();
+    IndexedRecord record1 = createUserRecord();
     IndexedRecord record2 = createAccountRecord();
     byte[] bytes1 = avroSerializer.serialize(topic, record1);
     byte[] bytes2 = avroSerializer.serialize(topic, record2);
@@ -252,6 +349,212 @@ public class KafkaAvroSerializerTest {
     );
     avroSerializer.configure(configs, false);
     avroSerializer.serialize(topic, "a string should not be allowed");
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithMultiTypeUnion() throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    schemaRegistry.register("user", new AvroSchema(createUserSchema()));
+    schemaRegistry.register("account", new AvroSchema(createAccountSchema()));
+    schemaRegistry.register(topic + "-value",
+        new AvroSchema("[ \"example.avro.User\", \"example.avro.Account\" ]",
+            ImmutableList.of(
+                new SchemaReference("example.avro.User", "user", 1),
+                new SchemaReference("example.avro.Account", "account", 1)
+            ),
+            ImmutableMap.of(
+                "example.avro.User",
+                createUserSchema().toString(),
+                "example.avro.Account",
+                createAccountSchema().toString()
+            ),
+            null
+        ));
+    avroSerializer.configure(configs, false);
+    IndexedRecord record1 = createUserRecord();
+    IndexedRecord record2 = createAccountRecord();
+    byte[] bytes1 = avroSerializer.serialize(topic, record1);
+    byte[] bytes2 = avroSerializer.serialize(topic, record2);
+    assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
+    assertEquals(record2, avroDeserializer.deserialize(topic, bytes2));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithMultiTypeUnionSpecific() throws IOException, RestClientException {
+    Map serializerConfigs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+            false,
+            KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+            true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+            true
+    );
+    IndexedRecord record = createSpecificAvroRecord();
+    AvroSchema schema = new AvroSchema(record.getSchema());
+    schemaRegistry.register("user", schema);
+    schemaRegistry.register("account", new AvroSchema(createAccountSchema()));
+    schemaRegistry.register(topic + "-value",
+            new AvroSchema("[ \"io.confluent.kafka.example.User\", \"example.avro.Account\" ]",
+                    ImmutableList.of(
+                            new SchemaReference("io.confluent.kafka.example.User", "user", 1),
+                            new SchemaReference("example.avro.Account", "account", 1)
+                    ),
+                    ImmutableMap.of(
+                            "io.confluent.kafka.example.User",
+                            schema.toString(),
+                            "example.avro.Account",
+                            createAccountSchema().toString()
+                    ),
+                    null
+            ));
+    avroSerializer.configure(serializerConfigs, false);
+    avroDeserializer.configure(deserializerConfigs, false);
+    byte[] bytes1 = avroSerializer.serialize(topic, record);
+    assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+  }
+
+  /**
+   * Verify the capability to use specific record deserializer in a scenario where
+   * consumer is bound to multiple topics with different union type subjects
+   */
+  @Test
+  public void testKafkaAvroSerializerWithMultiTypeUnionSpecificAndMultipleTopics() throws IOException, RestClientException {
+    Map serializerConfigs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+            false,
+            KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+            true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+            true
+    );
+
+    String differentTopic = "another_topic";
+    IndexedRecord record = createSpecificAvroRecord();
+    AvroSchema schema = new AvroSchema(record.getSchema());
+
+    Grant grantRecord = Grant.newBuilder()
+            .setGrant("p234")
+            .build();
+    AvroSchema grantSchema = new AvroSchema(grantRecord.getSchema());
+
+    schemaRegistry.register("user", schema);
+    schemaRegistry.register("account", new AvroSchema(createAccountSchema()));
+    // Given TOPIC A subject is union type [A, B]
+    schemaRegistry.register(topic + "-value",
+            new AvroSchema("[ \"io.confluent.kafka.example.User\", \"example.avro.Account\" ]",
+                    ImmutableList.of(
+                            new SchemaReference("io.confluent.kafka.example.User", "user", 1),
+                            new SchemaReference("example.avro.Account", "account", 1)
+                    ),
+                    ImmutableMap.of(
+                            "io.confluent.kafka.example.User",
+                            schema.toString(),
+                            "example.avro.Account",
+                            createAccountSchema().toString()
+                    ),
+                    null
+            ));
+    schemaRegistry.register("grant", grantSchema);
+    // Given TOPIC B subject is union type [C]
+    schemaRegistry.register(differentTopic + "-value",
+            new AvroSchema("[ \"io.confluent.kafka.example.Grant\" ]",
+                    ImmutableList.of(
+                            new SchemaReference("io.confluent.kafka.example.Grant", "grant", 1)
+                    ),
+                    ImmutableMap.of(
+                            "io.confluent.kafka.example.User",
+                            schema.toString(),
+                            "example.avro.Account",
+                            createAccountSchema().toString(),
+                            "io.confluent.kafka.example.Grant",
+                            grantSchema.toString()
+                    ),
+                    null
+            ));
+
+    avroSerializer.configure(serializerConfigs, false);
+    avroDeserializer.configure(deserializerConfigs, false);
+
+    byte[] bytes1 = avroSerializer.serialize(topic, record);
+    byte[] bytesGrant = avroSerializer.serialize(differentTopic, grantRecord);
+
+    // Assert that deserialize is capable to deserializing from topic A using A-subject
+    assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+    // Assert that deserialize is capable to deserializing from topic B using B-subject
+    assertEquals(grantRecord, avroDeserializer.deserialize(differentTopic, bytesGrant));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithArraySpecific() throws IOException, RestClientException {
+    Map serializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+        true
+    );
+    IndexedRecord record1 = createUserRecordUtf8();
+    GenericData.Array<IndexedRecord> data = new GenericData.Array(arraySchema,
+        Arrays.asList(record1)
+    );
+    schemaRegistry.register(topic + "-value", new AvroSchema(arraySchema));
+    avroSerializer.configure(serializerConfigs, false);
+    avroDeserializer.configure(deserializerConfigs, false);
+    byte[] bytes1 = avroSerializer.serialize(topic, data);
+    Object result = avroDeserializer.deserialize(topic, bytes1);
+    assertEquals(data, result);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithMapSpecific() throws IOException, RestClientException {
+    Map serializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+        true
+    );
+    Map<Utf8, IndexedRecord> data = new HashMap<>();
+    data.put(new Utf8("one"), createUserRecordUtf8());
+    schemaRegistry.register(topic + "-value", new AvroSchema(mapSchema));
+    avroSerializer.configure(serializerConfigs, false);
+    avroDeserializer.configure(deserializerConfigs, false);
+    byte[] bytes1 = avroSerializer.serialize(topic, data);
+    Object result = avroDeserializer.deserialize(topic, bytes1);
+    assertEquals(data, result);
   }
 
   @Test
@@ -426,7 +729,7 @@ public class KafkaAvroSerializerTest {
   public void testKafkaAvroSerializerNonexistantReflectionRecord() {
     byte[] bytes;
 
-    IndexedRecord avroRecord = createAvroRecord();
+    IndexedRecord avroRecord = createUserRecord();
     bytes = avroSerializer.serialize(topic, avroRecord);
 
     try {
@@ -475,7 +778,7 @@ public class KafkaAvroSerializerTest {
     HashMap<String, String> props = new HashMap<>();
     props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
-    props.put(AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG, "5");
+    props.put(AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG, "5");
     avroSerializer.configure(props, false);
   }
 

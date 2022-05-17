@@ -60,4 +60,15 @@ public class RegisterSchemaRequestTest {
 
     assertEquals("{\"schema\":\"string\"}", request.toJson());
   }
+
+  @Test
+  public void buildRegisterSchemaRequestWithSchemaTypeAvro() throws Exception {
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema("string");
+    request.setSchemaType("AVRO");
+
+    // Note that schemaType is omitted
+    assertEquals("{\"schema\":\"string\"}", request.toJson());
+  }
 }

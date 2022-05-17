@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>5.4.8-SNAPSHOT</version>
+        <version>5.5.9-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
@@ -46,15 +46,26 @@
     <modules>
         <module>core</module>
         <module>client</module>
+        <module>schema-serializer</module>
         <module>avro-serializer</module>
         <module>json-serializer</module>
+        <module>avro-data</module>
         <module>avro-converter</module>
         <module>package-schema-registry</module>
         <module>package-kafka-serde-tools</module>
         <module>maven-plugin</module>
         <module>avro-serde</module>
-        <module>avro-console-scripts</module>
+        <module>client-console-scripts</module>
         <module>schema-registry-console-scripts</module>
+        <module>protobuf-converter</module>
+        <module>protobuf-provider</module>
+        <module>protobuf-serializer</module>
+        <module>protobuf-serde</module>
+        <module>json-schema-converter</module>
+        <module>json-schema-provider</module>
+        <module>json-schema-serializer</module>
+        <module>json-schema-serde</module>
+        <module>benchmark</module>
     </modules>
 
     <properties>
@@ -64,6 +75,12 @@
         <podam.version>6.0.2.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
+        <kotlin.version>1.6.0</kotlin.version>
+        <json-schema.version>1.12.2</json-schema.version>
+        <protobuf.version>3.11.4</protobuf.version>
+        <wire.version>3.6.0</wire.version>
+        <swagger.version>1.6.2</swagger.version>
+        <spotbugs.plugin.version>4.0.0</spotbugs.plugin.version>
         <commons.compress.version>1.21</commons.compress.version>
         <snake.yaml.version>1.27</snake.yaml.version>
     </properties>
@@ -73,6 +90,10 @@
             <id>confluent</id>
             <name>Confluent</name>
             <url>https://packages.confluent.io/maven/</url>
+        </repository>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
         </repository>
     </repositories>
 
@@ -94,6 +115,73 @@
                 <version>${guava.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${protobuf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java-util</artifactId>
+                <version>${protobuf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.squareup.wire</groupId>
+                <artifactId>wire-schema</artifactId>
+                <version>${wire.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.jetbrains.kotlin</groupId>
+                        <artifactId>kotlin-stdlib</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.datatype</groupId>
+                <artifactId>jackson-datatype-guava</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.datatype</groupId>
+                <artifactId>jackson-datatype-jdk8</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.datatype</groupId>
+                <artifactId>jackson-datatype-joda</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.datatype</groupId>
+                <artifactId>jackson-datatype-jsr310</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.module</groupId>
+                <artifactId>jackson-module-parameter-names</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.everit-org.json-schema</groupId>
+                <artifactId>org.everit.json.schema</artifactId>
+                <version>${json-schema.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.kjetland</groupId>
+                <artifactId>mbknor-jackson-jsonschema_${kafka.scala.version}</artifactId>
+                <version>${mbknor-jackson-jsonschema.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.jetbrains.kotlin</groupId>
+                        <artifactId>kotlin-stdlib</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-stdlib</artifactId>
+                <version>${kotlin.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>uk.co.jemos.podam</groupId>
                 <artifactId>podam</artifactId>
                 <version>${podam.version}</version>
@@ -101,12 +189,12 @@
             <dependency>
                 <groupId>io.swagger</groupId>
                 <artifactId>swagger-annotations</artifactId>
-                <version>1.5.22</version>
+                <version>${swagger.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.swagger</groupId>
                 <artifactId>swagger-core</artifactId>
-                <version>1.6.2</version>
+                <version>${swagger.version}</version>
                 <exclusions>
                     <exclusion>
                         <groupId>javax.validation</groupId>
@@ -137,7 +225,17 @@
             </dependency>
             <dependency>
                 <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-avro-data</artifactId>
+                <version>${confluent.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
                 <artifactId>kafka-connect-avro-converter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-schema-serializer</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -152,8 +250,65 @@
             </dependency>
             <dependency>
                 <groupId>io.confluent</groupId>
+                <artifactId>kafka-schema-registry</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
                 <artifactId>kafka-streams-avro-serde</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-protobuf-converter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-protobuf-provider</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-protobuf-serializer</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-protobuf-serializer</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-streams-protobuf-serde</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-json-schema-converter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-json-schema-provider</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-json-schema-serializer</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-streams-json-schema-serde</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.ws.rs</groupId>
+                <artifactId>jakarta.ws.rs-api</artifactId>
+                <version>2.1.6</version>
             </dependency>
             <dependency>
                 <groupId>javax.xml.ws</groupId>
@@ -196,6 +351,28 @@
                     <artifactId>exec-maven-plugin</artifactId>
                     <version>${exec-maven-plugin.version}</version>
                 </plugin>
+                <plugin>
+                    <groupId>com.github.os72</groupId>
+                    <artifactId>protoc-jar-maven-plugin</artifactId>
+                    <version>${protobuf.version}</version>
+                    <executions>
+                        <execution>
+                            <phase>generate-test-sources</phase>
+                            <goals>
+                                <goal>run</goal>
+                            </goals>
+                            <configuration>
+                                <protocVersion>${protobuf.version}</protocVersion>
+                                <includeStdTypes>true</includeStdTypes>
+                                <addSources>none</addSources>
+                                <outputDirectory>src/test/java</outputDirectory>
+                                <inputDirectories>
+                                    <include>src/test/proto</include>
+                                </inputDirectories>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
@@ -210,6 +387,32 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>${spotbugs.plugin.version}</version>
+                <configuration>
+                    <xmlOutput>true</xmlOutput>
+                    <excludeFilterFile>findbugs/findbugs-exclude.xml</excludeFilterFile>
+                    <effort>Max</effort>
+                    <threshold>Max</threshold>
+                    <failOnError>true</failOnError>
+                    <includeTests>false</includeTests>
+                </configuration>
+                <executions>
+                    <!--
+                    Ensures that FindBugs inspects source code when project is compiled.
+                -->
+                    <execution>
+                        <id>analyze-compile</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
+
     </build>
 </project>

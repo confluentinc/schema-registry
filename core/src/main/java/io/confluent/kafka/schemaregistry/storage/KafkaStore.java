@@ -309,9 +309,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
    * Wait until the KafkaStore catches up to the given offset in the Kafka topic.
    */
   private void waitUntilKafkaReaderReachesOffset(long offset, int timeoutMs) throws StoreException {
-    if (offset == -1) {
-      return;
-    }
     log.info("Wait to catch up until the offset at " + offset);
     kafkaTopicReader.waitUntilOffset(offset, timeoutMs, TimeUnit.MILLISECONDS);
     log.debug("Reached offset at " + offset);
@@ -328,11 +325,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   @Override
-  public void put(K key, V value) throws StoreTimeoutException, StoreException {
+  public V put(K key, V value) throws StoreTimeoutException, StoreException {
     assertInitialized();
     if (key == null) {
       throw new StoreException("Key should not be null");
     }
+    V oldValue = get(key);
 
     // write to the Kafka topic
     ProducerRecord<byte[], byte[]> producerRecord = null;
@@ -370,9 +368,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreException("Put operation to Kafka failed", ke);
     } finally {
       if (!knownSuccessfulWrite) {
-        this.lastWrittenOffset = -1L;
+        markLastWrittenOffsetInvalid();
       }
     }
+    return oldValue;
   }
 
   @Override
@@ -391,10 +390,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   @Override
-  public void delete(K key) throws StoreException {
+  public V delete(K key) throws StoreException {
     assertInitialized();
     // deleteSchemaVersion from the Kafka topic by writing a null value for the key
-    put(key, null);
+    return put(key, null);
   }
 
   @Override

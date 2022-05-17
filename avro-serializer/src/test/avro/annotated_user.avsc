@@ -1,0 +1,11 @@
+{
+  "namespace": "io.confluent.kafka.example.annotated",
+  "type": "record",
+  "name": "User",
+  "fields": [
+    {
+      "name": "name",
+      "type":{"type":"string","avro.java.string":"String"}
+    }
+  ]
+}

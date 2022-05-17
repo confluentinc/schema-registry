@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.junit.Test;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
@@ -48,7 +50,7 @@ public class SchemaValuesTest {
     assertSchemaValue(subject, version, 1,
                       "{\"type\":\"record\",\"name\":\"myrecord\","
                       + "\"fields\":[{\"name\":\"f1067572235\",\"type\":\"string\"}]}",
-                      false, schemaValue);
+                      AvroSchema.TYPE, false, schemaValue);
 
   }
 
@@ -74,7 +76,7 @@ public class SchemaValuesTest {
     assertSchemaValue(subject, version, 1,
                       "{\"type\":\"record\",\"name\":\"myrecord\","
                       + "\"fields\":[{\"name\":\"f1067572235\",\"type\":\"string\"}]}",
-                      false, schemaValue);
+                      AvroSchema.TYPE, false, schemaValue);
 
   }
 
@@ -100,7 +102,7 @@ public class SchemaValuesTest {
     assertSchemaValue(subject, version, 1,
                       "{\"type\":\"record\",\"name\":\"myrecord\","
                       + "\"fields\":[{\"name\":\"f1067572235\",\"type\":\"string\"}]}",
-                      true, schemaValue);
+                      AvroSchema.TYPE,true, schemaValue);
 
   }
 
@@ -128,15 +130,24 @@ public class SchemaValuesTest {
 
   }
 
-  private void assertSchemaValue(String subject, int version, int schemaId,
-                                 String schema, boolean deleted, SchemaValue schemaValue) {
+  @Test
+  public void testSchemaValueNormalize() {
+    String oldSchema = "syntax = \"proto3\";\npackage com.mycorp.mynamespace;\n\n// Test Comment.\r\nmessage value {\n  int32 myField1 = 1;\n}\n";
+    String newSchema = "syntax = \"proto3\";\npackage com.mycorp.mynamespace;\n\nmessage value {\n  int32 myField1 = 1;\n}\n";
+    SchemaValue schemaValue = new SchemaValue("sub", 1, 0, ProtobufSchema.TYPE, null, oldSchema, false);
+    KafkaStoreMessageHandler.normalize(schemaValue);
+    assertEquals(newSchema, schemaValue.getSchema());
+  }
 
+  private void assertSchemaValue(String subject, int version, int schemaId,
+                                 String schema, String type, boolean deleted,
+                                 SchemaValue schemaValue) {
     assertNotNull("Not Null", schemaValue);
     assertEquals("Subject Matches", subject, schemaValue.getSubject());
     assertEquals("Version matches", (Integer) version, schemaValue.getVersion());
     assertEquals("SchemaId matches", (Integer) schemaId, schemaValue.getId());
     assertEquals("Schema Matches", schema, schemaValue.getSchema());
+    assertEquals("Type matches", type, schemaValue.getSchemaType());
     assertEquals("Delete Flag Matches", deleted, schemaValue.isDeleted());
-
   }
 }

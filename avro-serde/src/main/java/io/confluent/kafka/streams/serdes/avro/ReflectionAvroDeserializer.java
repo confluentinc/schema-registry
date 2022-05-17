@@ -40,9 +40,22 @@ public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
   private final KafkaAvroDeserializer inner;
   private final Schema schema;
 
+  public ReflectionAvroDeserializer() {
+    this.schema = null;
+    this.inner = new KafkaAvroDeserializer();
+  }
+
   public ReflectionAvroDeserializer(Class<T> type) {
     this.schema = ReflectData.get().getSchema(type);
     this.inner = new KafkaAvroDeserializer();
+  }
+
+  /**
+   * For testing purposes only.
+   */
+  ReflectionAvroDeserializer(final SchemaRegistryClient client) {
+    this.schema = null;
+    this.inner = new KafkaAvroDeserializer(client);
   }
 
   /**
@@ -61,6 +74,7 @@ public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
         isDeserializerForRecordKeys);
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public T deserialize(final String topic, final byte[] bytes) {
     return (T) inner.deserialize(topic, bytes, schema);
