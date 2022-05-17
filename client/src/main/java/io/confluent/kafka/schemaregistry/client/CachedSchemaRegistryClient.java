@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.kafka.common.config.SslConfigs;
 
+import org.apache.kafka.common.config.SslConfigs;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -53,6 +55,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdat
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+
+import javax.net.ssl.HostnameVerifier;
 
 import javax.net.ssl.HostnameVerifier;
 
