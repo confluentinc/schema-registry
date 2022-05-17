@@ -55,7 +55,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Before
   public void setup() {
-    log.debug("Zk conn url = " + zkConnect);
   }
 
   @After
@@ -552,7 +551,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
             new InMemoryCache<>(new SchemaRegistrySerializer());
     store.init();
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
-            store, new IncrementalIdGenerator());
+            store, new IncrementalIdGenerator(schemaRegistry));
 
     storeMessageHandler.handleUpdate(new DeleteSubjectKey("test"), null, null, null, 0L, 0L);
   }
@@ -574,7 +573,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
             new InMemoryCache<>(new SchemaRegistrySerializer());
     store.init();
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
-          store, new IncrementalIdGenerator());
+          store, new IncrementalIdGenerator(schemaRegistry));
 
     storeMessageHandler.handleUpdate(new ClearSubjectKey("test"), null, null, null, 0L, 0L);
   }

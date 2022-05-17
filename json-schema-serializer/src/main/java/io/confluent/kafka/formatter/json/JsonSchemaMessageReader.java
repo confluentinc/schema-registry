@@ -46,7 +46,7 @@ import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaSerializer;
  * command.
  *
  * <p>1. Send JSON Schema string as value. (make sure there is no space in the schema string)
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
+ * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic t1 \
  * --line-reader io.confluent.kafka.formatter.JsonSchemaMessageReader \
  * --property schema.registry.url=http://localhost:8081 \
  * --property value.schema='{"type":"string"}'
@@ -56,7 +56,7 @@ import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaSerializer;
  * "b"
  *
  * <p>2. Send JSON Schema record as value.
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
+ * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic t1 \
  * --line-reader io.confluent.kafka.formatter.JsonSchemaMessageReader \
  * --property schema.registry.url=http://localhost:8081 \
  * --property value.schema='{"type":"object","properties":{"f1":{"type":"string"}}}'
@@ -65,7 +65,7 @@ import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaSerializer;
  * {"f1": "value1"}
  *
  * <p>3. Send JSON Schema string as key and JSON Schema record as value.
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
+ * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic t1 \
  * --line-reader io.confluent.kafka.formatter.JsonSchemaMessageReader \
  * --property schema.registry.url=http://localhost:8081 \
  * --property parse.key=true \
@@ -97,22 +97,24 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
       String topic,
       boolean parseKey,
       BufferedReader reader,
+      boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest
   ) {
     super(schemaRegistryClient, keySchema, valueSchema, topic,
-        parseKey, reader, autoRegister, useLatest);
+        parseKey, reader, normalizeSchema, autoRegister, useLatest);
   }
 
   @Override
   protected SchemaMessageSerializer<JsonNode> createSerializer(
       SchemaRegistryClient schemaRegistryClient,
+      boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest,
       Serializer keySerializer
   ) {
     return new JsonSchemaMessageSerializer(
-        schemaRegistryClient, autoRegister, useLatest, keySerializer);
+        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, keySerializer);
   }
 
   @Override
@@ -136,9 +138,10 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
 
     JsonSchemaMessageSerializer(
         SchemaRegistryClient schemaRegistryClient,
-        boolean autoRegister, boolean useLatest, Serializer keySerializer
+        boolean normalizeSchema, boolean autoRegister, boolean useLatest, Serializer keySerializer
     ) {
       this.schemaRegistry = schemaRegistryClient;
+      this.normalizeSchema = normalizeSchema;
       this.autoRegisterSchema = autoRegister;
       this.useLatestVersion = useLatest;
       this.keySerializer = keySerializer;

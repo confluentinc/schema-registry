@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+option java_package = "io.confluent.connect.protobuf.test";
+option java_outer_classname = "DescriptorRef";
+
+import "google/protobuf/descriptor.proto";
+
+message DescriptorMessage {
+    int32 key = 1;
+    google.protobuf.DescriptorProto value = 2;
+}
