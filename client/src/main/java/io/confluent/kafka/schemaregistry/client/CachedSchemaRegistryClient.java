@@ -24,6 +24,8 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.kafka.common.config.SslConfigs;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -234,6 +236,19 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         restService.setHostnameVerifier(getHostnameVerifier(sslConfigs));
       }
     }
+  }
+
+  private HostnameVerifier getHostnameVerifier(Map<String, Object> config) {
+    String sslEndpointIdentificationAlgo =
+            (String) config.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
+
+    if (sslEndpointIdentificationAlgo == null
+            || sslEndpointIdentificationAlgo.equals("none")
+            || sslEndpointIdentificationAlgo.isEmpty()) {
+      return (hostname, session) -> true;
+    }
+
+    return null;
   }
 
   @Override
