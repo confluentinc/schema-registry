@@ -23,6 +23,8 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.kafka.common.config.SslConfigs;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -51,6 +53,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdat
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+
+import javax.net.ssl.HostnameVerifier;
 
 
 /**
@@ -228,8 +232,22 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       SslFactory sslFactory = new SslFactory(sslConfigs);
       if (sslFactory.sslContext() != null) {
         restService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
+        restService.setHostnameVerifier(getHostnameVerifier(sslConfigs));
       }
     }
+  }
+
+  private HostnameVerifier getHostnameVerifier(Map<String, Object> config) {
+    String sslEndpointIdentificationAlgo =
+            (String) config.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
+
+    if (sslEndpointIdentificationAlgo == null
+            || sslEndpointIdentificationAlgo.equals("none")
+            || sslEndpointIdentificationAlgo.isEmpty()) {
+      return (hostname, session) -> true;
+    }
+
+    return null;
   }
 
   @Override
