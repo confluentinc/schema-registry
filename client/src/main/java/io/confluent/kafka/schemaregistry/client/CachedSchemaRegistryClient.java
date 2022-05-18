@@ -367,15 +367,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
 
     Integer cachedId = schemaIdMap.get(schema);
-    if (cachedId != null) {
-      checkId(id, cachedId);
+    if (cachedId != null && (id < 0 || id == cachedId)) {
       return cachedId;
     }
 
     synchronized (this) {
       cachedId = schemaIdMap.get(schema);
-      if (cachedId != null) {
-        checkId(id, cachedId);
+      if (cachedId != null && (id < 0 || id == cachedId)) {
         return cachedId;
       }
 
@@ -388,13 +386,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           context, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
       idSchemaMap.put(retrievedId, schema);
       return retrievedId;
-    }
-  }
-
-  private void checkId(int id, Integer cachedId) {
-    if (id >= 0 && id != cachedId) {
-      throw new IllegalStateException("Schema already registered with id "
-          + cachedId + " instead of input id " + id);
     }
   }
 
