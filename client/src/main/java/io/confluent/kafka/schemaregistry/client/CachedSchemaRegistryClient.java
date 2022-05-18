@@ -271,19 +271,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return providers;
   }
 
-  private HostnameVerifier getHostnameVerifier(Map<String, Object> config) {
-    String sslEndpointIdentificationAlgo =
-        (String) config.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
-
-    if (sslEndpointIdentificationAlgo == null
-        || sslEndpointIdentificationAlgo.equals("none")
-        || sslEndpointIdentificationAlgo.isEmpty()) {
-      return (hostname, session) -> true;
-    }
-
-    return null;
-  }
-
   private int registerAndGetId(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     return restService.registerSchema(schema.canonicalString(), schema.schemaType(),
