@@ -114,8 +114,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       for (Map.Entry<Integer, ParsedSchema> entry : idSchemaMap.entrySet()) {
         if (schemasEqual(entry.getValue(), schema)) {
           if (registerRequest) {
-            checkId(id, entry.getKey());
-            generateVersion(subject, schema);
+            if (id < 0 || id == entry.getKey()) {
+              generateVersion(subject, schema);
+            } else {
+              continue;
+            }
           }
           return entry.getKey();
         }
@@ -129,11 +132,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String context = toQualifiedContext(subject);
       Map<ParsedSchema, Integer> schemaIdMap =
           schemaIdCache.computeIfAbsent(context, k -> new ConcurrentHashMap<>());
-      Integer schemaId =
-          schemaIdMap.computeIfAbsent(schema, k -> id >= 0
-              ? id
-              : ids.computeIfAbsent(context, c -> new AtomicInteger(0)).incrementAndGet());
-      checkId(id, schemaId);
+      Integer schemaId = id >= 0
+          ? id
+          : ids.computeIfAbsent(context, c -> new AtomicInteger(0)).incrementAndGet();
+      schemaIdMap.put(schema, schemaId);
       generateVersion(subject, schema);
       idSchemaMap.put(schemaId, schema);
       return schemaId;
@@ -209,15 +211,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         schemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
 
     Integer schemaId = schemaIdMap.get(schema);
-    if (schemaId != null) {
-      checkId(id, schemaId);
+    if (schemaId != null && (id < 0 || id == schemaId)) {
       return schemaId;
     }
 
     synchronized (this) {
       schemaId = schemaIdMap.get(schema);
-      if (schemaId != null) {
-        checkId(id, schemaId);
+      if (schemaId != null && (id < 0 || id == schemaId)) {
         return schemaId;
       }
 
@@ -228,13 +228,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schema);
       return retrievedId;
-    }
-  }
-
-  private void checkId(int id, Integer cachedId) {
-    if (id >= 0 && id != cachedId) {
-      throw new IllegalStateException("Schema already registered with id "
-          + cachedId + " instead of input id " + id);
     }
   }
 
