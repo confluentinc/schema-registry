@@ -47,6 +47,7 @@ public class ServerMetadataResource {
 
   @GET
   @Path("/id")
+  @DocumentedName("getClusterId")
   @Operation(summary = "Get the server metadata", responses = {
       @ApiResponse(responseCode = "500",
                        description = "Error code 50001 -- Error in the backend data store\n")

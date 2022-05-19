@@ -75,6 +75,7 @@ public class SubjectsResource {
   }
 
   @POST
+  @DocumentedName("lookUpSubjectVersion")
   @Path("/{subject}")
   @Operation(summary = "Lookup schema under subject",
       description = "Check if a schema has already been registered under the specified subject."
@@ -133,6 +134,7 @@ public class SubjectsResource {
   }
 
   @GET
+  @DocumentedName("getAllSubjects")
   @Valid
   @Operation(summary = "List subjects",
       description = "Retrieves a list of registered subjects matching specified parameters.",
@@ -164,6 +166,7 @@ public class SubjectsResource {
   }
 
   @DELETE
+  @DocumentedName("deleteSubject")
   @Path("/{subject}")
   @Operation(summary = "Delete subject",
       description = "Deletes the specified subject and its associated compatibility level if "

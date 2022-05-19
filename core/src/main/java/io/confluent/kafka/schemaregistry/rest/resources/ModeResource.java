@@ -74,6 +74,7 @@ public class ModeResource {
 
   @Path("/{subject}")
   @PUT
+  @DocumentedName("setMode")
   @Operation(summary = "Update subject mode",
       description = "Update mode for the specified subject. "
         + "On success, echoes the original request back to the client.",
@@ -132,6 +133,7 @@ public class ModeResource {
 
   @Path("/{subject}")
   @GET
+  @DocumentedName("getMode")
   @Operation(summary = "Get subject mode",
       description = "Retrieves the subject mode.",
       responses = {
@@ -163,6 +165,7 @@ public class ModeResource {
   }
 
   @PUT
+  @DocumentedName("setMode")
   @Operation(summary = "Update global mode",
       description = "Update global mode. "
         + "On success, echoes the original request back to the client.",
@@ -186,6 +189,7 @@ public class ModeResource {
   }
 
   @GET
+  @DocumentedName("getMode")
   @Operation(summary = "Get global mode",
       description = "Retrieves global mode.",
       responses = {
@@ -200,6 +204,7 @@ public class ModeResource {
 
   @DELETE
   @Path("/{subject}")
+  @DocumentedName("deleteSubjectMode")
   @Operation(summary = "Delete subject mode",
       description = "Deletes the specified subject-level mode and reverts to "
         + "the global default.",

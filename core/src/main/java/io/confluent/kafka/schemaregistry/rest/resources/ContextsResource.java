@@ -49,6 +49,7 @@ public class ContextsResource {
   }
 
   @GET
+  @DocumentedName("getAllContexts")
   @Operation(summary = "List contexts",
       description = "Retrieves a list of contexts.",
       responses = {
