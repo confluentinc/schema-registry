@@ -172,17 +172,33 @@ public class MockSchemaRegistryClientTest extends ClusterTestHarness {
         "\"name\": \"User\"," +
         "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}");
 
+    AvroSchema schema2 = new AvroSchema("{\"namespace\": \"example.avro\", \"type\": \"record\", " +
+        "\"name\": \"User2\"," +
+        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}");
+
     int id = client.register("test", schema);
     assertEquals(1, id);
+
+    id = client.register("test", schema2);
+    assertEquals(2, id);
 
     id = client.register("test2", schema);
     assertEquals(1, id);
 
+    id = client.register("test2", schema2);
+    assertEquals(2, id);
+
     id = client.getId("test", schema);
     assertEquals(1, id);
 
+    id = client.getId("test", schema2);
+    assertEquals(2, id);
+
     id = client.getId("test2", schema);
     assertEquals(1, id);
+
+    id = client.getId("test2", schema2);
+    assertEquals(2, id);
   }
 }
 
