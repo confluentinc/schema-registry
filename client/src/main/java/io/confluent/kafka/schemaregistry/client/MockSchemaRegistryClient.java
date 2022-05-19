@@ -132,10 +132,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String context = toQualifiedContext(subject);
       Map<ParsedSchema, Integer> schemaIdMap =
           schemaIdCache.computeIfAbsent(context, k -> new ConcurrentHashMap<>());
-      Integer schemaId = id >= 0
-          ? id
-          : ids.computeIfAbsent(context, c -> new AtomicInteger(0)).incrementAndGet();
-      schemaIdMap.put(schema, schemaId);
+      int schemaId;
+      if (id >= 0) {
+        schemaId = id;
+        schemaIdMap.put(schema, schemaId);
+      } else {
+        schemaId = schemaIdMap.computeIfAbsent(schema, k ->
+            ids.computeIfAbsent(context, c -> new AtomicInteger(0)).incrementAndGet());
+      }
       generateVersion(subject, schema);
       idSchemaMap.put(schemaId, schema);
       return schemaId;
