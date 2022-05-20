@@ -276,7 +276,14 @@ public class SslFactoryTest {
     configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
         pemFilePath(pemAsConfigValue(KEY, CERTCHAIN).value()));
     configs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
-    assertThrows(RuntimeException.class, () -> new SslFactory(configs));
+    configs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, null);
+    SslFactory factory = new SslFactory(configs);
+
+    KeyStore keyStore = factory.keyStore().get();
+    List<String> aliases = Collections.list(keyStore.aliases());
+    assertEquals(Collections.singletonList("kafka"), aliases);
+    assertNotNull("Certificate not found", keyStore.getCertificate("kafka"));
+    assertNotNull("Private key not found", keyStore.getKey("kafka", null));
   }
 
   @Test
