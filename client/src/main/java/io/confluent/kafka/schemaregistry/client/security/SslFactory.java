@@ -294,9 +294,6 @@ public class SslFactory {
       throw new InvalidConfigurationException(
           "SSL key store password cannot be specified with PEM format, "
               + "only key password may be specified");
-    } else if (keyPassword == null) {
-      throw new InvalidConfigurationException(
-          "SSL PEM key store is specified, but key password is not specified.");
     } else {
       return new FileBasedPemStore(path, keyPassword, true);
     }
