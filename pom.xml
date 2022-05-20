@@ -83,6 +83,11 @@
                 <version>${avro.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.google.code.gson</groupId>
+                <artifactId>gson</artifactId>
+                <version>${gson.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>uk.co.jemos.podam</groupId>
                 <artifactId>podam</artifactId>
                 <version>${podam.version}</version>
