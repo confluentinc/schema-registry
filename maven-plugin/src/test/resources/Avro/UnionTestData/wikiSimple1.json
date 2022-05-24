@@ -1,0 +1,27 @@
+[
+  {
+    "length": {
+      "long": 12
+    }
+  },
+  {
+    "length": {
+      "double": 1.5
+    }
+  },
+  {
+    "length": {
+      "boolean": true
+    }
+  },
+  {
+    "length": {
+      "array": [
+        true,
+        false,
+        true,
+        false
+      ]
+    }
+  }
+]

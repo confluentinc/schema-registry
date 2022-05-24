@@ -1,0 +1,60 @@
+[
+  {
+    "value": {
+      "length": {
+        "properties_length": {
+          "new": {
+            "long": 5
+          },
+          "old": {
+            "long": 53
+          }
+        }
+      }
+    },
+    "__confluent_index": 1
+  },
+  {
+    "value": {
+      "length": {
+        "properties_length": {
+          "new": {
+            "long": 10
+          },
+          "old": null
+        }
+      }
+    },
+    "__confluent_index": 1
+  },
+  {
+    "value": {
+      "length": {
+        "properties_length": {
+          "new": {
+            "long": 10
+          },
+          "old": null
+        }
+      }
+    },
+    "__confluent_index": 1
+  },
+  {
+    "value": {
+      "length": null
+    },
+    "__confluent_index": 18
+  },
+  {
+    "value": {
+      "length": {
+        "name": {
+          "first": "Jinit",
+          "second": "Shah"
+        }
+      }
+    },
+    "__confluent_index": 11.4
+  }
+]

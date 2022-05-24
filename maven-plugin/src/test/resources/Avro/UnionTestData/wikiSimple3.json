@@ -1,0 +1,57 @@
+[
+  {
+    "length": {
+      "long": 12
+    }
+  },
+  {
+    "length": {
+      "double": 1.5
+    }
+  },
+  {
+    "length": {
+      "double": 1.325
+    }
+  },
+  {
+    "length": {
+      "branch": {
+        "properties_length": {
+          "temp": 12
+        }
+      }
+    }
+  },
+  {
+    "length": {
+      "array": [[[
+        1,
+        2,
+        3,
+        4
+      ]]]
+    }
+  },
+  {
+    "length": {
+      "branch2": {
+        "haha": {
+          "new": 5,
+          "old": true
+        }
+      }
+    }
+  },
+  {
+    "length": {
+      "aa": {
+        "a": {
+          "new": 5,
+          "old": true
+        }
+      }
+    }
+  }
+
+]
