@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveAvroSchema;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -256,8 +257,9 @@ public final class MergeAvroProtoBufUtils {
         int freq = Collections.frequency(schemaList.get(key), schemaList.get(key).get(modeIndex));
         if (freq != schemaList.get(key).size()) {
           if (listError) {
-            String errorString = String.format("Warning! All elements "
-                    + "should be of same type. Choosing most frequent element for schema");
+            String errorString = String.format("Message %d: Warning! All elements "
+                    + "should be of same type. Choosing most frequent element for schema",
+                DeriveAvroSchema.getCurrentMessage());
             logger.warn(errorString);
           }
         }

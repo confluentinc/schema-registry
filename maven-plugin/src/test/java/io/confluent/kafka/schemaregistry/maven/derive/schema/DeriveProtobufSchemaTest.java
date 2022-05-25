@@ -32,7 +32,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
@@ -106,12 +105,6 @@ public class DeriveProtobufSchemaTest {
   @Test
   public void testPrimitiveTypes() throws IOException {
 
-    // TODO: Empty Record allowed or not?
-    String message1x = "{}";
-    List<String> messageObject3x = ReadFileUtils.readMessagesToString(message1x);
-    List<JSONObject> x = strictGenerator.getSchemaForMultipleMessages(messageObject3x);
-    serializeAndDeserializeCheckMulti(messageObject3x, x);
-
     String message =
         "{\n"
             + "    \"String\": \"John Smith\",\n"
@@ -150,7 +143,6 @@ public class DeriveProtobufSchemaTest {
     assertEquals(5.3443343443453E10, resultRecord.getField(fd));
 
     fd = desc.findFieldByName("Null");
-    System.out.println(fd);
     assert (resultRecord.getField(fd).toString().equals(""));
 
     String expectedSchema = "syntax = \"proto3\";\n" +
@@ -427,7 +419,6 @@ public class DeriveProtobufSchemaTest {
         "    int32 Int3 = 3;\n" +
         "  }\n" +
         "}\n";
-    System.out.println(expectedSchema2);
     assertEquals(expectedSchema2, protobufSchema2.toString());
 
 

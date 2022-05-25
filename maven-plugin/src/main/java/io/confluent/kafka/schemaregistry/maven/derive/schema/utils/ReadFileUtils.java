@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
 
-import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -43,7 +42,7 @@ public class ReadFileUtils {
 
   static JSONParser jsonParser = new JSONParser();
 
-  static String readFile(String content) throws IOException {
+  public static String readFile(String content) throws IOException {
     byte[] encoded = Files.readAllBytes(Paths.get(content));
     return new String(encoded, StandardCharsets.UTF_8);
   }
@@ -102,18 +101,6 @@ public class ReadFileUtils {
   }
 
 
-  /**
-   * Combines array of messages, line separated messages and a single message
-   * to return list of JSONObjects.
-   *
-   * @param content Name of the file to read
-   * @return List of JSONObjects
-   * @throws IOException thrown when file is not readable
-   */
-  public static List<Object> readMessages(String content) throws IOException {
-    return new ArrayList<>(readCustom(content));
-  }
-
   private static void checkEmpty(String content) {
     if (content == null || content.length() == 0) {
       throw new IllegalArgumentException("Input file is empty.");
@@ -121,7 +108,7 @@ public class ReadFileUtils {
 
   }
 
-  private static List<Object> readCustom(String content) throws IOException {
+  private static List<Object> readCustom(String content) {
 
     checkEmpty(content);
 
@@ -134,7 +121,7 @@ public class ReadFileUtils {
       ans.addAll(readArrayOfMessages(content));
       logger.info("Read input as array of Messages.");
       return ans;
-    } catch (JSONException | ParseException | ClassCastException ignored) {
+    } catch (Exception ignored) {
       logger.info("Cannot be read input as array of Messages.");
     }
 
@@ -142,7 +129,7 @@ public class ReadFileUtils {
       ans.addAll(readLinesOfMessages(content));
       logger.info("Read input as lines of messages.");
       return ans;
-    } catch (JSONException ignored) {
+    } catch (Exception ignored) {
       logger.info("Cannot be read input as lines of messages.");
     }
 
@@ -150,7 +137,7 @@ public class ReadFileUtils {
       ans.add(new JSONObject(content));
       logger.info("Read input as jsonObject.");
       return ans;
-    } catch (JSONException ignored) {
+    } catch (Exception ignored) {
       logger.info("Cannot be read input as jsonObject.");
     }
 
@@ -169,11 +156,10 @@ public class ReadFileUtils {
    *
    * @param content Name of the file to read
    * @return List of Strings, each message JSONObject is converted to String
-   * @throws IOException thrown when file is not readable
    */
-  public static List<String> readMessagesToString(String content) throws IOException {
+  public static List<String> readMessagesToString(String content) {
 
-    List<Object> listOfMessages = ReadFileUtils.readMessages(content);
+    List<Object> listOfMessages = readCustom(content);
     List<String> listOfStrings = new ArrayList<>();
     for (Object m : listOfMessages) {
       listOfStrings.add(m.toString());
@@ -182,6 +168,9 @@ public class ReadFileUtils {
   }
 
   public static List<String> readMessagesToString(File file) throws IOException {
+    if (file == null) {
+      throw new NullPointerException("Input file not set.");
+    }
     String fileContent = readFile(file.getAbsolutePath());
     return readMessagesToString(fileContent);
   }

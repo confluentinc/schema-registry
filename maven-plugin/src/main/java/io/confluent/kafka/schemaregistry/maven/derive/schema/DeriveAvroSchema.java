@@ -55,12 +55,16 @@ public class DeriveAvroSchema extends DeriveSchema {
   final boolean strictCheck;
   final boolean typeProtoBuf;
   private static final Gson gson = new Gson();
+  private static int currentMessage = -1;
 
-  public static void setCurrentMessage(int currentMessage) {
+  public static int getCurrentMessage() {
+    return currentMessage;
+  }
+
+  private static void setCurrentMessage(int currentMessage) {
     DeriveAvroSchema.currentMessage = currentMessage;
   }
 
-  static int currentMessage = -1;
   String errorMessageNoSchemasFound = "No strict schemas can be generated for the given messages. "
       + "Please try using the lenient version to generate a schema.";
 

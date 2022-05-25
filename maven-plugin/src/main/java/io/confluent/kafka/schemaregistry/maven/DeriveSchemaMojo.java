@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaMain;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -25,8 +24,12 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.json.JSONObject;
 
+import java.io.FileOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,6 +40,9 @@ public class DeriveSchemaMojo extends AbstractMojo {
 
   @Parameter(required = true)
   File messagePath;
+
+  @Parameter(defaultValue = "null")
+  File outputPath;
 
   @Parameter(defaultValue = "Avro")
   String schemaType;
@@ -51,19 +57,36 @@ public class DeriveSchemaMojo extends AbstractMojo {
     try {
       listOfMessages = new ArrayList<>(readMessagesToString(messagePath));
     } catch (IOException e) {
-      getLog().error(e);
-      throw new RuntimeException(e);
+      throw new MojoExecutionException(e.getMessage());
     }
 
     try {
       List<JSONObject> ans = DeriveSchemaMain.caseWiseOutput(schemaType, strictCheck,
           listOfMessages);
-      for (JSONObject schema : ans) {
-        System.out.println(schema.toString(2));
+
+      if (outputPath == null) {
+        for (JSONObject schema : ans) {
+          System.out.println(schema.toString(2));
+        }
+      } else {
+
+        try {
+          FileOutputStream fileStream = new FileOutputStream(outputPath.getPath());
+          OutputStreamWriter writer = new OutputStreamWriter(fileStream,
+              StandardCharsets.UTF_8);
+          for (JSONObject schema : ans) {
+            writer.write(schema.toString(2));
+          }
+          writer.close();
+        } catch (IOException e) {
+          getLog().error(e.getMessage());
+          throw new MojoExecutionException(e.getMessage());
+        }
+
       }
-    } catch (JsonProcessingException e) {
-      getLog().error(e);
-      throw new RuntimeException(e);
+    } catch (IOException e) {
+      getLog().error(e.getMessage());
+      throw new MojoExecutionException(e.getMessage());
     }
 
   }

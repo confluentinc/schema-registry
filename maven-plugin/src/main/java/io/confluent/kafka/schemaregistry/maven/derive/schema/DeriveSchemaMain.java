@@ -36,7 +36,9 @@ public class DeriveSchemaMain {
       throws JsonProcessingException {
 
     List<JSONObject> ans = new ArrayList<>();
-
+    if (schemaType == null) {
+      throw new IllegalArgumentException("Schema Type not set");
+    }
     switch (schemaType.toLowerCase()) {
       case "avro": {
 
@@ -60,7 +62,8 @@ public class DeriveSchemaMain {
         break;
 
       default:
-        System.out.println("Schema type not understood. Use Avro, Json or Protobuf");
+        throw new IllegalArgumentException("Schema type not understood. "
+            + "Use Avro, Json or Protobuf");
 
     }
 

@@ -23,6 +23,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveAvroSchema;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -171,8 +172,8 @@ public final class MergeUnionUtils {
           jsonObject.put("type", "record");
         } else if (jsonObject.getJSONObject("type").has("items")) {
           if (!jsonObject.get("name").equals("array")) {
-            logger.warn(String.format("For type Union, branch must have name array "
-                + "instead of %s", jsonObject.get("name")));
+            logger.warn(String.format("Message %d: For type Union, branch must have name array "
+                + "instead of %s", DeriveAvroSchema.getCurrentMessage(), jsonObject.get("name")));
             return false;
           }
           jsonObject.put("items", jsonObject.getJSONObject("type").get("items"));
