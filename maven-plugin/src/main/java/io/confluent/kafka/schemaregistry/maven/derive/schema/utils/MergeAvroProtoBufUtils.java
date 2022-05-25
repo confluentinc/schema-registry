@@ -256,8 +256,9 @@ public final class MergeAvroProtoBufUtils {
         int freq = Collections.frequency(schemaList.get(key), schemaList.get(key).get(modeIndex));
         if (freq != schemaList.get(key).size()) {
           if (listError) {
-            logger.warn("Warning! All elements should be of same type. "
-                + "Choosing most frequent element for schema");
+            String errorString = String.format("Warning! All elements "
+                    + "should be of same type. Choosing most frequent element for schema");
+            logger.warn(errorString);
           }
         }
 

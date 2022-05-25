@@ -33,9 +33,11 @@ import java.util.Optional;
 import java.util.TreeSet;
 
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeAvroProtoBufUtils;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeUnionUtils;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -52,9 +54,15 @@ public class DeriveAvroSchema extends DeriveSchema {
   static final Map<String, String> classToDataType = new HashMap<>();
   final boolean strictCheck;
   final boolean typeProtoBuf;
-  static int numThreads = 2;
-  static long numElements = 15;
   private static final Gson gson = new Gson();
+
+  public static void setCurrentMessage(int currentMessage) {
+    DeriveAvroSchema.currentMessage = currentMessage;
+  }
+
+  static int currentMessage = -1;
+  String errorMessageNoSchemasFound = "No strict schemas can be generated for the given messages. "
+      + "Please try using the lenient version to generate a schema.";
 
   /**
    * Basic constructor to specify strict and schema type.
@@ -110,6 +118,25 @@ public class DeriveAvroSchema extends DeriveSchema {
   }
 
 
+  private void checkName(String name) {
+
+    if (name.length() == 0) {
+      throw new IllegalArgumentException(
+          String.format("Message %d: Name of a field cannot be Empty.", currentMessage));
+    }
+
+    if (name.matches("\\d.*")) {
+      throw new IllegalArgumentException(
+          String.format("Message %d: Name of a field cannot begin with digit.", currentMessage));
+    }
+
+    if (typeProtoBuf && name.contains(".")) {
+      throw new IllegalArgumentException(
+          String.format("Message %d: Name of field cannot contain '.'", currentMessage));
+    }
+
+  }
+
   /**
    * Primitive schema of message is generated, if possible.
    *
@@ -128,16 +155,17 @@ public class DeriveAvroSchema extends DeriveSchema {
 
     if (jsonInferredType.equals("class java.math.BigInteger")) {
       if (this.strictCheck) {
-        String errorMessage = String.format("Numeric value %s out of range of long "
+        String errorMessage = String.format("Message %d: Numeric value %s out of range of long "
                 + "(-9223372036854775808 9223372036854775807). "
                 + "Change value to string type or change value to inside the range of long",
-            field);
+            currentMessage, field);
         logger.error(errorMessage);
         throw new IllegalArgumentException(errorMessage);
       } else {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("type", "double");
-        logger.warn("Value out of range of long. Mapping to double");
+        logger.warn(String.format("Message %d: Value out of range of long. "
+            + "Mapping to double", currentMessage));
         return Optional.of(jsonObject);
       }
     }
@@ -178,6 +206,7 @@ public class DeriveAvroSchema extends DeriveSchema {
 
     for (int i = 0; i < messages.size(); i++) {
 
+      setCurrentMessage(i);
       Object message = messages.get(i);
       Optional<JSONObject> x = getPrimitiveSchema(message);
 
@@ -200,11 +229,11 @@ public class DeriveAvroSchema extends DeriveSchema {
         if (multipleMessages) {
           // Empty Object added to maintain correct index
           arr.add(new JSONObject());
-          logger.warn(String.format("Cannot find Strict schema for Message %d."
-              + "Hence, ignoring for multiple messages.%n %s %n", i, e));
+          logger.warn(String.format("Message %d: cannot find Strict schema. "
+              + "Hence, ignoring for multiple messages. %s %n", i, e.getMessage()));
         } else {
-          logger.error(e.toString());
-          throw new IllegalArgumentException(e);
+          logger.error(e.getMessage());
+          throw new IllegalArgumentException(e.getMessage());
         }
       }
 
@@ -235,8 +264,8 @@ public class DeriveAvroSchema extends DeriveSchema {
     int modeIndex = MergeAvroProtoBufUtils.getMode(schemaStrings);
     int freq = Collections.frequency(schemaStrings, schemaStrings.get(modeIndex));
     if (freq != schemaStrings.size()) {
-      logger.warn(String.format("All elements should be of same type for array '%s'. "
-          + "Choosing most frequent element for schema", name));
+      logger.warn(String.format("Message %d: All elements should be of same type for array '%s'. "
+          + "Choosing most frequent element for schema", currentMessage, name));
     }
     return schemaList.get(modeIndex);
 
@@ -262,9 +291,9 @@ public class DeriveAvroSchema extends DeriveSchema {
         Map<String, Object> secondMap = gson.fromJson(schemaStrings.get(0), mapType);
         String diff = Maps.difference(firstMap, secondMap).toString().substring(30);
 
-        String errorMessage = String.format("Array '%s' should have "
+        String errorMessage = String.format("Message %d: Array '%s' should have "
             + "all elements of the same type. Element %d is different from  Element %d. "
-            + "Difference is : %s", name, i, 0, diff);
+            + "Difference is : %s", currentMessage, name, i, 0, diff);
         logger.error(errorMessage);
         throw new IllegalArgumentException(errorMessage);
       }
@@ -471,12 +500,7 @@ public class DeriveAvroSchema extends DeriveSchema {
 
     for (String key : keySet) {
 
-      if (key.length() == 0) {
-        String errorMessage = "Name cannot be blank.";
-        logger.error(errorMessage);
-        throw new IllegalArgumentException(errorMessage);
-      }
-
+      checkName(key);
       Object field = message.get(key);
       Optional<JSONObject> primitiveSchema = getPrimitiveSchema(field);
 
@@ -519,6 +543,12 @@ public class DeriveAvroSchema extends DeriveSchema {
     return schema;
   }
 
+  private static void checkValidSchema(JSONObject schema) {
+    new AvroSchema(schema.toString());
+    if (schema.getJSONArray("fields").isEmpty()) {
+      throw new IllegalArgumentException("Ignoring Empty record passed.");
+    }
+  }
 
   /**
    * Get schema for multiple messages.
@@ -568,10 +598,8 @@ public class DeriveAvroSchema extends DeriveSchema {
     ArrayList<JSONObject> uniqueList = MergeJsonUtils.getUnique(schemaList);
 
     if (uniqueList.size() == 0) {
-      String errorMessage = "No strict schemas can be generated for the given messages"
-          + ". Please try using the lenient version to generate a schema.";
-      logger.error(errorMessage);
-      throw new IllegalArgumentException(errorMessage);
+      logger.error(errorMessageNoSchemasFound);
+      throw new IllegalArgumentException(errorMessageNoSchemasFound);
     }
 
     List<List<Integer>> schemaToMessagesInfo = MergeAvroProtoBufUtils.getUniqueWithMessageInfo(
@@ -585,15 +613,29 @@ public class DeriveAvroSchema extends DeriveSchema {
         uniqueList, uniqueList2, schemaToMessagesInfo);
 
     ArrayList<JSONObject> ans = new ArrayList<>();
-
     for (int i = 0; i < uniqueList2.size(); i++) {
       JSONObject schemaInfo = new JSONObject();
-      schemaInfo.put("schema", uniqueList2.get(i));
       List<Integer> messagesMatched = schemaToMessagesInfo.get(i);
+
+      try {
+        checkValidSchema(uniqueList2.get(i));
+      } catch (Exception e) {
+        String errorMessage = String.format("Messages %s: Unable to find schema. ", messagesMatched)
+            + e.getMessage();
+        logger.warn(errorMessage);
+        continue;
+      }
+
+      schemaInfo.put("schema", uniqueList2.get(i));
       Collections.sort(messagesMatched);
       schemaInfo.put("messagesMatched", messagesMatched);
       schemaInfo.put("numMessagesMatched", schemaToMessagesInfo.get(i).size());
       ans.add(schemaInfo);
+    }
+
+    if (ans.size() == 0) {
+      logger.error(errorMessageNoSchemasFound);
+      throw new IllegalArgumentException(errorMessageNoSchemasFound);
     }
 
     Comparator<JSONObject> comparator

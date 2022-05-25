@@ -17,18 +17,22 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MapAndArray;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeAvroProtoBufUtils;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils;
+import com.google.protobuf.InvalidProtocolBufferException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeAvroProtoBufUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MapAndArray;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Class with functionality to derive schema from messages for JSON.
@@ -37,6 +41,9 @@ public class DeriveProtobufSchema {
 
   private static final Logger logger = LoggerFactory.getLogger(DeriveProtobufSchema.class);
   final boolean strictCheck;
+
+  String errorMessageNoSchemasFound = "No strict schemas can be generated for the given messages. "
+      + "Please try using the lenient version to generate a schema.";
 
   static void checkFor2dArrays(boolean typeProtoBuf, JSONObject element) {
 
@@ -51,10 +58,15 @@ public class DeriveProtobufSchema {
 
     if (typeProtoBuf && element.has("type")
         && element.get("type").equals("google.protobuf.Any")) {
-      logger.error("Protobuf support doesn't array of null.");
       throw new IllegalArgumentException("Protobuf support doesn't array of null.");
     }
 
+  }
+
+  static void checkValidSchema(String message, ProtobufSchema schema)
+      throws InvalidProtocolBufferException {
+    String formattedString = new JSONObject(message).toString();
+    ProtobufSchemaUtils.toObject(formattedString, schema);
   }
 
   public DeriveProtobufSchema(boolean isStrict) {
@@ -121,8 +133,7 @@ public class DeriveProtobufSchema {
 
   }
 
-  ProtobufSchema getSchema(String message, String name)
-      throws JsonProcessingException {
+  ProtobufSchema getSchema(String message, String name) throws JsonProcessingException {
 
     JSONObject messageObject = new JSONObject(message);
     DeriveAvroSchema schemaGenerator = new DeriveAvroSchema(this.strictCheck, true);
@@ -207,10 +218,8 @@ public class DeriveProtobufSchema {
     ArrayList<JSONObject> uniqueList = MergeJsonUtils.getUnique(schemaList);
 
     if (uniqueList.size() == 0) {
-      String errorMessage = "No strict schemas can be generated for the given messages"
-          + ". Please try using the lenient version to generate a schema.";
-      logger.error(errorMessage);
-      throw new IllegalArgumentException(errorMessage);
+      logger.error(errorMessageNoSchemasFound);
+      throw new IllegalArgumentException(errorMessageNoSchemasFound);
     }
 
     List<List<Integer>> schemaToMessagesInfo = MergeAvroProtoBufUtils.getUniqueWithMessageInfo(
@@ -228,12 +237,27 @@ public class DeriveProtobufSchema {
 
     for (int i = 0; i < schemas.size(); i++) {
       JSONObject schemaInfo = new JSONObject();
-      schemaInfo.put("schema", getSchemaFromAvro(schemas.get(i).toString(), "Record"));
       List<Integer> messagesMatched = schemaToMessagesInfo2.get(i);
+
+      try {
+        ProtobufSchema schema = getSchemaFromAvro(schemas.get(i).toString(), "Record");
+        schemaInfo.put("schema", schema);
+        checkValidSchema(messages.get(messagesMatched.get(0)), schema);
+      } catch (Exception e) {
+        String errorMessage = String.format("Messages %s: Unable to find schema", messagesMatched)
+            + e.getMessage();
+        logger.warn(errorMessage);
+        continue;
+      }
       Collections.sort(messagesMatched);
       schemaInfo.put("messagesMatched", messagesMatched);
       schemaInfo.put("numMessagesMatched", messagesMatched.size());
       ans.add(schemaInfo);
+    }
+
+    if (ans.size() == 0) {
+      logger.error(errorMessageNoSchemasFound);
+      throw new IllegalArgumentException(errorMessageNoSchemasFound);
     }
 
     return ans;

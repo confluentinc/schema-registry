@@ -20,26 +20,21 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
+
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.serializers.*;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils;
-import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
-import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import org.apache.avro.generic.GenericRecord;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Test;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.*;
 
 public class DeriveAvroSchemaTest {
 
@@ -319,13 +314,11 @@ public class DeriveAvroSchemaTest {
     assertThrows(IllegalArgumentException.class,
         () -> strictAvroGenerator.getSchemaForRecord(messageObject11, "Record"));
 
-    // TODO: Empty message allowed or not?
-
-    //    String message1x = "{}";
-    //    JSONObject messageObject3x = new JSONObject(message1x);
-    //    JSONObject x= strictAvroGenerator.getSchemaForRecord(messageObject3x, "Record");
-    //    serializeAndDeserializeCheck(message1x, new AvroSchema(x.toString()));
-
+    // Empty Record not allowed in Avro, ignoring this message
+    String message1x = "{}";
+    List<String> messageObject3x = ReadFileUtils.readMessagesToString(message1x);
+    assertThrows(IllegalArgumentException.class,
+        () -> strictAvroGenerator.getSchemaForMultipleMessages(messageObject3x));
 
     /*
     Array with no name
@@ -341,16 +334,17 @@ public class DeriveAvroSchemaTest {
 
 
     /*
-    Record with no name
+    Record with naming errors
     */
     String message3 =
         "{\n"
-            + "\"J\": {\"\":12}\n"
+            + "\"J\": {\"\":12},\n"
+            + "\"097\": {\"L\":12}\n"
             + "  }";
 
-    JSONObject messageObject3 = new JSONObject(message3);
+    List<String> messages = ReadFileUtils.readMessagesToString(message3);
     assertThrows(IllegalArgumentException.class,
-        () -> strictAvroGenerator.getSchemaForRecord(messageObject3, "Record"));
+        () -> strictAvroGenerator.getSchemaForMultipleMessages(messages));
 
 
   }
@@ -731,5 +725,7 @@ public class DeriveAvroSchemaTest {
     serializeAndDeserializeCheckMulti(messages2, schemas5);
 
   }
+
+
 
 }

@@ -125,7 +125,7 @@ public class ReadFileUtils {
 
     checkEmpty(content);
 
-    logger.info(String.format("Reading String : (Substring 0-20) %s",
+    logger.info(String.format("Reading (Substring 0-20) %s",
         content.substring(0, min(20, content.length()))));
 
     List<Object> ans = new ArrayList<>();
@@ -147,8 +147,7 @@ public class ReadFileUtils {
     }
 
     try {
-      String fileContent = readFile(content);
-      ans.add(new JSONObject(fileContent));
+      ans.add(new JSONObject(content));
       logger.info("Read input as jsonObject.");
       return ans;
     } catch (JSONException ignored) {

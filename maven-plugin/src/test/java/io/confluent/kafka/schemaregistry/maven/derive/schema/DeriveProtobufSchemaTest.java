@@ -106,6 +106,12 @@ public class DeriveProtobufSchemaTest {
   @Test
   public void testPrimitiveTypes() throws IOException {
 
+    // TODO: Empty Record allowed or not?
+    String message1x = "{}";
+    List<String> messageObject3x = ReadFileUtils.readMessagesToString(message1x);
+    List<JSONObject> x = strictGenerator.getSchemaForMultipleMessages(messageObject3x);
+    serializeAndDeserializeCheckMulti(messageObject3x, x);
+
     String message =
         "{\n"
             + "    \"String\": \"John Smith\",\n"
@@ -144,6 +150,7 @@ public class DeriveProtobufSchemaTest {
     assertEquals(5.3443343443453E10, resultRecord.getField(fd));
 
     fd = desc.findFieldByName("Null");
+    System.out.println(fd);
     assert (resultRecord.getField(fd).toString().equals(""));
 
     String expectedSchema = "syntax = \"proto3\";\n" +
@@ -420,6 +427,7 @@ public class DeriveProtobufSchemaTest {
         "    int32 Int3 = 3;\n" +
         "  }\n" +
         "}\n";
+    System.out.println(expectedSchema2);
     assertEquals(expectedSchema2, protobufSchema2.toString());
 
 
@@ -714,7 +722,7 @@ public class DeriveProtobufSchemaTest {
 
 
   @Test
-  public void testMultipleMessagesErrors() throws JsonProcessingException {
+  public void testMultipleMessagesErrors() throws IOException {
 
     /*
     Strict schema cannot be found for message1 because of field Arr having multiple data types
@@ -729,6 +737,15 @@ public class DeriveProtobufSchemaTest {
     arr.add(message1);
 
     assertThrows(IllegalArgumentException.class, () -> strictGenerator.getSchemaForMultipleMessages(arr));
+
+    /*
+    Record with naming errors
+    */
+    String message3 =
+        "[{\"\": {\"K\":12}},{\"M\": {\"J\":[null, null]}}, {\"K.L\":[1, 2]}]";
+
+    List<String> messages = ReadFileUtils.readMessagesToString(message3);
+    assertThrows(IllegalArgumentException.class, () -> strictGenerator.getSchemaForMultipleMessages(messages));
 
   }
 
