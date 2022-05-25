@@ -111,7 +111,7 @@ public class SchemasResource {
 
   @GET
   @Path("/ids/{id}")
-  @DocumentedName("getId")
+  @DocumentedName("getSchemasById")
   @Operation(summary = "Get schema string by ID",
       description = "Retrieves the schema string identified by the input ID.",
       responses = {

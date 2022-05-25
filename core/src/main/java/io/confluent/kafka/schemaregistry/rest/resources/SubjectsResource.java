@@ -75,7 +75,7 @@ public class SubjectsResource {
   }
 
   @POST
-  @DocumentedName("lookUpSubjectVersion")
+  @DocumentedName("lookUpSchemaUnderSubject")
   @Path("/{subject}")
   @Operation(summary = "Lookup schema under subject",
       description = "Check if a schema has already been registered under the specified subject."

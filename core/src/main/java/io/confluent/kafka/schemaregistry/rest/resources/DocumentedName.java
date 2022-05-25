@@ -17,8 +17,11 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.Inherited;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 
 @Inherited
+@Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface DocumentedName {
   String value();

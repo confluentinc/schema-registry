@@ -94,7 +94,7 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}")
-  @DocumentedName("getVersion")
+  @DocumentedName("getSchemaByVersion")
   @PerformanceMetric("subjects.versions.get-schema")
   @Operation(summary = "Get schema by version",
       description = "Retrieves a specific version of the schema registered under this subject.",
