@@ -62,10 +62,9 @@ public class ServerMetadataResource {
 
   @GET
   @Path("/version")
-  @Operation(summary = "Get Schema Registry server version", responses = {
-      @ApiResponse(responseCode = "500",
-              description = "Error code 50001 -- Error in the backend data store\n")
-  })
+  @ApiOperation("Get Schema Registry server version")
+  @ApiResponses(value = {
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
   public SchemaRegistryServerVersion getSchemaRegistryVersion() {
     return new SchemaRegistryServerVersion(AppInfoParser.getVersion(), AppInfoParser.getCommitId());
   }
