@@ -165,7 +165,7 @@ public class ModeResource {
   }
 
   @PUT
-  @DocumentedName("updateMode")
+  @DocumentedName("updateGlobalMode")
   @Operation(summary = "Update global mode",
       description = "Update global mode. "
         + "On success, echoes the original request back to the client.",
@@ -189,7 +189,7 @@ public class ModeResource {
   }
 
   @GET
-  @DocumentedName("getMode")
+  @DocumentedName("getGlobalMode")
   @Operation(summary = "Get global mode",
       description = "Retrieves global mode.",
       responses = {
