@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -143,6 +144,9 @@ public class RestService implements Configurable {
   private static final TypeReference<ServerClusterId> GET_CLUSTER_ID_RESPONSE_TYPE =
       new TypeReference<ServerClusterId>() {
       };
+  private static final TypeReference<SchemaRegistryServerVersion> GET_SR_VERSION_RESPONSE_TYPE =
+          new TypeReference<SchemaRegistryServerVersion>() {
+          };
 
   private static final int HTTP_CONNECT_TIMEOUT_MS = 60000;
   private static final int HTTP_READ_TIMEOUT_MS = 60000;
@@ -1169,6 +1173,12 @@ public class RestService implements Configurable {
       throws IOException, RestClientException {
     return httpRequest("/v1/metadata/id", "GET", null,
                         requestProperties, GET_CLUSTER_ID_RESPONSE_TYPE);
+  }
+
+  public SchemaRegistryServerVersion getSchemaRegistryServerVersion()
+          throws IOException, RestClientException {
+    return httpRequest("/v1/metadata/version", "GET", null,
+            DEFAULT_REQUEST_PROPERTIES, GET_SR_VERSION_RESPONSE_TYPE);
   }
 
   private static List<String> parseBaseUrl(String baseUrl) {
