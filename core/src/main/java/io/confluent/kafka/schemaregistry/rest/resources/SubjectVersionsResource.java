@@ -94,6 +94,7 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}")
+  @DocumentedName("getSchemaByVersion")
   @PerformanceMetric("subjects.versions.get-schema")
   @Operation(summary = "Get schema by version",
       description = "Retrieves a specific version of the schema registered under this subject.",
@@ -158,6 +159,7 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}/schema")
+  @DocumentedName("getVersionSchemaOnly")
   @PerformanceMetric("subjects.versions.get-schema.only")
   @Operation(summary = "Get schema string by version",
       description = "Retrieves the schema for the specified version of this subject. "
@@ -183,6 +185,7 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}/referencedby")
+  @DocumentedName("getReferencedBy")
   @Operation(summary = "List schemas referencing a schema",
       description = "Retrieves the IDs of schemas that reference the specified schema.",
       responses = {
@@ -230,6 +233,7 @@ public class SubjectVersionsResource {
   }
 
   @GET
+  @DocumentedName("getAllVersions")
   @PerformanceMetric("subjects.versions.list")
   @Operation(summary = "List versions under subject",
       description = "Retrieves a list of versions registered under the specified subject.",
@@ -283,6 +287,7 @@ public class SubjectVersionsResource {
   }
 
   @POST
+  @DocumentedName("registerSchema")
   @PerformanceMetric("subjects.versions.register")
   @Operation(summary = "Register schema under a subject",
       description = "Register a new schema under the specified subject. If successfully "
@@ -378,6 +383,7 @@ public class SubjectVersionsResource {
 
   @DELETE
   @Path("/{version}")
+  @DocumentedName("deleteSchemaVersion")
   @PerformanceMetric("subjects.versions.deleteSchemaVersion-schema")
   @Operation(summary = "Delete schema version",
       description = "Deletes a specific version of the schema registered under this subject. "

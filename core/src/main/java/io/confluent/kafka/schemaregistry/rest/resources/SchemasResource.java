@@ -61,6 +61,7 @@ public class SchemasResource {
   }
 
   @GET
+  @DocumentedName("getSchemas")
   @Operation(summary = "List schemas",
       description = "Get the schemas matching the specified parameters.",
       responses = {
@@ -110,6 +111,7 @@ public class SchemasResource {
 
   @GET
   @Path("/ids/{id}")
+  @DocumentedName("getSchemasById")
   @Operation(summary = "Get schema string by ID",
       description = "Retrieves the schema string identified by the input ID.",
       responses = {
@@ -149,6 +151,7 @@ public class SchemasResource {
 
   @GET
   @Path("/ids/{id}/subjects")
+  @DocumentedName("getAllSubjectsById")
   @Operation(summary = "List subjects associated to schema ID",
       description = "Retrieves all the subjects associated with a particular schema ID.",
       responses = {
@@ -189,6 +192,7 @@ public class SchemasResource {
 
   @GET
   @Path("/ids/{id}/versions")
+  @DocumentedName("getAllVersionsById")
   @Operation(summary = "List subject-versions associated to schema ID",
       description = "Get all the subject-version pairs associated with the input ID.",
       responses = {
@@ -231,6 +235,7 @@ public class SchemasResource {
 
   @GET
   @Path("/types")
+  @DocumentedName("getSchemaTypes")
   @Operation(summary = "List supported schema types",
       description = "Retrieve the schema types supported by this registry.",
       responses = {
