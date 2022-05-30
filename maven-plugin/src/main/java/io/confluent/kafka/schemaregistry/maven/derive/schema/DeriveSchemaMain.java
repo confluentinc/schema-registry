@@ -30,6 +30,17 @@ import java.util.List;
  */
 public class DeriveSchemaMain {
 
+  /**
+   * Derive schema for multiple messages based on schema type and strict flag
+   * Calls 'getSchemaForMultipleMessages' for the schema type.
+   *
+   * @param schemaType  One of Avro, Json or ProtoBuf
+   * @param strictCheck flag to specify strict check
+   * @param messages    List of messages, each message is a JSONObject
+   * @return List of JSONObjects, each object gives information of schema,
+   *          and which messages it matches
+   * @throws JsonProcessingException thrown if message not in JSON format
+   */
   public static List<JSONObject> caseWiseOutput(String schemaType,
                                                 boolean strictCheck,
                                                 ArrayList<String> messages)

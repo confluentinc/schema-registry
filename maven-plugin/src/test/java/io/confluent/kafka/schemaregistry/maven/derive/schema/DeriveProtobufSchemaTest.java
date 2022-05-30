@@ -74,13 +74,13 @@ public class DeriveProtobufSchemaTest {
   private void serializeAndDeserializeCheck(String message, ProtobufSchema schema)
       throws IOException {
 
+    schema.validate();
     String formattedString = new JSONObject(message).toString();
     Object test = ProtobufSchemaUtils.toObject(formattedString, schema);
     DynamicMessage dynamicMessage = (DynamicMessage) test;
 
     byte[] bytes = protobufSerializer.serialize(topic, dynamicMessage);
     assertEquals(test.toString(), protobufDeserializer.deserialize(topic, bytes).toString());
-
 
     /*
     Also note that if a scalar message field is set to its default, the value will not be serialized on the wire.
@@ -706,14 +706,14 @@ public class DeriveProtobufSchemaTest {
     List<JSONObject> schemas4 = lenientGenerator.getSchemaForMultipleMessages(arr2);
     assert (schemas4.size() == 1);
 
-    String schemas4Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage MainMessage {\\n  string Float = 1;\\n  int32 Num = 2;\\n  string String = 3;\\n}\\n\"}";
+    String schemas4Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  string Float = 1;\\n  int32 Num = 2;\\n  string String = 3;\\n}\\n\"}";
     assertEquals(schemas4Expected1, schemas4.get(0).toString());
 
   }
 
 
   @Test
-  public void testMultipleMessagesErrors() throws IOException {
+  public void testMultipleMessagesErrors() {
 
     /*
     Strict schema cannot be found for message1 because of field Arr having multiple data types
@@ -736,7 +736,8 @@ public class DeriveProtobufSchemaTest {
         "[{\"\": {\"K\":12}},{\"M\": {\"J\":[null, null]}}, {\"K.L\":[1, 2]}]";
 
     List<String> messages = ReadFileUtils.readMessagesToString(message3);
-    assertThrows(IllegalArgumentException.class, () -> strictGenerator.getSchemaForMultipleMessages(messages));
+    assertThrows(IllegalArgumentException.class, () ->
+        strictGenerator.getSchemaForMultipleMessages(messages));
 
   }
 
@@ -761,7 +762,7 @@ public class DeriveProtobufSchemaTest {
     List<JSONObject> schemas1 = lenientGenerator.getSchemaForMultipleMessages(messages);
     assert (schemas1.size() == 1);
 
-    String schemas1Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage MainMessage {\\n  JMessage J = 1;\\n\\n  message JMessage {\\n    int32 A = 1;\\n    bool B = 2;\\n    int32 C = 3;\\n    double K = 4;\\n  }\\n}\\n\"}";
+    String schemas1Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  JMessage J = 1;\\n\\n  message JMessage {\\n    int32 A = 1;\\n    bool B = 2;\\n    int32 C = 3;\\n    double K = 4;\\n  }\\n}\\n\"}";
     assertEquals(schemas1Expected1, schemas1.get(0).toString());
 
     /*
@@ -774,7 +775,7 @@ public class DeriveProtobufSchemaTest {
     List<JSONObject> schemas2 = lenientGenerator.getSchemaForMultipleMessages(messages);
     assert (schemas2.size() == 1);
 
-    String schemas2Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage MainMessage {\\n  JMessage J = 1;\\n\\n  message JMessage {\\n    int32 A = 1;\\n    bool B = 2;\\n    int32 C = 3;\\n    double K = 4;\\n  }\\n}\\n\"}";
+    String schemas2Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  JMessage J = 1;\\n\\n  message JMessage {\\n    int32 A = 1;\\n    bool B = 2;\\n    int32 C = 3;\\n    double K = 4;\\n  }\\n}\\n\"}";
     assertEquals(schemas2Expected1, schemas2.get(0).toString());
 
   }

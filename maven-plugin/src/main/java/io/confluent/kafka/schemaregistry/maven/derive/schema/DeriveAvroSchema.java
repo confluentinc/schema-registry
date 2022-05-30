@@ -548,10 +548,32 @@ public class DeriveAvroSchema extends DeriveSchema {
   }
 
   private static void checkValidSchema(JSONObject schema) {
-    new AvroSchema(schema.toString());
+    AvroSchema avroschema = new AvroSchema(schema.toString());
+    avroschema.validate();
     if (schema.getJSONArray("fields").isEmpty()) {
       throw new IllegalArgumentException("Ignoring Empty record passed.");
     }
+  }
+
+  private List<JSONObject> getSchemaForMultipleMessagesLenient(ArrayList<Object> messageObjects)
+      throws JsonProcessingException {
+
+    JSONObject schema = getSchemaForArray(messageObjects, "Record",
+        false, true);
+    JSONObject finalSchema = schema.getJSONObject("items");
+
+    try {
+      checkValidSchema(finalSchema);
+    } catch (Exception e) {
+      String errorMessage = "Unable to find schema. " + e.getMessage();
+      logger.warn(errorMessage);
+      throw e;
+    }
+
+    JSONObject schemaInfo = new JSONObject();
+    schemaInfo.put("schema", finalSchema);
+    return Collections.singletonList(schemaInfo);
+
   }
 
   /**
@@ -582,12 +604,7 @@ public class DeriveAvroSchema extends DeriveSchema {
     */
 
     if (!strictCheck) {
-      JSONObject schema = getSchemaForArray(messageObjects, "Record", false, true);
-      JSONObject finalSchema = schema.getJSONObject("items");
-
-      JSONObject schemaInfo = new JSONObject();
-      schemaInfo.put("schema", finalSchema);
-      return Collections.singletonList(schemaInfo);
+      return getSchemaForMultipleMessagesLenient(messageObjects);
     }
 
     /*

@@ -16,22 +16,22 @@
 
 package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
 
-import org.json.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static java.lang.Math.min;
 
-import java.io.IOException;
 import java.io.File;
-
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-import static java.lang.Math.min;
+import org.json.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 /**
  * Utility class to Read Files and generate messages in required format.
@@ -111,10 +111,6 @@ public class ReadFileUtils {
   private static List<Object> readCustom(String content) {
 
     checkEmpty(content);
-
-    logger.info(String.format("Reading (Substring 0-20) %s",
-        content.substring(0, min(20, content.length()))));
-
     List<Object> ans = new ArrayList<>();
 
     try {
@@ -152,12 +148,16 @@ public class ReadFileUtils {
 
 
   /**
-   * Reads contents from file using readMessages and converts JSONObjects to String.
+   * Reads string according to 3 formats, generating JSONObject for each message
+   * and each message is converted to string and returned as a list.
    *
-   * @param content Name of the file to read
-   * @return List of Strings, each message JSONObject is converted to String
+   * @param content string with messages
+   * @return List of messages
    */
   public static List<String> readMessagesToString(String content) {
+
+    logger.info(String.format("Reading input, Substring 0-20 is :%n  %s",
+        content.substring(0, min(20, content.length()))));
 
     List<Object> listOfMessages = readCustom(content);
     List<String> listOfStrings = new ArrayList<>();
@@ -167,13 +167,22 @@ public class ReadFileUtils {
     return listOfStrings;
   }
 
+  /**
+   * Reads file contents and generates string. The string is converted to list of messages.
+   *
+   * @param file input file to read
+   * @return List of messages
+   * @throws IOException thrown if unable to read ipnut file
+   */
   public static List<String> readMessagesToString(File file) throws IOException {
+
     if (file == null) {
       throw new NullPointerException("Input file not set.");
     }
+    logger.info(String.format("Reading input file %s", file.getName()));
     String fileContent = readFile(file.getAbsolutePath());
     return readMessagesToString(fileContent);
-  }
 
+  }
 
 }

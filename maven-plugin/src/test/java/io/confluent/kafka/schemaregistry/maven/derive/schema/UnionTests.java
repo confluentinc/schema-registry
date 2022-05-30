@@ -162,7 +162,7 @@ public class UnionTests {
 
     */
 
-    File file = new File("src/test/resources/Avro/UnionTestData/recursiveTest.json");
+    File file = new File("src/test/resources/Avro/UnionTestData/recursiveUnionsTest.json");
     List<String> messages = ReadFileUtils.readMessagesToString(file);
     List<JSONObject> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
     serializeAndDeserializeCheckMulti(messages, schemas);
@@ -249,7 +249,7 @@ public class UnionTests {
   @Test
   public void TestingReadFolder() throws IOException {
 
-    File file = new File("src/test/resources/Avro/UnionTestData/arrayOfUnions.txt");
+    File file = new File("src/test/resources/Avro/UnionTestData/arrayOfUnionsTest.txt");
     List<String> messages = ReadFileUtils.readMessagesToString(file);
     List<JSONObject> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
     serializeAndDeserializeCheckMulti(messages, schemas);

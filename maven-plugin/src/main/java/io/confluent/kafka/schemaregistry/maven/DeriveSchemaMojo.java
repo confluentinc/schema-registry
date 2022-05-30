@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils.readMessagesToString;
+
 import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaMain;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -33,7 +35,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils.readMessagesToString;
 
 @Mojo(name = "derive-schema", configurator = "custom-basic")
 public class DeriveSchemaMojo extends AbstractMojo {
@@ -50,6 +51,10 @@ public class DeriveSchemaMojo extends AbstractMojo {
   @Parameter(defaultValue = "true")
   boolean strictCheck;
 
+  private boolean checkTypeForOutput() {
+    return !this.strictCheck || schemaType.toLowerCase().equals("json");
+  }
+
   @Override
   public void execute() throws MojoExecutionException, MojoFailureException {
 
@@ -64,20 +69,24 @@ public class DeriveSchemaMojo extends AbstractMojo {
       List<JSONObject> ans = DeriveSchemaMain.caseWiseOutput(schemaType, strictCheck,
           listOfMessages);
 
+      JSONObject outputObject = new JSONObject();
+      if (checkTypeForOutput()) {
+        outputObject = ans.get(0);
+      } else {
+        outputObject.put("schemas", ans);
+      }
+
       if (outputPath == null) {
-        for (JSONObject schema : ans) {
-          System.out.println(schema.toString(2));
-        }
+        System.out.println(outputObject.toString(2));
       } else {
 
         try {
           FileOutputStream fileStream = new FileOutputStream(outputPath.getPath());
           OutputStreamWriter writer = new OutputStreamWriter(fileStream,
               StandardCharsets.UTF_8);
-          for (JSONObject schema : ans) {
-            writer.write(schema.toString(2));
-          }
+          writer.write(outputObject.toString(2));
           writer.close();
+          getLog().info(String.format("Output written to file : %s", outputPath.getPath()));
         } catch (IOException e) {
           getLog().error(e.getMessage());
           throw new MojoExecutionException(e.getMessage());

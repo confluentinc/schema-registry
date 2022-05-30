@@ -65,6 +65,7 @@ public class DeriveProtobufSchema {
 
   static void checkValidSchema(String message, ProtobufSchema schema)
       throws InvalidProtocolBufferException {
+    schema.validate();
     String formattedString = new JSONObject(message).toString();
     ProtobufSchemaUtils.toObject(formattedString, schema);
   }
@@ -197,13 +198,23 @@ public class DeriveProtobufSchema {
     */
 
     if (!strictCheck) {
-      JSONObject schema = schemaGenerator.getSchemaForArray(messageObjects, "MainMessage");
+
+      JSONObject schema = schemaGenerator.getSchemaForArray(messageObjects, "Record");
       JSONObject finalSchema = schema.getJSONObject("items");
-      ProtobufSchema protobufSchema = schemaStringToProto(
-          avroSchemaToProtobufSchema(finalSchema, 1, "MainMessage"));
-      JSONObject schemaInfo = new JSONObject();
-      schemaInfo.put("schema", protobufSchema);
-      return Collections.singletonList(schemaInfo);
+
+      try {
+        ProtobufSchema protobufSchema = schemaStringToProto(
+            avroSchemaToProtobufSchema(finalSchema, 1, "Record"));
+        protobufSchema.validate();
+        JSONObject schemaInfo = new JSONObject();
+        schemaInfo.put("schema", protobufSchema);
+        return Collections.singletonList(schemaInfo);
+      } catch (Exception e) {
+        String errorMessage = "Unable to find schema. " + e.getMessage();
+        logger.warn(errorMessage);
+        throw e;
+      }
+
     }
 
     /*
@@ -244,9 +255,10 @@ public class DeriveProtobufSchema {
         schemaInfo.put("schema", schema);
         checkValidSchema(messages.get(messagesMatched.get(0)), schema);
       } catch (Exception e) {
-        String errorMessage = String.format("Messages %s: Unable to find schema", messagesMatched)
+        String errorMessage = String.format("Messages %s: Unable to find schema. ", messagesMatched)
             + e.getMessage();
         logger.warn(errorMessage);
+        System.out.println(errorMessage);
         continue;
       }
       Collections.sort(messagesMatched);

@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.maven;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
@@ -100,7 +101,11 @@ public class DeriveSchemaMojoTest extends SchemaRegistryTest {
     String expectedSchema = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Double\",\"type\":\"double\"},{\"name\":\"Float\",\"type\":\"double\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"LongName\",\"type\":\"long\"},{\"name\":\"Null\",\"type\":\"null\"},{\"name\":\"String\",\"type\":\"string\"}]}";
     String schema = ReadFileUtils.readFile(this.tempDirectory + "/ans.json");
     JSONObject schemaInfo = new JSONObject(schema);
-    assertEquals(expectedSchema, schemaInfo.getJSONObject("schema").toString());
+    assert(schemaInfo.has("schemas"));
+    assert(schemaInfo.get("schemas") instanceof JSONArray);
+    assertEquals(schemaInfo.getJSONArray("schemas").length(), 1);
+    JSONObject outputSchema = schemaInfo.getJSONArray("schemas").getJSONObject(0).getJSONObject("schema");
+    assertEquals(expectedSchema, outputSchema.toString());
   }
 
   @Test
@@ -121,13 +126,13 @@ public class DeriveSchemaMojoTest extends SchemaRegistryTest {
     mojo.schemaType = "protobuf";
     mojo.messagePath = new File(this.tempDirectory + "/protoMessage.json");
     mojo.outputPath = new File(this.tempDirectory + "/ans.json");
-    mojo.strictCheck = false;
+    mojo.strictCheck = true;
     mojo.execute();
     String expectedSchema = "syntax = \"proto3\";\n" +
         "\n" +
         "import \"google/protobuf/any.proto\";\n" +
         "\n" +
-        "message MainMessage {\n" +
+        "message Record {\n" +
         "  bool Booleans = 1;\n" +
         "  double Double = 2;\n" +
         "  double Float = 3;\n" +
@@ -138,7 +143,11 @@ public class DeriveSchemaMojoTest extends SchemaRegistryTest {
         "}\n";
     String schema = ReadFileUtils.readFile(this.tempDirectory + "/ans.json");
     JSONObject schemaInfo = new JSONObject(schema);
-    assertEquals(expectedSchema, schemaInfo.getString("schema"));
+    assert(schemaInfo.has("schemas"));
+    assert(schemaInfo.get("schemas") instanceof JSONArray);
+    assertEquals(schemaInfo.getJSONArray("schemas").length(), 1);
+    String outputSchema = schemaInfo.getJSONArray("schemas").getJSONObject(0).getString("schema");
+    assertEquals(expectedSchema, outputSchema);
   }
 
   @Test
