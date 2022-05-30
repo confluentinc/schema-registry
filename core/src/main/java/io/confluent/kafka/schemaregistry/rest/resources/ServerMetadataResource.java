@@ -16,8 +16,10 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -56,5 +58,14 @@ public class ServerMetadataResource {
     String kafkaClusterId = schemaRegistry.getKafkaClusterId();
     String schemaRegistryClusterId = schemaRegistry.getGroupId();
     return ServerClusterId.of(kafkaClusterId, schemaRegistryClusterId);
+  }
+
+  @GET
+  @Path("/version")
+  @ApiOperation("Get Schema Registry server version")
+  @ApiResponses(value = {
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  public SchemaRegistryServerVersion getSchemaRegistryVersion() {
+    return new SchemaRegistryServerVersion(AppInfoParser.getVersion(), AppInfoParser.getCommitId());
   }
 }
