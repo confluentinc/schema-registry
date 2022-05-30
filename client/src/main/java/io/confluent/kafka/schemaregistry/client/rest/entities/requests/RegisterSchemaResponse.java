@@ -22,11 +22,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.io.IOException;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@io.swagger.v3.oas.annotations.media.Schema(description = "Schema register response")
 public class RegisterSchemaResponse {
 
   private int id;
@@ -35,6 +38,7 @@ public class RegisterSchemaResponse {
     return JacksonMapper.INSTANCE.readValue(json, RegisterSchemaResponse.class);
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.ID_DESC)
   @JsonProperty("id")
   public int getId() {
     return id;

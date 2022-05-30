@@ -20,18 +20,17 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import io.swagger.annotations.ApiModelProperty;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@io.swagger.v3.oas.annotations.media.Schema(description = "Schema definition")
 public class SchemaString {
 
   private String schemaType = AvroSchema.TYPE;
@@ -51,7 +50,7 @@ public class SchemaString {
     return JacksonMapper.INSTANCE.readValue(json, SchemaString.class);
   }
 
-  @ApiModelProperty(value = "Schema type")
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC)
   @JsonProperty("schemaType")
   @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
@@ -63,7 +62,7 @@ public class SchemaString {
     this.schemaType = schemaType;
   }
 
-  @ApiModelProperty(value = "Schema string identified by the ID")
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Schema string identified by the ID")
   @JsonProperty("schema")
   public String getSchemaString() {
     return schemaString;
@@ -74,7 +73,7 @@ public class SchemaString {
     this.schemaString = schemaString;
   }
 
-  @ApiModelProperty(value = "Schema references")
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.REFERENCES_DESC)
   @JsonProperty("references")
   public List<SchemaReference> getReferences() {
     return this.references;
@@ -85,7 +84,7 @@ public class SchemaString {
     this.references = references;
   }
 
-  @ApiModelProperty(value = "Maximum ID")
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Maximum ID")
   @JsonProperty("maxId")
   public Integer getMaxId() {
     return maxId;

@@ -1,16 +1,17 @@
 /*
- * Copyright 2019 Confluent Inc.
+ * Copyright 2021 Confluent Inc.
  *
- * Licensed under the Confluent Community License (the "License"); you may not use
- * this file except in compliance with the License.  You may obtain a copy of the
- * License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * http://www.confluent.io/confluent-community-license
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
@@ -19,11 +20,13 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = "Schema reference")
 public class SchemaReference implements Comparable<SchemaReference> {
 
   private String name;
@@ -39,6 +42,7 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.version = version;
   }
 
+  @Schema(description = "Reference name")
   @JsonProperty("name")
   public String getName() {
     return name;
@@ -49,6 +53,7 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.name = name;
   }
 
+  @Schema(description = "Name of the referenced subject")
   @JsonProperty("subject")
   public String getSubject() {
     return subject;
@@ -59,6 +64,7 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.subject = subject;
   }
 
+  @Schema(description = "Version number of the referenced subject")
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
