@@ -165,7 +165,7 @@ public class ConfigResource {
   }
 
   @PUT
-  @DocumentedName("updateConfig")
+  @DocumentedName("updateGlobalConfig")
   @Operation(summary = "Update global compatibility level",
       description = "Updates the global compatibility level. "
       + "On success, echoes the original request back to the client.", responses = {
@@ -204,7 +204,7 @@ public class ConfigResource {
   }
 
   @GET
-  @DocumentedName("getConfig")
+  @DocumentedName("getGlobalConfig")
   @Operation(summary = "Get global compatibility level.", responses = {
       @ApiResponse(responseCode = "200", description = "The global compatibility level",
           content = @Content(schema = @Schema(implementation = Config.class))),
@@ -223,7 +223,7 @@ public class ConfigResource {
   }
 
   @DELETE
-  @DocumentedName("deleteConfig")
+  @DocumentedName("deleteGlobalConfig")
   @Operation(summary = "Deletes the Global-level compatibility level config and "
       + "revert to the global default.", responses = {
         @ApiResponse(content = @Content(
