@@ -310,4 +310,34 @@ public class RestApiModeTest extends ClusterTestHarness {
         SCHEMA_WITH_DECIMAL2,
         restApp.restClient.getVersion(subject, 2).getSchema());
   }
+
+  @Test
+  public void testImportModeWithSameSchemaDifferentId() throws Exception {
+    String subject = "testSubject";
+    String mode = "IMPORT";
+
+    // set mode to import
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    int expectedIdSchema1 = 100;
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
+
+    assertEquals("Getting schema by id should succeed",
+        SCHEMA_WITH_DECIMAL,
+        restApp.restClient.getVersion(subject, 1).getSchema());
+
+    // register equivalent schema with different id
+    expectedIdSchema1 = 200;
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 2, expectedIdSchema1));
+
+    assertEquals("Getting schema by id should succeed",
+        SCHEMA_WITH_DECIMAL,
+        restApp.restClient.getVersion(subject, 2).getSchema());
+  }
 }
