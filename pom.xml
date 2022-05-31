@@ -193,7 +193,7 @@
             <dependency>
                 <groupId>com.github.erosb</groupId>
                 <artifactId>everit-json-schema</artifactId>
-                <version>1.14.1</version>
+                <version>${json-schema.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.kjetland</groupId>
