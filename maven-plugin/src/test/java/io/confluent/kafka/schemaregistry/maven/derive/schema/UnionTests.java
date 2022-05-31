@@ -87,7 +87,8 @@ public class UnionTests {
     }
 
     JsonElement jsonElement1 = JsonParser.parseString(message);
-    JsonElement jsonElement2 = JsonParser.parseString(bs.toString());
+    JsonElement jsonElement2 = JsonParser.parseString(bs.toString(utf8));
+
     assertEquals(jsonElement1, jsonElement2);
 
   }

@@ -1,0 +1,33 @@
+{"schema": {
+  "type": "object",
+  "properties": {
+    "gender": {"oneOf": [
+      {"type": "string"},
+      {"type": "null"}
+    ]},
+    "last_name": {"oneOf": [
+      {"type": "string"},
+      {"type": "null"}
+    ]},
+    "ip_address2": {"oneOf": [
+      {"type": "null"},
+      {"type": "string"}
+    ]},
+    "id": {"oneOf": [
+      {"type": "number"},
+      {"type": "null"}
+    ]},
+    "ip_address": {"oneOf": [
+      {"type": "null"},
+      {"type": "string"}
+    ]},
+    "first_name": {"oneOf": [
+      {"type": "string"},
+      {"type": "null"}
+    ]},
+    "email": {"oneOf": [
+      {"type": "null"},
+      {"type": "string"}
+    ]}
+  }
+}}

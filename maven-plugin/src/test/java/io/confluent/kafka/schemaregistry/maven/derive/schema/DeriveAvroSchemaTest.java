@@ -84,7 +84,7 @@ public class DeriveAvroSchemaTest {
     }
 
     JsonElement jsonElement1 = JsonParser.parseString(formattedString);
-    JsonElement jsonElement2 = JsonParser.parseString(bs.toString());
+    JsonElement jsonElement2 = JsonParser.parseString(bs.toString(utf8));
     assertEquals(jsonElement1, jsonElement2);
 
   }
