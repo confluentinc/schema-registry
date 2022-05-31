@@ -33,7 +33,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
-import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
@@ -449,10 +448,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       // see if the schema to be registered already exists
       SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
-      if (schemaIdAndSubjects != null) {
-        if (schemaId >= 0 && schemaId != schemaIdAndSubjects.getSchemaId()) {
-          throw new IdDoesNotMatchException(schemaIdAndSubjects.getSchemaId(), schema.getId());
-        }
+      if (schemaIdAndSubjects != null
+          && (schemaId < 0 || schemaId == schemaIdAndSubjects.getSchemaId())) {
         if (schemaIdAndSubjects.hasSubject(subject)
             && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
           // return only if the schema was previously registered under the input subject
@@ -592,13 +589,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throws SchemaRegistryException {
     Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
     if (existingSchema != null) {
-      if (schema.getId() != null
-          && schema.getId() >= 0
-          && !schema.getId().equals(existingSchema.getId())
+      if (schema.getId() == null
+          || schema.getId() < 0
+          || schema.getId().equals(existingSchema.getId())
       ) {
-        throw new IdDoesNotMatchException(existingSchema.getId(), schema.getId());
+        return existingSchema.getId();
       }
-      return existingSchema.getId();
     }
 
     kafkaStore.lockFor(subject).lock();
