@@ -15,6 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import static io.confluent.kafka.schemaregistry.storage.Metadata.EMPTY_METADATA;
+import static io.confluent.kafka.schemaregistry.storage.RuleSet.EMPTY_RULESET;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -43,6 +46,8 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   private String schema;
   private String schemaType = AvroSchema.TYPE;
   private List<SchemaReference> references = Collections.emptyList();
+  private Metadata metadata = EMPTY_METADATA;
+  private RuleSet ruleSet = EMPTY_RULESET;
   @NotEmpty
   private boolean deleted;
 
@@ -59,7 +64,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     this.deleted = deleted;
   }
 
-  @JsonCreator
+  @VisibleForTesting
   public SchemaValue(@JsonProperty("subject") String subject,
                      @JsonProperty("version") Integer version,
                      @JsonProperty("id") Integer id,
@@ -76,6 +81,27 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     this.deleted = deleted;
   }
 
+  @JsonCreator
+  public SchemaValue(@JsonProperty("subject") String subject,
+                     @JsonProperty("version") Integer version,
+                     @JsonProperty("id") Integer id,
+                     @JsonProperty("schemaType") String schemaType,
+                     @JsonProperty("references") List<SchemaReference> references,
+                     @JsonProperty("metadata") Metadata metadata,
+                     @JsonProperty("ruleSet") RuleSet ruleSet,
+                     @JsonProperty("schema") String schema,
+                     @JsonProperty("deleted") boolean deleted) {
+    super(subject);
+    this.version = version;
+    this.id = id;
+    this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
+    this.references = references != null ? references : Collections.emptyList();
+    this.metadata = metadata != null ? metadata : EMPTY_METADATA;
+    this.ruleSet = ruleSet != null ? ruleSet : EMPTY_RULESET;
+    this.schema = schema;
+    this.deleted = deleted;
+  }
+
   public SchemaValue(Schema schemaEntity) {
     super(schemaEntity.getSubject());
     this.version = schemaEntity.getVersion();
@@ -84,8 +110,22 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
         = schemaEntity.getReferences();
     this.references = refs == null ? null : refs.stream()
-        .map(ref -> new SchemaReference(ref.getName(), ref.getSubject(), ref.getVersion()))
+        .map(SchemaReference::new)
         .collect(Collectors.toList());
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata =
+        schemaEntity.getMetadata();
+    this.metadata =
+        metadata == null || metadata
+            == io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EMPTY_METADATA
+            ? EMPTY_METADATA
+            : new Metadata(metadata);
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet =
+        schemaEntity.getRuleSet();
+    this.ruleSet =
+        ruleSet == null || ruleSet
+            == io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET
+            ? EMPTY_RULESET
+            : new RuleSet(ruleSet);
     this.schema = schemaEntity.getSchema();
     this.deleted = false;
   }
@@ -129,6 +169,26 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   @JsonProperty("references")
   public void setReferences(List<SchemaReference> references) {
     this.references = references;
+  }
+
+  @JsonProperty("metadata")
+  public Metadata getMetadata() {
+    return this.metadata;
+  }
+
+  @JsonProperty("metdata")
+  public void setMetadata(Metadata metadata) {
+    this.metadata = metadata;
+  }
+
+  @JsonProperty("ruleSet")
+  public RuleSet getRuleSet() {
+    return this.ruleSet;
+  }
+
+  @JsonProperty("ruleSet")
+  public void setRuleSet(RuleSet ruleSet) {
+    this.ruleSet = ruleSet;
   }
 
   @JsonProperty("schema")
@@ -177,6 +237,12 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     if (!this.references.equals(that.getReferences())) {
       return false;
     }
+    if (!this.metadata.equals(that.getMetadata())) {
+      return false;
+    }
+    if (!this.ruleSet.equals(that.getRuleSet())) {
+      return false;
+    }
     if (!this.schema.equals(that.schema)) {
       return false;
     }
@@ -195,6 +261,8 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     result = 31 * result + (schemaType != null ? schemaType.hashCode() : 0);
     result = 31 * result + schema.hashCode();
     result = 31 * result + references.hashCode();
+    result = 31 * result + metadata.hashCode();
+    result = 31 * result + ruleSet.hashCode();
     result = 31 * result + (deleted ? 1 : 0);
     return result;
   }
@@ -207,6 +275,8 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     sb.append("id=" + this.id + ",");
     sb.append("schemaType=" + this.schemaType + ",");
     sb.append("references=" + this.references + ",");
+    sb.append("metadata=" + this.metadata + ",");
+    sb.append("ruleSet=" + this.ruleSet + ",");
     sb.append("schema=" + this.schema + ",");
     sb.append("deleted=" + this.deleted + "}");
     return sb.toString();
@@ -234,9 +304,10 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
         getId(),
         getSchemaType(),
         getReferences() == null ? null : getReferences().stream()
-            .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
-                ref.getName(), ref.getSubject(), ref.getVersion()))
+            .map(SchemaReference::toRefEntity)
             .collect(Collectors.toList()),
+        getMetadata() == null ? null : getMetadata().toMetadataEntity(),
+        getRuleSet() == null ? null : getRuleSet().toRuleSetEntity(),
         getSchema()
     );
   }

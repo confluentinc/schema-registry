@@ -76,4 +76,5 @@ public class Mode {
   public int hashCode() {
     return Objects.hash(mode);
   }
+
 }

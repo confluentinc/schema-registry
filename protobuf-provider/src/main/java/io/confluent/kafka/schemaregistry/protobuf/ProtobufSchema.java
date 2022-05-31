@@ -87,6 +87,8 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.protobuf.MetaProto;
@@ -121,6 +123,8 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 
 import static com.google.common.base.CaseFormat.LOWER_UNDERSCORE;
 import static com.google.common.base.CaseFormat.UPPER_CAMEL;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EMPTY_METADATA;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET;
 
 public class ProtobufSchema implements ParsedSchema {
 
@@ -321,6 +325,10 @@ public class ProtobufSchema implements ParsedSchema {
 
   private final Map<String, ProtoFileElement> dependencies;
 
+  private final Metadata metadata;
+
+  private final RuleSet ruleSet;
+
   private transient String canonicalString;
 
   private transient DynamicSchema dynamicSchema;
@@ -346,6 +354,19 @@ public class ProtobufSchema implements ParsedSchema {
       Integer version,
       String name
   ) {
+    this(schemaString, references, resolvedReferences,
+        EMPTY_METADATA, EMPTY_RULESET, version, name);
+  }
+
+  public ProtobufSchema(
+      String schemaString,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      Metadata metadata,
+      RuleSet ruleSet,
+      Integer version,
+      String name
+  ) {
     try {
       this.schemaObj = toProtoFile(schemaString);
       this.version = version;
@@ -357,6 +378,8 @@ public class ProtobufSchema implements ParsedSchema {
               Map.Entry::getKey,
               e -> toProtoFile(e.getValue())
           )));
+      this.metadata = metadata;
+      this.ruleSet = ruleSet;
     } catch (IllegalStateException e) {
       log.error("Could not parse Protobuf schema " + schemaString
           + " with references " + references, e);
@@ -374,6 +397,8 @@ public class ProtobufSchema implements ParsedSchema {
     this.name = null;
     this.references = Collections.unmodifiableList(references);
     this.dependencies = Collections.unmodifiableMap(dependencies);
+    this.metadata = EMPTY_METADATA;
+    this.ruleSet = EMPTY_RULESET;
   }
 
   public ProtobufSchema(Descriptor descriptor) {
@@ -387,6 +412,8 @@ public class ProtobufSchema implements ParsedSchema {
     this.name = descriptor.getFullName();
     this.references = Collections.unmodifiableList(references);
     this.dependencies = Collections.unmodifiableMap(dependencies);
+    this.metadata = EMPTY_METADATA;
+    this.ruleSet = EMPTY_RULESET;
     this.descriptor = descriptor;
   }
 
@@ -401,6 +428,8 @@ public class ProtobufSchema implements ParsedSchema {
     this.name = enumDescriptor.getFullName();
     this.references = Collections.unmodifiableList(references);
     this.dependencies = Collections.unmodifiableMap(dependencies);
+    this.metadata = EMPTY_METADATA;
+    this.ruleSet = EMPTY_RULESET;
     this.descriptor = null;
   }
 
@@ -410,6 +439,8 @@ public class ProtobufSchema implements ParsedSchema {
       String name,
       List<SchemaReference> references,
       Map<String, ProtoFileElement> dependencies,
+      Metadata metadata,
+      RuleSet ruleSet,
       String canonicalString,
       DynamicSchema dynamicSchema,
       Descriptor descriptor
@@ -419,11 +450,14 @@ public class ProtobufSchema implements ParsedSchema {
     this.name = name;
     this.references = references;
     this.dependencies = dependencies;
+    this.metadata = metadata;
+    this.ruleSet = ruleSet;
     this.canonicalString = canonicalString;
     this.dynamicSchema = dynamicSchema;
     this.descriptor = descriptor;
   }
 
+  @Override
   public ProtobufSchema copy() {
     return new ProtobufSchema(
         this.schemaObj,
@@ -431,12 +465,15 @@ public class ProtobufSchema implements ParsedSchema {
         this.name,
         this.references,
         this.dependencies,
+        this.metadata,
+        this.ruleSet,
         this.canonicalString,
         this.dynamicSchema,
         this.descriptor
     );
   }
 
+  @Override
   public ProtobufSchema copy(Integer version) {
     return new ProtobufSchema(
         this.schemaObj,
@@ -444,6 +481,8 @@ public class ProtobufSchema implements ParsedSchema {
         this.name,
         this.references,
         this.dependencies,
+        this.metadata,
+        this.ruleSet,
         this.canonicalString,
         this.dynamicSchema,
         this.descriptor
@@ -457,6 +496,8 @@ public class ProtobufSchema implements ParsedSchema {
         name,
         this.references,
         this.dependencies,
+        this.metadata,
+        this.ruleSet,
         this.canonicalString,
         this.dynamicSchema,
         // reset descriptor if names not equal
@@ -471,6 +512,24 @@ public class ProtobufSchema implements ParsedSchema {
         this.name,
         references,
         this.dependencies,
+        this.metadata,
+        this.ruleSet,
+        this.canonicalString,
+        this.dynamicSchema,
+        this.descriptor
+    );
+  }
+
+  @Override
+  public ProtobufSchema copy(Metadata metadata, RuleSet ruleSet) {
+    return new ProtobufSchema(
+        this.schemaObj,
+        this.version,
+        this.name,
+        this.references,
+        this.dependencies,
+        metadata,
+        ruleSet,
         this.canonicalString,
         this.dynamicSchema,
         this.descriptor
@@ -484,6 +543,8 @@ public class ProtobufSchema implements ParsedSchema {
         this.name,
         references,
         this.dependencies,
+        this.metadata,
+        this.ruleSet,
         schema,
         null,
         null
@@ -1703,6 +1764,7 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
+  @Override
   public Integer version() {
     return version;
   }
@@ -1734,6 +1796,16 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   @Override
+  public Metadata metadata() {
+    return metadata;
+  }
+
+  @Override
+  public RuleSet ruleSet() {
+    return ruleSet;
+  }
+
+  @Override
   public ProtobufSchema normalize() {
     String normalized = ProtobufSchemaUtils.toNormalizedString(this);
     return new ProtobufSchema(
@@ -1742,6 +1814,8 @@ public class ProtobufSchema implements ParsedSchema {
         this.name,
         this.references.stream().sorted().distinct().collect(Collectors.toList()),
         this.dependencies,
+        this.metadata,
+        this.ruleSet,
         normalized,
         null,
         null
@@ -1797,14 +1871,16 @@ public class ProtobufSchema implements ParsedSchema {
     // Can't use schemaObj as locations may differ
     return Objects.equals(version, that.version)
         && Objects.equals(references, that.references)
-        && Objects.equals(canonicalString(), that.canonicalString());
+        && Objects.equals(canonicalString(), that.canonicalString())
+        && Objects.equals(metadata, that.metadata)
+        && Objects.equals(ruleSet, that.ruleSet);
   }
 
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
       // Can't use schemaObj as locations may differ
-      hashCode = Objects.hash(canonicalString(), references, version);
+      hashCode = Objects.hash(canonicalString(), references, version, metadata, ruleSet);
     }
     return hashCode;
   }

@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
@@ -36,8 +38,23 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
       String schemaString,
       List<SchemaReference> references);
 
+  default Optional<ParsedSchema> parseSchema(
+      String schemaType,
+      String schemaString,
+      List<SchemaReference> references,
+      Metadata metadata,
+      RuleSet ruleSet) {
+    return parseSchema(schemaType, schemaString, references).map(s -> s.copy(metadata, ruleSet));
+  }
+
   default Optional<ParsedSchema> parseSchema(Schema schema) {
-    return parseSchema(schema.getSchemaType(), schema.getSchema(), schema.getReferences());
+    return parseSchema(
+        schema.getSchemaType(),
+        schema.getSchema(),
+        schema.getReferences(),
+        schema.getMetadata(),
+        schema.getRuleSet()
+    );
   }
 
   /**

@@ -79,6 +79,7 @@
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.6.0</kotlin.version>
+        <jsonata-version>1.7.6</jsonata-version>
         <json-schema.version>1.14.1</json-schema.version>
         <proto-google-common-protos.version>2.5.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
@@ -211,6 +212,11 @@
                         <artifactId>kotlin-stdlib</artifactId>
                     </exclusion>
                 </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>com.ibm.jsonata4java</groupId>
+                <artifactId>JSONata4Java</artifactId>
+                <version>${jsonata-version}</version>
             </dependency>
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>

@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EMPTY_METADATA;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +28,8 @@ import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.ValidationException;
 import org.everit.json.schema.loader.SchemaLoader;
@@ -70,6 +75,10 @@ public class JsonSchema implements ParsedSchema {
 
   private final Map<String, String> resolvedReferences;
 
+  private final Metadata metadata;
+
+  private final RuleSet ruleSet;
+
   private transient String canonicalString;
 
   private transient int hashCode = NO_HASHCODE;
@@ -97,6 +106,8 @@ public class JsonSchema implements ParsedSchema {
     this.version = version;
     this.references = Collections.unmodifiableList(references);
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
+    this.metadata = EMPTY_METADATA;
+    this.ruleSet = EMPTY_RULESET;
   }
 
   public JsonSchema(
@@ -105,11 +116,24 @@ public class JsonSchema implements ParsedSchema {
       Map<String, String> resolvedReferences,
       Integer version
   ) {
+    this(schemaString, references, resolvedReferences, EMPTY_METADATA, EMPTY_RULESET, version);
+  }
+
+  public JsonSchema(
+      String schemaString,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      Metadata metadata,
+      RuleSet ruleSet,
+      Integer version
+  ) {
     try {
       this.jsonNode = objectMapper.readTree(schemaString);
       this.version = version;
       this.references = Collections.unmodifiableList(references);
       this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
+      this.metadata = metadata;
+      this.ruleSet = ruleSet;
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON " + schemaString, e);
     }
@@ -126,8 +150,10 @@ public class JsonSchema implements ParsedSchema {
       this.version = version;
       this.references = Collections.emptyList();
       this.resolvedReferences = Collections.emptyMap();
+      this.metadata = EMPTY_METADATA;
+      this.ruleSet = EMPTY_RULESET;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaObj.toString(), e);
+      throw new IllegalArgumentException("Invalid JSON " + schemaObj, e);
     }
   }
 
@@ -137,6 +163,8 @@ public class JsonSchema implements ParsedSchema {
       Integer version,
       List<SchemaReference> references,
       Map<String, String> resolvedReferences,
+      Metadata metadata,
+      RuleSet ruleSet,
       String canonicalString
   ) {
     this.jsonNode = jsonNode;
@@ -144,9 +172,12 @@ public class JsonSchema implements ParsedSchema {
     this.version = version;
     this.references = references;
     this.resolvedReferences = resolvedReferences;
+    this.metadata = metadata;
+    this.ruleSet = ruleSet;
     this.canonicalString = canonicalString;
   }
 
+  @Override
   public JsonSchema copy() {
     return new JsonSchema(
         this.jsonNode,
@@ -154,10 +185,13 @@ public class JsonSchema implements ParsedSchema {
         this.version,
         this.references,
         this.resolvedReferences,
+        this.metadata,
+        this.ruleSet,
         this.canonicalString
     );
   }
 
+  @Override
   public JsonSchema copy(Integer version) {
     return new JsonSchema(
         this.jsonNode,
@@ -165,6 +199,22 @@ public class JsonSchema implements ParsedSchema {
         version,
         this.references,
         this.resolvedReferences,
+        this.metadata,
+        this.ruleSet,
+        this.canonicalString
+    );
+  }
+
+  @Override
+  public JsonSchema copy(Metadata metadata, RuleSet ruleSet) {
+    return new JsonSchema(
+        this.jsonNode,
+        this.schemaObj,
+        this.version,
+        this.references,
+        this.resolvedReferences,
+        metadata,
+        ruleSet,
         this.canonicalString
     );
   }
@@ -243,6 +293,7 @@ public class JsonSchema implements ParsedSchema {
     return canonicalString;
   }
 
+  @Override
   public Integer version() {
     return version;
   }
@@ -254,6 +305,16 @@ public class JsonSchema implements ParsedSchema {
 
   public Map<String, String> resolvedReferences() {
     return resolvedReferences;
+  }
+
+  @Override
+  public Metadata metadata() {
+    return metadata;
+  }
+
+  @Override
+  public RuleSet ruleSet() {
+    return ruleSet;
   }
 
   @Override
@@ -364,13 +425,15 @@ public class JsonSchema implements ParsedSchema {
     JsonSchema that = (JsonSchema) o;
     return Objects.equals(version, that.version)
         && Objects.equals(references, that.references)
-        && Objects.equals(canonicalString(), that.canonicalString());
+        && Objects.equals(canonicalString(), that.canonicalString())
+        && Objects.equals(metadata, that.metadata)
+        && Objects.equals(ruleSet, that.ruleSet);
   }
 
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      hashCode = Objects.hash(jsonNode, references, version);
+      hashCode = Objects.hash(jsonNode, references, version, metadata, ruleSet);
     }
     return hashCode;
   }

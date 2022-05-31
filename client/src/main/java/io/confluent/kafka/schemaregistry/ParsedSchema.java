@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -63,11 +65,56 @@ public interface ParsedSchema {
   }
 
   /**
+   * Returns the version of the schema if set.
+   *
+   * @return the version
+   */
+  Integer version();
+
+  /**
    * Returns a list of schema references.
    *
    * @return the schema references
    */
   List<SchemaReference> references();
+
+  /**
+   * Returns metadata.
+   *
+   * @return the metadata
+   */
+  Metadata metadata();
+
+  /**
+   * Returns a rule set.
+   *
+   * @return the rule set
+   */
+  RuleSet ruleSet();
+
+  /**
+   * Returns a copy of this schema.
+   *
+   * @return a copy of this schema
+   */
+  ParsedSchema copy();
+
+  /**
+   * Returns a copy of this schema, but with the given version.
+   *
+   * @param version the version
+   * @return a copy of this schema, but with the given version
+   */
+  ParsedSchema copy(Integer version);
+
+  /**
+   * Returns a copy of this schema, but with the given metadata and rule set.
+   *
+   * @param metadata the metadata
+   * @param ruleSet the rule set
+   * @return a copy of this schema, but with the given metadata and rule set
+   */
+  ParsedSchema copy(Metadata metadata, RuleSet ruleSet);
 
   /**
    * Returns a normalized copy of this schema.
