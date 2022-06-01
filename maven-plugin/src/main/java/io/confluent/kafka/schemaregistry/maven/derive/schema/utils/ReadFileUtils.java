@@ -26,12 +26,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 /**
  * Utility class to Read Files and generate messages in required format.
@@ -40,7 +38,6 @@ public class ReadFileUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(ReadFileUtils.class);
 
-  static JSONParser jsonParser = new JSONParser();
 
   public static String readFile(String content) throws IOException {
     byte[] encoded = Files.readAllBytes(Paths.get(content));
@@ -56,19 +53,16 @@ public class ReadFileUtils {
    *
    * @param content Content or name of the file to read
    * @return List of JSONObjects
-   * @throws ParseException thrown when file not in correct format
    */
-  public static List<Object> readArrayOfMessages(String content)
-      throws ParseException {
+  public static List<JSONObject> readArrayOfMessages(String content) {
 
-    Object obj = jsonParser.parse(content);
-
-    List<Object> listOfMessages = new ArrayList<>();
-    for (Object x : (org.json.simple.JSONArray) obj) {
-      listOfMessages.add(new JSONObject(x.toString()));
+    JSONArray jsonArray = new JSONArray(content);
+    List<JSONObject> listOfMessages = new ArrayList<>();
+    for (int i = 0; i < jsonArray.length(); i++) {
+      listOfMessages.add(jsonArray.getJSONObject(i));
     }
-
     return listOfMessages;
+
   }
 
   /**

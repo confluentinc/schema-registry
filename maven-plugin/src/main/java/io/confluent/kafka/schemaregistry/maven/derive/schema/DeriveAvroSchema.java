@@ -32,10 +32,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeSet;
 
-
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeAvroProtoBufUtils;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ProtoBufUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.JsonUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeNumberUtils;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeUnionUtils;
 
 import org.json.JSONArray;
@@ -265,7 +265,7 @@ public class DeriveAvroSchema extends DeriveSchema {
   JSONObject getModeForArray(ArrayList<JSONObject> schemaList, ArrayList<String> schemaStrings,
                              String name) {
 
-    int modeIndex = MergeAvroProtoBufUtils.getMode(schemaStrings);
+    int modeIndex = ProtoBufUtils.getMode(schemaStrings);
     int freq = Collections.frequency(schemaStrings, schemaStrings.get(modeIndex));
     if (freq != schemaStrings.size()) {
       logger.warn(String.format("Message %d: All elements should be of same type for array '%s'. "
@@ -313,7 +313,7 @@ public class DeriveAvroSchema extends DeriveSchema {
     only if 1 value remains use unique
     */
 
-    ArrayList<JSONObject> uniqueSchemaList = MergeJsonUtils.getUnique(schemaList);
+    ArrayList<JSONObject> uniqueSchemaList = JsonUtils.getUnique(schemaList);
     if (uniqueSchemaList.size() == 1 || strictCheck) {
       return uniqueSchemaList;
     }
@@ -346,12 +346,12 @@ public class DeriveAvroSchema extends DeriveSchema {
 
     schemaList = getUniqueList(schemaList);
 
-    MergeAvroProtoBufUtils.mergeNumberTypes(schemaList, !strictCheck);
+    MergeNumberUtils.mergeNumberTypes(schemaList, !strictCheck);
     schemaList = getUniqueList(schemaList);
 
     if (typeProtoBuf) {
       // Merge Records for ProtoBuf
-      MergeAvroProtoBufUtils.mergeRecordsInsideArray(schemaList, strictCheck);
+      ProtoBufUtils.mergeRecordsInsideArray(schemaList, strictCheck);
     } else {
       // Merge Unions for Avro
       MergeUnionUtils.mergeUnion(schemaList, !strictCheck);
@@ -616,21 +616,21 @@ public class DeriveAvroSchema extends DeriveSchema {
     ArrayList<JSONObject> schemaList = getSchemaOfAllElements(messageObjects,
         "Record", true);
 
-    ArrayList<JSONObject> uniqueList = MergeJsonUtils.getUnique(schemaList);
+    ArrayList<JSONObject> uniqueList = JsonUtils.getUnique(schemaList);
 
     if (uniqueList.size() == 0) {
       logger.error(errorMessageNoSchemasFound);
       throw new IllegalArgumentException(errorMessageNoSchemasFound);
     }
 
-    List<List<Integer>> schemaToMessagesInfo = MergeAvroProtoBufUtils.getUniqueWithMessageInfo(
+    List<List<Integer>> schemaToMessagesInfo = ProtoBufUtils.getUniqueWithMessageInfo(
         schemaList, uniqueList, null);
 
-    MergeAvroProtoBufUtils.mergeNumberTypes(uniqueList, true);
+    MergeNumberUtils.mergeNumberTypes(uniqueList, true);
     MergeUnionUtils.mergeUnion(uniqueList, true);
 
-    ArrayList<JSONObject> uniqueList2 = MergeJsonUtils.getUnique(uniqueList);
-    schemaToMessagesInfo = MergeAvroProtoBufUtils.getUniqueWithMessageInfo(
+    ArrayList<JSONObject> uniqueList2 = JsonUtils.getUnique(uniqueList);
+    schemaToMessagesInfo = ProtoBufUtils.getUniqueWithMessageInfo(
         uniqueList, uniqueList2, schemaToMessagesInfo);
 
     ArrayList<JSONObject> ans = new ArrayList<>();

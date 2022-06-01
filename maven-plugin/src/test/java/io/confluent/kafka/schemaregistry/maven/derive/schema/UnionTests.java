@@ -215,7 +215,7 @@ public class UnionTests {
 
      */
     String message = "[\n" +
-        "  {\"name\" : \"Testing Merging check for union\"}" +
+        "  {\"name\" : \"Testing Merging check for union\"}," +
         "  {\"length\": {\"long\": 12\n}}," +
         "  {\"length\": {\"string\": \"2\"}}" +
         "]";

@@ -29,6 +29,45 @@ import java.util.TreeSet;
  */
 public final class MergeNumberUtils {
 
+
+  /**
+   * Merge together fields of type int, long, float and double.
+   *
+   * @param schemaList list of schemas to merge
+   */
+  public static void mergeNumberTypes(ArrayList<JSONObject> schemaList, boolean matchAll) {
+
+    if (schemaList.size() == 0 || schemaList.size() == 1) {
+      return;
+    }
+
+    /*
+    Using O(n*n) version over O(n) version checking only with 1st schema
+    1. A field is absent in the first schema, hence that field is never checked in other messages
+    2. A field is present in the first schema, but of type non-Number
+    but rest of the messages are of number type.
+     */
+
+    if (matchAll) {
+      for (JSONObject curr : schemaList) {
+        for (JSONObject starting : schemaList) {
+          adjustNumberTypes(starting, curr);
+        }
+      }
+    } else {
+
+      for (JSONObject curr : schemaList) {
+        adjustNumberTypes(schemaList.get(0), curr);
+      }
+
+      for (JSONObject curr : schemaList) {
+        adjustNumberTypes(schemaList.get(0), curr);
+      }
+
+    }
+
+  }
+
   /**
    * Function to match fields of int, long, float and double values.
    *

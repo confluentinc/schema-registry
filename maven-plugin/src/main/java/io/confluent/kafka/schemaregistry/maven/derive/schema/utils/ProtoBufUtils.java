@@ -39,9 +39,9 @@ import java.util.stream.Collectors;
  * Utility class that has functions for merging records and numbers in Avro and ProtoBuf.
  */
 
-public final class MergeAvroProtoBufUtils {
+public final class ProtoBufUtils {
 
-  private static final Logger logger = LoggerFactory.getLogger(MergeAvroProtoBufUtils.class);
+  private static final Logger logger = LoggerFactory.getLogger(ProtoBufUtils.class);
 
   private static String getErrorMessage(String key, Object existingField, Object newField) {
     String errorMessage = "Two fields exist with same name %s"
@@ -78,43 +78,6 @@ public final class MergeAvroProtoBufUtils {
 
   }
 
-  /**
-   * Merge together fields of type int, long, float and double.
-   *
-   * @param schemaList list of schemas to merge
-   */
-  public static void mergeNumberTypes(ArrayList<JSONObject> schemaList, boolean matchAll) {
-
-    if (schemaList.size() == 0 || schemaList.size() == 1) {
-      return;
-    }
-
-    /*
-    Using O(n*n) version for 2 reasons over O(n) version checking only with 1st schema
-    1. A field is absent in the first schema, hence never check
-    2. A field is present in the first schema, but of type non-Number
-    but rest of the messages are of number type.
-     */
-
-    if (matchAll) {
-      for (JSONObject curr : schemaList) {
-        for (JSONObject starting : schemaList) {
-          MergeNumberUtils.adjustNumberTypes(starting, curr);
-        }
-      }
-    } else {
-
-      for (JSONObject curr : schemaList) {
-        MergeNumberUtils.adjustNumberTypes(schemaList.get(0), curr);
-      }
-
-      for (JSONObject curr : schemaList) {
-        MergeNumberUtils.adjustNumberTypes(schemaList.get(0), curr);
-      }
-
-    }
-
-  }
 
   /**
    * All the fields are merged together in one record.
@@ -309,7 +272,7 @@ public final class MergeAvroProtoBufUtils {
         JSONObject toMatch = schemaList.get(j);
 
         try {
-          curr = MergeAvroProtoBufUtils.mergeRecords(
+          curr = ProtoBufUtils.mergeRecords(
               new ArrayList<>(Arrays.asList(curr, toMatch)), true, false);
 
           if (schemaToMessagesInfoInput == null) {
@@ -327,8 +290,8 @@ public final class MergeAvroProtoBufUtils {
 
     }
 
-    ArrayList<JSONObject> uniqueList = MergeJsonUtils.getUnique(mergedSchemas);
-    List<List<Integer>> schemaToMessagesInfo2 = MergeAvroProtoBufUtils.getUniqueWithMessageInfo(
+    ArrayList<JSONObject> uniqueList = JsonUtils.getUnique(mergedSchemas);
+    List<List<Integer>> schemaToMessagesInfo2 = ProtoBufUtils.getUniqueWithMessageInfo(
         mergedSchemas, uniqueList, schemaToMessagesInfo);
 
     Comparator<JSONObject> comparator

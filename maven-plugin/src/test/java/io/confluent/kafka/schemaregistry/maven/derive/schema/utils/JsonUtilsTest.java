@@ -6,10 +6,10 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils.*;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.JsonUtils.*;
 import static org.junit.Assert.assertEquals;
 
-public class MergeJsonUtilsTest {
+public class JsonUtilsTest {
 
   @Test
   public void shouldGetOneUniqueElementBasic() {

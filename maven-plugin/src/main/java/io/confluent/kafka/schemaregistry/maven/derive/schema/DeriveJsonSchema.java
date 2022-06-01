@@ -17,7 +17,7 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.JsonUtils;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -136,7 +136,7 @@ public class DeriveJsonSchema extends DeriveSchema {
     schema.put("type", "array");
 
     ArrayList<JSONObject> schemaList = getSchemaOfAllElements(messages, name);
-    ArrayList<JSONObject> uniqueSchemas = MergeJsonUtils.getUnique(schemaList);
+    ArrayList<JSONObject> uniqueSchemas = JsonUtils.getUnique(schemaList);
     ArrayList<JSONObject> recordList = new ArrayList<>();
     ArrayList<JSONObject> arrayList = new ArrayList<>();
     ArrayList<JSONObject> othersList = new ArrayList<>();
@@ -152,14 +152,14 @@ public class DeriveJsonSchema extends DeriveSchema {
     }
 
     if (recordList.size() > 1) {
-      JSONObject x = MergeJsonUtils.mergeRecords(recordList);
+      JSONObject x = JsonUtils.mergeRecords(recordList);
       othersList.add(x);
     } else if (recordList.size() == 1) {
       othersList.add(recordList.get(0));
     }
 
     if (arrayList.size() > 1) {
-      JSONObject x = MergeJsonUtils.mergeArrays(arrayList);
+      JSONObject x = JsonUtils.mergeArrays(arrayList);
       othersList.add(x);
     } else if (arrayList.size() == 1) {
       othersList.add(arrayList.get(0));

@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
  * Utility class that has functions for merging records and arrays in JSON.
  */
 
-public final class MergeJsonUtils {
+public final class JsonUtils {
 
   /**
    * Get unique JSONObjects from a list of JSONObjects and remove duplicates.

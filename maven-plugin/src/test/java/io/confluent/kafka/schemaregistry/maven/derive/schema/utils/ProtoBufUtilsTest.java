@@ -9,11 +9,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeAvroProtoBufUtils.*;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ProtoBufUtils.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
-public class MergeAvroProtoBufUtilsTest {
+public class ProtoBufUtilsTest {
 
   String schemaRecordOfRecords = "{\n" +
       "  \"__type\": \"record\",\n" +

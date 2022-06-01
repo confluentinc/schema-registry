@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.protobuf.InvalidProtocolBufferException;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeNumberUtils;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 
 import java.util.ArrayList;
@@ -25,8 +26,8 @@ import java.util.Collections;
 import java.util.List;
 
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeAvroProtoBufUtils;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ProtoBufUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.JsonUtils;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MapAndArray;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -226,19 +227,19 @@ public class DeriveProtobufSchema {
     ArrayList<JSONObject> schemaList = schemaGenerator.getSchemaOfAllElements(messageObjects,
         "Record", true);
 
-    ArrayList<JSONObject> uniqueList = MergeJsonUtils.getUnique(schemaList);
+    ArrayList<JSONObject> uniqueList = JsonUtils.getUnique(schemaList);
 
     if (uniqueList.size() == 0) {
       logger.error(errorMessageNoSchemasFound);
       throw new IllegalArgumentException(errorMessageNoSchemasFound);
     }
 
-    List<List<Integer>> schemaToMessagesInfo = MergeAvroProtoBufUtils.getUniqueWithMessageInfo(
+    List<List<Integer>> schemaToMessagesInfo = ProtoBufUtils.getUniqueWithMessageInfo(
         schemaList, uniqueList, null);
 
 
-    MergeAvroProtoBufUtils.mergeNumberTypes(uniqueList, true);
-    MapAndArray schemasAndMap = MergeAvroProtoBufUtils.tryAndMergeStrictFromList(
+    MergeNumberUtils.mergeNumberTypes(uniqueList, true);
+    MapAndArray schemasAndMap = ProtoBufUtils.tryAndMergeStrictFromList(
         uniqueList, schemaToMessagesInfo);
 
     ArrayList<JSONObject> schemas = schemasAndMap.getSchemas();
