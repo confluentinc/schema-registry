@@ -26,10 +26,13 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
 /**
  * Utility class to Read Files and generate messages in required format.
@@ -38,36 +41,36 @@ public class ReadFileUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(ReadFileUtils.class);
 
-
   public static String readFile(String content) throws IOException {
     byte[] encoded = Files.readAllBytes(Paths.get(content));
     return new String(encoded, StandardCharsets.UTF_8);
   }
 
   /**
-   * Given a file with array of JSONObjects, reads it and generates List of JSONObjects.
+   * Given a file with array of ObjectNodes, reads it and generates List of ObjectNodes.
    * <p>
    * Eg, Expected File contents are :
    * [{"name":"J"}, {"name":"K"}, {"name":"L"}]
    * </p>
    *
    * @param content Content or name of the file to read
-   * @return List of JSONObjects
+   * @return List of ObjectNodes
    */
-  public static List<JSONObject> readArrayOfMessages(String content) {
+  public static List<ObjectNode> readArrayOfMessages(String content)
+      throws JsonProcessingException {
 
-    JSONArray jsonArray = new JSONArray(content);
-    List<JSONObject> listOfMessages = new ArrayList<>();
-    for (int i = 0; i < jsonArray.length(); i++) {
-      listOfMessages.add(jsonArray.getJSONObject(i));
+    ArrayNode arrayNode = mapper.readValue(content, ArrayNode.class);
+    List<ObjectNode> listOfMessages = new ArrayList<>();
+    for (int i = 0; i < arrayNode.size(); i++) {
+      listOfMessages.add((ObjectNode) arrayNode.get(i));
     }
     return listOfMessages;
 
   }
 
   /**
-   * Given a file with JSONObjects which are line separated,
-   * list of JSONObjects are generated and returned.
+   * Given a file with ObjectNodes which are line separated,
+   * list of ObjectNodes are generated and returned.
    * Eg, Expected File contents are :
    * <p>
    * {"name":"J"}
@@ -81,14 +84,14 @@ public class ReadFileUtils {
    * </p>
    *
    * @param content Name of the file to read
-   * @return List of JSONObjects
+   * @return List of ObjectNodes
    */
-  public static List<Object> readLinesOfMessages(String content) {
+  public static List<Object> readLinesOfMessages(String content) throws JsonProcessingException {
 
     List<Object> listOfMessages = new ArrayList<>();
     String[] arrOfStr = content.split("\n");
     for (String line : arrOfStr) {
-      listOfMessages.add(new JSONObject(line));
+      listOfMessages.add(mapper.readValue(line, ObjectNode.class));
     }
 
     return listOfMessages;
@@ -112,7 +115,7 @@ public class ReadFileUtils {
       logger.info("Read input as array of Messages.");
       return ans;
     } catch (Exception ignored) {
-      logger.info("Cannot be read input as array of Messages.");
+      logger.warn("Cannot be read input as array of Messages.");
     }
 
     try {
@@ -120,15 +123,15 @@ public class ReadFileUtils {
       logger.info("Read input as lines of messages.");
       return ans;
     } catch (Exception ignored) {
-      logger.info("Cannot be read input as lines of messages.");
+      logger.warn("Cannot be read input as lines of messages.");
     }
 
     try {
-      ans.add(new JSONObject(content));
-      logger.info("Read input as jsonObject.");
+      ans.add(mapper.readValue(content, ObjectNode.class));
+      logger.info("Read input as ObjectNode.");
       return ans;
     } catch (Exception ignored) {
-      logger.info("Cannot be read input as jsonObject.");
+      logger.warn("Cannot be read input as ObjectNode.");
     }
 
     if (ans.isEmpty()) {
@@ -142,7 +145,7 @@ public class ReadFileUtils {
 
 
   /**
-   * Reads string according to 3 formats, generating JSONObject for each message
+   * Reads string according to 3 formats, generating ObjectNode for each message
    * and each message is converted to string and returned as a list.
    *
    * @param content string with messages
@@ -166,7 +169,7 @@ public class ReadFileUtils {
    *
    * @param file input file to read
    * @return List of messages
-   * @throws IOException thrown if unable to read ipnut file
+   * @throws IOException thrown if unable to read input file
    */
   public static List<String> readMessagesToString(File file) throws IOException {
 

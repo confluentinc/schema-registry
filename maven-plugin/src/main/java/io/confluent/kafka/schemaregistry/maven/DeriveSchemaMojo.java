@@ -18,13 +18,15 @@ package io.confluent.kafka.schemaregistry.maven;
 
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils.readMessagesToString;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaMain;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
-import org.json.JSONObject;
 
 import java.io.FileOutputStream;
 import java.io.File;
@@ -42,7 +44,7 @@ public class DeriveSchemaMojo extends AbstractMojo {
   @Parameter(required = true)
   File messagePath;
 
-  @Parameter(defaultValue = "null")
+  @Parameter()
   File outputPath;
 
   @Parameter(defaultValue = "Avro")
@@ -51,8 +53,10 @@ public class DeriveSchemaMojo extends AbstractMojo {
   @Parameter(defaultValue = "true")
   boolean strictCheck;
 
+  private final ObjectMapper mapper = new ObjectMapper();
+
   private boolean checkTypeForOutput() {
-    return !this.strictCheck || schemaType.toLowerCase().equals("json");
+    return !this.strictCheck || schemaType.equalsIgnoreCase("json");
   }
 
   @Override
@@ -66,25 +70,28 @@ public class DeriveSchemaMojo extends AbstractMojo {
     }
 
     try {
-      List<JSONObject> ans = DeriveSchemaMain.caseWiseOutput(schemaType, strictCheck,
+      List<ObjectNode> ans = DeriveSchemaMain.caseWiseOutput(schemaType, strictCheck,
           listOfMessages);
 
-      JSONObject outputObject = new JSONObject();
+      ObjectNode outputObject = mapper.createObjectNode();
       if (checkTypeForOutput()) {
         outputObject = ans.get(0);
       } else {
-        outputObject.put("schemas", ans);
+        ArrayNode arrayNode = outputObject.putArray("schemas");
+        for (ObjectNode objectNode : ans) {
+          arrayNode.add(objectNode);
+        }
       }
 
       if (outputPath == null) {
-        System.out.println(outputObject.toString(2));
+        System.out.println(outputObject.toPrettyString());
       } else {
 
         try {
           FileOutputStream fileStream = new FileOutputStream(outputPath.getPath());
           OutputStreamWriter writer = new OutputStreamWriter(fileStream,
               StandardCharsets.UTF_8);
-          writer.write(outputObject.toString(2));
+          writer.write(outputObject.toPrettyString());
           writer.close();
           getLog().info(String.format("Output written to file : %s", outputPath.getPath()));
         } catch (IOException e) {

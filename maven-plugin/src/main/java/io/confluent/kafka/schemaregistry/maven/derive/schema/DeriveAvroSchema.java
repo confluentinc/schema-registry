@@ -17,29 +17,28 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.Maps;
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Type;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.TreeSet;
+import java.util.List;
+import java.util.Collections;
+import java.util.Comparator;
 
+import com.google.gson.reflect.TypeToken;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ProtoBufUtils;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.JsonUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeProtoBufUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeNumberUtils;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeUnionUtils;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,6 +55,7 @@ public class DeriveAvroSchema extends DeriveSchema {
   final boolean typeProtoBuf;
   private static final Gson gson = new Gson();
   private static int currentMessage = -1;
+  private int depth = 0;
 
   public static int getCurrentMessage() {
     return currentMessage;
@@ -64,6 +64,7 @@ public class DeriveAvroSchema extends DeriveSchema {
   private static void setCurrentMessage(int currentMessage) {
     DeriveAvroSchema.currentMessage = currentMessage;
   }
+
 
   String errorMessageNoSchemasFound = "No strict schemas can be generated for the given messages. "
       + "Please try using the lenient version to generate a schema.";
@@ -94,8 +95,9 @@ public class DeriveAvroSchema extends DeriveSchema {
 
   private void fillMap() {
 
-    classToDataType.put("class java.lang.String", "string");
-    classToDataType.put("class java.math.BigDecimal", "double");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.DoubleNode", "double");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.TextNode", "string");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.BigIntegerNode", "double");
 
     if (this.typeProtoBuf) {
       fillProtoBufMap();
@@ -106,19 +108,18 @@ public class DeriveAvroSchema extends DeriveSchema {
   }
 
   private void fillProtoBufMap() {
-    classToDataType.put("class java.math.BigInteger", "double");
-    classToDataType.put("class java.lang.Integer", "int32");
-    classToDataType.put("class java.lang.Long", "int64");
-    classToDataType.put("class java.lang.Boolean", "bool");
-    classToDataType.put("class org.json.JSONObject$Null", "google.protobuf.Any");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.IntNode", "int32");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.LongNode", "int64");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.BooleanNode", "bool");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.NullNode",
+        "google.protobuf.Any");
   }
 
   private void fillAvroMap() {
-    classToDataType.put("class java.math.BigInteger", "double");
-    classToDataType.put("class java.lang.Integer", "int");
-    classToDataType.put("class java.lang.Long", "long");
-    classToDataType.put("class java.lang.Boolean", "boolean");
-    classToDataType.put("class org.json.JSONObject$Null", "null");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.IntNode", "int");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.LongNode", "long");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.BooleanNode", "boolean");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.NullNode", "null");
   }
 
 
@@ -145,19 +146,20 @@ public class DeriveAvroSchema extends DeriveSchema {
    * Primitive schema of message is generated, if possible.
    *
    * @param field - message whose schema has to be found
-   * @return JSONObject if type primitive else empty option
+   * @return ObjectNode if type primitive else empty option
    */
-  Optional<JSONObject> getPrimitiveSchema(Object field) throws IllegalArgumentException {
+  Optional<ObjectNode> getPrimitiveSchema(Object field) throws IllegalArgumentException,
+      JsonProcessingException {
 
     String jsonInferredType;
 
     if (field == null) {
-      jsonInferredType = "class org.json.JSONObject$Null";
+      jsonInferredType = "class com.fasterxml.jackson.databind.node.NullNode";
     } else {
       jsonInferredType = field.getClass().toString();
     }
 
-    if (jsonInferredType.equals("class java.math.BigInteger")) {
+    if (jsonInferredType.equals("class com.fasterxml.jackson.databind.node.BigIntegerNode")) {
       if (this.strictCheck) {
         String errorMessage = String.format("Message %d: Numeric value %s out of range of long "
                 + "(-9223372036854775808 9223372036854775807). "
@@ -166,25 +168,25 @@ public class DeriveAvroSchema extends DeriveSchema {
         logger.error(errorMessage);
         throw new IllegalArgumentException(errorMessage);
       } else {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("type", "double");
+        ObjectNode objectNode = mapper.createObjectNode();
+        objectNode.put("type", "double");
         logger.warn(String.format("Message %d: Value out of range of long. "
             + "Mapping to double", currentMessage));
-        return Optional.of(jsonObject);
+        return Optional.of(objectNode);
       }
     }
 
     if (classToDataType.containsKey(jsonInferredType)) {
       String schemaString = String.format("{\"type\" : \"%s\"}",
           classToDataType.get(jsonInferredType));
-      return Optional.of(new JSONObject(schemaString));
+      return Optional.of(mapper.readValue(schemaString, ObjectNode.class));
     }
 
     return Optional.empty();
   }
 
   /**
-   * Return a list of schemas as JSONObject, a schema corresponding to each message.
+   * Return a list of schemas as ObjectNode, a schema corresponding to each message.
    * <p>
    * Checks if message is of primitive, array or record type
    * and makes further function call accordingly
@@ -195,58 +197,66 @@ public class DeriveAvroSchema extends DeriveSchema {
    * warning message is logged.
    * </p>
    *
-   * @param messages         List of messages, each message is a JSONObject
+   * @param messages         List of messages, each message is a ObjectNode
    * @param name             Name of Element
    * @param multipleMessages Flag to denote multiple message
    * @return List of Schemas, one for each message
    * @throws JsonProcessingException  thrown if message not in JSON format
    * @throws IllegalArgumentException thrown if no messages can be generated for strict check
    */
-  public ArrayList<JSONObject> getSchemaOfAllElements(List<Object> messages, String name,
+  public ArrayList<ObjectNode> getSchemaOfAllElements(List<Object> messages, String name,
                                                       boolean multipleMessages)
       throws JsonProcessingException, IllegalArgumentException {
 
-    ArrayList<JSONObject> arr = new ArrayList<>();
+    ArrayList<ObjectNode> arr = new ArrayList<>();
 
     for (int i = 0; i < messages.size(); i++) {
 
-      setCurrentMessage(i);
+      if (depth == 0) {
+        setCurrentMessage(i);
+      }
       Object message = messages.get(i);
-      Optional<JSONObject> x = getPrimitiveSchema(message);
+      Optional<ObjectNode> x = getPrimitiveSchema(message);
+
+      depth++;
 
       try {
-
         if (x.isPresent()) {
-          if (x.get().get("type").equals("null")) {
-            x.get().put("name", name);
+          if (x.get().get("type").asText().equals("null")) {
+            ObjectNode nullType = mapper.createObjectNode();
+            nullType.put("name", name);
+            nullType.put("type", "null");
+            arr.add(nullType);
+          } else {
+            arr.add(x.get());
           }
-          arr.add(x.get());
-        } else if (isArrayType(message.getClass().toString())) {
+        } else if (message instanceof ArrayNode) {
           List<Object> l = getListFromArray(message);
           arr.add(getSchemaForArray(l, name));
         } else {
-          JSONObject jsonObject = getMapFromObject(message);
-          arr.add(getSchemaForRecord(jsonObject, name, false));
+          ObjectNode objectNode = mapper.valueToTree(message);
+          arr.add(getSchemaForRecord(objectNode, name, false));
         }
 
       } catch (IllegalArgumentException e) {
         if (multipleMessages) {
           // Empty Object added to maintain correct index
-          arr.add(new JSONObject());
+          arr.add(mapper.createObjectNode());
           logger.warn(String.format("Message %d: cannot find Strict schema. "
-              + "Hence, ignoring for multiple messages. %s %n", i, e.getMessage()));
+              + "Hence, ignoring for multiple messages.", i));
         } else {
           logger.error(e.getMessage());
           throw new IllegalArgumentException(e.getMessage());
         }
       }
 
+      depth--;
     }
 
     return arr;
   }
 
-  public ArrayList<JSONObject> getSchemaOfAllElements(List<Object> list, String name)
+  public ArrayList<ObjectNode> getSchemaOfAllElements(List<Object> list, String name)
       throws JsonProcessingException {
     return getSchemaOfAllElements(list, name, false);
   }
@@ -257,19 +267,16 @@ public class DeriveAvroSchema extends DeriveSchema {
    * Prints warning in case there are multiple types of elements. Expected one data type
    * </p>
    *
-   * @param schemaList    List of schemas as JSONObjects
+   * @param schemaList    List of schemas as ObjectNode
    * @param schemaStrings List of schema as Strings
-   * @param name          Name of Array
    */
 
-  JSONObject getModeForArray(ArrayList<JSONObject> schemaList, ArrayList<String> schemaStrings,
-                             String name) {
+  ObjectNode getModeForArray(ArrayList<ObjectNode> schemaList, ArrayList<String> schemaStrings) {
 
-    int modeIndex = ProtoBufUtils.getMode(schemaStrings);
+    int modeIndex = MergeProtoBufUtils.getMode(schemaStrings);
     int freq = Collections.frequency(schemaStrings, schemaStrings.get(modeIndex));
-    if (freq != schemaStrings.size()) {
-      logger.warn(String.format("Message %d: All elements should be of same type for array '%s'. "
-          + "Choosing most frequent element for schema", currentMessage, name));
+    if (freq != schemaStrings.size() && depth == 0) {
+      logger.warn("Found multiple schemas for given messages. Choosing most occurring type");
     }
     return schemaList.get(modeIndex);
 
@@ -283,29 +290,34 @@ public class DeriveAvroSchema extends DeriveSchema {
    * @param name          Name of Array
    * @throws IllegalArgumentException thrown when elements are of different types
    */
-  private void checkForSameStructure(ArrayList<String> schemaStrings, String name)
+  private void checkForSameStructure(ArrayList<String> schemaStrings, String name,
+                                     boolean throwError)
       throws IllegalArgumentException {
 
-    for (int i = 0; i < schemaStrings.size(); i++) {
-      if (!schemaStrings.get(0).equals(schemaStrings.get(i))) {
+    for (String schemaString : schemaStrings) {
+      if (!schemaStrings.get(0).equals(schemaString)) {
 
         Type mapType = new TypeToken<Map<String, Object>>() {
         }.getType();
-        Map<String, Object> firstMap = gson.fromJson(schemaStrings.get(i), mapType);
+        Map<String, Object> firstMap = gson.fromJson(schemaString, mapType);
         Map<String, Object> secondMap = gson.fromJson(schemaStrings.get(0), mapType);
         String diff = Maps.difference(firstMap, secondMap).toString().substring(30);
 
         String errorMessage = String.format("Message %d: Array '%s' should have "
-            + "all elements of the same type. Element %d is different from  Element %d. "
-            + "Difference is : %s", currentMessage, name, i, 0, diff);
-        logger.error(errorMessage);
-        throw new IllegalArgumentException(errorMessage);
+            + "all elements of the same type. Difference is : %s", currentMessage, name, diff);
+        if (throwError) {
+          logger.error(errorMessage);
+          throw new IllegalArgumentException(errorMessage);
+        } else if (depth > 0) {
+          logger.warn(errorMessage);
+          return;
+        }
       }
     }
 
   }
 
-  private ArrayList<JSONObject> getUniqueList(ArrayList<JSONObject> schemaList) {
+  private ArrayList<ObjectNode> getUniqueList(ArrayList<ObjectNode> schemaList) {
 
     /*
     To reduce computation, use only unique values for strict check
@@ -313,7 +325,7 @@ public class DeriveAvroSchema extends DeriveSchema {
     only if 1 value remains use unique
     */
 
-    ArrayList<JSONObject> uniqueSchemaList = JsonUtils.getUnique(schemaList);
+    ArrayList<ObjectNode> uniqueSchemaList = MergeJsonUtils.getUnique(schemaList);
     if (uniqueSchemaList.size() == 1 || strictCheck) {
       return uniqueSchemaList;
     }
@@ -329,19 +341,19 @@ public class DeriveAvroSchema extends DeriveSchema {
    * <p>For strict version, checks if all schemas are same otherwise throws error.
    * For lenient version, picks most occurring type in case of conflicts</p>
    *
-   * @param messages         List of messages, each message is a JSONObject
+   * @param messages         List of messages, each message is a ObjectNode
    * @param name             name used for record and arrays
    * @param multipleMessages flag to specify multiple messages
    * @return map with information about schema
    * @throws JsonProcessingException  thrown if message not in JSON format
    * @throws IllegalArgumentException thrown if schema cannot be found in strict version
    */
-  public JSONObject getDatatypeForArray(List<Object> messages,
+  public ObjectNode getDatatypeForArray(List<Object> messages,
                                         String name,
                                         boolean multipleMessages)
       throws JsonProcessingException, IllegalArgumentException {
 
-    ArrayList<JSONObject> schemaList = getSchemaOfAllElements(messages,
+    ArrayList<ObjectNode> schemaList = getSchemaOfAllElements(messages,
         name, multipleMessages);
 
     schemaList = getUniqueList(schemaList);
@@ -351,37 +363,36 @@ public class DeriveAvroSchema extends DeriveSchema {
 
     if (typeProtoBuf) {
       // Merge Records for ProtoBuf
-      ProtoBufUtils.mergeRecordsInsideArray(schemaList, strictCheck);
+      MergeProtoBufUtils.mergeRecordsInsideArray(schemaList, strictCheck);
     } else {
       // Merge Unions for Avro
       MergeUnionUtils.mergeUnion(schemaList, !strictCheck);
     }
 
     ArrayList<String> schemaStrings = new ArrayList<>();
-    for (JSONObject jsonObject : schemaList) {
-      schemaStrings.add(jsonObject.toString());
+    for (ObjectNode objectNode : schemaList) {
+      schemaStrings.add(objectNode.toString());
     }
 
     if (!strictCheck) {
       // Lenient check choose highest occurring schema
       if (schemaList.size() > 0) {
-        return getModeForArray(schemaList, schemaStrings, name);
+        checkForSameStructure(schemaStrings, name, false);
+        return getModeForArray(schemaList, schemaStrings);
       }
-      return new JSONObject();
+      return mapper.createObjectNode();
     }
 
     // Check if all schemas are same, else raise error
-    checkForSameStructure(schemaStrings, name);
+    checkForSameStructure(schemaStrings, name, true);
     if (schemaList.size() > 0) {
       return schemaList.get(0);
     }
-    return new JSONObject();
-
-
+    return mapper.createObjectNode();
   }
 
 
-  public JSONObject getSchemaForArray(List<Object> field, String name)
+  public ObjectNode getSchemaForArray(List<Object> field, String name)
       throws JsonProcessingException {
     return getSchemaForArray(field, name, false, false);
   }
@@ -389,7 +400,7 @@ public class DeriveAvroSchema extends DeriveSchema {
   /**
    * Generates schema for array type.
    *
-   * @param messages         List of messages, each message is a JSONObject
+   * @param messages         List of messages, each message is a ObjectNode
    * @param name             name assigned to array
    * @param calledAsField    flag to check if called as a field
    * @param multipleMessages flag to specify multiple messages
@@ -398,41 +409,43 @@ public class DeriveAvroSchema extends DeriveSchema {
    * @throws IllegalArgumentException thrown if schema cannot be found in strict version
    */
 
-  public JSONObject getSchemaForArray(List<Object> messages, String name,
+  public ObjectNode getSchemaForArray(List<Object> messages, String name,
                                       boolean calledAsField, boolean multipleMessages)
       throws JsonProcessingException, IllegalArgumentException {
 
-    JSONObject schema = new JSONObject();
-    schema.put("name", name);
+    ObjectNode schema = mapper.createObjectNode();
 
     if (typeProtoBuf) {
       schema.put("__type", "array");
     }
 
+    schema.put("name", name);
+
     if (!calledAsField) {
       schema.put("type", "array");
     }
 
-    JSONObject elementSchema = getDatatypeForArray(messages, name, multipleMessages);
+    ObjectNode elementSchema = getDatatypeForArray(messages, name, multipleMessages);
 
     if (!elementSchema.isEmpty()) {
       DeriveProtobufSchema.checkForArrayOfNull(typeProtoBuf, elementSchema);
     } else {
-      elementSchema.put("type", new JSONArray());
+      elementSchema.set("type", mapper.createArrayNode());
     }
 
     if (!elementSchema.has("name")) {
 
-      elementSchema.put("items", elementSchema.get("type"));
-      elementSchema.put("type", "array");
       if (typeProtoBuf) {
         elementSchema.put("__type", "array");
       }
 
+      elementSchema.set("items", elementSchema.get("type"));
+      elementSchema.put("type", "array");
+
       if (calledAsField) {
-        schema.put("type", elementSchema);
+        schema.set("type", elementSchema);
       } else {
-        schema.put("items", elementSchema.get("items"));
+        schema.set("items", elementSchema.get("items"));
       }
 
     } else {
@@ -445,33 +458,34 @@ public class DeriveAvroSchema extends DeriveSchema {
     return schema;
   }
 
-  private void fillRecursiveType(JSONObject element, JSONObject schema, boolean calledAsField) {
+  private void fillRecursiveType(ObjectNode element, ObjectNode schema, boolean calledAsField) {
 
     if (calledAsField) {
 
-      JSONObject type = new JSONObject();
-
-      if (element.has("type") && element.get("type") instanceof JSONArray) {
-        // Element is of type union
-        type.put("items", element.get("type"));
-      } else {
-        type.put("items", element);
-      }
+      ObjectNode type = mapper.createObjectNode();
 
       type.put("type", "array");
+
+      if (element.has("type") && element.get("type") instanceof ArrayNode) {
+        // Element is of type union
+        type.set("items", element.get("type"));
+      } else {
+        type.set("items", element);
+      }
+
       if (typeProtoBuf) {
         type.put("__type", "array");
       }
-      schema.put("type", type);
+      schema.set("type", type);
 
     } else {
-      schema.put("items", element);
+      schema.set("items", element);
     }
   }
 
-  public JSONObject getSchemaForRecord(JSONObject jsonObject, String name)
+  public ObjectNode getSchemaForRecord(ObjectNode objectNode, String name)
       throws JsonProcessingException {
-    return getSchemaForRecord(jsonObject, name, false);
+    return getSchemaForRecord(objectNode, name, false);
   }
 
   /**
@@ -483,84 +497,83 @@ public class DeriveAvroSchema extends DeriveSchema {
    * @return schema
    * @throws JsonProcessingException thrown if message not in JSON format
    */
-  public JSONObject getSchemaForRecord(JSONObject message, String name,
+  public ObjectNode getSchemaForRecord(ObjectNode message, String name,
                                        boolean calledAsField) throws JsonProcessingException {
 
-    JSONObject schema = new JSONObject();
+    ObjectNode schema = mapper.createObjectNode();
 
     if (typeProtoBuf) {
       schema.put("__type", "record");
     }
 
+    schema.put("name", name);
+
     if (!calledAsField) {
       schema.put("type", "record");
     }
 
-    schema.put("name", name);
-    schema.put("fields", new JSONArray());
+    schema.set("fields", mapper.createArrayNode());
 
-    // Using TreeSet to visit fields in sorted manner
-    TreeSet<String> keySet = new TreeSet<>(message.keySet());
-
-    for (String key : keySet) {
+    for (String key : getSortedKeys(message)) {
 
       checkName(key);
       Object field = message.get(key);
-      Optional<JSONObject> primitiveSchema = getPrimitiveSchema(field);
+      Optional<ObjectNode> primitiveSchema = getPrimitiveSchema(field);
 
       if (primitiveSchema.isPresent()) {
 
-        JSONArray fields = (JSONArray) schema.get("fields");
-        JSONObject info = primitiveSchema.get();
-        info.put("name", key);
-        fields.put(info);
+        ArrayNode fields = (ArrayNode) schema.get("fields");
+        ObjectNode primitiveType = mapper.createObjectNode();
+        primitiveType.put("name", key);
+        primitiveType.set("type", primitiveSchema.get().get("type"));
+        fields.add(primitiveType);
 
       } else {
 
-        JSONObject info;
-        if (isArrayType(field.getClass().toString())) {
+        ObjectNode info;
+        if (field instanceof ArrayNode) {
           info = getSchemaForArray(getListFromArray(field), key, true, false);
         } else {
-          info = getSchemaForRecord(getMapFromObject(field), key, true);
+          info = getSchemaForRecord(mapper.valueToTree(field), key, true);
         }
 
-        JSONArray fields = (JSONArray) schema.get("fields");
-        fields.put(info);
+        ArrayNode fields = (ArrayNode) schema.get("fields");
+        fields.add(info);
 
       }
     }
 
     if (calledAsField) {
-      JSONObject recursive = new JSONObject();
-      recursive.put("fields", schema.get("fields"));
+      ObjectNode recursive = mapper.createObjectNode();
+      recursive.put("name", name);
+      recursive.set("fields", schema.get("fields"));
       recursive.put("type", "record");
 
       if (typeProtoBuf) {
         recursive.put("__type", "record");
       }
 
-      recursive.put("name", name);
       schema.remove("fields");
-      schema.put("type", recursive);
+      schema.set("type", recursive);
     }
 
     return schema;
   }
 
-  private static void checkValidSchema(JSONObject schema) {
+  private static void checkValidSchema(ObjectNode schema) {
     AvroSchema avroschema = new AvroSchema(schema.toString());
     avroschema.validate();
-    if (schema.getJSONArray("fields").isEmpty()) {
+    if (schema.get("fields").isEmpty()) {
       throw new IllegalArgumentException("Ignoring Empty record passed.");
     }
   }
 
-  private List<JSONObject> getSchemaForMultipleMessagesLenient(ArrayList<Object> messageObjects)
+  private List<ObjectNode> getSchemaForMultipleMessagesLenient(ArrayList<Object> messageObjects)
       throws JsonProcessingException {
 
-    JSONObject schema = getSchemaForArray(messageObjects, "Record",
+    ObjectNode schema = getSchemaForArray(messageObjects, "Record",
         false, true);
-    JSONObject finalSchema = schema.getJSONObject("items");
+    ObjectNode finalSchema = (ObjectNode) schema.get("items");
 
     try {
       checkValidSchema(finalSchema);
@@ -570,8 +583,8 @@ public class DeriveAvroSchema extends DeriveSchema {
       throw e;
     }
 
-    JSONObject schemaInfo = new JSONObject();
-    schemaInfo.put("schema", finalSchema);
+    ObjectNode schemaInfo = mapper.createObjectNode();
+    schemaInfo.set("schema", finalSchema);
     return Collections.singletonList(schemaInfo);
 
   }
@@ -591,12 +604,12 @@ public class DeriveAvroSchema extends DeriveSchema {
    * @throws JsonProcessingException  thrown if message not in JSON format
    * @throws IllegalArgumentException thrown if no messages can be generated for strict check
    */
-  public List<JSONObject> getSchemaForMultipleMessages(List<String> messages)
+  public List<ObjectNode> getSchemaForMultipleMessages(List<String> messages)
       throws JsonProcessingException {
 
     ArrayList<Object> messageObjects = new ArrayList<>();
     for (String message : messages) {
-      messageObjects.add(new JSONObject(message));
+      messageObjects.add(mapper.readTree(message));
     }
 
     /*
@@ -613,29 +626,29 @@ public class DeriveAvroSchema extends DeriveSchema {
     All Unique Schemas are returned and the messages it matches
     */
 
-    ArrayList<JSONObject> schemaList = getSchemaOfAllElements(messageObjects,
+    ArrayList<ObjectNode> schemaList = getSchemaOfAllElements(messageObjects,
         "Record", true);
 
-    ArrayList<JSONObject> uniqueList = JsonUtils.getUnique(schemaList);
+    ArrayList<ObjectNode> uniqueList = MergeJsonUtils.getUnique(schemaList);
 
     if (uniqueList.size() == 0) {
       logger.error(errorMessageNoSchemasFound);
       throw new IllegalArgumentException(errorMessageNoSchemasFound);
     }
 
-    List<List<Integer>> schemaToMessagesInfo = ProtoBufUtils.getUniqueWithMessageInfo(
+    List<List<Integer>> schemaToMessagesInfo = MergeProtoBufUtils.getUniqueWithMessageInfo(
         schemaList, uniqueList, null);
 
     MergeNumberUtils.mergeNumberTypes(uniqueList, true);
     MergeUnionUtils.mergeUnion(uniqueList, true);
 
-    ArrayList<JSONObject> uniqueList2 = JsonUtils.getUnique(uniqueList);
-    schemaToMessagesInfo = ProtoBufUtils.getUniqueWithMessageInfo(
+    ArrayList<ObjectNode> uniqueList2 = MergeJsonUtils.getUnique(uniqueList);
+    schemaToMessagesInfo = MergeProtoBufUtils.getUniqueWithMessageInfo(
         uniqueList, uniqueList2, schemaToMessagesInfo);
 
-    ArrayList<JSONObject> ans = new ArrayList<>();
+    ArrayList<ObjectNode> ans = new ArrayList<>();
     for (int i = 0; i < uniqueList2.size(); i++) {
-      JSONObject schemaInfo = new JSONObject();
+      ObjectNode schemaInfo = mapper.createObjectNode();
       List<Integer> messagesMatched = schemaToMessagesInfo.get(i);
 
       try {
@@ -647,9 +660,12 @@ public class DeriveAvroSchema extends DeriveSchema {
         continue;
       }
 
-      schemaInfo.put("schema", uniqueList2.get(i));
+      schemaInfo.set("schema", uniqueList2.get(i));
       Collections.sort(messagesMatched);
-      schemaInfo.put("messagesMatched", messagesMatched);
+      ArrayNode messagesMatchedArr = schemaInfo.putArray("messagesMatched");
+      for (Integer m : messagesMatched) {
+        messagesMatchedArr.add(m);
+      }
       schemaInfo.put("numMessagesMatched", schemaToMessagesInfo.get(i).size());
       ans.add(schemaInfo);
     }
@@ -659,8 +675,8 @@ public class DeriveAvroSchema extends DeriveSchema {
       throw new IllegalArgumentException(errorMessageNoSchemasFound);
     }
 
-    Comparator<JSONObject> comparator
-        = Comparator.comparingInt(obj -> obj.getInt("numMessagesMatched"));
+    Comparator<ObjectNode> comparator
+        = Comparator.comparingInt(obj -> obj.get("numMessagesMatched").asInt());
 
     ans.sort(comparator.reversed());
     return ans;

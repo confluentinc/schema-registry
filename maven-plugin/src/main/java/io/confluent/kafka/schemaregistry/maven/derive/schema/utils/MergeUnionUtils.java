@@ -23,12 +23,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveAvroSchema;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
 /**
  * Utility class to provide functionality for unions in avro.
@@ -42,12 +46,22 @@ public final class MergeUnionUtils {
       new ArrayList<>(Arrays.asList("float", "double", "int", "long", "string", "boolean"));
 
 
-  private static void checkUnionInArray(JSONObject schema, ArrayList<String> unionBranches) {
+  private static String nodeToString(JsonNode node) {
 
-    if (schema.get("type").equals("array") && schema.get("items") instanceof JSONObject) {
-      JSONObject type = schema.getJSONObject("items");
-      if (type.get("type") instanceof String) {
-        String t = type.getString("type");
+    if (node instanceof TextNode) {
+      return node.asText();
+    }
+
+    return node.toString();
+  }
+
+  private static void checkUnionInArray(ObjectNode schema, ArrayList<String> unionBranches) {
+
+    if (schema.get("type").asText().equals("array")
+        && schema.get("items") instanceof ObjectNode) {
+      ObjectNode type = (ObjectNode) schema.get("items");
+      if (type.get("type") instanceof TextNode) {
+        String t = type.get("type").asText();
         if (!t.equals("record") && !t.equals("array")) {
           unionBranches.add(t);
         }
@@ -56,13 +70,13 @@ public final class MergeUnionUtils {
 
   }
 
-  private static boolean checkBranchName(JSONObject fieldItem) {
+  private static boolean checkBranchName(ObjectNode fieldItem) {
 
-    String name = fieldItem.getString("name");
-    if (!(fieldItem.get("type") instanceof String)) {
+    String name = fieldItem.get("name").asText();
+    if (!(fieldItem.get("type") instanceof TextNode)) {
       return false;
     }
-    String type = fieldItem.getString("type");
+    String type = fieldItem.get("type").asText();
 
     if (avroTypes.contains(name)) {
 
@@ -78,22 +92,27 @@ public final class MergeUnionUtils {
     return false;
   }
 
-  static void checkUnionInRecord(JSONObject obj,
+  static void checkUnionInRecord(ObjectNode obj,
                                  ArrayList<String> unionBranches,
                                  boolean includeComplex) {
 
-    JSONArray fields = obj.getJSONArray("fields");
-    if (fields.length() == 1 && fields.get(0) instanceof JSONObject) {
+    ArrayNode fields = (ArrayNode) obj.get("fields");
+    if (fields.size() == 1 && fields.get(0) instanceof ObjectNode) {
 
-      JSONObject fieldItem = fields.getJSONObject(0);
+      ObjectNode fieldItem = (ObjectNode) fields.get(0);
       if (checkBranchName(fieldItem)) {
         // Primitive Type
-        unionBranches.add(fieldItem.getString("name"));
+        unionBranches.add(fieldItem.get("name").asText());
       } else if (includeComplex) {
 
         // Complex Type - Array or Record or Union
         Object type = fieldItem.get("type");
-        if (type.equals("record") || type.equals("array") || !(type instanceof String)) {
+        if (type instanceof TextNode) {
+          String typeName = ((TextNode) type).asText();
+          if (typeName.equals("record") || typeName.equals("array")) {
+            unionBranches.add(fieldItem.toString());
+          }
+        } else {
           unionBranches.add(fieldItem.toString());
         }
 
@@ -136,13 +155,13 @@ public final class MergeUnionUtils {
    * @return branch of union as a list
    **/
 
-  static ArrayList<String> checkForUnion(JSONObject schema, boolean includeComplex) {
+  static ArrayList<String> checkForUnion(ObjectNode schema, boolean includeComplex) {
 
     ArrayList<String> unionBranches = new ArrayList<>();
-    JSONObject obj = schema;
+    ObjectNode obj = schema;
 
-    if (schema.get("type") instanceof JSONObject) {
-      obj = schema.getJSONObject("type");
+    if (schema.get("type") instanceof ObjectNode) {
+      obj = (ObjectNode) schema.get("type");
     }
 
     if ((obj.has("fields"))) {
@@ -154,68 +173,73 @@ public final class MergeUnionUtils {
   }
 
   /**
-   * Convert string to JSONObject if possible and make changes in type, fields and items.
+   * Convert string to ObjectNode if possible and make changes in type, fields and items.
    *
-   * @param str string to convert to JSONObject
-   * @param arr array to which JSONObject is added
+   * @param str string to convert to ObjectNode
+   * @param arr array to which ObjectNode is added
    */
 
   private static boolean convertStringToObject(String str, List<Object> arr) {
 
     try {
 
-      JSONObject jsonObject = new JSONObject(str);
+      ObjectNode objectNode = mapper.readValue(str, ObjectNode.class);
+      if (objectNode == null) {
+        arr.add(str);
+        return true;
+      }
 
-      if (jsonObject.get("type") instanceof JSONObject) {
-        if (jsonObject.getJSONObject("type").has("fields")) {
-          jsonObject.put("fields", jsonObject.getJSONObject("type").getJSONArray("fields"));
-          jsonObject.put("type", "record");
-        } else if (jsonObject.getJSONObject("type").has("items")) {
-          if (!jsonObject.get("name").equals("array")) {
+      if (objectNode.get("type") instanceof ObjectNode) {
+        if (objectNode.get("type").has("fields")) {
+          objectNode.set("fields", objectNode.get("type").get("fields"));
+          objectNode.put("type", "record");
+        } else if (objectNode.get("type").has("items")) {
+          if (!objectNode.get("name").asText().equals("array")) {
             logger.warn(String.format("Message %d: For type Union, branch must have name array "
-                + "instead of %s", DeriveAvroSchema.getCurrentMessage(), jsonObject.get("name")));
+                + "instead of %s", DeriveAvroSchema.getCurrentMessage(), objectNode.get("name")));
             return false;
           }
-          jsonObject.put("items", jsonObject.getJSONObject("type").get("items"));
-          jsonObject.put("type", "array");
+          objectNode.set("items", objectNode.get("type").get("items"));
+          objectNode.put("type", "array");
         }
       }
 
-      arr.add(jsonObject);
+      arr.add(objectNode);
 
-    } catch (JSONException e) {
+    } catch (JsonProcessingException e) {
       arr.add(str);
     }
 
     return true;
   }
 
-  private static void copyTypesForArray(JSONObject schema1, JSONObject schema2,
+  private static void copyTypesForArray(ObjectNode schema1, ObjectNode schema2,
                                         Set<String> unionBranches) {
 
     if (schema2.has("items")) {
 
-      if (schema2.get("items") instanceof JSONArray) {
-        JSONArray arr = schema2.getJSONArray("items");
-        if (arr.length() == 0) {
+      if (schema2.get("items") instanceof ArrayNode) {
+        ArrayNode items = (ArrayNode) schema2.get("items");
+        if (items.size() == 0) {
           return;
         }
 
         boolean flag = true;
-        for (Object x : arr) {
-          if (!unionBranches.contains(x.toString())) {
+        for (JsonNode branches : items) {
+          String branchString = nodeToString(branches);
+          if (!unionBranches.contains(branchString)) {
             flag = false;
             break;
           }
         }
 
         if (flag) {
-          schema2.put("items", schema1.get("items"));
+          schema2.set("items", schema1.get("items"));
         }
 
-      } else if ((schema2.get("items") instanceof String)
-          && unionBranches.contains(schema2.getString("items"))) {
-        schema2.put("items", schema1.get("items"));
+      } else if ((schema2.get("items") instanceof TextNode)
+          && unionBranches.contains(schema2.get("items").asText())) {
+        schema2.set("items", schema1.get("items"));
       }
 
     }
@@ -227,42 +251,53 @@ public final class MergeUnionUtils {
    * @param schema1 Object with all branches of union
    * @param schema2 Object to which changes are copied
    */
-  static void copyTypes(JSONObject schema1, JSONObject schema2) {
+  static void copyTypes(ObjectNode schema1, ObjectNode schema2) {
 
     Set<String> unionBranches = new HashSet<>();
     fillBranches(schema1, unionBranches, new HashSet<>(), false);
 
-    if (schema2.get("type").equals("null")) {
+    if (schema2.get("type").asText().equals("null")) {
       if (unionBranches.contains("null")) {
-        schema2.put("type", schema1.get("type"));
+        schema2.set("type", schema1.get("type"));
         return;
       }
     }
 
     ArrayList<String> newUnionBranches = checkForUnion(schema2, true);
     if (newUnionBranches.size() > 0 && unionBranches.contains(newUnionBranches.get(0))) {
-      if (!(schema1.get("type") instanceof String)) {
-        schema2.put("type", schema1.get("type"));
+      if (!(schema1.get("type") instanceof TextNode)) {
+        schema2.set("type", schema1.get("type"));
         schema2.remove("fields");
       } else {
-        schema2.put("type", schema1.get("type"));
-        schema2.put("fields", schema1.get("fields"));
+        schema2.set("type", schema1.get("type"));
+        schema2.set("fields", schema1.get("fields"));
       }
     }
 
     // Case when schema2 is type union
-    if (schema2.get("type") instanceof JSONArray) {
-      JSONArray arr = schema2.getJSONArray("type");
-      if (arr.length() == 0) {
-        return;
-      }
-      Object schema2Type = schema2.getJSONArray("type").get(0);
-      if (unionBranches.contains(schema2Type.toString())) {
-        schema2.put("type", schema1.get("type"));
-      }
-    }
+    copyTypesForUnion(schema1, schema2, unionBranches);
 
     copyTypesForArray(schema1, schema2, unionBranches);
+
+  }
+
+
+  private static void copyTypesForUnion(ObjectNode schema1, ObjectNode schema2,
+                                        Set<String> unionBranches) {
+
+    if (schema2.get("type") instanceof ArrayNode) {
+      ArrayNode arr = (ArrayNode) schema2.get("type");
+      if (arr.size() == 0) {
+        return;
+      }
+
+      JsonNode schema2Type = schema2.get("type").get(0);
+      String schema2TypeString = nodeToString(schema2Type);
+
+      if (unionBranches.contains(schema2TypeString)) {
+        schema2.set("type", schema1.get("type"));
+      }
+    }
 
   }
 
@@ -278,40 +313,47 @@ public final class MergeUnionUtils {
                                  Set<String> namesOfObjects, boolean check) {
 
     try {
-      JSONObject temp = new JSONObject(str);
+      ObjectNode branch = mapper.readValue(str, ObjectNode.class);
+      if (branch == null) {
+        unionBranches.add(str);
+        return;
+      }
+
       if (check) {
-        String name = temp.getString("name");
+        String name = branch.get("name").asText();
         if (!namesOfObjects.contains(name)) {
           unionBranches.add(str);
         }
       } else {
         unionBranches.add(str);
-        namesOfObjects.add(temp.getString("name"));
+        namesOfObjects.add(branch.get("name").asText());
       }
-    } catch (JSONException e) {
+    } catch (JsonProcessingException e) {
       unionBranches.add(str);
     }
 
   }
 
 
-  private static void fillBranches(JSONObject schema, Set<String> unionBranches,
+  private static void fillBranches(ObjectNode schema, Set<String> unionBranches,
                                    Set<String> namesOfObjects, boolean check) {
 
 
-    if (schema.get("type").equals("null")) {
+    if (schema.get("type").asText().equals("null")) {
       unionBranches.add("null");
-    } else if (schema.get("type") instanceof JSONArray) {
+    } else if (schema.get("type") instanceof ArrayNode) {
 
       // schema1 is of type Union, going through all branches
-      for (Object obj : schema.getJSONArray("type")) {
-        addToUnion(obj.toString(), unionBranches, namesOfObjects, check);
+      for (JsonNode obj : schema.get("type")) {
+        String objString = nodeToString(obj);
+        addToUnion(objString, unionBranches, namesOfObjects, check);
       }
 
-    } else if (schema.has("items") && schema.get("items") instanceof JSONArray) {
+    } else if (schema.has("items") && schema.get("items") instanceof ArrayNode) {
 
-      for (Object obj : schema.getJSONArray("items")) {
-        addToUnion(obj.toString(), unionBranches, namesOfObjects, check);
+      for (JsonNode obj : schema.get("items")) {
+        String objString = nodeToString(obj);
+        addToUnion(objString, unionBranches, namesOfObjects, check);
       }
 
     } else {
@@ -329,10 +371,10 @@ public final class MergeUnionUtils {
    * Alter schema1 to have branches of union in schema1
    * and schema2.
    *
-   * @param schema1 JSONObject where changes are made
-   * @param schema2 JSONObject where no change is made
+   * @param schema1 ObjectNode where changes are made
+   * @param schema2 ObjectNode where no change is made
    */
-  static void matchTypes(JSONObject schema1, JSONObject schema2) {
+  static void matchTypes(ObjectNode schema1, ObjectNode schema2) {
 
     /*
     Branches of the union are found out and merged here
@@ -356,10 +398,19 @@ public final class MergeUnionUtils {
 
       if (flag) {
 
-        if (schema1.get("type").equals("array")) {
-          schema1.put("items", arr);
+        ArrayNode arrayNode;
+        if (schema1.get("type").asText().equals("array")) {
+          arrayNode = schema1.putArray("items");
         } else {
-          schema1.put("type", arr);
+          arrayNode = schema1.putArray("type");
+        }
+
+        for (Object obj : arr) {
+          if (obj instanceof String) {
+            arrayNode.add((String) obj);
+          } else {
+            arrayNode.add((JsonNode) obj);
+          }
         }
 
         if (schema1.has("fields")) {
@@ -376,11 +427,11 @@ public final class MergeUnionUtils {
    * Match schema1
    * with type of schema2.
    *
-   * @param schema1      JSONObject matched whole
-   * @param schema2      JSONObject whose type is matched
+   * @param schema1      ObjectNode matched whole
+   * @param schema2      ObjectNode whose type is matched
    * @param changeSecond flag to change schema2
    */
-  static void matchRecordTypeWithRecord(JSONObject schema1, JSONObject schema2,
+  static void matchRecordTypeWithRecord(ObjectNode schema1, ObjectNode schema2,
                                         boolean changeSecond) {
 
     /*
@@ -392,16 +443,16 @@ public final class MergeUnionUtils {
      */
 
 
-    if ((schema2.get("type") instanceof JSONObject) && !schema1.similar(schema2)) {
+    if ((schema2.get("type") instanceof ObjectNode) && !schema1.equals(schema2)) {
 
-      JSONObject schema2Type = schema2.getJSONObject("type");
+      ObjectNode schema2Type = (ObjectNode) schema2.get("type");
       if (schema2Type.has("name") && schema1.get("name").equals(schema2Type.get("name"))) {
-        matchJsonArray(schema1, schema2.getJSONObject("type"), changeSecond);
+        matchArrayNode(schema1, (ObjectNode) schema2.get("type"), changeSecond);
       }
 
-      if (schema2Type.similar(schema1)) {
+      if (schema2Type.equals(schema1)) {
         schema2.put("type", "record");
-        schema2.put("fields", schema1.get("fields"));
+        schema2.set("fields", schema1.get("fields"));
       }
 
     }
@@ -413,19 +464,19 @@ public final class MergeUnionUtils {
    * Each branch in union of schema1
    * is matched with field/type in schema2.
    *
-   * @param schema1      JSONObject of type union
-   * @param schema2      JSONObject of type record
+   * @param schema1      ObjectNode of type union
+   * @param schema2      ObjectNode of type record
    * @param changeSecond flag to change schema2
    */
-  static void matchJsonArrayWithRecord(JSONObject schema1,
-                                       JSONObject schema2, boolean changeSecond) {
+  static void matchJsonArrayWithRecord(ObjectNode schema1,
+                                       ObjectNode schema2, boolean changeSecond) {
 
-    JSONArray arr = schema1.getJSONArray("type");
-    ArrayList<JSONObject> arrJsonObjects = new ArrayList<>();
+    ArrayNode arr = (ArrayNode) schema1.get("type");
+    ArrayList<ObjectNode> arrObjects = new ArrayList<>();
 
-    for (int i = 0; i < arr.length(); i++) {
-      if (arr.get(i) instanceof JSONObject) {
-        arrJsonObjects.add(arr.getJSONObject(i));
+    for (int i = 0; i < arr.size(); i++) {
+      if (arr.get(i) instanceof ObjectNode) {
+        arrObjects.add((ObjectNode) arr.get(i));
       }
     }
 
@@ -435,29 +486,29 @@ public final class MergeUnionUtils {
         schema2 {name: J, type: {J, fields:[Obj1]}}
         To match Obj1 in both schema1 and schema2
     */
-    if (schema2.get("type") instanceof JSONObject) {
+    if (schema2.get("type") instanceof ObjectNode) {
 
-      JSONObject toCompare = schema2.getJSONObject("type");
+      ObjectNode toCompare = (ObjectNode) schema2.get("type");
       if (schema1.get("name").equals(toCompare.get("name"))) {
 
-        for (JSONObject obj : arrJsonObjects) {
-          JSONObject temp = new JSONObject();
-          temp.put("name", schema1.getString("name"));
-
-          JSONArray f = new JSONArray();
-          f.put(obj);
-          temp.put("fields", f);
+        for (ObjectNode obj : arrObjects) {
+          ObjectNode temp = mapper.createObjectNode();
+          temp.put("name", schema1.get("name").asText());
           temp.put("type", "record");
 
-          matchJsonArray(temp, toCompare, changeSecond);
+          ArrayNode fields = mapper.createArrayNode();
+          fields.add(obj);
+          temp.set("fields", fields);
+
+          matchArrayNode(temp, toCompare, changeSecond);
         }
       }
 
     } else if (schema2.has("fields")) {
 
-      for (JSONObject obj : arrJsonObjects) {
-        if (obj.get("name").equals(schema2.getJSONArray("fields").getJSONObject(0).get("name"))) {
-          matchJsonArray(obj, schema2.getJSONArray("fields").getJSONObject(0), changeSecond);
+      for (ObjectNode obj : arrObjects) {
+        if (obj.get("name").equals(schema2.get("fields").get(0).get("name"))) {
+          matchArrayNode(obj, (ObjectNode) schema2.get("fields").get(0), changeSecond);
         }
       }
 
@@ -469,32 +520,32 @@ public final class MergeUnionUtils {
    * Match objects inside fields of schema1
    * and schema2.
    *
-   * @param schema1      JSONObject of type record
-   * @param schema2      JSONObject of type record
+   * @param schema1      ObjectNode of type record
+   * @param schema2      ObjectNode of type record
    * @param changeSecond flag to change schema2
    */
 
-  private static void matchFieldsInArray(JSONObject schema1,
-                                         JSONObject schema2, boolean changeSecond) {
+  private static void matchFieldsInArray(ObjectNode schema1,
+                                         ObjectNode schema2, boolean changeSecond) {
 
-    if (schema1.has("fields") && schema1.get("fields") instanceof JSONArray
-        && schema2.get("fields") instanceof JSONArray) {
+    if (schema1.has("fields") && schema1.get("fields") instanceof ArrayNode
+        && schema2.get("fields") instanceof ArrayNode) {
 
-      JSONArray schema1Fields = schema1.getJSONArray("fields");
-      JSONArray schema2Fields = schema2.getJSONArray("fields");
+      ArrayNode schema1Fields = (ArrayNode) schema1.get("fields");
+      ArrayNode schema2Fields = (ArrayNode) schema2.get("fields");
 
-      for (int i = 0; (i < schema1Fields.length()) && (i < schema2Fields.length()); ++i) {
-        if (schema1Fields.getJSONObject(i).get("name")
-            .equals(schema2Fields.getJSONObject(i).get("name"))) {
-          matchJsonArray(schema1Fields.getJSONObject(i),
-              schema2Fields.getJSONObject(i), changeSecond);
+      for (int i = 0; (i < schema1Fields.size()) && (i < schema2Fields.size()); ++i) {
+        if (schema1Fields.get(i).get("name")
+            .equals(schema2Fields.get(i).get("name"))) {
+          matchArrayNode((ObjectNode) schema1Fields.get(i),
+              (ObjectNode) schema2Fields.get(i), changeSecond);
         }
       }
     }
   }
 
-  static void matchItems(JSONObject schema1,
-                         JSONObject schema2, boolean changeSecond) {
+  static void matchItems(ObjectNode schema1,
+                         ObjectNode schema2, boolean changeSecond) {
 
 
     /*
@@ -505,21 +556,21 @@ public final class MergeUnionUtils {
         Possible only for array of unions
     */
 
-    if ((schema1.get("items") instanceof JSONArray)
-        && (schema2.get("items") instanceof JSONArray)) {
+    if ((schema1.get("items") instanceof ArrayNode)
+        && (schema2.get("items") instanceof ArrayNode)) {
 
-      JSONArray schema1Items = schema1.getJSONArray("items");
-      JSONArray schema2Items = schema2.getJSONArray("items");
+      ArrayNode schema1Items = (ArrayNode) schema1.get("items");
+      ArrayNode schema2Items = (ArrayNode) schema2.get("items");
 
-      for (int i = 0; i < schema1Items.length(); ++i) {
+      for (int i = 0; i < schema1Items.size(); ++i) {
 
-        if (schema1Items.get(i) instanceof JSONObject) {
-          for (int j = 0; j < schema2Items.length(); j++) {
-            if (schema2Items.get(j) instanceof JSONObject) {
-              if (schema1Items.getJSONObject(i).getString("name")
-                  .equals(schema2Items.getJSONObject(j).getString("name"))) {
-                matchJsonArray(schema1Items.getJSONObject(i),
-                    schema2Items.getJSONObject(j), changeSecond);
+        if (schema1Items.get(i) instanceof ObjectNode) {
+          for (int j = 0; j < schema2Items.size(); j++) {
+            if (schema2Items.get(j) instanceof ObjectNode) {
+              if (schema1Items.get(i).get("name").asText()
+                  .equals(schema2Items.get(j).get("name").asText())) {
+                matchArrayNode((ObjectNode) schema1Items.get(i),
+                    (ObjectNode) schema2Items.get(j), changeSecond);
               }
             }
           }
@@ -535,23 +586,24 @@ public final class MergeUnionUtils {
    * Match type or field of schema1
    * with corresponding type or field with schema2.
    *
-   * @param schema1      JSONObject to match
-   * @param schema2      JSONObject to match
+   * @param schema1      ObjectNode to match
+   * @param schema2      ObjectNode to match
    * @param changeSecond flag to change schema2
    */
 
-  private static void matchJsonArray(JSONObject schema1, JSONObject schema2, boolean changeSecond) {
+  private static void matchArrayNode(ObjectNode schema1, ObjectNode schema2, boolean changeSecond) {
 
-    if (schema1.similar(schema2)) {
+    if (schema1.equals(schema2)) {
       return;
     }
 
-    if (schema1.get("type") instanceof JSONObject && schema2.get("type") instanceof JSONObject) {
+    if (schema1.get("type") instanceof ObjectNode && schema2.get("type") instanceof ObjectNode) {
       /*
-      Both are of type record as type is JSONObject
+      Both are of type record as type is ObjectNode
       */
-      matchJsonArray(schema1.getJSONObject("type"), schema2.getJSONObject("type"), changeSecond);
-    } else if (schema1.get("type") instanceof JSONArray) {
+      matchArrayNode((ObjectNode) schema1.get("type"),
+          (ObjectNode) schema2.get("type"), changeSecond);
+    } else if (schema1.get("type") instanceof ArrayNode) {
 
       /*
       schema1 has type Union, type is of json Array,
@@ -583,9 +635,9 @@ public final class MergeUnionUtils {
 
   }
 
-  private static void updateRecords(JSONObject schema1, JSONObject schema2, boolean changeSecond) {
+  private static void updateRecords(ObjectNode schema1, ObjectNode schema2, boolean changeSecond) {
 
-    if (!schema1.similar(schema2)) {
+    if (!schema1.equals(schema2)) {
 
       if (!changeSecond) {
         // Merging types, schema1 is changed in this function to have all branches of union
@@ -596,9 +648,9 @@ public final class MergeUnionUtils {
         copyTypes(schema1, schema2);
       }
 
-      if (changeSecond && (schema2.get("type") instanceof JSONObject)) {
+      if (changeSecond && (schema2.get("type") instanceof ObjectNode)) {
         updateMergedRecords(schema1, schema2);
-        if (!schema2.get("type").equals("record")) {
+        if (!schema2.get("type").asText().equals("record")) {
           updateMergedArrays(schema1, schema2);
         }
       }
@@ -611,10 +663,10 @@ public final class MergeUnionUtils {
    * Update record schema2 to have fields and type as schema1
    * .
    *
-   * @param schema1 JSONObject with correct formatting
-   * @param schema2 JSONObject to update
+   * @param schema1 ObjectNode with correct formatting
+   * @param schema2 ObjectNode to update
    */
-  private static void updateMergedRecords(JSONObject schema1, JSONObject schema2) {
+  private static void updateMergedRecords(ObjectNode schema1, ObjectNode schema2) {
 
     /*
     Inside unions type:record has to be mentioned and fields
@@ -624,10 +676,10 @@ public final class MergeUnionUtils {
         's
      */
 
-    JSONObject schema2Type = schema2.getJSONObject("type");
-    if (schema1.similar(schema2Type) && schema1.has("fields")) {
-      schema2.put("type", schema1.get("type"));
-      schema2.put("fields", schema1.get("fields"));
+    ObjectNode schema2Type = (ObjectNode) schema2.get("type");
+    if (schema1.equals(schema2Type) && schema1.has("fields")) {
+      schema2.set("type", schema1.get("type"));
+      schema2.set("fields", schema1.get("fields"));
     }
 
   }
@@ -636,11 +688,11 @@ public final class MergeUnionUtils {
    * Update array schema2 to have items and type as schema1
    * .
    *
-   * @param schema1 JSONObject with correct formatting
-   * @param schema2 JSONObject to update
+   * @param schema1 ObjectNode with correct formatting
+   * @param schema2 ObjectNode to update
    */
 
-  private static void updateMergedArrays(JSONObject schema1, JSONObject schema2) {
+  private static void updateMergedArrays(ObjectNode schema1, ObjectNode schema2) {
 
     /*
     Restructuring Array items, similar to record
@@ -648,23 +700,23 @@ public final class MergeUnionUtils {
         schema2 {"name":"array","type":{"type":"array","items":"int"}}
         schema2 is changed to same as schema1
      */
-    JSONObject schema2Type = schema2.getJSONObject("type");
+    ObjectNode schema2Type = (ObjectNode) schema2.get("type");
 
-    if (schema1.get("type").equals("array") && schema2Type.has("items")) {
+    if (schema1.get("type").asText().equals("array") && schema2Type.has("items")) {
 
-      if ((schema2Type.get("items") instanceof String)
+      if ((schema2Type.get("items") instanceof TextNode)
           && schema2Type.get("items").equals(schema1.get("items"))) {
 
         // 1D Array
         schema2.put("type", "array");
-        schema2.put("items", schema1.get("items"));
+        schema2.set("items", schema1.get("items"));
 
-      } else if ((schema2Type.get("items") instanceof JSONObject)
-          && schema2Type.getJSONObject("items").similar(schema1.get("items"))) {
+      } else if ((schema2Type.get("items") instanceof ObjectNode)
+          && schema2Type.get("items").equals(schema1.get("items"))) {
 
         // 2D or higher Array
         schema2.put("type", "array");
-        schema2.put("items", schema1.get("items"));
+        schema2.set("items", schema1.get("items"));
 
       }
 
@@ -677,18 +729,18 @@ public final class MergeUnionUtils {
    *
    * @param schemaList List of schemas
    */
-  public static void mergeUnion(ArrayList<JSONObject> schemaList, boolean matchAll) {
+  public static void mergeUnion(ArrayList<ObjectNode> schemaList, boolean matchAll) {
 
     if (schemaList.size() == 0) {
       return;
     }
 
-    for (JSONObject curr : schemaList) {
+    for (ObjectNode curr : schemaList) {
       compressRecordToUnion(curr);
     }
 
     if (matchAll) {
-      for (JSONObject obj : schemaList) {
+      for (ObjectNode obj : schemaList) {
         mergeUnionLoops(schemaList, obj);
       }
     } else {
@@ -698,20 +750,20 @@ public final class MergeUnionUtils {
   }
 
 
-  private static void mergeUnionLoops(ArrayList<JSONObject> schemaList, JSONObject starting) {
+  private static void mergeUnionLoops(ArrayList<ObjectNode> schemaList, ObjectNode starting) {
 
     // Loop 1 : Match Schema 1 with rest and modify only first schema to include all union branches
-    for (JSONObject curr : schemaList) {
-      if (!starting.similar(curr)) {
-        matchJsonArray(starting, curr, false);
+    for (ObjectNode curr : schemaList) {
+      if (!starting.equals(curr)) {
+        matchArrayNode(starting, curr, false);
       }
     }
 
     // Loop 2 : Match Schema 1 with rest and check if second has corresponding branch in union
     // If yes, then copy union from schema 1 to current schema
-    for (JSONObject curr : schemaList) {
-      if (!starting.similar(curr)) {
-        matchJsonArray(starting, curr, true);
+    for (ObjectNode curr : schemaList) {
+      if (!starting.equals(curr)) {
+        matchArrayNode(starting, curr, true);
       }
     }
 
@@ -738,38 +790,38 @@ public final class MergeUnionUtils {
    * "type":["string"]
    * }}</pre>
    *
-   * @param schema JSONObject to compress
+   * @param schema ObjectNode to compress
    */
 
 
-  static void compressRecordToUnion(JSONObject schema) {
+  static void compressRecordToUnion(ObjectNode schema) {
 
     ArrayList<String> unionBranches = checkForUnion(schema, false);
     if (unionBranches.size() == 1) {
-      JSONArray union = new JSONArray();
-      union.put(unionBranches.get(0));
-      if (schema.get("type").equals("array")) {
+      ArrayNode union = mapper.createArrayNode();
+      union.add(unionBranches.get(0));
+      if (schema.get("type").asText().equals("array")) {
         schema.put("items", unionBranches.get(0));
       } else {
-        schema.put("type", union);
+        schema.set("type", union);
         schema.remove("fields");
       }
       return;
     }
 
     for (String typeName : Arrays.asList("type", "fields")) {
-      if (schema.has(typeName) && schema.get(typeName) instanceof JSONArray) {
-        JSONArray arr = schema.getJSONArray(typeName);
-        for (int i = 0; i < arr.length(); i++) {
-          if (arr.get(i) instanceof JSONObject) {
-            compressRecordToUnion(arr.getJSONObject(i));
+      if (schema.has(typeName) && schema.get(typeName) instanceof ArrayNode) {
+        ArrayNode arr = (ArrayNode) schema.get(typeName);
+        for (int i = 0; i < arr.size(); i++) {
+          if (arr.get(i) instanceof ObjectNode) {
+            compressRecordToUnion((ObjectNode) arr.get(i));
           }
         }
       }
     }
 
-    if (schema.has("type") && schema.get("type") instanceof JSONObject) {
-      compressRecordToUnion(schema.getJSONObject("type"));
+    if (schema.has("type") && schema.get("type") instanceof ObjectNode) {
+      compressRecordToUnion((ObjectNode) schema.get("type"));
     }
 
   }

@@ -17,8 +17,8 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils;
-import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
@@ -36,17 +36,17 @@ public class DeriveSchemaMain {
    *
    * @param schemaType  One of Avro, Json or ProtoBuf
    * @param strictCheck flag to specify strict check
-   * @param messages    List of messages, each message is a JSONObject
-   * @return List of JSONObjects, each object gives information of schema,
+   * @param messages    List of messages, each message is a ObjectNode
+   * @return List of ObjectNode, each object gives information of schema,
    *          and which messages it matches
    * @throws JsonProcessingException thrown if message not in JSON format
    */
-  public static List<JSONObject> caseWiseOutput(String schemaType,
+  public static List<ObjectNode> caseWiseOutput(String schemaType,
                                                 boolean strictCheck,
                                                 ArrayList<String> messages)
       throws JsonProcessingException {
 
-    List<JSONObject> ans = new ArrayList<>();
+    List<ObjectNode> ans = new ArrayList<>();
     if (schemaType == null) {
       throw new IllegalArgumentException("Schema Type not set");
     }
@@ -54,21 +54,21 @@ public class DeriveSchemaMain {
       case "avro": {
 
         DeriveAvroSchema schemaGenerator = new DeriveAvroSchema(strictCheck);
-        List<JSONObject> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
+        List<ObjectNode> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
         ans.addAll(schemas);
         break;
       }
       case "json": {
 
         DeriveJsonSchema schemaGenerator = new DeriveJsonSchema();
-        JSONObject schema = schemaGenerator.getSchemaForMultipleMessages(messages);
+        ObjectNode schema = schemaGenerator.getSchemaForMultipleMessages(messages);
         ans.add(schema);
         break;
 
       }
       case "protobuf":
         DeriveProtobufSchema schemaGenerator = new DeriveProtobufSchema(strictCheck);
-        List<JSONObject> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
+        List<ObjectNode> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
         ans.addAll(schemas);
         break;
 

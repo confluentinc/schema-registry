@@ -17,6 +17,9 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
@@ -28,14 +31,13 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerConfig;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils;
-import org.json.JSONArray;
-import org.json.JSONObject;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.util.*;
 
 import static org.junit.Assert.*;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
 public class DeriveProtobufSchemaTest {
 
@@ -55,14 +57,14 @@ public class DeriveProtobufSchemaTest {
     topic = "test";
   }
 
-  void serializeAndDeserializeCheckMulti(List<String> messages, List<JSONObject> schemas) throws IOException {
+  void serializeAndDeserializeCheckMulti(List<String> messages, List<ObjectNode> schemas) throws IOException {
 
-    for (JSONObject schemaInfo : schemas) {
+    for (ObjectNode schemaInfo : schemas) {
 
-      ProtobufSchema schema = new ProtobufSchema(schemaInfo.get("schema").toString());
-      JSONArray matchingMessages = schemaInfo.getJSONArray("messagesMatched");
-      for (int i = 0; i < matchingMessages.length(); i++) {
-        int index = matchingMessages.getInt(i);
+      ProtobufSchema schema = new ProtobufSchema(schemaInfo.get("schema").asText());
+      ArrayNode matchingMessages = (ArrayNode) schemaInfo.get("messagesMatched");
+      for (int i = 0; i < matchingMessages.size(); i++) {
+        int index = matchingMessages.get(i).asInt();
         serializeAndDeserializeCheck(messages.get(index), schema);
       }
 
@@ -70,12 +72,11 @@ public class DeriveProtobufSchemaTest {
 
   }
 
-
   private void serializeAndDeserializeCheck(String message, ProtobufSchema schema)
       throws IOException {
 
     schema.validate();
-    String formattedString = new JSONObject(message).toString();
+    String formattedString = mapper.readTree(message).toString();
     Object test = ProtobufSchemaUtils.toObject(formattedString, schema);
     DynamicMessage dynamicMessage = (DynamicMessage) test;
 
@@ -361,17 +362,17 @@ public class DeriveProtobufSchemaTest {
       Raising error if found
      */
 
-    String message = "{\n" + "    \"Array2d\": [[1,2], [2,3]],\n" + "  }";
+    String message = "{\n" + "    \"Array2d\": [[1,2], [2,3]]\n" + "  }";
 
     assertThrows(IllegalArgumentException.class, () -> strictGenerator.getSchema(message));
 
     String message2 = "{\n"
-        + "    \"RecordOfArrays3\": { \"Array2D\": [ [{\"name\": \"J\"},{\"name\": \"K\"}], [{\"name\": \"T\"}] ]},\n"
+        + "    \"RecordOfArrays3\": { \"Array2D\": [ [{\"name\": \"J\"},{\"name\": \"K\"}], [{\"name\": \"T\"}] ]}\n"
         + "  }";
 
     assertThrows(IllegalArgumentException.class, () -> strictGenerator.getSchema(message2));
 
-    String message3 = "{\n" + "    \"ArrayNull\": [null, null],\n" + "  }";
+    String message3 = "{\n" + "    \"ArrayNull\": [null, null]\n" + "  }";
     assertThrows(IllegalArgumentException.class, () -> strictGenerator.getSchema(message3));
 
   }
@@ -629,7 +630,7 @@ public class DeriveProtobufSchemaTest {
         String message2 = String.format("\"Bool2\": %b", false);
         arr.add(message + message2 + "}");
       } else {
-        arr.add(message + "}");
+        arr.add(message.substring(0, message.length() - 2) + "}");
       }
     }
 
@@ -638,7 +639,7 @@ public class DeriveProtobufSchemaTest {
     Best matching schema would be 3 merged with 1 having 3 occurrences
      */
 
-    List<JSONObject> schemas = strictGenerator.getSchemaForMultipleMessages(arr);
+    List<ObjectNode> schemas = strictGenerator.getSchemaForMultipleMessages(arr);
     assert (schemas.size() == 1);
 
     String schemasExpected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  bool Bool2 = 1;\\n  bool Boolean = 2;\\n  int32 Integer = 3;\\n  int32 Long = 4;\\n  string String = 5;\\n}\\n\",\"messagesMatched\":[0,1,2,3,4,5,6],\"numMessagesMatched\":7}";
@@ -649,26 +650,26 @@ public class DeriveProtobufSchemaTest {
 
     ArrayList<String> arr2 = new ArrayList<>();
     String message1 = "{\n"
-        + "    \"String\": \"John Smith\",\n"
+        + "    \"String\": \"John Smith\"\n"
         + "  }";
     arr2.add(message1);
 
     String message2 = "{\n"
         + "    \"String\": \"John\",\n"
-        + "    \"Float\": 1e16,\n"
+        + "    \"Float\": 1e16\n"
         + "  }";
     arr2.add(message2);
 
     String message3 = "{\n"
         + "    \"String\": \"John\",\n"
-        + "    \"Float\": \"JJ\",\n"
+        + "    \"Float\": \"JJ\"\n"
         + "  }";
 
     arr2.add(message3);
     arr2.add(message3);
     arr2.add(message3);
 
-    List<JSONObject> schemas2 = strictGenerator.getSchemaForMultipleMessages(arr2);
+    List<ObjectNode> schemas2 = strictGenerator.getSchemaForMultipleMessages(arr2);
     assert (schemas2.size() == 2);
 
     String schemas2Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  string Float = 1;\\n  string String = 2;\\n}\\n\",\"messagesMatched\":[0,2,3,4],\"numMessagesMatched\":4}";
@@ -681,19 +682,19 @@ public class DeriveProtobufSchemaTest {
     String message4 = "{\n"
         + "    \"String\": \"John\",\n"
         + "    \"Float\": \"JJ\",\n"
-        + "    \"Num\": 100,\n"
+        + "    \"Num\": 100\n"
         + "  }";
 
     String message5 = "{\n"
         + "    \"String\": \"John\",\n"
         + "    \"Float\": 33,\n"
-        + "    \"Num\": true,\n"
+        + "    \"Num\": true\n"
         + "  }";
 
     arr2.add(message4);
     arr2.add(message5);
 
-    List<JSONObject> schemas3 = strictGenerator.getSchemaForMultipleMessages(arr2);
+    List<ObjectNode> schemas3 = strictGenerator.getSchemaForMultipleMessages(arr2);
     assert (schemas3.size() == 2);
 
     String schemas3Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  string Float = 1;\\n  int32 Num = 2;\\n  string String = 3;\\n}\\n\",\"messagesMatched\":[0,2,3,4,5],\"numMessagesMatched\":5}";
@@ -703,7 +704,7 @@ public class DeriveProtobufSchemaTest {
     assertEquals(schemas3Expected2, schemas3.get(1).toString());
     serializeAndDeserializeCheckMulti(arr2, schemas3);
 
-    List<JSONObject> schemas4 = lenientGenerator.getSchemaForMultipleMessages(arr2);
+    List<ObjectNode> schemas4 = lenientGenerator.getSchemaForMultipleMessages(arr2);
     assert (schemas4.size() == 1);
 
     String schemas4Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  string Float = 1;\\n  int32 Num = 2;\\n  string String = 3;\\n}\\n\"}";
@@ -752,14 +753,14 @@ public class DeriveProtobufSchemaTest {
     String m3 = "{\"J\" : {\"K\": 1.2, \"B\":true}}";
 
     ArrayList<String> messages = new ArrayList<>(Arrays.asList(m1, m2, m3));
-    List<JSONObject> schemas = strictGenerator.getSchemaForMultipleMessages(messages);
+    List<ObjectNode> schemas = strictGenerator.getSchemaForMultipleMessages(messages);
     assert (schemas.size() == 1);
     serializeAndDeserializeCheckMulti(messages, schemas);
 
     String schemasExpected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  JMessage J = 1;\\n\\n  message JMessage {\\n    int32 A = 1;\\n    bool B = 2;\\n    int32 C = 3;\\n    double K = 4;\\n  }\\n}\\n\",\"messagesMatched\":[0,1,2],\"numMessagesMatched\":3}";
     assertEquals(schemasExpected1, schemas.get(0).toString());
 
-    List<JSONObject> schemas1 = lenientGenerator.getSchemaForMultipleMessages(messages);
+    List<ObjectNode> schemas1 = lenientGenerator.getSchemaForMultipleMessages(messages);
     assert (schemas1.size() == 1);
 
     String schemas1Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  JMessage J = 1;\\n\\n  message JMessage {\\n    int32 A = 1;\\n    bool B = 2;\\n    int32 C = 3;\\n    double K = 4;\\n  }\\n}\\n\"}";
@@ -772,7 +773,7 @@ public class DeriveProtobufSchemaTest {
     String m4 = "{\"J\" : {\"K\": true, \"B\":true}}";
     messages.add(m4);
 
-    List<JSONObject> schemas2 = lenientGenerator.getSchemaForMultipleMessages(messages);
+    List<ObjectNode> schemas2 = lenientGenerator.getSchemaForMultipleMessages(messages);
     assert (schemas2.size() == 1);
 
     String schemas2Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  JMessage J = 1;\\n\\n  message JMessage {\\n    int32 A = 1;\\n    bool B = 2;\\n    int32 C = 3;\\n    double K = 4;\\n  }\\n}\\n\"}";

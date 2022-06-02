@@ -16,8 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
 
-import org.json.JSONObject;
-
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,15 +26,15 @@ import java.util.List;
  * Kept separate to enhance further or add more details.
  */
 public class MapAndArray {
-  ArrayList<JSONObject> schemas;
+  ArrayList<ObjectNode> schemas;
   List<List<Integer>> schemaToMessagesInfo;
 
-  public MapAndArray(ArrayList<JSONObject> schemas, List<List<Integer>> schemaToMessagesInfo) {
+  public MapAndArray(ArrayList<ObjectNode> schemas, List<List<Integer>> schemaToMessagesInfo) {
     this.schemas = schemas;
     this.schemaToMessagesInfo = schemaToMessagesInfo;
   }
 
-  public ArrayList<JSONObject> getSchemas() {
+  public ArrayList<ObjectNode> getSchemas() {
     return schemas;
   }
 

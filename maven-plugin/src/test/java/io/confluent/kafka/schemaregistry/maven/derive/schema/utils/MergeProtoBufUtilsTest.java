@@ -1,7 +1,8 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import org.json.JSONObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -9,11 +10,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ProtoBufUtils.*;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeProtoBufUtils.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
-public class ProtoBufUtilsTest {
+public class MergeProtoBufUtilsTest {
+
+  private static final ObjectMapper mapper = new ObjectMapper();
 
   String schemaRecordOfRecords = "{\n" +
       "  \"__type\": \"record\",\n" +
@@ -98,101 +101,101 @@ public class ProtoBufUtilsTest {
 
   @Test
   public void shouldMakeNoChangeMergeRecords() throws JsonProcessingException {
-    JSONObject schema1 = new JSONObject("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
-    JSONObject schema2 = new JSONObject("{\"__type\":\"record\",\"name\":\"R2\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
-    ArrayList<JSONObject> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
-    JSONObject schemaStrict = mergeRecords(schemas, true, false);
-    assert (schemaStrict.similar(schema1));
+    ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
+    ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"R2\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
+    ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
+    ObjectNode schemaStrict = mergeRecords(schemas, true, false);
+    assert (schemaStrict.equals(schema1));
 
-    JSONObject schemaLenient = mergeRecords(schemas, false, false);
-    assert (schemaLenient.similar(schema1));
+    ObjectNode schemaLenient = mergeRecords(schemas, false, false);
+    assert (schemaLenient.equals(schema1));
 
   }
 
   @Test
   public void shouldCombineFieldsMergeRecords() throws JsonProcessingException {
-    JSONObject schema1 = new JSONObject("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
-    JSONObject schema2 = new JSONObject("{\"__type\":\"record\",\"name\":\"R2\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"}]}");
-    ArrayList<JSONObject> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
+    ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
+    ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"R2\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"}]}");
+    ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
 
     String expectedSchema = "{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"},{\"name\":\"K\",\"type\":\"int\"}]}";
 
-    JSONObject schemaStrict = mergeRecords(schemas, true, false);
+    ObjectNode schemaStrict = mergeRecords(schemas, true, false);
     assertEquals(expectedSchema, schemaStrict.toString());
 
-    JSONObject schemaLenient = mergeRecords(schemas, false, false);
+    ObjectNode schemaLenient = mergeRecords(schemas, false, false);
     assertEquals(expectedSchema, schemaLenient.toString());
   }
 
   @Test
   public void shouldCombineArrayFieldsMergeRecords() throws JsonProcessingException {
 
-    JSONObject schema1 = new JSONObject("{\"__type\":\"record\",\"name\":\"A1\",\"type\":\"record\",\"fields\":[{\"__type\":\"array\",\"name\":\"arr\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"double\"}}]}");
-    JSONObject schema2 = new JSONObject("{\"__type\":\"record\",\"name\":\"A1\",\"type\":\"record\",\"fields\":[{\"__type\":\"array\",\"name\":\"arr1\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"double\"}}]}");
-    ArrayList<JSONObject> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
+    ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"A1\",\"type\":\"record\",\"fields\":[{\"__type\":\"array\",\"name\":\"arr\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"double\"}}]}");
+    ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"A1\",\"type\":\"record\",\"fields\":[{\"__type\":\"array\",\"name\":\"arr1\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"double\"}}]}");
+    ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
 
     String expectedSchema = "{\"__type\":\"record\",\"name\":\"A1\",\"type\":\"record\",\"fields\":[{\"__type\":\"array\",\"name\":\"arr\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"double\"}},{\"__type\":\"array\",\"name\":\"arr1\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"double\"}}]}";
-    JSONObject schemaStrict = mergeRecords(schemas, true, false);
+    ObjectNode schemaStrict = mergeRecords(schemas, true, false);
     assertEquals(expectedSchema, schemaStrict.toString());
 
-    JSONObject schemaLenient = mergeRecords(schemas, false, false);
+    ObjectNode schemaLenient = mergeRecords(schemas, false, false);
     assertEquals(expectedSchema, schemaLenient.toString());
   }
 
   @Test
   public void SameArrayDifferentTypeMergeRecords() throws JsonProcessingException {
 
-    JSONObject schema1 = new JSONObject("{\"__type\":\"record\",\"name\":\"A1\",\"type\":\"record\",\"fields\":[{\"__type\":\"array\",\"name\":\"arr\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"double\"}}]}");
-    JSONObject schema2 = new JSONObject("{\"__type\":\"record\",\"name\":\"A1\",\"type\":\"record\",\"fields\":[{\"__type\":\"array\",\"name\":\"arr\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"string\"}}]}");
-    ArrayList<JSONObject> schemas = new ArrayList<>(Arrays.asList(schema1, schema1, schema2));
+    ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"A1\",\"type\":\"record\",\"fields\":[{\"__type\":\"array\",\"name\":\"arr\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"double\"}}]}");
+    ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"A1\",\"type\":\"record\",\"fields\":[{\"__type\":\"array\",\"name\":\"arr\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"string\"}}]}");
+    ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema1, schema2));
 
     assertThrows(IllegalArgumentException.class, () -> mergeRecords(schemas, true, false));
 
     // Picks schema1 type as most occurring
-    JSONObject schemaLenient = mergeRecords(schemas, false, false);
+    ObjectNode schemaLenient = mergeRecords(schemas, false, false);
     assertEquals(schema1.toString(), schemaLenient.toString());
   }
 
   @Test
   public void SameFieldDifferentTypeMergeRecords() throws JsonProcessingException {
-    JSONObject schema1 = new JSONObject("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
-    JSONObject schema2 = new JSONObject("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"boolean\"}]}");
+    ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
+    ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"boolean\"}]}");
 
     // shouldRaiseError
-    ArrayList<JSONObject> schemas = new ArrayList<>(Arrays.asList(schema1, schema2, schema2));
+    ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2, schema2));
     assertThrows(IllegalArgumentException.class, () -> mergeRecords(schemas, true, false));
 
     // Picks K's type as boolean
-    JSONObject schemaLenient = mergeRecords(schemas, false, false);
-    assert (schemaLenient.similar(schema2));
+    ObjectNode schemaLenient = mergeRecords(schemas, false, false);
+    assert (schemaLenient.equals(schema2));
   }
 
 
   @Test
   public void shouldMakeNoChangeTypeRecordMergeRecords() throws JsonProcessingException {
-    JSONObject schema1 = new JSONObject(String.format(schemaRecordOfRecords, "J", "K"));
-    ArrayList<JSONObject> schemas = new ArrayList<>(Arrays.asList(schema1, schema1));
-    JSONObject schemaStrict = mergeRecords(schemas, true, false);
-    assert (schemaStrict.similar(schema1));
+    ObjectNode schema1 = (ObjectNode) mapper.readTree(String.format(schemaRecordOfRecords, "J", "K"));
+    ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema1));
+    ObjectNode schemaStrict = mergeRecords(schemas, true, false);
+    assert (schemaStrict.equals(schema1));
 
-    JSONObject schemaLenient = mergeRecords(schemas, true, false);
-    assert (schemaLenient.similar(schema1));
+    ObjectNode schemaLenient = mergeRecords(schemas, true, false);
+    assert (schemaLenient.equals(schema1));
   }
 
 
   @Test
   public void shouldMergeFieldsInsideRecordTypeMergeRecords() throws JsonProcessingException {
 
-    JSONObject schema1 = new JSONObject(String.format(schemaRecordOfRecords, "J", "P"));
-    JSONObject schema2 = new JSONObject(String.format(schemaRecordOfRecords, "J", "K"));
-    ArrayList<JSONObject> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
+    ObjectNode schema1 = (ObjectNode) mapper.readTree(String.format(schemaRecordOfRecords, "J", "P"));
+    ObjectNode schema2 = (ObjectNode) mapper.readTree(String.format(schemaRecordOfRecords, "J", "K"));
+    ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
 
     String expectedSchema = "{\"__type\":\"record\",\"name\":\"mainMessage\",\"type\":\"record\",\"fields\":[{\"__type\":\"record\",\"name\":\"IntRecord\",\"type\":{\"__type\":\"record\",\"name\":\"IntRecord\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int32\"},{\"name\":\"K\",\"type\":\"int32\"},{\"name\":\"P\",\"type\":\"int32\"}]}}]}";
 
-    JSONObject schemaStrict = mergeRecords(schemas, true, false);
+    ObjectNode schemaStrict = mergeRecords(schemas, true, false);
     assertEquals(expectedSchema, schemaStrict.toString());
 
-    JSONObject schemaLenient = mergeRecords(schemas, true, false);
+    ObjectNode schemaLenient = mergeRecords(schemas, true, false);
     assertEquals(expectedSchema, schemaLenient.toString());
 
   }
@@ -239,12 +242,12 @@ public class ProtoBufUtilsTest {
     MapAndArray mapAndArray = tryAndMergeStrict(schemas);
 
     assertEquals(mapAndArray.getSchemas().size(), 2);
-    assertEquals(mapAndArray.getSchemas().get(0).toString(), schema1);
-    assertEquals(mapAndArray.getSchemas().get(1).toString(), schema2);
+    assertEquals(mapAndArray.getSchemas().get(0).toString(), schema2);
+    assertEquals(mapAndArray.getSchemas().get(1).toString(), schema1);
 
     assertEquals(mapAndArray.getSchemaToMessagesInfo().size(), 2);
-    assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Collections.singletonList(0)));
-    assertEquals(mapAndArray.getSchemaToMessagesInfo().get(1), new ArrayList<>(Collections.singletonList(1)));
+    assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Collections.singletonList(1)));
+    assertEquals(mapAndArray.getSchemaToMessagesInfo().get(1), new ArrayList<>(Collections.singletonList(0)));
 
   }
 
@@ -337,7 +340,7 @@ public class ProtoBufUtilsTest {
 
     String expectedSchema = "{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"__type\":\"array\",\"name\":\"arr\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"double\"}},{\"__type\":\"array\",\"name\":\"arr1\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"double\"}}]}";
     assertEquals(mapAndArray.getSchemas().size(), 1);
-    assertEquals(mapAndArray.getSchemas().get(0).toString(), expectedSchema);
+    assertEquals(expectedSchema, mapAndArray.getSchemas().get(0).toString());
 
     assertEquals(mapAndArray.getSchemaToMessagesInfo().size(), 1);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Arrays.asList(0, 1)));
@@ -354,12 +357,12 @@ public class ProtoBufUtilsTest {
     MapAndArray mapAndArray = tryAndMergeStrict(schemas);
 
     assertEquals(mapAndArray.getSchemas().size(), 2);
-    assertEquals(mapAndArray.getSchemas().get(0).toString(), schema1);
-    assertEquals(mapAndArray.getSchemas().get(1).toString(), schema2);
+    assertEquals(mapAndArray.getSchemas().get(0).toString(), schema2);
+    assertEquals(mapAndArray.getSchemas().get(1).toString(), schema1);
 
     assertEquals(mapAndArray.getSchemaToMessagesInfo().size(), 2);
-    assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Collections.singletonList(0)));
-    assertEquals(mapAndArray.getSchemaToMessagesInfo().get(1), new ArrayList<>(Collections.singletonList(1)));
+    assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Collections.singletonList(1)));
+    assertEquals(mapAndArray.getSchemaToMessagesInfo().get(1), new ArrayList<>(Collections.singletonList(0)));
 
   }
 
@@ -469,13 +472,13 @@ public class ProtoBufUtilsTest {
   }
 
   @Test
-  public void shouldGenerateSchemaToMessageInfoPreviousInfoNull() {
+  public void shouldGenerateSchemaToMessageInfoPreviousInfoNull() throws JsonProcessingException {
 
-    JSONObject schema1 = new JSONObject("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
-    JSONObject schema2 = new JSONObject("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"boolean\"}]}");
+    ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
+    ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"boolean\"}]}");
 
-    ArrayList<JSONObject> schemaList = new ArrayList<>(Arrays.asList(schema1, schema1, schema2, schema2, schema1, schema1));
-    ArrayList<JSONObject> uniqueList = new ArrayList<>(Arrays.asList(schema1, schema2));
+    ArrayList<ObjectNode> schemaList = new ArrayList<>(Arrays.asList(schema1, schema1, schema2, schema2, schema1, schema1));
+    ArrayList<ObjectNode> uniqueList = new ArrayList<>(Arrays.asList(schema1, schema2));
     List<List<Integer>> info = getUniqueWithMessageInfo(schemaList, uniqueList, null);
 
     assertEquals(info.size(), 2);
@@ -485,13 +488,13 @@ public class ProtoBufUtilsTest {
   }
 
   @Test
-  public void shouldGenerateSchemaToMessageInfoPreviousInfoSupplied() {
+  public void shouldGenerateSchemaToMessageInfoPreviousInfoSupplied() throws JsonProcessingException {
 
-    JSONObject schema1 = new JSONObject("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
-    JSONObject schema2 = new JSONObject("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"boolean\"}]}");
+    ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
+    ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"boolean\"}]}");
 
-    ArrayList<JSONObject> schemaList = new ArrayList<>(Arrays.asList(schema1, schema1, schema2, schema2, schema1, schema1));
-    ArrayList<JSONObject> uniqueList = new ArrayList<>(Arrays.asList(schema1, schema2));
+    ArrayList<ObjectNode> schemaList = new ArrayList<>(Arrays.asList(schema1, schema1, schema2, schema2, schema1, schema1));
+    ArrayList<ObjectNode> uniqueList = new ArrayList<>(Arrays.asList(schema1, schema2));
 
     List<List<Integer>> schemaToMessages = new ArrayList<>();
     schemaToMessages.add(new ArrayList<>(Arrays.asList(0, 1, 2)));

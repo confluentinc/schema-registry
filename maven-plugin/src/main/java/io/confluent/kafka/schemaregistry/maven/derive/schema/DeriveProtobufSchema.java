@@ -17,6 +17,9 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeNumberUtils;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -26,14 +29,14 @@ import java.util.Collections;
 import java.util.List;
 
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ProtoBufUtils;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.JsonUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeProtoBufUtils;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MapAndArray;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
 /**
  * Class with functionality to derive schema from messages for JSON.
@@ -46,28 +49,28 @@ public class DeriveProtobufSchema {
   String errorMessageNoSchemasFound = "No strict schemas can be generated for the given messages. "
       + "Please try using the lenient version to generate a schema.";
 
-  static void checkFor2dArrays(boolean typeProtoBuf, JSONObject element) {
+  static void checkFor2dArrays(boolean typeProtoBuf, ObjectNode element) {
 
-    if (typeProtoBuf && element.get("__type").equals("array")) {
+    if (typeProtoBuf && element.get("__type").asText().equals("array")) {
       logger.error("Protobuf doesn't support array of arrays.");
       throw new IllegalArgumentException("Protobuf doesn't support array of arrays.");
     }
 
   }
 
-  static void checkForArrayOfNull(boolean typeProtoBuf, JSONObject element) {
+  static void checkForArrayOfNull(boolean typeProtoBuf, ObjectNode element) {
 
     if (typeProtoBuf && element.has("type")
-        && element.get("type").equals("google.protobuf.Any")) {
+        && element.get("type").asText().equals("google.protobuf.Any")) {
       throw new IllegalArgumentException("Protobuf support doesn't array of null.");
     }
 
   }
 
   static void checkValidSchema(String message, ProtobufSchema schema)
-      throws InvalidProtocolBufferException {
+      throws InvalidProtocolBufferException, JsonProcessingException {
     schema.validate();
-    String formattedString = new JSONObject(message).toString();
+    String formattedString = mapper.readTree(message).toString();
     ProtobufSchemaUtils.toObject(formattedString, schema);
   }
 
@@ -83,22 +86,22 @@ public class DeriveProtobufSchema {
    * @param name       name of Message
    * @return ProtoBuf schema as a string
    */
-  public String avroSchemaToProtobufSchema(JSONObject avroSchema, int fieldNum, String name) {
+  public String avroSchemaToProtobufSchema(ObjectNode avroSchema, int fieldNum, String name) {
 
     StringBuilder ans = new StringBuilder();
     // Type array
-    if (avroSchema.get("__type").equals("array")) {
+    if (avroSchema.get("__type").asText().equals("array")) {
 
-      if (avroSchema.get("items") instanceof String) {
+      if (avroSchema.get("items") instanceof TextNode) {
         return String.format("repeated %s %s = %d;",
-            avroSchema.get("items"), name, fieldNum) + '\n';
+            avroSchema.get("items").asText(), name, fieldNum) + '\n';
       } else {
-        if (avroSchema.get("items") instanceof JSONArray) {
+        if (avroSchema.get("items") instanceof ArrayNode) {
           ans.append(
               String.format("repeated %s %s = %d;%n", "google.protobuf.Any", name, fieldNum));
           return ans.toString();
         }
-        String fieldDefinition = avroSchemaToProtobufSchema((JSONObject) avroSchema.get("items"),
+        String fieldDefinition = avroSchemaToProtobufSchema((ObjectNode) avroSchema.get("items"),
             fieldNum, name + "Message");
         ans.append(
             String.format("repeated %s %s = %d;%n", name + "Message", name, fieldNum));
@@ -109,23 +112,24 @@ public class DeriveProtobufSchema {
     }
 
     ans.append(String.format("message %s { %n", name));
-    JSONArray fields = (JSONArray) avroSchema.get("fields");
+    ArrayNode fields = (ArrayNode) avroSchema.get("fields");
 
-    for (int i = 0; i < fields.length(); i++) {
-      JSONObject obj = (JSONObject) (fields.get(i));
+    for (int i = 0; i < fields.size(); i++) {
+      ObjectNode obj = (ObjectNode) (fields.get(i));
 
-      if (obj.get("type") instanceof String) {
-        ans.append(String.format("  %s %s = %d;", obj.get("type"), obj.get("name"), fieldNum++));
+      if (obj.get("type") instanceof TextNode) {
+        ans.append(String.format("  %s %s = %d;", obj.get("type").asText(),
+            obj.get("name").asText(), fieldNum++));
         ans.append('\n');
-      } else if (obj.get("__type").equals("record")) {
-        JSONObject j = (JSONObject) obj.get("type");
-        String newMessage = avroSchemaToProtobufSchema(j, 1, obj.get("name") + "Message");
+      } else if (obj.get("__type").asText().equals("record")) {
+        ObjectNode j = (ObjectNode) obj.get("type");
+        String newMessage = avroSchemaToProtobufSchema(j, 1, obj.get("name").asText() + "Message");
         ans.append(newMessage);
-        ans.append(String.format("  %s %s = %d; %n", obj.get("name") + "Message", obj.get("name"),
-            fieldNum++));
-      } else if (obj.get("__type").equals("array")) {
-        JSONObject j = (JSONObject) obj.get("type");
-        String newMessage = avroSchemaToProtobufSchema(j, fieldNum++, obj.get("name").toString());
+        ans.append(String.format("  %s %s = %d; %n", obj.get("name").asText()
+                + "Message", obj.get("name").asText(), fieldNum++));
+      } else if (obj.get("__type").asText().equals("array")) {
+        ObjectNode j = (ObjectNode) obj.get("type");
+        String newMessage = avroSchemaToProtobufSchema(j, fieldNum++, obj.get("name").asText());
         ans.append(newMessage);
       }
     }
@@ -137,9 +141,9 @@ public class DeriveProtobufSchema {
 
   ProtobufSchema getSchema(String message, String name) throws JsonProcessingException {
 
-    JSONObject messageObject = new JSONObject(message);
+    ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
     DeriveAvroSchema schemaGenerator = new DeriveAvroSchema(this.strictCheck, true);
-    JSONObject schema = schemaGenerator.getSchemaForRecord(messageObject, name);
+    ObjectNode schema = schemaGenerator.getSchemaForRecord(messageObject, name);
     String protobufString = avroSchemaToProtobufSchema(schema, 1, name);
     return schemaStringToProto(protobufString);
 
@@ -163,8 +167,10 @@ public class DeriveProtobufSchema {
 
   }
 
-  private ProtobufSchema getSchemaFromAvro(String schema, String name) {
-    String protobufString = avroSchemaToProtobufSchema(new JSONObject(schema), 1, name);
+  private ProtobufSchema getSchemaFromAvro(String schema, String name)
+      throws JsonProcessingException {
+    String protobufString = avroSchemaToProtobufSchema((ObjectNode) mapper.readTree(schema),
+        1, name);
     return schemaStringToProto(protobufString);
   }
 
@@ -184,12 +190,12 @@ public class DeriveProtobufSchema {
    * @throws JsonProcessingException  thrown if message not in JSON format
    * @throws IllegalArgumentException thrown if no messages can be generated for strict check
    */
-  public List<JSONObject> getSchemaForMultipleMessages(List<String> messages)
+  public List<ObjectNode> getSchemaForMultipleMessages(List<String> messages)
       throws JsonProcessingException, IllegalArgumentException {
 
     ArrayList<Object> messageObjects = new ArrayList<>();
     for (String message : messages) {
-      messageObjects.add(new JSONObject(message));
+      messageObjects.add(mapper.readTree(message));
     }
 
     DeriveAvroSchema schemaGenerator = new DeriveAvroSchema(this.strictCheck, true);
@@ -200,15 +206,15 @@ public class DeriveProtobufSchema {
 
     if (!strictCheck) {
 
-      JSONObject schema = schemaGenerator.getSchemaForArray(messageObjects, "Record");
-      JSONObject finalSchema = schema.getJSONObject("items");
+      ObjectNode schema = schemaGenerator.getSchemaForArray(messageObjects, "Record");
+      ObjectNode finalSchema = (ObjectNode) schema.get("items");
 
       try {
         ProtobufSchema protobufSchema = schemaStringToProto(
             avroSchemaToProtobufSchema(finalSchema, 1, "Record"));
         protobufSchema.validate();
-        JSONObject schemaInfo = new JSONObject();
-        schemaInfo.put("schema", protobufSchema);
+        ObjectNode schemaInfo = mapper.createObjectNode();
+        schemaInfo.put("schema", String.valueOf(protobufSchema));
         return Collections.singletonList(schemaInfo);
       } catch (Exception e) {
         String errorMessage = "Unable to find schema. " + e.getMessage();
@@ -224,46 +230,48 @@ public class DeriveProtobufSchema {
     All Unique Schemas are returned and the messages it matches
     */
 
-    ArrayList<JSONObject> schemaList = schemaGenerator.getSchemaOfAllElements(messageObjects,
+    ArrayList<ObjectNode> schemaList = schemaGenerator.getSchemaOfAllElements(messageObjects,
         "Record", true);
 
-    ArrayList<JSONObject> uniqueList = JsonUtils.getUnique(schemaList);
+    ArrayList<ObjectNode> uniqueList = MergeJsonUtils.getUnique(schemaList);
 
     if (uniqueList.size() == 0) {
       logger.error(errorMessageNoSchemasFound);
       throw new IllegalArgumentException(errorMessageNoSchemasFound);
     }
 
-    List<List<Integer>> schemaToMessagesInfo = ProtoBufUtils.getUniqueWithMessageInfo(
+    List<List<Integer>> schemaToMessagesInfo = MergeProtoBufUtils.getUniqueWithMessageInfo(
         schemaList, uniqueList, null);
 
 
     MergeNumberUtils.mergeNumberTypes(uniqueList, true);
-    MapAndArray schemasAndMap = ProtoBufUtils.tryAndMergeStrictFromList(
+    MapAndArray schemasAndMap = MergeProtoBufUtils.tryAndMergeStrictFromList(
         uniqueList, schemaToMessagesInfo);
 
-    ArrayList<JSONObject> schemas = schemasAndMap.getSchemas();
+    ArrayList<ObjectNode> schemas = schemasAndMap.getSchemas();
     List<List<Integer>> schemaToMessagesInfo2 = schemasAndMap.getSchemaToMessagesInfo();
 
-    ArrayList<JSONObject> ans = new ArrayList<>();
+    ArrayList<ObjectNode> ans = new ArrayList<>();
 
     for (int i = 0; i < schemas.size(); i++) {
-      JSONObject schemaInfo = new JSONObject();
+      ObjectNode schemaInfo = mapper.createObjectNode();
       List<Integer> messagesMatched = schemaToMessagesInfo2.get(i);
 
       try {
         ProtobufSchema schema = getSchemaFromAvro(schemas.get(i).toString(), "Record");
-        schemaInfo.put("schema", schema);
+        schemaInfo.put("schema", schema.canonicalString());
         checkValidSchema(messages.get(messagesMatched.get(0)), schema);
       } catch (Exception e) {
         String errorMessage = String.format("Messages %s: Unable to find schema. ", messagesMatched)
             + e.getMessage();
         logger.warn(errorMessage);
-        System.out.println(errorMessage);
         continue;
       }
       Collections.sort(messagesMatched);
-      schemaInfo.put("messagesMatched", messagesMatched);
+      ArrayNode messagesMatchedArr = schemaInfo.putArray("messagesMatched");
+      for (Integer m : messagesMatched) {
+        messagesMatchedArr.add(m);
+      }
       schemaInfo.put("numMessagesMatched", messagesMatched.size());
       ans.add(schemaInfo);
     }

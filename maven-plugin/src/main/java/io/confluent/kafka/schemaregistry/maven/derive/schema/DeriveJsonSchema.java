@@ -17,20 +17,22 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.JsonUtils;
-import org.json.JSONObject;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.List;
 
 
 /**
  * Class with functionality to derive schema from messages for JSON.
  */
 public class DeriveJsonSchema extends DeriveSchema {
+
 
   public DeriveJsonSchema() {
     fillMap();
@@ -40,13 +42,13 @@ public class DeriveJsonSchema extends DeriveSchema {
 
   private void fillMap() {
 
-    classToDataType.put("class java.lang.String", "string");
-    classToDataType.put("class java.lang.Integer", "number");
-    classToDataType.put("class java.lang.Long", "number");
-    classToDataType.put("class java.math.BigInteger", "number");
-    classToDataType.put("class java.math.BigDecimal", "number");
-    classToDataType.put("class java.lang.Boolean", "boolean");
-    classToDataType.put("class org.json.JSONObject$Null", "null");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.IntNode", "number");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.LongNode", "number");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.BooleanNode", "boolean");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.NullNode", "null");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.DoubleNode", "number");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.TextNode", "string");
+    classToDataType.put("class com.fasterxml.jackson.databind.node.BigIntegerNode", "number");
 
   }
 
@@ -54,13 +56,13 @@ public class DeriveJsonSchema extends DeriveSchema {
    * Primitive schema of message is generated, if possible.
    *
    * @param field - message whose schema has to be found
-   * @return JSONObject if type primitive else empty option
+   * @return ObjectNode if type primitive else empty option
    */
-  Optional<JSONObject> getPrimitiveSchema(Object field) {
+  Optional<ObjectNode> getPrimitiveSchema(Object field) throws JsonProcessingException {
 
     String jsonInferredType;
     if (field == null) {
-      jsonInferredType = "class org.json.JSONObject$Null";
+      jsonInferredType = "class com.fasterxml.jackson.databind.node.NullNode";
     } else {
       jsonInferredType = field.getClass().toString();
     }
@@ -68,7 +70,7 @@ public class DeriveJsonSchema extends DeriveSchema {
     if (classToDataType.containsKey(jsonInferredType)) {
       String schemaString = String.format("{\"type\" : \"%s\"}",
           classToDataType.get(jsonInferredType));
-      return Optional.of(new JSONObject(schemaString));
+      return Optional.of(mapper.readValue(schemaString, ObjectNode.class));
     }
 
     return Optional.empty();
@@ -77,24 +79,25 @@ public class DeriveJsonSchema extends DeriveSchema {
   /**
    * Get schema for each message present in list.
    *
-   * @param messages list of messages, each message is a JSONObject
+   * @param messages list of messages, each message is a ObjectNode
    * @param name     name used for record and arrays
    * @return List of Schemas, one schema for each message
    * @throws JsonProcessingException thrown if message not in JSON format
    */
 
-  public ArrayList<JSONObject> getSchemaOfAllElements(List<Object> messages, String name)
+  public ArrayList<ObjectNode> getSchemaOfAllElements(List<Object> messages, String name)
       throws JsonProcessingException {
 
-    ArrayList<JSONObject> arr = new ArrayList<>();
+    ArrayList<ObjectNode> arr = new ArrayList<>();
     for (Object message : messages) {
-      Optional<JSONObject> x = getPrimitiveSchema(message);
-      if (x.isPresent()) {
-        arr.add(x.get());
-      } else if (isArrayType(message.getClass().toString())) {
+      Optional<ObjectNode> primitiveSchema = getPrimitiveSchema(message);
+      if (primitiveSchema.isPresent()) {
+        arr.add(primitiveSchema.get());
+      } else if (message instanceof ArrayNode) {
         arr.add(getSchemaForArray(getListFromArray(message), name));
       } else {
-        arr.add(getSchemaForRecord(getMapFromObject(message), name));
+        ObjectNode objectNode = mapper.valueToTree(message);
+        arr.add(getSchemaForRecord(objectNode, name));
       }
     }
 
@@ -102,11 +105,14 @@ public class DeriveJsonSchema extends DeriveSchema {
   }
 
 
-  private JSONObject concatElementsUsingOneOf(ArrayList<JSONObject> othersList) {
+  private ObjectNode concatElementsUsingOneOf(ArrayList<ObjectNode> othersList) {
 
-    List<JSONObject> elements = new ArrayList<>(othersList);
-    JSONObject oneOf = new JSONObject();
-    oneOf.put("oneOf", elements);
+    List<ObjectNode> elements = new ArrayList<>(othersList);
+    ObjectNode oneOf = mapper.createObjectNode();
+    ArrayNode arr = oneOf.putArray("oneOf");
+    for (ObjectNode objectNode : elements) {
+      arr.add(objectNode);
+    }
     return oneOf;
 
   }
@@ -123,28 +129,28 @@ public class DeriveJsonSchema extends DeriveSchema {
    * they are merged together into one array with multiple data types
    * </p>
    *
-   * @param messages List of messages, each message is a JSONObject
+   * @param messages List of messages, each message is a ObjectNode
    * @param name     name assigned to array
    * @return schema
    * @throws JsonProcessingException thrown if message not in JSON format
    */
 
-  public JSONObject getSchemaForArray(List<Object> messages, String name)
+  public ObjectNode getSchemaForArray(List<Object> messages, String name)
       throws JsonProcessingException {
 
-    JSONObject schema = new JSONObject();
+    ObjectNode schema = mapper.createObjectNode();
     schema.put("type", "array");
 
-    ArrayList<JSONObject> schemaList = getSchemaOfAllElements(messages, name);
-    ArrayList<JSONObject> uniqueSchemas = JsonUtils.getUnique(schemaList);
-    ArrayList<JSONObject> recordList = new ArrayList<>();
-    ArrayList<JSONObject> arrayList = new ArrayList<>();
-    ArrayList<JSONObject> othersList = new ArrayList<>();
+    ArrayList<ObjectNode> schemaList = getSchemaOfAllElements(messages, name);
+    ArrayList<ObjectNode> uniqueSchemas = MergeJsonUtils.getUnique(schemaList);
+    ArrayList<ObjectNode> recordList = new ArrayList<>();
+    ArrayList<ObjectNode> arrayList = new ArrayList<>();
+    ArrayList<ObjectNode> othersList = new ArrayList<>();
 
-    for (JSONObject schemaElement : uniqueSchemas) {
-      if (schemaElement.get("type").equals("object")) {
+    for (ObjectNode schemaElement : uniqueSchemas) {
+      if (schemaElement.get("type").asText().equals("object")) {
         recordList.add(schemaElement);
-      } else if (schemaElement.get("type").equals("array")) {
+      } else if (schemaElement.get("type").asText().equals("array")) {
         arrayList.add(schemaElement);
       } else {
         othersList.add(schemaElement);
@@ -152,25 +158,25 @@ public class DeriveJsonSchema extends DeriveSchema {
     }
 
     if (recordList.size() > 1) {
-      JSONObject x = JsonUtils.mergeRecords(recordList);
+      ObjectNode x = MergeJsonUtils.mergeRecords(recordList);
       othersList.add(x);
     } else if (recordList.size() == 1) {
       othersList.add(recordList.get(0));
     }
 
     if (arrayList.size() > 1) {
-      JSONObject x = JsonUtils.mergeArrays(arrayList);
+      ObjectNode x = MergeJsonUtils.mergeArrays(arrayList);
       othersList.add(x);
     } else if (arrayList.size() == 1) {
       othersList.add(arrayList.get(0));
     }
 
     if (othersList.size() > 1) {
-      schema.put("items", concatElementsUsingOneOf(othersList));
+      schema.set("items", concatElementsUsingOneOf(othersList));
     } else if (othersList.size() > 0) {
-      schema.put("items", othersList.get(0));
+      schema.set("items", othersList.get(0));
     } else {
-      schema.put("items", new JSONObject());
+      schema.set("items", mapper.createObjectNode());
     }
 
     return schema;
@@ -185,32 +191,32 @@ public class DeriveJsonSchema extends DeriveSchema {
    * @return schema
    * @throws JsonProcessingException thrown if message not in JSON format
    */
-  public JSONObject getSchemaForRecord(JSONObject message, String name)
+  public ObjectNode getSchemaForRecord(ObjectNode message, String name)
       throws JsonProcessingException {
 
-    JSONObject schema = new JSONObject();
+    ObjectNode schema = mapper.createObjectNode();
     schema.put("type", "object");
-    schema.put("properties", new JSONObject());
+    schema.set("properties", mapper.createObjectNode());
 
-    for (String key : message.keySet()) {
+    for (String key : getSortedKeys(message)) {
 
       Object field = message.get(key);
-      Optional<JSONObject> primitiveSchema = getPrimitiveSchema(field);
-      JSONObject info;
+
+      Optional<ObjectNode> primitiveSchema = getPrimitiveSchema(field);
+      ObjectNode info;
 
       if (primitiveSchema.isPresent()) {
         info = primitiveSchema.get();
       } else {
-        if (isArrayType(field.getClass().toString())) {
+        if (field instanceof ArrayNode) {
           info = getSchemaForArray(getListFromArray(field), key);
         } else {
-          info = getSchemaForRecord(
-              getMapFromObject(field), key);
+          info = getSchemaForRecord(mapper.valueToTree(field), key);
         }
       }
 
-      JSONObject fields = (JSONObject) schema.get("properties");
-      fields.put(key, info);
+      ObjectNode fields = (ObjectNode) schema.get("properties");
+      fields.set(key, info);
 
     }
 
@@ -225,17 +231,17 @@ public class DeriveJsonSchema extends DeriveSchema {
    * @return map with schema and the number of messages it matches
    * @throws JsonProcessingException thrown if message not in JSON format
    */
-  public JSONObject getSchemaForMultipleMessages(List<String> messages)
+  public ObjectNode getSchemaForMultipleMessages(List<String> messages)
       throws JsonProcessingException {
 
     List<Object> messageObjects = new ArrayList<>();
     for (String s : messages) {
-      messageObjects.add(new JSONObject(s));
+      messageObjects.add(mapper.readTree(s));
     }
 
-    JSONObject schema = getSchemaForArray(messageObjects, "").getJSONObject("items");
-    JSONObject ans = new JSONObject();
-    ans.put("schema", schema);
+    ObjectNode schema = (ObjectNode) getSchemaForArray(messageObjects, "").get("items");
+    ObjectNode ans = mapper.createObjectNode();
+    ans.set("schema", schema);
     return ans;
   }
 

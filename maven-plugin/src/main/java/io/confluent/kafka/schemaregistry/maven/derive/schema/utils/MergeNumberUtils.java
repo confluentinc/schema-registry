@@ -16,13 +16,15 @@
 
 package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.TreeSet;
+
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.getSortedKeys;
 
 /**
  * Utility class for adjusting int, long, float and double values in avro and protobuf.
@@ -35,7 +37,7 @@ public final class MergeNumberUtils {
    *
    * @param schemaList list of schemas to merge
    */
-  public static void mergeNumberTypes(ArrayList<JSONObject> schemaList, boolean matchAll) {
+  public static void mergeNumberTypes(ArrayList<ObjectNode> schemaList, boolean matchAll) {
 
     if (schemaList.size() == 0 || schemaList.size() == 1) {
       return;
@@ -49,18 +51,18 @@ public final class MergeNumberUtils {
      */
 
     if (matchAll) {
-      for (JSONObject curr : schemaList) {
-        for (JSONObject starting : schemaList) {
+      for (ObjectNode curr : schemaList) {
+        for (ObjectNode starting : schemaList) {
           adjustNumberTypes(starting, curr);
         }
       }
     } else {
 
-      for (JSONObject curr : schemaList) {
+      for (ObjectNode curr : schemaList) {
         adjustNumberTypes(schemaList.get(0), curr);
       }
 
-      for (JSONObject curr : schemaList) {
+      for (ObjectNode curr : schemaList) {
         adjustNumberTypes(schemaList.get(0), curr);
       }
 
@@ -74,87 +76,79 @@ public final class MergeNumberUtils {
    * @param schema1 schema to compare
    * @param schema2 schema to compare
    */
-  public static void adjustNumberTypes(JSONObject schema1, JSONObject schema2) {
+  public static void adjustNumberTypes(ObjectNode schema1, ObjectNode schema2) {
 
     if (checkName(schema1, schema2)) {
       return;
     }
 
-    TreeSet<String> keys1 = new TreeSet<>(schema1.keySet());
-    TreeSet<String> keys2 = new TreeSet<>(schema2.keySet());
+    for (String key : getSortedKeys(schema1)) {
 
-    for (String key : keys1) {
-
-      if (!keys2.contains(key) || (schema1.get(key).getClass() != schema2.get(key).getClass())) {
+      if (!schema2.has(key) || (schema1.get(key).getClass() != schema2.get(key).getClass())) {
         continue;
       }
 
-      String field1 = schema1.get(key).toString();
-      String field2 = schema2.get(key).toString();
-
-      if (field1.equals(field2)) {
-        continue;
-      }
-
-      matchTypes(schema1, schema2, field1, field2, key);
-
-      if (schema1.get(key) instanceof JSONArray && schema2.get(key) instanceof JSONArray) {
+      if (schema1.get(key) instanceof TextNode) {
+        matchTypes(schema1, schema2, key);
+      } else if (schema1.get(key) instanceof ArrayNode) {
         matchJsonArray(schema1, schema2, key);
-      } else if (schema1.get(key) instanceof JSONObject && schema2.get(key) instanceof JSONObject) {
-        adjustNumberTypes(schema1.getJSONObject(key), schema2.getJSONObject(key));
+      } else if (schema1.get(key) instanceof ObjectNode) {
+        adjustNumberTypes((ObjectNode) schema1.get(key), (ObjectNode) schema2.get(key));
       }
 
     }
 
   }
 
-  private static boolean checkName(JSONObject schema1, JSONObject schema2) {
+  private static boolean checkName(ObjectNode schema1, ObjectNode schema2) {
 
-    if (schema1.similar(schema2)) {
+    if (schema1.equals(schema2)) {
       return true;
     }
 
     return schema1.has("name") && schema2.has("name")
-        && !schema1.getString("name").equals(schema2.getString("name"));
+        && !schema1.get("name").equals(schema2.get("name"));
   }
 
-  private static void matchTypes(JSONObject schema1, JSONObject schema2,
-                                 String field1, String field2, String key) {
 
+  private static void matchTypes(ObjectNode schema1, ObjectNode schema2, String key) {
 
     if (key.equals("name")) {
       return;
     }
 
+    String field1 = schema1.get(key).textValue();
+    String field2 = schema2.get(key).textValue();
+
     ArrayList<String> dataTypes = new ArrayList<>(Arrays.asList("int", "int32", "int64", "long"));
 
     if (Objects.equals(field2, "double") && dataTypes.contains(field1)) {
-      schema1.put(key, schema2.get(key));
+      schema1.set(key, schema2.get(key));
     } else if (Objects.equals(field1, "double") && dataTypes.contains(field2)) {
-      schema2.put(key, schema1.get(key));
+      schema2.set(key, schema1.get(key));
     } else if (Objects.equals(field2, "long") && dataTypes.contains(field1)) {
-      schema1.put(key, schema2.get(key));
+      schema1.set(key, schema2.get(key));
     } else if (Objects.equals(field1, "long") && dataTypes.contains(field2)) {
-      schema2.put(key, schema1.get(key));
+      schema2.set(key, schema1.get(key));
     }
 
   }
 
-  private static void matchJsonArray(JSONObject schema1, JSONObject schema2, String key) {
+  private static void matchJsonArray(ObjectNode schema1, ObjectNode schema2, String key) {
 
-    JSONArray fields1 = schema1.getJSONArray(key);
-    JSONArray fields2 = schema2.getJSONArray(key);
+    ArrayNode fields1 = (ArrayNode) schema1.get(key);
+    ArrayNode fields2 = (ArrayNode) schema2.get(key);
 
-    for (int i = 0; i < fields1.length(); i++) {
-      for (int j = 0; j < fields2.length(); j++) {
+    for (int i = 0; i < fields1.size(); i++) {
+      for (int j = 0; j < fields2.size(); j++) {
 
-        if ((fields1.get(i) instanceof JSONObject) && (fields2.get(j) instanceof JSONObject)) {
+        if ((fields1.get(i) instanceof ObjectNode) && (fields2.get(j) instanceof ObjectNode)) {
 
-          JSONObject field1 = fields1.getJSONObject(i);
-          JSONObject field2 = fields2.getJSONObject(j);
+          ObjectNode field1 = (ObjectNode) fields1.get(i);
+          ObjectNode field2 = (ObjectNode) fields2.get(j);
 
-          if (field1.getString("name").equals(field2.getString("name"))) {
-            adjustNumberTypes(fields1.getJSONObject(i), fields2.getJSONObject(j));
+          if (field1.get("name").equals(field2.get("name"))) {
+            adjustNumberTypes((ObjectNode) fields1.get(i), (ObjectNode) fields2.get(j));
           }
 
         }

@@ -17,13 +17,15 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import org.json.JSONArray;
-import org.json.JSONObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Optional;
+import java.util.List;
+import java.util.Collections;
+import java.util.Iterator;
 
 
 /**
@@ -31,39 +33,39 @@ import java.util.Optional;
  */
 public abstract class DeriveSchema {
 
+  public static final ObjectMapper mapper = new ObjectMapper();
 
-  abstract Optional<JSONObject> getPrimitiveSchema(Object field);
+  abstract Optional<ObjectNode> getPrimitiveSchema(Object field) throws JsonProcessingException;
 
-  abstract ArrayList<JSONObject> getSchemaOfAllElements(List<Object> list, String name)
+  abstract ArrayList<ObjectNode> getSchemaOfAllElements(List<Object> list, String name)
       throws JsonProcessingException;
 
-  abstract JSONObject getSchemaForArray(List<Object> list, String name)
+  abstract ObjectNode getSchemaForArray(List<Object> list, String name)
       throws JsonProcessingException;
 
-  abstract JSONObject getSchemaForRecord(JSONObject jsonObject, String name)
+  abstract ObjectNode getSchemaForRecord(ObjectNode objectNode, String name)
       throws JsonProcessingException;
-
-  static boolean isArrayType(String javaClass) {
-    return javaClass.equals("class org.json.JSONArray")
-        || javaClass.equals("class java.util.ArrayList");
-  }
 
   static List<Object> getListFromArray(Object field) {
 
-    if (field instanceof JSONArray) {
-      return ((JSONArray) field).toList();
+    if (field instanceof ArrayNode) {
+      List<Object> objectList = new ArrayList<>();
+      for (int i = 0; i < ((ArrayNode) field).size(); i++) {
+        objectList.add(((ArrayNode) field).get(i));
+      }
+      return objectList;
     }
 
     return ((List<Object>) field);
   }
 
-  static JSONObject getMapFromObject(Object field) {
+  public static List<String> getSortedKeys(ObjectNode message) {
 
-    if (field instanceof JSONObject) {
-      return (JSONObject) field;
+    ArrayList<String> keys = new ArrayList<>();
+    for (Iterator<String> it = message.fieldNames(); it.hasNext(); ) {
+      keys.add(it.next());
     }
-
-    return new JSONObject((HashMap) field);
+    Collections.sort(keys);
+    return keys;
   }
-
 }

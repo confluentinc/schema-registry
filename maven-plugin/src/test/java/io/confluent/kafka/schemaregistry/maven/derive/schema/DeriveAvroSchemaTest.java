@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -30,11 +32,10 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.*;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils;
 import org.apache.avro.generic.GenericRecord;
-import org.json.JSONArray;
-import org.json.JSONObject;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
 public class DeriveAvroSchemaTest {
 
@@ -55,14 +56,14 @@ public class DeriveAvroSchemaTest {
 
   }
 
-  void serializeAndDeserializeCheckMulti(List<String> messages, List<JSONObject> schemas) throws IOException {
+  void serializeAndDeserializeCheckMulti(List<String> messages, List<ObjectNode> schemas) throws IOException {
 
-    for (JSONObject schemaInfo : schemas) {
+    for (ObjectNode schemaInfo : schemas) {
 
-      AvroSchema schema = new AvroSchema(schemaInfo.getJSONObject("schema").toString());
-      JSONArray matchingMessages = schemaInfo.getJSONArray("messagesMatched");
-      for (int i = 0; i < matchingMessages.length(); i++) {
-        int index = matchingMessages.getInt(i);
+      AvroSchema schema = new AvroSchema(schemaInfo.get("schema").toString());
+      ArrayNode matchingMessages = (ArrayNode) schemaInfo.get("messagesMatched");
+      for (int i = 0; i < matchingMessages.size(); i++) {
+        int index = matchingMessages.get(i).asInt();
         serializeAndDeserializeCheck(messages.get(index), schema);
       }
 
@@ -72,7 +73,7 @@ public class DeriveAvroSchemaTest {
 
   void serializeAndDeserializeCheck(String message, AvroSchema schema) throws IOException {
 
-    String formattedString = new JSONObject(message).toString();
+    String formattedString = mapper.readTree(message).toString();
     Object test = AvroSchemaUtils.toObject(formattedString, schema);
     byte[] bytes = this.avroSerializer.serialize(this.topic, test);
     assertEquals(test, this.avroDeserializer.deserialize(this.topic, bytes, schema.rawSchema()));
@@ -107,7 +108,7 @@ public class DeriveAvroSchemaTest {
             + "  }";
 
     AvroSchema avroSchema = new AvroSchema(
-        strictAvroGenerator.getSchemaForRecord(new JSONObject(message),
+        strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
             "record").toString());
     serializeAndDeserializeCheck(message, avroSchema);
 
@@ -118,7 +119,7 @@ public class DeriveAvroSchemaTest {
     Lenient and Strict checking both give same schema
      */
     AvroSchema avroSchema2 = new AvroSchema(
-        lenientAvroGenerator.getSchemaForRecord(new JSONObject(message),
+        lenientAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
             "record").toString());
 
     assertEquals(avroSchema, avroSchema2);
@@ -140,8 +141,8 @@ public class DeriveAvroSchemaTest {
             + "    \"ArrayInt\": [1, 11],\n"
             + "    \"ArrayDoubleInt\": [1, 11.322, 0.2222],\n"
             + "    \"ArrayLongInt\": [1, 212121212212121, 121212124324343432],\n"
-            + "    \"ArrayLongInt2\": [212121212212121, 2],\n"
-            + "    \"ArrayLongIntDouble\": [0.5, 1, 212121212212121, 121212124324343432],\n"
+            + "    \"ArrayLongInt2\": [2121212122312121, 2],\n"
+            + "    \"ArrayLongIntDouble\": [0.5, 1, 2121212124212121, 121212124324343432],\n"
             + "    \"ArrayComb\": [{\"K\":10}, {\"K\":10.5}, {\"K\":10.43223}],\n"
             + "    \"ArrayComb2\": [{\"K\":[10]}, {\"K\":[10.5]}, {\"K\":[10.43223]}],\n"
             + "    \"ArrayComb3\": [{\"K\":[[10]]}, {\"K\":[[10.5]]}, {\"K\":[[10.43223]]}],\n"
@@ -149,7 +150,7 @@ public class DeriveAvroSchemaTest {
             + "  }";
 
     AvroSchema avroSchema = new AvroSchema(
-        strictAvroGenerator.getSchemaForRecord(new JSONObject(message),
+        strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
             "record").toString());
 
     serializeAndDeserializeCheck(message, avroSchema);
@@ -160,14 +161,14 @@ public class DeriveAvroSchemaTest {
     Lenient and Strict checking both give same schema
      */
     AvroSchema avroSchema2 = new AvroSchema(
-        lenientAvroGenerator.getSchemaForRecord(new JSONObject(message),
+        lenientAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
             "record").toString());
 
     assertEquals(avroSchema, avroSchema2);
 
     String message2 = "[{\"A\" : 12}, {\"A\" : 12}, {\"B\" : 12.5}]";
     List<String> m = ReadFileUtils.readMessagesToString(message2);
-    List<JSONObject> schemas = strictAvroGenerator.getSchemaForMultipleMessages(m);
+    List<ObjectNode> schemas = strictAvroGenerator.getSchemaForMultipleMessages(m);
     serializeAndDeserializeCheckMulti(m, schemas);
 
   }
@@ -186,17 +187,17 @@ public class DeriveAvroSchemaTest {
             + "  }";
 
     assertThrows(IllegalArgumentException.class,
-        () -> strictAvroGenerator.getSchemaForRecord(new JSONObject(bigIntMessage),
+        () -> strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(bigIntMessage),
             "record"));
 
     AvroSchema avroSchema = new AvroSchema(
-        lenientAvroGenerator.getSchemaForRecord(new JSONObject(bigIntMessage),
+        lenientAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(bigIntMessage),
             "record").toString());
 
     Object test = AvroSchemaUtils.toObject(bigIntMessage, avroSchema);
     assert (test instanceof GenericRecord);
-    GenericRecord jsonObject = (GenericRecord) test;
-    assertEquals(jsonObject.get("BigDataType"), 1.2020210222344344E45);
+    GenericRecord ObjectNode = (GenericRecord) test;
+    assertEquals(ObjectNode.get("BigDataType"), 1.2020210222344344E45);
 
 
     /*
@@ -210,12 +211,12 @@ public class DeriveAvroSchemaTest {
             + "  }";
 
     avroSchema = new AvroSchema(
-        strictAvroGenerator.getSchemaForRecord(new JSONObject(bigDoubleMessage),
+        strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(bigDoubleMessage),
             "record").toString());
     test = AvroSchemaUtils.toObject(bigDoubleMessage, avroSchema);
     assert (test instanceof GenericRecord);
-    jsonObject = (GenericRecord) test;
-    assertEquals(jsonObject.get("BigDataType"), 6.2323232789012454E7);
+    ObjectNode = (GenericRecord) test;
+    assertEquals(ObjectNode.get("BigDataType"), 6.2323232789012454E7);
   }
 
   @Test
@@ -238,7 +239,7 @@ public class DeriveAvroSchemaTest {
             + "  }";
 
     AvroSchema avroSchema = new AvroSchema(
-        strictAvroGenerator.getSchemaForRecord(new JSONObject(message),
+        strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
             "record").toString());
     serializeAndDeserializeCheck(message, avroSchema);
 
@@ -247,7 +248,7 @@ public class DeriveAvroSchemaTest {
     */
 
     AvroSchema avroSchema2 = new AvroSchema(
-        lenientAvroGenerator.getSchemaForRecord(new JSONObject(message),
+        lenientAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
             "record").toString());
 
     assertEquals(avroSchema, avroSchema2);
@@ -265,23 +266,23 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfStrings\": [null, \"Java\", 10, 100, \"C++\", \"Scala\"]\n"
             + "  }";
 
-    JSONObject messageObject1 = new JSONObject(message1);
-    JSONObject schema1 = lenientAvroGenerator.getSchemaForRecord(messageObject1, "Record");
+    ObjectNode messageObject1 = (ObjectNode) mapper.readTree(message1);
+    ObjectNode schema1 = lenientAvroGenerator.getSchemaForRecord(messageObject1, "Record");
 
-    assert (schema1.get("fields") instanceof JSONArray);
-    JSONArray fields = (JSONArray) schema1.get("fields");
+    assert (schema1.get("fields") instanceof ArrayNode);
+    ArrayNode fields = (ArrayNode) schema1.get("fields");
 
-    assert (fields.get(0) instanceof JSONObject);
-    JSONObject ArrayOfBoolean = (JSONObject) fields.get(0);
+    assert (fields.get(0) instanceof ObjectNode);
+    ObjectNode ArrayOfBoolean = (ObjectNode) fields.get(0);
     assertEquals(ArrayOfBoolean.get("type").toString(),
         "{\"type\":\"array\",\"items\":\"boolean\"}");
 
-    assert (fields.get(1) instanceof JSONObject);
-    JSONObject ArrayOfInts = (JSONObject) fields.get(1);
+    assert (fields.get(1) instanceof ObjectNode);
+    ObjectNode ArrayOfInts = (ObjectNode) fields.get(1);
     assertEquals(ArrayOfInts.get("type").toString(), "{\"type\":\"array\",\"items\":\"int\"}");
 
-    assert (fields.get(2) instanceof JSONObject);
-    JSONObject ArrayOfStrings = (JSONObject) fields.get(2);
+    assert (fields.get(2) instanceof ObjectNode);
+    ObjectNode ArrayOfStrings = (ObjectNode) fields.get(2);
     assertEquals(ArrayOfStrings.get("type").toString(),
         "{\"type\":\"array\",\"items\":\"string\"}");
 
@@ -298,7 +299,7 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfRecords\": [0, \"Java\"]\n"
             + "  }";
 
-    JSONObject messageObject1 = new JSONObject(message1);
+    ObjectNode messageObject1 = (ObjectNode) mapper.readTree(message1);
     assertThrows(IllegalArgumentException.class,
         () -> strictAvroGenerator.getSchemaForRecord(messageObject1, "Record"));
 
@@ -310,7 +311,7 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfRecords\": [[12, true, false]]\n"
             + "  }";
 
-    JSONObject messageObject11 = new JSONObject(message11);
+    ObjectNode messageObject11 = (ObjectNode) mapper.readTree(message11);
     assertThrows(IllegalArgumentException.class,
         () -> strictAvroGenerator.getSchemaForRecord(messageObject11, "Record"));
 
@@ -328,7 +329,7 @@ public class DeriveAvroSchemaTest {
             + "\"\": [0, \"Java\"]\n"
             + "  }";
 
-    JSONObject messageObject2 = new JSONObject(message2);
+    ObjectNode messageObject2 = (ObjectNode) mapper.readTree(message2);
     assertThrows(IllegalArgumentException.class,
         () -> strictAvroGenerator.getSchemaForRecord(messageObject2, "Record"));
 
@@ -369,8 +370,8 @@ public class DeriveAvroSchemaTest {
             + "    \"RecordOfArrays6\": {\"New\": {\"keys\":\"4\"}, \"News\": {\"keys\":\"43\"}}\n"
             + "  }";
 
-    JSONObject jsonObject = strictAvroGenerator.getSchemaForRecord(new JSONObject(message), "record", false);
-    AvroSchema avroSchema = new AvroSchema(jsonObject.toString());
+    ObjectNode ObjectNode = strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message), "record", false);
+    AvroSchema avroSchema = new AvroSchema(ObjectNode.toString());
 
     serializeAndDeserializeCheck(message, avroSchema);
 
@@ -380,7 +381,7 @@ public class DeriveAvroSchemaTest {
     */
 
     AvroSchema avroSchema2 = new AvroSchema(
-        lenientAvroGenerator.getSchemaForRecord(new JSONObject(message),
+        lenientAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
             "record").toString());
 
     assertEquals(avroSchema, avroSchema2);
@@ -396,26 +397,26 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfRecords3\": [{\"Int1\": true, \"Int2\":false}, {\"Int1\": -0.5, \"Int2\":1}, {\"Int1\": 0.1, \"Int2\": -10}]\n"
             + "  }";
 
-    JSONObject messageObject2 = new JSONObject(message2);
-    JSONObject schema2 = lenientAvroGenerator.getSchemaForRecord(messageObject2, "Record");
+    ObjectNode messageObject2 = (ObjectNode) mapper.readTree(message2);
+    ObjectNode schema2 = lenientAvroGenerator.getSchemaForRecord(messageObject2, "Record");
 
-    assert (schema2.get("fields") instanceof JSONArray);
-    JSONArray fields = (JSONArray) schema2.get("fields");
+    assert (schema2.get("fields") instanceof ArrayNode);
+    ArrayNode fields = (ArrayNode) schema2.get("fields");
 
     // {"J": boolean} is chosen as most occurring datatype
-    assert (fields.get(0) instanceof JSONObject);
-    JSONObject ArrayOfRecords1 = (JSONObject) fields.get(0);
+    assert (fields.get(0) instanceof ObjectNode);
+    ObjectNode ArrayOfRecords1 = (ObjectNode) fields.get(0);
     assertEquals(ArrayOfRecords1.get("type").toString(), "{\"type\":\"array\",\"items\":{\"name\":\"ArrayOfRecords1\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"boolean\"}]}}");
 
     // {"Int1": double, "Int2": double} is chosen as most occurring datatype
-    assert (fields.get(1) instanceof JSONObject);
-    JSONObject ArrayOfRecords2 = (JSONObject) fields.get(1);
+    assert (fields.get(1) instanceof ObjectNode);
+    ObjectNode ArrayOfRecords2 = (ObjectNode) fields.get(1);
     assertEquals(ArrayOfRecords2.get("type").toString(),
         "{\"type\":\"array\",\"items\":{\"name\":\"ArrayOfRecords2\",\"type\":\"record\",\"fields\":[{\"name\":\"Int1\",\"type\":\"double\"},{\"name\":\"Int2\",\"type\":\"double\"}]}}");
 
     // {"Int1": double, "Int2": int} is chosen as most occurring datatype
-    assert (fields.get(2) instanceof JSONObject);
-    JSONObject ArrayOfRecords3 = (JSONObject) fields.get(2);
+    assert (fields.get(2) instanceof ObjectNode);
+    ObjectNode ArrayOfRecords3 = (ObjectNode) fields.get(2);
     assertEquals(ArrayOfRecords3.get("type").toString(),
         "{\"type\":\"array\",\"items\":{\"name\":\"ArrayOfRecords3\",\"type\":\"record\",\"fields\":[{\"name\":\"Int1\",\"type\":\"double\"},{\"name\":\"Int2\",\"type\":\"int\"}]}}");
 
@@ -437,14 +438,14 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfRecords1\": [{\"J\": [10,11,true]}, {\"J\": [10, \"first\", \"second\"]}, {\"J\": [\"first\", \"first\", 11]}]}\n"
             + "  }";
 
-    JSONObject messageObject = new JSONObject(message);
-    JSONObject schema = lenientAvroGenerator.getSchemaForRecord(messageObject, "Record");
+    ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
+    ObjectNode schema = lenientAvroGenerator.getSchemaForRecord(messageObject, "Record");
 
-    assert (schema.get("fields") instanceof JSONArray);
-    JSONArray fields = (JSONArray) schema.get("fields");
+    assert (schema.get("fields") instanceof ArrayNode);
+    ArrayNode fields = (ArrayNode) schema.get("fields");
 
-    assert (fields.get(0) instanceof JSONObject);
-    JSONObject ArrayOfRecords1 = (JSONObject) fields.get(0);
+    assert (fields.get(0) instanceof ObjectNode);
+    ObjectNode ArrayOfRecords1 = (ObjectNode) fields.get(0);
     assertEquals(ArrayOfRecords1.get("type").toString(),
         "{\"type\":\"array\",\"items\":{\"name\":\"ArrayOfRecords1\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":{\"type\":\"array\",\"items\":\"string\"}}]}}");
 
@@ -462,8 +463,8 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfRecords\": [{\"array\":[12]}, {\"long\": 12}]\n"
             + "  }";
 
-    JSONObject messageObject = new JSONObject(message);
-    JSONObject t =
+    ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
+    ObjectNode t =
         strictAvroGenerator.getSchemaForRecord(messageObject, "Record");
     assertEquals(t.toString(), "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"ArrayOfRecords\",\"type\":{\"type\":\"array\",\"items\":[\"long\",{\"name\":\"array\",\"type\":\"array\",\"items\":\"int\"}]}}]}");
     serializeAndDeserializeCheck(message, new AvroSchema(t.toString()));
@@ -477,7 +478,7 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfRecords\": [{\"K\":12}, {\"J\": 12}]\n"
             + "  }";
 
-    JSONObject messageObject1 = new JSONObject(message1);
+    ObjectNode messageObject1 = (ObjectNode) mapper.readTree(message1);
     assertThrows(IllegalArgumentException.class,
         () -> strictAvroGenerator.getSchemaForRecord(messageObject1, "Record"));
 
@@ -490,7 +491,7 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfRecords\": [{\"long\":12}, {\"kong\": 12}]\n"
             + "  }";
 
-    JSONObject messageObject12 = new JSONObject(message12);
+    ObjectNode messageObject12 = (ObjectNode) mapper.readTree(message12);
     assertThrows(IllegalArgumentException.class,
         () -> strictAvroGenerator.getSchemaForRecord(messageObject12, "Record"));
 
@@ -504,7 +505,7 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfRecords\": [{\"J\":[12]}, {\"J\":[true, false]}]\n"
             + "  }";
 
-    JSONObject messageObject2 = new JSONObject(message2);
+    ObjectNode messageObject2 = (ObjectNode) mapper.readTree(message2);
     assertThrows(IllegalArgumentException.class,
         () -> strictAvroGenerator.getSchemaForRecord(messageObject2, "Record"));
 
@@ -518,7 +519,7 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfRecords\": [{\"J\":[{\"K\":12}]}, {\"J\":[{\"K\":true}]}]\n"
             + "  }";
 
-    JSONObject messageObject3 = new JSONObject(message3);
+    ObjectNode messageObject3 = (ObjectNode) mapper.readTree(message3);
     assertThrows(IllegalArgumentException.class,
         () -> strictAvroGenerator.getSchemaForRecord(messageObject3, "Record"));
 
@@ -532,8 +533,8 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfRecords\": [{\"J\":23, \"K\":23}, {\"J\": 33}]\n"
             + "  }";
 
-    JSONObject messageObject4 = new JSONObject(message4);
-    JSONObject schema = lenientAvroGenerator.getSchemaForRecord(messageObject4, "Record");
+    ObjectNode messageObject4 = (ObjectNode) mapper.readTree(message4);
+    ObjectNode schema = lenientAvroGenerator.getSchemaForRecord(messageObject4, "Record");
     String expectedSchema = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"ArrayOfRecords\",\"type\":{\"type\":\"array\",\"items\":{\"name\":\"ArrayOfRecords\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"},{\"name\":\"K\",\"type\":\"int\"}]}}}]}";
     assertEquals(schema.toString(), expectedSchema);
 
@@ -552,16 +553,15 @@ public class DeriveAvroSchemaTest {
       String message = String.format("{\n"
           + "    \"String\": \"%d\",\n"
           + "    \"Integer\": %d,\n"
-          + "    \"Boolean\": %b,\n"
+          + "    \"Boolean\": %b\n"
           + "  }", i * 100, i, i % 2 == 0);
       arr.add(message);
     }
-    List<JSONObject> schemas1 = strictAvroGenerator.getSchemaForMultipleMessages(arr);
+    List<ObjectNode> schemas1 = strictAvroGenerator.getSchemaForMultipleMessages(arr);
     assert (schemas1.size() == 1);
 
     String schemas1Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[0,1,2,3,4,5,6,7,8,9],\"numMessagesMatched\":10}";
-    assertEquals(schemas1.get(0).toString(), schemas1Expected1);
-
+    assertEquals(schemas1Expected1, schemas1.get(0).toString());
     serializeAndDeserializeCheckMulti(arr, schemas1);
 
     /*
@@ -582,20 +582,20 @@ public class DeriveAvroSchemaTest {
         String message2 = String.format("\"Bool2\": %b", false);
         arr2.add(message + message2 + "}");
       } else {
-        arr2.add(message + "}");
+        arr2.add(message.substring(0, message.length()-2) + "}");
       }
     }
 
-    List<JSONObject> schemas2 = strictAvroGenerator.getSchemaForMultipleMessages(arr2);
+    List<ObjectNode> schemas2 = strictAvroGenerator.getSchemaForMultipleMessages(arr2);
     assert (schemas2.size() == 3);
 
     String schemas2Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"Long\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[0,3,6],\"numMessagesMatched\":3}";
     assertEquals(schemas2.get(0).toString(), schemas2Expected1);
 
-    String schemas2Expected2 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[1,4],\"numMessagesMatched\":2}";
+    String schemas2Expected2 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Bool2\",\"type\":\"boolean\"},{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[2,5],\"numMessagesMatched\":2}";
     assertEquals(schemas2.get(1).toString(), schemas2Expected2);
 
-    String schemas2Expected3 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Bool2\",\"type\":\"boolean\"},{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[2,5],\"numMessagesMatched\":2}";
+    String schemas2Expected3 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[1,4],\"numMessagesMatched\":2}";
     assertEquals(schemas2.get(2).toString(), schemas2Expected3);
 
     serializeAndDeserializeCheckMulti(arr2, schemas2);
@@ -605,7 +605,7 @@ public class DeriveAvroSchemaTest {
     Treated as array of messages and highest occurring one is returned
     */
 
-    List<JSONObject> schemas3 = lenientAvroGenerator.getSchemaForMultipleMessages(arr2);
+    List<ObjectNode> schemas3 = lenientAvroGenerator.getSchemaForMultipleMessages(arr2);
     assert (schemas3.size() == 1);
 
     String schema3Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"Long\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]}}";
@@ -634,11 +634,11 @@ public class DeriveAvroSchemaTest {
 
     String message2 = "{\n"
         + "    \"String\": \"John\",\n"
-        + "    \"Float\": 1e16,\n"
+        + "    \"Float\": 1e16\n"
         + "  }";
     arr.add(message2);
 
-    List<JSONObject> schemas2 = strictAvroGenerator.getSchemaForMultipleMessages(arr);
+    List<ObjectNode> schemas2 = strictAvroGenerator.getSchemaForMultipleMessages(arr);
     assert (schemas2.size() == 1);
 
     String schemas2Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Float\",\"type\":\"double\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[1],\"numMessagesMatched\":1}";
@@ -651,7 +651,7 @@ public class DeriveAvroSchemaTest {
     Lenient generator will pick the most occurring schema, here both occur only once so first element is picked
     */
 
-    List<JSONObject> schemas3 = lenientAvroGenerator.getSchemaForMultipleMessages(arr);
+    List<ObjectNode> schemas3 = lenientAvroGenerator.getSchemaForMultipleMessages(arr);
     assert (schemas3.size() == 1);
 
     String schemas3Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Arr\",\"type\":{\"type\":\"array\",\"items\":\"double\"}},{\"name\":\"String\",\"type\":\"string\"}]}}";
@@ -685,7 +685,7 @@ public class DeriveAvroSchemaTest {
         "    }";
 
     ArrayList<String> messages = new ArrayList<>(Arrays.asList(message31, message32, message33));
-    List<JSONObject> schemas4 = strictAvroGenerator.getSchemaForMultipleMessages(messages);
+    List<ObjectNode> schemas4 = strictAvroGenerator.getSchemaForMultipleMessages(messages);
     assert (schemas4.size() == 1);
 
     String schemas4Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Age\",\"type\":\"int\"},{\"name\":\"Date\",\"type\":\"int\"},{\"name\":\"arr\",\"type\":{\"type\":\"array\",\"items\":\"double\"}},{\"name\":\"name\",\"type\":\"string\"}]},\"messagesMatched\":[0,1,2],\"numMessagesMatched\":3}";
@@ -715,7 +715,7 @@ public class DeriveAvroSchemaTest {
         "    }}";
 
     ArrayList<String> messages2 = new ArrayList<>(Arrays.asList(message41, message42, message43));
-    List<JSONObject> schemas5 = strictAvroGenerator.getSchemaForMultipleMessages(messages2);
+    List<ObjectNode> schemas5 = strictAvroGenerator.getSchemaForMultipleMessages(messages2);
 
     assert (schemas5.size() == 1);
 
@@ -725,7 +725,6 @@ public class DeriveAvroSchemaTest {
     serializeAndDeserializeCheckMulti(messages2, schemas5);
 
   }
-
 
 
 }
