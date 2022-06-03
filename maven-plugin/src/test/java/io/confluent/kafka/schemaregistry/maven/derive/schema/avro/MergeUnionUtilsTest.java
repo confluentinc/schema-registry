@@ -1,4 +1,4 @@
-package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
+package io.confluent.kafka.schemaregistry.maven.derive.schema.avro;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeUnionUtils.*;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.avro.MergeUnionUtils.*;
 import static org.junit.Assert.assertEquals;
 
 public class MergeUnionUtilsTest {

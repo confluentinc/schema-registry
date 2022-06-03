@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.maven.derive.schema;
+package io.confluent.kafka.schemaregistry.maven.derive.schema.json;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.json.DeriveJsonSchema;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.json.DeriveJsonSchemaRecord;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -64,7 +66,7 @@ public class DeriveJsonSchemaTest {
 
     ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
     JsonSchema jsonSchema = new JsonSchema(
-        schemaGenerator.getSchemaForRecord(messageObject, "Record").toString());
+        DeriveJsonSchemaRecord.getSchemaForRecord(messageObject, "Record").toString());
 
     jsonSchema.validate(mapper.readTree(message));
     String expectedSchema = "{\"type\":\"object\",\"properties\":{\"BigDataType\":{\"type\":\"number\"},\"Boolean\":{\"type\":\"boolean\"},\"Double\":{\"type\":\"number\"},\"Float\":{\"type\":\"number\"},\"Integer\":{\"type\":\"number\"},\"LongName\":{\"type\":\"number\"},\"Null\":{\"type\":\"null\"},\"String\":{\"type\":\"string\"}}}";
@@ -89,7 +91,7 @@ public class DeriveJsonSchemaTest {
 
     ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
     JsonSchema jsonSchema = new JsonSchema(
-        schemaGenerator.getSchemaForRecord(messageObject, "Record").toString());
+        DeriveJsonSchemaRecord.getSchemaForRecord(messageObject, "Record").toString());
     jsonSchema.validate(mapper.readTree(message));
 
     String expectedSchema = "{\"type\":\"object\",\"properties\":{\"ArrayBoolean\":{\"type\":\"array\",\"items\":{\"type\":\"boolean\"}},\"ArrayEmpty\":{\"type\":\"array\",\"items\":{}},\"ArrayInteger\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"ArrayNull\":{\"type\":\"array\",\"items\":{\"type\":\"null\"}},\"ArrayString\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"DoubleRecord\":{\"type\":\"object\",\"properties\":{\"Double1\":{\"type\":\"number\"},\"Double2\":{\"type\":\"number\"}}},\"IntRecord\":{\"type\":\"object\",\"properties\":{\"Int1\":{\"type\":\"number\"},\"Int2\":{\"type\":\"number\"}}},\"MixedRecord\":{\"type\":\"object\",\"properties\":{\"Double1\":{\"type\":\"number\"},\"Int1\":{\"type\":\"number\"},\"name\":{\"type\":\"string\"}}}}}";
@@ -122,7 +124,7 @@ public class DeriveJsonSchemaTest {
 
     ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
     JsonSchema jsonSchema = new JsonSchema(
-        schemaGenerator.getSchemaForRecord(messageObject, "Record").toString());
+        DeriveJsonSchemaRecord.getSchemaForRecord(messageObject, "Record").toString());
     jsonSchema.validate(mapper.readTree(message));
 
     String expectedSchema = "{\"type\":\"object\",\"properties\":{\"Array2d\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}},\"Array2dDiff\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"number\"},{\"type\":\"boolean\"}]}}},\"Array2dEmpty\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{}}},\"Array2dNull\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"null\"}}},\"Array3d\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}},\"ArrayOfRecords\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"Int1\":{\"type\":\"number\"},\"Int2\":{\"type\":\"number\"}}}},\"RecordOfArrays\":{\"type\":\"object\",\"properties\":{\"ArrayBoolean1\":{\"type\":\"array\",\"items\":{\"type\":\"boolean\"}},\"ArrayInt1\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}},\"RecordOfArrays2\":{\"type\":\"object\",\"properties\":{\"Array2D\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}},\"Array3D\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}}}},\"RecordOfArrays3\":{\"type\":\"object\",\"properties\":{\"Array2D\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}}}}},\"RecordOfArrays4\":{\"type\":\"object\",\"properties\":{\"Array2D\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"number\"}}}}}}},\"RecordOfArrays5\":{\"type\":\"object\",\"properties\":{\"key\":{\"type\":\"object\",\"properties\":{\"keys\":{\"type\":\"number\"}}}}},\"RecordOfArrays6\":{\"type\":\"object\",\"properties\":{\"key\":{\"type\":\"object\",\"properties\":{\"keys\":{\"type\":\"string\"}}}}},\"RecordOfRecords\":{\"type\":\"object\",\"properties\":{\"Record1\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"place\":{\"type\":\"string\"}}},\"Record2\":{\"type\":\"object\",\"properties\":{\"place\":{\"type\":\"string\"},\"thing\":{\"type\":\"string\"}}}}}}}";
@@ -147,7 +149,7 @@ public class DeriveJsonSchemaTest {
 
     ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
     JsonSchema jsonSchema = new JsonSchema(
-        schemaGenerator.getSchemaForRecord(messageObject, "Record").toString());
+        DeriveJsonSchemaRecord.getSchemaForRecord(messageObject, "Record").toString());
     jsonSchema.validate(mapper.readTree(message));
     String expectedSchema = "{\"type\":\"object\",\"properties\":{\"ArrayOfDifferentTypes\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]}},\"ArrayOfDifferentTypes2\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"J\":{\"oneOf\":[{\"type\":\"number\"},{\"type\":\"boolean\"}]}}}},\"ArrayOfDifferentTypes3\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"string\"}]}}}}}";
     assertEquals(expectedSchema, jsonSchema.toString());
@@ -179,7 +181,7 @@ public class DeriveJsonSchemaTest {
             + "  }";
 
     ObjectNode messageObject2 = (ObjectNode) mapper.readTree(message2);
-    ObjectNode ObjectNode = schemaGenerator.getSchemaForRecord(messageObject2, "Record");
+    ObjectNode ObjectNode = DeriveJsonSchemaRecord.getSchemaForRecord(messageObject2, "Record");
     JsonSchema jsonSchema2 = new JsonSchema(ObjectNode.toString());
     jsonSchema2.validate(mapper.readTree(message2));
 

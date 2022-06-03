@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.maven.derive.schema;
+package io.confluent.kafka.schemaregistry.maven.derive.schema.avro;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.NumericNodeComparator;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.avro.DeriveAvroSchema;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
@@ -37,7 +37,9 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 
 public class UnionTests {
@@ -85,10 +87,11 @@ public class UnionTests {
       AvroSchemaUtils.toJson(test, ps);
     }
 
-    JsonElement jsonElement1 = JsonParser.parseString(message);
-    JsonElement jsonElement2 = JsonParser.parseString(bs.toString(utf8));
+    ObjectNode tree1 = (ObjectNode) mapper.readTree(message);
+    ObjectNode tree2 = (ObjectNode) mapper.readTree(bs.toString(utf8));
 
-    assertEquals(jsonElement1, jsonElement2);
+    NumericNodeComparator cmp = new NumericNodeComparator();
+    assertTrue(tree1.equals(cmp, tree2));
 
   }
 

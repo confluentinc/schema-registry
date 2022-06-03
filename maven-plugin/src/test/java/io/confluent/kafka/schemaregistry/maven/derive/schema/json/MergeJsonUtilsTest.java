@@ -1,14 +1,15 @@
-package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
+package io.confluent.kafka.schemaregistry.maven.derive.schema.json;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils.*;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.json.MergeJsonUtils.*;
 import static org.junit.Assert.assertEquals;
 
 public class MergeJsonUtilsTest {
@@ -19,7 +20,7 @@ public class MergeJsonUtilsTest {
   public void shouldGetOneUniqueElementBasic() throws JsonProcessingException {
     ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"name\":\"K\",\"type\":\"double\"}");
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema1));
-    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
+    ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 1);
     assert (uniqueSchemas.get(0).equals(schema1));
   }
@@ -29,7 +30,7 @@ public class MergeJsonUtilsTest {
     ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"name\":\"K\",\"type\":\"double\"}");
     ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"name\":\"K\",\"type\":\"double\"}");
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema1, schema2));
-    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
+    ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 1);
     assert (uniqueSchemas.get(0).equals(schema1));
   }
@@ -39,7 +40,7 @@ public class MergeJsonUtilsTest {
     ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
     ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2, schema2));
-    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
+    ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 1);
     assert (uniqueSchemas.get(0).equals(schema1));
   }
@@ -49,7 +50,7 @@ public class MergeJsonUtilsTest {
     ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"type\":\"object\",\"properties\":{\"Integer\":{\"type\":\"number\"}}}");
     ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"type\":\"object\",\"properties\":{\"Integer\":{\"type\":\"number\"}}}");
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2, schema2));
-    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
+    ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 1);
     assert (uniqueSchemas.get(0).equals(schema1));
   }
@@ -60,7 +61,7 @@ public class MergeJsonUtilsTest {
     ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"name\":\"K\",\"type\":{\"type\":\"array\",\"items\":\"int\"}}");
     ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"name\":\"K\",\"type\":{\"type\":\"array\",\"items\":\"int\"}}");
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema1, schema2));
-    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
+    ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 1);
     assert (uniqueSchemas.get(0).equals(schema1));
   }
@@ -70,7 +71,7 @@ public class MergeJsonUtilsTest {
     ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"type\":\"array\",\"items\":{\"type\":\"number\"}}");
     ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"type\":\"array\",\"items\":{\"type\":\"number\"}}");
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2, schema2));
-    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
+    ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 1);
     assert (uniqueSchemas.get(0).equals(schema1));
   }
@@ -84,7 +85,7 @@ public class MergeJsonUtilsTest {
     ObjectNode schema4 = (ObjectNode) mapper.readTree("{\"name\":\"R2\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}");
     ObjectNode schema5 = (ObjectNode) mapper.readTree("{\"name\":\"K\",\"type\":{\"type\":\"array\",\"items\":\"int\"}}");
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema1, schema2, schema2, schema3, schema4, schema5));
-    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
+    ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 5);
     for (ObjectNode schema : schemas) {
       assert (uniqueSchemas.contains(schema));
@@ -99,7 +100,7 @@ public class MergeJsonUtilsTest {
     ObjectNode schema3 = (ObjectNode) mapper.readTree("{\"type\":\"object\",\"properties\":{\"Integer\":{\"type\":\"number\"}}}");
     ObjectNode schema4 = (ObjectNode) mapper.readTree("{\"type\":\"array\",\"items\":{\"type\":\"number\"}}");
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema1, schema2, schema2, schema3, schema4));
-    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
+    ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 4);
     for (ObjectNode schema : schemas) {
       assert (uniqueSchemas.contains(schema));

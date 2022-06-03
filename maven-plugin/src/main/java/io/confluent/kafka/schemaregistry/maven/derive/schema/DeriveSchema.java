@@ -20,33 +20,37 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.avro.DeriveAvroSchema;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.json.DeriveJsonSchema;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.protobuf.DeriveProtobufSchema;
 
 import java.util.ArrayList;
-import java.util.Optional;
-import java.util.List;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 
 
-/**
- * Abstract class to provide structure for each schema type and store common functions.
- */
 public abstract class DeriveSchema {
 
   public static final ObjectMapper mapper = new ObjectMapper();
 
-  abstract Optional<ObjectNode> getPrimitiveSchema(Object field) throws JsonProcessingException;
+  public static ArrayList<ObjectNode> getUnique(ArrayList<ObjectNode> schemas) {
 
-  abstract ArrayList<ObjectNode> getSchemaOfAllElements(List<Object> list, String name)
-      throws JsonProcessingException;
+    Set<ObjectNode> setWithWrappedObjects = new HashSet<>(schemas);
+    ArrayList<ObjectNode> ans = new ArrayList<>();
 
-  abstract ObjectNode getSchemaForArray(List<Object> list, String name)
-      throws JsonProcessingException;
+    for (ObjectNode objectNode : setWithWrappedObjects) {
+      if (objectNode != null && !objectNode.isEmpty()) {
+        ans.add(objectNode);
+      }
+    }
 
-  abstract ObjectNode getSchemaForRecord(ObjectNode objectNode, String name)
-      throws JsonProcessingException;
+    return ans;
+  }
 
-  static List<Object> getListFromArray(Object field) {
+  public static List<Object> getListFromArray(Object field) {
 
     if (field instanceof ArrayNode) {
       List<Object> objectList = new ArrayList<>();
@@ -68,4 +72,57 @@ public abstract class DeriveSchema {
     Collections.sort(keys);
     return keys;
   }
+
+  /**
+   * Derive schema for multiple messages based on schema type and strict flag
+   * Calls 'getSchemaForMultipleMessages' for the schema type.
+   *
+   * @param schemaType  One of Avro, Json or ProtoBuf
+   * @param strictCheck flag to specify strict check
+   * @param messages    List of messages, each message is a ObjectNode
+   * @return List of ObjectNode, each object gives information of schema,
+   *          and which messages it matches
+   * @throws JsonProcessingException thrown if message not in JSON format
+   */
+  public static List<ObjectNode> caseWiseOutput(String schemaType,
+                                                boolean strictCheck,
+                                                ArrayList<String> messages)
+      throws JsonProcessingException {
+
+    List<ObjectNode> ans = new ArrayList<>();
+    if (schemaType == null) {
+      throw new IllegalArgumentException("Schema Type not set");
+    }
+    switch (schemaType.toLowerCase()) {
+      case "avro": {
+
+        DeriveAvroSchema schemaGenerator = new DeriveAvroSchema(strictCheck);
+        List<ObjectNode> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
+        ans.addAll(schemas);
+        break;
+      }
+      case "json": {
+
+        DeriveJsonSchema schemaGenerator = new DeriveJsonSchema();
+        ObjectNode schema = schemaGenerator.getSchemaForMultipleMessages(messages);
+        ans.add(schema);
+        break;
+
+      }
+      case "protobuf":
+        DeriveProtobufSchema schemaGenerator = new DeriveProtobufSchema(strictCheck);
+        List<ObjectNode> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
+        ans.addAll(schemas);
+        break;
+
+      default:
+        throw new IllegalArgumentException("Schema type not understood. "
+            + "Use Avro, Json or Protobuf");
+
+    }
+
+    return ans;
+  }
+
+
 }

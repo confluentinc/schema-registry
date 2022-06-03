@@ -1,8 +1,9 @@
-package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
+package io.confluent.kafka.schemaregistry.maven.derive.schema.protobuf;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.protobuf.MapAndArray;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -10,7 +11,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeProtoBufUtils.*;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.protobuf.MergeProtoBufUtils.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 

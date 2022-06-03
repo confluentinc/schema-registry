@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.maven.derive.schema;
+package io.confluent.kafka.schemaregistry.maven.derive.schema.avro;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 
@@ -29,11 +28,14 @@ import java.util.*;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.NumericNodeComparator;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.avro.DeriveAvroSchema;
 import io.confluent.kafka.serializers.*;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.Test;
 
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.avro.DeriveAvroSchemaRecord.getSchemaForRecord;
 import static org.junit.Assert.*;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
@@ -44,6 +46,8 @@ public class DeriveAvroSchemaTest {
   private final KafkaAvroSerializer avroSerializer;
   private final KafkaAvroDeserializer avroDeserializer;
   private final String topic;
+
+  boolean typeProtoBuf = false;
 
   public DeriveAvroSchemaTest() {
 
@@ -84,9 +88,11 @@ public class DeriveAvroSchemaTest {
       AvroSchemaUtils.toJson(test, ps);
     }
 
-    JsonElement jsonElement1 = JsonParser.parseString(formattedString);
-    JsonElement jsonElement2 = JsonParser.parseString(bs.toString(utf8));
-    assertEquals(jsonElement1, jsonElement2);
+    ObjectNode tree1 = (ObjectNode) mapper.readTree(formattedString);
+    ObjectNode tree2 = (ObjectNode) mapper.readTree(bs.toString(utf8));
+
+    NumericNodeComparator cmp = new NumericNodeComparator();
+    assertTrue(tree1.equals(cmp, tree2));
 
   }
 
@@ -107,9 +113,8 @@ public class DeriveAvroSchemaTest {
             + "    \"Null\": null\n"
             + "  }";
 
-    AvroSchema avroSchema = new AvroSchema(
-        strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
-            "record").toString());
+    AvroSchema avroSchema = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
+        "record", true, typeProtoBuf).toString());
     serializeAndDeserializeCheck(message, avroSchema);
 
     String expectedSchema = "{\"type\":\"record\",\"name\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Double\",\"type\":\"double\"},{\"name\":\"Float\",\"type\":\"double\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"LongName\",\"type\":\"long\"},{\"name\":\"Null\",\"type\":\"null\"},{\"name\":\"String\",\"type\":\"string\"}]}";
@@ -118,9 +123,8 @@ public class DeriveAvroSchemaTest {
     /*
     Lenient and Strict checking both give same schema
      */
-    AvroSchema avroSchema2 = new AvroSchema(
-        lenientAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
-            "record").toString());
+    AvroSchema avroSchema2 = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
+        "record", true, typeProtoBuf).toString());
 
     assertEquals(avroSchema, avroSchema2);
   }
@@ -149,9 +153,8 @@ public class DeriveAvroSchemaTest {
             + "    \"ArrayComb4\": [{\"K\":[[{\"K\":10}]]}, {\"K\":[[{\"K\":0.5}]]}, {\"K\":[[{\"K\":1}]]}]\n"
             + "  }";
 
-    AvroSchema avroSchema = new AvroSchema(
-        strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
-            "record").toString());
+    AvroSchema avroSchema = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
+        "record", true, typeProtoBuf).toString());
 
     serializeAndDeserializeCheck(message, avroSchema);
     String expectedSchema = "{\"type\":\"record\",\"name\":\"record\",\"fields\":[{\"name\":\"ArrayComb\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"ArrayComb\",\"fields\":[{\"name\":\"K\",\"type\":\"double\"}]}}},{\"name\":\"ArrayComb2\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"ArrayComb2\",\"fields\":[{\"name\":\"K\",\"type\":{\"type\":\"array\",\"items\":\"double\"}}]}}},{\"name\":\"ArrayComb3\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"ArrayComb3\",\"fields\":[{\"name\":\"K\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":\"double\"}}}]}}},{\"name\":\"ArrayComb4\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"ArrayComb4\",\"fields\":[{\"name\":\"K\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"K\",\"fields\":[{\"name\":\"K\",\"type\":\"double\"}]}}}}]}}},{\"name\":\"ArrayDouble\",\"type\":{\"type\":\"array\",\"items\":\"double\"}},{\"name\":\"ArrayDoubleInt\",\"type\":{\"type\":\"array\",\"items\":\"double\"}},{\"name\":\"ArrayInt\",\"type\":{\"type\":\"array\",\"items\":\"int\"}},{\"name\":\"ArrayLongInt\",\"type\":{\"type\":\"array\",\"items\":\"long\"}},{\"name\":\"ArrayLongInt2\",\"type\":{\"type\":\"array\",\"items\":\"long\"}},{\"name\":\"ArrayLongIntDouble\",\"type\":{\"type\":\"array\",\"items\":\"double\"}}]}";
@@ -160,9 +163,8 @@ public class DeriveAvroSchemaTest {
     /*
     Lenient and Strict checking both give same schema
      */
-    AvroSchema avroSchema2 = new AvroSchema(
-        lenientAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
-            "record").toString());
+    AvroSchema avroSchema2 = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
+        "record", false, typeProtoBuf).toString());
 
     assertEquals(avroSchema, avroSchema2);
 
@@ -187,12 +189,11 @@ public class DeriveAvroSchemaTest {
             + "  }";
 
     assertThrows(IllegalArgumentException.class,
-        () -> strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(bigIntMessage),
-            "record"));
+        () -> getSchemaForRecord((ObjectNode) mapper.readTree(bigIntMessage),
+            "record", true, typeProtoBuf));
 
-    AvroSchema avroSchema = new AvroSchema(
-        lenientAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(bigIntMessage),
-            "record").toString());
+    AvroSchema avroSchema = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(bigIntMessage),
+        "record", false, typeProtoBuf).toString());
 
     Object test = AvroSchemaUtils.toObject(bigIntMessage, avroSchema);
     assert (test instanceof GenericRecord);
@@ -210,9 +211,8 @@ public class DeriveAvroSchemaTest {
             + "    \"BigDataType\": 62323232.789012456\n"
             + "  }";
 
-    avroSchema = new AvroSchema(
-        strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(bigDoubleMessage),
-            "record").toString());
+    avroSchema = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(bigDoubleMessage),
+        "record", true, typeProtoBuf).toString());
     test = AvroSchemaUtils.toObject(bigDoubleMessage, avroSchema);
     assert (test instanceof GenericRecord);
     ObjectNode = (GenericRecord) test;
@@ -238,18 +238,16 @@ public class DeriveAvroSchemaTest {
             + "    \"MixedRecord\": {\"Int1\": 62, \"Double1\": 1.2212, \"name\" : \"Just Testing\"}\n"
             + "  }";
 
-    AvroSchema avroSchema = new AvroSchema(
-        strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
-            "record").toString());
+    AvroSchema avroSchema = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
+        "record", true, typeProtoBuf).toString());
     serializeAndDeserializeCheck(message, avroSchema);
 
     /*
     Lenient and Strict checking both give same schema
     */
 
-    AvroSchema avroSchema2 = new AvroSchema(
-        lenientAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
-            "record").toString());
+    AvroSchema avroSchema2 = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
+        "record", true, typeProtoBuf).toString());
 
     assertEquals(avroSchema, avroSchema2);
 
@@ -267,7 +265,7 @@ public class DeriveAvroSchemaTest {
             + "  }";
 
     ObjectNode messageObject1 = (ObjectNode) mapper.readTree(message1);
-    ObjectNode schema1 = lenientAvroGenerator.getSchemaForRecord(messageObject1, "Record");
+    ObjectNode schema1 = getSchemaForRecord(messageObject1, "Record", false, typeProtoBuf);
 
     assert (schema1.get("fields") instanceof ArrayNode);
     ArrayNode fields = (ArrayNode) schema1.get("fields");
@@ -301,7 +299,7 @@ public class DeriveAvroSchemaTest {
 
     ObjectNode messageObject1 = (ObjectNode) mapper.readTree(message1);
     assertThrows(IllegalArgumentException.class,
-        () -> strictAvroGenerator.getSchemaForRecord(messageObject1, "Record"));
+        () -> getSchemaForRecord(messageObject1, "Record", true, typeProtoBuf));
 
     /*
     Array with different data types should raise error
@@ -313,7 +311,7 @@ public class DeriveAvroSchemaTest {
 
     ObjectNode messageObject11 = (ObjectNode) mapper.readTree(message11);
     assertThrows(IllegalArgumentException.class,
-        () -> strictAvroGenerator.getSchemaForRecord(messageObject11, "Record"));
+        () -> getSchemaForRecord(messageObject11, "Record", true, typeProtoBuf));
 
     // Empty Record not allowed in Avro, ignoring this message
     String message1x = "{}";
@@ -331,7 +329,7 @@ public class DeriveAvroSchemaTest {
 
     ObjectNode messageObject2 = (ObjectNode) mapper.readTree(message2);
     assertThrows(IllegalArgumentException.class,
-        () -> strictAvroGenerator.getSchemaForRecord(messageObject2, "Record"));
+        () -> getSchemaForRecord(messageObject2, "Record", true, typeProtoBuf));
 
 
     /*
@@ -370,7 +368,7 @@ public class DeriveAvroSchemaTest {
             + "    \"RecordOfArrays6\": {\"New\": {\"keys\":\"4\"}, \"News\": {\"keys\":\"43\"}}\n"
             + "  }";
 
-    ObjectNode ObjectNode = strictAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message), "record", false);
+    ObjectNode ObjectNode = getSchemaForRecord((ObjectNode) mapper.readTree(message), "record", true, typeProtoBuf);
     AvroSchema avroSchema = new AvroSchema(ObjectNode.toString());
 
     serializeAndDeserializeCheck(message, avroSchema);
@@ -380,9 +378,8 @@ public class DeriveAvroSchemaTest {
     Lenient and Strict checking both give same schema
     */
 
-    AvroSchema avroSchema2 = new AvroSchema(
-        lenientAvroGenerator.getSchemaForRecord((ObjectNode) mapper.readTree(message),
-            "record").toString());
+    AvroSchema avroSchema2 = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
+        "record", false, typeProtoBuf).toString());
 
     assertEquals(avroSchema, avroSchema2);
 
@@ -398,7 +395,7 @@ public class DeriveAvroSchemaTest {
             + "  }";
 
     ObjectNode messageObject2 = (ObjectNode) mapper.readTree(message2);
-    ObjectNode schema2 = lenientAvroGenerator.getSchemaForRecord(messageObject2, "Record");
+    ObjectNode schema2 = getSchemaForRecord(messageObject2, "Record", false, typeProtoBuf);
 
     assert (schema2.get("fields") instanceof ArrayNode);
     ArrayNode fields = (ArrayNode) schema2.get("fields");
@@ -439,7 +436,7 @@ public class DeriveAvroSchemaTest {
             + "  }";
 
     ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
-    ObjectNode schema = lenientAvroGenerator.getSchemaForRecord(messageObject, "Record");
+    ObjectNode schema = getSchemaForRecord(messageObject, "Record", false, typeProtoBuf);
 
     assert (schema.get("fields") instanceof ArrayNode);
     ArrayNode fields = (ArrayNode) schema.get("fields");
@@ -464,8 +461,7 @@ public class DeriveAvroSchemaTest {
             + "  }";
 
     ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
-    ObjectNode t =
-        strictAvroGenerator.getSchemaForRecord(messageObject, "Record");
+    ObjectNode t = getSchemaForRecord(messageObject, "Record", true, typeProtoBuf);
     assertEquals(t.toString(), "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"ArrayOfRecords\",\"type\":{\"type\":\"array\",\"items\":[\"long\",{\"name\":\"array\",\"type\":\"array\",\"items\":\"int\"}]}}]}");
     serializeAndDeserializeCheck(message, new AvroSchema(t.toString()));
 
@@ -480,7 +476,7 @@ public class DeriveAvroSchemaTest {
 
     ObjectNode messageObject1 = (ObjectNode) mapper.readTree(message1);
     assertThrows(IllegalArgumentException.class,
-        () -> strictAvroGenerator.getSchemaForRecord(messageObject1, "Record"));
+        () -> getSchemaForRecord(messageObject1, "Record", true, typeProtoBuf));
 
     /*
     Array of Records where structure is different, (name is different)
@@ -493,7 +489,7 @@ public class DeriveAvroSchemaTest {
 
     ObjectNode messageObject12 = (ObjectNode) mapper.readTree(message12);
     assertThrows(IllegalArgumentException.class,
-        () -> strictAvroGenerator.getSchemaForRecord(messageObject12, "Record"));
+        () -> getSchemaForRecord(messageObject12, "Record", true, typeProtoBuf));
 
 
     /*
@@ -507,7 +503,7 @@ public class DeriveAvroSchemaTest {
 
     ObjectNode messageObject2 = (ObjectNode) mapper.readTree(message2);
     assertThrows(IllegalArgumentException.class,
-        () -> strictAvroGenerator.getSchemaForRecord(messageObject2, "Record"));
+        () -> getSchemaForRecord(messageObject2, "Record", true, typeProtoBuf));
 
 
     /*
@@ -521,7 +517,7 @@ public class DeriveAvroSchemaTest {
 
     ObjectNode messageObject3 = (ObjectNode) mapper.readTree(message3);
     assertThrows(IllegalArgumentException.class,
-        () -> strictAvroGenerator.getSchemaForRecord(messageObject3, "Record"));
+        () -> getSchemaForRecord(messageObject3, "Record", true, typeProtoBuf));
 
     /*
       Field is missing for object
@@ -534,7 +530,7 @@ public class DeriveAvroSchemaTest {
             + "  }";
 
     ObjectNode messageObject4 = (ObjectNode) mapper.readTree(message4);
-    ObjectNode schema = lenientAvroGenerator.getSchemaForRecord(messageObject4, "Record");
+    ObjectNode schema = getSchemaForRecord(messageObject4, "Record", false, typeProtoBuf);
     String expectedSchema = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"ArrayOfRecords\",\"type\":{\"type\":\"array\",\"items\":{\"name\":\"ArrayOfRecords\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"},{\"name\":\"K\",\"type\":\"int\"}]}}}]}";
     assertEquals(schema.toString(), expectedSchema);
 
@@ -582,7 +578,7 @@ public class DeriveAvroSchemaTest {
         String message2 = String.format("\"Bool2\": %b", false);
         arr2.add(message + message2 + "}");
       } else {
-        arr2.add(message.substring(0, message.length()-2) + "}");
+        arr2.add(message.substring(0, message.length() - 2) + "}");
       }
     }
 

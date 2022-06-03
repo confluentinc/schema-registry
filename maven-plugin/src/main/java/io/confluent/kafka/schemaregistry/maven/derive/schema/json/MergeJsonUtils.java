@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
+package io.confluent.kafka.schemaregistry.maven.derive.schema.json;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,8 +26,6 @@ import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Utility class that has functions for merging records and arrays in JSON.
@@ -35,26 +33,6 @@ import java.util.Set;
 
 public final class MergeJsonUtils {
 
-
-  /**
-   * Get unique ObjectNode from a list of ObjectNode and remove duplicates.
-   *
-   * @param schemas List of ObjectNode
-   * @return Unique set of ObjectNode
-   */
-  public static ArrayList<ObjectNode> getUnique(ArrayList<ObjectNode> schemas) {
-
-    Set<ObjectNode> setWithWrappedObjects = new HashSet<>(schemas);
-    ArrayList<ObjectNode> ans = new ArrayList<>();
-
-    for (ObjectNode objectNode : setWithWrappedObjects) {
-      if (objectNode != null && !objectNode.isEmpty()) {
-        ans.add(objectNode);
-      }
-    }
-
-    return ans;
-  }
 
   private static void fillLists(ObjectNode element, ArrayList<String> items,
                                 ArrayList<ObjectNode> records,

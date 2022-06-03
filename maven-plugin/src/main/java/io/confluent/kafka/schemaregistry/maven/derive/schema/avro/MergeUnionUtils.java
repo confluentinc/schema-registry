@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
+package io.confluent.kafka.schemaregistry.maven.derive.schema.avro;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,7 +28,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveAvroSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -125,30 +124,7 @@ public final class MergeUnionUtils {
 
   /**
    * Returns branch of union if present otherwise empty.
-   * For primitive data types name is chosen as datatype and matching with inferred datatype
-   * is not done currently.
-   * <p><strong>Sample Input </strong></p>
-   * <p>schema1
-   * -
-   * <pre>{@code
-   * {
-   *   "name":"log_id",
-   *   "type":{
-   *     "name":"log_id",
-   *     "fields":[
-   *       {
-   *         "name":"long",
-   *         "type":"int"
-   *       }
-   *     ],
-   *     "type":"record"
-   *   }
-   * }
-   * }</pre>
-   * includeComplex true
-   * </p>
-   * <p><strong> Output </strong></p>
-   * <pre>{@code ['long']}</pre>
+   * For primitive data types name is chosen as datatype and matched with inferred datatype
    *
    * @param schema         Object to check for union
    * @param includeComplex flag to include records and arrays in list
@@ -156,6 +132,13 @@ public final class MergeUnionUtils {
    **/
 
   static ArrayList<String> checkForUnion(ObjectNode schema, boolean includeComplex) {
+
+    /*
+    Eg, schema1 {name: length, type: {name: length, fields:{name:long, type:long}}
+    Field can be interpreted of type unions with branch long
+    Output for the function is [long]
+    */
+
 
     ArrayList<String> unionBranches = new ArrayList<>();
     ObjectNode obj = schema;

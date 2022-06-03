@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.maven.derive.schema;
+package io.confluent.kafka.schemaregistry.maven.derive.schema.protobuf;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.protobuf.InvalidProtocolBufferException;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.avro.DeriveAvroSchemaArray;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.avro.DeriveAvroSchemaRecord;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeNumberUtils;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 
@@ -29,18 +32,12 @@ import java.util.Collections;
 import java.util.List;
 
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeProtoBufUtils;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MergeJsonUtils;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.MapAndArray;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
-/**
- * Class with functionality to derive schema from messages for JSON.
- */
 public class DeriveProtobufSchema {
 
   private static final Logger logger = LoggerFactory.getLogger(DeriveProtobufSchema.class);
@@ -49,7 +46,7 @@ public class DeriveProtobufSchema {
   String errorMessageNoSchemasFound = "No strict schemas can be generated for the given messages. "
       + "Please try using the lenient version to generate a schema.";
 
-  static void checkFor2dArrays(boolean typeProtoBuf, ObjectNode element) {
+  public static void checkFor2dArrays(boolean typeProtoBuf, ObjectNode element) {
 
     if (typeProtoBuf && element.get("__type").asText().equals("array")) {
       logger.error("Protobuf doesn't support array of arrays.");
@@ -58,7 +55,7 @@ public class DeriveProtobufSchema {
 
   }
 
-  static void checkForArrayOfNull(boolean typeProtoBuf, ObjectNode element) {
+  public static void checkForArrayOfNull(boolean typeProtoBuf, ObjectNode element) {
 
     if (typeProtoBuf && element.has("type")
         && element.get("type").asText().equals("google.protobuf.Any")) {
@@ -142,8 +139,8 @@ public class DeriveProtobufSchema {
   ProtobufSchema getSchema(String message, String name) throws JsonProcessingException {
 
     ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
-    DeriveAvroSchema schemaGenerator = new DeriveAvroSchema(this.strictCheck, true);
-    ObjectNode schema = schemaGenerator.getSchemaForRecord(messageObject, name);
+    ObjectNode schema = DeriveAvroSchemaRecord.getSchemaForRecord(messageObject, name,
+        this.strictCheck, true);
     String protobufString = avroSchemaToProtobufSchema(schema, 1, name);
     return schemaStringToProto(protobufString);
 
@@ -198,15 +195,14 @@ public class DeriveProtobufSchema {
       messageObjects.add(mapper.readTree(message));
     }
 
-    DeriveAvroSchema schemaGenerator = new DeriveAvroSchema(this.strictCheck, true);
-
     /*
     Lenient check returns 1 schema Picking highest occurring datatype in case of conflicts
     */
 
     if (!strictCheck) {
 
-      ObjectNode schema = schemaGenerator.getSchemaForArray(messageObjects, "Record");
+      ObjectNode schema = DeriveAvroSchemaArray.getSchemaForArray(messageObjects, "Record",
+          false, true, false, true);
       ObjectNode finalSchema = (ObjectNode) schema.get("items");
 
       try {
@@ -230,10 +226,10 @@ public class DeriveProtobufSchema {
     All Unique Schemas are returned and the messages it matches
     */
 
-    ArrayList<ObjectNode> schemaList = schemaGenerator.getSchemaOfAllElements(messageObjects,
-        "Record", true);
+    ArrayList<ObjectNode> schemaList = DeriveAvroSchemaArray.getSchemaOfAllElements(messageObjects,
+        "Record", true, true, true);
 
-    ArrayList<ObjectNode> uniqueList = MergeJsonUtils.getUnique(schemaList);
+    ArrayList<ObjectNode> uniqueList = DeriveSchema.getUnique(schemaList);
 
     if (uniqueList.size() == 0) {
       logger.error(errorMessageNoSchemasFound);

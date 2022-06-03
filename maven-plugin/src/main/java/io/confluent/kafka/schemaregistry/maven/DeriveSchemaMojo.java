@@ -21,7 +21,7 @@ import static io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFi
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaMain;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -70,7 +70,7 @@ public class DeriveSchemaMojo extends AbstractMojo {
     }
 
     try {
-      List<ObjectNode> ans = DeriveSchemaMain.caseWiseOutput(schemaType, strictCheck,
+      List<ObjectNode> ans = DeriveSchema.caseWiseOutput(schemaType, strictCheck,
           listOfMessages);
 
       ObjectNode outputObject = mapper.createObjectNode();

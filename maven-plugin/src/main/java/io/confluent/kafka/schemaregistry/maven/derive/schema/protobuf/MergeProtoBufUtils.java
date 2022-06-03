@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
+package io.confluent.kafka.schemaregistry.maven.derive.schema.protobuf;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveAvroSchema;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.avro.DeriveAvroSchema;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -298,7 +299,7 @@ public final class MergeProtoBufUtils {
 
     }
 
-    ArrayList<ObjectNode> uniqueList = MergeJsonUtils.getUnique(mergedSchemas);
+    ArrayList<ObjectNode> uniqueList = DeriveSchema.getUnique(mergedSchemas);
     List<List<Integer>> schemaToMessagesInfo2 = MergeProtoBufUtils.getUniqueWithMessageInfo(
         mergedSchemas, uniqueList, schemaToMessagesInfo);
 
