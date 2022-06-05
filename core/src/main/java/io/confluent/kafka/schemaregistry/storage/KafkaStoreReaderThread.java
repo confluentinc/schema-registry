@@ -121,7 +121,9 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     }
 
     KafkaStore.addSchemaRegistryConfigsToClientProperties(config, consumerProps);
-    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
+    if (this.groupId != null) {
+      consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
+    }
     consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "KafkaStore-reader-" + this.topic);
 
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
