@@ -54,7 +54,6 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import io.confluent.rest.RestConfig;
 
 public class KafkaStore<K, V> implements Store<K, V> {
 
@@ -62,7 +61,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
   private final String topic;
   private final int desiredReplicationFactor;
-  private final String groupId;
   private final StoreUpdateHandler<K, V> storeUpdateHandler;
   private final Serializer<K, V> serializer;
   private final Store<K, V> localStore;
@@ -82,6 +80,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final Lock leaderLock = new ReentrantLock();
   private final Lock lock = new ReentrantLock();
 
+  private static final String NO_GROUP_ID = null;
+
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
                     Serializer<K, V> serializer,
@@ -90,17 +90,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
-    int port = KafkaSchemaRegistry.getSchemeAndPortForIdentity(
-        config.getInt(SchemaRegistryConfig.PORT_CONFIG),
-        config.getList(RestConfig.LISTENERS_CONFIG),
-        config.interInstanceProtocol()
-    ).port;
-    this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG).isEmpty()
-                   ? String.format("schema-registry-%s-%d",
-                        config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG), port)
-                   : config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG);
-    initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
-    timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
+    this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
+    this.timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.storeUpdateHandler = storeUpdateHandler;
     this.serializer = serializer;
     this.localStore = localStore;
@@ -139,8 +130,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     // start the background thread that subscribes to the Kafka topic and applies updates.
     // the thread must be created after the schema topic has been created.
+    // explicitly set group ID to null due to https://issues.apache.org/jira/browse/KAFKA-13563
     this.kafkaTopicReader =
-        new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
+        new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, NO_GROUP_ID,
                                      this.storeUpdateHandler, serializer, this.localStore,
                                      this.producer, this.noopKey, this.initialized, this.config);
     this.kafkaTopicReader.start();
