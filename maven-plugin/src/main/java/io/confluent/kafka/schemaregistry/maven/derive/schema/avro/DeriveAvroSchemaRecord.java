@@ -63,15 +63,6 @@ public class DeriveAvroSchemaRecord {
     return getSchemaForRecord(objectNode, name, strictCheck, typeProtoBuf, false);
   }
 
-  /**
-   * Generates schema for record.
-   *
-   * @param message       input message for which schema is found
-   * @param name          name assigned to record
-   * @param calledAsField flag to check if called as a field
-   * @return schema
-   * @throws JsonProcessingException thrown if message not in JSON format
-   */
   public static ObjectNode getSchemaForRecord(ObjectNode message,
                                               String name,
                                               boolean strictCheck,

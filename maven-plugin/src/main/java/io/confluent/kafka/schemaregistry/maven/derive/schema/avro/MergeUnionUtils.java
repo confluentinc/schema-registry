@@ -33,10 +33,6 @@ import org.slf4j.LoggerFactory;
 
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
-/**
- * Utility class to provide functionality for unions in avro.
- */
-
 public final class MergeUnionUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(MergeUnionUtils.class);
@@ -98,6 +94,7 @@ public final class MergeUnionUtils {
     ArrayNode fields = (ArrayNode) obj.get("fields");
     if (fields.size() == 1 && fields.get(0) instanceof ObjectNode) {
 
+      // For primitive data types name is chosen as datatype and matched with inferred datatype
       ObjectNode fieldItem = (ObjectNode) fields.get(0);
       if (checkBranchName(fieldItem)) {
         // Primitive Type
@@ -122,23 +119,15 @@ public final class MergeUnionUtils {
   }
 
 
-  /**
-   * Returns branch of union if present otherwise empty.
-   * For primitive data types name is chosen as datatype and matched with inferred datatype
-   *
-   * @param schema         Object to check for union
-   * @param includeComplex flag to include records and arrays in list
-   * @return branch of union as a list
-   **/
-
   static ArrayList<String> checkForUnion(ObjectNode schema, boolean includeComplex) {
 
     /*
+    Returns branch of union if present otherwise empty.
+
     Eg, schema1 {name: length, type: {name: length, fields:{name:long, type:long}}
     Field can be interpreted of type unions with branch long
     Output for the function is [long]
     */
-
 
     ArrayList<String> unionBranches = new ArrayList<>();
     ObjectNode obj = schema;
@@ -155,15 +144,10 @@ public final class MergeUnionUtils {
     return unionBranches;
   }
 
-  /**
-   * Convert string to ObjectNode if possible and make changes in type, fields and items.
-   *
-   * @param str string to convert to ObjectNode
-   * @param arr array to which ObjectNode is added
-   */
 
   private static boolean convertStringToObject(String str, List<Object> arr) {
 
+    // Convert string to ObjectNode if possible and make changes in type, fields and items.
     try {
 
       ObjectNode objectNode = mapper.readValue(str, ObjectNode.class);
@@ -228,13 +212,13 @@ public final class MergeUnionUtils {
     }
   }
 
-  /**
-   * Check if branch of union is schema2 is present in schema1, if yes copy update schema2.
-   *
-   * @param schema1 Object with all branches of union
-   * @param schema2 Object to which changes are copied
-   */
+
   static void copyTypes(ObjectNode schema1, ObjectNode schema2) {
+
+    /*
+    Checking if branch of union is schema2 is present in schema1,
+    if yes copy update schema2.
+    */
 
     Set<String> unionBranches = new HashSet<>();
     fillBranches(schema1, unionBranches, new HashSet<>(), false);
@@ -284,14 +268,6 @@ public final class MergeUnionUtils {
 
   }
 
-  /**
-   * Helper function to add given string to union and names set.
-   *
-   * @param str            string to add
-   * @param unionBranches  set of all branches
-   * @param namesOfObjects set of names of records in union
-   * @param check          to check if name present in unionBranches or not
-   */
   private static void addToUnion(String str, Set<String> unionBranches,
                                  Set<String> namesOfObjects, boolean check) {
 
@@ -350,17 +326,11 @@ public final class MergeUnionUtils {
 
   }
 
-  /**
-   * Alter schema1 to have branches of union in schema1
-   * and schema2.
-   *
-   * @param schema1 ObjectNode where changes are made
-   * @param schema2 ObjectNode where no change is made
-   */
   static void matchTypes(ObjectNode schema1, ObjectNode schema2) {
 
     /*
     Branches of the union are found out and merged here
+    Alter schema1 to have branches of union in schema1 and schema2
     */
 
     Set<String> unionBranches = new HashSet<>();
@@ -406,14 +376,6 @@ public final class MergeUnionUtils {
 
   }
 
-  /**
-   * Match schema1
-   * with type of schema2.
-   *
-   * @param schema1      ObjectNode matched whole
-   * @param schema2      ObjectNode whose type is matched
-   * @param changeSecond flag to change schema2
-   */
   static void matchRecordTypeWithRecord(ObjectNode schema1, ObjectNode schema2,
                                         boolean changeSecond) {
 
@@ -443,14 +405,7 @@ public final class MergeUnionUtils {
 
   }
 
-  /**
-   * Each branch in union of schema1
-   * is matched with field/type in schema2.
-   *
-   * @param schema1      ObjectNode of type union
-   * @param schema2      ObjectNode of type record
-   * @param changeSecond flag to change schema2
-   */
+
   static void matchJsonArrayWithRecord(ObjectNode schema1,
                                        ObjectNode schema2, boolean changeSecond) {
 
@@ -499,17 +454,10 @@ public final class MergeUnionUtils {
 
   }
 
-  /**
-   * Match objects inside fields of schema1
-   * and schema2.
-   *
-   * @param schema1      ObjectNode of type record
-   * @param schema2      ObjectNode of type record
-   * @param changeSecond flag to change schema2
-   */
-
   private static void matchFieldsInArray(ObjectNode schema1,
                                          ObjectNode schema2, boolean changeSecond) {
+
+    // Match objects inside fields of schema1 and schema2
 
     if (schema1.has("fields") && schema1.get("fields") instanceof ArrayNode
         && schema2.get("fields") instanceof ArrayNode) {
@@ -564,15 +512,6 @@ public final class MergeUnionUtils {
     }
 
   }
-
-  /**
-   * Match type or field of schema1
-   * with corresponding type or field with schema2.
-   *
-   * @param schema1      ObjectNode to match
-   * @param schema2      ObjectNode to match
-   * @param changeSecond flag to change schema2
-   */
 
   private static void matchArrayNode(ObjectNode schema1, ObjectNode schema2, boolean changeSecond) {
 
@@ -642,16 +581,11 @@ public final class MergeUnionUtils {
 
   }
 
-  /**
-   * Update record schema2 to have fields and type as schema1
-   * .
-   *
-   * @param schema1 ObjectNode with correct formatting
-   * @param schema2 ObjectNode to update
-   */
   private static void updateMergedRecords(ObjectNode schema1, ObjectNode schema2) {
 
     /*
+
+    Update record schema2 to have fields and type as schema1
     Inside unions type:record has to be mentioned and fields
     Eg, schema1 {name:J, type: record, fields:[obj1, obj2]}
         schema2 {name, J, type: {name: J, fields[obj1, obj2]}
@@ -667,17 +601,11 @@ public final class MergeUnionUtils {
 
   }
 
-  /**
-   * Update array schema2 to have items and type as schema1
-   * .
-   *
-   * @param schema1 ObjectNode with correct formatting
-   * @param schema2 ObjectNode to update
-   */
-
   private static void updateMergedArrays(ObjectNode schema1, ObjectNode schema2) {
 
     /*
+    Update array schema2 to have items and type as schema1
+
     Restructuring Array items, similar to record
     Eg, schema1 {"name":"array","type":"array","items":"int"}
         schema2 {"name":"array","type":{"type":"array","items":"int"}}
@@ -707,11 +635,6 @@ public final class MergeUnionUtils {
 
   }
 
-  /**
-   * Function to match and update schemas to include unions.
-   *
-   * @param schemaList List of schemas
-   */
   public static void mergeUnion(ArrayList<ObjectNode> schemaList, boolean matchAll) {
 
     if (schemaList.size() == 0) {
@@ -752,32 +675,14 @@ public final class MergeUnionUtils {
 
   }
 
-  /**
-   * Compress record to type union, if possible.
-   * <pre>{@code
-   * {
-   *   "name": "server_script_path",
-   *   "type": {
-   *     "name": "server_script_path",
-   *     "fields": [{
-   *       "name": "string",
-   *       "type": "string"
-   *     }],
-   *     "type": "record"
-   *   }
-   * }}</pre>
-   * is changed to
-   * <pre>{@code
-   * {
-   * "name":"server_script_path",
-   * "type":["string"]
-   * }}</pre>
-   *
-   * @param schema ObjectNode to compress
-   */
-
-
   static void compressRecordToUnion(ObjectNode schema) {
+
+    /*
+    Compress Record with one field to type union if possible
+    Eg, schema1 {name: length, type: {name: length, fields:{name:long, type:long}}
+    Field can be interpreted of type unions with branch long
+    Output for the function is {name: length, type:[long]}
+    */
 
     ArrayList<String> unionBranches = checkForUnion(schema, false);
     if (unionBranches.size() == 1) {

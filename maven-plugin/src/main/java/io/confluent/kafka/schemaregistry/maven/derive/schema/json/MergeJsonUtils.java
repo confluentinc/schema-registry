@@ -168,12 +168,6 @@ public final class MergeJsonUtils {
 
   }
 
-  /**
-   * Helper function to put elements of oneOf in schema in mergedElements.
-   *
-   * @param mergedElements list of data types in oneOf
-   * @param schema         schema whose elements are added to mergedElements
-   */
   private static void fillMergedElements(ArrayList<String> mergedElements, ObjectNode schema) {
 
     ArrayNode oneOf = (ArrayNode) schema.get("oneOf");
@@ -186,12 +180,6 @@ public final class MergeJsonUtils {
 
   }
 
-  /**
-   * Helper function to fill mergedElements from schema.
-   *
-   * @param mergedElements list of data types in oneOf
-   * @param schema         schema whose elements are added to mergedElements
-   */
   private static void fillElements(ArrayList<String> mergedElements, ObjectNode schema) {
 
     if (schema.has("oneOf")) {

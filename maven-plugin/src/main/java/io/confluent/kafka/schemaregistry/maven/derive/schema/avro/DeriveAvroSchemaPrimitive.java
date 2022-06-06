@@ -36,23 +36,23 @@ public class DeriveAvroSchemaPrimitive {
   static {
 
     // Mapping class to data type for avro
-    classToDataTypeAvro.put("class com.fasterxml.jackson.databind.node.DoubleNode", "double");
-    classToDataTypeAvro.put("class com.fasterxml.jackson.databind.node.TextNode", "string");
-    classToDataTypeAvro.put("class com.fasterxml.jackson.databind.node.BigIntegerNode", "double");
-    classToDataTypeAvro.put("class com.fasterxml.jackson.databind.node.IntNode", "int");
-    classToDataTypeAvro.put("class com.fasterxml.jackson.databind.node.LongNode", "long");
-    classToDataTypeAvro.put("class com.fasterxml.jackson.databind.node.BooleanNode", "boolean");
-    classToDataTypeAvro.put("class com.fasterxml.jackson.databind.node.NullNode", "null");
+    classToDataTypeAvro.put("DoubleNode", "double");
+    classToDataTypeAvro.put("TextNode", "string");
+    classToDataTypeAvro.put("BigIntegerNode", "double");
+    classToDataTypeAvro.put("IntNode", "int");
+    classToDataTypeAvro.put("LongNode", "long");
+    classToDataTypeAvro.put("BooleanNode", "boolean");
+    classToDataTypeAvro.put("NullNode", "null");
 
     // Mapping class to data type for ProtoBuf
-    classToDataTypeProtoBuf.put("class com.fasterxml.jackson.databind.node.DoubleNode", "double");
-    classToDataTypeProtoBuf.put("class com.fasterxml.jackson.databind.node.TextNode", "string");
-    classToDataTypeProtoBuf.put("class com.fasterxml.jackson.databind.node.BigIntegerNode",
+    classToDataTypeProtoBuf.put("DoubleNode", "double");
+    classToDataTypeProtoBuf.put("TextNode", "string");
+    classToDataTypeProtoBuf.put("BigIntegerNode",
         "double");
-    classToDataTypeProtoBuf.put("class com.fasterxml.jackson.databind.node.IntNode", "int32");
-    classToDataTypeProtoBuf.put("class com.fasterxml.jackson.databind.node.LongNode", "int64");
-    classToDataTypeProtoBuf.put("class com.fasterxml.jackson.databind.node.BooleanNode", "bool");
-    classToDataTypeProtoBuf.put("class com.fasterxml.jackson.databind.node.NullNode",
+    classToDataTypeProtoBuf.put("IntNode", "int32");
+    classToDataTypeProtoBuf.put("LongNode", "int64");
+    classToDataTypeProtoBuf.put("BooleanNode", "bool");
+    classToDataTypeProtoBuf.put("NullNode",
         "google.protobuf.Any");
 
   }
@@ -85,12 +85,12 @@ public class DeriveAvroSchemaPrimitive {
     String jsonInferredType;
 
     if (field == null) {
-      jsonInferredType = "class com.fasterxml.jackson.databind.node.NullNode";
+      jsonInferredType = "NullNode";
     } else {
-      jsonInferredType = field.getClass().toString();
+      jsonInferredType = field.getClass().getSimpleName();
     }
 
-    if (jsonInferredType.equals("class com.fasterxml.jackson.databind.node.BigIntegerNode")) {
+    if (jsonInferredType.equals("BigIntegerNode")) {
       if (strictCheck) {
         String errorMessage = getOutOfRangeError(DeriveAvroSchema.getCurrentMessage(), field);
         logger.error(errorMessage);

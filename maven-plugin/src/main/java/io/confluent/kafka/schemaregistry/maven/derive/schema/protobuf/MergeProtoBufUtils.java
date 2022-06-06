@@ -39,9 +39,6 @@ import java.util.stream.Collectors;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.getSortedKeys;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
-/**
- * Utility class that has functions for merging records and numbers in Avro and ProtoBuf.
- */
 
 public final class MergeProtoBufUtils {
 

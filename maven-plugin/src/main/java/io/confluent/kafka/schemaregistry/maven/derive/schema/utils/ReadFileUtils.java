@@ -34,9 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
-/**
- * Utility class to Read Files and generate messages in required format.
- */
+
 public class ReadFileUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(ReadFileUtils.class);
