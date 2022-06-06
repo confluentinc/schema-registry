@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Confluent Inc.
+ * Copyright 2022 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,10 +44,10 @@ public class DeriveSchemaMojo extends AbstractMojo {
   @Parameter(required = true)
   File messagePath;
 
-  @Parameter()
+  @Parameter
   File outputPath;
 
-  @Parameter(defaultValue = "Avro")
+  @Parameter(defaultValue = "AVRO")
   String schemaType;
 
   @Parameter(defaultValue = "true")

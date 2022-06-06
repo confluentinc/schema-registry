@@ -31,14 +31,15 @@ public class DeriveJsonSchemaPrimitive {
 
   static {
 
-    classToDataType.put("IntNode", "number");
-    classToDataType.put("LongNode", "number");
-    classToDataType.put("BooleanNode", "boolean");
-    classToDataType.put("NullNode", "null");
-    classToDataType.put("DoubleNode", "number");
-    classToDataType.put("TextNode", "string");
-    classToDataType.put("BigIntegerNode", "number");
-
+    classToDataType.put(com.fasterxml.jackson.databind.node.DoubleNode.class.getName(), "number");
+    classToDataType.put(com.fasterxml.jackson.databind.node.TextNode.class.getName(), "string");
+    classToDataType.put(com.fasterxml.jackson.databind.node.BigIntegerNode.class.getName(),
+        "number");
+    classToDataType.put(com.fasterxml.jackson.databind.node.IntNode.class.getName(), "number");
+    classToDataType.put(com.fasterxml.jackson.databind.node.LongNode.class.getName(), "number");
+    classToDataType.put(com.fasterxml.jackson.databind.node.BooleanNode.class.getName(),
+        "boolean");
+    classToDataType.put(com.fasterxml.jackson.databind.node.NullNode.class.getName(), "null");
   }
 
   /**
@@ -51,9 +52,9 @@ public class DeriveJsonSchemaPrimitive {
 
     String jsonInferredType;
     if (field == null) {
-      jsonInferredType = "NullNode";
+      jsonInferredType = com.fasterxml.jackson.databind.node.NullNode.class.getName();
     } else {
-      jsonInferredType = field.getClass().getSimpleName();
+      jsonInferredType = field.getClass().getName();
     }
 
     if (classToDataType.containsKey(jsonInferredType)) {
