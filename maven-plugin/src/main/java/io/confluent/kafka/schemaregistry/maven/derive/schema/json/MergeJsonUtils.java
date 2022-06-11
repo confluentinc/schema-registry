@@ -30,9 +30,7 @@ import java.util.Arrays;
 /**
  * Utility class that has functions for merging records and arrays in JSON.
  */
-
 public final class MergeJsonUtils {
-
 
   private static void fillLists(ObjectNode element, ArrayList<String> items,
                                 ArrayList<ObjectNode> records,
@@ -45,7 +43,6 @@ public final class MergeJsonUtils {
     } else if (!items.contains(element.toString())) {
       items.add(element.toString());
     }
-
   }
 
   /**
@@ -57,16 +54,16 @@ public final class MergeJsonUtils {
   public static ObjectNode mergeArrays(ArrayList<ObjectNode> arrayList)
       throws JsonProcessingException {
 
-    ObjectNode ans = mapper.createObjectNode();
-    ans.put("type", "array");
+    ObjectNode mergedArray = mapper.createObjectNode();
+    mergedArray.put("type", "array");
 
     ArrayList<String> items = new ArrayList<>();
     ArrayList<ObjectNode> records = new ArrayList<>();
     ArrayList<ObjectNode> arrays = new ArrayList<>();
 
-    for (ObjectNode arr : arrayList) {
+    for (ObjectNode array : arrayList) {
 
-      ObjectNode field = (ObjectNode) arr.get("items");
+      ObjectNode field = (ObjectNode) array.get("items");
       if (field.isEmpty()) {
         continue;
       }
@@ -86,6 +83,7 @@ public final class MergeJsonUtils {
     for (String item : items) {
       jsonItems.add(mapper.readTree(item));
     }
+
     if (records.size() > 0) {
       ObjectNode mergedRecords = mergeRecords(records);
       jsonItems.add(mergedRecords);
@@ -97,17 +95,16 @@ public final class MergeJsonUtils {
     }
 
     if (jsonItems.size() > 1) {
-      ObjectNode oneOf = mapper.createObjectNode();
-      oneOf.set("oneOf", jsonItems);
-      ans.set("items", oneOf);
+      ObjectNode oneOfDataType = mapper.createObjectNode();
+      oneOfDataType.set("oneOf", jsonItems);
+      mergedArray.set("items", oneOfDataType);
     } else if (jsonItems.size() == 1) {
-      ans.set("items", jsonItems.get(0));
+      mergedArray.set("items", jsonItems.get(0));
     } else {
-      ans.set("items", mapper.createObjectNode());
+      mergedArray.set("items", mapper.createObjectNode());
     }
 
-
-    return ans;
+    return mergedArray;
   }
 
   /**
@@ -119,15 +116,13 @@ public final class MergeJsonUtils {
   public static ObjectNode mergeRecords(ArrayList<ObjectNode> recordList)
       throws JsonProcessingException {
 
-    ObjectNode ans = mapper.createObjectNode();
-    ans.put("type", "object");
-
+    ObjectNode mergedRecord = mapper.createObjectNode();
+    mergedRecord.put("type", "object");
     ObjectNode properties = mapper.createObjectNode();
 
     for (ObjectNode record : recordList) {
 
       ObjectNode fields = (ObjectNode) record.get("properties");
-
       for (String key : getSortedKeys(fields)) {
 
         if (!properties.has(key)) {
@@ -141,31 +136,33 @@ public final class MergeJsonUtils {
 
             if (existingField.get("type").asText().equals("object")
                 && newField.get("type").asText().equals("object")) {
-              ObjectNode x = mergeRecords(new ArrayList<>(Arrays.asList(existingField, newField)));
-              properties.set(key, x);
+
+              ObjectNode mergedRecordRecursive = mergeRecords(
+                  new ArrayList<>(Arrays.asList(existingField, newField)));
+              properties.set(key, mergedRecordRecursive);
               continue;
+
             } else if (existingField.get("type").asText().equals("array")
                 && newField.get("type").asText().equals("array")) {
-              ObjectNode x = mergeArrays(new ArrayList<>(Arrays.asList(existingField, newField)));
-              properties.set(key, x);
-              continue;
-            }
 
+              ObjectNode mergedArray = mergeArrays(
+                  new ArrayList<>(Arrays.asList(existingField, newField)));
+              properties.set(key, mergedArray);
+              continue;
+
+            }
           }
 
           // One is of Primitive type or oneOf
           if (!existingField.equals(newField)) {
             mergePrimitiveTypes(properties, key, fields);
           }
-
         }
-
       }
     }
 
-    ans.set("properties", properties);
-    return ans;
-
+    mergedRecord.set("properties", properties);
+    return mergedRecord;
   }
 
   private static void fillMergedElements(ArrayList<String> mergedElements, ObjectNode schema) {
@@ -177,7 +174,6 @@ public final class MergeJsonUtils {
         mergedElements.add(objectString);
       }
     }
-
   }
 
   private static void fillElements(ArrayList<String> mergedElements, ObjectNode schema) {
@@ -187,7 +183,6 @@ public final class MergeJsonUtils {
     } else if (!mergedElements.contains(schema.toString())) {
       mergedElements.add(schema.toString());
     }
-
   }
 
   /**
@@ -219,7 +214,6 @@ public final class MergeJsonUtils {
     } else {
       properties.set(key, jsonItems.get(0));
     }
-
   }
 
 }

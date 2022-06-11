@@ -34,7 +34,6 @@ import org.slf4j.LoggerFactory;
 
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
-
 public class ReadFileUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(ReadFileUtils.class);
@@ -63,7 +62,6 @@ public class ReadFileUtils {
       listOfMessages.add((ObjectNode) arrayNode.get(i));
     }
     return listOfMessages;
-
   }
 
   /**
@@ -87,60 +85,56 @@ public class ReadFileUtils {
   public static List<Object> readLinesOfMessages(String content) throws JsonProcessingException {
 
     List<Object> listOfMessages = new ArrayList<>();
-    String[] arrOfStr = content.split("\n");
-    for (String line : arrOfStr) {
+    String[] lineSeparatedMessages = content.split("\n");
+    for (String line : lineSeparatedMessages) {
       listOfMessages.add(mapper.readValue(line, ObjectNode.class));
     }
 
     return listOfMessages;
   }
 
-
   private static void checkEmpty(String content) {
     if (content == null || content.length() == 0) {
       throw new IllegalArgumentException("Input file is empty.");
     }
-
   }
 
   private static List<Object> readCustom(String content) {
 
     checkEmpty(content);
-    List<Object> ans = new ArrayList<>();
+    List<Object> messageList = new ArrayList<>();
 
     try {
-      ans.addAll(readArrayOfMessages(content));
+      messageList.addAll(readArrayOfMessages(content));
       logger.info("Read input as array of Messages.");
-      return ans;
+      return messageList;
     } catch (Exception ignored) {
       logger.warn("Cannot be read input as array of Messages.");
     }
 
     try {
-      ans.addAll(readLinesOfMessages(content));
+      messageList.addAll(readLinesOfMessages(content));
       logger.info("Read input as lines of messages.");
-      return ans;
+      return messageList;
     } catch (Exception ignored) {
       logger.warn("Cannot be read input as lines of messages.");
     }
 
     try {
-      ans.add(mapper.readValue(content, ObjectNode.class));
+      messageList.add(mapper.readValue(content, ObjectNode.class));
       logger.info("Read input as ObjectNode.");
-      return ans;
+      return messageList;
     } catch (Exception ignored) {
       logger.warn("Cannot be read input as ObjectNode.");
     }
 
-    if (ans.isEmpty()) {
+    if (messageList.isEmpty()) {
       logger.error("Unable to read messages.");
       throw new IllegalArgumentException("Input file format not understood.");
     }
 
-    return ans;
-
+    return messageList;
   }
-
 
   /**
    * Reads string according to 3 formats, generating ObjectNode for each message
@@ -156,8 +150,8 @@ public class ReadFileUtils {
 
     List<Object> listOfMessages = readCustom(content);
     List<String> listOfStrings = new ArrayList<>();
-    for (Object m : listOfMessages) {
-      listOfStrings.add(m.toString());
+    for (Object message : listOfMessages) {
+      listOfStrings.add(message.toString());
     }
     return listOfStrings;
   }
@@ -177,7 +171,6 @@ public class ReadFileUtils {
     logger.info(String.format("Reading input file %s", file.getName()));
     String fileContent = readFile(file.getAbsolutePath());
     return readMessagesToString(fileContent);
-
   }
 
 }

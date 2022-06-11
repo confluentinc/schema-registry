@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.maven.derive.schema.avro;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -29,7 +28,6 @@ import java.util.*;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.NumericNodeComparator;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.avro.DeriveAvroSchema;
 import io.confluent.kafka.serializers.*;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils;
 import org.apache.avro.generic.GenericRecord;
@@ -46,33 +44,26 @@ public class DeriveAvroSchemaTest {
   private final KafkaAvroSerializer avroSerializer;
   private final KafkaAvroDeserializer avroDeserializer;
   private final String topic;
-
   boolean typeProtoBuf = false;
 
   public DeriveAvroSchemaTest() {
-
     Properties defaultConfig = new Properties();
     defaultConfig.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(defaultConfig));
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry);
     topic = "test";
-
   }
 
   void serializeAndDeserializeCheckMulti(List<String> messages, List<ObjectNode> schemas) throws IOException {
-
     for (ObjectNode schemaInfo : schemas) {
-
       AvroSchema schema = new AvroSchema(schemaInfo.get("schema").toString());
       ArrayNode matchingMessages = (ArrayNode) schemaInfo.get("messagesMatched");
       for (int i = 0; i < matchingMessages.size(); i++) {
         int index = matchingMessages.get(i).asInt();
         serializeAndDeserializeCheck(messages.get(index), schema);
       }
-
     }
-
   }
 
   void serializeAndDeserializeCheck(String message, AvroSchema schema) throws IOException {
@@ -93,14 +84,13 @@ public class DeriveAvroSchemaTest {
 
     NumericNodeComparator cmp = new NumericNodeComparator();
     assertTrue(tree1.equals(cmp, tree2));
-
   }
 
   @Test
   public void testPrimitiveTypes() throws IOException {
 
     /*
-    Primitive data types test
+    Testing fields with only primitive data types
     */
     String message =
         "{\n"
@@ -116,17 +106,15 @@ public class DeriveAvroSchemaTest {
     AvroSchema avroSchema = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
         "record", true, typeProtoBuf).toString());
     serializeAndDeserializeCheck(message, avroSchema);
-
     String expectedSchema = "{\"type\":\"record\",\"name\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Double\",\"type\":\"double\"},{\"name\":\"Float\",\"type\":\"double\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"LongName\",\"type\":\"long\"},{\"name\":\"Null\",\"type\":\"null\"},{\"name\":\"String\",\"type\":\"string\"}]}";
     assertEquals(expectedSchema, avroSchema.toString());
 
     /*
     Lenient and Strict checking both give same schema
      */
-    AvroSchema avroSchema2 = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
-        "record", true, typeProtoBuf).toString());
-
-    assertEquals(avroSchema, avroSchema2);
+    AvroSchema avroSchemaLenient = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
+        "record", false, typeProtoBuf).toString());
+    assertEquals(avroSchema, avroSchemaLenient);
   }
 
   @Test
@@ -138,7 +126,6 @@ public class DeriveAvroSchemaTest {
     Both these mappings are done only if value is present in similar situation like [1, 1.5, 3]
     Here, field can be taken as array of double
      */
-
     String message =
         "{\n"
             + "    \"ArrayDouble\": [1e16, 11.5],\n"
@@ -169,12 +156,10 @@ public class DeriveAvroSchemaTest {
     assertEquals(avroSchema, avroSchema2);
 
     String message2 = "[{\"A\" : 12}, {\"A\" : 12}, {\"B\" : 12.5}]";
-    List<String> m = ReadFileUtils.readMessagesToString(message2);
-    List<ObjectNode> schemas = strictAvroGenerator.getSchemaForMultipleMessages(m);
-    serializeAndDeserializeCheckMulti(m, schemas);
-
+    List<String> messages = ReadFileUtils.readMessagesToString(message2);
+    List<ObjectNode> schemas = strictAvroGenerator.getSchemaForMultipleMessages(messages);
+    serializeAndDeserializeCheckMulti(messages, schemas);
   }
-
 
   @Test
   public void testStrictPrimitiveTypesErrors() throws IOException {
@@ -182,7 +167,6 @@ public class DeriveAvroSchemaTest {
     /*
     Big Integer is not allowed for strict check, raises error
    */
-
     String bigIntMessage =
         "{\n"
             + "    \"BigDataType\": 1202021022234434333333444444444444444444443333\n"
@@ -200,12 +184,10 @@ public class DeriveAvroSchemaTest {
     GenericRecord ObjectNode = (GenericRecord) test;
     assertEquals(ObjectNode.get("BigDataType"), 1.2020210222344344E45);
 
-
     /*
     Big Decimal is coerced to double and value is less accurate
     Observation: Double allows up to 16 digits without loss
      */
-
     String bigDoubleMessage =
         "{\n"
             + "    \"BigDataType\": 62323232.789012456\n"
@@ -225,7 +207,6 @@ public class DeriveAvroSchemaTest {
     /*
     Testing arrays and records with elements as primitive data types
     */
-
     String message =
         "{\n"
             + "    \"ArrayString\": [\"John Smith\", \"Tom Davies\"],\n"
@@ -245,18 +226,15 @@ public class DeriveAvroSchemaTest {
     /*
     Lenient and Strict checking both give same schema
     */
+    AvroSchema avroSchemaLenient = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
+        "record", false, typeProtoBuf).toString());
 
-    AvroSchema avroSchema2 = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
-        "record", true, typeProtoBuf).toString());
-
-    assertEquals(avroSchema, avroSchema2);
-
+    assertEquals(avroSchema, avroSchemaLenient);
 
     /*
     Array with different data types
     Highest occurring one is chosen
     */
-
     String message1 =
         "{\n"
             + "\"ArrayOfBoolean\": [0, 1, true, true, true, null],\n"
@@ -264,11 +242,11 @@ public class DeriveAvroSchemaTest {
             + "\"ArrayOfStrings\": [null, \"Java\", 10, 100, \"C++\", \"Scala\"]\n"
             + "  }";
 
-    ObjectNode messageObject1 = (ObjectNode) mapper.readTree(message1);
-    ObjectNode schema1 = getSchemaForRecord(messageObject1, "Record", false, typeProtoBuf);
+    ObjectNode messageObject = (ObjectNode) mapper.readTree(message1);
+    ObjectNode schema = getSchemaForRecord(messageObject, "Record", false, typeProtoBuf);
 
-    assert (schema1.get("fields") instanceof ArrayNode);
-    ArrayNode fields = (ArrayNode) schema1.get("fields");
+    assert (schema.get("fields") instanceof ArrayNode);
+    ArrayNode fields = (ArrayNode) schema.get("fields");
 
     assert (fields.get(0) instanceof ObjectNode);
     ObjectNode ArrayOfBoolean = (ObjectNode) fields.get(0);
@@ -283,7 +261,6 @@ public class DeriveAvroSchemaTest {
     ObjectNode ArrayOfStrings = (ObjectNode) fields.get(2);
     assertEquals(ArrayOfStrings.get("type").toString(),
         "{\"type\":\"array\",\"items\":\"string\"}");
-
   }
 
   @Test
@@ -331,7 +308,6 @@ public class DeriveAvroSchemaTest {
     assertThrows(IllegalArgumentException.class,
         () -> getSchemaForRecord(messageObject2, "Record", true, typeProtoBuf));
 
-
     /*
     Record with naming errors
     */
@@ -344,10 +320,7 @@ public class DeriveAvroSchemaTest {
     List<String> messages = ReadFileUtils.readMessagesToString(message3);
     assertThrows(IllegalArgumentException.class,
         () -> strictAvroGenerator.getSchemaForMultipleMessages(messages));
-
-
   }
-
 
   @Test
   public void testStrictComplexTypesRecursive() throws IOException {
@@ -370,19 +343,14 @@ public class DeriveAvroSchemaTest {
 
     ObjectNode ObjectNode = getSchemaForRecord((ObjectNode) mapper.readTree(message), "record", true, typeProtoBuf);
     AvroSchema avroSchema = new AvroSchema(ObjectNode.toString());
-
     serializeAndDeserializeCheck(message, avroSchema);
-
 
     /*
     Lenient and Strict checking both give same schema
     */
-
-    AvroSchema avroSchema2 = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
+    AvroSchema avroSchemaLenient = new AvroSchema(getSchemaForRecord((ObjectNode) mapper.readTree(message),
         "record", false, typeProtoBuf).toString());
-
-    assertEquals(avroSchema, avroSchema2);
-
+    assertEquals(avroSchema, avroSchemaLenient);
 
     /*
     Array of records but records have different structure, picking highest occurring datatype
@@ -416,7 +384,6 @@ public class DeriveAvroSchemaTest {
     ObjectNode ArrayOfRecords3 = (ObjectNode) fields.get(2);
     assertEquals(ArrayOfRecords3.get("type").toString(),
         "{\"type\":\"array\",\"items\":{\"name\":\"ArrayOfRecords3\",\"type\":\"record\",\"fields\":[{\"name\":\"Int1\",\"type\":\"double\"},{\"name\":\"Int2\",\"type\":\"int\"}]}}");
-
   }
 
   @Test
@@ -429,7 +396,6 @@ public class DeriveAvroSchemaTest {
     Element 3 - array of strings
     Hence, schema chosen is array of strings
      */
-
     String message =
         "{\n"
             + "\"ArrayOfRecords1\": [{\"J\": [10,11,true]}, {\"J\": [10, \"first\", \"second\"]}, {\"J\": [\"first\", \"first\", 11]}]}\n"
@@ -445,7 +411,6 @@ public class DeriveAvroSchemaTest {
     ObjectNode ArrayOfRecords1 = (ObjectNode) fields.get(0);
     assertEquals(ArrayOfRecords1.get("type").toString(),
         "{\"type\":\"array\",\"items\":{\"name\":\"ArrayOfRecords1\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":{\"type\":\"array\",\"items\":\"string\"}}]}}");
-
   }
 
   @Test
@@ -491,7 +456,6 @@ public class DeriveAvroSchemaTest {
     assertThrows(IllegalArgumentException.class,
         () -> getSchemaForRecord(messageObject12, "Record", true, typeProtoBuf));
 
-
     /*
     Array of Records where structure is different, same name but different datatype
     Should throw Error
@@ -504,7 +468,6 @@ public class DeriveAvroSchemaTest {
     ObjectNode messageObject2 = (ObjectNode) mapper.readTree(message2);
     assertThrows(IllegalArgumentException.class,
         () -> getSchemaForRecord(messageObject2, "Record", true, typeProtoBuf));
-
 
     /*
     Array of Records where structure is different, same name but different datatype, more complex test
@@ -523,7 +486,6 @@ public class DeriveAvroSchemaTest {
       Field is missing for object
       Treated as separate object and highest occurring is chosen
     */
-
     String message4 =
         "{\n"
             + "\"ArrayOfRecords\": [{\"J\":23, \"K\":23}, {\"J\": 33}]\n"
@@ -533,38 +495,38 @@ public class DeriveAvroSchemaTest {
     ObjectNode schema = getSchemaForRecord(messageObject4, "Record", false, typeProtoBuf);
     String expectedSchema = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"ArrayOfRecords\",\"type\":{\"type\":\"array\",\"items\":{\"name\":\"ArrayOfRecords\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"},{\"name\":\"K\",\"type\":\"int\"}]}}}]}";
     assertEquals(schema.toString(), expectedSchema);
-
   }
 
   @Test
-  public void testMultipleMessages() throws IOException {
+  public void testMultipleMessagesSimple() throws IOException {
 
     /*
     Multiple messages with exact same structure, returns 1 schema
     */
-
-    ArrayList<String> arr = new ArrayList<>();
-
+    ArrayList<String> messages = new ArrayList<>();
     for (int i = 0; i < 10; i++) {
       String message = String.format("{\n"
           + "    \"String\": \"%d\",\n"
           + "    \"Integer\": %d,\n"
           + "    \"Boolean\": %b\n"
           + "  }", i * 100, i, i % 2 == 0);
-      arr.add(message);
+      messages.add(message);
     }
-    List<ObjectNode> schemas1 = strictAvroGenerator.getSchemaForMultipleMessages(arr);
+    List<ObjectNode> schemas1 = strictAvroGenerator.getSchemaForMultipleMessages(messages);
     assert (schemas1.size() == 1);
 
     String schemas1Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[0,1,2,3,4,5,6,7,8,9],\"numMessagesMatched\":10}";
     assertEquals(schemas1Expected1, schemas1.get(0).toString());
-    serializeAndDeserializeCheckMulti(arr, schemas1);
+    serializeAndDeserializeCheckMulti(messages, schemas1);
+  }
+
+  @Test
+  public void testMultipleMessagesExtraField() throws IOException {
 
     /*
     Multiple messages with different structure, top 3 most occurring schemas returned
     */
-
-    ArrayList<String> arr2 = new ArrayList<>();
+    ArrayList<String> messages = new ArrayList<>();
     for (int i = 0; i < 7; i++) {
       String message = String.format("{\n"
           + "    \"String\": \"%d\",\n"
@@ -573,154 +535,105 @@ public class DeriveAvroSchemaTest {
 
       if (i % 3 == 0) {
         String message2 = String.format("\"Long\": %d", i * 121202212);
-        arr2.add(message + message2 + "}");
+        messages.add(message + message2 + "}");
       } else if (i % 3 == 2) {
         String message2 = String.format("\"Bool2\": %b", false);
-        arr2.add(message + message2 + "}");
+        messages.add(message + message2 + "}");
       } else {
-        arr2.add(message.substring(0, message.length() - 2) + "}");
+        messages.add(message.substring(0, message.length() - 2) + "}");
       }
     }
 
-    List<ObjectNode> schemas2 = strictAvroGenerator.getSchemaForMultipleMessages(arr2);
-    assert (schemas2.size() == 3);
+    List<ObjectNode> schema = strictAvroGenerator.getSchemaForMultipleMessages(messages);
+    assert (schema.size() == 3);
 
-    String schemas2Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"Long\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[0,3,6],\"numMessagesMatched\":3}";
-    assertEquals(schemas2.get(0).toString(), schemas2Expected1);
-
-    String schemas2Expected2 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Bool2\",\"type\":\"boolean\"},{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[2,5],\"numMessagesMatched\":2}";
-    assertEquals(schemas2.get(1).toString(), schemas2Expected2);
-
-    String schemas2Expected3 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[1,4],\"numMessagesMatched\":2}";
-    assertEquals(schemas2.get(2).toString(), schemas2Expected3);
-
-    serializeAndDeserializeCheckMulti(arr2, schemas2);
+    String schemasExpected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"Long\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[0,3,6],\"numMessagesMatched\":3}";
+    assertEquals(schema.get(0).toString(), schemasExpected1);
+    String schemasExpected2 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Bool2\",\"type\":\"boolean\"},{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[2,5],\"numMessagesMatched\":2}";
+    assertEquals(schema.get(1).toString(), schemasExpected2);
+    String schemasExpected3 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[1,4],\"numMessagesMatched\":2}";
+    assertEquals(schema.get(2).toString(), schemasExpected3);
+    serializeAndDeserializeCheckMulti(messages, schema);
 
     /*
     Multiple messages with different structure but lenient check returns 1 schema
     Treated as array of messages and highest occurring one is returned
     */
-
-    List<ObjectNode> schemas3 = lenientAvroGenerator.getSchemaForMultipleMessages(arr2);
-    assert (schemas3.size() == 1);
-
-    String schema3Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"Long\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]}}";
-    assertEquals(schemas3.get(0).toString(), schema3Expected1);
-
+    List<ObjectNode> schemasLenient = lenientAvroGenerator.getSchemaForMultipleMessages(messages);
+    assert (schemasLenient.size() == 1);
+    String schemaExpected = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Boolean\",\"type\":\"boolean\"},{\"name\":\"Integer\",\"type\":\"int\"},{\"name\":\"Long\",\"type\":\"int\"},{\"name\":\"String\",\"type\":\"string\"}]}}";
+    assertEquals(schemasLenient.get(0).toString(), schemaExpected);
   }
 
   @Test
   public void testMultipleMessagesErrors() throws IOException {
 
-
     /*
     Strict schema cannot be found for message1 because of field Arr having multiple data types
     Hence, message1 is ignored in multiple messages
      */
-
-    ArrayList<String> arr = new ArrayList<>();
+    ArrayList<String> messages = new ArrayList<>();
     String message1 = "{\n"
         + "    \"String\": \"John Smith\","
         + "    \"Arr\": [1.5, true]"
         + "  }";
-    arr.add(message1);
+    messages.add(message1);
 
     // If no schemas can be generated error is raised
-    assertThrows(IllegalArgumentException.class, () -> strictAvroGenerator.getSchemaForMultipleMessages(arr));
+    assertThrows(IllegalArgumentException.class, () -> strictAvroGenerator.getSchemaForMultipleMessages(messages));
 
     String message2 = "{\n"
         + "    \"String\": \"John\",\n"
         + "    \"Float\": 1e16\n"
         + "  }";
-    arr.add(message2);
+    messages.add(message2);
 
-    List<ObjectNode> schemas2 = strictAvroGenerator.getSchemaForMultipleMessages(arr);
-    assert (schemas2.size() == 1);
-
+    List<ObjectNode> schema = strictAvroGenerator.getSchemaForMultipleMessages(messages);
+    assert (schema.size() == 1);
     String schemas2Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Float\",\"type\":\"double\"},{\"name\":\"String\",\"type\":\"string\"}]},\"messagesMatched\":[1],\"numMessagesMatched\":1}";
-    assertEquals(schemas2.get(0).toString(), schemas2Expected1);
-
-    serializeAndDeserializeCheckMulti(arr, schemas2);
-
+    assertEquals(schema.get(0).toString(), schemas2Expected1);
+    serializeAndDeserializeCheckMulti(messages, schema);
 
     /*
     Lenient generator will pick the most occurring schema, here both occur only once so first element is picked
     */
-
-    List<ObjectNode> schemas3 = lenientAvroGenerator.getSchemaForMultipleMessages(arr);
-    assert (schemas3.size() == 1);
-
+    List<ObjectNode> schemasLenient = lenientAvroGenerator.getSchemaForMultipleMessages(messages);
+    assert (schemasLenient.size() == 1);
     String schemas3Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Arr\",\"type\":{\"type\":\"array\",\"items\":\"double\"}},{\"name\":\"String\",\"type\":\"string\"}]}}";
-    assertEquals(schemas3.get(0).toString(), schemas3Expected1);
+    assertEquals(schemasLenient.get(0).toString(), schemas3Expected1);
+  }
 
+  @Test
+  public void testMultipleMessagesOrder() throws IOException {
 
     /*
-    Order Checking Tests for Multiple Messages
+    Checking schema returns correct value after field order is interchanged in messages
     */
-
-
-    String message31 = "    {\n" +
+    String message1 = "    {\n" +
         "      \"name\" : \"J\",\n" +
         "      \"Age\" : 13,\n" +
         "        \"Date\":151109,\n" +
         "      \"arr\" : [12, 45, 56]\n" +
         "    }";
-
-    String message32 = "    {\n" +
+    String message2 = "    {\n" +
         "      \"arr\" : [4.5],\n" +
         "        \"Date\":151109,\n" +
         "      \"Age\" : 13,\n" +
         "      \"name\" : \"J\"\n" +
         "    }";
-
-    String message33 = "    {\n" +
+    String message3 = "    {\n" +
         "      \"Age\" : 13,\n" +
         "      \"name\" : \"J\",\n" +
         "      \"arr\" : [2121212],\n" +
         "        \"Date\":151109\n" +
         "    }";
 
-    ArrayList<String> messages = new ArrayList<>(Arrays.asList(message31, message32, message33));
-    List<ObjectNode> schemas4 = strictAvroGenerator.getSchemaForMultipleMessages(messages);
-    assert (schemas4.size() == 1);
-
+    ArrayList<String> messages = new ArrayList<>(Arrays.asList(message1, message2, message3));
+    List<ObjectNode> schema = strictAvroGenerator.getSchemaForMultipleMessages(messages);
+    assert (schema.size() == 1);
     String schemas4Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"Age\",\"type\":\"int\"},{\"name\":\"Date\",\"type\":\"int\"},{\"name\":\"arr\",\"type\":{\"type\":\"array\",\"items\":\"double\"}},{\"name\":\"name\",\"type\":\"string\"}]},\"messagesMatched\":[0,1,2],\"numMessagesMatched\":3}";
-    assertEquals(schemas4.get(0).toString(), schemas4Expected1);
-
-    serializeAndDeserializeCheckMulti(messages, schemas4);
-
-    String message41 = "   { \"J\":{\n" +
-        "      \"name\" : \"J\",\n" +
-        "      \"Age\" : 13,\n" +
-        "        \"Date\":151109,\n" +
-        "      \"arr\" : [12, 45, 56]\n" +
-        "    }}";
-
-    String message42 = " {  \"J\" :{\n" +
-        "      \"arr\" : [1.4],\n" +
-        "        \"Date\":151109,\n" +
-        "      \"Age\" : 13,\n" +
-        "      \"name\" : \"J\"\n" +
-        "    }}";
-
-    String message43 = " {\"J\" :   {\n" +
-        "      \"Age\" : 13,\n" +
-        "      \"name\" : \"J\",\n" +
-        "      \"arr\" : [12, 45, 56],\n" +
-        "        \"Date\":151109\n" +
-        "    }}";
-
-    ArrayList<String> messages2 = new ArrayList<>(Arrays.asList(message41, message42, message43));
-    List<ObjectNode> schemas5 = strictAvroGenerator.getSchemaForMultipleMessages(messages2);
-
-    assert (schemas5.size() == 1);
-
-    String schemas5Expected1 = "{\"schema\":{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":{\"name\":\"J\",\"fields\":[{\"name\":\"Age\",\"type\":\"int\"},{\"name\":\"Date\",\"type\":\"int\"},{\"name\":\"arr\",\"type\":{\"type\":\"array\",\"items\":\"double\"}},{\"name\":\"name\",\"type\":\"string\"}],\"type\":\"record\"}}]},\"messagesMatched\":[0,1,2],\"numMessagesMatched\":3}";
-    assertEquals(schemas5.get(0).toString(), schemas5Expected1);
-
-    serializeAndDeserializeCheckMulti(messages2, schemas5);
-
+    assertEquals(schema.get(0).toString(), schemas4Expected1);
+    serializeAndDeserializeCheckMulti(messages, schema);
   }
-
 
 }

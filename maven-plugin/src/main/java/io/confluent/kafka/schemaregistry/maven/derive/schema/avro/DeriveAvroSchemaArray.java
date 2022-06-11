@@ -42,7 +42,6 @@ public class DeriveAvroSchemaArray {
 
   private static final Logger logger = LoggerFactory.getLogger(DeriveAvroSchema.class);
 
-
   /**
    * Return a list of schemas as ObjectNode, a schema corresponding to each message.
    * <p>
@@ -70,7 +69,7 @@ public class DeriveAvroSchemaArray {
 
       throws JsonProcessingException, IllegalArgumentException {
 
-    ArrayList<ObjectNode> arr = new ArrayList<>();
+    ArrayList<ObjectNode> schemaList = new ArrayList<>();
 
     for (int i = 0; i < messages.size(); i++) {
 
@@ -78,34 +77,34 @@ public class DeriveAvroSchemaArray {
         DeriveAvroSchema.setCurrentMessage(i);
       }
       Object message = messages.get(i);
-      Optional<ObjectNode> x = DeriveAvroSchemaPrimitive.getPrimitiveSchema(
+      Optional<ObjectNode> primitiveSchema = DeriveAvroSchemaPrimitive.getPrimitiveSchema(
           message, strictCheck, typeProtoBuf);
 
       DeriveAvroSchema.setDepth(DeriveAvroSchema.getDepth() + 1);
 
       try {
-        if (x.isPresent()) {
-          if (x.get().get("type").asText().equals("null")) {
+        if (primitiveSchema.isPresent()) {
+          if (primitiveSchema.get().get("type").asText().equals("null")) {
             ObjectNode nullType = mapper.createObjectNode();
             nullType.put("name", name);
             nullType.put("type", "null");
-            arr.add(nullType);
+            schemaList.add(nullType);
           } else {
-            arr.add(x.get());
+            schemaList.add(primitiveSchema.get());
           }
         } else if (message instanceof ArrayNode) {
-          List<Object> l = DeriveSchema.getListFromArray(message);
-          arr.add(getSchemaForArray(l, name, strictCheck, typeProtoBuf));
+          List<Object> messageList = DeriveSchema.getListFromArray(message);
+          schemaList.add(getSchemaForArray(messageList, name, strictCheck, typeProtoBuf));
         } else {
           ObjectNode objectNode = mapper.valueToTree(message);
-          arr.add(DeriveAvroSchemaRecord.getSchemaForRecord(
+          schemaList.add(DeriveAvroSchemaRecord.getSchemaForRecord(
               objectNode, name, strictCheck, typeProtoBuf, false));
         }
 
       } catch (IllegalArgumentException e) {
         if (multipleMessages) {
           // Empty Object added to maintain correct index
-          arr.add(mapper.createObjectNode());
+          schemaList.add(mapper.createObjectNode());
           logger.warn(String.format("Message %d: cannot find Strict schema. "
               + "Hence, ignoring for multiple messages.", i));
         } else {
@@ -117,9 +116,8 @@ public class DeriveAvroSchemaArray {
       DeriveAvroSchema.setDepth(DeriveAvroSchema.getDepth() - 1);
     }
 
-    return arr;
+    return schemaList;
   }
-
 
   private static ObjectNode getModeForArray(ArrayList<ObjectNode> schemaList,
                                             ArrayList<String> schemaStrings) {
@@ -130,7 +128,6 @@ public class DeriveAvroSchemaArray {
       logger.warn("Found multiple schemas for given messages. Choosing most occurring type");
     }
     return schemaList.get(modeIndex);
-
   }
 
   private static void checkForSameStructure(ArrayList<String> schemaStrings, String name,
@@ -140,10 +137,8 @@ public class DeriveAvroSchemaArray {
     // Checking if all elements have the same structure for strict check.
     for (String schemaString : schemaStrings) {
       if (!schemaStrings.get(0).equals(schemaString)) {
-
-        TypeReference<HashMap<String, Object>> mapType =
-            new TypeReference<HashMap<String, Object>>() {};
-
+        TypeReference<HashMap<String, Object>> mapType = new TypeReference<HashMap
+            <String, Object>>() {};
         Map<String, Object> firstMap = mapper.readValue(schemaString, mapType);
         Map<String, Object> secondMap = mapper.readValue(schemaStrings.get(0), mapType);
         String diff = Maps.difference(firstMap, secondMap).toString();
@@ -161,7 +156,6 @@ public class DeriveAvroSchemaArray {
         }
       }
     }
-
   }
 
   private static ArrayList<ObjectNode> getUniqueList(ArrayList<ObjectNode> schemaList,
@@ -172,15 +166,12 @@ public class DeriveAvroSchemaArray {
     Lenient check we need frequency of data type, hence reassign schemaList
     only if 1 value remains use unique
     */
-
     ArrayList<ObjectNode> uniqueSchemaList = DeriveSchema.getUnique(schemaList);
     if (uniqueSchemaList.size() == 1 || strictCheck) {
       return uniqueSchemaList;
     }
     return schemaList;
-
   }
-
 
   /**
    * Returns schema for array.
@@ -220,8 +211,8 @@ public class DeriveAvroSchemaArray {
     }
 
     ArrayList<String> schemaStrings = new ArrayList<>();
-    for (ObjectNode objectNode : schemaList) {
-      schemaStrings.add(objectNode.toString());
+    for (ObjectNode schema : schemaList) {
+      schemaStrings.add(schema.toString());
     }
 
     if (!strictCheck) {
@@ -241,7 +232,6 @@ public class DeriveAvroSchemaArray {
     return mapper.createObjectNode();
   }
 
-
   public static ObjectNode getSchemaForArray(List<Object> field, String name, boolean strictCheck,
                                              boolean typeProtoBuf)
       throws JsonProcessingException {
@@ -257,17 +247,14 @@ public class DeriveAvroSchemaArray {
       throws JsonProcessingException, IllegalArgumentException {
 
     ObjectNode schema = mapper.createObjectNode();
-
     if (typeProtoBuf) {
       schema.put("__type", "array");
     }
-
     schema.put("name", name);
 
     if (!calledAsField) {
       schema.put("type", "array");
     }
-
     ObjectNode elementSchema = getDatatypeForArray(messages, name, strictCheck,
         typeProtoBuf, multipleMessages);
 
@@ -278,7 +265,6 @@ public class DeriveAvroSchemaArray {
     }
 
     if (!elementSchema.has("name")) {
-
       if (typeProtoBuf) {
         elementSchema.put("__type", "array");
       }
@@ -291,38 +277,32 @@ public class DeriveAvroSchemaArray {
       } else {
         schema.set("items", elementSchema.get("items"));
       }
-
     } else {
-
       DeriveProtobufSchema.checkFor2dArrays(typeProtoBuf, elementSchema);
       fillRecursiveType(elementSchema, schema, typeProtoBuf, calledAsField);
-
     }
 
     return schema;
   }
 
-
   private static void fillRecursiveType(ObjectNode element, ObjectNode schema, boolean typeProtoBuf,
                                         boolean calledAsField) {
 
     if (calledAsField) {
-
-      ObjectNode type = mapper.createObjectNode();
-      type.put("type", "array");
+      ObjectNode schemaType = mapper.createObjectNode();
+      schemaType.put("type", "array");
 
       if (element.has("type") && element.get("type") instanceof ArrayNode) {
         // Element is of type union
-        type.set("items", element.get("type"));
+        schemaType.set("items", element.get("type"));
       } else {
-        type.set("items", element);
+        schemaType.set("items", element);
       }
 
       if (typeProtoBuf) {
-        type.put("__type", "array");
+        schemaType.put("__type", "array");
       }
-      schema.set("type", type);
-
+      schema.set("type", schemaType);
     } else {
       schema.set("items", element);
     }

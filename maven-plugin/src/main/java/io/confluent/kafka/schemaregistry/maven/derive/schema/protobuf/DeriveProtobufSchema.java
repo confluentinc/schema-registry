@@ -52,7 +52,6 @@ public class DeriveProtobufSchema {
       logger.error("Protobuf doesn't support array of arrays.");
       throw new IllegalArgumentException("Protobuf doesn't support array of arrays.");
     }
-
   }
 
   public static void checkForArrayOfNull(boolean typeProtoBuf, ObjectNode element) {
@@ -61,7 +60,6 @@ public class DeriveProtobufSchema {
         && element.get("type").asText().equals("google.protobuf.Any")) {
       throw new IllegalArgumentException("Protobuf support doesn't array of null.");
     }
-
   }
 
   static void checkValidSchema(String message, ProtobufSchema schema)
@@ -85,7 +83,7 @@ public class DeriveProtobufSchema {
    */
   public String avroSchemaToProtobufSchema(ObjectNode avroSchema, int fieldNum, String name) {
 
-    StringBuilder ans = new StringBuilder();
+    StringBuilder protobufSchema = new StringBuilder();
     // Type array
     if (avroSchema.get("__type").asText().equals("array")) {
 
@@ -94,46 +92,45 @@ public class DeriveProtobufSchema {
             avroSchema.get("items").asText(), name, fieldNum) + '\n';
       } else {
         if (avroSchema.get("items") instanceof ArrayNode) {
-          ans.append(
+          protobufSchema.append(
               String.format("repeated %s %s = %d;%n", "google.protobuf.Any", name, fieldNum));
-          return ans.toString();
+          return protobufSchema.toString();
         }
         String fieldDefinition = avroSchemaToProtobufSchema((ObjectNode) avroSchema.get("items"),
             fieldNum, name + "Message");
-        ans.append(
+        protobufSchema.append(
             String.format("repeated %s %s = %d;%n", name + "Message", name, fieldNum));
-        ans.append(fieldDefinition);
-        return ans.toString();
+        protobufSchema.append(fieldDefinition);
+        return protobufSchema.toString();
       }
 
     }
 
-    ans.append(String.format("message %s { %n", name));
+    protobufSchema.append(String.format("message %s { %n", name));
     ArrayNode fields = (ArrayNode) avroSchema.get("fields");
 
     for (int i = 0; i < fields.size(); i++) {
       ObjectNode obj = (ObjectNode) (fields.get(i));
 
       if (obj.get("type") instanceof TextNode) {
-        ans.append(String.format("  %s %s = %d;", obj.get("type").asText(),
+        protobufSchema.append(String.format("  %s %s = %d;", obj.get("type").asText(),
             obj.get("name").asText(), fieldNum++));
-        ans.append('\n');
+        protobufSchema.append('\n');
       } else if (obj.get("__type").asText().equals("record")) {
         ObjectNode j = (ObjectNode) obj.get("type");
         String newMessage = avroSchemaToProtobufSchema(j, 1, obj.get("name").asText() + "Message");
-        ans.append(newMessage);
-        ans.append(String.format("  %s %s = %d; %n", obj.get("name").asText()
-                + "Message", obj.get("name").asText(), fieldNum++));
+        protobufSchema.append(newMessage);
+        protobufSchema.append(String.format("  %s %s = %d; %n", obj.get("name").asText()
+            + "Message", obj.get("name").asText(), fieldNum++));
       } else if (obj.get("__type").asText().equals("array")) {
         ObjectNode j = (ObjectNode) obj.get("type");
         String newMessage = avroSchemaToProtobufSchema(j, fieldNum++, obj.get("name").asText());
-        ans.append(newMessage);
+        protobufSchema.append(newMessage);
       }
     }
 
-    ans.append("}\n");
-    return ans.toString();
-
+    protobufSchema.append("}\n");
+    return protobufSchema.toString();
   }
 
   ProtobufSchema getSchema(String message, String name) throws JsonProcessingException {
@@ -143,7 +140,6 @@ public class DeriveProtobufSchema {
         this.strictCheck, true);
     String protobufString = avroSchemaToProtobufSchema(schema, 1, name);
     return schemaStringToProto(protobufString);
-
   }
 
   public ProtobufSchema getSchema(String message)
@@ -161,7 +157,6 @@ public class DeriveProtobufSchema {
 
     String schemaString = "syntax = \"proto3\";\n\n" + schema;
     return new ProtobufSchema(schemaString);
-
   }
 
   private ProtobufSchema getSchemaFromAvro(String schema, String name)
@@ -170,7 +165,6 @@ public class DeriveProtobufSchema {
         1, name);
     return schemaStringToProto(protobufString);
   }
-
 
   /**
    * Get schema for multiple messages.
@@ -198,7 +192,6 @@ public class DeriveProtobufSchema {
     /*
     Lenient check returns 1 schema Picking highest occurring datatype in case of conflicts
     */
-
     if (!strictCheck) {
 
       ObjectNode schema = DeriveAvroSchemaArray.getSchemaForArray(messageObjects, "Record",
@@ -225,7 +218,6 @@ public class DeriveProtobufSchema {
     Merging of Records is performed then
     All Unique Schemas are returned and the messages it matches
     */
-
     ArrayList<ObjectNode> schemaList = DeriveAvroSchemaArray.getSchemaOfAllElements(messageObjects,
         "Record", true, true, true);
 
@@ -239,7 +231,6 @@ public class DeriveProtobufSchema {
     List<List<Integer>> schemaToMessagesInfo = MergeProtoBufUtils.getUniqueWithMessageInfo(
         schemaList, uniqueList, null);
 
-
     MergeNumberUtils.mergeNumberTypes(uniqueList, true);
     MapAndArray schemasAndMap = MergeProtoBufUtils.tryAndMergeStrictFromList(
         uniqueList, schemaToMessagesInfo);
@@ -247,7 +238,7 @@ public class DeriveProtobufSchema {
     ArrayList<ObjectNode> schemas = schemasAndMap.getSchemas();
     List<List<Integer>> schemaToMessagesInfo2 = schemasAndMap.getSchemaToMessagesInfo();
 
-    ArrayList<ObjectNode> ans = new ArrayList<>();
+    ArrayList<ObjectNode> schemaInformation = new ArrayList<>();
 
     for (int i = 0; i < schemas.size(); i++) {
       ObjectNode schemaInfo = mapper.createObjectNode();
@@ -265,20 +256,19 @@ public class DeriveProtobufSchema {
       }
       Collections.sort(messagesMatched);
       ArrayNode messagesMatchedArr = schemaInfo.putArray("messagesMatched");
-      for (Integer m : messagesMatched) {
-        messagesMatchedArr.add(m);
+      for (Integer messageIndex : messagesMatched) {
+        messagesMatchedArr.add(messageIndex);
       }
       schemaInfo.put("numMessagesMatched", messagesMatched.size());
-      ans.add(schemaInfo);
+      schemaInformation.add(schemaInfo);
     }
 
-    if (ans.size() == 0) {
+    if (schemaInformation.size() == 0) {
       logger.error(errorMessageNoSchemasFound);
       throw new IllegalArgumentException(errorMessageNoSchemasFound);
     }
 
-    return ans;
+    return schemaInformation;
   }
-
 
 }

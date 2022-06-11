@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -31,7 +32,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-
 public abstract class DeriveSchema {
 
   public static final ObjectMapper mapper = new ObjectMapper();
@@ -39,23 +39,24 @@ public abstract class DeriveSchema {
   public static ArrayList<ObjectNode> getUnique(ArrayList<ObjectNode> schemas) {
 
     Set<ObjectNode> setWithWrappedObjects = new HashSet<>(schemas);
-    ArrayList<ObjectNode> ans = new ArrayList<>();
+    ArrayList<ObjectNode> uniqueList = new ArrayList<>();
 
     for (ObjectNode objectNode : setWithWrappedObjects) {
       if (objectNode != null && !objectNode.isEmpty()) {
-        ans.add(objectNode);
+        uniqueList.add(objectNode);
       }
     }
 
-    return ans;
+    return uniqueList;
   }
 
   public static List<Object> getListFromArray(Object field) {
 
     if (field instanceof ArrayNode) {
+      ArrayNode arrayField = (ArrayNode) field;
       List<Object> objectList = new ArrayList<>();
-      for (int i = 0; i < ((ArrayNode) field).size(); i++) {
-        objectList.add(((ArrayNode) field).get(i));
+      for (JsonNode fieldItem : arrayField) {
+        objectList.add(fieldItem);
       }
       return objectList;
     }
@@ -84,12 +85,12 @@ public abstract class DeriveSchema {
    *          and which messages it matches
    * @throws JsonProcessingException thrown if message not in JSON format
    */
-  public static List<ObjectNode> caseWiseOutput(String schemaType,
-                                                boolean strictCheck,
-                                                ArrayList<String> messages)
+  public static List<ObjectNode> getSchemaInformation(String schemaType,
+                                                      boolean strictCheck,
+                                                      ArrayList<String> messages)
       throws JsonProcessingException {
 
-    List<ObjectNode> ans = new ArrayList<>();
+    List<ObjectNode> schemaList = new ArrayList<>();
     if (schemaType == null) {
       throw new IllegalArgumentException("Schema Type not set");
     }
@@ -98,21 +99,21 @@ public abstract class DeriveSchema {
 
         DeriveAvroSchema schemaGenerator = new DeriveAvroSchema(strictCheck);
         List<ObjectNode> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
-        ans.addAll(schemas);
+        schemaList.addAll(schemas);
         break;
       }
       case "json": {
 
         DeriveJsonSchema schemaGenerator = new DeriveJsonSchema();
         ObjectNode schema = schemaGenerator.getSchemaForMultipleMessages(messages);
-        ans.add(schema);
+        schemaList.add(schema);
         break;
 
       }
       case "protobuf":
         DeriveProtobufSchema schemaGenerator = new DeriveProtobufSchema(strictCheck);
         List<ObjectNode> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
-        ans.addAll(schemas);
+        schemaList.addAll(schemas);
         break;
 
       default:
@@ -121,8 +122,7 @@ public abstract class DeriveSchema {
 
     }
 
-    return ans;
+    return schemaList;
   }
-
 
 }

@@ -26,7 +26,6 @@ import java.util.Optional;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
 public class DeriveJsonSchemaPrimitive {
-
   private static final Map<String, String> classToDataType = new HashMap<>();
 
   static {
@@ -65,4 +64,5 @@ public class DeriveJsonSchemaPrimitive {
 
     return Optional.empty();
   }
+
 }

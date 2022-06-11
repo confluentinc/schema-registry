@@ -29,24 +29,23 @@ import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema
 
 public class DeriveJsonSchemaArray {
 
-
   public static ArrayList<ObjectNode> getSchemaOfAllElements(List<Object> messages, String name)
       throws JsonProcessingException {
 
-    ArrayList<ObjectNode> arr = new ArrayList<>();
+    ArrayList<ObjectNode> schemaList = new ArrayList<>();
     for (Object message : messages) {
       Optional<ObjectNode> primitiveSchema = DeriveJsonSchemaPrimitive.getPrimitiveSchema(message);
       if (primitiveSchema.isPresent()) {
-        arr.add(primitiveSchema.get());
+        schemaList.add(primitiveSchema.get());
       } else if (message instanceof ArrayNode) {
-        arr.add(getSchemaForArray(DeriveSchema.getListFromArray(message), name));
+        schemaList.add(getSchemaForArray(DeriveSchema.getListFromArray(message), name));
       } else {
         ObjectNode objectNode = mapper.valueToTree(message);
-        arr.add(DeriveJsonSchemaRecord.getSchemaForRecord(objectNode, name));
+        schemaList.add(DeriveJsonSchemaRecord.getSchemaForRecord(objectNode, name));
       }
     }
 
-    return arr;
+    return schemaList;
   }
 
   /**
@@ -65,7 +64,6 @@ public class DeriveJsonSchemaArray {
    * @return schema
    * @throws JsonProcessingException thrown if message not in JSON format
    */
-
   public static ObjectNode getSchemaForArray(List<Object> messages, String name)
       throws JsonProcessingException {
 
@@ -76,7 +74,7 @@ public class DeriveJsonSchemaArray {
     ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemaList);
     ArrayList<ObjectNode> recordList = new ArrayList<>();
     ArrayList<ObjectNode> arrayList = new ArrayList<>();
-    ArrayList<ObjectNode> othersList = new ArrayList<>();
+    ArrayList<ObjectNode> primitiveList = new ArrayList<>();
 
     for (ObjectNode schemaElement : uniqueSchemas) {
       if (schemaElement.get("type").asText().equals("object")) {
@@ -84,47 +82,44 @@ public class DeriveJsonSchemaArray {
       } else if (schemaElement.get("type").asText().equals("array")) {
         arrayList.add(schemaElement);
       } else {
-        othersList.add(schemaElement);
+        primitiveList.add(schemaElement);
       }
     }
 
     if (recordList.size() > 1) {
-      ObjectNode x = MergeJsonUtils.mergeRecords(recordList);
-      othersList.add(x);
+      ObjectNode mergedRecords = MergeJsonUtils.mergeRecords(recordList);
+      primitiveList.add(mergedRecords);
     } else if (recordList.size() == 1) {
-      othersList.add(recordList.get(0));
+      primitiveList.add(recordList.get(0));
     }
 
     if (arrayList.size() > 1) {
-      ObjectNode x = MergeJsonUtils.mergeArrays(arrayList);
-      othersList.add(x);
+      ObjectNode mergedArrays = MergeJsonUtils.mergeArrays(arrayList);
+      primitiveList.add(mergedArrays);
     } else if (arrayList.size() == 1) {
-      othersList.add(arrayList.get(0));
+      primitiveList.add(arrayList.get(0));
     }
 
-    if (othersList.size() > 1) {
-      schema.set("items", concatElementsUsingOneOf(othersList));
-    } else if (othersList.size() > 0) {
-      schema.set("items", othersList.get(0));
+    if (primitiveList.size() > 1) {
+      schema.set("items", concatElementsUsingOneOf(primitiveList));
+    } else if (primitiveList.size() > 0) {
+      schema.set("items", primitiveList.get(0));
     } else {
       schema.set("items", mapper.createObjectNode());
     }
 
     return schema;
-
   }
 
   private static ObjectNode concatElementsUsingOneOf(ArrayList<ObjectNode> othersList) {
 
     List<ObjectNode> elements = new ArrayList<>(othersList);
-    ObjectNode oneOf = mapper.createObjectNode();
-    ArrayNode arr = oneOf.putArray("oneOf");
+    ObjectNode oneOfDataType = mapper.createObjectNode();
+    ArrayNode oneOfElements = oneOfDataType.putArray("oneOf");
     for (ObjectNode objectNode : elements) {
-      arr.add(objectNode);
+      oneOfElements.add(objectNode);
     }
-    return oneOf;
-
+    return oneOfDataType;
   }
-
 
 }

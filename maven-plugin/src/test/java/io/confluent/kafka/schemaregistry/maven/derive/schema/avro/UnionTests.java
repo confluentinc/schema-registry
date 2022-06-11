@@ -19,7 +19,6 @@ package io.confluent.kafka.schemaregistry.maven.derive.schema.avro;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.NumericNodeComparator;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.avro.DeriveAvroSchema;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.utils.ReadFileUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
@@ -41,7 +40,6 @@ import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-
 public class UnionTests {
 
   private final KafkaAvroSerializer avroSerializer;
@@ -49,32 +47,26 @@ public class UnionTests {
   private final String topic;
   private final DeriveAvroSchema schemaGenerator = new DeriveAvroSchema(true);
 
-
   public UnionTests() {
-
     Properties defaultConfig = new Properties();
     defaultConfig.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(defaultConfig));
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry);
     topic = "test";
-
   }
 
   void serializeAndDeserializeCheckMulti(List<String> messages, List<ObjectNode> schemas) throws IOException {
-
     for (ObjectNode schemaInfo : schemas) {
-
       AvroSchema schema = new AvroSchema(schemaInfo.get("schema").toString());
       ArrayNode matchingMessages = (ArrayNode) schemaInfo.get("messagesMatched");
       for (int i = 0; i < matchingMessages.size(); i++) {
         int index = matchingMessages.get(i).asInt();
         serializeAndDeserializeCheck(messages.get(index), schema);
       }
-
     }
-
   }
+
   void serializeAndDeserializeCheck(String message, AvroSchema schema) throws IOException {
 
     Object test = AvroSchemaUtils.toObject(message, schema);
@@ -89,12 +81,9 @@ public class UnionTests {
 
     ObjectNode tree1 = (ObjectNode) mapper.readTree(message);
     ObjectNode tree2 = (ObjectNode) mapper.readTree(bs.toString(utf8));
-
     NumericNodeComparator cmp = new NumericNodeComparator();
     assertTrue(tree1.equals(cmp, tree2));
-
   }
-
 
   @Test
   public void TestUnionsBasic() throws IOException {
@@ -102,7 +91,6 @@ public class UnionTests {
     /*
     Merging branches of primitive Types and Array
     */
-
     String message1 = "[\n" +
         "  {\"length\": {\"long\": 12}},\n" +
         "  {\"length\": {\"double\": 1.5}},\n" +
@@ -116,11 +104,9 @@ public class UnionTests {
     String expectedSchema1 = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"length\",\"type\":[\"boolean\",\"double\",\"long\",{\"name\":\"array\",\"type\":\"array\",\"items\":\"boolean\"}]}]}";
     assertEquals(expectedSchema1, schemas1.get(0).get("schema").toString());
 
-
     /*
     Merging branches of Primitive Types and Null
     */
-
     String message2 = "[\n" +
         "  {\"length\": null},\n" +
         "  {\"length\": {\"long\": 12}},\n" +
@@ -133,11 +119,9 @@ public class UnionTests {
     String expectedSchema2 = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"length\",\"type\":[\"double\",\"long\",\"null\"]}]}";
     assertEquals(expectedSchema2, schemas2.get(0).get("schema").toString());
 
-
     /*
     Merging branches of primitive Types, array and records of different types
     */
-
     String message3 = "[\n" +
         "  {\"length\": {\"long\": 12}},\n" +
         "  {\"length\": {\"double\": 1.5}},\n" +
@@ -153,7 +137,6 @@ public class UnionTests {
     serializeAndDeserializeCheckMulti(messages3, schemas3);
     String expectedSchema3 = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"length\",\"type\":[\"double\",\"long\",{\"name\":\"aa\",\"type\":\"record\",\"fields\":[{\"name\":\"a\",\"type\":{\"name\":\"a\",\"fields\":[{\"name\":\"new\",\"type\":\"int\"},{\"name\":\"old\",\"type\":\"boolean\"}],\"type\":\"record\"}}]},{\"name\":\"array\",\"type\":\"array\",\"items\":{\"name\":\"array\",\"type\":\"array\",\"items\":{\"name\":\"array\",\"type\":\"array\",\"items\":\"int\"}}},{\"name\":\"branch\",\"type\":\"record\",\"fields\":[{\"name\":\"properties_length\",\"type\":{\"name\":\"properties_length\",\"fields\":[{\"name\":\"temp\",\"type\":\"int\"}],\"type\":\"record\"}}]},{\"name\":\"branch2\",\"type\":\"record\",\"fields\":[{\"name\":\"haha\",\"type\":{\"name\":\"haha\",\"fields\":[{\"name\":\"new\",\"type\":\"int\"},{\"name\":\"old\",\"type\":\"boolean\"}],\"type\":\"record\"}}]}]}]}";
     assertEquals(expectedSchema3, schemas3.get(0).get("schema").toString());
-
   }
 
   @Test
@@ -162,14 +145,11 @@ public class UnionTests {
     /*
     recursiveTest - Merging branches of null and records, null and int and merging of null and record which has
     a field of type Union
-
     */
-
     File file = new File("src/test/resources/Avro/UnionTestData/recursiveUnionsTest.json");
     List<String> messages = ReadFileUtils.readMessagesToString(file);
     List<ObjectNode> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
     serializeAndDeserializeCheckMulti(messages, schemas);
-
     String expectedSchema = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"__confluent_index\",\"type\":\"int\"},{\"name\":\"headers\",\"type\":{\"type\":\"array\",\"items\":[]}},{\"name\":\"key\",\"type\":\"null\"},{\"name\":\"offset\",\"type\":\"int\"},{\"name\":\"partition\",\"type\":\"int\"},{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"timestampType\",\"type\":\"string\"},{\"name\":\"topic\",\"type\":\"string\"},{\"name\":\"value\",\"type\":{\"name\":\"value\",\"fields\":[{\"name\":\"bot\",\"type\":[\"boolean\"]},{\"name\":\"comment\",\"type\":[\"string\"]},{\"name\":\"id\",\"type\":[\"long\",\"null\"]},{\"name\":\"length\",\"type\":[\"null\",{\"name\":\"properties.length\",\"type\":\"record\",\"fields\":[{\"name\":\"new\",\"type\":[\"long\"]},{\"name\":\"old\",\"type\":[\"long\",\"null\"]}]}]},{\"name\":\"log_action\",\"type\":[\"null\",\"string\"]},{\"name\":\"log_action_comment\",\"type\":[\"null\",\"string\"]},{\"name\":\"log_id\",\"type\":[\"long\",\"null\"]},{\"name\":\"log_type\",\"type\":[\"null\",\"string\"]},{\"name\":\"meta\",\"type\":{\"name\":\"meta\",\"fields\":[{\"name\":\"domain\",\"type\":[\"string\"]},{\"name\":\"dt\",\"type\":\"long\"},{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"request_id\",\"type\":[\"string\"]},{\"name\":\"stream\",\"type\":\"string\"},{\"name\":\"uri\",\"type\":[\"string\"]}],\"type\":\"record\"}},{\"name\":\"minor\",\"type\":[\"boolean\",\"null\"]},{\"name\":\"namespace\",\"type\":[\"long\"]},{\"name\":\"parsedcomment\",\"type\":[\"string\"]},{\"name\":\"patrolled\",\"type\":[\"boolean\",\"null\"]},{\"name\":\"revision\",\"type\":[\"null\",{\"name\":\"properties.revision\",\"type\":\"record\",\"fields\":[{\"name\":\"new\",\"type\":[\"long\"]},{\"name\":\"old\",\"type\":[\"long\",\"null\"]}]}]},{\"name\":\"server_name\",\"type\":[\"string\"]},{\"name\":\"server_script_path\",\"type\":[\"string\"]},{\"name\":\"server_url\",\"type\":[\"string\"]},{\"name\":\"timestamp\",\"type\":[\"long\"]},{\"name\":\"title\",\"type\":[\"string\"]},{\"name\":\"type\",\"type\":[\"string\"]},{\"name\":\"user\",\"type\":[\"string\"]},{\"name\":\"wiki\",\"type\":[\"string\"]}],\"type\":\"record\"}}]}";
     assertEquals(expectedSchema, schemas.get(0).get("schema").toString());
 
@@ -202,7 +182,6 @@ public class UnionTests {
     List<String> messages1 = ReadFileUtils.readMessagesToString(message1);
     List<ObjectNode> schemas1 = schemaGenerator.getSchemaForMultipleMessages(messages1);
     serializeAndDeserializeCheckMulti(messages1, schemas1);
-
     String expectedSchema1 = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"__confluent_index\",\"type\":\"double\"},{\"name\":\"value\",\"type\":{\"name\":\"value\",\"fields\":[{\"name\":\"length\",\"type\":[\"null\",{\"name\":\"name\",\"type\":\"record\",\"fields\":[{\"name\":\"first\",\"type\":\"string\"},{\"name\":\"second\",\"type\":\"string\"}]},{\"name\":\"properties_length\",\"type\":\"record\",\"fields\":[{\"name\":\"new\",\"type\":[\"long\"]},{\"name\":\"old\",\"type\":[\"long\",\"null\"]}]}]}],\"type\":\"record\"}}]}";
     assertEquals(expectedSchema1, schemas1.get(0).get("schema").toString());
   }
@@ -213,9 +192,7 @@ public class UnionTests {
     /*
     Case when first message doesn't have all fields,
     Second and Third has union and can be merged, this is the most occurring type
-    *
-
-     */
+    */
     String message = "[\n" +
         "  {\"name\" : \"Testing Merging check for union\"}," +
         "  {\"length\": {\"long\": 12\n}}," +
@@ -224,13 +201,10 @@ public class UnionTests {
     List<String> messages = ReadFileUtils.readMessagesToString(message);
     List<ObjectNode> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
     serializeAndDeserializeCheckMulti(messages, schemas);
-
     String expectedSchema1 = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"length\",\"type\":[\"long\",\"string\"]}]}";
     assertEquals(expectedSchema1, schemas.get(0).get("schema").toString());
-
     String expectedSchema2 = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]}";
     assertEquals(expectedSchema2, schemas.get(1).get("schema").toString());
-
   }
 
   @Test
@@ -243,23 +217,18 @@ public class UnionTests {
     List<String> messages = ReadFileUtils.readMessagesToString(message);
     List<ObjectNode> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
     serializeAndDeserializeCheckMulti(messages, schemas);
-
     String expectedSchema = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"A\",\"type\":{\"type\":\"array\",\"items\":[\"double\",\"int\",\"string\"]}}]}";
     assertEquals(expectedSchema, schemas.get(0).get("schema").toString());
-
   }
 
   @Test
   public void TestingReadFolder() throws IOException {
-
     File file = new File("src/test/resources/Avro/UnionTestData/arrayOfUnionsTest.txt");
     List<String> messages = ReadFileUtils.readMessagesToString(file);
     List<ObjectNode> schemas = schemaGenerator.getSchemaForMultipleMessages(messages);
     serializeAndDeserializeCheckMulti(messages, schemas);
-
     String expectedSchema = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"aa\",\"type\":\"double\"},{\"name\":\"ahha\",\"type\":\"int\"},{\"name\":\"arr\",\"type\":{\"type\":\"array\",\"items\":[\"int\",\"long\",\"null\",{\"name\":\"array\",\"type\":\"array\",\"items\":\"string\"},{\"name\":\"org.apache.avro.test.TestRecord2\",\"type\":\"record\",\"fields\":[{\"name\":\"arr\",\"type\":{\"type\":\"array\",\"items\":{\"name\":\"arr\",\"type\":\"record\",\"fields\":[{\"name\":\"arrFloat\",\"type\":{\"type\":\"array\",\"items\":\"int\"}},{\"name\":\"g\",\"type\":\"double\"},{\"name\":\"l\",\"type\":{\"type\":\"array\",\"items\":[\"long\",\"null\"]}},{\"name\":\"name\",\"type\":\"string\"}]}}},{\"name\":\"arrFloat\",\"type\":{\"type\":\"array\",\"items\":\"double\"}},{\"name\":\"l\",\"type\":{\"type\":\"array\",\"items\":[\"boolean\",\"long\",\"null\"]}},{\"name\":\"name\",\"type\":\"string\"}]},{\"name\":\"org.apache.avro.test.TestRecord3\",\"type\":\"record\",\"fields\":[{\"name\":\"arrFloat\",\"type\":{\"type\":\"array\",\"items\":\"int\"}},{\"name\":\"g\",\"type\":\"double\"},{\"name\":\"l\",\"type\":{\"type\":\"array\",\"items\":[\"long\",\"null\"]}},{\"name\":\"name\",\"type\":\"string\"}]}]}},{\"name\":\"arr2\",\"type\":{\"type\":\"array\",\"items\":{\"name\":\"arr2\",\"type\":\"record\",\"fields\":[{\"name\":\"arr\",\"type\":{\"type\":\"array\",\"items\":{\"name\":\"arr\",\"type\":\"record\",\"fields\":[{\"name\":\"arrFloat\",\"type\":{\"type\":\"array\",\"items\":\"int\"}},{\"name\":\"g\",\"type\":\"double\"},{\"name\":\"l\",\"type\":{\"type\":\"array\",\"items\":[\"long\",\"null\"]}},{\"name\":\"name\",\"type\":\"string\"}]}}},{\"name\":\"arrFloat\",\"type\":{\"type\":\"array\",\"items\":\"double\"}},{\"name\":\"l\",\"type\":{\"type\":\"array\",\"items\":[\"boolean\",\"long\",\"null\"]}},{\"name\":\"name\",\"type\":\"string\"}]}}}]}";
     assertEquals(expectedSchema, schemas.get(0).get("schema").toString());
-
   }
 
 }

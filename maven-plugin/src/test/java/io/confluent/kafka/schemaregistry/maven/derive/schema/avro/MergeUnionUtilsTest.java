@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.confluent.kafka.schemaregistry.maven.derive.schema.avro;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -18,9 +34,9 @@ public class MergeUnionUtilsTest {
 
   @Test
   public void shouldNotReturnPrimitiveTypeCheckUnionInRecord() throws JsonProcessingException {
-    String schemaString1 = "{\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}";
+    String schemaString = "{\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"int\"}]}";
     ArrayList<String> branch = new ArrayList<>();
-    checkUnionInRecord(mapper.readValue(schemaString1, ObjectNode.class), branch, false);
+    checkUnionInRecord(mapper.readValue(schemaString, ObjectNode.class), branch, false);
     assertEquals(branch.size(), 0);
   }
 
@@ -100,7 +116,6 @@ public class MergeUnionUtilsTest {
     assertEquals(branch.size(), 0);
   }
 
-
   @Test
   public void shouldReturnArrayCheckUnionInRecord() throws JsonProcessingException {
     String schemaString1 = "{\"name\":\"Record\",\"type\":\"record\",\"fields\":[{\"name\":\"array\",\"type\":\"array\",\"items\":{\"name\":\"array\",\"type\":\"array\",\"items\":\"int\"}}]}";
@@ -111,7 +126,6 @@ public class MergeUnionUtilsTest {
     ArrayList<String> branchNoComplexTypes = checkForUnion(mapper.readValue(schemaString1, ObjectNode.class), false);
     assertEquals(branchNoComplexTypes.size(), 0);
   }
-
 
   @Test
   public void shouldNotCopyTypes() throws JsonProcessingException {
@@ -133,22 +147,22 @@ public class MergeUnionUtilsTest {
 
   @Test
   public void shouldCopyTypesArray() throws JsonProcessingException {
-    String schemaString1 = "{\"name\":\"arr\",\"type\":[\"int\",{\"name\":\"array\",\"type\":\"array\",\"items\":\"string\"}]}";
-    ObjectNode schema1 = mapper.readValue(schemaString1, ObjectNode.class);
+    String schemaString = "{\"name\":\"arr\",\"type\":[\"int\",{\"name\":\"array\",\"type\":\"array\",\"items\":\"string\"}]}";
+    ObjectNode schema1 = mapper.readValue(schemaString, ObjectNode.class);
     ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"name\":\"arr\",\"type\":\"record\",\"fields\":[{\"name\":\"array\",\"type\":\"array\",\"items\":\"string\"}]}");
     copyTypes(schema1, schema2);
-    assertEquals(schemaString1, schema1.toString());
-    assertEquals(schemaString1, schema2.toString());
+    assertEquals(schemaString, schema1.toString());
+    assertEquals(schemaString, schema2.toString());
   }
 
   @Test
   public void shouldCopyTypesRecord() throws JsonProcessingException {
-    String schemaString1 = "{\"name\":\"arr\",\"type\":[\"int\",{\"name\":\"R\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"}]}]}";
-    ObjectNode schema1 = mapper.readValue(schemaString1, ObjectNode.class);
+    String schemaString = "{\"name\":\"arr\",\"type\":[\"int\",{\"name\":\"R\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"}]}]}";
+    ObjectNode schema1 = mapper.readValue(schemaString, ObjectNode.class);
     ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"name\":\"arr\",\"type\":\"record\",\"fields\":[{\"name\":\"R\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"}]}]}");
     copyTypes(schema1, schema2);
-    assertEquals(schemaString1, schema1.toString());
-    assertEquals(schemaString1, schema2.toString());
+    assertEquals(schemaString, schema1.toString());
+    assertEquals(schemaString, schema2.toString());
   }
 
   @Test
@@ -162,8 +176,8 @@ public class MergeUnionUtilsTest {
 
   @Test
   public void shouldMatchTypesArray() throws JsonProcessingException {
-    String schemaString1 = "{\"name\":\"arr\",\"type\":[{\"name\":\"array\",\"type\":\"array\",\"items\":\"string\"}]}";
-    ObjectNode schema1 = mapper.readValue(schemaString1, ObjectNode.class);
+    String schemaString = "{\"name\":\"arr\",\"type\":[{\"name\":\"array\",\"type\":\"array\",\"items\":\"string\"}]}";
+    ObjectNode schema1 = mapper.readValue(schemaString, ObjectNode.class);
     ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"name\":\"arr\",\"type\":[\"int\"]}");
     matchTypes(schema1, schema2);
     String expectedSchema = "{\"name\":\"arr\",\"type\":[\"int\",{\"name\":\"array\",\"type\":\"array\",\"items\":\"string\"}]}";
@@ -173,8 +187,8 @@ public class MergeUnionUtilsTest {
 
   @Test
   public void shouldMatchTypesRecord() throws JsonProcessingException {
-    String schemaString1 = "{\"name\":\"arr\",\"type\":[{\"name\":\"R\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"}]}]}";
-    ObjectNode schema1 = mapper.readValue(schemaString1, ObjectNode.class);
+    String schemaString = "{\"name\":\"arr\",\"type\":[{\"name\":\"R\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"}]}]}";
+    ObjectNode schema1 = mapper.readValue(schemaString, ObjectNode.class);
     ObjectNode schema2 = (ObjectNode) mapper.readTree("{\"name\":\"arr\",\"type\":[\"int\"]}");
     matchTypes(schema1, schema2);
     String expectedSchema = "{\"name\":\"arr\",\"type\":[\"int\",{\"name\":\"R\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"}]}]}";
@@ -230,20 +244,18 @@ public class MergeUnionUtilsTest {
 
   @Test
   public void shouldCompressPrimitiveType() throws JsonProcessingException {
-    String schemaString1 = "{\"name\":\"l\",\"type\":\"record\",\"fields\":[{\"name\":\"boolean\",\"type\":\"boolean\"}]}";
-    ObjectNode schema1 = mapper.readValue(schemaString1, ObjectNode.class);
+    String schemaString = "{\"name\":\"l\",\"type\":\"record\",\"fields\":[{\"name\":\"boolean\",\"type\":\"boolean\"}]}";
+    ObjectNode schema1 = mapper.readValue(schemaString, ObjectNode.class);
     compressRecordToUnion(schema1);
     assertEquals("{\"name\":\"l\",\"type\":[\"boolean\"]}", schema1.toString());
   }
 
   @Test
   public void shouldCompressTypeArray() throws JsonProcessingException {
-    String schemaString1 = "{\"type\":\"array\",\"items\":{\"name\":\"l\",\"type\":\"null\"}}";
-    ObjectNode schema1 = mapper.readValue(schemaString1, ObjectNode.class);
+    String schemaString = "{\"type\":\"array\",\"items\":{\"name\":\"l\",\"type\":\"null\"}}";
+    ObjectNode schema1 = mapper.readValue(schemaString, ObjectNode.class);
     compressRecordToUnion(schema1);
     assertEquals("{\"type\":\"array\",\"items\":\"null\"}", schema1.toString());
   }
-
-
 
 }

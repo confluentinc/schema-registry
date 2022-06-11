@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.confluent.kafka.schemaregistry.maven.derive.schema.json;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -18,11 +34,11 @@ public class MergeJsonUtilsTest {
 
   @Test
   public void shouldGetOneUniqueElementBasic() throws JsonProcessingException {
-    ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"name\":\"K\",\"type\":\"double\"}");
-    ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema1));
+    ObjectNode schema = (ObjectNode) mapper.readTree("{\"name\":\"K\",\"type\":\"double\"}");
+    ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema, schema));
     ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 1);
-    assert (uniqueSchemas.get(0).equals(schema1));
+    assert (uniqueSchemas.get(0).equals(schema));
   }
 
   @Test
@@ -55,7 +71,6 @@ public class MergeJsonUtilsTest {
     assert (uniqueSchemas.get(0).equals(schema1));
   }
 
-
   @Test
   public void shouldGetOneUniqueElementArrayTypeAvro() throws JsonProcessingException {
     ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"name\":\"K\",\"type\":{\"type\":\"array\",\"items\":\"int\"}}");
@@ -76,7 +91,6 @@ public class MergeJsonUtilsTest {
     assert (uniqueSchemas.get(0).equals(schema1));
   }
 
-
   @Test
   public void shouldGetDifferentUniqueElementsAvro() throws JsonProcessingException {
     ObjectNode schema1 = (ObjectNode) mapper.readTree("{\"name\":\"K\",\"type\":\"boolean\"}");
@@ -91,7 +105,6 @@ public class MergeJsonUtilsTest {
       assert (uniqueSchemas.contains(schema));
     }
   }
-
 
   @Test
   public void shouldGetDifferentUniqueElementsJson() throws JsonProcessingException {
@@ -155,7 +168,6 @@ public class MergeJsonUtilsTest {
     String expectedSchema = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"Integer\":{\"type\":\"number\"},\"Temp\":{\"type\":\"string\"}}}}";
     assertEquals(expectedSchema, schema.toString());
   }
-
 
   @Test
   public void shouldNotMakeAnyChangesMergeRecord() throws JsonProcessingException {

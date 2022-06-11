@@ -105,7 +105,6 @@ public class DeriveAvroSchema extends DeriveSchema {
     /*
     Lenient check returns 1 schema Picking highest occurring datatype in case of conflicts
     */
-
     if (!strictCheck) {
       return getSchemaForMultipleMessagesLenient(messageObjects);
     }
@@ -115,7 +114,6 @@ public class DeriveAvroSchema extends DeriveSchema {
     Merging of Unions is performed then
     All Unique Schemas are returned and the messages it matches
     */
-
     ArrayList<ObjectNode> schemaList = DeriveAvroSchemaArray.getSchemaOfAllElements(messageObjects,
         "Record", true, false, true);
 
@@ -136,7 +134,7 @@ public class DeriveAvroSchema extends DeriveSchema {
     schemaToMessagesInfo = MergeProtoBufUtils.getUniqueWithMessageInfo(
         uniqueList, uniqueList2, schemaToMessagesInfo);
 
-    ArrayList<ObjectNode> ans = new ArrayList<>();
+    ArrayList<ObjectNode> schemaInformation = new ArrayList<>();
     for (int i = 0; i < uniqueList2.size(); i++) {
       ObjectNode schemaInfo = mapper.createObjectNode();
       List<Integer> messagesMatched = schemaToMessagesInfo.get(i);
@@ -153,14 +151,14 @@ public class DeriveAvroSchema extends DeriveSchema {
       schemaInfo.set("schema", uniqueList2.get(i));
       Collections.sort(messagesMatched);
       ArrayNode messagesMatchedArr = schemaInfo.putArray("messagesMatched");
-      for (Integer m : messagesMatched) {
-        messagesMatchedArr.add(m);
+      for (Integer messageIndex : messagesMatched) {
+        messagesMatchedArr.add(messageIndex);
       }
       schemaInfo.put("numMessagesMatched", schemaToMessagesInfo.get(i).size());
-      ans.add(schemaInfo);
+      schemaInformation.add(schemaInfo);
     }
 
-    if (ans.size() == 0) {
+    if (schemaInformation.size() == 0) {
       logger.error(errorMessageNoSchemasFound);
       throw new IllegalArgumentException(errorMessageNoSchemasFound);
     }
@@ -168,9 +166,8 @@ public class DeriveAvroSchema extends DeriveSchema {
     Comparator<ObjectNode> comparator
         = Comparator.comparingInt(obj -> obj.get("numMessagesMatched").asInt());
 
-    ans.sort(comparator.reversed());
-    return ans;
+    schemaInformation.sort(comparator.reversed());
+    return schemaInformation;
   }
-
 
 }

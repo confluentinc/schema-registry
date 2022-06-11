@@ -70,16 +70,16 @@ public class DeriveAvroSchemaPrimitive {
   }
 
   private static final String messageOutOfRangeError = "Message %d: Numeric value %s "
-      + "out of range of long " + "(-9223372036854775808 9223372036854775807).";
+      + "out of range of long (%d %d).";
 
   private static String getOutOfRangeError(int currentMessage, Object field) {
-    return String.format(messageOutOfRangeError, currentMessage, field);
+    return String.format(messageOutOfRangeError, currentMessage, field, Long.MIN_VALUE,
+        Long.MAX_VALUE);
   }
 
   private static String getOutOfRangeWarning(int currentMessage, Object field) {
     return getOutOfRangeError(currentMessage, field) + " Mapping to double.";
   }
-
 
   /**
    * Get schema for primitive types - numeric types, boolean, string and null
@@ -95,7 +95,6 @@ public class DeriveAvroSchemaPrimitive {
       throws IllegalArgumentException, JsonProcessingException {
 
     String jsonInferredType;
-
     if (field == null) {
       jsonInferredType = com.fasterxml.jackson.databind.node.NullNode.class.getName();
     } else {
@@ -117,7 +116,6 @@ public class DeriveAvroSchemaPrimitive {
     }
 
     if (classToDataTypeAvro.containsKey(jsonInferredType)) {
-
       String schemaString;
       if (typeProtoBuf) {
         schemaString = String.format("{\"type\" : \"%s\"}",

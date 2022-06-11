@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.confluent.kafka.schemaregistry.maven.derive.schema.utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -20,14 +36,14 @@ public class MergeNumberUtilsTest {
     assertEquals(schemaString2, schema2.toString());
   }
 
-  private void assertChange(String schemaString1, String schemaString2, String ans) throws JsonProcessingException {
+  private void assertChange(String schemaString1, String schemaString2, String expectedSchema)
+      throws JsonProcessingException {
     ObjectNode schema1 = (ObjectNode) mapper.readTree(schemaString1);
     ObjectNode schema2 = (ObjectNode) mapper.readTree(schemaString2);
     adjustNumberTypes(schema1, schema2);
-    assertEquals(ans, schema1.toString());
-    assertEquals(ans, schema2.toString());
+    assertEquals(expectedSchema, schema1.toString());
+    assertEquals(expectedSchema, schema2.toString());
   }
-
 
   @Test
   public void shouldMakeNoChangeDifferentNamePrimitiveType() throws JsonProcessingException {
@@ -64,7 +80,6 @@ public class MergeNumberUtilsTest {
     assertChange(schemaString1, schemaString2, schemaString2);
   }
 
-
   @Test
   public void shouldMakeChangeNameProvidedPrimitiveType() throws JsonProcessingException {
     String schemaString1 = "{\"name\":\"K\",\"type\":\"double\"}";
@@ -86,7 +101,6 @@ public class MergeNumberUtilsTest {
     String expectedOutput = "{\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"K\",\"type\":\"double\"},{\"name\":\"B\",\"type\":\"double\"}]}";
     assertChange(schemaString1, schemaString2, expectedOutput);
   }
-
 
   @Test
   public void shouldMakeChangeArray() throws JsonProcessingException {

@@ -37,7 +37,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-
 @Mojo(name = "derive-schema", configurator = "custom-basic")
 public class DeriveSchemaMojo extends AbstractMojo {
 
@@ -70,15 +69,16 @@ public class DeriveSchemaMojo extends AbstractMojo {
     }
 
     try {
-      List<ObjectNode> ans = DeriveSchema.caseWiseOutput(schemaType, strictCheck,
-          listOfMessages);
+
+      List<ObjectNode> schemaInformation = DeriveSchema.getSchemaInformation(schemaType,
+          strictCheck, listOfMessages);
 
       ObjectNode outputObject = mapper.createObjectNode();
       if (checkTypeForOutput()) {
-        outputObject = ans.get(0);
+        outputObject = schemaInformation.get(0);
       } else {
         ArrayNode arrayNode = outputObject.putArray("schemas");
-        for (ObjectNode objectNode : ans) {
+        for (ObjectNode objectNode : schemaInformation) {
           arrayNode.add(objectNode);
         }
       }

@@ -54,7 +54,6 @@ public class DeriveAvroSchemaRecord {
       logger.error(message);
       throw new IllegalArgumentException(message);
     }
-
   }
 
   public static ObjectNode getSchemaForRecord(ObjectNode objectNode, String name,
@@ -71,17 +70,14 @@ public class DeriveAvroSchemaRecord {
       throws JsonProcessingException {
 
     ObjectNode schema = mapper.createObjectNode();
-
     if (typeProtoBuf) {
       schema.put("__type", "record");
     }
-
     schema.put("name", name);
 
     if (!calledAsField) {
       schema.put("type", "record");
     }
-
     schema.set("fields", mapper.createArrayNode());
 
     for (String key : DeriveSchema.getSortedKeys(message)) {
@@ -92,13 +88,11 @@ public class DeriveAvroSchemaRecord {
           field, strictCheck, typeProtoBuf);
 
       if (primitiveSchema.isPresent()) {
-
         ArrayNode fields = (ArrayNode) schema.get("fields");
         ObjectNode primitiveType = mapper.createObjectNode();
         primitiveType.put("name", key);
         primitiveType.set("type", primitiveSchema.get().get("type"));
         fields.add(primitiveType);
-
       } else {
 
         ObjectNode info;
@@ -109,10 +103,8 @@ public class DeriveAvroSchemaRecord {
           info = getSchemaForRecord(mapper.valueToTree(field), key, strictCheck,
               typeProtoBuf, true);
         }
-
         ArrayNode fields = (ArrayNode) schema.get("fields");
         fields.add(info);
-
       }
     }
 
@@ -132,5 +124,4 @@ public class DeriveAvroSchemaRecord {
 
     return schema;
   }
-
 }

@@ -31,7 +31,6 @@ import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema
  */
 public final class MergeNumberUtils {
 
-
   /**
    * Merge together fields of type int, long, float and double.
    *
@@ -39,31 +38,30 @@ public final class MergeNumberUtils {
    */
   public static void mergeNumberTypes(ArrayList<ObjectNode> schemaList, boolean matchAll) {
 
-    if (schemaList.size() == 0 || schemaList.size() == 1) {
+    if (schemaList.size() <= 1) {
       return;
     }
 
     /*
-    Using O(n*n) version over O(n) version checking only with 1st schema
+    O(n) checking is done only with 1st schema, will fail in the following scenarios:
     1. A field is absent in the first schema, hence that field is never checked in other messages
     2. A field is present in the first schema, but of type non-Number
     but rest of the messages are of number type.
      */
-
     if (matchAll) {
-      for (ObjectNode curr : schemaList) {
-        for (ObjectNode starting : schemaList) {
-          adjustNumberTypes(starting, curr);
+      for (ObjectNode currentSchema : schemaList) {
+        for (ObjectNode startingSchema : schemaList) {
+          adjustNumberTypes(startingSchema, currentSchema);
         }
       }
     } else {
 
-      for (ObjectNode curr : schemaList) {
-        adjustNumberTypes(schemaList.get(0), curr);
+      for (ObjectNode currentSchema : schemaList) {
+        adjustNumberTypes(schemaList.get(0), currentSchema);
       }
 
-      for (ObjectNode curr : schemaList) {
-        adjustNumberTypes(schemaList.get(0), curr);
+      for (ObjectNode currentSchema : schemaList) {
+        adjustNumberTypes(schemaList.get(0), currentSchema);
       }
 
     }
@@ -105,11 +103,9 @@ public final class MergeNumberUtils {
     if (schema1.equals(schema2)) {
       return true;
     }
-
     return schema1.has("name") && schema2.has("name")
         && !schema1.get("name").equals(schema2.get("name"));
   }
-
 
   private static void matchTypes(ObjectNode schema1, ObjectNode schema2, String key) {
 
@@ -117,45 +113,41 @@ public final class MergeNumberUtils {
       return;
     }
 
-    String field1 = schema1.get(key).textValue();
-    String field2 = schema2.get(key).textValue();
-
+    String field1Type = schema1.get(key).textValue();
+    String field2Type = schema2.get(key).textValue();
     ArrayList<String> dataTypes = new ArrayList<>(Arrays.asList("int", "int32", "int64", "long"));
-
-    if (Objects.equals(field2, "double") && dataTypes.contains(field1)) {
+    if (Objects.equals(field2Type, "double") && dataTypes.contains(field1Type)) {
       schema1.set(key, schema2.get(key));
-    } else if (Objects.equals(field1, "double") && dataTypes.contains(field2)) {
+    } else if (Objects.equals(field1Type, "double") && dataTypes.contains(field2Type)) {
       schema2.set(key, schema1.get(key));
-    } else if (Objects.equals(field2, "long") && dataTypes.contains(field1)) {
+    } else if (Objects.equals(field2Type, "long") && dataTypes.contains(field1Type)) {
       schema1.set(key, schema2.get(key));
-    } else if (Objects.equals(field1, "long") && dataTypes.contains(field2)) {
+    } else if (Objects.equals(field1Type, "long") && dataTypes.contains(field2Type)) {
       schema2.set(key, schema1.get(key));
     }
-
   }
 
   private static void matchJsonArray(ObjectNode schema1, ObjectNode schema2, String key) {
 
-    ArrayNode fields1 = (ArrayNode) schema1.get(key);
-    ArrayNode fields2 = (ArrayNode) schema2.get(key);
+    ArrayNode fieldItems1 = (ArrayNode) schema1.get(key);
+    ArrayNode fieldsItems2 = (ArrayNode) schema2.get(key);
 
-    for (int i = 0; i < fields1.size(); i++) {
-      for (int j = 0; j < fields2.size(); j++) {
+    for (int i = 0; i < fieldItems1.size(); i++) {
+      for (int j = 0; j < fieldsItems2.size(); j++) {
 
-        if ((fields1.get(i) instanceof ObjectNode) && (fields2.get(j) instanceof ObjectNode)) {
+        if ((fieldItems1.get(i) instanceof ObjectNode)
+            && (fieldsItems2.get(j) instanceof ObjectNode)) {
 
-          ObjectNode field1 = (ObjectNode) fields1.get(i);
-          ObjectNode field2 = (ObjectNode) fields2.get(j);
-
+          ObjectNode field1 = (ObjectNode) fieldItems1.get(i);
+          ObjectNode field2 = (ObjectNode) fieldsItems2.get(j);
           if (field1.get("name").equals(field2.get("name"))) {
-            adjustNumberTypes((ObjectNode) fields1.get(i), (ObjectNode) fields2.get(j));
+            adjustNumberTypes((ObjectNode) fieldItems1.get(i), (ObjectNode) fieldsItems2.get(j));
           }
 
         }
+
       }
     }
-
   }
-
 
 }

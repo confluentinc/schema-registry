@@ -26,7 +26,6 @@ import java.util.Optional;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
 public class DeriveJsonSchemaRecord {
-
   public static ObjectNode getSchemaForRecord(ObjectNode message, String name)
       throws JsonProcessingException {
 
@@ -37,7 +36,6 @@ public class DeriveJsonSchemaRecord {
     for (String key : DeriveSchema.getSortedKeys(message)) {
 
       Object field = message.get(key);
-
       Optional<ObjectNode> primitiveSchema = DeriveJsonSchemaPrimitive.getPrimitiveSchema(field);
       ObjectNode info;
 
@@ -53,9 +51,9 @@ public class DeriveJsonSchemaRecord {
 
       ObjectNode fields = (ObjectNode) schema.get("properties");
       fields.set(key, info);
-
     }
 
     return schema;
   }
+
 }

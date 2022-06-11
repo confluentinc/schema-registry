@@ -24,7 +24,6 @@ import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.protobuf.DeriveProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
@@ -58,18 +57,14 @@ public class DeriveProtobufSchemaTest {
   }
 
   void serializeAndDeserializeCheckMulti(List<String> messages, List<ObjectNode> schemas) throws IOException {
-
     for (ObjectNode schemaInfo : schemas) {
-
       ProtobufSchema schema = new ProtobufSchema(schemaInfo.get("schema").asText());
       ArrayNode matchingMessages = (ArrayNode) schemaInfo.get("messagesMatched");
       for (int i = 0; i < matchingMessages.size(); i++) {
         int index = matchingMessages.get(i).asInt();
         serializeAndDeserializeCheck(messages.get(index), schema);
       }
-
     }
-
   }
 
   private void serializeAndDeserializeCheck(String message, ProtobufSchema schema)
@@ -86,22 +81,10 @@ public class DeriveProtobufSchemaTest {
     /*
     Also note that if a scalar message field is set to its default, the value will not be serialized on the wire.
     https://developers.google.com/protocol-buffers/docs/proto3#default
-    In below example if Booleans is set to false, it won't show up in the serialized output
+    In message if boolean field is set to false, it won't show up in the serialized output
     Long, absent fields and default fields cause issues.
    */
-
-    /*
-    String jsonString = JsonFormat.printer().includingDefaultValueFields().omittingInsignificantWhitespace().print(dynamicMessage);
-
-    if (!ignoreLong) {
-      JsonElement jsonElement1 = JsonParser.parseString(message);
-      JsonElement jsonElement2 = JsonParser.parseString(jsonString);
-      assertEquals(jsonElement1, jsonElement2);
-    }
-     */
-
   }
-
 
   @Test
   public void testPrimitiveTypes() throws IOException {
@@ -170,8 +153,7 @@ public class DeriveProtobufSchemaTest {
 
     /*
       If number not found in range of int64/long, throws error
-     */
-
+    */
     String message = "{\n"
         + "    \"BigDataTypes\": 1202021022234434333333333312020210222344343333333333120202102\n"
         + "  }";
@@ -181,7 +163,6 @@ public class DeriveProtobufSchemaTest {
     /*
       If number not found in range of double, mapped as double with loss in precision
      */
-
     String message2 = "{\n" + "    \"Double\": 6243332.789012332245\n" + "  }";
 
     ProtobufSchema protobufSchema = strictGenerator.getSchema(message2);
@@ -191,7 +172,6 @@ public class DeriveProtobufSchemaTest {
     Descriptor desc = resultRecord.getDescriptorForType();
     FieldDescriptor fd = desc.findFieldByName("Double");
     assertEquals(6243332.789012332, resultRecord.getField(fd));
-
   }
 
   @Test
@@ -241,9 +221,8 @@ public class DeriveProtobufSchemaTest {
     assertEquals(expectedSchema, protobufSchema.toString());
 
     /*
-    Default value are not serialized by protoBuf
-     */
-
+      Default value are not serialized by protoBuf
+    */
     String message2 =
         "{\n"
             + "    \"IntRecord\": {\"Int1\": 62, \"Int2\": null}\n"
@@ -265,16 +244,14 @@ public class DeriveProtobufSchemaTest {
         "}\n";
 
     assertEquals(expectedSchema2, protobufSchema2.toString());
-
   }
 
   @Test
   public void testComplexTypesRecursive() throws IOException {
 
     /*
-    Different combinations of map and array are tested
-   */
-
+      Different combinations of map and array are tested
+    */
     String message = "{\n"
         + "    \"ArrayOfRecords\": [{\"Int1\": 62323232, \"Int2\": 12}, {\"Int1\": 6232323, \"Int2\": 2.5}],\n"
         + "    \"RecordOfArrays\": {\"ArrayInt1\": [12, 13,14], \"ArrayBoolean1\": [true, false]},\n"
@@ -353,7 +330,6 @@ public class DeriveProtobufSchemaTest {
     assertEquals(protobufSchema.toString(), expectedSchema);
   }
 
-
   @Test
   public void testArrayOfArrays() {
 
@@ -361,15 +337,12 @@ public class DeriveProtobufSchemaTest {
       Array of arrays, ie 2d arrays aren't allowed in protobuf
       Raising error if found
      */
-
     String message = "{\n" + "    \"Array2d\": [[1,2], [2,3]]\n" + "  }";
-
     assertThrows(IllegalArgumentException.class, () -> strictGenerator.getSchema(message));
 
     String message2 = "{\n"
         + "    \"RecordOfArrays3\": { \"Array2D\": [ [{\"name\": \"J\"},{\"name\": \"K\"}], [{\"name\": \"T\"}] ]}\n"
         + "  }";
-
     assertThrows(IllegalArgumentException.class, () -> strictGenerator.getSchema(message2));
 
     String message3 = "{\n" + "    \"ArrayNull\": [null, null]\n" + "  }";
@@ -381,11 +354,10 @@ public class DeriveProtobufSchemaTest {
   public void testArrayDifferentTypes()
       throws IOException {
 
-      /*
-      Array has element 1 of type integer and second float
-      Elements are of different type in array are allowed in protobuf
-     */
-
+    /*
+    Array has element 1 of type integer and second float
+    Elements are of different type in array are allowed in protobuf
+   */
     String message = "{\n" + "    \"arr\": [13.1, 24]\n" + "  }";
     ProtobufSchema protobufSchema = strictGenerator.getSchema(message);
     serializeAndDeserializeCheck(message, protobufSchema);
@@ -422,7 +394,6 @@ public class DeriveProtobufSchemaTest {
         "}\n";
     assertEquals(expectedSchema2, protobufSchema2.toString());
 
-
     String message3 = "{\n"
         + "    \"ArrayOfRecords\": [{\"Int1\": 62, \"Int2\": 12}, {\"Int1\": 1, \"Int3\": [2,5]}, {\"Int1\": 1, \"Int3\": [2,132]}]\n"
         + "  }";
@@ -446,7 +417,6 @@ public class DeriveProtobufSchemaTest {
     Int1 has different types int and bool, not allowed
     Raises Error
     */
-
     String message4 = "{\n"
         + "    \"ArrayOfRecords\": [{\"Int1\": 62, \"Int2\": 12}, {\"Int1\": false, \"Int3\": 2, \"Int4\": 2}]\n"
         + "  }";
@@ -489,7 +459,6 @@ public class DeriveProtobufSchemaTest {
         "  }\n" +
         "}\n";
     assertEquals(expectedSchema52, protobufSchema52.toString());
-
 
     String message6 =
         "{\n"
@@ -539,12 +508,10 @@ public class DeriveProtobufSchemaTest {
 
     assertEquals(expected7, protobufSchema7.toString());
 
-
     /*
     Array of records with each element has one field and that field is of type record
     Checking if merging of records is happening recursively
      */
-
     String message8 = "{\n"
         + "    \"ArrayOfRecords\": [ {\"Int1\": {\"age\":12}}, {\"Int1\": {\"name\":\"S\"}}, {\"Int1\": {\"age\":12}}]\n"
         + "  }";
@@ -572,6 +539,9 @@ public class DeriveProtobufSchemaTest {
   @Test
   public void testRecursive() throws JsonProcessingException {
 
+    /*
+      Elements inside arrays should be merged
+    */
     String message1 =
         "{\n"
             + "\"ArrayOfRecords1\": [{\"J\": [10,11,true]}, {\"J\": [10, \"first\", \"second\"]}, {\"J\": [\"first\", \"first\", 11]}]}\n"
@@ -589,6 +559,9 @@ public class DeriveProtobufSchemaTest {
         "}\n";
     assertEquals(expectedSchema1, protobufSchema1.toString());
 
+    /*
+      Elements inside arrays are different type, highest is picked for lenient check
+     */
     String message2 =
         "{\n"
             + "\"ArrayOfRecords1\": [{\"K\": [10,11,true]}, {\"J\": [10, \"first\", \"second\"]}, {\"J\": [\"first\", \"first\", 11]}]}\n"
@@ -609,14 +582,13 @@ public class DeriveProtobufSchemaTest {
     assertEquals(expectedSchema2, protobufSchema2.toString());
   }
 
-
   @Test
-  public void testMultipleMessages() throws IOException {
+  public void testMultipleMessagesSimple() throws IOException {
 
     /*
       Optional Field Check, Long and Bool2 not present in all messages
-     */
-    ArrayList<String> arr = new ArrayList<>();
+    */
+    ArrayList<String> messages = new ArrayList<>();
     for (int i = 0; i < 7; i++) {
       String message = String.format("{\n"
           + "    \"String\": \"%d\",\n"
@@ -625,93 +597,68 @@ public class DeriveProtobufSchemaTest {
 
       if (i % 3 == 0) {
         String message2 = String.format("\"Long\": %d", i * 121202212);
-        arr.add(message + message2 + "}");
+        messages.add(message + message2 + "}");
       } else if (i % 3 == 2) {
         String message2 = String.format("\"Bool2\": %b", false);
-        arr.add(message + message2 + "}");
+        messages.add(message + message2 + "}");
       } else {
-        arr.add(message.substring(0, message.length() - 2) + "}");
+        messages.add(message.substring(0, message.length() - 2) + "}");
       }
     }
 
-    /*
-    Message 2 and 3 are in conflict, 3 can be merged with 1 and 3 can be merged with 2
-    Best matching schema would be 3 merged with 1 having 3 occurrences
-     */
-
-    List<ObjectNode> schemas = strictGenerator.getSchemaForMultipleMessages(arr);
-    assert (schemas.size() == 1);
-
+    List<ObjectNode> schema = strictGenerator.getSchemaForMultipleMessages(messages);
     String schemasExpected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  bool Bool2 = 1;\\n  bool Boolean = 2;\\n  int32 Integer = 3;\\n  int32 Long = 4;\\n  string String = 5;\\n}\\n\",\"messagesMatched\":[0,1,2,3,4,5,6],\"numMessagesMatched\":7}";
-    assertEquals(schemasExpected1, schemas.get(0).toString());
+    assertEquals(schemasExpected1, schema.get(0).toString());
+    serializeAndDeserializeCheckMulti(messages, schema);
+  }
 
-    serializeAndDeserializeCheckMulti(arr, schemas);
+  @Test
+  public void testMultipleMessagesConflictingTypes() throws IOException {
 
-
-    ArrayList<String> arr2 = new ArrayList<>();
+    /*
+    Message 2 and 3 are in conflict
+    Message 4 and 5 are in conflict
+    Messages 1, 2 and 5 can be merged together
+    Messages 1, 3 and 4 can be merged together
+    */
     String message1 = "{\n"
         + "    \"String\": \"John Smith\"\n"
         + "  }";
-    arr2.add(message1);
-
     String message2 = "{\n"
         + "    \"String\": \"John\",\n"
         + "    \"Float\": 1e16\n"
         + "  }";
-    arr2.add(message2);
-
     String message3 = "{\n"
         + "    \"String\": \"John\",\n"
         + "    \"Float\": \"JJ\"\n"
         + "  }";
-
-    arr2.add(message3);
-    arr2.add(message3);
-    arr2.add(message3);
-
-    List<ObjectNode> schemas2 = strictGenerator.getSchemaForMultipleMessages(arr2);
-    assert (schemas2.size() == 2);
-
-    String schemas2Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  string Float = 1;\\n  string String = 2;\\n}\\n\",\"messagesMatched\":[0,2,3,4],\"numMessagesMatched\":4}";
-    String schemas2Expected2 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  double Float = 1;\\n  string String = 2;\\n}\\n\",\"messagesMatched\":[0,1],\"numMessagesMatched\":2}";
-
-    assertEquals(schemas2Expected1, schemas2.get(0).toString());
-    assertEquals(schemas2Expected2, schemas2.get(1).toString());
-    serializeAndDeserializeCheckMulti(arr2, schemas2);
-
     String message4 = "{\n"
         + "    \"String\": \"John\",\n"
         + "    \"Float\": \"JJ\",\n"
         + "    \"Num\": 100\n"
         + "  }";
-
     String message5 = "{\n"
         + "    \"String\": \"John\",\n"
         + "    \"Float\": 33,\n"
         + "    \"Num\": true\n"
         + "  }";
 
-    arr2.add(message4);
-    arr2.add(message5);
+    ArrayList<String> messages = new ArrayList<>(Arrays.asList(message1, message2, message3, message4, message5, message5));
+    List<ObjectNode> schema = strictGenerator.getSchemaForMultipleMessages(messages);
+    String schemasExpected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  double Float = 1;\\n  bool Num = 2;\\n  string String = 3;\\n}\\n\",\"messagesMatched\":[0,1,4,5],\"numMessagesMatched\":4}";
+    String schemasExpected2 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  string Float = 1;\\n  int32 Num = 2;\\n  string String = 3;\\n}\\n\",\"messagesMatched\":[0,2,3],\"numMessagesMatched\":3}";
+    assertEquals(schemasExpected1, schema.get(0).toString());
+    assertEquals(schemasExpected2, schema.get(1).toString());
+    serializeAndDeserializeCheckMulti(messages, schema);
 
-    List<ObjectNode> schemas3 = strictGenerator.getSchemaForMultipleMessages(arr2);
-    assert (schemas3.size() == 2);
-
-    String schemas3Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  string Float = 1;\\n  int32 Num = 2;\\n  string String = 3;\\n}\\n\",\"messagesMatched\":[0,2,3,4,5],\"numMessagesMatched\":5}";
-    String schemas3Expected2 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  double Float = 1;\\n  bool Num = 2;\\n  string String = 3;\\n}\\n\",\"messagesMatched\":[0,1,6],\"numMessagesMatched\":3}";
-
-    assertEquals(schemas3Expected1, schemas3.get(0).toString());
-    assertEquals(schemas3Expected2, schemas3.get(1).toString());
-    serializeAndDeserializeCheckMulti(arr2, schemas3);
-
-    List<ObjectNode> schemas4 = lenientGenerator.getSchemaForMultipleMessages(arr2);
+    /*
+    Message 5 is taken as most repeated type as messages has 2 occurrences of it
+     */
+    List<ObjectNode> schemas4 = lenientGenerator.getSchemaForMultipleMessages(messages);
     assert (schemas4.size() == 1);
-
-    String schemas4Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  string Float = 1;\\n  int32 Num = 2;\\n  string String = 3;\\n}\\n\"}";
+    String schemas4Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  double Float = 1;\\n  bool Num = 2;\\n  string String = 3;\\n}\\n\"}";
     assertEquals(schemas4Expected1, schemas4.get(0).toString());
-
   }
-
 
   @Test
   public void testMultipleMessagesErrors() {
@@ -720,26 +667,21 @@ public class DeriveProtobufSchemaTest {
     Strict schema cannot be found for message1 because of field Arr having multiple data types
     Hence, message1 is ignored in multiple messages
     */
-
-    ArrayList<String> arr = new ArrayList<>();
     String message1 = "{\n"
         + "    \"String\": \"John Smith\","
         + "    \"Arr\": [1.5, true]"
         + "  }";
-    arr.add(message1);
-
-    assertThrows(IllegalArgumentException.class, () -> strictGenerator.getSchemaForMultipleMessages(arr));
+    assertThrows(IllegalArgumentException.class, () -> strictGenerator.getSchemaForMultipleMessages(
+        Collections.singletonList(message1)));
 
     /*
     Record with naming errors
     */
     String message3 =
         "[{\"\": {\"K\":12}},{\"M\": {\"J\":[null, null]}}, {\"K.L\":[1, 2]}]";
-
     List<String> messages = ReadFileUtils.readMessagesToString(message3);
     assertThrows(IllegalArgumentException.class, () ->
         strictGenerator.getSchemaForMultipleMessages(messages));
-
   }
 
   @Test
@@ -756,29 +698,24 @@ public class DeriveProtobufSchemaTest {
     List<ObjectNode> schemas = strictGenerator.getSchemaForMultipleMessages(messages);
     assert (schemas.size() == 1);
     serializeAndDeserializeCheckMulti(messages, schemas);
-
     String schemasExpected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  JMessage J = 1;\\n\\n  message JMessage {\\n    int32 A = 1;\\n    bool B = 2;\\n    int32 C = 3;\\n    double K = 4;\\n  }\\n}\\n\",\"messagesMatched\":[0,1,2],\"numMessagesMatched\":3}";
     assertEquals(schemasExpected1, schemas.get(0).toString());
 
     List<ObjectNode> schemas1 = lenientGenerator.getSchemaForMultipleMessages(messages);
     assert (schemas1.size() == 1);
-
     String schemas1Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  JMessage J = 1;\\n\\n  message JMessage {\\n    int32 A = 1;\\n    bool B = 2;\\n    int32 C = 3;\\n    double K = 4;\\n  }\\n}\\n\"}";
     assertEquals(schemas1Expected1, schemas1.get(0).toString());
 
     /*
     Most occurring type is chosen for K inside Record
      */
-
     String m4 = "{\"J\" : {\"K\": true, \"B\":true}}";
     messages.add(m4);
 
     List<ObjectNode> schemas2 = lenientGenerator.getSchemaForMultipleMessages(messages);
     assert (schemas2.size() == 1);
-
     String schemas2Expected1 = "{\"schema\":\"syntax = \\\"proto3\\\";\\n\\nmessage Record {\\n  JMessage J = 1;\\n\\n  message JMessage {\\n    int32 A = 1;\\n    bool B = 2;\\n    int32 C = 3;\\n    double K = 4;\\n  }\\n}\\n\"}";
     assertEquals(schemas2Expected1, schemas2.get(0).toString());
-
   }
 
 }

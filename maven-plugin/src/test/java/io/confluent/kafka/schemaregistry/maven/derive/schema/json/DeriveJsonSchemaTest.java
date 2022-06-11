@@ -16,10 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.maven.derive.schema.json;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.json.DeriveJsonSchema;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.json.DeriveJsonSchemaRecord;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -29,29 +28,16 @@ import java.util.Arrays;
 import static org.junit.Assert.assertEquals;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
-/**
- * Testing whether valid schemas are generated and validating schema against the message using:
- *
- * <pre>
- *  {@code
- *    jsonSchema.validate(mapper.readTree(message));
- *  }
- * </pre>
- */
-
 public class DeriveJsonSchemaTest {
 
-
   final DeriveJsonSchema schemaGenerator = new DeriveJsonSchema();
-
 
   @Test
   public void testPrimitiveTypes() throws Exception {
 
     /*
-    Primitive data types test
+    Testing message with fields having only primitive data types
     */
-
     String message =
         "{\n"
             + "    \"String\": \"John Smith\",\n"
@@ -67,11 +53,9 @@ public class DeriveJsonSchemaTest {
     ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
     JsonSchema jsonSchema = new JsonSchema(
         DeriveJsonSchemaRecord.getSchemaForRecord(messageObject, "Record").toString());
-
     jsonSchema.validate(mapper.readTree(message));
     String expectedSchema = "{\"type\":\"object\",\"properties\":{\"BigDataType\":{\"type\":\"number\"},\"Boolean\":{\"type\":\"boolean\"},\"Double\":{\"type\":\"number\"},\"Float\":{\"type\":\"number\"},\"Integer\":{\"type\":\"number\"},\"LongName\":{\"type\":\"number\"},\"Null\":{\"type\":\"null\"},\"String\":{\"type\":\"string\"}}}";
     assertEquals(expectedSchema, jsonSchema.toString());
-
   }
 
   @Test
@@ -93,7 +77,6 @@ public class DeriveJsonSchemaTest {
     JsonSchema jsonSchema = new JsonSchema(
         DeriveJsonSchemaRecord.getSchemaForRecord(messageObject, "Record").toString());
     jsonSchema.validate(mapper.readTree(message));
-
     String expectedSchema = "{\"type\":\"object\",\"properties\":{\"ArrayBoolean\":{\"type\":\"array\",\"items\":{\"type\":\"boolean\"}},\"ArrayEmpty\":{\"type\":\"array\",\"items\":{}},\"ArrayInteger\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"ArrayNull\":{\"type\":\"array\",\"items\":{\"type\":\"null\"}},\"ArrayString\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"DoubleRecord\":{\"type\":\"object\",\"properties\":{\"Double1\":{\"type\":\"number\"},\"Double2\":{\"type\":\"number\"}}},\"IntRecord\":{\"type\":\"object\",\"properties\":{\"Int1\":{\"type\":\"number\"},\"Int2\":{\"type\":\"number\"}}},\"MixedRecord\":{\"type\":\"object\",\"properties\":{\"Double1\":{\"type\":\"number\"},\"Int1\":{\"type\":\"number\"},\"name\":{\"type\":\"string\"}}}}}";
     assertEquals(jsonSchema.toString(), expectedSchema);
   }
@@ -104,7 +87,6 @@ public class DeriveJsonSchemaTest {
     /*
     Different combinations of map and array are tested
    */
-
     String message =
         "{\n"
             + "    \"ArrayOfRecords\": [{\"Int1\": 62323232.78901245, \"Int2\": 12}, {\"Int2\": 2, \"Int1\": 6232323.789012453}],\n"
@@ -126,7 +108,6 @@ public class DeriveJsonSchemaTest {
     JsonSchema jsonSchema = new JsonSchema(
         DeriveJsonSchemaRecord.getSchemaForRecord(messageObject, "Record").toString());
     jsonSchema.validate(mapper.readTree(message));
-
     String expectedSchema = "{\"type\":\"object\",\"properties\":{\"Array2d\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}},\"Array2dDiff\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"number\"},{\"type\":\"boolean\"}]}}},\"Array2dEmpty\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{}}},\"Array2dNull\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"null\"}}},\"Array3d\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}},\"ArrayOfRecords\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"Int1\":{\"type\":\"number\"},\"Int2\":{\"type\":\"number\"}}}},\"RecordOfArrays\":{\"type\":\"object\",\"properties\":{\"ArrayBoolean1\":{\"type\":\"array\",\"items\":{\"type\":\"boolean\"}},\"ArrayInt1\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}},\"RecordOfArrays2\":{\"type\":\"object\",\"properties\":{\"Array2D\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}},\"Array3D\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}}}},\"RecordOfArrays3\":{\"type\":\"object\",\"properties\":{\"Array2D\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}}}}},\"RecordOfArrays4\":{\"type\":\"object\",\"properties\":{\"Array2D\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"number\"}}}}}}},\"RecordOfArrays5\":{\"type\":\"object\",\"properties\":{\"key\":{\"type\":\"object\",\"properties\":{\"keys\":{\"type\":\"number\"}}}}},\"RecordOfArrays6\":{\"type\":\"object\",\"properties\":{\"key\":{\"type\":\"object\",\"properties\":{\"keys\":{\"type\":\"string\"}}}}},\"RecordOfRecords\":{\"type\":\"object\",\"properties\":{\"Record1\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"place\":{\"type\":\"string\"}}},\"Record2\":{\"type\":\"object\",\"properties\":{\"place\":{\"type\":\"string\"},\"thing\":{\"type\":\"string\"}}}}}}}";
     assertEquals(expectedSchema, jsonSchema.toString());
   }
@@ -134,12 +115,11 @@ public class DeriveJsonSchemaTest {
   @Test
   public void testArrayDifferentTypes() throws IOException {
 
-      /*
-      Array has elements of type number, float and string
-      Elements are of different type in array, this is allowed in JSON
-      They are represented using oneOf in schema
-     */
-
+    /*
+    Array has elements of type number, float and string
+    Elements are of different type in array, this is allowed in JSON
+    They are represented using oneOf in schema
+   */
     String message =
         "{\n"
             + "    \"ArrayOfDifferentTypes\": [2, 13.1, true, \"J\", \"K\"],\n"
@@ -159,7 +139,6 @@ public class DeriveJsonSchemaTest {
       Record2 has parameters - Int1 and Int3
       Both Records are of different type, this is allowed in JSON
      */
-
     String message2 =
         "{\n"
             + "    \"ArrayOfRecords\": [{\"Int1\": 62, \"Int2\": 12}, {\"Int1\": 1, \"Int2\": 2}],\n"
@@ -184,19 +163,15 @@ public class DeriveJsonSchemaTest {
     ObjectNode ObjectNode = DeriveJsonSchemaRecord.getSchemaForRecord(messageObject2, "Record");
     JsonSchema jsonSchema2 = new JsonSchema(ObjectNode.toString());
     jsonSchema2.validate(mapper.readTree(message2));
-
   }
-
 
   @Test
   public void testMultipleMessages() throws IOException {
 
     /*
-    Logic is same as array of records
-    Adding basic tests as a sanity check
+    Testing multiple messages with primitive data types
      */
-
-    ArrayList<String> arr = new ArrayList<>();
+    ArrayList<String> messages = new ArrayList<>();
 
     for (int i = 0; i < 10; i++) {
       String message = String.format("{\n"
@@ -204,86 +179,51 @@ public class DeriveJsonSchemaTest {
           + "    \"Integer\": %d,\n"
           + "    \"Boolean\": %b\n"
           + "  }", i * 100, i, i % 2 == 0);
-      arr.add(message);
+      messages.add(message);
     }
 
-    ObjectNode schema = (ObjectNode) schemaGenerator.getSchemaForMultipleMessages(arr).get("schema");
+    ObjectNode schema = (ObjectNode) schemaGenerator.getSchemaForMultipleMessages(messages).get("schema");
     JsonSchema jsonSchema = new JsonSchema(schema.toString());
-    for (String message : arr) {
+    for (String message : messages) {
       jsonSchema.validate(mapper.readTree(message));
     }
     String expectedSchema = "{\"type\":\"object\",\"properties\":{\"Boolean\":{\"type\":\"boolean\"},\"Integer\":{\"type\":\"number\"},\"String\":{\"type\":\"string\"}}}";
     assertEquals(expectedSchema, jsonSchema.toString());
+  }
 
+  @Test
+  public void testMultipleMessagesOrder() throws JsonProcessingException {
 
     /*
-    Order Checking Tests for Multiple Messages
-     */
-
-    String message31 = "    {\n" +
+    Checking schema returns correct value after field order is interchanged in messages
+    */
+    String message1 = "    {\n" +
         "      \"name\" : \"J\",\n" +
         "      \"Age\" : 13,\n" +
-        "        \"Date\":151109,\n" +
+        "      \"Date\":151109,\n" +
         "      \"arr\" : [12, 45, 56]\n" +
         "    }";
-
-    String message32 = "    {\n" +
+    String message2 = "    {\n" +
         "      \"arr\" : [true, false],\n" +
-        "        \"Date\":151109,\n" +
+        "      \"Date\":151109,\n" +
         "      \"Age\" : 13,\n" +
         "      \"name\" : \"J\"\n" +
         "    }";
-
-    String message33 = "    {\n" +
+    String message3 = "    {\n" +
         "      \"Age\" : 13,\n" +
         "      \"name\" : \"J\",\n" +
         "      \"arr\" : [12, 45, 56],\n" +
         "        \"Date\":151109\n" +
         "    }";
 
-    ArrayList<String> arr3 = new ArrayList<>(Arrays.asList(message31, message32, message33));
-    ObjectNode ObjectNode = (ObjectNode) schemaGenerator.getSchemaForMultipleMessages(arr3).get("schema");
-    JsonSchema jsonSchema3 = new JsonSchema(ObjectNode.toString());
-    for (String message : arr3) {
-      jsonSchema3.validate(mapper.readTree(message));
+    ArrayList<String> messages = new ArrayList<>(Arrays.asList(message1, message2, message3));
+    ObjectNode ObjectNode = (ObjectNode) schemaGenerator.getSchemaForMultipleMessages(messages).get("schema");
+    JsonSchema jsonSchema = new JsonSchema(ObjectNode.toString());
+    for (String message : messages) {
+      jsonSchema.validate(mapper.readTree(message));
     }
-
     String expectedSchema3 = "{\"type\":\"object\",\"properties\":{\"Age\":{\"type\":\"number\"},\"Date\":{\"type\":\"number\"},\"arr\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"}]}},\"name\":{\"type\":\"string\"}}}";
-    assertEquals(expectedSchema3, jsonSchema3.toString());
-
-    String message41 = "   { \"J\":{\n" +
-        "      \"name\" : \"J\",\n" +
-        "      \"Age\" : 13,\n" +
-        "        \"Date\":151109,\n" +
-        "      \"arr\" : [12, 45, 56]\n" +
-        "    }}";
-
-    String message42 = " {  \"J\" :{\n" +
-        "        \"Date\":151109,\n" +
-        "      \"arr\" : [true, false],\n" +
-        "      \"Age\" : 13,\n" +
-        "      \"name\" : \"J\"\n" +
-        "    }}";
-
-    String message43 = " {\"J\" :   {\n" +
-        "      \"name\" : \"J\",\n" +
-        "      \"arr\" : [true, false],\n" +
-        "        \"Date\":151109,\n" +
-        "      \"Age\" : 13\n" +
-        "    }}";
-
-    ArrayList<String> arr4 = new ArrayList<>(Arrays.asList(message41, message42, message43));
-    ObjectNode ObjectNode2 = (ObjectNode) schemaGenerator.getSchemaForMultipleMessages(arr4).get("schema");
-    JsonSchema jsonSchema4 = new JsonSchema(ObjectNode2.toString());
-    for (String message : arr4) {
-      jsonSchema4.validate(mapper.readTree(message));
-    }
-    String expectedSchema4 = "{\"type\":\"object\",\"properties\":{\"Age\":{\"type\":\"number\"},\"Date\":{\"type\":\"number\"},\"arr\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"}]}},\"name\":{\"type\":\"string\"}}}";
-    assertEquals(expectedSchema4, jsonSchema3.toString());
-
+    assertEquals(expectedSchema3, jsonSchema.toString());
   }
 
 }
-
-
-

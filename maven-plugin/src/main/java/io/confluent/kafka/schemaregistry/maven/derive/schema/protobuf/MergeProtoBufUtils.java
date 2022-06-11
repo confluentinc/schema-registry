@@ -39,7 +39,6 @@ import java.util.stream.Collectors;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.getSortedKeys;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
-
 public final class MergeProtoBufUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(MergeProtoBufUtils.class);
@@ -76,9 +75,7 @@ public final class MergeProtoBufUtils {
         schemaList.set(index, mergedRecords);
       }
     }
-
   }
-
 
   /**
    * All the fields are merged together in one record.
@@ -95,10 +92,10 @@ public final class MergeProtoBufUtils {
                                         boolean listError)
       throws IllegalArgumentException, JsonProcessingException {
 
-    ObjectNode ans = mapper.createObjectNode();
-    ans.put("__type", "record");
-    ans.put("name", recordList.get(0).get("name").asText());
-    ans.put("type", "record");
+    ObjectNode mergedRecord = mapper.createObjectNode();
+    mergedRecord.put("__type", "record");
+    mergedRecord.put("name", recordList.get(0).get("name").asText());
+    mergedRecord.put("type", "record");
 
     ObjectNode properties = mapper.createObjectNode();
     Map<String, ArrayList<String>> schemaList = new HashMap<>();
@@ -148,10 +145,9 @@ public final class MergeProtoBufUtils {
 
     }
 
-    ans.set("fields", getModeForFields(properties, schemaList, strictCheck, listError));
-    return ans;
+    mergedRecord.set("fields", getModeForFields(properties, schemaList, strictCheck, listError));
+    return mergedRecord;
   }
-
 
   private static void mergeRecord(Object existingField, Object newField,
                                   ObjectNode properties, String key, boolean strictCheck,
@@ -190,7 +186,6 @@ public final class MergeProtoBufUtils {
    * @param strictCheck flag to specify strict check
    * @return JSONArray as the schema chosen
    */
-
   private static JsonNode getModeForFields(ObjectNode properties, Map<String,
       ArrayList<String>> schemaList, boolean strictCheck, boolean listError) {
 
@@ -199,17 +194,14 @@ public final class MergeProtoBufUtils {
     for (String key : getSortedKeys(properties)) {
 
       ObjectNode field = mapper.createObjectNode();
-
       if (properties.get(key) instanceof ObjectNode) {
         field.set("__type", (properties.get(key)).get("__type"));
       }
 
       field.put("name", key);
-
       if (strictCheck) {
         field.set("type", properties.get(key));
       } else {
-
         int modeIndex = getMode(schemaList.get(key));
 
         // If mode is of type record, it may be possible to merge with other records
@@ -239,7 +231,6 @@ public final class MergeProtoBufUtils {
       }
 
       fields.add(field);
-
     }
 
     return fields;
@@ -259,7 +250,6 @@ public final class MergeProtoBufUtils {
    *          and information of how many each messages each schema matches
    * @throws JsonProcessingException thrown if element not in JSON format
    */
-
   public static MapAndArray tryAndMergeStrictFromList(ArrayList<ObjectNode> schemaList,
                                                       List<List<Integer>> schemaToMessagesInfoInput)
       throws JsonProcessingException {
@@ -272,14 +262,13 @@ public final class MergeProtoBufUtils {
 
     for (int i = 0; i < schemaList.size(); i++) {
 
-      ObjectNode curr = schemaList.get(i);
+      ObjectNode currentSchema = schemaList.get(i);
       for (int j = 0; j < schemaList.size(); j++) {
 
-        ObjectNode toMatch = schemaList.get(j);
-
+        ObjectNode schemaToMatch = schemaList.get(j);
         try {
-          curr = MergeProtoBufUtils.mergeRecords(
-              new ArrayList<>(Arrays.asList(curr, toMatch)), true, false);
+          currentSchema = MergeProtoBufUtils.mergeRecords(
+              new ArrayList<>(Arrays.asList(currentSchema, schemaToMatch)), true, false);
 
           if (schemaToMessagesInfoInput == null) {
             schemaToMessagesInfo.get(i).add(j);
@@ -292,8 +281,7 @@ public final class MergeProtoBufUtils {
         }
       }
 
-      mergedSchemas.add(curr);
-
+      mergedSchemas.add(currentSchema);
     }
 
     ArrayList<ObjectNode> uniqueList = DeriveSchema.getUnique(mergedSchemas);
@@ -304,10 +292,8 @@ public final class MergeProtoBufUtils {
         = Comparator.comparing(o -> schemaToMessagesInfo.get(mergedSchemas.indexOf(o)).size());
 
     Comparator<List<Integer>> comparatorList = Comparator.comparing(List::size);
-
     uniqueList.sort(comparator.reversed());
     schemaToMessagesInfo2.sort(comparatorList.reversed());
-
     return new MapAndArray(uniqueList, schemaToMessagesInfo2);
   }
 
@@ -341,18 +327,18 @@ public final class MergeProtoBufUtils {
    */
   public static int getMode(ArrayList<String> list) {
 
-    int max = 0;
-    int maxi = 0;
+    int maxFrequency = 0;
+    int indexOfMax = 0;
 
     for (int i = 0; i < list.size(); i++) {
       int curr = Collections.frequency(list, list.get(i));
-      if (max < curr) {
-        max = curr;
-        maxi = i;
+      if (maxFrequency < curr) {
+        maxFrequency = curr;
+        indexOfMax = i;
       }
     }
 
-    return maxi;
+    return indexOfMax;
   }
 
   /**
@@ -397,8 +383,6 @@ public final class MergeProtoBufUtils {
     }
 
     return schemaToMessagesForUnique;
-
   }
-
 }
 

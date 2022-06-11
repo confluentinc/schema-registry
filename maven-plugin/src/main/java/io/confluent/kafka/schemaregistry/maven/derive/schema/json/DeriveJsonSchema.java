@@ -24,11 +24,9 @@ import java.util.List;
 
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
-
 public class DeriveJsonSchema {
 
   public DeriveJsonSchema() {}
-
 
   /**
    * Get schema for multiple messages.
@@ -42,16 +40,15 @@ public class DeriveJsonSchema {
       throws JsonProcessingException {
 
     List<Object> messageObjects = new ArrayList<>();
-    for (String s : messages) {
-      messageObjects.add(mapper.readTree(s));
+    for (String message : messages) {
+      messageObjects.add(mapper.readTree(message));
     }
 
     ObjectNode schema = (ObjectNode) DeriveJsonSchemaArray.getSchemaForArray(
         messageObjects, "").get("items");
-    ObjectNode ans = mapper.createObjectNode();
-    ans.set("schema", schema);
-    return ans;
+    ObjectNode schemaInformation = mapper.createObjectNode();
+    schemaInformation.set("schema", schema);
+    return schemaInformation;
   }
-
 
 }

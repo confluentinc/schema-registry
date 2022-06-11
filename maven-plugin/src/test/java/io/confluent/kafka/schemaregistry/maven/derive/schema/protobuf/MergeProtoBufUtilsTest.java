@@ -1,9 +1,24 @@
+/*
+ * Copyright 2022 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.confluent.kafka.schemaregistry.maven.derive.schema.protobuf;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.protobuf.MapAndArray;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -110,7 +125,6 @@ public class MergeProtoBufUtilsTest {
 
     ObjectNode schemaLenient = mergeRecords(schemas, false, false);
     assert (schemaLenient.equals(schema1));
-
   }
 
   @Test
@@ -120,7 +134,6 @@ public class MergeProtoBufUtilsTest {
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
 
     String expectedSchema = "{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int\"},{\"name\":\"K\",\"type\":\"int\"}]}";
-
     ObjectNode schemaStrict = mergeRecords(schemas, true, false);
     assertEquals(expectedSchema, schemaStrict.toString());
 
@@ -171,7 +184,6 @@ public class MergeProtoBufUtilsTest {
     assert (schemaLenient.equals(schema2));
   }
 
-
   @Test
   public void shouldMakeNoChangeTypeRecordMergeRecords() throws JsonProcessingException {
     ObjectNode schema1 = (ObjectNode) mapper.readTree(String.format(schemaRecordOfRecords, "J", "K"));
@@ -183,7 +195,6 @@ public class MergeProtoBufUtilsTest {
     assert (schemaLenient.equals(schema1));
   }
 
-
   @Test
   public void shouldMergeFieldsInsideRecordTypeMergeRecords() throws JsonProcessingException {
 
@@ -192,13 +203,11 @@ public class MergeProtoBufUtilsTest {
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
 
     String expectedSchema = "{\"__type\":\"record\",\"name\":\"mainMessage\",\"type\":\"record\",\"fields\":[{\"__type\":\"record\",\"name\":\"IntRecord\",\"type\":{\"__type\":\"record\",\"name\":\"IntRecord\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int32\"},{\"name\":\"K\",\"type\":\"int32\"},{\"name\":\"P\",\"type\":\"int32\"}]}}]}";
-
     ObjectNode schemaStrict = mergeRecords(schemas, true, false);
     assertEquals(expectedSchema, schemaStrict.toString());
 
     ObjectNode schemaLenient = mergeRecords(schemas, true, false);
     assertEquals(expectedSchema, schemaLenient.toString());
-
   }
 
   @Test
@@ -214,7 +223,6 @@ public class MergeProtoBufUtilsTest {
 
     assertEquals(mapAndArray.getSchemaToMessagesInfo().size(), 1);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Arrays.asList(0, 1)));
-
   }
 
   @Test
@@ -231,7 +239,6 @@ public class MergeProtoBufUtilsTest {
 
     assertEquals(mapAndArray.getSchemaToMessagesInfo().size(), 1);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Arrays.asList(0, 1)));
-
   }
 
   @Test
@@ -249,7 +256,6 @@ public class MergeProtoBufUtilsTest {
     assertEquals(mapAndArray.getSchemaToMessagesInfo().size(), 2);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Collections.singletonList(1)));
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(1), new ArrayList<>(Collections.singletonList(0)));
-
   }
 
   @Test
@@ -273,9 +279,6 @@ public class MergeProtoBufUtilsTest {
     String expectedSchema2 = "{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"boolean\"},{\"name\":\"K\",\"type\":\"boolean\"}]}";
     assertEquals(mapAndArray.getSchemas().get(1).toString(), expectedSchema2);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(1), new ArrayList<>(Arrays.asList(1, 2)));
-
-    // Schema 3 can use both schemas generated, the optional field 'K' with different type is causing issues
-
   }
 
   @Test
@@ -299,9 +302,6 @@ public class MergeProtoBufUtilsTest {
     String expectedSchema2 = "{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"boolean\"},{\"name\":\"K\",\"type\":\"boolean\"}]}";
     assertEquals(mapAndArray.getSchemas().get(1).toString(), expectedSchema2);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(1), new ArrayList<>(Arrays.asList(1, 2)));
-
-    // Schema 3 can use both schemas generated, the optional field 'K' with different type is causing issues
-
   }
 
   @Test
@@ -326,9 +326,6 @@ public class MergeProtoBufUtilsTest {
     String expectedSchema2 = "{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"boolean\"},{\"name\":\"K\",\"type\":\"int\"}]}";
     assertEquals(mapAndArray.getSchemas().get(1).toString(), expectedSchema2);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(1), new ArrayList<>(Arrays.asList(0, 3)));
-
-    // Schema 3 can use both schemas generated, the optional field 'K' with different type is causing issues
-
   }
 
   @Test
@@ -345,9 +342,7 @@ public class MergeProtoBufUtilsTest {
 
     assertEquals(mapAndArray.getSchemaToMessagesInfo().size(), 1);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Arrays.asList(0, 1)));
-
   }
-
 
   @Test
   public void shouldNotMergeArraySchemasTryAndMergeStrict() throws JsonProcessingException {
@@ -364,7 +359,6 @@ public class MergeProtoBufUtilsTest {
     assertEquals(mapAndArray.getSchemaToMessagesInfo().size(), 2);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Collections.singletonList(1)));
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(1), new ArrayList<>(Collections.singletonList(0)));
-
   }
 
   @Test
@@ -389,7 +383,6 @@ public class MergeProtoBufUtilsTest {
     String expectedSchema2 = "{\"__type\":\"record\",\"name\":\"R1\",\"type\":\"record\",\"fields\":[{\"__type\":\"array\",\"name\":\"arr\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"double\"}},{\"__type\":\"array\",\"name\":\"arr1\",\"type\":{\"__type\":\"array\",\"type\":\"array\",\"items\":\"boolean\"}}]}";
     assertEquals(mapAndArray.getSchemas().get(1).toString(), expectedSchema2);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(1), new ArrayList<>(Arrays.asList(0, 1)));
-
   }
 
   @Test
@@ -406,9 +399,7 @@ public class MergeProtoBufUtilsTest {
 
     assertEquals(mapAndArray.getSchemaToMessagesInfo().size(), 1);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Arrays.asList(0, 1)));
-
   }
-
 
   @Test
   public void shouldNotMergeRecordsTryAndMergeStrict() throws JsonProcessingException {
@@ -424,7 +415,6 @@ public class MergeProtoBufUtilsTest {
 
     assertEquals(mapAndArray.getSchemaToMessagesInfo().size(), 1);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Arrays.asList(0, 1)));
-
   }
 
   @Test
@@ -444,7 +434,6 @@ public class MergeProtoBufUtilsTest {
     assertEquals(mapAndArray.getSchemas().get(0).toString(), expectedSchema);
 
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(0), new ArrayList<>(Arrays.asList(0, 1, 2)));
-
   }
 
   @Test
@@ -469,7 +458,6 @@ public class MergeProtoBufUtilsTest {
     String expectedSchema2 = "{\"__type\":\"record\",\"name\":\"mainMessage\",\"type\":\"record\",\"fields\":[{\"__type\":\"record\",\"name\":\"IntRecord\",\"type\":{\"__type\":\"record\",\"name\":\"IntRecord\",\"type\":\"record\",\"fields\":[{\"name\":\"J\",\"type\":\"int32\"},{\"name\":\"K\",\"type\":\"int32\"},{\"name\":\"L\",\"type\":\"int32\"},{\"name\":\"M\",\"type\":\"int32\"}]}}]}";
     assertEquals(mapAndArray.getSchemas().get(1).toString(), expectedSchema2);
     assertEquals(mapAndArray.getSchemaToMessagesInfo().get(1), new ArrayList<>(Arrays.asList(0, 3)));
-
   }
 
   @Test
@@ -485,7 +473,6 @@ public class MergeProtoBufUtilsTest {
     assertEquals(info.size(), 2);
     assertEquals(info.get(0), new ArrayList<>(Arrays.asList(0, 1, 4, 5)));
     assertEquals(info.get(1), new ArrayList<>(Arrays.asList(2, 3)));
-
   }
 
   @Test
@@ -509,10 +496,6 @@ public class MergeProtoBufUtilsTest {
     assertEquals(info.size(), 2);
     assertEquals(info.get(0), new ArrayList<>(Arrays.asList(0, 1, 2, 3, 4, 7)));
     assertEquals(info.get(1), new ArrayList<>(Arrays.asList(4, 5, 6)));
-
   }
-
-
-
 
 }
