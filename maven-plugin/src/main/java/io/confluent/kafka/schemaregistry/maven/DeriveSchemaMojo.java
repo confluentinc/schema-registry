@@ -50,6 +50,7 @@ public class DeriveSchemaMojo extends AbstractMojo {
   String schemaType;
 
   @Parameter(defaultValue = "true")
+
   boolean strictCheck;
 
   private final ObjectMapper mapper = new ObjectMapper();
