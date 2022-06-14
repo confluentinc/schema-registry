@@ -34,6 +34,9 @@ import org.slf4j.LoggerFactory;
 
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
+/**
+ * Utility class for reading files and strings according to input format
+ */
 public class ReadFileUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(ReadFileUtils.class);
@@ -136,13 +139,6 @@ public class ReadFileUtils {
     return messageList;
   }
 
-  /**
-   * Reads string according to 3 formats, generating ObjectNode for each message
-   * and each message is converted to string and returned as a list.
-   *
-   * @param content string with messages
-   * @return List of messages
-   */
   public static List<String> readMessagesToString(String content) {
 
     logger.info(String.format("Reading input, Substring 0-20 is :%n  %s",
@@ -156,13 +152,6 @@ public class ReadFileUtils {
     return listOfStrings;
   }
 
-  /**
-   * Reads file contents and generates string. The string is converted to list of messages.
-   *
-   * @param file input file to read
-   * @return List of messages
-   * @throws IOException thrown if unable to read input file
-   */
   public static List<String> readMessagesToString(File file) throws IOException {
 
     if (file == null) {

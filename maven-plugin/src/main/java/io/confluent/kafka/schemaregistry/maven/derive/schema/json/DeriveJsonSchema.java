@@ -33,7 +33,7 @@ public class DeriveJsonSchema {
    * Treated same as array of records and exactly one schema is returned
    *
    * @param messages list of messages, each message is a string
-   * @return map with schema and the number of messages it matches
+   * @return map with schema
    * @throws JsonProcessingException thrown if message not in JSON format
    */
   public ObjectNode getSchemaForMultipleMessages(List<String> messages)

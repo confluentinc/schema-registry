@@ -166,21 +166,6 @@ public class DeriveProtobufSchema {
     return schemaStringToProto(protobufString);
   }
 
-  /**
-   * Get schema for multiple messages.
-   * <p>
-   * For lenient check, treated same as array of records and exactly one schema is returned
-   * </p>
-   * <p>
-   * For Strict check, the schemas are merged for number types and record types.
-   * Top 3 occurring schemas are returned
-   * </p>
-   *
-   * @param messages list of messages, each message is a string
-   * @return map with schema and the number of messages it matches
-   * @throws JsonProcessingException  thrown if message not in JSON format
-   * @throws IllegalArgumentException thrown if no messages can be generated for strict check
-   */
   public List<ObjectNode> getSchemaForMultipleMessages(List<String> messages)
       throws JsonProcessingException, IllegalArgumentException {
 

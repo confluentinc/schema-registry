@@ -33,6 +33,9 @@ import org.slf4j.LoggerFactory;
 
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
+/**
+ * Utility class for generating and merging union types in Avro
+ */
 public final class MergeUnionUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(MergeUnionUtils.class);

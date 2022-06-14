@@ -39,6 +39,9 @@ import java.util.stream.Collectors;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.getSortedKeys;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
+/**
+ * Utility class for merging records and generating unique schemas in ProtoBuf.
+ */
 public final class MergeProtoBufUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(MergeProtoBufUtils.class);

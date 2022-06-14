@@ -28,7 +28,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 /**
- * Utility class that has functions for merging records and arrays in JSON.
+ * Utility class for merging records and arrays in JSON.
  */
 public final class MergeJsonUtils {
 
