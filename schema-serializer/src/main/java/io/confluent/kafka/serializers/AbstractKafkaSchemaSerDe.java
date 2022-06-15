@@ -65,10 +65,10 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected void configureClientProperties(
       AbstractKafkaSchemaSerDeConfig config,
       SchemaProvider provider) {
-    List<String> urls = config.getSchemaRegistryUrls();
-    int maxSchemaObject = config.getMaxSchemasPerSubject();
-    Map<String, Object> originals = config.originalsWithPrefix("");
     if (schemaRegistry == null) {
+      List<String> urls = config.getSchemaRegistryUrls();
+      int maxSchemaObject = config.getMaxSchemasPerSubject();
+      Map<String, Object> originals = config.originalsWithPrefix("");
       schemaRegistry = SchemaRegistryClientFactory.newClient(
           urls,
           maxSchemaObject,
