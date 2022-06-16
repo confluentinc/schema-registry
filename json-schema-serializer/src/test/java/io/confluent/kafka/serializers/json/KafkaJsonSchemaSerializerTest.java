@@ -16,10 +16,14 @@
 package io.confluent.kafka.serializers.json;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
 import java.time.LocalDate;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
@@ -35,6 +39,7 @@ import java.util.Properties;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
+import static org.easymock.EasyMock.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -67,7 +72,7 @@ public class KafkaJsonSchemaSerializerTest {
     byte[] bytes;
 
     bytes = serializer.serialize(topic, null);
-    assertEquals(null, deserializer.deserialize(topic, bytes));
+    assertNull(deserializer.deserialize(topic, bytes));
 
     bytes = serializer.serialize(topic, true);
     assertEquals(true, deserializer.deserialize(topic, bytes));
@@ -144,6 +149,35 @@ public class KafkaJsonSchemaSerializerTest {
     byte[] bytes = serializer.serialize("foo", user);
     Object deserialized = getDeserializer(User.class).deserialize(topic, bytes);
     assertEquals(user, deserialized);
+  }
+
+  @Test
+  public void testKeyAndValueSerde() throws Exception {
+    String KEY_SCHEMA = "{\"type\":\"object\",\"properties\":{\"key\":{\"type\":\"string\"}}}";
+    String VALUE_SCHEMA = "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}";
+
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode value = objectMapper.readTree("{\"value\": \"My first string\"}");
+    JsonNode key = objectMapper.readTree("{\"key\": \"My first key\"}");
+
+    SchemaRegistryClient schemaRegistryClient = mock(SchemaRegistryClient.class);
+    expect(schemaRegistryClient.getId(eq(topic + "-value"), anyObject(ParsedSchema.class), anyBoolean())).andReturn(1);
+    expect(schemaRegistryClient.getId(eq(topic + "-key"), anyObject(ParsedSchema.class), anyBoolean())).andReturn(2);
+    expect(schemaRegistryClient.getSchemaBySubjectAndId(eq(topic + "-value"), eq(1))).andReturn(new JsonSchema(VALUE_SCHEMA)).anyTimes();
+    expect(schemaRegistryClient.getSchemaBySubjectAndId(eq(topic + "-key"), eq(2))).andReturn(new JsonSchema(KEY_SCHEMA)).anyTimes();
+
+    replay(schemaRegistryClient);
+
+    KafkaJsonSchemaSerializer<JsonNode> keySerializer = new KafkaJsonSchemaSerializer<>(schemaRegistryClient, true);
+    KafkaJsonSchemaDeserializer<JsonNode> keyDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistryClient, true);
+    KafkaJsonSchemaSerializer<JsonNode> valueSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistryClient);
+    KafkaJsonSchemaDeserializer<JsonNode> valueDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistryClient);
+
+    byte[] bytes = keySerializer.serialize(topic, key);
+    assertEquals(key, keyDeserializer.deserialize(topic, bytes));
+
+    bytes = valueSerializer.serialize(topic, value);
+    assertEquals(value, valueDeserializer.deserialize(topic, bytes));
   }
 
   // Generate javaType property

@@ -15,11 +15,15 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
-import io.confluent.kafka.serializers.protobuf.test.TestMessageOptionalProtos.TestMessageOptional;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -41,7 +45,11 @@ import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status;
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.UserId;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage;
 
+import static org.easymock.EasyMock.*;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class KafkaProtobufSerializerTest {
 
@@ -292,7 +300,7 @@ public class KafkaProtobufSerializerTest {
 
     // null -> null
     bytes = protobufSerializer.serialize(topic, null);
-    assertEquals(null, protobufDeserializer.deserialize(topic, bytes));
+    assertNull(protobufDeserializer.deserialize(topic, bytes));
   }
 
 
@@ -382,7 +390,7 @@ public class KafkaProtobufSerializerTest {
     bytes = protobufSerializer.serialize(topic, OPTIONAL_MESSAGE);
     DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
     assertEquals(OPTIONAL_MESSAGE.getTestString(), getField(message, "test_string"));
-    assertEquals(false, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+    assertFalse(message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
 
     // dynamic -> specific
     bytes = protobufSerializer.serialize(topic, message);
@@ -392,7 +400,7 @@ public class KafkaProtobufSerializerTest {
     bytes = protobufSerializer.serialize(topic, message);
     message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
     assertEquals(OPTIONAL_MESSAGE.getTestString(), getField(message, "test_string"));
-    assertEquals(false, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+    assertFalse(message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
 
 
     // specific -> specific
@@ -403,7 +411,7 @@ public class KafkaProtobufSerializerTest {
     bytes = protobufSerializer.serialize(topic, OPTIONAL_MESSAGE_DEFAULT);
     message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
     assertEquals(OPTIONAL_MESSAGE_DEFAULT.getTestString(), getField(message, "test_string"));
-    assertEquals(true, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+    assertTrue(message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
 
     // dynamic -> specific
     bytes = protobufSerializer.serialize(topic, message);
@@ -413,19 +421,54 @@ public class KafkaProtobufSerializerTest {
     bytes = protobufSerializer.serialize(topic, message);
     message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
     assertEquals(OPTIONAL_MESSAGE_DEFAULT.getTestString(), getField(message, "test_string"));
-    assertEquals(true, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+    assertTrue(message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
 
     DynamicMessage.Builder builder = schema.newMessageBuilder();
     builder.setField(builder.getDescriptorForType().findFieldByName("test_string"), "hi");
     message = builder.build();
     assertEquals(OPTIONAL_MESSAGE.getTestString(), getField(message, "test_string"));
-    assertEquals(false, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+    assertFalse(message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
 
     builder = schema.newMessageBuilder();
     builder.setField(builder.getDescriptorForType().findFieldByName("test_string"), "hi");
     builder.setField(builder.getDescriptorForType().findFieldByName("test_optional_string"), "");
     message = builder.build();
     assertEquals(OPTIONAL_MESSAGE_DEFAULT.getTestString(), getField(message, "test_string"));
-    assertEquals(true, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+    assertTrue(message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+  }
+
+  @Test
+  public void testKeyAndValueSerde() throws Exception {
+    String KEY_SCHEMA = "syntax = \"proto3\"; message MyKey { string key = 1; }";
+    String VALUE_SCHEMA = "syntax = \"proto3\"; message MyValue { string value = 1; }";
+
+    ProtobufSchema keySchema = new ProtobufSchema(KEY_SCHEMA);
+    ProtobufSchema valueSchema = new ProtobufSchema(VALUE_SCHEMA);
+
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode valueJson = objectMapper.readTree("{\"value\": \"My first string\"}");
+    JsonNode keyJson = objectMapper.readTree("{\"key\": \"My first key\"}");
+
+    Message value = (Message) ProtobufSchemaUtils.toObject(valueJson, valueSchema);
+    Message key = (Message) ProtobufSchemaUtils.toObject(keyJson, keySchema);
+
+    SchemaRegistryClient schemaRegistryClient = mock(SchemaRegistryClient.class);
+    expect(schemaRegistryClient.getId(eq(topic + "-value"), anyObject(ParsedSchema.class), anyBoolean())).andReturn(1);
+    expect(schemaRegistryClient.getId(eq(topic + "-key"), anyObject(ParsedSchema.class), anyBoolean())).andReturn(2);
+    expect(schemaRegistryClient.getSchemaBySubjectAndId(eq(topic + "-value"), eq(1))).andReturn(valueSchema).anyTimes();
+    expect(schemaRegistryClient.getSchemaBySubjectAndId(eq(topic + "-key"), eq(2))).andReturn(keySchema).anyTimes();
+
+    replay(schemaRegistryClient);
+
+    KafkaProtobufSerializer<Message> keySerializer = new KafkaProtobufSerializer<>(schemaRegistryClient, true);
+    KafkaProtobufDeserializer<Message> keyDeserializer = new KafkaProtobufDeserializer<>(schemaRegistryClient, true);
+    KafkaProtobufSerializer<Message> valueSerializer = new KafkaProtobufSerializer<>(schemaRegistryClient);
+    KafkaProtobufDeserializer<Message> valueDeserializer = new KafkaProtobufDeserializer<>(schemaRegistryClient);
+
+    byte[] bytes = keySerializer.serialize(topic, key);
+    assertEquals(key, keyDeserializer.deserialize(topic, bytes));
+
+    bytes = valueSerializer.serialize(topic, value);
+    assertEquals(value, valueDeserializer.deserialize(topic, bytes));
   }
 }

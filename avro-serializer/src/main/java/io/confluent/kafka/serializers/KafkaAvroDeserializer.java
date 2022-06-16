@@ -33,12 +33,26 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   }
 
+  public KafkaAvroDeserializer(boolean isKey) {
+    this.isKey = isKey;
+  }
+
   public KafkaAvroDeserializer(SchemaRegistryClient client) {
+    this(client, false);
+  }
+
+  public KafkaAvroDeserializer(SchemaRegistryClient client, boolean isKey) {
     schemaRegistry = client;
+    this.isKey = isKey;
   }
 
   public KafkaAvroDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
+    this(client, props, false);
+  }
+
+  public KafkaAvroDeserializer(SchemaRegistryClient client, Map<String, ?> props, boolean isKey) {
     schemaRegistry = client;
+    this.isKey = isKey;
     configure(deserializerConfig(props));
   }
 

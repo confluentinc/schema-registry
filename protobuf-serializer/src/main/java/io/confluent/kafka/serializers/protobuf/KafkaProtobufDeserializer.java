@@ -34,12 +34,27 @@ public class KafkaProtobufDeserializer<T extends Message>
 
   }
 
+  public KafkaProtobufDeserializer(boolean isKey) {
+    this.isKey = isKey;
+  }
+
   public KafkaProtobufDeserializer(SchemaRegistryClient client) {
+    this(client, false);
+  }
+
+  public KafkaProtobufDeserializer(SchemaRegistryClient client, boolean isKey) {
     schemaRegistry = client;
+    this.isKey = isKey;
   }
 
   public KafkaProtobufDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
+    this(client, props, false);
+  }
+
+  public KafkaProtobufDeserializer(SchemaRegistryClient client, Map<String, ?> props,
+                                   boolean isKey) {
     this(client, props, null);
+    this.isKey = isKey;
   }
 
   @VisibleForTesting

@@ -20,6 +20,7 @@ import io.confluent.kafka.example.ExtendedWidget;
 import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import java.math.BigDecimal;
@@ -55,6 +56,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
 import kafka.utils.VerifiableProperties;
 
+import static org.easymock.EasyMock.*;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -169,8 +171,7 @@ public class KafkaAvroSerializerTest {
         "\"name\": \"Account\"," +
         "\"fields\": [{\"name\": \"accountNumber\", \"type\": \"string\"}]}";
     Schema.Parser parser = new Schema.Parser();
-    Schema schema = parser.parse(accountSchema);
-    return schema;
+    return parser.parse(accountSchema);
   }
 
   private IndexedRecord createAccountRecord() {
@@ -201,8 +202,7 @@ public class KafkaAvroSerializerTest {
             "    ]\n" +
             "}";
     Schema.Parser parser = new Schema.Parser();
-    Schema schema = parser.parse(balanceSchema);
-    return schema;
+    return parser.parse(balanceSchema);
   }
 
   private IndexedRecord createBalanceRecord() {
@@ -288,8 +288,8 @@ public class KafkaAvroSerializerTest {
     assertEquals(avroRecordWithoutOptional, avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, null);
-    assertEquals(null, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(null, avroDecoder.fromBytes(bytes));
+    assertNull(avroDeserializer.deserialize(topic, bytes));
+    assertNull(avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, true);
     assertEquals(true, avroDeserializer.deserialize(topic, bytes));
@@ -1124,4 +1124,48 @@ public class KafkaAvroSerializerTest {
     assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
   }
 
+  @Test
+  public void testKeyAndValueSerde() throws Exception {
+    String KEY_SCHEMA = "{\n" +
+            "    \"fields\": [\n" +
+            "        { \"name\": \"key\", \"type\": \"string\" }\n" +
+            "    ],\n" +
+            "    \"name\": \"mykey\",\n" +
+            "    \"type\": \"record\"\n" +
+            "}";
+    String VALUE_SCHEMA = "{\n" +
+            "    \"fields\": [\n" +
+            "        { \"name\": \"value\", \"type\": \"string\" }\n" +
+            "    ],\n" +
+            "    \"name\": \"myvalue\",\n" +
+            "    \"type\": \"record\"\n" +
+            "}";
+    Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA);
+    Schema valueSchema = new Schema.Parser().parse(VALUE_SCHEMA);
+
+    GenericData.Record avroValue = new GenericData.Record(valueSchema);
+    avroValue.put("value", "My first string");
+
+    GenericData.Record avroKey = new GenericData.Record(keySchema);
+    avroKey.put("key", "My first key");
+
+    SchemaRegistryClient schemaRegistryClient = mock(SchemaRegistryClient.class);
+    expect(schemaRegistryClient.getId(eq(topic + "-value"), anyObject(ParsedSchema.class), anyBoolean())).andReturn(1);
+    expect(schemaRegistryClient.getId(eq(topic + "-key"), anyObject(ParsedSchema.class), anyBoolean())).andReturn(2);
+    expect(schemaRegistryClient.getSchemaBySubjectAndId(eq(topic + "-value"), eq(1))).andReturn(new AvroSchema(valueSchema)).anyTimes();
+    expect(schemaRegistryClient.getSchemaBySubjectAndId(eq(topic + "-key"), eq(2))).andReturn(new AvroSchema(keySchema)).anyTimes();
+
+    replay(schemaRegistryClient);
+
+    KafkaAvroSerializer keySerializer = new KafkaAvroSerializer(schemaRegistryClient, true);
+    KafkaAvroDeserializer keyDeserializer = new KafkaAvroDeserializer(schemaRegistryClient, true);
+    KafkaAvroSerializer valueSerializer = new KafkaAvroSerializer(schemaRegistryClient);
+    KafkaAvroDeserializer valueDeserializer = new KafkaAvroDeserializer(schemaRegistryClient);
+
+    byte[] bytes = keySerializer.serialize(topic, avroKey);
+    assertEquals(avroKey, keyDeserializer.deserialize(topic, bytes));
+
+    bytes = valueSerializer.serialize(topic, avroValue);
+    assertEquals(avroValue, valueDeserializer.deserialize(topic, bytes));
+  }
 }

@@ -35,12 +35,26 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   }
 
+  public KafkaAvroSerializer(boolean isKey) {
+    this.isKey = isKey;
+  }
+
   public KafkaAvroSerializer(SchemaRegistryClient client) {
+    this(client, false);
+  }
+
+  public KafkaAvroSerializer(SchemaRegistryClient client, boolean isKey) {
     schemaRegistry = client;
+    this.isKey = isKey;
   }
 
   public KafkaAvroSerializer(SchemaRegistryClient client, Map<String, ?> props) {
+    this(client, props, false);
+  }
+
+  public KafkaAvroSerializer(SchemaRegistryClient client, Map<String, ?> props, boolean isKey) {
     schemaRegistry = client;
+    this.isKey = isKey;
     configure(serializerConfig(props));
   }
 

@@ -30,20 +30,30 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSerializer<T>
     implements Serializer<T> {
 
-  private static int DEFAULT_CACHE_CAPACITY = 1000;
+  private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   private boolean isKey;
-  private Map<Class<?>, JsonSchema> schemaCache;
+  private final Map<Class<?>, JsonSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaJsonSchemaSerializer() {
+    this(false);
+  }
+
+  public KafkaJsonSchemaSerializer(boolean isKey) {
+    this.isKey = isKey;
     schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client) {
+    this(client, false);
+  }
+
+  public KafkaJsonSchemaSerializer(SchemaRegistryClient client, boolean isKey) {
     schemaRegistry = client;
+    this.isKey = isKey;
     schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
@@ -52,10 +62,21 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props,
+                                   boolean isKey) {
+    this(client, props, DEFAULT_CACHE_CAPACITY, isKey);
+  }
+
+  public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props,
                                    int cacheCapacity) {
+    this(client, props, cacheCapacity, false);
+  }
+
+  public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props,
+                                   int cacheCapacity, boolean isKey) {
     schemaRegistry = client;
     configure(serializerConfig(props));
     schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.isKey = isKey;
   }
 
   @Override

@@ -34,20 +34,30 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 public class KafkaProtobufSerializer<T extends Message>
     extends AbstractKafkaProtobufSerializer<T> implements Serializer<T> {
 
-  private static int DEFAULT_CACHE_CAPACITY = 1000;
+  private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   private boolean isKey;
-  private Map<Descriptor, ProtobufSchema> schemaCache;
+  private final Map<Descriptor, ProtobufSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaProtobufSerializer() {
+    this(false);
+  }
+
+  public KafkaProtobufSerializer(boolean isKey) {
+    this.isKey = isKey;
     schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client) {
+    this(client, false);
+  }
+
+  public KafkaProtobufSerializer(SchemaRegistryClient client, boolean isKey) {
     schemaRegistry = client;
+    this.isKey = isKey;
     schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
@@ -55,9 +65,19 @@ public class KafkaProtobufSerializer<T extends Message>
     this(client, props, DEFAULT_CACHE_CAPACITY);
   }
 
+  public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props, boolean isKey) {
+    this(client, props, DEFAULT_CACHE_CAPACITY, isKey);
+  }
+
   public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props,
                                  int cacheCapacity) {
+    this(client, props, cacheCapacity, false);
+  }
+
+  public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props,
+                                 int cacheCapacity, boolean isKey) {
     schemaRegistry = client;
+    this.isKey = isKey;
     configure(serializerConfig(props));
     schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
   }

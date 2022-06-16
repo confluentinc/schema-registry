@@ -35,12 +35,27 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
   public KafkaJsonSchemaDeserializer() {
   }
 
+  public KafkaJsonSchemaDeserializer(boolean isKey) {
+    this.isKey = isKey;
+  }
+
   public KafkaJsonSchemaDeserializer(SchemaRegistryClient client) {
+    this(client, false);
+  }
+
+  public KafkaJsonSchemaDeserializer(SchemaRegistryClient client, boolean isKey) {
     schemaRegistry = client;
+    this.isKey = isKey;
   }
 
   public KafkaJsonSchemaDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
+    this(client, props, false);
+  }
+
+  public KafkaJsonSchemaDeserializer(SchemaRegistryClient client, Map<String, ?> props,
+                                     boolean isKey) {
     this(client, props, null);
+    this.isKey = isKey;
   }
 
   @VisibleForTesting
