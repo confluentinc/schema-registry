@@ -692,8 +692,19 @@ public class JsonSchemaData {
         unprocessedProps.put(CONNECT_TYPE_PROP, CONNECT_TYPE_BYTES);
         break;
       case ARRAY:
-        builder = ArraySchema.builder().allItemSchema(
-            rawSchemaFromConnectSchema(ctx, schema.valueSchema()));
+        Schema arrayValueSchema = schema.valueSchema();
+        String refId = null;
+        if (arrayValueSchema.parameters() != null
+            && arrayValueSchema.parameters().containsKey(JSON_ID_PROP)) {
+          refId = arrayValueSchema.parameters().get(JSON_ID_PROP);
+        }
+        org.everit.json.schema.Schema itemsSchema;
+        if (ctx.contains(refId)) {
+          itemsSchema = ReferenceSchema.builder().refValue(refId).build();
+        } else {
+          itemsSchema = rawSchemaFromConnectSchema(ctx, arrayValueSchema);
+        }
+        builder = ArraySchema.builder().allItemSchema(itemsSchema);
         break;
       case MAP:
         // JSON Schema only supports string keys
@@ -738,14 +749,14 @@ public class JsonSchemaData {
           ObjectSchema.Builder objectBuilder = ObjectSchema.builder();
           for (Field field : schema.fields()) {
             Schema fieldSchema = field.schema();
-            String refId = null;
+            String fieldRefId = null;
             if (fieldSchema.parameters() != null
                 && fieldSchema.parameters().containsKey(JSON_ID_PROP)) {
-              refId = fieldSchema.parameters().get(JSON_ID_PROP);
+              fieldRefId = fieldSchema.parameters().get(JSON_ID_PROP);
             }
             org.everit.json.schema.Schema jsonSchema;
-            if (ctx.contains(refId)) {
-              jsonSchema = ReferenceSchema.builder().refValue(refId).build();
+            if (ctx.contains(fieldRefId)) {
+              jsonSchema = ReferenceSchema.builder().refValue(fieldRefId).build();
             } else {
               jsonSchema = rawSchemaFromConnectSchema(ctx, fieldSchema, field.index());
             }
@@ -1137,11 +1148,12 @@ public class JsonSchemaData {
       org.everit.json.schema.Schema schema,
       Map<String, org.everit.json.schema.Schema> properties,
       Map<String, Boolean> required,
-      Set<org.everit.json.schema.Schema> visited) {
-    if (visited.contains(schema)) {
+      Set<JsonSchema> visited) {
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    if (visited.contains(jsonSchema)) {
       return;
     } else {
-      visited.add(schema);
+      visited.add(jsonSchema);
     }
     if (schema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) schema;
