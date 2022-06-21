@@ -1777,4 +1777,68 @@ public class JsonSchemaDataTest {
     );
     return schemaBuilder.build();
   }
+
+  @Test
+  public void testToConnectRecursiveSchema2() {
+    JsonSchema jsonSchema = getRecursiveJsonSchema2();
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema expected = getRecursiveSchema2();
+    Schema actual = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertEquals(expected.field("title"), actual.field("title"));
+    Schema expectedNested = expected.field("foos").schema();
+    Schema actualNested = actual.field("foos").schema();
+    assertEquals(expectedNested.name(), actualNested.name());
+    assertEquals(expectedNested.type(), actualNested.type());
+  }
+
+  @Test
+  public void testFromConnectRecursiveSchema2() {
+    JsonSchema expected = getRecursiveJsonSchema2();
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    JsonSchema jsonSchema = jsonSchemaData.fromConnectSchema(getRecursiveSchema2());
+    assertEquals(expected, jsonSchema);
+  }
+
+  private JsonSchema getRecursiveJsonSchema2() {
+    String schema = "{\n"
+        + "    \"$schema\": \"http://json-schema.org/draft/2020-12/schema\",\n"
+        + "    \"title\": \"Foo\",\n"
+        + "    \"$ref\": \"#/$defs/Foo\",\n"
+        + "    \"$defs\": {\n"
+        + "        \"Foo\": {\n"
+        + "            \"properties\": {\n"
+        + "                \"foos\": {\n"
+        + "                    \"oneOf\": [\n"
+        + "                        {\n"
+        + "                            \"items\": {\n"
+        + "                                \"$ref\": \"#/$defs/Foo\"\n"
+        + "                            },\n"
+        + "                            \"type\": \"array\"\n"
+        + "                        },\n"
+        + "                        {\n"
+        + "                            \"type\": \"null\"\n"
+        + "                        }\n"
+        + "                    ],\n"
+        + "                    \"items\": {\n"
+        + "                        \"$ref\": \"#/$defs/Foo\"\n"
+        + "                    },\n"
+        + "                    \"type\": \"array\"\n"
+        + "                }\n"
+        + "            },\n"
+        + "            \"additionalProperties\": false,\n"
+        + "            \"type\": \"object\"\n"
+        + "        }\n"
+        + "    }\n"
+        + "}";
+    return new JsonSchema(schema);
+  }
+
+  private Schema getRecursiveSchema2() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("Foo");
+    schemaBuilder.parameter(JsonSchemaData.JSON_ID_PROP, "#id1");
+    Schema arraySchema = SchemaBuilder.array(schemaBuilder).build();
+    schemaBuilder.field("foos", arraySchema);
+    return schemaBuilder.build();
+  }
 }

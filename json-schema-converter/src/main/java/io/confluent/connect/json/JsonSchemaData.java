@@ -1137,11 +1137,12 @@ public class JsonSchemaData {
       org.everit.json.schema.Schema schema,
       Map<String, org.everit.json.schema.Schema> properties,
       Map<String, Boolean> required,
-      Set<org.everit.json.schema.Schema> visited) {
-    if (visited.contains(schema)) {
+      Set<JsonSchema> visited) {
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    if (visited.contains(jsonSchema)) {
       return;
     } else {
-      visited.add(schema);
+      visited.add(jsonSchema);
     }
     if (schema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) schema;
