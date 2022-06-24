@@ -1747,6 +1747,7 @@ public class ProtobufDataTest {
             SchemaBuilder.struct().name("UInt32Value").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3))
                     .field("value", SchemaBuilder.int64().optional()
                         .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+                        .parameter(PROTOBUF_TYPE_PROP, "uint32")
                         .build())
                     .build()
     );
