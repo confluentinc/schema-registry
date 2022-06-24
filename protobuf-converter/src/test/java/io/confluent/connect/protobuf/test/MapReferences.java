@@ -99,7 +99,7 @@ public final class MapReferences {
   /**
    * Protobuf type {@code MapReferencesMessage}
    */
-  public  static final class MapReferencesMessage extends
+  public static final class MapReferencesMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:MapReferencesMessage)
       MapReferencesMessageOrBuilder {
@@ -231,12 +231,14 @@ public final class MapReferences {
     /**
      * <code>repeated .AttributeFieldEntry map1 = 1;</code>
      */
+    @java.lang.Override
     public java.util.List<io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry> getMap1List() {
       return map1_;
     }
     /**
      * <code>repeated .AttributeFieldEntry map1 = 1;</code>
      */
+    @java.lang.Override
     public java.util.List<? extends io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntryOrBuilder> 
         getMap1OrBuilderList() {
       return map1_;
@@ -244,18 +246,21 @@ public final class MapReferences {
     /**
      * <code>repeated .AttributeFieldEntry map1 = 1;</code>
      */
+    @java.lang.Override
     public int getMap1Count() {
       return map1_.size();
     }
     /**
      * <code>repeated .AttributeFieldEntry map1 = 1;</code>
      */
+    @java.lang.Override
     public io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry getMap1(int index) {
       return map1_.get(index);
     }
     /**
      * <code>repeated .AttributeFieldEntry map1 = 1;</code>
      */
+    @java.lang.Override
     public io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntryOrBuilder getMap1OrBuilder(
         int index) {
       return map1_.get(index);
@@ -266,12 +271,14 @@ public final class MapReferences {
     /**
      * <code>repeated .AttributeFieldEntry map2 = 2;</code>
      */
+    @java.lang.Override
     public java.util.List<io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry> getMap2List() {
       return map2_;
     }
     /**
      * <code>repeated .AttributeFieldEntry map2 = 2;</code>
      */
+    @java.lang.Override
     public java.util.List<? extends io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntryOrBuilder> 
         getMap2OrBuilderList() {
       return map2_;
@@ -279,18 +286,21 @@ public final class MapReferences {
     /**
      * <code>repeated .AttributeFieldEntry map2 = 2;</code>
      */
+    @java.lang.Override
     public int getMap2Count() {
       return map2_.size();
     }
     /**
      * <code>repeated .AttributeFieldEntry map2 = 2;</code>
      */
+    @java.lang.Override
     public io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry getMap2(int index) {
       return map2_.get(index);
     }
     /**
      * <code>repeated .AttributeFieldEntry map2 = 2;</code>
      */
+    @java.lang.Override
     public io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntryOrBuilder getMap2OrBuilder(
         int index) {
       return map2_.get(index);
@@ -302,6 +312,7 @@ public final class MapReferences {
      * <code>.AttributeFieldEntry notAMap1 = 3;</code>
      * @return Whether the notAMap1 field is set.
      */
+    @java.lang.Override
     public boolean hasNotAMap1() {
       return notAMap1_ != null;
     }
@@ -309,12 +320,14 @@ public final class MapReferences {
      * <code>.AttributeFieldEntry notAMap1 = 3;</code>
      * @return The notAMap1.
      */
+    @java.lang.Override
     public io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry getNotAMap1() {
       return notAMap1_ == null ? io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry.getDefaultInstance() : notAMap1_;
     }
     /**
      * <code>.AttributeFieldEntry notAMap1 = 3;</code>
      */
+    @java.lang.Override
     public io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntryOrBuilder getNotAMap1OrBuilder() {
       return getNotAMap1();
     }
@@ -325,6 +338,7 @@ public final class MapReferences {
      * <code>.AttributeFieldEntry notAMap2 = 4;</code>
      * @return Whether the notAMap2 field is set.
      */
+    @java.lang.Override
     public boolean hasNotAMap2() {
       return notAMap2_ != null;
     }
@@ -332,12 +346,14 @@ public final class MapReferences {
      * <code>.AttributeFieldEntry notAMap2 = 4;</code>
      * @return The notAMap2.
      */
+    @java.lang.Override
     public io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry getNotAMap2() {
       return notAMap2_ == null ? io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry.getDefaultInstance() : notAMap2_;
     }
     /**
      * <code>.AttributeFieldEntry notAMap2 = 4;</code>
      */
+    @java.lang.Override
     public io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntryOrBuilder getNotAMap2OrBuilder() {
       return getNotAMap2();
     }
@@ -1600,7 +1616,7 @@ public final class MapReferences {
   /**
    * Protobuf type {@code AttributeFieldEntry}
    */
-  public  static final class AttributeFieldEntry extends
+  public static final class AttributeFieldEntry extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:AttributeFieldEntry)
       AttributeFieldEntryOrBuilder {
@@ -1694,6 +1710,7 @@ public final class MapReferences {
      * <code>string key = 1;</code>
      * @return The key.
      */
+    @java.lang.Override
     public java.lang.String getKey() {
       java.lang.Object ref = key_;
       if (ref instanceof java.lang.String) {
@@ -1710,6 +1727,7 @@ public final class MapReferences {
      * <code>string key = 1;</code>
      * @return The bytes for key.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString
         getKeyBytes() {
       java.lang.Object ref = key_;
@@ -1730,6 +1748,7 @@ public final class MapReferences {
      * <code>string value = 2;</code>
      * @return The value.
      */
+    @java.lang.Override
     public java.lang.String getValue() {
       java.lang.Object ref = value_;
       if (ref instanceof java.lang.String) {
@@ -1746,6 +1765,7 @@ public final class MapReferences {
      * <code>string value = 2;</code>
      * @return The bytes for value.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString
         getValueBytes() {
       java.lang.Object ref = value_;
@@ -1774,10 +1794,10 @@ public final class MapReferences {
     @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      if (!getKeyBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(key_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, key_);
       }
-      if (!getValueBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(value_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 2, value_);
       }
       unknownFields.writeTo(output);
@@ -1789,10 +1809,10 @@ public final class MapReferences {
       if (size != -1) return size;
 
       size = 0;
-      if (!getKeyBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(key_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, key_);
       }
-      if (!getValueBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(value_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, value_);
       }
       size += unknownFields.getSerializedSize();
