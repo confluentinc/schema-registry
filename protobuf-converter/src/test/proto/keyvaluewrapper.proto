@@ -9,4 +9,5 @@ import "google/protobuf/wrappers.proto";
 message KeyValueWrapperMessage {
     int32 key = 1;
     google.protobuf.StringValue wrappedValue = 2;
+    google.protobuf.UInt32Value wrappedValue2 = 3;
 }

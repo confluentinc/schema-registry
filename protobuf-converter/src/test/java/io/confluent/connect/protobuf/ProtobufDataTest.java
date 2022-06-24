@@ -31,6 +31,7 @@ import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
+import com.google.protobuf.UInt32Value;
 import com.google.protobuf.util.Timestamps;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
@@ -1719,6 +1720,7 @@ public class ProtobufDataTest {
             KeyValueWrapper.KeyValueWrapperMessage.newBuilder()
                     .setKey(123)
                     .setWrappedValue(StringValue.newBuilder().setValue("hi").build())
+                    .setWrappedValue2(UInt32Value.newBuilder().setValue(456).build())
                     .build();
     SchemaAndValue schemaAndValue = getSchemaAndValue(message);
     Schema expectedSchema = getExpectedNoWrapperForNullablesSchema();
@@ -1741,6 +1743,13 @@ public class ProtobufDataTest {
                     .field("value", SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build())
                     .build()
     );
+    schemaBuilder.field("wrappedValue2",
+            SchemaBuilder.struct().name("UInt32Value").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3))
+                    .field("value", SchemaBuilder.int64().optional()
+                        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+                        .build())
+                    .build()
+    );
     return schemaBuilder.build();
   }
 
@@ -1749,8 +1758,11 @@ public class ProtobufDataTest {
     Struct result = new Struct(schema.schema());
     Struct value = new Struct(schema.field("wrappedValue").schema());
     value.put("value", "hi");
+    Struct value2 = new Struct(schema.field("wrappedValue2").schema());
+    value2.put("value", 456L);
     result.put("key", 123);
     result.put("wrappedValue", value);
+    result.put("wrappedValue2", value2);
     return result;
   }
 
@@ -1764,6 +1776,7 @@ public class ProtobufDataTest {
             KeyValueWrapper.KeyValueWrapperMessage.newBuilder()
                     .setKey(123)
                     .setWrappedValue(StringValue.newBuilder().setValue("hi").build())
+                    .setWrappedValue2(UInt32Value.newBuilder().setValue(456).build())
                     .build();
     SchemaAndValue schemaAndValue = getSchemaAndValue(protobufData, message);
     Schema expectedSchema = getExpectedWrapperForNullablesSchema();
@@ -1784,6 +1797,9 @@ public class ProtobufDataTest {
     schemaBuilder.field("wrappedValue",
             SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
     );
+    schemaBuilder.field("wrappedValue2",
+            SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3)).build()
+    );
     return schemaBuilder.build();
   }
 
@@ -1792,6 +1808,7 @@ public class ProtobufDataTest {
     Struct result = new Struct(schema.schema());
     result.put("key", 123);
     result.put("wrappedValue", "hi");
+    result.put("wrappedValue2", 456L);
     return result;
   }
 
