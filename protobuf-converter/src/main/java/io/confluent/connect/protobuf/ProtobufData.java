@@ -1141,46 +1141,58 @@ public class ProtobufData {
       Object converted = null;
       switch (schema.type()) {
         case INT8:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : ((Number) value).byteValue();
+          if (value instanceof Message) {
+            value = getWrappedValue((Message) value);
+          }
+          converted = ((Number) value).byteValue();
           break;
         case INT16:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : ((Number) value).shortValue();
+          if (value instanceof Message) {
+            value = getWrappedValue((Message) value);
+          }
+          converted = ((Number) value).shortValue();
           break;
         case INT32:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : ((Number) value).intValue();
+          if (value instanceof Message) {
+            value = getWrappedValue((Message) value);
+          }
+          converted = ((Number) value).intValue();
           break;
         case INT64:
           if (value instanceof Message) {
-            converted = getWrappedValue((Message) value);
-          } else {
-            long longValue;
-            if (value instanceof Long) {
-              longValue = (Long) value;
-            } else {
-              longValue = Integer.toUnsignedLong(((Number) value).intValue());
-            }
-            converted = longValue;
+            value = getWrappedValue((Message) value);
           }
+          long longValue;
+          if (value instanceof Long) {
+            longValue = (Long) value;
+          } else {
+            longValue = Integer.toUnsignedLong(((Number) value).intValue());
+          }
+          converted = longValue;
           break;
         case FLOAT32:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : ((Number) value).floatValue();
+          if (value instanceof Message) {
+            value = getWrappedValue((Message) value);
+          }
+          converted = ((Number) value).floatValue();
           break;
         case FLOAT64:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : ((Number) value).doubleValue();
+          if (value instanceof Message) {
+            value = getWrappedValue((Message) value);
+          }
+          converted = ((Number) value).doubleValue();
           break;
         case BOOLEAN:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : (Boolean) value;
+          if (value instanceof Message) {
+            value = getWrappedValue((Message) value);
+          }
+          converted = value;
           break;
         case STRING:
           if (value instanceof Message) {
-            converted = getWrappedValue((Message) value);
-          } else if (value instanceof String) {
+            value = getWrappedValue((Message) value);
+          }
+          if (value instanceof String) {
             converted = value;
           } else if (value instanceof CharSequence
               || value instanceof Enum
@@ -1194,9 +1206,9 @@ public class ProtobufData {
           break;
         case BYTES:
           if (value instanceof Message) {
-            converted = ByteBuffer.wrap(
-                ((ByteString) getWrappedValue((Message) value)).toByteArray());
-          } else if (value instanceof byte[]) {
+            value = getWrappedValue((Message) value);
+          }
+          if (value instanceof byte[]) {
             converted = ByteBuffer.wrap((byte[]) value);
           } else if (value instanceof ByteBuffer) {
             converted = value;
