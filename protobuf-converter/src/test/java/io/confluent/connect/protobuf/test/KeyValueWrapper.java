@@ -38,11 +38,26 @@ public final class KeyValueWrapper {
      * <code>.google.protobuf.StringValue wrappedValue = 2;</code>
      */
     com.google.protobuf.StringValueOrBuilder getWrappedValueOrBuilder();
+
+    /**
+     * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+     * @return Whether the wrappedValue2 field is set.
+     */
+    boolean hasWrappedValue2();
+    /**
+     * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+     * @return The wrappedValue2.
+     */
+    com.google.protobuf.UInt32Value getWrappedValue2();
+    /**
+     * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+     */
+    com.google.protobuf.UInt32ValueOrBuilder getWrappedValue2OrBuilder();
   }
   /**
    * Protobuf type {@code KeyValueWrapperMessage}
    */
-  public  static final class KeyValueWrapperMessage extends
+  public static final class KeyValueWrapperMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:KeyValueWrapperMessage)
       KeyValueWrapperMessageOrBuilder {
@@ -102,6 +117,19 @@ public final class KeyValueWrapper {
 
               break;
             }
+            case 26: {
+              com.google.protobuf.UInt32Value.Builder subBuilder = null;
+              if (wrappedValue2_ != null) {
+                subBuilder = wrappedValue2_.toBuilder();
+              }
+              wrappedValue2_ = input.readMessage(com.google.protobuf.UInt32Value.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(wrappedValue2_);
+                wrappedValue2_ = subBuilder.buildPartial();
+              }
+
+              break;
+            }
             default: {
               if (!parseUnknownField(
                   input, unknownFields, extensionRegistry, tag)) {
@@ -140,6 +168,7 @@ public final class KeyValueWrapper {
      * <code>int32 key = 1;</code>
      * @return The key.
      */
+    @java.lang.Override
     public int getKey() {
       return key_;
     }
@@ -150,6 +179,7 @@ public final class KeyValueWrapper {
      * <code>.google.protobuf.StringValue wrappedValue = 2;</code>
      * @return Whether the wrappedValue field is set.
      */
+    @java.lang.Override
     public boolean hasWrappedValue() {
       return wrappedValue_ != null;
     }
@@ -157,14 +187,42 @@ public final class KeyValueWrapper {
      * <code>.google.protobuf.StringValue wrappedValue = 2;</code>
      * @return The wrappedValue.
      */
+    @java.lang.Override
     public com.google.protobuf.StringValue getWrappedValue() {
       return wrappedValue_ == null ? com.google.protobuf.StringValue.getDefaultInstance() : wrappedValue_;
     }
     /**
      * <code>.google.protobuf.StringValue wrappedValue = 2;</code>
      */
+    @java.lang.Override
     public com.google.protobuf.StringValueOrBuilder getWrappedValueOrBuilder() {
       return getWrappedValue();
+    }
+
+    public static final int WRAPPEDVALUE2_FIELD_NUMBER = 3;
+    private com.google.protobuf.UInt32Value wrappedValue2_;
+    /**
+     * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+     * @return Whether the wrappedValue2 field is set.
+     */
+    @java.lang.Override
+    public boolean hasWrappedValue2() {
+      return wrappedValue2_ != null;
+    }
+    /**
+     * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+     * @return The wrappedValue2.
+     */
+    @java.lang.Override
+    public com.google.protobuf.UInt32Value getWrappedValue2() {
+      return wrappedValue2_ == null ? com.google.protobuf.UInt32Value.getDefaultInstance() : wrappedValue2_;
+    }
+    /**
+     * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+     */
+    @java.lang.Override
+    public com.google.protobuf.UInt32ValueOrBuilder getWrappedValue2OrBuilder() {
+      return getWrappedValue2();
     }
 
     private byte memoizedIsInitialized = -1;
@@ -187,6 +245,9 @@ public final class KeyValueWrapper {
       if (wrappedValue_ != null) {
         output.writeMessage(2, getWrappedValue());
       }
+      if (wrappedValue2_ != null) {
+        output.writeMessage(3, getWrappedValue2());
+      }
       unknownFields.writeTo(output);
     }
 
@@ -203,6 +264,10 @@ public final class KeyValueWrapper {
       if (wrappedValue_ != null) {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(2, getWrappedValue());
+      }
+      if (wrappedValue2_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(3, getWrappedValue2());
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -226,6 +291,11 @@ public final class KeyValueWrapper {
         if (!getWrappedValue()
             .equals(other.getWrappedValue())) return false;
       }
+      if (hasWrappedValue2() != other.hasWrappedValue2()) return false;
+      if (hasWrappedValue2()) {
+        if (!getWrappedValue2()
+            .equals(other.getWrappedValue2())) return false;
+      }
       if (!unknownFields.equals(other.unknownFields)) return false;
       return true;
     }
@@ -242,6 +312,10 @@ public final class KeyValueWrapper {
       if (hasWrappedValue()) {
         hash = (37 * hash) + WRAPPEDVALUE_FIELD_NUMBER;
         hash = (53 * hash) + getWrappedValue().hashCode();
+      }
+      if (hasWrappedValue2()) {
+        hash = (37 * hash) + WRAPPEDVALUE2_FIELD_NUMBER;
+        hash = (53 * hash) + getWrappedValue2().hashCode();
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
@@ -384,6 +458,12 @@ public final class KeyValueWrapper {
           wrappedValue_ = null;
           wrappedValueBuilder_ = null;
         }
+        if (wrappedValue2Builder_ == null) {
+          wrappedValue2_ = null;
+        } else {
+          wrappedValue2_ = null;
+          wrappedValue2Builder_ = null;
+        }
         return this;
       }
 
@@ -415,6 +495,11 @@ public final class KeyValueWrapper {
           result.wrappedValue_ = wrappedValue_;
         } else {
           result.wrappedValue_ = wrappedValueBuilder_.build();
+        }
+        if (wrappedValue2Builder_ == null) {
+          result.wrappedValue2_ = wrappedValue2_;
+        } else {
+          result.wrappedValue2_ = wrappedValue2Builder_.build();
         }
         onBuilt();
         return result;
@@ -470,6 +555,9 @@ public final class KeyValueWrapper {
         if (other.hasWrappedValue()) {
           mergeWrappedValue(other.getWrappedValue());
         }
+        if (other.hasWrappedValue2()) {
+          mergeWrappedValue2(other.getWrappedValue2());
+        }
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
@@ -504,6 +592,7 @@ public final class KeyValueWrapper {
        * <code>int32 key = 1;</code>
        * @return The key.
        */
+      @java.lang.Override
       public int getKey() {
         return key_;
       }
@@ -647,6 +736,125 @@ public final class KeyValueWrapper {
         }
         return wrappedValueBuilder_;
       }
+
+      private com.google.protobuf.UInt32Value wrappedValue2_;
+      private com.google.protobuf.SingleFieldBuilderV3<
+          com.google.protobuf.UInt32Value, com.google.protobuf.UInt32Value.Builder, com.google.protobuf.UInt32ValueOrBuilder> wrappedValue2Builder_;
+      /**
+       * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+       * @return Whether the wrappedValue2 field is set.
+       */
+      public boolean hasWrappedValue2() {
+        return wrappedValue2Builder_ != null || wrappedValue2_ != null;
+      }
+      /**
+       * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+       * @return The wrappedValue2.
+       */
+      public com.google.protobuf.UInt32Value getWrappedValue2() {
+        if (wrappedValue2Builder_ == null) {
+          return wrappedValue2_ == null ? com.google.protobuf.UInt32Value.getDefaultInstance() : wrappedValue2_;
+        } else {
+          return wrappedValue2Builder_.getMessage();
+        }
+      }
+      /**
+       * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+       */
+      public Builder setWrappedValue2(com.google.protobuf.UInt32Value value) {
+        if (wrappedValue2Builder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          wrappedValue2_ = value;
+          onChanged();
+        } else {
+          wrappedValue2Builder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+       */
+      public Builder setWrappedValue2(
+          com.google.protobuf.UInt32Value.Builder builderForValue) {
+        if (wrappedValue2Builder_ == null) {
+          wrappedValue2_ = builderForValue.build();
+          onChanged();
+        } else {
+          wrappedValue2Builder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+       */
+      public Builder mergeWrappedValue2(com.google.protobuf.UInt32Value value) {
+        if (wrappedValue2Builder_ == null) {
+          if (wrappedValue2_ != null) {
+            wrappedValue2_ =
+              com.google.protobuf.UInt32Value.newBuilder(wrappedValue2_).mergeFrom(value).buildPartial();
+          } else {
+            wrappedValue2_ = value;
+          }
+          onChanged();
+        } else {
+          wrappedValue2Builder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+       */
+      public Builder clearWrappedValue2() {
+        if (wrappedValue2Builder_ == null) {
+          wrappedValue2_ = null;
+          onChanged();
+        } else {
+          wrappedValue2_ = null;
+          wrappedValue2Builder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+       */
+      public com.google.protobuf.UInt32Value.Builder getWrappedValue2Builder() {
+        
+        onChanged();
+        return getWrappedValue2FieldBuilder().getBuilder();
+      }
+      /**
+       * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+       */
+      public com.google.protobuf.UInt32ValueOrBuilder getWrappedValue2OrBuilder() {
+        if (wrappedValue2Builder_ != null) {
+          return wrappedValue2Builder_.getMessageOrBuilder();
+        } else {
+          return wrappedValue2_ == null ?
+              com.google.protobuf.UInt32Value.getDefaultInstance() : wrappedValue2_;
+        }
+      }
+      /**
+       * <code>.google.protobuf.UInt32Value wrappedValue2 = 3;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          com.google.protobuf.UInt32Value, com.google.protobuf.UInt32Value.Builder, com.google.protobuf.UInt32ValueOrBuilder> 
+          getWrappedValue2FieldBuilder() {
+        if (wrappedValue2Builder_ == null) {
+          wrappedValue2Builder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              com.google.protobuf.UInt32Value, com.google.protobuf.UInt32Value.Builder, com.google.protobuf.UInt32ValueOrBuilder>(
+                  getWrappedValue2(),
+                  getParentForChildren(),
+                  isClean());
+          wrappedValue2_ = null;
+        }
+        return wrappedValue2Builder_;
+      }
       @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -716,11 +924,12 @@ public final class KeyValueWrapper {
     java.lang.String[] descriptorData = {
       "\n\025keyvaluewrapper.proto\032 google/protobuf" +
       "/descriptor.proto\032\036google/protobuf/wrapp" +
-      "ers.proto\"Y\n\026KeyValueWrapperMessage\022\013\n\003k" +
-      "ey\030\001 \001(\005\0222\n\014wrappedValue\030\002 \001(\0132\034.google." +
-      "protobuf.StringValueB5\n\"io.confluent.con" +
-      "nect.protobuf.testB\017KeyValueWrapperb\006pro" +
-      "to3"
+      "ers.proto\"\216\001\n\026KeyValueWrapperMessage\022\013\n\003" +
+      "key\030\001 \001(\005\0222\n\014wrappedValue\030\002 \001(\0132\034.google" +
+      ".protobuf.StringValue\0223\n\rwrappedValue2\030\003" +
+      " \001(\0132\034.google.protobuf.UInt32ValueB5\n\"io" +
+      ".confluent.connect.protobuf.testB\017KeyVal" +
+      "ueWrapperb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -733,7 +942,7 @@ public final class KeyValueWrapper {
     internal_static_KeyValueWrapperMessage_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_KeyValueWrapperMessage_descriptor,
-        new java.lang.String[] { "Key", "WrappedValue", });
+        new java.lang.String[] { "Key", "WrappedValue", "WrappedValue2", });
     com.google.protobuf.DescriptorProtos.getDescriptor();
     com.google.protobuf.WrappersProto.getDescriptor();
   }
