@@ -867,16 +867,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     registerSchemaRequest.setReferences(schema.getReferences());
     registerSchemaRequest.setVersion(schema.getVersion());
     registerSchemaRequest.setId(schema.getId());
-    log.debug(String.format("Forwarding registering schema request %s to %s",
-                            registerSchemaRequest, baseUrl));
+    log.debug(String.format("Forwarding registering schema request to %s", baseUrl));
     try {
       int id = leaderRestService.registerSchema(
           headerProperties, registerSchemaRequest, subject, normalize);
       return id;
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
-          String.format("Unexpected error while forwarding the registering schema request %s to %s",
-                        registerSchemaRequest, baseUrl),
+          String.format("Unexpected error while forwarding the registering schema request to %s",
+              baseUrl),
           e);
     } catch (RestClientException e) {
       throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
@@ -1601,7 +1600,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                    Schema latestSchema)
       throws SchemaRegistryException {
     if (latestSchema == null) {
-      log.error("Lastest schema not provided");
+      log.error("Latest schema not provided");
       throw new InvalidSchemaException("Latest schema not provided");
     }
     return isCompatible(subject, newSchema, Collections.singletonList(latestSchema));
