@@ -55,8 +55,8 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   private Boolean parseKey = false;
   private String keySeparator = "\t";
   private boolean ignoreError = false;
-  private ParsedSchema keySchema = null;
-  private ParsedSchema valueSchema = null;
+  protected ParsedSchema keySchema = null;
+  protected ParsedSchema valueSchema = null;
   private String keySubject = null;
   private String valueSubject = null;
   private SchemaMessageSerializer<T> serializer;
