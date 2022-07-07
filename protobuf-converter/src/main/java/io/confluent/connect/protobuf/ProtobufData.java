@@ -295,6 +295,7 @@ public class ProtobufData {
   private final Map<Schema, ProtobufSchema> fromConnectSchemaCache;
   private final Map<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean generalizedSumTypeSupport;
+  private boolean ignoreDefaultForNullables;
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
   private boolean useIntForEnums;
@@ -316,7 +317,8 @@ public class ProtobufData {
   public ProtobufData(ProtobufDataConfig protobufDataConfig) {
     fromConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
     toConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
-    this.generalizedSumTypeSupport = protobufDataConfig.isGeneralizedSumTypeSupportDefault();
+    this.generalizedSumTypeSupport = protobufDataConfig.isGeneralizedSumTypeSupport();
+    this.ignoreDefaultForNullables = protobufDataConfig.ignoreDefaultForNullables();
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
     this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
     this.useIntForEnums = protobufDataConfig.useIntForEnums();
@@ -487,7 +489,8 @@ public class ProtobufData {
           // one of the union types.
           if (isUnionSchema(schema)) {
             for (Field field : schema.fields()) {
-              Object object = struct.get(field);
+              Object object = ignoreDefaultForNullables
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
               if (object != null) {
                 String fieldName = scrubName(field.name());
                 Object fieldCtx = getFieldType(ctx, fieldName);
@@ -507,11 +510,13 @@ public class ProtobufData {
             for (Field field : schema.fields()) {
               String fieldName = scrubName(field.name());
               Object fieldCtx = getFieldType(ctx, fieldName);
+              Object connectFieldVal = ignoreDefaultForNullables
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
               Object fieldValue = fromConnectData(
                   fieldCtx,
                   field.schema(),
                   scopedStructName + ".",
-                  struct.get(field),
+                  connectFieldVal,
                   protobufSchema
               );
               if (fieldValue != null) {
