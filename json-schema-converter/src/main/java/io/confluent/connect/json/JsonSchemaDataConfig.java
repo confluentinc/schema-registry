@@ -15,6 +15,7 @@
 
 package io.confluent.connect.json;
 
+import io.confluent.connect.schema.AbstractDataConfig;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.json.DecimalFormat;
 
@@ -26,17 +27,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 
-public class JsonSchemaDataConfig extends AbstractConfig {
-
-  public static final String GENERALIZED_SUM_TYPE_SUPPORT_CONFIG = "generalized.sum.type.support";
-  public static final boolean GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT = false;
-  public static final String GENERALIZED_SUM_TYPE_SUPPORT_DOC =
-      "Toggle for enabling/disabling generalized sum type support: interoperability of enum/union "
-      + "with other schema formats";
+public class JsonSchemaDataConfig extends AbstractDataConfig {
 
   public static final String OBJECT_ADDITIONAL_PROPERTIES_CONFIG = "object.additional.properties";
   public static final boolean OBJECT_ADDITIONAL_PROPERTIES_DEFAULT = true;
@@ -48,10 +42,6 @@ public class JsonSchemaDataConfig extends AbstractConfig {
   public static final String USE_OPTIONAL_FOR_NON_REQUIRED_DOC =
       "Whether to set non-required properties to be optional.";
 
-  public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.size";
-  public static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
-  public static final String SCHEMAS_CACHE_SIZE_DOC = "Size of the converted schemas cache";
-
   public static final String DECIMAL_FORMAT_CONFIG = "decimal.format";
   public static final String DECIMAL_FORMAT_DEFAULT = DecimalFormat.BASE64.name();
   private static final String DECIMAL_FORMAT_DOC =
@@ -59,13 +49,7 @@ public class JsonSchemaDataConfig extends AbstractConfig {
       + " This value is case insensitive and can be either 'BASE64' (default) or 'NUMERIC'";
 
   public static ConfigDef baseConfigDef() {
-    return new ConfigDef().define(
-        GENERALIZED_SUM_TYPE_SUPPORT_CONFIG,
-        ConfigDef.Type.BOOLEAN,
-        GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT,
-        ConfigDef.Importance.MEDIUM,
-        GENERALIZED_SUM_TYPE_SUPPORT_DOC
-    ).define(
+    return AbstractDataConfig.baseConfigDef().define(
         OBJECT_ADDITIONAL_PROPERTIES_CONFIG,
         ConfigDef.Type.BOOLEAN,
         OBJECT_ADDITIONAL_PROPERTIES_DEFAULT,
@@ -77,12 +61,6 @@ public class JsonSchemaDataConfig extends AbstractConfig {
         USE_OPTIONAL_FOR_NON_REQUIRED_DEFAULT,
         ConfigDef.Importance.MEDIUM,
         USE_OPTIONAL_FOR_NON_REQUIRED_DOC
-    ).define(
-        SCHEMAS_CACHE_SIZE_CONFIG,
-        ConfigDef.Type.INT,
-        SCHEMAS_CACHE_SIZE_DEFAULT,
-        ConfigDef.Importance.LOW,
-        SCHEMAS_CACHE_SIZE_DOC
     ).define(
         DECIMAL_FORMAT_CONFIG,
         ConfigDef.Type.STRING,
@@ -98,20 +76,12 @@ public class JsonSchemaDataConfig extends AbstractConfig {
     super(baseConfigDef(), props);
   }
 
-  public boolean isGeneralizedSumTypeSupport() {
-    return this.getBoolean(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG);
-  }
-
   public boolean allowAdditionalProperties() {
     return getBoolean(OBJECT_ADDITIONAL_PROPERTIES_CONFIG);
   }
 
   public boolean useOptionalForNonRequiredProperties() {
     return getBoolean(USE_OPTIONAL_FOR_NON_REQUIRED_CONFIG);
-  }
-
-  public int schemaCacheSize() {
-    return Math.max(1, this.getInt(SCHEMAS_CACHE_SIZE_CONFIG));
   }
 
   /**
