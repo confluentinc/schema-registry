@@ -203,7 +203,7 @@ public class KafkaProtobufFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
         new ProtobufMessageReader(schemaRegistry, null, recordSchema.copy("User2"), "topic1", false, reader,
-            true, false);
+            false, true, false);
     ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
 
     byte[] serializedValue = message.value();
