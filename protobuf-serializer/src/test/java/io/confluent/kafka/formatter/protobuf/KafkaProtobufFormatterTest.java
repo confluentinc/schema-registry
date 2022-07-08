@@ -57,12 +57,12 @@ public class KafkaProtobufFormatterTest {
     props.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     props.put("preserve.json.field.name", "true");
 
-    String userSchema = "syntax = \"proto3\"; message User { string name = 1; }";
+    String userSchema = "syntax = \"proto3\"; message User { string name = 1; } "
+        + "message User2 { string full_name = 1; }";
     recordSchema = new ProtobufSchema(userSchema);
     String enumSchema = "syntax = \"proto3\"; message ConfluentDefault1 {enum Suit {SPADES = 0; "
       + "HEARTS = 1; DIAMONDS = 2; CLUBS = 4;} Suit c1 = 1;}";
     this.enumSchema = new ProtobufSchema(enumSchema);
-    recordSchema = new ProtobufSchema(userSchema);
     String keySchema = "syntax = \"proto3\"; message Key { int32 key = 1; }";
     this.keySchema = new ProtobufSchema(keySchema);
     String snakeCaseSchema = "syntax = \"proto3\"; message Foo { string first_field = 1;"
@@ -192,6 +192,32 @@ public class KafkaProtobufFormatterTest {
     assertEquals("Null message should print \"null\"",
         "null\n",
         outputJson);
+  }
+
+  @Test
+  public void testKafkaProtobufValueFormatterSecondMessage() throws Exception {
+    formatter.init(props);
+
+    String inputJson = "{\"full_name\":\"myname\"}\n";
+    BufferedReader reader =
+        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    ProtobufMessageReader protobufReader =
+        new ProtobufMessageReader(schemaRegistry, null, recordSchema.copy("User2"), "topic1", false, reader,
+            true, false);
+    ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
+
+    byte[] serializedValue = message.value();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
+        null, serializedValue);
+    formatter.writeTo(crecord, ps);
+    String outputJson = baos.toString();
+
+    assertEquals("Input value json should match output value json",
+        objectMapper.readTree(inputJson),
+        objectMapper.readTree(outputJson));
   }
 
   @Test
