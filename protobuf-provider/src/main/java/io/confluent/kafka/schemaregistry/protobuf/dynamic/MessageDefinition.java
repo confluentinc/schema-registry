@@ -63,6 +63,10 @@ public class MessageDefinition {
   public static class Builder {
     // --- public ---
 
+    public String getName() {
+      return mMsgTypeBuilder.getName();
+    }
+
     public Builder addField(String label, String type, String name, int num, String defaultVal) {
       return addField(label, type, name, num, defaultVal, null, null);
     }
