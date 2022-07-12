@@ -365,6 +365,10 @@ public class DynamicSchema {
   public static class Builder {
     // --- public ---
 
+    public String getName() {
+      return mFileDescProtoBuilder.getName();
+    }
+
     /**
      * Builds a dynamic schema
      *
