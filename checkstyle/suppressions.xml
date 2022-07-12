@@ -28,7 +28,7 @@
               files="(AvroData|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|MessageDefinition|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaProtobufDeserializer|ProtobufData|ProtobufSchemaUtils|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader|ContextFilter|QualifiedSubject|SubjectVersionsResource).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AvroData|AvroSchemaUtils|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema|ProtobufSchemaUtils).java"/>
+              files="(AbstractKafkaAvroSerializer|AvroData|AvroSchemaUtils|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema|ProtobufSchemaUtils).java"/>
 
     <suppress checks="MethodLength"
               files="AvroData.java"/>
