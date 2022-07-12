@@ -16,7 +16,9 @@
 
 package io.confluent.kafka.serializers;
 
-import com.google.common.collect.MapMaker;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -46,8 +48,16 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean removeJavaProperties;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
-  private final Map<Schema, DatumWriter<Object>> datumWriterCache =
-      new MapMaker().weakKeys().makeMap();  // use identity (==) comparison for keys
+  private final Cache<Schema, DatumWriter<Object>> datumWriterCache;
+
+  public AbstractKafkaAvroSerializer() {
+    // use identity (==) comparison for keys
+    datumWriterCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        .weakKeys()
+        .build();
+
+  }
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
@@ -110,7 +120,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       } else {
         BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
         DatumWriter<Object> writer;
-        writer = datumWriterCache.computeIfAbsent(rawSchema, v -> {
+        writer = datumWriterCache.get(rawSchema, () -> {
           if (value instanceof SpecificRecord) {
             return new SpecificDatumWriter<>(rawSchema);
           } else if (useSchemaReflection) {
@@ -125,6 +135,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       byte[] bytes = out.toByteArray();
       out.close();
       return bytes;
+    } catch (ExecutionException ex) {
+      throw new SerializationException("Error serializing Avro message", ex.getCause());
     } catch (IOException | RuntimeException e) {
       // avro serialization can throw AvroRuntimeException, NullPointerException,
       // ClassCastException, etc
