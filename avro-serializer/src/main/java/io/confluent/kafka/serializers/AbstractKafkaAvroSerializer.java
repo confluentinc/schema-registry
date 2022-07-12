@@ -16,7 +16,8 @@
 
 package io.confluent.kafka.serializers;
 
-import com.google.common.collect.MapMaker;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -25,6 +26,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -49,8 +51,16 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
-  private final Map<Schema, DatumWriter<Object>> datumWriterCache =
-      new MapMaker().weakKeys().makeMap();  // use identity (==) comparison for keys
+  private final Cache<Schema, DatumWriter<Object>> datumWriterCache;
+
+  public AbstractKafkaAvroSerializer() {
+    // use identity (==) comparison for keys
+    datumWriterCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        .weakKeys()
+        .build();
+
+  }
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
@@ -148,6 +158,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       byte[] bytes = out.toByteArray();
       out.close();
       return bytes;
+    } catch (ExecutionException ex) {
+      throw new SerializationException("Error serializing Avro message", ex.getCause());
     } catch (IOException | RuntimeException e) {
       // avro serialization can throw AvroRuntimeException, NullPointerException,
       // ClassCastException, etc
@@ -158,12 +170,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   }
 
   private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
-          throws IOException {
+          throws ExecutionException, IOException {
     BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
 
     DatumWriter<Object> writer;
-    writer = datumWriterCache.computeIfAbsent(rawSchema,
-      v -> (DatumWriter<Object>) getDatumWriter(value, rawSchema)
+    writer = datumWriterCache.get(rawSchema,
+        () -> (DatumWriter<Object>) getDatumWriter(value, rawSchema)
     );
     writer.write(value, encoder);
     encoder.flush();
