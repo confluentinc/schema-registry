@@ -67,6 +67,10 @@ public class MessageDefinition {
   public static class Builder {
     // --- public ---
 
+    public String getName() {
+      return mMsgTypeBuilder.getName();
+    }
+
     public Builder addField(
         String label,
         String type,

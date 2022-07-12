@@ -1847,7 +1847,6 @@ public class ProtobufDataTest {
     assertEquals(expectedKey.getNumber(), actualKey.getNumber());
     assertEquals(expectedValue.getType(), actualValue.getType());
     assertEquals(expectedValue.getNumber(), actualValue.getNumber());
-    assertEquals(actual, actualKeyValue.getMessageType());  // Checks recursive reference
     assertEquals(expectedKeyValue.getNumber(), actualKeyValue.getNumber());
   }
 

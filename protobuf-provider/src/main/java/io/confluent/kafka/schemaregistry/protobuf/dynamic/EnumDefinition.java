@@ -66,6 +66,10 @@ public class EnumDefinition {
   public static class Builder {
     // --- public ---
 
+    public String getName() {
+      return mEnumTypeBuilder.getName();
+    }
+
     public Builder addValue(String name, int num) {
       return addValue(name, num, null, null);
     }
