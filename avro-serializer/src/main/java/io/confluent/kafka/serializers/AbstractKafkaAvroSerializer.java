@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.serializers;
 
-import com.google.common.collect.MapMaker;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -25,6 +24,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -49,8 +51,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
-  private final Map<Schema, DatumWriter<Object>> datumWriterCache =
-      new MapMaker().weakKeys().makeMap();  // use identity (==) comparison for keys
+  private final ConcurrentMap<Schema, DatumWriter<Object>> datumWriterCache =
+        new ConcurrentHashMap<>();
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
@@ -163,7 +165,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
     DatumWriter<Object> writer;
     writer = datumWriterCache.computeIfAbsent(rawSchema,
-      v -> (DatumWriter<Object>) getDatumWriter(value, rawSchema)
+      cacheKey -> (DatumWriter<Object>) getDatumWriter(value, cacheKey)
     );
     writer.write(value, encoder);
     encoder.flush();

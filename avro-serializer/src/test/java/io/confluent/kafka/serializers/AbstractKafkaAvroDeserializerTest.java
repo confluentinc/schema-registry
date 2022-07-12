@@ -3,10 +3,8 @@ package io.confluent.kafka.serializers;
 import static java.util.Collections.singletonMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.sameInstance;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
-import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -19,12 +17,17 @@ import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinTask;
+import java.util.stream.LongStream;
 
 import com.google.common.collect.ImmutableMap;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.DatumWriter;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Assert;
 import org.junit.Before;
@@ -137,6 +140,32 @@ public class AbstractKafkaAvroDeserializerTest {
     org.apache.avro.Schema avroSchema = genericContainerWithVersion.container().getSchema();
     Integer schemaVersion = genericContainerWithVersion.version();
     assertThat(schemaVersion, equalTo(version));
+  }
+
+  @Test
+  public void datum_writer_cache_should_not_duplicate_identical_schemas() throws ExecutionException, InterruptedException, NoSuchFieldException, IllegalAccessException {
+    KafkaAvroSerializer cachedSerializer = new KafkaAvroSerializer(schemaRegistry, defaultConfigs);
+    ForkJoinPool customThreadPool = new ForkJoinPool(8);
+    ForkJoinTask<Long> results = customThreadPool.submit(() -> LongStream
+            .range(0, 64).parallel().map(i -> {
+              IndexedRecord avroRecord = createAvroRecord();
+              Schema recordSchema = avroRecord.getSchema();
+              try {
+                schemaRegistry.register("topic", new AvroSchema(recordSchema));
+              } catch (RestClientException | IOException e) {
+                throw new RuntimeException(e);
+              }
+              cachedSerializer.serialize("topic", avroRecord);
+              return 1L;
+            })
+            .reduce(0L, Long::sum)
+    );
+    results.get();
+
+    Field datumWriterCacheField = AbstractKafkaAvroSerializer.class.getDeclaredField("datumWriterCache");
+    datumWriterCacheField.setAccessible(true);
+    Map<Schema, DatumWriter<Object>> datumWriterCache = (Map<Schema, DatumWriter<Object>>) datumWriterCacheField.get(cachedSerializer);
+    assertEquals(1, datumWriterCache.size());
   }
 
   @Test
