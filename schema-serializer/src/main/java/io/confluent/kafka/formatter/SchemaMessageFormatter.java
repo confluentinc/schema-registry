@@ -159,8 +159,8 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       try {
         if (deserializer.getKeyDeserializer() != null) {
           Object deserializedKey = consumerRecord.key() == null
-                                   ? null
-                                   : deserializer.deserializeKey(null, consumerRecord.key());
+              ? null
+              : deserializer.deserializeKey(consumerRecord.topic(), consumerRecord.key());
           output.write(
               deserializedKey != null ? deserializedKey.toString().getBytes(StandardCharsets.UTF_8)
                                       : NULL_BYTES);
