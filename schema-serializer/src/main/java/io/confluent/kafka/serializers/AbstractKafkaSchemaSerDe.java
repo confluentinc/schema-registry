@@ -52,7 +52,7 @@ public abstract class AbstractKafkaSchemaSerDe {
 
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
-  private static int DEFAULT_CACHE_CAPACITY = 1000;
+  protected static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   protected SchemaRegistryClient schemaRegistry;
   protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
