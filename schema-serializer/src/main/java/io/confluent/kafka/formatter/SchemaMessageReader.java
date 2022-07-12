@@ -84,8 +84,8 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     this.keySchema = keySchema;
     this.valueSchema = valueSchema;
     this.topic = topic;
-    this.keySubject = topic + "-key";
-    this.valueSubject = topic + "-value";
+    this.keySubject = topic != null ? topic + "-key" : null;
+    this.valueSubject = topic != null ? topic + "-value" : null;
     this.parseKey = parseKey;
     this.reader = reader;
     this.serializer = createSerializer(
