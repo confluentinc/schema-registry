@@ -165,7 +165,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
               deserializedKey != null ? deserializedKey.toString().getBytes(StandardCharsets.UTF_8)
                                       : NULL_BYTES);
         } else {
-          writeTo(consumerRecord.key(), output);
+          writeTo(consumerRecord.topic(), consumerRecord.key(), output);
         }
         if (printKeyId) {
           output.write(idSeparator);
@@ -178,7 +178,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       }
     }
     try {
-      writeTo(consumerRecord.value(), output);
+      writeTo(consumerRecord.topic(), consumerRecord.value(), output);
       if (printValueId) {
         output.write(idSeparator);
         int schemaId = schemaIdFor(consumerRecord.value());
@@ -190,7 +190,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     }
   }
 
-  protected abstract void writeTo(byte[] data, PrintStream output) throws IOException;
+  protected abstract void writeTo(String topic, byte[] data, PrintStream output) throws IOException;
 
   @Override
   public void close() {
