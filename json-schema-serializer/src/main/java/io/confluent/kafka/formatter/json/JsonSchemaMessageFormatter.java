@@ -90,8 +90,8 @@ public class JsonSchemaMessageFormatter extends SchemaMessageFormatter<JsonNode>
 
 
   @Override
-  protected void writeTo(byte[] data, PrintStream output) throws IOException {
-    JsonNode object = deserializer.deserialize(data);
+  protected void writeTo(String topic, byte[] data, PrintStream output) throws IOException {
+    JsonNode object = deserializer.deserialize(topic, data);
     output.print(objectMapper.writeValueAsString(object));
   }
 
@@ -126,8 +126,8 @@ public class JsonSchemaMessageFormatter extends SchemaMessageFormatter<JsonNode>
     }
 
     @Override
-    public JsonNode deserialize(byte[] payload) throws SerializationException {
-      return super.deserialize(payload);
+    public JsonNode deserialize(String topic, byte[] payload) throws SerializationException {
+      return (JsonNode) super.deserialize(false, topic, isKey, payload);
     }
   }
 }
