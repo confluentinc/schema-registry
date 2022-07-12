@@ -107,6 +107,11 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
+        <Class name="~io.confluent.kafka.serializers.*"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+    <Match>
         <Class name="~io.confluent.schemaregistry.benchmark.*"/>
         <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
     </Match>
