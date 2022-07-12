@@ -389,7 +389,6 @@ public class ProtobufData {
     String[] split = splitName(fullName);
     String namespace = split[0];
     String name = split[1];
-    ctx.add(fullName);
     ProtobufSchema resultSchema = new ProtobufSchema(
         rawSchemaFromConnectSchema(ctx, namespace, name, schema).getMessageDescriptor(name)
     );
@@ -506,8 +505,8 @@ public class ProtobufData {
           oneofDefinitionFromConnectSchema(ctx, schema, message, fieldSchema, unionName);
           return null;
         } else {
-          if (!ctx.contains(type)) {
-            ctx.add(type);
+          if (!ctx.contains(message.getName(), type)) {
+            ctx.add(message.getName(), type);
             message.addMessageDefinition(messageDefinitionFromConnectSchema(
                 ctx,
                 schema,
@@ -1288,20 +1287,25 @@ public class ProtobufData {
    * Class that holds the context for performing {@code fromConnectSchema}
    */
   private static class FromConnectContext {
-    private final Set<String> structNames;
+    private final Map<String, Set<String>> messageNames;
     private int defaultSchemaNameIndex = 0;
 
     public FromConnectContext() {
-      this.structNames = new HashSet<>();
+      this.messageNames = new HashMap<>();
     }
 
-    public boolean contains(String structName) {
-      return structName != null ? structNames.contains(structName) : false;
+    public boolean contains(String parent, String child) {
+      Set<String> children = messageNames.get(parent);
+      if (child == null || children == null) {
+        return false;
+      }
+      return children.contains(child);
     }
 
-    public void add(String structName) {
-      if (structName != null) {
-        structNames.add(structName);
+    public void add(String parent, String child) {
+      if (child != null) {
+        Set<String> children = messageNames.computeIfAbsent(parent, k -> new HashSet<>());
+        children.add(child);
       }
     }
 
