@@ -52,6 +52,8 @@ public class RegisterSchemaRequest {
   }
 
   public RegisterSchemaRequest(Schema schema) {
+    this.version = schema.getVersion();
+    this.id = schema.getId();
     this.schemaType = schema.getSchemaType();
     this.references = schema.getReferences();
     this.schema = schema.getSchema();
