@@ -368,8 +368,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         id = entry.getKey();
       }
     }
-    return new Schema(subject, version, id, schema.schemaType(), schema.references(),
-        schema.canonicalString());
+    return new Schema(subject, version, id, schema);
   }
 
   @Override
@@ -395,8 +394,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         id = entry.getKey();
       }
     }
-    return new SchemaMetadata(
-        id, version, schema.schemaType(), schema.references(), schema.canonicalString());
+    return new SchemaMetadata(new Schema(subject, version, id, schema));
   }
 
   @Override
