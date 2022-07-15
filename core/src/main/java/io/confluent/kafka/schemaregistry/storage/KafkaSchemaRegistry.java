@@ -1022,11 +1022,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return parsedSchema;
   }
 
-  private ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
+  public ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
     return parseSchema(schema, false);
   }
 
-  private ParsedSchema parseSchema(Schema schema, boolean isNew) throws InvalidSchemaException {
+  public ParsedSchema parseSchema(Schema schema, boolean isNew) throws InvalidSchemaException {
     return parseSchema(schema.getSchemaType(), schema.getSchema(), schema.getReferences(), isNew);
   }
 
