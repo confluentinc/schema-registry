@@ -342,9 +342,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         subject,
         version,
         id,
-        schema.schemaType(),
-        schema.references(),
-        schema.canonicalString()
+        schema
     );
   }
 }

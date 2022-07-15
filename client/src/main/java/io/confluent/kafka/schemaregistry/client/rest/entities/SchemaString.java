@@ -46,6 +46,12 @@ public class SchemaString {
     this.schemaString = schemaString;
   }
 
+  public SchemaString(Schema schema) {
+    this.schemaType = schema.getSchemaType();
+    this.schemaString = schema.getSchema();
+    this.references = schema.getReferences();
+  }
+
   public static SchemaString fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, SchemaString.class);
   }

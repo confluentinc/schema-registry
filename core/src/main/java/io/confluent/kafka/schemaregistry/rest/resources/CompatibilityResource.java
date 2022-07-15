@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
@@ -128,14 +127,7 @@ public class CompatibilityResource {
     if (schemaForSpecifiedVersion == null && !versionId.isLatest()) {
       throw Errors.versionNotFoundException(versionId.getVersionId());
     }
-    Schema schema = new Schema(
-        subject,
-        0,
-        -1,
-        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
-        request.getReferences(),
-        request.getSchema()
-    );
+    Schema schema = new Schema(subject, request);
     try {
       errorMessages = schemaRegistry.isCompatible(
           subject, schema,
@@ -211,14 +203,7 @@ public class CompatibilityResource {
       throw Errors.storeException("Error while retrieving schema for subject "
           + subject, e);
     }
-    Schema schema = new Schema(
-        subject,
-        0,
-        -1,
-        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
-        request.getReferences(),
-        request.getSchema()
-    );
+    Schema schema = new Schema(subject, request);
     try {
       errorMessages = schemaRegistry.isCompatible(subject, schema, previousSchemas);
     } catch (InvalidSchemaException e) {

@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOBAL_RESOURCE_NAME;
 
 import com.google.common.base.CharMatcher;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -340,14 +339,7 @@ public class SubjectVersionsResource {
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
 
-    Schema schema = new Schema(
-        subjectName,
-        request.getVersion() != null ? request.getVersion() : 0,
-        request.getId() != null ? request.getId() : -1,
-        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
-        request.getReferences(),
-        request.getSchema()
-    );
+    Schema schema = new Schema(subjectName, request);
     int id;
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);

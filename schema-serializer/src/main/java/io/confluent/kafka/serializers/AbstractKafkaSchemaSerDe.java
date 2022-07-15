@@ -215,9 +215,8 @@ public abstract class AbstractKafkaSchemaSerDe {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestSchemaMetadata(subject);
       Optional<ParsedSchema> optSchema =
           schemaRegistry.parseSchema(
-              schemaMetadata.getSchemaType(),
-              schemaMetadata.getSchema(),
-              schemaMetadata.getReferences());
+              new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
+                  null, schemaMetadata));
       latestVersion = optSchema.orElseThrow(
           () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
               + " with refs " + schemaMetadata.getReferences()

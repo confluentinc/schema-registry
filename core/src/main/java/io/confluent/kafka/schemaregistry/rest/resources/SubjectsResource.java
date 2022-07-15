@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -105,14 +104,7 @@ public class SubjectsResource {
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     // returns version if the schema exists. Otherwise returns 404
-    Schema schema = new Schema(
-        subject,
-        0,
-        -1,
-        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
-        request.getReferences(),
-        request.getSchema()
-    );
+    Schema schema = new Schema(subject, request);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
     try {
       matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
