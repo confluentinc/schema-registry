@@ -301,8 +301,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       }
       throw rce;
     }
-    Optional<ParsedSchema> schema = parseSchema(
-        restSchema.getSchemaType(), restSchema.getSchemaString(), restSchema.getReferences());
+    Optional<ParsedSchema> schema = parseSchema(new Schema(null, null, null, restSchema));
     return schema.orElseThrow(() -> new IOException("Invalid schema " + restSchema.getSchemaString()
             + " with refs " + restSchema.getReferences()
             + " of type " + restSchema.getSchemaType()));
