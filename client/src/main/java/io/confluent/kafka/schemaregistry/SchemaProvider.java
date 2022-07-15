@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import org.apache.kafka.common.Configurable;
 
 import java.util.List;
@@ -47,6 +48,17 @@ public interface SchemaProvider extends Configurable {
   String schemaType();
 
   /**
+   * Parses a schema.
+   *
+   * @param schema the schema
+   * @param isNew whether the schema is new
+   * @return an optional parsed schema
+   */
+  default Optional<ParsedSchema> parseSchema(Schema schema, boolean isNew) {
+    return parseSchema(schema.getSchema(), schema.getReferences(), isNew);
+  }
+
+  /**
    * Parses a string representing a schema.
    *
    * @param schemaString the schema
@@ -55,8 +67,8 @@ public interface SchemaProvider extends Configurable {
    * @return an optional parsed schema
    */
   default Optional<ParsedSchema> parseSchema(String schemaString,
-                                            List<SchemaReference> references,
-                                            boolean isNew) {
+                                             List<SchemaReference> references,
+                                             boolean isNew) {
     try {
       return Optional.of(parseSchemaOrElseThrow(schemaString, references, isNew));
     } catch (Exception e) {

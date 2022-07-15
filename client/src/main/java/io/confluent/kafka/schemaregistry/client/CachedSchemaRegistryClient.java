@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client;
 import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import org.apache.kafka.common.config.SslConfigs;
 import org.slf4j.Logger;
@@ -271,15 +272,17 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private int registerAndGetId(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    return restService.registerSchema(schema.canonicalString(), schema.schemaType(),
-        schema.references(), subject, normalize);
+    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    return restService.registerSchema(request, subject, normalize);
   }
 
   private int registerAndGetId(
       String subject, ParsedSchema schema, int version, int id, boolean normalize)
       throws IOException, RestClientException {
-    return restService.registerSchema(schema.canonicalString(), schema.schemaType(),
-        schema.references(), subject, version, id, normalize);
+    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    request.setVersion(version);
+    request.setId(id);
+    return restService.registerSchema(request, subject, normalize);
   }
 
   protected ParsedSchema getSchemaByIdFromRegistry(int id, String subject)
@@ -311,8 +314,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
     try {
-      response = restService.lookUpSubjectVersion(schema.canonicalString(),
-              schema.schemaType(), schema.references(), subject, normalize, true);
+      RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+      response = restService.lookUpSubjectVersion(request, subject, normalize, true);
     } catch (RestClientException rce) {
       if (isSchemaNotFoundException(rce)) {
         missingSchemaCache.put(
@@ -330,8 +333,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
     try {
-      response = restService.lookUpSubjectVersion(schema.canonicalString(),
-              schema.schemaType(), schema.references(), subject, normalize, false);
+      RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+      response = restService.lookUpSubjectVersion(request, subject, normalize, false);
     } catch (RestClientException rce) {
       if (isSchemaNotFoundException(rce)) {
         missingSchemaCache.put(
@@ -431,11 +434,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
             lookupDeletedSchema,
             latestOnly);
     return restSchemas.stream()
-        .map(restSchema -> parseSchema(
-                  restSchema.getSchemaType(),
-                  restSchema.getSchema(),
-                  restSchema.getReferences())
-        )
+        .map(this::parseSchema)
         .filter(Optional::isPresent)
         .map(Optional::get)
         .collect(Collectors.toList());
@@ -466,11 +465,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
         = restService.getVersion(subject, version);
-    int id = response.getId();
-    String schemaType = response.getSchemaType();
-    String schema = response.getSchema();
-    List<SchemaReference> references = response.getReferences();
-    return new SchemaMetadata(id, version, schemaType, references, schema);
+    return new SchemaMetadata(response);
   }
 
   @Override
@@ -478,11 +473,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
         = restService.getVersion(subject, version, lookupDeletedSchema);
-    int id = response.getId();
-    String schemaType = response.getSchemaType();
-    String schema = response.getSchema();
-    List<SchemaReference> references = response.getReferences();
-    return new SchemaMetadata(id, version, schemaType, references, schema);
+    return new SchemaMetadata(response);
   }
 
   @Override
@@ -490,12 +481,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
         = restService.getLatestVersion(subject);
-    int id = response.getId();
-    int version = response.getVersion();
-    String schemaType = response.getSchemaType();
-    String schema = response.getSchema();
-    List<SchemaReference> references = response.getReferences();
-    return new SchemaMetadata(id, version, schemaType, references, schema);
+    return new SchemaMetadata(response);
   }
 
   @Override
@@ -613,15 +599,15 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public boolean testCompatibility(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
-    return restService.testCompatibility(schema.canonicalString(), schema.schemaType(),
-        schema.references(), subject, "latest", false).isEmpty();
+    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    return restService.testCompatibility(request, subject, "latest", false).isEmpty();
   }
 
   @Override
   public List<String> testCompatibilityVerbose(String subject, ParsedSchema schema)
           throws IOException, RestClientException {
-    return restService.testCompatibility(schema.canonicalString(), schema.schemaType(),
-            schema.references(), subject, "latest", true);
+    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    return restService.testCompatibility(request, subject, "latest", true);
   }
 
   @Override

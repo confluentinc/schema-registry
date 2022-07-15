@@ -21,8 +21,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -59,6 +62,54 @@ public class Schema implements Comparable<Schema> {
     this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
     this.references = references != null ? references : Collections.emptyList();
     this.schema = schema;
+  }
+
+  public Schema(String subject, SchemaMetadata schemaMetadata) {
+    this.subject = subject;
+    this.version = schemaMetadata.getVersion();
+    this.id = schemaMetadata.getId();
+    this.schemaType = schemaMetadata.getSchemaType() != null
+        ? schemaMetadata.getSchemaType() : AvroSchema.TYPE;
+    this.references = schemaMetadata.getReferences() != null
+        ? schemaMetadata.getReferences() : Collections.emptyList();
+    this.schema = schemaMetadata.getSchema();
+  }
+
+  public Schema(String subject, Integer version, Integer id, SchemaString schemaString) {
+    this.subject = subject;
+    this.version = version;
+    this.id = id;
+    this.schemaType = schemaString.getSchemaType() != null
+        ? schemaString.getSchemaType() : AvroSchema.TYPE;
+    this.references = schemaString.getReferences() != null
+        ? schemaString.getReferences() : Collections.emptyList();
+    this.schema = schemaString.getSchemaString();
+  }
+
+  public Schema(String subject, Integer version, Integer id, ParsedSchema schema) {
+    this.subject = subject;
+    this.version = version;
+    this.id = id;
+    this.schemaType = schema.schemaType() != null
+        ? schema.schemaType() : AvroSchema.TYPE;
+    this.references = schema.references() != null
+        ? schema.references() : Collections.emptyList();
+    this.schema = schema.canonicalString();
+  }
+
+  public Schema(String subject, RegisterSchemaRequest request) {
+    this.subject = subject;
+    this.version = request.getVersion() != null ? request.getVersion() : 0;
+    this.id = request.getId() != null ? request.getId() : -1;
+    this.schemaType = request.getSchemaType() != null
+        ? request.getSchemaType() : AvroSchema.TYPE;
+    this.references = request.getReferences() != null
+        ? request.getReferences() : Collections.emptyList();
+    this.schema = request.getSchema();
+  }
+
+  public Schema copy() {
+    return new Schema(subject, version, id, schemaType, references, schema);
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC)
