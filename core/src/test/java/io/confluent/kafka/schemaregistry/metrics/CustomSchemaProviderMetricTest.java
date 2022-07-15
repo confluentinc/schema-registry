@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.metrics;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import org.junit.Test;
@@ -61,9 +62,7 @@ public class CustomSchemaProviderMetricTest extends ClusterTestHarness {
     }
 
     @Override
-    public ParsedSchema parseSchemaOrElseThrow(String schemaString,
-                                               List<SchemaReference> references,
-                                               boolean isNew) {
+    public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew) {
       return null;
     }
   }

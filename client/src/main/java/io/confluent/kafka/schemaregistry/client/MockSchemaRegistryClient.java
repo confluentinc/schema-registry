@@ -105,6 +105,20 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return schemaProvider.parseSchema(schemaString, references);
   }
 
+  @Override
+  public Optional<ParsedSchema> parseSchema(Schema schema) {
+    String schemaType = schema.getSchemaType();
+    if (schemaType == null) {
+      schemaType = AvroSchema.TYPE;
+    }
+    SchemaProvider schemaProvider = providers.get(schemaType);
+    if (schemaProvider == null) {
+      log.error("Invalid schema type " + schemaType);
+      return Optional.empty();
+    }
+    return schemaProvider.parseSchema(schema, false);
+  }
+
   private int getIdFromRegistry(
       String subject, ParsedSchema schema, boolean registerRequest, int id)
       throws IOException, RestClientException {

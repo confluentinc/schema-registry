@@ -266,6 +266,20 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return schemaProvider.parseSchema(schemaString, references);
   }
 
+  @Override
+  public Optional<ParsedSchema> parseSchema(Schema schema) {
+    String schemaType = schema.getSchemaType();
+    if (schemaType == null) {
+      schemaType = AvroSchema.TYPE;
+    }
+    SchemaProvider schemaProvider = providers.get(schemaType);
+    if (schemaProvider == null) {
+      log.error("Invalid schema type " + schemaType);
+      return Optional.empty();
+    }
+    return schemaProvider.parseSchema(schema, false);
+  }
+
   public Map<String, SchemaProvider> getSchemaProviders() {
     return providers;
   }

@@ -27,6 +27,7 @@ import com.google.protobuf.DynamicMessage;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
@@ -1028,8 +1029,8 @@ public class ProtobufSchemaTest {
   @Test
   public void testParseSchema() {
     SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
-    ParsedSchema parsedSchema = protobufSchemaProvider.parseSchemaOrElseThrow(recordSchemaString,
-            new ArrayList<>(), false);
+    ParsedSchema parsedSchema = protobufSchemaProvider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, ProtobufSchema.TYPE, new ArrayList<>(), recordSchemaString), false);
     Optional<ParsedSchema> parsedSchemaOptional = protobufSchemaProvider.parseSchema(recordSchemaString,
             new ArrayList<>(), false);
 
@@ -1040,8 +1041,8 @@ public class ProtobufSchemaTest {
   @Test(expected = IllegalArgumentException.class)
   public void testParseSchemaThrowException() {
     SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
-    protobufSchemaProvider.parseSchemaOrElseThrow(invalidSchemaString,
-            new ArrayList<>(), false);
+    protobufSchemaProvider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, ProtobufSchema.TYPE, new ArrayList<>(), invalidSchemaString), false);
   }
 
   @Test
