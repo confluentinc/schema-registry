@@ -490,8 +490,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
               subject, parsedSchema, undeletedVersions);
       final boolean isCompatible = compatibilityErrorLogs.isEmpty();
 
-      if (normalize) {
-        parsedSchema = parsedSchema.normalize();
+      try {
+        if (normalize) {
+          parsedSchema = parsedSchema.normalize();
+        }
+      } catch (Exception e) {
+        String errMsg = "Invalid schema " + schema + ", details: " + e.getMessage();
+        log.error(errMsg, e);
+        throw new InvalidSchemaException(errMsg, e);
       }
       // Allow schema providers to modify the schema during compatibility checks
       schema.setSchema(parsedSchema.canonicalString());
@@ -1009,13 +1015,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     ParsedSchema parsedSchema = parseSchema(schema, isNew);
     try {
       parsedSchema.validate();
+      if (normalize) {
+        parsedSchema = parsedSchema.normalize();
+      }
     } catch (Exception e) {
       String errMsg = "Invalid schema " + schema + ", details: " + e.getMessage();
       log.error(errMsg, e);
       throw new InvalidSchemaException(errMsg, e);
-    }
-    if (normalize) {
-      parsedSchema = parsedSchema.normalize();
     }
     schema.setSchema(parsedSchema.canonicalString());
     schema.setReferences(parsedSchema.references());

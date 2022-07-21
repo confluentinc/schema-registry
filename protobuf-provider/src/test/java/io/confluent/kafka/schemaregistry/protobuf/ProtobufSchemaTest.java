@@ -1020,6 +1020,38 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testNormalizationWithPackagePrefix() {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package confluent.package;\n"
+        + "\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "\n"
+        + "message Nested {\n"
+        + "  type.Decimal test_cflt_decimal = 1;\n"
+        + "}\n";
+
+    String normalized = "syntax = \"proto3\";\n"
+        + "package confluent.package;\n"
+        + "\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "\n"
+        + "message Nested {\n"
+        + "  .confluent.type.Decimal test_cflt_decimal = 1;\n"
+        + "}\n";
+
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    assertEquals(schemaString, schema.canonicalString());
+    Descriptor descriptor = schema.toDescriptor();
+    assertNotNull(descriptor);
+    ProtobufSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+    descriptor = normalizedSchema.toDescriptor();
+    assertNotNull(descriptor);
+    normalizedSchema = new ProtobufSchema(descriptor).normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+  }
+
+  @Test
   public void testEnumAfterMessage() throws Exception {
     assertEquals(enumAfterMessageSchemaString, enumBeforeMessageSchema.canonicalString());
     assertEquals(enumAfterMessageSchemaString,
