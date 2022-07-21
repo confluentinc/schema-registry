@@ -191,16 +191,19 @@ public class Context {
         return n;
       }
     } else {
-      Deque<String> prefix = new ArrayDeque<>(fullName);
+      Deque<String> prefix = new ArrayDeque<>();
       if (isOriginal) {
         if (!originalPackageName.isEmpty()) {
-          prefix.addFirst(originalPackageName);
+          String[] parts = originalPackageName.split("\\.");
+          prefix.addAll(Arrays.asList(parts));
         }
       } else {
         if (!updatePackageName.isEmpty()) {
-          prefix.addFirst(updatePackageName);
+          String[] parts = updatePackageName.split("\\.");
+          prefix.addAll(Arrays.asList(parts));
         }
       }
+      prefix.addAll(fullName);
       while (!prefix.isEmpty()) {
         String n = String.join(".", prefix) + "." + name;
         TypeElementInfo type = getTypeForFullName(n, isOriginal);
