@@ -21,19 +21,15 @@ import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.Parameter;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.SchemaProvider;
-import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 
 public abstract class SchemaRegistryMojo extends AbstractMojo {
 
@@ -75,7 +71,7 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
       }
       List<SchemaProvider> providers = schemaProviders != null && !schemaProviders.isEmpty()
                                        ? schemaProviders()
-                                       : defaultSchemaProviders();
+                                       : MojoUtils.defaultSchemaProviders();
       this.client = new CachedSchemaRegistryClient(
           this.schemaRegistryUrls,
           1000,
@@ -97,9 +93,4 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
     }).collect(Collectors.toList());
   }
 
-  private List<SchemaProvider> defaultSchemaProviders() {
-    return Arrays.asList(
-        new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
-    );
-  }
 }

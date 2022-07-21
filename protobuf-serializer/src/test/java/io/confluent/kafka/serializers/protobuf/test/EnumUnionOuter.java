@@ -236,8 +236,8 @@ public final class EnumUnionOuter {
               break;
             }
             case 16: {
-              someValCase_ = 2;
               someVal_ = input.readInt32();
+              someValCase_ = 2;
               break;
             }
             case 24: {
