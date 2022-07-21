@@ -23,6 +23,7 @@ import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
 import com.google.protobuf.DescriptorProtos.FileOptions;
+import com.google.protobuf.DescriptorProtos.FileOptions.OptimizeMode;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.DescriptorValidationException;
 import com.google.protobuf.Descriptors.EnumDescriptor;
@@ -425,6 +426,11 @@ public class DynamicSchema {
       return this;
     }
 
+    public Builder addServiceDefinition(ServiceDefinition serviceDef) {
+      mFileDescProtoBuilder.addService(serviceDef.getServiceType());
+      return this;
+    }
+
     // Note: added
     public Builder addDependency(String dependency) {
       for (int i = 0; i < mFileDescProtoBuilder.getDependencyCount(); i++) {
@@ -472,6 +478,150 @@ public class DynamicSchema {
       FileOptions.Builder optionsBuilder =
           DescriptorProtos.FileOptions.newBuilder();
       optionsBuilder.setJavaMultipleFiles(javaMultipleFiles);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setJavaStringCheckUtf8(boolean javaStringCheckUtf8) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setJavaStringCheckUtf8(javaStringCheckUtf8);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setOptimizeFor(OptimizeMode optimizeFor) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setOptimizeFor(optimizeFor);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setGoPackage(String goPackage) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setGoPackage(goPackage);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setCcGenericServices(boolean ccGenericServices) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setCcGenericServices(ccGenericServices);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setJavaGenericServices(boolean javaGenericServices) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setJavaGenericServices(javaGenericServices);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setPyGenericServices(boolean pyGenericServices) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setPyGenericServices(pyGenericServices);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setPhpGenericServices(boolean phpGenericServices) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setPhpGenericServices(phpGenericServices);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setDeprecated(boolean isDeprecated) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setDeprecated(isDeprecated);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setCcEnableArenas(boolean ccEnableArenas) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setCcEnableArenas(ccEnableArenas);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setObjcClassPrefix(String objcClassPrefix) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setObjcClassPrefix(objcClassPrefix);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setCsharpNamespace(String csharpNamespace) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setCsharpNamespace(csharpNamespace);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setSwiftPrefix(String swiftPrefix) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setSwiftPrefix(swiftPrefix);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setPhpClassPrefix(String phpClassPrefix) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setPhpClassPrefix(phpClassPrefix);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setPhpNamespace(String phpNamespace) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setPhpNamespace(phpNamespace);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setPhpMetadataNamespace(String phpMetadataNamespace) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setPhpMetadataNamespace(phpMetadataNamespace);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setRubyPackage(String rubyPackage) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setRubyPackage(rubyPackage);
       mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
       return this;
     }

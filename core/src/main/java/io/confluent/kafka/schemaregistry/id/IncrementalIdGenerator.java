@@ -15,12 +15,16 @@
 
 package io.confluent.kafka.schemaregistry.id;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
-import java.util.concurrent.atomic.AtomicInteger;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,20 +32,23 @@ public class IncrementalIdGenerator implements IdGenerator {
 
   Logger log = LoggerFactory.getLogger(IncrementalIdGenerator.class);
 
-  private final AtomicInteger maxIdInKafkaStore = new AtomicInteger(0);
+  private final SchemaRegistry schemaRegistry;
+  private final Map<String, Integer> maxIds = new ConcurrentHashMap<>();
 
-  @Override
-  public int id(Schema schema) throws IdGenerationException {
-    return maxIdInKafkaStore.incrementAndGet();
+  public IncrementalIdGenerator(SchemaRegistry schemaRegistry) {
+    this.schemaRegistry = schemaRegistry;
   }
 
   @Override
-  public int getMaxId(int currentId) {
-    int maxId = maxIdInKafkaStore.get();
-    if (currentId > maxId) {
-      log.debug("Requested ID is greater than max ID");
-    }
-    return maxId;
+  public int id(SchemaValue schema) throws IdGenerationException {
+    String context = QualifiedSubject.contextFor(schemaRegistry.tenant(), schema.getSubject());
+    return maxIds.compute(context, (k, v) -> v != null ? v + 1 : 1);
+  }
+
+  @Override
+  public int getMaxId(SchemaValue schema) {
+    String context = QualifiedSubject.contextFor(schemaRegistry.tenant(), schema.getSubject());
+    return maxIds.computeIfAbsent(context, k -> 1);
   }
 
   @Override
@@ -56,8 +63,10 @@ public class IncrementalIdGenerator implements IdGenerator {
 
   @Override
   public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
-    if (maxIdInKafkaStore.get() < schemaValue.getId()) {
-      maxIdInKafkaStore.set(schemaValue.getId());
-    }
+    String context = QualifiedSubject.contextFor(schemaRegistry.tenant(), schemaKey.getSubject());
+    maxIds.compute(context, (k, v) -> {
+      int id = v != null ? v : 1;
+      return Math.max(schemaValue.getId(), id);
+    });
   }
 }

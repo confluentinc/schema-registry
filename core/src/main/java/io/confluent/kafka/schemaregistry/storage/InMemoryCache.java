@@ -16,13 +16,17 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,18 +38,20 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+
 
 /**
  * In-memory store based on maps
  */
 public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final ConcurrentNavigableMap<K, V> store;
-  private final Map<String, Map<Integer, Map<String, Integer>>> guidToSubjectVersions;
-  private final Map<String, Map<MD5, Integer>> hashToGuid;
-  private final Map<SchemaKey, Set<Integer>> referencedBy;
+  private final Map<String, Map<String, Map<Integer, Map<String, Integer>>>> guidToSubjectVersions;
+  private final Map<String, Map<String, Map<MD5, Integer>>> hashToGuid;
+  private final Map<String, Map<String, Map<SchemaKey, Set<Integer>>>> referencedBy;
 
   public InMemoryCache(Serializer<K, V> serializer) {
-    this.store = new ConcurrentSkipListMap<>();
+    this.store = new ConcurrentSkipListMap<>(new SubjectKeyComparator<>(this));
     this.guidToSubjectVersions = new ConcurrentHashMap<>();
     this.hashToGuid = new ConcurrentHashMap<>();
     this.referencedBy = new ConcurrentHashMap<>();
@@ -100,18 +106,22 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public SchemaIdAndSubjects schemaIdAndSubjects(Schema schema) throws StoreException {
+    String ctx = QualifiedSubject.contextFor(tenant(), schema.getSubject());
     List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
         = schema.getReferences();
     MD5 md5 = MD5.ofString(schema.getSchema(), refs == null ? null : refs.stream()
         .map(ref -> new SchemaReference(ref.getName(), ref.getSubject(), ref.getVersion()))
         .collect(Collectors.toList()));
-    Map<MD5, Integer> hashes = hashToGuid.getOrDefault(tenant(), Collections.emptyMap());
+    Map<String, Map<MD5, Integer>> ctxHashes =
+        hashToGuid.getOrDefault(tenant(), Collections.emptyMap());
+    Map<MD5, Integer> hashes = ctxHashes.getOrDefault(ctx, Collections.emptyMap());
     Integer id = hashes.get(md5);
     if (id == null) {
       return null;
     }
-    Map<Integer, Map<String, Integer>> guids =
-            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
     Map<String, Integer> subjectVersions = guids.get(id);
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return null;
@@ -126,13 +136,19 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public Set<Integer> referencesSchema(SchemaKey schema) throws StoreException {
-    return referencedBy.getOrDefault(schema, Collections.emptySet());
+    String ctx = QualifiedSubject.contextFor(tenant(), schema.getSubject());
+    Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+        referencedBy.getOrDefault(tenant(), Collections.emptyMap());
+    Map<SchemaKey, Set<Integer>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
+    return refBy.getOrDefault(schema, Collections.emptySet());
   }
 
   @Override
-  public SchemaKey schemaKeyById(Integer id) throws StoreException {
-    Map<Integer, Map<String, Integer>> guids =
-            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+  public SchemaKey schemaKeyById(Integer id, String subject) throws StoreException {
+    String ctx = QualifiedSubject.contextFor(tenant(), subject);
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
     Map<String, Integer> subjectVersions = guids.get(id);
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return null;
@@ -142,9 +158,13 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue) {
+  public void schemaDeleted(
+      SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<Integer, Map<String, Integer>> guids =
-            guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+        ctxGuids.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
         guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
     subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
@@ -153,11 +173,16 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
       SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
-      Set<Integer> refBy = referencedBy.get(refKey);
+      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+          referencedBy.getOrDefault(tenant(), Collections.emptyMap());
+      Map<SchemaKey, Set<Integer>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
       if (refBy != null) {
-        refBy.remove(schemaValue.getId());
-        if (refBy.isEmpty()) {
-          referencedBy.remove(refKey);
+        Set<Integer> ids = refBy.get(refKey);
+        if (ids != null) {
+          ids.remove(schemaValue.getId());
+          if (ids.isEmpty()) {
+            refBy.remove(refKey);
+          }
         }
       }
     }
@@ -168,8 +193,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (schemaValue == null) {
       return;
     }
-    Map<Integer, Map<String, Integer>> guids =
-            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
     Map<String, Integer> subjectVersions = guids.get(schemaValue.getId());
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return;
@@ -182,24 +209,35 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
+  public void schemaRegistered(
+      SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<Integer, Map<String, Integer>> guids =
-            guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+        ctxGuids.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
         guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
     subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
       SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
-      Set<Integer> refBy = referencedBy.computeIfAbsent(
+      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+          referencedBy.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+      Map<SchemaKey, Set<Integer>> refBy =
+          ctxRefBy.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
+      Set<Integer> ids = refBy.computeIfAbsent(
               refKey, k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
-      refBy.add(schemaValue.getId());
+      ids.add(schemaValue.getId());
     }
   }
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
     MD5 md5 = MD5.ofString(schemaValue.getSchema(), schemaValue.getReferences());
-    Map<MD5, Integer> hashes = hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+    Map<String, Map<MD5, Integer>> ctxHashes =
+        hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+    Map<MD5, Integer> hashes = ctxHashes.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
     hashes.put(md5, schemaValue.getId());
   }
 
@@ -217,7 +255,12 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (config != null) {
       return config.getCompatibilityLevel();
     } else if (returnTopLevelIfNotFound) {
-      config = (ConfigValue) get((K) new ConfigKey(null));
+      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+      if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
+        config = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
+      } else {
+        config = (ConfigValue) get((K) new ConfigKey(null));
+      }
       return config != null ? config.getCompatibilityLevel() : defaultForTopLevel;
     } else {
       return null;
@@ -238,7 +281,12 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (modeValue != null) {
       return modeValue.getMode();
     } else if (returnTopLevelIfNotFound) {
-      modeValue = (ModeValue) get((K) new ModeKey(null));
+      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+      if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
+        modeValue = (ModeValue) get((K) new ModeKey(qs.toQualifiedContext()));
+      } else {
+        modeValue = (ModeValue) get((K) new ModeKey(null));
+      }
       return modeValue != null ? modeValue.getMode() : defaultForTopLevel;
     } else {
       return null;
@@ -264,7 +312,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
           }
           return Stream.empty();
         })
-        .collect(Collectors.toSet());
+        .collect(Collectors.toCollection(LinkedHashSet::new));
   }
 
   @Override
@@ -289,15 +337,17 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void clearSubjects(String subject) throws StoreException {
-    clearSubjects(matchingSubjectPredicate(subject));
+  public Map<String, Integer> clearSubjects(String subject) throws StoreException {
+    return clearSubjects(subject, matchingSubjectPredicate(subject));
   }
 
-  private void clearSubjects(Predicate<String> match) {
+  private Map<String, Integer> clearSubjects(String subject, Predicate<String> match) {
+    String ctx = QualifiedSubject.contextFor(tenant(), subject);
     BiPredicate<String, Integer> matchDeleted = matchDeleted(match);
 
-    Map<Integer, Map<String, Integer>> guids =
-            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
     Iterator<Map.Entry<Integer, Map<String, Integer>>> it = guids.entrySet().iterator();
     while (it.hasNext()) {
       Map<String, Integer> subjectVersions = it.next().getValue();
@@ -308,14 +358,24 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     }
 
     // Delete from store later as the previous deletions rely on the store
+    Map<String, Integer> counts = new HashMap<>();
     store.entrySet().removeIf(e -> {
       if (e.getKey() instanceof SchemaKey) {
         SchemaKey key = (SchemaKey) e.getKey();
         SchemaValue value = (SchemaValue) e.getValue();
-        return match.test(key.getSubject()) && value.isDeleted();
+        boolean isMatch = match.test(key.getSubject()) && value.isDeleted();
+        if (isMatch) {
+          String schemaType = value.getSchemaType();
+          if (schemaType == null) {
+            schemaType = AvroSchema.TYPE;
+          }
+          counts.merge(schemaType, 1, Integer::sum);
+        }
+        return isMatch;
       }
       return false;
     });
+    return counts;
   }
 
   protected Predicate<String> matchingSubjectPredicate(String subject) {
@@ -336,7 +396,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   static class DelegatingIterator<T> implements CloseableIterator<T> {
 
-    private Iterator<T> iterator;
+    private final Iterator<T> iterator;
 
     public DelegatingIterator(Iterator<T> iterator) {
       this.iterator = iterator;

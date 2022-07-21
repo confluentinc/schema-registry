@@ -36,7 +36,7 @@ for dir in $base_dir/package-schema-registry/target/kafka-schema-registry-packag
 done
 
 # Production jars, including kafka, rest-utils, and schema-registry
-for library in "confluent-security/schema-registry" "confluent-common" "confluent-telemetry" "rest-utils" "schema-registry"; do
+for library in "confluent-security/schema-registry" "schema-registry-plugins" "confluent-common" "confluent-telemetry" "rest-utils" "schema-registry"; do
   CLASSPATH=$CLASSPATH:$base_dir/share/java/$library/*      
 done
 
