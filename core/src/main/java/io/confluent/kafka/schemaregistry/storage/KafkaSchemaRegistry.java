@@ -379,6 +379,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           "Tried to set an ineligible node to leader: " + newLeader);
     }
 
+    boolean isLeader;
     kafkaStore.leaderLock().lock();
     try {
       SchemaRegistryIdentity previousLeader = leaderIdentity;
@@ -394,7 +395,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
 
-      boolean isLeader = isLeader();
+      isLeader = isLeader();
       if (leaderIdentity != null && !leaderIdentity.equals(previousLeader) && isLeader) {
         // The new leader may not know the exact last offset in the Kafka log. So, mark the
         // last offset invalid here
@@ -407,15 +408,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
         }
         idGenerator.init();
-
-        for (Consumer<Boolean> listener : leaderChangeListeners) {
-          listener.accept(isLeader);
-        }
       }
-
       metricsContainer.getLeaderNode().set(isLeader() ? 1 : 0);
     } finally {
       kafkaStore.leaderLock().unlock();
+    }
+
+    for (Consumer<Boolean> listener : leaderChangeListeners) {
+      listener.accept(isLeader);
     }
   }
 
