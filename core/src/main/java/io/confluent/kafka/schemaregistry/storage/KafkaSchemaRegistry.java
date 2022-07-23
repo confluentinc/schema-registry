@@ -382,7 +382,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     boolean isLeader;
     kafkaStore.leaderLock().lock();
     try {
-      SchemaRegistryIdentity previousLeader = leaderIdentity;
+      final SchemaRegistryIdentity previousLeader = leaderIdentity;
       leaderIdentity = newLeader;
 
       if (leaderIdentity == null) {
