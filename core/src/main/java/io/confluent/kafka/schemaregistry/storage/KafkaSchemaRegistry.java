@@ -67,6 +67,8 @@ import io.confluent.rest.exceptions.RestException;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -132,6 +134,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final Map<String, SchemaProvider> providers;
   private final String kafkaClusterId;
   private final String groupId;
+  private final List<Consumer<Boolean>> leaderChangeListeners = new CopyOnWriteArrayList<>();
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -336,6 +339,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return kafkaStore.initialized();
   }
 
+  /**
+   * Add a leader change listener.
+   *
+   * @param listener a function that takes whether this node is a leader
+   */
+  public void addLeaderChangeListener(Consumer<Boolean> listener) {
+    leaderChangeListeners.add(listener);
+  }
+
   public boolean isLeader() {
     kafkaStore.leaderLock().lock();
     try {
@@ -367,9 +379,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           "Tried to set an ineligible node to leader: " + newLeader);
     }
 
+    boolean isLeader;
     kafkaStore.leaderLock().lock();
     try {
-      SchemaRegistryIdentity previousLeader = leaderIdentity;
+      final SchemaRegistryIdentity previousLeader = leaderIdentity;
       leaderIdentity = newLeader;
 
       if (leaderIdentity == null) {
@@ -382,7 +395,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
 
-      if (leaderIdentity != null && !leaderIdentity.equals(previousLeader) && isLeader()) {
+      isLeader = isLeader();
+      if (leaderIdentity != null && !leaderIdentity.equals(previousLeader) && isLeader) {
         // The new leader may not know the exact last offset in the Kafka log. So, mark the
         // last offset invalid here
         kafkaStore.markLastWrittenOffsetInvalid();
@@ -398,6 +412,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       metricsContainer.getLeaderNode().set(isLeader() ? 1 : 0);
     } finally {
       kafkaStore.leaderLock().unlock();
+    }
+
+    for (Consumer<Boolean> listener : leaderChangeListeners) {
+      listener.accept(isLeader);
     }
   }
 
