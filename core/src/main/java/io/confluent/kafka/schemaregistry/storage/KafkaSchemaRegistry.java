@@ -380,6 +380,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
 
     boolean isLeader;
+    boolean leaderChanged;
     kafkaStore.leaderLock().lock();
     try {
       final SchemaRegistryIdentity previousLeader = leaderIdentity;
@@ -396,7 +397,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
 
       isLeader = isLeader();
-      if (leaderIdentity != null && !leaderIdentity.equals(previousLeader) && isLeader) {
+      leaderChanged = leaderIdentity != null && !leaderIdentity.equals(previousLeader);
+      if (leaderChanged && isLeader) {
         // The new leader may not know the exact last offset in the Kafka log. So, mark the
         // last offset invalid here
         kafkaStore.markLastWrittenOffsetInvalid();
@@ -414,8 +416,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       kafkaStore.leaderLock().unlock();
     }
 
-    for (Consumer<Boolean> listener : leaderChangeListeners) {
-      listener.accept(isLeader);
+    if (leaderChanged) {
+      for (Consumer<Boolean> listener : leaderChangeListeners) {
+        try {
+          listener.accept(isLeader);
+        } catch (Exception e) {
+          log.error("Could not invoke leader change listener", e);
+        }
+      }
     }
   }
 
