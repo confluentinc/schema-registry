@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
 import java.util.Collections;
@@ -67,12 +68,12 @@ public class OauthTokenCacheTest {
   public void TestIsExpiredWithExpiredToken() throws InterruptedException {
     OAuthBearerToken token1 = new BasicOAuthBearerToken(tokenString1,
         Collections.emptySet(),
-        100L,
+        95L,
         "random",
         0L);
     oAuthTokenCache.setCurrentToken(token1);
     //sleeping till token get expired
-    Thread.sleep((long) Math.floor(100 * OauthTokenCache.CACHE_PERCENTAGE_THRESHOLD));
+    Thread.sleep((long) Math.floor(100 * OauthTokenCache.CACHE_EXPIRY_THRESHOLD));
     Assert.assertEquals(true, oAuthTokenCache.isTokenExpired());
   }
 

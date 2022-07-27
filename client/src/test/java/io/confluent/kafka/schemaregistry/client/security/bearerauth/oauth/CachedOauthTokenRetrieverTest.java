@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
 
@@ -100,7 +101,7 @@ public class CachedOauthTokenRetrieverTest {
 
     Assert.assertEquals(tokenString1, cachedOauthTokenRetriever.getToken());
 
-    Thread.sleep((long) (100 * OauthTokenCache.CACHE_PERCENTAGE_THRESHOLD));
+    Thread.sleep((long) (100 * OauthTokenCache.CACHE_EXPIRY_THRESHOLD));
     // since token has lifespan of 100s second, token cache get expired as soon it is received
     // and it will retrieve a new token , i.e token2
     Assert.assertEquals(tokenString2, cachedOauthTokenRetriever.getToken());
@@ -111,15 +112,16 @@ public class CachedOauthTokenRetrieverTest {
     String ioError = "Returned 401";
     // Test whether IO exception is handled first when token retrieval,
     // then test whether Validation exception is handled when token validation
-    when(accessTokenRetriever.retrieve()).thenThrow(new IOException(ioError)).thenReturn(tokenString1);
+    when(accessTokenRetriever.retrieve()).thenThrow(new IOException(ioError))
+        .thenReturn(tokenString1);
 
     Assert.assertThrows(ioError, SchemaRegistryOauthTokenRetrieverException.class, () -> {
       String token = cachedOauthTokenRetriever.getToken();
     });
 
-
     String validationError = "Malformed JWT provided";
-    when(accessTokenValidator.validate(tokenString1)).thenThrow(new ValidateException(validationError));
+    when(accessTokenValidator.validate(tokenString1)).thenThrow(
+        new ValidateException(validationError));
     Assert.assertThrows(validationError, SchemaRegistryOauthTokenRetrieverException.class, () -> {
       String token = cachedOauthTokenRetriever.getToken();
     });

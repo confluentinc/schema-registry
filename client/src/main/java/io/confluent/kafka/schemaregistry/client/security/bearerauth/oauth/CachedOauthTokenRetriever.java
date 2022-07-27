@@ -16,12 +16,22 @@
 
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions.SchemaRegistryOauthTokenRetrieverException;
 import java.io.IOException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.secured.ValidateException;
+
+/**
+ * <code>CachedOauthTokenRetriever</code> is an wrapper around {@link AccessTokenRetriever} that
+ * will communicate with an OAuth/OIDC provider directly via HTTP to post client credentials ({@link
+ * SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_ID}/{@link SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_SECRET})
+ * to a publicized token endpoint URL ({@link SchemaRegistryClientConfig#BEARER_AUTH_ISSUER_ENDPOINT_URL}).
+ * This class adds caching mechanism over {@link AccessTokenRetriever} using {@link
+ * OauthTokenCache}
+ */
 
 class CachedOauthTokenRetriever {
 
@@ -45,7 +55,7 @@ class CachedOauthTokenRetriever {
       String token = null;
       try {
         token = accessTokenRetriever.retrieve();
-      } catch (IOException e) {
+      } catch (IOException | RuntimeException e) {
         throw new SchemaRegistryOauthTokenRetrieverException(
             "Failed to Retrieve OAuth Token for Schema Registry", e);
       }
@@ -54,7 +64,8 @@ class CachedOauthTokenRetriever {
       try {
         oauthBearerToken = accessTokenValidator.validate(token);
       } catch (ValidateException e) {
-        throw new SchemaRegistryOauthTokenRetrieverException(e.getMessage());
+        throw new SchemaRegistryOauthTokenRetrieverException(
+            "OAuth Token for Schema Registry is Invalid", e);
       }
 
       oauthTokenCache.setCurrentToken(oauthBearerToken);

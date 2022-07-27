@@ -14,15 +14,12 @@
  * limitations under the License.
  */
 
+
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions;
 
 public class SchemaRegistryOauthTokenRetrieverException extends RuntimeException {
 
   public SchemaRegistryOauthTokenRetrieverException(String message, Throwable cause) {
     super(message, cause);
-  }
-
-  public SchemaRegistryOauthTokenRetrieverException(String message) {
-    super(message);
   }
 }

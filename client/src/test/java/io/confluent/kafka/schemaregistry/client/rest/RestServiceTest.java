@@ -28,16 +28,21 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.powermock.api.easymock.PowerMock.expectNew;
 import static org.powermock.api.easymock.PowerMock.replay;
+
+import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.net.*;
+import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.SocketAddress;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
-
-import com.google.common.collect.ImmutableMap;
 import org.easymock.EasyMock;
 import org.easymock.IArgumentMatcher;
 import org.junit.Test;
@@ -46,12 +51,39 @@ import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
-
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(RestService.class)
 public class RestServiceTest {
+
+  @Mock
+  private URL url;
+
+  private static Proxy withProxy() {
+    EasyMock.reportMatcher(new IArgumentMatcher() {
+      private final String proxyHost = "http://localhost";
+      private final int proxyPort = 8080;
+
+      @Override
+      public boolean matches(Object proxyObj) {
+        if (proxyObj instanceof Proxy) {
+          Proxy proxy = (Proxy) proxyObj;
+          SocketAddress socketAddress = proxy.address();
+          if (socketAddress instanceof InetSocketAddress) {
+            InetSocketAddress inetAddress = (InetSocketAddress) socketAddress;
+            return inetAddress.getHostName().equals(proxyHost) &&
+                inetAddress.getPort() == proxyPort;
+          }
+        }
+        return false;
+      }
+
+      @Override
+      public void appendTo(StringBuffer stringBuffer) {
+        stringBuffer.append("HTTP @ ").append(proxyHost).append(":").append(proxyPort);
+      }
+    });
+    return null;
+  }
 
   @Test
   public void buildRequestUrl_trimNothing() {
@@ -85,9 +117,6 @@ public class RestServiceTest {
     assertEquals("http://test.com/some/path", RestService.buildRequestUrl(baseUrl, path));
   }
 
-  @Mock
-  private URL url;
-
   /*
    * Test setBasicAuthRequestHeader (private method) indirectly through getAllSubjects.
    */
@@ -95,7 +124,8 @@ public class RestServiceTest {
   public void testSetBasicAuthRequestHeader() throws Exception {
     RestService restService = new RestService("http://localhost:8081");
 
-    BasicAuthCredentialProvider basicAuthCredentialProvider = createMock(BasicAuthCredentialProvider.class);
+    BasicAuthCredentialProvider basicAuthCredentialProvider = createMock(
+        BasicAuthCredentialProvider.class);
     restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
 
     HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
@@ -104,7 +134,8 @@ public class RestServiceTest {
     expectNew(URL.class, anyString()).andReturn(url);
     expect(url.openConnection()).andReturn(httpURLConnection);
     expect(httpURLConnection.getURL()).andReturn(url);
-    expect(basicAuthCredentialProvider.getUserInfo(anyObject(URL.class))).andReturn("user:password");
+    expect(basicAuthCredentialProvider.getUserInfo(anyObject(URL.class))).andReturn(
+        "user:password");
     expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
 
     // Make sure that the Authorization header is set with the correct value for "user:password"
@@ -127,7 +158,6 @@ public class RestServiceTest {
     verify(httpURLConnection);
   }
 
-
   /*
    * Test setBearerAuthRequestHeader (private method) indirectly through getAllSubjects.
    */
@@ -135,7 +165,8 @@ public class RestServiceTest {
   public void testSetBearerAuthRequestHeader() throws Exception {
     RestService restService = new RestService("http://localhost:8081");
 
-    BearerAuthCredentialProvider bearerAuthCredentialProvider = createMock(BearerAuthCredentialProvider.class);
+    BearerAuthCredentialProvider bearerAuthCredentialProvider = createMock(
+        BearerAuthCredentialProvider.class);
     restService.setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
 
     HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
@@ -144,17 +175,22 @@ public class RestServiceTest {
     expectNew(URL.class, anyString()).andReturn(url);
     expect(url.openConnection()).andReturn(httpURLConnection);
     expect(httpURLConnection.getURL()).andReturn(url);
-    expect(bearerAuthCredentialProvider.getBearerToken(anyObject(URL.class))).andReturn("auth-token");
+    expect(bearerAuthCredentialProvider.getBearerToken(anyObject(URL.class))).andReturn(
+        "auth-token");
+    expect(bearerAuthCredentialProvider.getTargetSchemaRegistry()).andReturn("lsrc-dummy");
+    expect(bearerAuthCredentialProvider.getTargetIdentityPoolId()).andReturn("my-pool-id");
     expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
 
     // Make sure that the Authorization header is set with the correct value for "user:password"
     httpURLConnection.setRequestProperty("Authorization", "Bearer auth-token");
+    httpURLConnection.setRequestProperty("target-sr-cluster", "lsrc-dummy");
+    httpURLConnection.setRequestProperty("target-identity-pool-id", "my-pool-id");
     expectLastCall().once();
 
     expect(httpURLConnection.getInputStream()).andReturn(inputStream);
 
     expect(inputStream.read((byte[]) anyObject(), anyInt(), anyInt()))
-            .andDelegateTo(createInputStream("[\"abc\"]")).anyTimes();
+        .andDelegateTo(createInputStream("[\"abc\"]")).anyTimes();
 
     replay(URL.class, url);
     replay(HttpURLConnection.class, httpURLConnection);
@@ -167,15 +203,16 @@ public class RestServiceTest {
   }
 
   /*
- * Test setHttpHeaders (private method) indirectly through getAllSubjects.
- */
+   * Test setHttpHeaders (private method) indirectly through getAllSubjects.
+   */
   @Test
   public void testSetHttpHeaders() throws Exception {
     RestService restService = new RestService("http://localhost:8081");
 
-    BasicAuthCredentialProvider basicAuthCredentialProvider = createMock(BasicAuthCredentialProvider.class);
+    BasicAuthCredentialProvider basicAuthCredentialProvider = createMock(
+        BasicAuthCredentialProvider.class);
     restService.setHttpHeaders(
-        ImmutableMap.of("api-key", "test-api-key","source-app", "foo"));
+        ImmutableMap.of("api-key", "test-api-key", "source-app", "foo"));
 
     HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
     InputStream inputStream = createNiceMock(InputStream.class);
@@ -252,7 +289,7 @@ public class RestServiceTest {
     expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
     expect(httpURLConnection.getInputStream()).andReturn(inputStream);
     expect(inputStream.read(anyObject(), anyInt(), anyInt()))
-            .andDelegateTo(createInputStream("[\"abc\"]")).anyTimes();
+        .andDelegateTo(createInputStream("[\"abc\"]")).anyTimes();
 
     replay(URL.class, url);
     replay(HttpURLConnection.class, httpURLConnection);
@@ -265,32 +302,5 @@ public class RestServiceTest {
 
   private ByteArrayInputStream createInputStream(String content) {
     return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
-  }
-
-  private static Proxy withProxy() {
-    EasyMock.reportMatcher(new IArgumentMatcher() {
-      private final String proxyHost = "http://localhost";
-      private final int proxyPort = 8080;
-
-      @Override
-      public boolean matches(Object proxyObj) {
-        if (proxyObj instanceof Proxy) {
-          Proxy proxy = (Proxy) proxyObj;
-          SocketAddress socketAddress = proxy.address();
-          if (socketAddress instanceof InetSocketAddress) {
-            InetSocketAddress inetAddress = (InetSocketAddress) socketAddress;
-            return inetAddress.getHostName().equals(proxyHost) &&
-                    inetAddress.getPort() == proxyPort;
-          }
-        }
-        return false;
-      }
-
-      @Override
-      public void appendTo(StringBuffer stringBuffer) {
-        stringBuffer.append("HTTP @ ").append(proxyHost).append(":").append(proxyPort);
-      }
-    });
-    return null;
   }
 }

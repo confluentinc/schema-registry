@@ -16,9 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
-import org.apache.kafka.common.config.ConfigDef;
-
 import java.util.Map;
+import org.apache.kafka.common.config.ConfigDef;
 
 public class SchemaRegistryClientConfig {
 
@@ -42,6 +41,14 @@ public class SchemaRegistryClientConfig {
   public static final String MISSING_CACHE_SIZE_CONFIG = "missing.cache.size";
   public static final String MISSING_ID_CACHE_TTL_CONFIG = "missing.id.cache.ttl.sec";
   public static final String MISSING_SCHEMA_CACHE_TTL_CONFIG = "missing.schema.cache.ttl.sec";
+
+  //OAuth related configs
+  public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL = "bearer.auth.issuer.endpoint.url";
+  public static final String BEARER_AUTH_CLIENT_ID = "bearer.auth.client.id";
+  public static final String BEARER_AUTH_CLIENT_SECRET = "bearer.auth.client.secret";
+  public static final String BEARER_AUTH_SCOPE = "bearer.auth.scope";
+  public static final String BEARER_AUTH_LOGICAL_CLUSTER = "bearer.auth.logical.cluster";
+  public static final String BEARER_AUTH_IDENTITY_POOL_ID = "bearer.auth.identity.pool";
 
   public static void withClientSslSupport(ConfigDef configDef, String namespace) {
     org.apache.kafka.common.config.ConfigDef sslConfigDef = new org.apache.kafka.common.config

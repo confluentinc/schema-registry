@@ -19,9 +19,21 @@ package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 import java.time.Instant;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
+/**
+ * <code>OauthTokenCache {</code> is a simple  {@link OAuthBearerToken} Cache.
+ * Users can call {@link #isTokenExpired() isTokenExpired()} method to check if cache has null or
+ * expired cache. If the cache is expired then users can call {@link
+ * #setCurrentToken(OAuthBearerToken) setCurrentToken(OAuthBearerToken)} to set a newly retrieved
+ * token. {@link #expiresAtMs expiresAtMs()} is calculated from the token itself at time of setting
+ * the token using {@link #setCurrentToken(OAuthBearerToken) setCurrentToken(OAuthBearerToken)}. In
+ * order to encourage fetching a new token in advance before the token expiry, {@link #expiresAtMs
+ * expiresAtMs()} is altered by multiplying {@link #CACHE_EXPIRY_THRESHOLD
+ * CACHE_EXPIRY_THRESHOLD()}. Thus we consider a shorter lifespan than actual.
+ */
+
 public class OauthTokenCache {
 
-  public static final float CACHE_PERCENTAGE_THRESHOLD = 0.8f;
+  public static final float CACHE_EXPIRY_THRESHOLD = 0.8f;
   private OAuthBearerToken currentToken;
   private long expiresAtMs;
 
@@ -38,7 +50,7 @@ public class OauthTokenCache {
   }
 
   private void updateExpiryTime(long lifespanMs) {
-    this.expiresAtMs = (long) Math.floor(lifespanMs * CACHE_PERCENTAGE_THRESHOLD)
+    this.expiresAtMs = (long) Math.floor(lifespanMs * CACHE_EXPIRY_THRESHOLD)
         + Instant.now().toEpochMilli();
   }
 
