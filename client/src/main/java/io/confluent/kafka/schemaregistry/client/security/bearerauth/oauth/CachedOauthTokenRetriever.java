@@ -29,7 +29,8 @@ import org.apache.kafka.common.security.oauthbearer.secured.ValidateException;
  * will communicate with an OAuth/OIDC provider directly via HTTP to post client credentials ({@link
  * SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_ID}/
  * {@link SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_SECRET})
- * to a publicized token endpoint URL ({@link SchemaRegistryClientConfig#BEARER_AUTH_ISSUER_ENDPOINT_URL}).
+ * to a publicized token endpoint URL
+ * ({@link SchemaRegistryClientConfig#BEARER_AUTH_ISSUER_ENDPOINT_URL}).
  * This class adds caching mechanism over {@link AccessTokenRetriever} using {@link
  * OauthTokenCache}
  */
