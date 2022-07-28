@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.metrics;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Value;
@@ -23,24 +24,42 @@ import org.apache.kafka.common.metrics.stats.Value;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class SchemaRegistryMetric {
+  @Deprecated
   private final AtomicLong count = new AtomicLong();
   private final Sensor sensor;
 
+  @Deprecated
   public SchemaRegistryMetric(Metrics metrics, String sensorName, MetricName metricName) {
-    sensor = metrics.sensor(sensorName);
-    sensor.add(metricName, new Value());
+    this(metrics, sensorName, metricName, new Value());
   }
 
+  public SchemaRegistryMetric(Metrics metrics, String sensorName, MetricName metricName,
+                              MeasurableStat measurableStat) {
+    sensor = metrics.sensor(sensorName);
+    sensor.add(metricName, measurableStat);
+  }
+
+  @Deprecated
   public void increment() {
     sensor.record(count.addAndGet(1));
   }
 
+  @Deprecated
   public void set(long value) {
     count.set(value);
     sensor.record(value);
   }
 
+  @Deprecated
   public long get() {
     return count.get();
+  }
+
+  public void record() {
+    sensor.record();
+  }
+
+  public void record(double value) {
+    sensor.record(value);
   }
 }
