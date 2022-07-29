@@ -35,7 +35,9 @@ public class SchemaRegistryMetric {
 
   public SchemaRegistryMetric(Metrics metrics, String sensorName, MetricName metricName,
                               MeasurableStat measurableStat) {
+    // a new sensor is only created if the sensor name doesn't already exist in metrics
     sensor = metrics.sensor(sensorName);
+    // a new metric is only created if the metric name doesn't already exist in the sensor
     sensor.add(metricName, measurableStat);
   }
 
@@ -56,6 +58,7 @@ public class SchemaRegistryMetric {
   }
 
   public void record() {
+    // equivalent to record(1.0);
     sensor.record();
   }
 
