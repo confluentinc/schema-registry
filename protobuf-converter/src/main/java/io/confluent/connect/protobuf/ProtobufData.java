@@ -241,7 +241,9 @@ public class ProtobufData {
                 protobufSchema
             );
             mapBuilder.setField(keyDescriptor, entryKey);
-            mapBuilder.setField(valueDescriptor, entryValue);
+            if (entryValue != null) {
+              mapBuilder.setField(valueDescriptor, entryValue);
+            }
             newMapValue.add(mapBuilder.build());
           }
           return newMapValue;

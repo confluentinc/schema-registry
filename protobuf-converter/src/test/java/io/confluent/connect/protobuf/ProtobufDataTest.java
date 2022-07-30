@@ -823,6 +823,9 @@ public class ProtobufDataTest {
         .field("mapNonStringKeys",
             SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build()
         )
+        .field("mapNullValues",
+            SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA).build()
+        )
         .field("enum", SchemaBuilder.string()
             .name("Status")
             .optional()
@@ -844,6 +847,7 @@ public class ProtobufDataTest {
         .put("array", Arrays.asList("a", "b", "c"))
         .put("map", Collections.singletonMap("field", 1))
         .put("mapNonStringKeys", Collections.singletonMap(1, 1))
+        .put("mapNullValues", Collections.singletonMap("field", null))
         .put("enum", "INACTIVE");
 
     ProtobufSchemaAndValue convertedRecord = new ProtobufData().fromConnectData(schema, struct);
@@ -888,6 +892,9 @@ public class ProtobufDataTest {
     assertEquals("mapNonStringKeys", fieldElem.getName());
     assertEquals("ConnectDefault3Entry", fieldElem.getType());
     fieldElem = messageElem.getFields().get(12);
+    assertEquals("mapNullValues", fieldElem.getName());
+    assertEquals("ConnectDefault4Entry", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(13);
     assertEquals("enum", fieldElem.getName());
     assertEquals("Status", fieldElem.getType());
 
@@ -928,6 +935,14 @@ public class ProtobufDataTest {
     assertEquals(1, dynamicMessage.getField(fieldDescriptor));
     fieldDescriptor = dynamicMessage.getDescriptorForType().findFieldByName("value");
     assertEquals(1, dynamicMessage.getField(fieldDescriptor));
+
+    fieldDescriptor = message.getDescriptorForType().findFieldByName("mapNullValues");
+    value = message.getField(fieldDescriptor);
+    dynamicMessage = ((List<DynamicMessage>) value).get(0);
+    fieldDescriptor = dynamicMessage.getDescriptorForType().findFieldByName("key");
+    assertEquals("field", dynamicMessage.getField(fieldDescriptor));
+    fieldDescriptor = dynamicMessage.getDescriptorForType().findFieldByName("value");
+    assertEquals("", dynamicMessage.getField(fieldDescriptor));
 
     fieldDescriptor = message.getDescriptorForType().findFieldByName("enum");
     EnumValueDescriptor enumValueDescriptor =
