@@ -16,7 +16,6 @@
 package io.confluent.kafka.schemaregistry.metrics;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
@@ -27,34 +26,47 @@ import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.List;
 
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_API_FAILURE_COUNT;
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_API_SUCCESS_COUNT;
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_AVRO_SCHEMAS_CREATED;
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_AVRO_SCHEMAS_DELETED;
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_DELETED_COUNT;
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_MASTER_SLAVE_ROLE;
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_REGISTERED_COUNT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 public class MetricsTest extends ClusterTestHarness {
-
-  private MetricsContainer container;
 
   public MetricsTest() { super(1, true); }
 
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    container = restApp.restApp.schemaRegistry().getMetricsContainer();
   }
 
   @Test
   public void testLeaderFollowerMetric() throws Exception {
     MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
     ObjectName leaderFollowerMetricName =
-            new ObjectName("kafka.schema.registry:type=master-slave-role");
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_MASTER_SLAVE_ROLE);
     assertEquals(1.0,
-            mBeanServer.getAttribute(leaderFollowerMetricName, "master-slave-role"));
+            mBeanServer.getAttribute(leaderFollowerMetricName, METRIC_NAME_MASTER_SLAVE_ROLE));
   }
 
   @Test
   public void testSchemaCreatedCount() throws Exception {
-    RestService service = restApp.restClient;
+    MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+    ObjectName schemasCreated =
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_REGISTERED_COUNT);
+    ObjectName avroCreated =
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_AVRO_SCHEMAS_CREATED);
+    ObjectName schemasDeleted =
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_DELETED_COUNT);
+    ObjectName avroDeleted =
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_AVRO_SCHEMAS_DELETED);
 
+    RestService service = restApp.restClient;
     String subject = "testTopic1";
     int schemaCount = 3;
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(schemaCount);
@@ -65,8 +77,6 @@ public class MetricsTest extends ClusterTestHarness {
       String schema = schemas.get(i);
       TestUtils.registerAndVerifySchema(service, schema, schemaIdCounter++, subject);
     }
-    assertEquals(schemaCount, container.getSchemasCreated().get());
-    assertEquals(schemaCount, container.getSchemasCreated(AvroSchema.TYPE).get());
 
     // Re-registering schemas should not increase metrics.
     for (int i = 0; i < schemaCount; i++) {
@@ -74,24 +84,26 @@ public class MetricsTest extends ClusterTestHarness {
       service.registerSchema(schemaString, subject);
     }
 
-    assertEquals(schemaCount, container.getSchemasCreated().get());
-    assertEquals(schemaCount, container.getSchemasCreated(AvroSchema.TYPE).get());
-
+    // Deleting schemas should not modify create count.
     for (Integer i = 1; i < schemaIdCounter; i++) {
       assertEquals(i, service.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
                                                   subject, i.toString()));
     }
 
-    // Deleting schemas should not modify create count.
-    assertEquals(schemaCount, container.getSchemasCreated().get());
-    assertEquals(schemaCount, container.getSchemasCreated(AvroSchema.TYPE).get());
-
-    assertEquals(schemaCount, container.getSchemasDeleted().get());
-    assertEquals(schemaCount, container.getSchemasDeleted(AvroSchema.TYPE).get());
+    assertEquals((double) schemaCount, mBeanServer.getAttribute(schemasCreated, METRIC_NAME_REGISTERED_COUNT));
+    assertEquals((double) schemaCount, mBeanServer.getAttribute(avroCreated, METRIC_NAME_AVRO_SCHEMAS_CREATED));
+    assertEquals((double) schemaCount, mBeanServer.getAttribute(schemasDeleted, METRIC_NAME_DELETED_COUNT));
+    assertEquals((double) schemaCount, mBeanServer.getAttribute(avroDeleted, METRIC_NAME_AVRO_SCHEMAS_DELETED));
   }
 
   @Test
   public void testApiCallMetrics() throws Exception {
+    MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+    ObjectName apiSuccess =
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_API_SUCCESS_COUNT);
+    ObjectName apiFailure =
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_API_FAILURE_COUNT);
+
     String subject = "testTopic1";
     int schemaCount = 3;
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(schemaCount);
@@ -104,14 +116,14 @@ public class MetricsTest extends ClusterTestHarness {
     }
 
     // We perform two operations (register & get) for each schema
-    assertEquals(schemaCount * 2, container.getApiCallsSuccess().get());
-    assertEquals(0, container.getApiCallsFailure().get());
+    assertEquals((double) schemaCount * 2, mBeanServer.getAttribute(apiSuccess, METRIC_NAME_API_SUCCESS_COUNT));
+    assertEquals(0.0, mBeanServer.getAttribute(apiFailure, METRIC_NAME_API_FAILURE_COUNT));
 
     try {
       restApp.restClient.getId(100);
       fail("Schema lookup with missing ID expected to fail");
     } catch (RestClientException rce) {
-      assertEquals(1, container.getApiCallsFailure().get());
+      assertEquals(1.0, mBeanServer.getAttribute(apiFailure, METRIC_NAME_API_FAILURE_COUNT));
     }
   }
 }
