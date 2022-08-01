@@ -191,9 +191,9 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   }
 
   private static void updateMetrics(SchemaRegistryMetric total, SchemaRegistryMetric perType) {
-    total.increment();
+    total.record();
     if (perType != null) {
-      perType.increment();
+      perType.record();
     }
   }
 }
