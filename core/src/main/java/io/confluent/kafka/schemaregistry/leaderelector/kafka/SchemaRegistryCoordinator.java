@@ -167,7 +167,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     log.debug("Member information: {}", memberConfigs);
 
     if (nodeCountMetric != null) {
-      nodeCountMetric.set(memberConfigs.size());
+      nodeCountMetric.record(memberConfigs.size());
     }
 
     // Compute the leader as the leader-eligible member with the "smallest" (lexicographically) ID.
