@@ -27,10 +27,13 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
+import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.stats.CumulativeCount;
+import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.SystemTime;
 
 import java.util.Collections;
@@ -50,6 +53,19 @@ public class MetricsContainer {
   public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
+  public static final String METRIC_NAME_MASTER_SLAVE_ROLE = "master-slave-role";
+  public static final String METRIC_NAME_NODE_COUNT = "node-count";
+  public static final String METRIC_NAME_CUSTOM_SCHEMA_PROVIDER = "custom-schema-provider-count";
+  public static final String METRIC_NAME_API_SUCCESS_COUNT = "api-success-count";
+  public static final String METRIC_NAME_API_FAILURE_COUNT = "api-failure-count";
+  public static final String METRIC_NAME_REGISTERED_COUNT = "registered-count";
+  public static final String METRIC_NAME_DELETED_COUNT = "deleted-count";
+  public static final String METRIC_NAME_AVRO_SCHEMAS_CREATED = "avro-schemas-created";
+  public static final String METRIC_NAME_AVRO_SCHEMAS_DELETED = "avro-schemas-deleted";
+  public static final String METRIC_NAME_JSON_SCHEMAS_CREATED = "json-schemas-created";
+  public static final String METRIC_NAME_JSON_SCHEMAS_DELETED = "json-schemas-deleted";
+  public static final String METRIC_NAME_PB_SCHEMAS_CREATED = "protobuf-schemas-created";
+  public static final String METRIC_NAME_PB_SCHEMAS_DELETED = "protobuf-schemas-deleted";
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
@@ -93,38 +109,43 @@ public class MetricsContainer {
                             TimeUnit.MILLISECONDS);
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime(), metricsContext);
 
-    this.isLeaderNode = createMetric("master-slave-role",
+    this.isLeaderNode = createMetric(METRIC_NAME_MASTER_SLAVE_ROLE,
             "1.0 indicates the node is the active leader in the cluster and is the"
             + " node where all register schema and config update requests are "
-            + "served.");
-    this.nodeCount = createMetric("node-count", "Number of Schema Registry nodes in the cluster");
+            + "served.", new Value());
+    this.nodeCount = createMetric(METRIC_NAME_NODE_COUNT,
+            "Number of Schema Registry nodes in the cluster", new Value());
 
-    this.apiCallsSuccess = createMetric("api-success-count", "Number of successful API calls");
-    this.apiCallsFailure = createMetric("api-failure-count", "Number of failed API calls");
+    this.apiCallsSuccess = createMetric(METRIC_NAME_API_SUCCESS_COUNT,
+            "Number of successful API calls", new CumulativeCount());
+    this.apiCallsFailure = createMetric(METRIC_NAME_API_FAILURE_COUNT,
+            "Number of failed API calls", new CumulativeCount());
 
-    this.customSchemaProviders = createMetric("custom-schema-provider-count",
-            "Number of custom schema providers");
+    this.customSchemaProviders = createMetric(METRIC_NAME_CUSTOM_SCHEMA_PROVIDER,
+            "Number of custom schema providers", new Value());
 
-    this.schemasCreated = createMetric("registered-count", "Number of registered schemas");
-    this.schemasDeleted = createMetric("deleted-count", "Number of deleted schemas");
+    this.schemasCreated = createMetric(METRIC_NAME_REGISTERED_COUNT, "Number of registered schemas",
+            new CumulativeCount());
+    this.schemasDeleted = createMetric(METRIC_NAME_DELETED_COUNT, "Number of deleted schemas",
+            new CumulativeCount());
 
-    this.avroSchemasCreated = createMetric("avro-schemas-created",
-            "Number of registered Avro schemas");
+    this.avroSchemasCreated = createMetric(METRIC_NAME_AVRO_SCHEMAS_CREATED,
+            "Number of registered Avro schemas", new CumulativeCount());
 
-    this.avroSchemasDeleted = createMetric("avro-schemas-deleted",
-            "Number of deleted Avro schemas");
+    this.avroSchemasDeleted = createMetric(METRIC_NAME_AVRO_SCHEMAS_DELETED,
+            "Number of deleted Avro schemas", new CumulativeCount());
 
-    this.jsonSchemasCreated = createMetric("json-schemas-created",
-            "Number of registered JSON schemas");
+    this.jsonSchemasCreated = createMetric(METRIC_NAME_JSON_SCHEMAS_CREATED,
+            "Number of registered JSON schemas", new CumulativeCount());
 
-    this.jsonSchemasDeleted = createMetric("json-schemas-deleted",
-            "Number of deleted JSON schemas");
+    this.jsonSchemasDeleted = createMetric(METRIC_NAME_JSON_SCHEMAS_DELETED,
+            "Number of deleted JSON schemas", new CumulativeCount());
 
-    this.protobufSchemasCreated = createMetric("protobuf-schemas-created",
-            "Number of registered Protobuf schemas");
+    this.protobufSchemasCreated = createMetric(METRIC_NAME_PB_SCHEMAS_CREATED,
+            "Number of registered Protobuf schemas", new CumulativeCount());
 
-    this.protobufSchemasDeleted = createMetric("protobuf-schemas-deleted",
-            "Number of deleted Protobuf schemas");
+    this.protobufSchemasDeleted = createMetric(METRIC_NAME_PB_SCHEMAS_DELETED,
+            "Number of deleted Protobuf schemas", new CumulativeCount());
   }
 
   public MetricsContext getMetricsContext() {
@@ -137,14 +158,16 @@ public class MetricsContainer {
     return reporter;
   }
 
-  private SchemaRegistryMetric createMetric(String name, String metricDescription) {
-    return createMetric(name, name, name, metricDescription);
+  private SchemaRegistryMetric createMetric(String name, String metricDescription,
+                                            MeasurableStat stat) {
+    return createMetric(name, name, name, metricDescription, stat);
   }
 
   private SchemaRegistryMetric createMetric(String sensorName, String metricName,
-                                            String metricGroup, String metricDescription) {
+                                            String metricGroup, String metricDescription,
+                                            MeasurableStat stat) {
     MetricName mn = new MetricName(metricName, metricGroup, metricDescription, configuredTags);
-    return new SchemaRegistryMetric(metrics, sensorName, mn);
+    return new SchemaRegistryMetric(metrics, sensorName, mn, stat);
   }
 
   public SchemaRegistryMetric getNodeCountMetric() {

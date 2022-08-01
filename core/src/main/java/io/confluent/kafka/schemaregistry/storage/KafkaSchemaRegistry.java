@@ -194,7 +194,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             schemaProviderConfigs);
     // Allow custom providers to override default providers
     registerProviders(providerMap, customSchemaProviders);
-    metricsContainer.getCustomSchemaProviderCount().set(customSchemaProviders.size());
+    metricsContainer.getCustomSchemaProviderCount().record(customSchemaProviders.size());
     return providerMap;
   }
 
@@ -396,7 +396,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
         idGenerator.init();
       }
-      metricsContainer.getLeaderNode().set(isLeader() ? 1 : 0);
+      metricsContainer.getLeaderNode().record(isLeader() ? 1 : 0);
     } finally {
       kafkaStore.leaderLock().unlock();
     }
