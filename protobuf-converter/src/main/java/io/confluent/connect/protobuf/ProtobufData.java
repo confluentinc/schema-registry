@@ -449,6 +449,9 @@ public class ProtobufData {
                 mapEntry.getKey(),
                 protobufSchema
             );
+            if (entryKey != null) {
+              mapBuilder.setField(keyDescriptor, entryKey);
+            }
             Object entryValue = fromConnectData(
                 getFieldType(valueDescriptor),
                 schema.valueSchema(),
@@ -456,8 +459,9 @@ public class ProtobufData {
                 mapEntry.getValue(),
                 protobufSchema
             );
-            mapBuilder.setField(keyDescriptor, entryKey);
-            mapBuilder.setField(valueDescriptor, entryValue);
+            if (entryValue != null) {
+              mapBuilder.setField(valueDescriptor, entryValue);
+            }
             newMapValue.add(mapBuilder.build());
           }
           return newMapValue;
@@ -512,7 +516,9 @@ public class ProtobufData {
                 if (fieldDescriptor == null) {
                   throw new DataException("Cannot find field with name " + fieldName);
                 }
-                messageBuilder.setField(fieldDescriptor, fieldValue);
+                if (fieldValue != null) {
+                  messageBuilder.setField(fieldDescriptor, fieldValue);
+                }
               }
             }
             return messageBuilder.build();
