@@ -842,6 +842,24 @@ public class RestService implements Configurable {
     return response;
   }
 
+  public String getOnlySchemaById(int id) throws RestClientException, IOException {
+    return getOnlySchemaById(DEFAULT_REQUEST_PROPERTIES,id,null,false);
+  }
+
+  public String getOnlySchemaById(Map<String, String> requestProperties,
+                                  int id, String subject, boolean fetchMaxId)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/schema")
+            .queryParam("fetchMaxId", fetchMaxId);
+    if (subject != null) {
+      builder.queryParam("subject", subject);
+    }
+    String path = builder.build(id).toString();
+    JsonNode response = httpRequest(path,"GET",null,
+            requestProperties,GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
+    return response.toString();
+  }
+
   public List<String> getSchemaTypes() throws IOException, RestClientException {
     return getSchemaTypes(DEFAULT_REQUEST_PROPERTIES);
   }

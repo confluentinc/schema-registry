@@ -33,12 +33,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.Consumes;
-import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.PathParam;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -96,7 +96,6 @@ public class SchemasResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    int fromIndex = offset;
     int toIndex = limit > 0 ? offset + limit : Integer.MAX_VALUE;
     int index = 0;
     while (schemas.hasNext() && index < toIndex) {
@@ -231,6 +230,48 @@ public class SchemasResource {
     }
 
     return versions;
+  }
+
+  @GET
+  @Path("/ids/{id}/schema")
+  @DocumentedName("getOnlySchemaById")
+  @Operation(summary = "Get schema by ID",
+      description = "Retrieves the schema identified by the input ID.",
+      responses = {
+          @ApiResponse(responseCode = "200", description = "schema",content = @Content(
+             schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class))),
+          @ApiResponse(responseCode = "404", description = "Error code "
+                  + "40403 -- Schema not found\n"),
+          @ApiResponse(responseCode = "500",description = "Error code "
+                  + "50001 -- Error in the backend data store\n")
+      })
+  @PerformanceMetric("schemas.ids.get-schema.only")
+  public String getSchemaOnly(
+      @Parameter(description = "Globally unique "
+              + "identifier of the schema", required = true)
+      @PathParam("id") Integer id,
+      @Parameter(description = "Name of the subject")
+      @QueryParam("subject") String subject,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Whether to fetch the "
+              + "maximum schema identifier that exists")
+      @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
+    String errorMessage = "Error while retrieving "
+            + "schema with id " + id + " from the schema registry";
+    String schema ;
+    try {
+      schema = schemaRegistry.get(id, subject, format, fetchMaxId).getSchemaString();
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+    if (schema == null) {
+      throw Errors.schemaNotFoundException(id);
+    }
+    return schema;
   }
 
   @GET
