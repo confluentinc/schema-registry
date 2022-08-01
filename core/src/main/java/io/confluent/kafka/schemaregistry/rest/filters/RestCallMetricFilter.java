@@ -37,11 +37,11 @@ public class RestCallMetricFilter implements ContainerResponseFilter {
                      ContainerResponseContext containerResponseContext) throws IOException {
     switch (containerResponseContext.getStatusInfo().getFamily()) {
       case SUCCESSFUL:
-        metricSucceeded.increment();
+        metricSucceeded.record();
         break;
       case CLIENT_ERROR:
       case SERVER_ERROR:
-        metricFailed.increment();
+        metricFailed.record();
         break;
       default:
         break;
