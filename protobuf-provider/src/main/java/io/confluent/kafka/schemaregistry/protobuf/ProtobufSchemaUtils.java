@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.protobuf;
 
 import static com.squareup.wire.schema.internal.UtilKt.MAX_TAG_VALUE;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.DEFAULT_LOCATION;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -55,10 +56,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+import kotlin.Pair;
 import kotlin.ranges.IntRange;
 
 public class ProtobufSchemaUtils {
@@ -173,8 +176,22 @@ public class ProtobufSchemaUtils {
     }
     if (!protoFile.getExtendDeclarations().isEmpty()) {
       sb.append('\n');
-      for (ExtendElement extendDeclaration : protoFile.getExtendDeclarations()) {
-        sb.append(extendDeclaration.toSchema());
+      List<ExtendElement> extendElems = protoFile.getExtendDeclarations();
+      if (normalize) {
+        extendElems = extendElems.stream()
+            .flatMap(e -> e.getFields().stream().map(f -> new Pair<>(resolve(ctx, e.getName()), f)))
+            .collect(Collectors.groupingBy(
+                Pair::getFirst,
+                LinkedHashMap::new,  // deterministic order
+                Collectors.mapping(Pair::getSecond, Collectors.toList()))
+            )
+            .entrySet()
+            .stream()
+            .map(e -> new ExtendElement(DEFAULT_LOCATION, e.getKey(), "", e.getValue()))
+            .collect(Collectors.toList());
+      }
+      for (ExtendElement extendElem : extendElems) {
+        sb.append(toString(ctx, extendElem, normalize));
       }
     }
     if (!protoFile.getServices().isEmpty()) {
@@ -423,14 +440,42 @@ public class ProtobufSchemaUtils {
     }
     if (!type.getGroups().isEmpty()) {
       sb.append('\n');
-      for (GroupElement group : type.getGroups()) {
-        appendIndented(sb, group.toSchema());
+      List<GroupElement> groups = type.getGroups();
+      if (normalize) {
+        groups = new ArrayList<>(groups);
+        groups.sort(Comparator.comparing(GroupElement::getTag));
+      }
+      for (GroupElement group : groups) {
+        appendIndented(sb, toString(ctx, group, normalize));
       }
     }
     if (!type.getExtensions().isEmpty()) {
       sb.append('\n');
-      for (ExtensionsElement extension : type.getExtensions()) {
-        appendIndented(sb, extension.toSchema());
+      List<ExtensionsElement> extensions = type.getExtensions();
+      if (normalize) {
+        extensions = extensions.stream()
+            .flatMap(r -> r.getValues().stream()
+                .map(o -> new ExtensionsElement(
+                    r.getLocation(),
+                    r.getDocumentation(),
+                    Collections.singletonList(o))
+                )
+            )
+            .collect(Collectors.toList());
+        Comparator<Object> cmp = Comparator.comparing(r -> {
+          Object o = ((ExtensionsElement)r).getValues().get(0);
+          if (o instanceof IntRange) {
+            return ((IntRange) o).getStart();
+          } else if (o instanceof Integer) {
+            return (Integer) o;
+          } else {
+            return Integer.MAX_VALUE;
+          }
+        });
+        extensions.sort(cmp);
+      }
+      for (ExtensionsElement extension : extensions) {
+        appendIndented(sb, toString(ctx, extension, normalize));
       }
     }
     List<TypeElement> types = filterTypes(ctx, type.getNestedTypes(), normalize);
@@ -492,6 +537,37 @@ public class ProtobufSchemaUtils {
     return sb.toString();
   }
 
+  private static String toString(Context ctx, ExtensionsElement type, boolean normalize) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("extensions ");
+
+    boolean first = true;
+    for (Object value : type.getValues()) {
+      if (first) {
+        first = false;
+      } else {
+        sb.append(", ");
+      }
+      if (value instanceof Integer) {
+        sb.append(value);
+      } else if (value instanceof IntRange) {
+        IntRange range = (IntRange) value;
+        sb.append(range.getStart());
+        sb.append(" to ");
+        int last = range.getEndInclusive();
+        if (last < MAX_TAG_VALUE) {
+          sb.append(last);
+        } else {
+          sb.append("max");
+        }
+      } else {
+        throw new IllegalArgumentException();
+      }
+    }
+    sb.append(";\n");
+    return sb.toString();
+  }
+
   private static String toString(Context ctx, OneOfElement type, boolean normalize) {
     StringBuilder sb = new StringBuilder();
     sb.append("oneof ");
@@ -519,8 +595,62 @@ public class ProtobufSchemaUtils {
     }
     if (!type.getGroups().isEmpty()) {
       sb.append('\n');
-      for (GroupElement group : type.getGroups()) {
-        appendIndented(sb, group.toSchema());
+      List<GroupElement> groups = type.getGroups();
+      if (normalize) {
+        groups = new ArrayList<>(groups);
+        groups.sort(Comparator.comparing(GroupElement::getTag));
+      }
+      for (GroupElement group : groups) {
+        appendIndented(sb, toString(ctx, group, normalize));
+      }
+    }
+    sb.append("}\n");
+    return sb.toString();
+  }
+
+  private static String toString(Context ctx, GroupElement group, boolean normalize) {
+    StringBuilder sb = new StringBuilder();
+    Label label = group.getLabel();
+    if (label != null) {
+      sb.append(label.name().toLowerCase(Locale.US));
+      sb.append(" ");
+    }
+    sb.append("group ");
+    sb.append(group.getName());
+    sb.append(" = ");
+    sb.append(group.getTag());
+    sb.append(" {");
+    if (!group.getFields().isEmpty()) {
+      sb.append('\n');
+      List<FieldElement> fields = group.getFields();
+      if (normalize) {
+        fields = new ArrayList<>(fields);
+        fields.sort(Comparator.comparing(FieldElement::getTag));
+      }
+      for (FieldElement field : fields) {
+        appendIndented(sb, toString(ctx, field, normalize));
+      }
+    }
+    sb.append("}\n");
+    return sb.toString();
+  }
+
+  private static String toString(Context ctx, ExtendElement extendElem, boolean normalize) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("extend ");
+    // Names have been resolved when grouping by name
+    String extendName = extendElem.getName();
+    sb.append(extendName);
+    sb.append(" {");
+    if (!extendElem.getFields().isEmpty()) {
+      sb.append('\n');
+      List<FieldElement> fields = extendElem.getFields();
+      if (normalize) {
+        fields = new ArrayList<>(fields);
+        fields.sort(Comparator.comparing(FieldElement::getTag));
+      }
+      for (FieldElement field : fields) {
+        appendIndented(sb, toString(ctx, field, normalize));
       }
     }
     sb.append("}\n");

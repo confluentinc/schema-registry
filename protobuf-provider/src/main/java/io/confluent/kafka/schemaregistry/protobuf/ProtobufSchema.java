@@ -21,6 +21,7 @@ import com.google.protobuf.AnyProto;
 import com.google.protobuf.ApiProto;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
+import com.google.protobuf.DescriptorProtos.DescriptorProto.ExtensionRange;
 import com.google.protobuf.DescriptorProtos.DescriptorProto.ReservedRange;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto.EnumReservedRange;
@@ -69,6 +70,8 @@ import com.squareup.wire.schema.Location;
 import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.EnumConstantElement;
 import com.squareup.wire.schema.internal.parser.EnumElement;
+import com.squareup.wire.schema.internal.parser.ExtendElement;
+import com.squareup.wire.schema.internal.parser.ExtensionsElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import com.squareup.wire.schema.internal.parser.OneOfElement;
@@ -521,6 +524,22 @@ public class ProtobufSchema implements ParsedSchema {
       ServiceElement service = toService(sd);
       services.add(service);
     }
+    Map<String, ImmutableList.Builder<FieldElement>> extendFieldElements = new LinkedHashMap<>();
+    for (FieldDescriptorProto fd : file.getExtensionList()) {
+      // Note that the extendee is a fully qualified name
+      ImmutableList.Builder<FieldElement> fields = extendFieldElements.computeIfAbsent(
+          fd.getExtendee(), k -> ImmutableList.builder());
+      fields.add(toField(file, fd, false));
+    }
+    for (DescriptorProto md : file.getMessageTypeList()) {
+      addExtendFieldElements(file, md, extendFieldElements);
+    }
+    ImmutableList.Builder<ExtendElement> extendElements = ImmutableList.builder();
+    for (Map.Entry<String, ImmutableList.Builder<FieldElement>> extendFieldElement :
+        extendFieldElements.entrySet()) {
+      extendElements.add(new ExtendElement(DEFAULT_LOCATION,
+          extendFieldElement.getKey(), "", extendFieldElement.getValue().build()));
+    }
     ImmutableList.Builder<String> imports = ImmutableList.builder();
     ImmutableList.Builder<String> publicImports = ImmutableList.builder();
     List<String> dependencyList = file.getDependencyList();
@@ -617,7 +636,6 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    // NOTE: skip extensions
     return new ProtoFileElement(DEFAULT_LOCATION,
         packageName,
         syntax,
@@ -625,7 +643,7 @@ public class ProtobufSchema implements ParsedSchema {
         publicImports.build(),
         types.build(),
         services.build(),
-        Collections.emptyList(),
+        extendElements.build(),
         options.build()
     );
   }
@@ -636,6 +654,7 @@ public class ProtobufSchema implements ParsedSchema {
     ImmutableList.Builder<FieldElement> fields = ImmutableList.builder();
     ImmutableList.Builder<TypeElement> nested = ImmutableList.builder();
     ImmutableList.Builder<ReservedElement> reserved = ImmutableList.builder();
+    ImmutableList.Builder<ExtensionsElement> extensions = ImmutableList.builder();
     LinkedHashMap<String, ImmutableList.Builder<FieldElement>> oneofsMap = new LinkedHashMap<>();
     for (OneofDescriptorProto od : descriptor.getOneofDeclList()) {
       oneofsMap.put(od.getName(), ImmutableList.builder());
@@ -671,6 +690,10 @@ public class ProtobufSchema implements ParsedSchema {
       );
       reserved.add(reservedElem);
     }
+    for (ExtensionRange extensionRange : descriptor.getExtensionRangeList()) {
+      ExtensionsElement extension = toExtension(extensionRange);
+      extensions.add(extension);
+    }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (descriptor.getOptions().hasNoStandardDescriptorAccessor()) {
       OptionElement option = new OptionElement(
@@ -700,7 +723,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    // NOTE: skip extensions, groups
+    // NOTE: skip groups
     return new MessageElement(DEFAULT_LOCATION,
         name,
         "",
@@ -712,7 +735,7 @@ public class ProtobufSchema implements ParsedSchema {
             .map(e -> toOneof(e.getKey(), e.getValue()))
             .filter(e -> !e.getFields().isEmpty())
             .collect(Collectors.toList()),
-        Collections.emptyList(),
+        extensions.build(),
         Collections.emptyList()
     );
   }
@@ -834,6 +857,14 @@ public class ProtobufSchema implements ParsedSchema {
     return new ReservedElement(DEFAULT_LOCATION, "", values);
   }
 
+  private static ExtensionsElement toExtension(ExtensionRange range) {
+    List<Object> values = new ArrayList<>();
+    int start = range.getStart();
+    int end = range.getEnd();
+    values.add(start == end - 1 ? start : new IntRange(start, end - 1));
+    return new ExtensionsElement(DEFAULT_LOCATION, "", values);
+  }
+
   private static ServiceElement toService(ServiceDescriptorProto sd) {
     String name = sd.getName();
     log.trace("*** service name: {}", name);
@@ -874,6 +905,18 @@ public class ProtobufSchema implements ParsedSchema {
       options.add(option);
     }
     return new ServiceElement(DEFAULT_LOCATION, name, "", methods.build(), options.build());
+  }
+
+  private static void addExtendFieldElements(FileDescriptorProto file, DescriptorProto descriptor,
+      Map<String, ImmutableList.Builder<FieldElement>> extendFieldElements) {
+    for (FieldDescriptorProto fd : descriptor.getExtensionList()) {
+      ImmutableList.Builder<FieldElement> fields = extendFieldElements.computeIfAbsent(
+          fd.getExtendee(), k -> ImmutableList.builder());
+      fields.add(toField(file, fd, false));
+    }
+    for (DescriptorProto nestedDesc : descriptor.getNestedTypeList()) {
+      addExtendFieldElements(file, nestedDesc, extendFieldElements);
+    }
   }
 
   private static FieldElement toField(
@@ -1038,6 +1081,42 @@ public class ProtobufSchema implements ParsedSchema {
       for (ServiceElement serviceElement : rootElem.getServices()) {
         ServiceDefinition service = toDynamicService(serviceElement);
         schema.addServiceDefinition(service);
+      }
+      for (ExtendElement extendElement : rootElem.getExtendDeclarations()) {
+        for (FieldElement field : extendElement.getFields()) {
+          Field.Label fieldLabel = field.getLabel();
+          String label = fieldLabel != null ? fieldLabel.toString().toLowerCase() : null;
+          String fieldType = field.getType();
+          String defaultVal = field.getDefaultValue();
+          String jsonName = field.getJsonName();
+          Map<String, OptionElement> options = mergeOptions(field.getOptions());
+          CType ctype = findOption(CTYPE, options)
+              .map(o -> CType.valueOf(o.getValue().toString())).orElse(null);
+          Boolean isPacked = findOption(PACKED, options)
+              .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+          JSType jstype = findOption(JSTYPE, options)
+              .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
+          Boolean isDeprecated = findOption(DEPRECATED, options)
+              .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+          Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
+          String doc = findDoc(meta);
+          Map<String, String> params = findParams(meta);
+          schema.addExtendDefinition(
+              extendElement.getName(),
+              label,
+              fieldType,
+              field.getName(),
+              field.getTag(),
+              defaultVal,
+              jsonName,
+              doc,
+              params,
+              ctype,
+              isPacked,
+              jstype,
+              isDeprecated
+          );
+        }
       }
       for (String ref : rootElem.getImports()) {
         ProtoFileElement dep = dependencies.get(ref);
@@ -1308,6 +1387,20 @@ public class ProtobufSchema implements ParsedSchema {
           message.addReservedRange(range.getStart(), range.getEndInclusive() + 1);
         } else {
           throw new IllegalStateException("Unsupported reserved type: " + elem.getClass()
+              .getName());
+        }
+      }
+    }
+    for (ExtensionsElement extension : messageElem.getExtensions()) {
+      for (Object elem : extension.getValues()) {
+        if (elem instanceof Integer) {
+          int tag = (Integer) elem;
+          message.addExtensionRange(tag, tag + 1);
+        } else if (elem instanceof IntRange) {
+          IntRange range = (IntRange) elem;
+          message.addExtensionRange(range.getStart(), range.getEndInclusive() + 1);
+        } else {
+          throw new IllegalStateException("Unsupported extensions type: " + elem.getClass()
               .getName());
         }
       }
