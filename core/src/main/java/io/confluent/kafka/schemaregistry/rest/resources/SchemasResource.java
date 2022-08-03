@@ -238,11 +238,11 @@ public class SchemasResource {
   @Operation(summary = "Get schema by ID",
       description = "Retrieves the schema identified by the input ID.",
       responses = {
-          @ApiResponse(responseCode = "200", description = "schema",content = @Content(
+          @ApiResponse(responseCode = "200", description = "schema", content = @Content(
              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class))),
           @ApiResponse(responseCode = "404", description = "Error code "
                   + "40403 -- Schema not found\n"),
-          @ApiResponse(responseCode = "500",description = "Error code "
+          @ApiResponse(responseCode = "500", description = "Error code "
                   + "50001 -- Error in the backend data store\n")
       })
   @PerformanceMetric("schemas.ids.get-schema.only")
@@ -253,15 +253,12 @@ public class SchemasResource {
       @Parameter(description = "Name of the subject")
       @QueryParam("subject") String subject,
       @Parameter(description = "Desired output format, dependent on schema type")
-      @DefaultValue("") @QueryParam("format") String format,
-      @Parameter(description = "Whether to fetch the "
-              + "maximum schema identifier that exists")
-      @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
+      @DefaultValue("") @QueryParam("format") String format) {
     String errorMessage = "Error while retrieving "
             + "schema with id " + id + " from the schema registry";
     String schema ;
     try {
-      schema = schemaRegistry.get(id, subject, format, fetchMaxId).getSchemaString();
+      schema = schemaRegistry.get(id, subject, format, false).getSchemaString();
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
