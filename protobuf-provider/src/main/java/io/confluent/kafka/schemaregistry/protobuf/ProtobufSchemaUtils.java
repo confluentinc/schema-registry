@@ -650,6 +650,7 @@ public class ProtobufSchemaUtils {
       return types;
     }
   }
+
   private static void formatOptionMap(
       StringBuilder sb, Map<String, Object> valueMap, boolean normalize) {
     int lastIndex = valueMap.size() - 1;
