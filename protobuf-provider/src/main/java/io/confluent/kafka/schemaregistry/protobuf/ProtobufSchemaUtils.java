@@ -151,24 +151,19 @@ public class ProtobufSchemaUtils {
         sb.append(toOptionString(option, normalize));
       }
     }
-    if (!protoFile.getTypes().isEmpty()) {
+    List<TypeElement> types = filterTypes(ctx, protoFile.getTypes(), normalize);
+    if (!types.isEmpty()) {
       sb.append('\n');
       // Order of message types is significant since the client is using
       // the non-normalized schema to serialize message indexes
-      for (TypeElement typeElement : protoFile.getTypes()) {
+      for (TypeElement typeElement : types) {
         if (typeElement instanceof MessageElement) {
-          if (normalize) {
-            TypeElementInfo typeInfo = ctx.getType(typeElement.getName(), true);
-            if (typeInfo != null && typeInfo.isMap()) {
-              continue;  // don't emit synthetic map message
-            }
-          }
           try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
             sb.append(toString(ctx, (MessageElement) typeElement, normalize));
           }
         }
       }
-      for (TypeElement typeElement : protoFile.getTypes()) {
+      for (TypeElement typeElement : types) {
         if (typeElement instanceof EnumElement) {
           try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
             sb.append(toString(ctx, (EnumElement) typeElement, normalize));
@@ -438,24 +433,19 @@ public class ProtobufSchemaUtils {
         appendIndented(sb, extension.toSchema());
       }
     }
-    if (!type.getNestedTypes().isEmpty()) {
+    List<TypeElement> types = filterTypes(ctx, type.getNestedTypes(), normalize);
+    if (!types.isEmpty()) {
       sb.append('\n');
       // Order of message types is significant since the client is using
       // the non-normalized schema to serialize message indexes
-      for (TypeElement typeElement : type.getNestedTypes()) {
+      for (TypeElement typeElement : types) {
         if (typeElement instanceof MessageElement) {
-          if (normalize) {
-            TypeElementInfo typeInfo = ctx.getType(typeElement.getName(), true);
-            if (typeInfo != null && typeInfo.isMap()) {
-              continue;  // don't emit synthetic map message
-            }
-          }
           try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
             appendIndented(sb, toString(ctx, (MessageElement) typeElement, normalize));
           }
         }
       }
-      for (TypeElement typeElement : type.getNestedTypes()) {
+      for (TypeElement typeElement : types) {
         if (typeElement instanceof EnumElement) {
           try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
             appendIndented(sb, toString(ctx, (EnumElement) typeElement, normalize));
@@ -640,6 +630,25 @@ public class ProtobufSchemaUtils {
         break;
     }
     return sb.toString();
+  }
+
+  private static List<TypeElement> filterTypes(
+      Context ctx, List<TypeElement> types, boolean normalize) {
+    if (normalize) {
+      return types.stream()
+          .filter(type -> {
+            if (type instanceof MessageElement) {
+              TypeElementInfo typeInfo = ctx.getType(type.getName(), true);
+              // Don't emit synthetic map message
+              return typeInfo == null || !typeInfo.isMap();
+            } else {
+              return true;
+            }
+          })
+          .collect(Collectors.toList());
+    } else {
+      return types;
+    }
   }
 
   private static void formatOptionMap(
