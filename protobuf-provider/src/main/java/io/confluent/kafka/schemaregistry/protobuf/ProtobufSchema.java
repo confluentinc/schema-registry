@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.protobuf;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.AnyProto;
 import com.google.protobuf.ApiProto;
 import com.google.protobuf.DescriptorProtos;
@@ -38,6 +39,7 @@ import com.google.protobuf.DescriptorProtos.ServiceDescriptorProto;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DurationProto;
@@ -90,6 +92,7 @@ import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
 import java.util.LinkedHashMap;
+import java.util.stream.Stream;
 import kotlin.Pair;
 import kotlin.ranges.IntRange;
 import org.slf4j.Logger;
@@ -657,9 +660,20 @@ public class ProtobufSchema implements ParsedSchema {
     return options.getAllFields().entrySet().stream()
         .filter(e -> e.getKey().isExtension()
             && !e.getKey().getFullName().startsWith(CONFLUENT_PREFIX))
-        .map(e -> new OptionElement(e.getKey().getFullName(),
-            toKind(e.getValue()), toOptionValue(e.getValue()), true))
+        .flatMap(e -> toOptionElements(e.getKey().getFullName(), e.getValue()))
         .collect(Collectors.toList());
+  }
+
+  private static Stream<OptionElement> toOptionElements(String name, Object value) {
+    if (value instanceof List) {
+      return ((List<?>) value).stream().map(v -> toOptionElement(name, v));
+    } else {
+      return Stream.of(toOptionElement(name, value));
+    }
+  }
+
+  private static OptionElement toOptionElement(String name, Object value) {
+    return new OptionElement(name, toKind(value), toOptionValue(value), true);
   }
 
   private static Kind toKind(Object value) {
@@ -669,7 +683,7 @@ public class ProtobufSchema implements ParsedSchema {
       return Kind.BOOLEAN;
     } else if (value instanceof Number) {
       return Kind.NUMBER;
-    } else if (value instanceof Enum) {
+    } else if (value instanceof Enum || value instanceof EnumValueDescriptor) {
       return Kind.ENUM;
     } else if (value instanceof List) {
       return Kind.LIST;
@@ -685,6 +699,12 @@ public class ProtobufSchema implements ParsedSchema {
       return ((List<?>) value).stream()
           .map(ProtobufSchema::toOptionValue)
           .collect(Collectors.toList());
+    } else if (value instanceof Map.Entry) {   // A map is represented as a list of entries
+      Map.Entry<?, ?> entry = (Map.Entry<?, ?>) value;
+      Map<Object, Object> keyValue = new LinkedHashMap<>();
+      keyValue.put(KEY_FIELD, entry.getKey());
+      keyValue.put(VALUE_FIELD, entry.getValue());
+      return keyValue;
     } else if (value instanceof Message) {
       return toOptionMap((Message) value);
     } else {
