@@ -44,6 +44,8 @@ import com.google.protobuf.DurationProto;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.EmptyProto;
 import com.google.protobuf.FieldMaskProto;
+import com.google.protobuf.GeneratedMessageV3.ExtendableMessage;
+import com.google.protobuf.Message;
 import com.google.protobuf.SourceContextProto;
 import com.google.protobuf.StructProto;
 import com.google.protobuf.TimestampProto;
@@ -88,6 +90,7 @@ import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
 import java.util.LinkedHashMap;
+import kotlin.Pair;
 import kotlin.ranges.IntRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -136,6 +139,7 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String KEY_FIELD = "key";
   public static final String VALUE_FIELD = "value";
 
+  private static final String CONFLUENT_PREFIX = "confluent.";
   private static final String CONFLUENT_FILE_META = "confluent.file_meta";
   private static final String CONFLUENT_MESSAGE_META = "confluent.message_meta";
   private static final String CONFLUENT_FIELD_META = "confluent.field_meta";
@@ -636,6 +640,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
+    options.addAll(toCustomOptions(file.getOptions()));
     return new ProtoFileElement(DEFAULT_LOCATION,
         packageName,
         syntax,
@@ -646,6 +651,53 @@ public class ProtobufSchema implements ParsedSchema {
         extendElements.build(),
         options.build()
     );
+  }
+
+  private static List<OptionElement> toCustomOptions(ExtendableMessage<?> options) {
+    return options.getAllFields().entrySet().stream()
+        .filter(e -> e.getKey().isExtension()
+            && !e.getKey().getFullName().startsWith(CONFLUENT_PREFIX))
+        .map(e -> new OptionElement(e.getKey().getFullName(),
+            toKind(e.getValue()), toOptionValue(e.getValue()), true))
+        .collect(Collectors.toList());
+  }
+
+  private static Kind toKind(Object value) {
+    if (value instanceof String) {
+      return Kind.STRING;
+    } else if (value instanceof Boolean) {
+      return Kind.BOOLEAN;
+    } else if (value instanceof Number) {
+      return Kind.NUMBER;
+    } else if (value instanceof Enum) {
+      return Kind.ENUM;
+    } else if (value instanceof List) {
+      return Kind.LIST;
+    } else if (value instanceof Message) {
+      return Kind.MAP;
+    } else {
+      throw new IllegalArgumentException("Unsupported option type " + value.getClass().getName());
+    }
+  }
+
+  private static Object toOptionValue(Object value) {
+    if (value instanceof List) {
+      return ((List<?>) value).stream()
+          .map(ProtobufSchema::toOptionValue)
+          .collect(Collectors.toList());
+    } else if (value instanceof Message) {
+      return toOptionMap((Message) value);
+    } else {
+      return value;
+    }
+  }
+
+  private static Map<String, Object> toOptionMap(Message message) {
+    return message.getAllFields().entrySet().stream()
+        .map(e -> new Pair<>(e.getKey().getName(), toOptionValue(e.getValue())))
+        .filter(p -> p.getSecond() != null)
+        .collect(Collectors.toMap(Pair::getFirst, Pair::getSecond,
+            (e1, e2) -> e1, LinkedHashMap::new));
   }
 
   private static MessageElement toMessage(FileDescriptorProto file, DescriptorProto descriptor) {
@@ -723,6 +775,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
+    options.addAll(toCustomOptions(descriptor.getOptions()));
     // NOTE: skip groups
     return new MessageElement(DEFAULT_LOCATION,
         name,
@@ -794,6 +847,7 @@ public class ProtobufSchema implements ParsedSchema {
           options.add(option);
         }
       }
+      options.addAll(toCustomOptions(ev.getOptions()));
       constants.add(new EnumConstantElement(
           DEFAULT_LOCATION,
           ev.getName(),
@@ -837,6 +891,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
+    options.addAll(toCustomOptions(ed.getOptions()));
     return new EnumElement(DEFAULT_LOCATION, name, "",
         options.build(), constants.build(), reserved.build());
   }
@@ -885,6 +940,7 @@ public class ProtobufSchema implements ParsedSchema {
         );
         options.add(option);
       }
+      options.addAll(toCustomOptions(method.getOptions()));
       methods.add(new RpcElement(
           DEFAULT_LOCATION,
           method.getName(),
@@ -904,6 +960,7 @@ public class ProtobufSchema implements ParsedSchema {
       );
       options.add(option);
     }
+    options.addAll(toCustomOptions(sd.getOptions()));
     return new ServiceElement(DEFAULT_LOCATION, name, "", methods.build(), options.build());
   }
 
@@ -951,6 +1008,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
+    options.addAll(toCustomOptions(fd.getOptions()));
     String jsonName = fd.hasJsonName() ? fd.getJsonName() : null;
     String defaultValue = !PROTO3.equals(file.getSyntax()) && fd.hasDefaultValue()
                           ? fd.getDefaultValue()
