@@ -502,25 +502,6 @@ public class ProtobufSchemaUtils {
     return sb.toString();
   }
 
-  private static List<TypeElement> filterTypes(
-      Context ctx, List<TypeElement> types, boolean normalize) {
-    if (normalize) {
-      return types.stream()
-          .filter(type -> {
-            if (type instanceof MessageElement) {
-              TypeElementInfo typeInfo = ctx.getType(type.getName(), true);
-              // Don't emit synthetic map message
-              return typeInfo == null || !typeInfo.isMap();
-            } else {
-              return true;
-            }
-          })
-          .collect(Collectors.toList());
-    } else {
-      return types;
-    }
-  }
-
   private static String toString(Context ctx, ReservedElement type, boolean normalize) {
     StringBuilder sb = new StringBuilder();
     sb.append("reserved ");
