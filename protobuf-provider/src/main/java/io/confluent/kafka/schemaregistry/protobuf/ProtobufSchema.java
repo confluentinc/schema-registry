@@ -910,6 +910,7 @@ public class ProtobufSchema implements ParsedSchema {
   private static void addExtendFieldElements(FileDescriptorProto file, DescriptorProto descriptor,
       Map<String, ImmutableList.Builder<FieldElement>> extendFieldElements) {
     for (FieldDescriptorProto fd : descriptor.getExtensionList()) {
+      // Note that the extendee is a fully qualified name
       ImmutableList.Builder<FieldElement> fields = extendFieldElements.computeIfAbsent(
           fd.getExtendee(), k -> ImmutableList.builder());
       fields.add(toField(file, fd, false));
