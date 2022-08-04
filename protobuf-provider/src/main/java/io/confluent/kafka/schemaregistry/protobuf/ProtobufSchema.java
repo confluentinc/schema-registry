@@ -699,12 +699,6 @@ public class ProtobufSchema implements ParsedSchema {
       return ((List<?>) value).stream()
           .map(ProtobufSchema::toOptionValue)
           .collect(Collectors.toList());
-    } else if (value instanceof Map.Entry) {   // A map is represented as a list of entries
-      Map.Entry<?, ?> entry = (Map.Entry<?, ?>) value;
-      Map<Object, Object> keyValue = new LinkedHashMap<>();
-      keyValue.put(KEY_FIELD, entry.getKey());
-      keyValue.put(VALUE_FIELD, entry.getValue());
-      return keyValue;
     } else if (value instanceof Message) {
       return toOptionMap((Message) value);
     } else {
