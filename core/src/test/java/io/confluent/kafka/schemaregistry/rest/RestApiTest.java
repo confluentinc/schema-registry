@@ -711,6 +711,16 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testGetOnlySchemaById() throws Exception {
+    String schema = String.valueOf(TestUtils.getRandomCanonicalAvroString(1));
+    String subject = "test";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
+    assertEquals("Schema with ID 1 should match.",
+            schema,
+            restApp.restClient.getOnlySchemaById(1));
+  }
+
+  @Test
   public void testGetLatestVersionSchemaOnly() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";

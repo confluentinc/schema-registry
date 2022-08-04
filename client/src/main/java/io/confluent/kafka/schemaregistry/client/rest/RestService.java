@@ -264,7 +264,7 @@ public class RestService implements Configurable {
     HttpURLConnection connection = null;
     try {
       URL url = new URL(requestUrl);
-      
+
       connection = buildConnection(url, method, requestProperties);
 
       if (requestBodyData != null) {
@@ -700,7 +700,7 @@ public class RestService implements Configurable {
       throws IOException, RestClientException {
     return setMode(mode, subject, false);
   }
-  
+
   public ModeUpdateRequest setMode(String mode, String subject, boolean force)
       throws IOException, RestClientException {
     ModeUpdateRequest request = new ModeUpdateRequest();
@@ -840,6 +840,23 @@ public class RestService implements Configurable {
     SchemaString response = httpRequest(path, "GET", null, requestProperties,
                                         GET_SCHEMA_BY_ID_RESPONSE_TYPE);
     return response;
+  }
+
+  public String getOnlySchemaById(int id) throws RestClientException, IOException {
+    return getOnlySchemaById(DEFAULT_REQUEST_PROPERTIES, id, null);
+  }
+
+  public String getOnlySchemaById(Map<String, String> requestProperties,
+                                  int id, String subject)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/schema");
+    if (subject != null) {
+      builder.queryParam("subject", subject);
+    }
+    String path = builder.build(id).toString();
+    JsonNode response = httpRequest(path, "GET", null,
+            requestProperties, GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
+    return response.toString();
   }
 
   public List<String> getSchemaTypes() throws IOException, RestClientException {
