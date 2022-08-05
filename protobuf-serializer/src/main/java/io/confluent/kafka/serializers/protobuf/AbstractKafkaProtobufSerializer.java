@@ -127,7 +127,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());
-      MessageIndexes indexes = schema.toMessageIndexes(object.getDescriptorForType().getFullName());
+      MessageIndexes indexes = schema.toMessageIndexes(
+          object.getDescriptorForType().getFullName(), normalizeSchema);
       out.write(indexes.toByteArray());
       object.writeTo(out);
       byte[] bytes = out.toByteArray();
