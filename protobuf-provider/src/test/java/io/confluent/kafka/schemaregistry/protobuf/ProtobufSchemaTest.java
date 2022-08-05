@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import java.util.ArrayList;
@@ -1183,6 +1184,30 @@ public class ProtobufSchemaTest {
     assertNotNull(descriptor);
     normalizedSchema = new ProtobufSchema(descriptor).normalize();
     assertEquals(normalized, normalizedSchema.canonicalString());
+
+    String expected = "package my.package;\n"
+        + "\n"
+        + "message ExtendedDummy {\n"
+        + "  message Nested {\n"
+        + "    message Oh {\n"
+        + "      message My {\n"
+        + "        message God {}\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n"
+        + "message Extended {\n"
+        + "  optional string vaulted_data = 1;\n"
+        + "  optional string field_normal = 2;\n"
+        + "\n"
+        + "  message NestedExtended {\n"
+        + "    optional string vaulted_data = 1;\n"
+        + "    optional string field_normal = 2;\n"
+        + "    optional string field_vault_replace = 3;\n"
+        + "  }\n"
+        + "}\n";
+    String noExtSchema = normalizedSchema.formattedString(Format.IGNORE_EXTENSIONS.symbol());
+    assertEquals(expected, noExtSchema);
   }
 
   @Test

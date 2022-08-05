@@ -92,6 +92,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       "Whether to check for backward compatibility between the latest subject version and "
       + " the schema of the object to be serialized";
 
+  public static final String SCHEMA_FORMAT = "schema.format";
+  public static final String SCHEMA_FORMAT_DOC =
+      "The schema format to use when registering or looking up schemas.";
+
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT = "URL";
@@ -180,6 +184,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, USE_LATEST_VERSION_DOC)
         .define(LATEST_COMPATIBILITY_STRICT, Type.BOOLEAN, LATEST_COMPATIBILITY_STRICT_DEFAULT,
                 Importance.LOW, LATEST_COMPATIBILITY_STRICT_DOC)
+        .define(SCHEMA_FORMAT, Type.STRING, null,
+                Importance.LOW, SCHEMA_FORMAT_DOC)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
                 Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
@@ -245,6 +251,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean getLatestCompatibilityStrict() {
     return this.getBoolean(LATEST_COMPATIBILITY_STRICT);
+  }
+
+  public String getSchemaFormat() {
+    return this.getString(SCHEMA_FORMAT);
   }
 
   public ContextNameStrategy contextNameStrategy() {

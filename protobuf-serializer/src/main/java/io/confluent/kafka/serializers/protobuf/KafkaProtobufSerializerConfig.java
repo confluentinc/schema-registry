@@ -60,6 +60,7 @@ public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfi
     super(config, props);
   }
 
+
   public boolean onlyLookupReferencesBySchema() {
     return this.getBoolean(REFERENCE_LOOKUP_ONLY_CONFIG);
   }

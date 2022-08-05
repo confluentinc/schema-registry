@@ -16,8 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
+import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.AnyProto;
 import com.google.protobuf.ApiProto;
 import com.google.protobuf.DescriptorProtos;
@@ -87,6 +87,7 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -142,7 +143,7 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String KEY_FIELD = "key";
   public static final String VALUE_FIELD = "value";
 
-  private static final String CONFLUENT_PREFIX = "confluent.";
+  protected static final String CONFLUENT_PREFIX = "confluent.";
   private static final String CONFLUENT_FILE_META = "confluent.file_meta";
   private static final String CONFLUENT_MESSAGE_META = "confluent.message_meta";
   private static final String CONFLUENT_FIELD_META = "confluent.field_meta";
@@ -473,6 +474,19 @@ public class ProtobufSchema implements ParsedSchema {
         this.canonicalString,
         this.dynamicSchema,
         this.descriptor
+    );
+  }
+
+  public ProtobufSchema copyWithSchema(String schema) {
+    return new ProtobufSchema(
+        toProtoFile(schema),
+        this.version,
+        this.name,
+        references,
+        this.dependencies,
+        schema,
+        null,
+        null
     );
   }
 
@@ -1657,11 +1671,20 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public String formattedString(String format) {
-    if (SERIALIZED_FORMAT.equals(format)) {
-      FileDescriptorProto file = toDynamicSchema().getFileDescriptorProto();
-      return base64Encoder.encodeToString(file.toByteArray());
+    if (format == null || format.trim().isEmpty()) {
+      return canonicalString();
     }
-    throw new IllegalArgumentException("Unsupported format " + format);
+    Format formatEnum = Format.get(format);
+    switch (formatEnum) {
+      case IGNORE_EXTENSIONS:
+        FormatContext ctx = new FormatContext(true, false);
+        return ProtobufSchemaUtils.toFormattedString(ctx, this);
+      case SERIALIZED:
+        FileDescriptorProto file = toDynamicSchema().getFileDescriptorProto();
+        return base64Encoder.encodeToString(file.toByteArray());
+      default:
+        throw new IllegalArgumentException("Unsupported format " + format);
+    }
   }
 
   public Integer version() {
@@ -1873,5 +1896,42 @@ public class ProtobufSchema implements ParsedSchema {
       s = UPPER_CAMEL.to(LOWER_UNDERSCORE, s);
     }
     return s;
+  }
+
+  public enum Format {
+    IGNORE_EXTENSIONS("ignore_extensions"),
+    SERIALIZED("serialized");
+
+    private static final EnumHashBiMap<Format, String> lookup =
+        EnumHashBiMap.create(Format.class);
+
+    static {
+      for (Format type : Format.values()) {
+        lookup.put(type, type.symbol());
+      }
+    }
+
+    private final String symbol;
+
+    Format(String symbol) {
+      this.symbol = symbol;
+    }
+
+    public String symbol() {
+      return symbol;
+    }
+
+    public static Format get(String symbol) {
+      return lookup.inverse().get(symbol);
+    }
+
+    public static Set<String> symbols() {
+      return lookup.inverse().keySet();
+    }
+
+    @Override
+    public String toString() {
+      return symbol();
+    }
   }
 }
