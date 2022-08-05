@@ -188,7 +188,8 @@ public abstract class AbstractKafkaSchemaSerDe {
       throw new IOException("Incompatible schema " + lookupSchema.canonicalString()
           + " with refs " + lookupSchema.references()
           + " of type " + lookupSchema.schemaType()
-          + " for schema " + schema.canonicalString());
+          + " for schema " + schema.canonicalString()
+          + ". Set id.compatibility.strict=false to disable this check");
     }
     return lookupSchema;
   }
@@ -227,7 +228,8 @@ public abstract class AbstractKafkaSchemaSerDe {
         throw new IOException("Incompatible schema " + schemaMetadata.getSchema()
             + " with refs " + schemaMetadata.getReferences()
             + " of type " + schemaMetadata.getSchemaType()
-            + " for schema " + schema.canonicalString());
+            + " for schema " + schema.canonicalString()
+            + ". Set latest.compatibility.strict=false to disable this check");
       }
       if (cache != null) {
         cache.put(ss, latestVersion);
