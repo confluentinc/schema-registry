@@ -108,6 +108,7 @@ public class KafkaProtobufSerializerTest {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    serializerConfig.put(KafkaProtobufSerializerConfig.NORMALIZE_SCHEMAS, true);
     schemaRegistry = new MockSchemaRegistryClient();
     protobufSerializer = new KafkaProtobufSerializer(schemaRegistry, new HashMap(serializerConfig));
 
