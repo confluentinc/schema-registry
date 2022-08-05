@@ -1619,6 +1619,10 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public MessageIndexes toMessageIndexes(String name) {
+    return toMessageIndexes(name, false);
+  }
+
+  public MessageIndexes toMessageIndexes(String name, boolean normalize) {
     List<Integer> indexes = new ArrayList<>();
     String[] parts = name.split("\\.");
     List<TypeElement> types = schemaObj.getTypes();
@@ -1626,6 +1630,14 @@ public class ProtobufSchema implements ParsedSchema {
       int i = 0;
       for (TypeElement type : types) {
         if (type instanceof MessageElement) {
+          if (normalize) {
+            boolean isMapEntry = findOption(MAP_ENTRY, type.getOptions())
+                .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(false);
+            if (isMapEntry) {
+              // Skip map entries if normalizing
+              continue;
+            }
+          }
           if (type.getName().equals(part)) {
             indexes.add(i);
             types = type.getNestedTypes();
