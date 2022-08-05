@@ -16,11 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
+import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.AnyProto;
 import com.google.protobuf.ApiProto;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
+import com.google.protobuf.DescriptorProtos.DescriptorProto.ExtensionRange;
 import com.google.protobuf.DescriptorProtos.DescriptorProto.ReservedRange;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto.EnumReservedRange;
@@ -37,12 +39,15 @@ import com.google.protobuf.DescriptorProtos.ServiceDescriptorProto;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DurationProto;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.EmptyProto;
 import com.google.protobuf.FieldMaskProto;
+import com.google.protobuf.GeneratedMessageV3.ExtendableMessage;
+import com.google.protobuf.Message;
 import com.google.protobuf.SourceContextProto;
 import com.google.protobuf.StructProto;
 import com.google.protobuf.TimestampProto;
@@ -69,6 +74,8 @@ import com.squareup.wire.schema.Location;
 import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.EnumConstantElement;
 import com.squareup.wire.schema.internal.parser.EnumElement;
+import com.squareup.wire.schema.internal.parser.ExtendElement;
+import com.squareup.wire.schema.internal.parser.ExtensionsElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import com.squareup.wire.schema.internal.parser.OneOfElement;
@@ -80,11 +87,14 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
 import java.util.LinkedHashMap;
+import java.util.stream.Stream;
+import kotlin.Pair;
 import kotlin.ranges.IntRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -133,6 +143,7 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String KEY_FIELD = "key";
   public static final String VALUE_FIELD = "value";
 
+  protected static final String CONFLUENT_PREFIX = "confluent.";
   private static final String CONFLUENT_FILE_META = "confluent.file_meta";
   private static final String CONFLUENT_MESSAGE_META = "confluent.message_meta";
   private static final String CONFLUENT_FIELD_META = "confluent.field_meta";
@@ -466,6 +477,19 @@ public class ProtobufSchema implements ParsedSchema {
     );
   }
 
+  public ProtobufSchema copyWithSchema(String schema) {
+    return new ProtobufSchema(
+        toProtoFile(schema),
+        this.version,
+        this.name,
+        references,
+        this.dependencies,
+        schema,
+        null,
+        null
+    );
+  }
+
   private ProtoFileElement toProtoFile(String schema) {
     try {
       return ProtoParser.Companion.parse(DEFAULT_LOCATION, schema);
@@ -520,6 +544,22 @@ public class ProtobufSchema implements ParsedSchema {
     for (ServiceDescriptorProto sd : file.getServiceList()) {
       ServiceElement service = toService(sd);
       services.add(service);
+    }
+    Map<String, ImmutableList.Builder<FieldElement>> extendFieldElements = new LinkedHashMap<>();
+    for (FieldDescriptorProto fd : file.getExtensionList()) {
+      // Note that the extendee is a fully qualified name
+      ImmutableList.Builder<FieldElement> fields = extendFieldElements.computeIfAbsent(
+          fd.getExtendee(), k -> ImmutableList.builder());
+      fields.add(toField(file, fd, false));
+    }
+    for (DescriptorProto md : file.getMessageTypeList()) {
+      addExtendFieldElements(file, md, extendFieldElements);
+    }
+    ImmutableList.Builder<ExtendElement> extendElements = ImmutableList.builder();
+    for (Map.Entry<String, ImmutableList.Builder<FieldElement>> extendFieldElement :
+        extendFieldElements.entrySet()) {
+      extendElements.add(new ExtendElement(DEFAULT_LOCATION,
+          extendFieldElement.getKey(), "", extendFieldElement.getValue().build()));
     }
     ImmutableList.Builder<String> imports = ImmutableList.builder();
     ImmutableList.Builder<String> publicImports = ImmutableList.builder();
@@ -617,7 +657,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    // NOTE: skip extensions
+    options.addAll(toCustomOptions(file.getOptions()));
     return new ProtoFileElement(DEFAULT_LOCATION,
         packageName,
         syntax,
@@ -625,9 +665,67 @@ public class ProtobufSchema implements ParsedSchema {
         publicImports.build(),
         types.build(),
         services.build(),
-        Collections.emptyList(),
+        extendElements.build(),
         options.build()
     );
+  }
+
+  private static List<OptionElement> toCustomOptions(ExtendableMessage<?> options) {
+    return options.getAllFields().entrySet().stream()
+        .filter(e -> e.getKey().isExtension()
+            && !e.getKey().getFullName().startsWith(CONFLUENT_PREFIX))
+        .flatMap(e -> toOptionElements(e.getKey().getFullName(), e.getValue()))
+        .collect(Collectors.toList());
+  }
+
+  private static Stream<OptionElement> toOptionElements(String name, Object value) {
+    if (value instanceof List) {
+      return ((List<?>) value).stream().map(v -> toOptionElement(name, v));
+    } else {
+      return Stream.of(toOptionElement(name, value));
+    }
+  }
+
+  private static OptionElement toOptionElement(String name, Object value) {
+    return new OptionElement(name, toKind(value), toOptionValue(value), true);
+  }
+
+  private static Kind toKind(Object value) {
+    if (value instanceof String) {
+      return Kind.STRING;
+    } else if (value instanceof Boolean) {
+      return Kind.BOOLEAN;
+    } else if (value instanceof Number) {
+      return Kind.NUMBER;
+    } else if (value instanceof Enum || value instanceof EnumValueDescriptor) {
+      return Kind.ENUM;
+    } else if (value instanceof List) {
+      return Kind.LIST;
+    } else if (value instanceof Message) {
+      return Kind.MAP;
+    } else {
+      throw new IllegalArgumentException("Unsupported option type " + value.getClass().getName());
+    }
+  }
+
+  private static Object toOptionValue(Object value) {
+    if (value instanceof List) {
+      return ((List<?>) value).stream()
+          .map(ProtobufSchema::toOptionValue)
+          .collect(Collectors.toList());
+    } else if (value instanceof Message) {
+      return toOptionMap((Message) value);
+    } else {
+      return value;
+    }
+  }
+
+  private static Map<String, Object> toOptionMap(Message message) {
+    return message.getAllFields().entrySet().stream()
+        .map(e -> new Pair<>(e.getKey().getName(), toOptionValue(e.getValue())))
+        .filter(p -> p.getSecond() != null)
+        .collect(Collectors.toMap(Pair::getFirst, Pair::getSecond,
+            (e1, e2) -> e1, LinkedHashMap::new));
   }
 
   private static MessageElement toMessage(FileDescriptorProto file, DescriptorProto descriptor) {
@@ -636,6 +734,7 @@ public class ProtobufSchema implements ParsedSchema {
     ImmutableList.Builder<FieldElement> fields = ImmutableList.builder();
     ImmutableList.Builder<TypeElement> nested = ImmutableList.builder();
     ImmutableList.Builder<ReservedElement> reserved = ImmutableList.builder();
+    ImmutableList.Builder<ExtensionsElement> extensions = ImmutableList.builder();
     LinkedHashMap<String, ImmutableList.Builder<FieldElement>> oneofsMap = new LinkedHashMap<>();
     for (OneofDescriptorProto od : descriptor.getOneofDeclList()) {
       oneofsMap.put(od.getName(), ImmutableList.builder());
@@ -671,6 +770,10 @@ public class ProtobufSchema implements ParsedSchema {
       );
       reserved.add(reservedElem);
     }
+    for (ExtensionRange extensionRange : descriptor.getExtensionRangeList()) {
+      ExtensionsElement extension = toExtension(extensionRange);
+      extensions.add(extension);
+    }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (descriptor.getOptions().hasNoStandardDescriptorAccessor()) {
       OptionElement option = new OptionElement(
@@ -700,7 +803,8 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    // NOTE: skip extensions, groups
+    options.addAll(toCustomOptions(descriptor.getOptions()));
+    // NOTE: skip groups
     return new MessageElement(DEFAULT_LOCATION,
         name,
         "",
@@ -712,7 +816,7 @@ public class ProtobufSchema implements ParsedSchema {
             .map(e -> toOneof(e.getKey(), e.getValue()))
             .filter(e -> !e.getFields().isEmpty())
             .collect(Collectors.toList()),
-        Collections.emptyList(),
+        extensions.build(),
         Collections.emptyList()
     );
   }
@@ -771,6 +875,7 @@ public class ProtobufSchema implements ParsedSchema {
           options.add(option);
         }
       }
+      options.addAll(toCustomOptions(ev.getOptions()));
       constants.add(new EnumConstantElement(
           DEFAULT_LOCATION,
           ev.getName(),
@@ -814,6 +919,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
+    options.addAll(toCustomOptions(ed.getOptions()));
     return new EnumElement(DEFAULT_LOCATION, name, "",
         options.build(), constants.build(), reserved.build());
   }
@@ -832,6 +938,14 @@ public class ProtobufSchema implements ParsedSchema {
     int end = range.getEnd();
     values.add(start == end - 1 ? start : new IntRange(start, end - 1));
     return new ReservedElement(DEFAULT_LOCATION, "", values);
+  }
+
+  private static ExtensionsElement toExtension(ExtensionRange range) {
+    List<Object> values = new ArrayList<>();
+    int start = range.getStart();
+    int end = range.getEnd();
+    values.add(start == end - 1 ? start : new IntRange(start, end - 1));
+    return new ExtensionsElement(DEFAULT_LOCATION, "", values);
   }
 
   private static ServiceElement toService(ServiceDescriptorProto sd) {
@@ -854,6 +968,7 @@ public class ProtobufSchema implements ParsedSchema {
         );
         options.add(option);
       }
+      options.addAll(toCustomOptions(method.getOptions()));
       methods.add(new RpcElement(
           DEFAULT_LOCATION,
           method.getName(),
@@ -873,7 +988,21 @@ public class ProtobufSchema implements ParsedSchema {
       );
       options.add(option);
     }
+    options.addAll(toCustomOptions(sd.getOptions()));
     return new ServiceElement(DEFAULT_LOCATION, name, "", methods.build(), options.build());
+  }
+
+  private static void addExtendFieldElements(FileDescriptorProto file, DescriptorProto descriptor,
+      Map<String, ImmutableList.Builder<FieldElement>> extendFieldElements) {
+    for (FieldDescriptorProto fd : descriptor.getExtensionList()) {
+      // Note that the extendee is a fully qualified name
+      ImmutableList.Builder<FieldElement> fields = extendFieldElements.computeIfAbsent(
+          fd.getExtendee(), k -> ImmutableList.builder());
+      fields.add(toField(file, fd, false));
+    }
+    for (DescriptorProto nestedDesc : descriptor.getNestedTypeList()) {
+      addExtendFieldElements(file, nestedDesc, extendFieldElements);
+    }
   }
 
   private static FieldElement toField(
@@ -907,6 +1036,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
+    options.addAll(toCustomOptions(fd.getOptions()));
     String jsonName = fd.hasJsonName() ? fd.getJsonName() : null;
     String defaultValue = !PROTO3.equals(file.getSyntax()) && fd.hasDefaultValue()
                           ? fd.getDefaultValue()
@@ -1038,6 +1168,42 @@ public class ProtobufSchema implements ParsedSchema {
       for (ServiceElement serviceElement : rootElem.getServices()) {
         ServiceDefinition service = toDynamicService(serviceElement);
         schema.addServiceDefinition(service);
+      }
+      for (ExtendElement extendElement : rootElem.getExtendDeclarations()) {
+        for (FieldElement field : extendElement.getFields()) {
+          Field.Label fieldLabel = field.getLabel();
+          String label = fieldLabel != null ? fieldLabel.toString().toLowerCase() : null;
+          String fieldType = field.getType();
+          String defaultVal = field.getDefaultValue();
+          String jsonName = field.getJsonName();
+          Map<String, OptionElement> options = mergeOptions(field.getOptions());
+          CType ctype = findOption(CTYPE, options)
+              .map(o -> CType.valueOf(o.getValue().toString())).orElse(null);
+          Boolean isPacked = findOption(PACKED, options)
+              .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+          JSType jstype = findOption(JSTYPE, options)
+              .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
+          Boolean isDeprecated = findOption(DEPRECATED, options)
+              .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+          Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
+          String doc = findDoc(meta);
+          Map<String, String> params = findParams(meta);
+          schema.addExtendDefinition(
+              extendElement.getName(),
+              label,
+              fieldType,
+              field.getName(),
+              field.getTag(),
+              defaultVal,
+              jsonName,
+              doc,
+              params,
+              ctype,
+              isPacked,
+              jstype,
+              isDeprecated
+          );
+        }
       }
       for (String ref : rootElem.getImports()) {
         ProtoFileElement dep = dependencies.get(ref);
@@ -1312,6 +1478,20 @@ public class ProtobufSchema implements ParsedSchema {
         }
       }
     }
+    for (ExtensionsElement extension : messageElem.getExtensions()) {
+      for (Object elem : extension.getValues()) {
+        if (elem instanceof Integer) {
+          int tag = (Integer) elem;
+          message.addExtensionRange(tag, tag + 1);
+        } else if (elem instanceof IntRange) {
+          IntRange range = (IntRange) elem;
+          message.addExtensionRange(range.getStart(), range.getEndInclusive() + 1);
+        } else {
+          throw new IllegalStateException("Unsupported extensions type: " + elem.getClass()
+              .getName());
+        }
+      }
+    }
     Map<String, OptionElement> options = mergeOptions(messageElem.getOptions());
     Boolean noStandardDescriptorAccessor =
         findOption(NO_STANDARD_DESCRIPTOR_ACCESSOR, options)
@@ -1491,11 +1671,20 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public String formattedString(String format) {
-    if (SERIALIZED_FORMAT.equals(format)) {
-      FileDescriptorProto file = toDynamicSchema().getFileDescriptorProto();
-      return base64Encoder.encodeToString(file.toByteArray());
+    if (format == null || format.trim().isEmpty()) {
+      return canonicalString();
     }
-    throw new IllegalArgumentException("Unsupported format " + format);
+    Format formatEnum = Format.get(format);
+    switch (formatEnum) {
+      case IGNORE_EXTENSIONS:
+        FormatContext ctx = new FormatContext(true, false);
+        return ProtobufSchemaUtils.toFormattedString(ctx, this);
+      case SERIALIZED:
+        FileDescriptorProto file = toDynamicSchema().getFileDescriptorProto();
+        return base64Encoder.encodeToString(file.toByteArray());
+      default:
+        throw new IllegalArgumentException("Unsupported format " + format);
+    }
   }
 
   public Integer version() {
@@ -1638,6 +1827,10 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public MessageIndexes toMessageIndexes(String name) {
+    return toMessageIndexes(name, false);
+  }
+
+  public MessageIndexes toMessageIndexes(String name, boolean normalize) {
     List<Integer> indexes = new ArrayList<>();
     String[] parts = name.split("\\.");
     List<TypeElement> types = schemaObj.getTypes();
@@ -1645,6 +1838,14 @@ public class ProtobufSchema implements ParsedSchema {
       int i = 0;
       for (TypeElement type : types) {
         if (type instanceof MessageElement) {
+          if (normalize) {
+            boolean isMapEntry = findOption(MAP_ENTRY, type.getOptions())
+                .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(false);
+            if (isMapEntry) {
+              // Skip map entries if normalizing
+              continue;
+            }
+          }
           if (type.getName().equals(part)) {
             indexes.add(i);
             types = type.getNestedTypes();
@@ -1707,5 +1908,42 @@ public class ProtobufSchema implements ParsedSchema {
       s = UPPER_CAMEL.to(LOWER_UNDERSCORE, s);
     }
     return s;
+  }
+
+  public enum Format {
+    IGNORE_EXTENSIONS("ignore_extensions"),
+    SERIALIZED("serialized");
+
+    private static final EnumHashBiMap<Format, String> lookup =
+        EnumHashBiMap.create(Format.class);
+
+    static {
+      for (Format type : Format.values()) {
+        lookup.put(type, type.symbol());
+      }
+    }
+
+    private final String symbol;
+
+    Format(String symbol) {
+      this.symbol = symbol;
+    }
+
+    public String symbol() {
+      return symbol;
+    }
+
+    public static Format get(String symbol) {
+      return lookup.inverse().get(symbol);
+    }
+
+    public static Set<String> symbols() {
+      return lookup.inverse().keySet();
+    }
+
+    @Override
+    public String toString() {
+      return symbol();
+    }
   }
 }
