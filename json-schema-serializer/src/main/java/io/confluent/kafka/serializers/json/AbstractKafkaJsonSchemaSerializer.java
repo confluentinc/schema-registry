@@ -122,15 +122,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
       if (validate) {
-        try {
-          JsonNode jsonNode = objectMapper.convertValue(object, JsonNode.class);
-          schema.validate(jsonNode);
-        } catch (JsonProcessingException | ValidationException e) {
-          throw new SerializationException("JSON "
-              + object
-              + " does not match schema "
-              + schema.canonicalString(), e);
-        }
+        validateJson(object, schema);
       }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
@@ -143,6 +135,25 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       throw new SerializationException("Error serializing JSON message", e);
     } catch (RestClientException e) {
       throw toKafkaException(e, restClientErrorMsg + schema);
+    }
+  }
+
+  protected void validateJson(T object,
+                              JsonSchema schema)
+      throws SerializationException {
+    try {
+      JsonNode jsonNode = objectMapper.convertValue(object, JsonNode.class);
+      schema.validate(jsonNode);
+    } catch (JsonProcessingException e) {
+      throw new SerializationException("JSON "
+          + object
+          + " does not match schema "
+          + schema.canonicalString(), e);
+    } catch (ValidationException e) {
+      throw new SerializationException("Validation error in JSON "
+          + object
+          + ", Error report:\n"
+          + e.toJSON().toString(2), e);
     }
   }
 }
