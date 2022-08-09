@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
+import java.security.PublicKey;
 import java.time.Instant;
 import java.util.Collections;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
@@ -51,9 +52,10 @@ public class OauthTokenCacheTest {
 
   @Test
   public void TestIsExpiredWithValidCache() throws InterruptedException {
+    Long lifespan = 2L;
     OAuthBearerToken token1 = new BasicOAuthBearerToken(tokenString1,
         Collections.emptySet(),
-        Instant.now().plusSeconds(2).toEpochMilli(),
+        Instant.now().plusSeconds(lifespan).toEpochMilli(),
         "random",
         Instant.now().toEpochMilli());
     oAuthTokenCache.setCurrentToken(token1);
@@ -64,15 +66,30 @@ public class OauthTokenCacheTest {
 
   @Test
   public void TestIsExpiredWithExpiredCache() throws InterruptedException {
+    Long lifespanSeconds = 2L;
     OAuthBearerToken token1 = new BasicOAuthBearerToken(tokenString1,
         Collections.emptySet(),
-        Instant.now().plusSeconds(2).toEpochMilli(),
+        Instant.now().plusSeconds(lifespanSeconds).toEpochMilli(),
         "random",
         Instant.now().toEpochMilli());
     oAuthTokenCache.setCurrentToken(token1);
     //sleeping till cache get expired
-    Thread.sleep((long) Math.floor(100 * OauthTokenCache.CACHE_EXPIRY_THRESHOLD));
+    Thread.sleep((long) Math.floor(1000*lifespanSeconds * OauthTokenCache.CACHE_EXPIRY_THRESHOLD));
     Assert.assertEquals(true, oAuthTokenCache.isTokenExpired());
+  }
+
+  @Test
+  public  void TestCalculateTokenExpiryTime(){
+    //already expired token
+    long tokenStartTime = Instant.now().plusSeconds(-3).toEpochMilli();
+    long tokenExpiryTime= Instant.now().plusSeconds(-1).toEpochMilli();
+    OAuthBearerToken token1 = new BasicOAuthBearerToken(tokenString1,
+        Collections.emptySet(),
+         tokenExpiryTime,
+        "random",
+        tokenStartTime);
+    oAuthTokenCache.setCurrentToken(token1);
+    Assert.assertEquals(tokenExpiryTime,oAuthTokenCache.calculateTokenExpiryTime(token1));
   }
 
 }

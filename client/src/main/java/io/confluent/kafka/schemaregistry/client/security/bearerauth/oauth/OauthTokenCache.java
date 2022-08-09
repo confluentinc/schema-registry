@@ -44,7 +44,7 @@ public class OauthTokenCache {
   private long cacheExpiryMs;
 
   public OauthTokenCache(short cacheExpiryBufferSeconds) {
-     /*
+    /*
      setting a value of 0 so that isTokenExpired() returns true in when called the first time
      cacheExpiryMs time of 0L means this cache does not have a valid token.
     */
@@ -67,11 +67,12 @@ public class OauthTokenCache {
     this.currentToken = currentToken;
   }
 
-  private long calculateTokenExpiryTime(OAuthBearerToken currentToken) {
+  //visible for testing
+  protected long calculateTokenExpiryTime(OAuthBearerToken currentToken) {
     long nowMs = Instant.now().toEpochMilli();
     long tokenExpiryMs = currentToken.lifetimeMs();
-    // If the current time is greater than tokenExpiryMs we log the possible clock skew message return
-    // the maximum time i.e expiresMs
+    // If the current time is greater than tokenExpiryMs we log the possible clock skew
+    // message return the maximum time i.e tokenExpiryMs
     if (nowMs > tokenExpiryMs) {
       log.error(
           "Schema Registry OAuth Token [Principal={}]: Current clock: {} is later than expiry {}. "
