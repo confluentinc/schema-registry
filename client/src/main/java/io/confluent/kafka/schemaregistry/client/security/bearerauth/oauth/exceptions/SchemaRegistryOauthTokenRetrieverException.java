@@ -17,6 +17,10 @@
 
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions;
 
+/**
+ * <code>SchemaRegistryOauthTokenRetrieverException</code> can be used to differentiate OAuth
+ * error/exception of schema registry from that of kafka.
+ */
 public class SchemaRegistryOauthTokenRetrieverException extends RuntimeException {
 
   public SchemaRegistryOauthTokenRetrieverException(String message, Throwable cause) {

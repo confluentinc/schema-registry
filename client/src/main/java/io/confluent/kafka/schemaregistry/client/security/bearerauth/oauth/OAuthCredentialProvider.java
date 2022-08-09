@@ -30,6 +30,11 @@ import org.apache.kafka.common.security.oauthbearer.secured.HttpAccessTokenRetri
 import org.apache.kafka.common.security.oauthbearer.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.secured.LoginAccessTokenValidator;
 
+/**
+ * <code>OAuthCredentialProvider</code> is a <code>BearerAuthCredentialProvider</code>
+ * implementation used for configuring OAuth in schema registry. This can used when we have setup
+ * OAuth Independently from kafka.
+ */
 public class OAuthCredentialProvider implements BearerAuthCredentialProvider {
 
   private CachedOauthTokenRetriever tokenRetriever;
@@ -60,14 +65,20 @@ public class OAuthCredentialProvider implements BearerAuthCredentialProvider {
   public void configure(Map<String, ?> map) {
     ConfigurationUtils cu = new ConfigurationUtils(map);
 
-    this.targetSchemaRegistry = cu.validateString(
+    targetSchemaRegistry = cu.validateString(
         SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER);
-    this.targetIdentityPoolId = cu.validateString(
+    targetIdentityPoolId = cu.validateString(
         SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID);
+
     tokenRetriever = new CachedOauthTokenRetriever();
-    tokenRetriever.configure(getTokenRetriever(cu), getTokenValidator());
+    tokenRetriever.configure(getTokenRetriever(cu), getTokenValidator(), getOauthTokenCache(map));
   }
 
+  private OauthTokenCache getOauthTokenCache(Map<String, ?> map) {
+    short cacheExpiryBufferSeconds = SchemaRegistryClientConfig.
+        getBearerAuthCacheExpiryBufferSeconds(map);
+    return new OauthTokenCache(cacheExpiryBufferSeconds);
+  }
 
   private AccessTokenRetriever getTokenRetriever(ConfigurationUtils cu) {
 

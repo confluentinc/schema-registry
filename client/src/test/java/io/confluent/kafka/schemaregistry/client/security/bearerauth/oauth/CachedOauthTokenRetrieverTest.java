@@ -17,6 +17,8 @@
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions.SchemaRegistryOauthTokenRetrieverException;
@@ -30,8 +32,10 @@ import org.apache.kafka.common.security.oauthbearer.secured.ValidateException;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Answers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 
@@ -43,6 +47,9 @@ public class CachedOauthTokenRetrieverTest {
 
   @Mock
   AccessTokenValidator accessTokenValidator;
+
+  @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+  OauthTokenCache oauthTokenCache;
 
   @InjectMocks
   CachedOauthTokenRetriever cachedOauthTokenRetriever = new CachedOauthTokenRetriever();
@@ -58,25 +65,24 @@ public class CachedOauthTokenRetrieverTest {
     //Token1 has validity of 100 ms
     token1 = new BasicOAuthBearerToken(tokenString1,
         Collections.emptySet(),
-        100L,
+        2 * 1000L,
         "random",
         0L);
 
-    token2 = new BasicOAuthBearerToken(tokenString2,
-        Collections.emptySet(),
-        100L,
-        "random",
-        0L);
-
-    when(accessTokenRetriever.retrieve()).thenReturn(tokenString1).thenReturn(tokenString2);
+    when(accessTokenRetriever.retrieve()).thenReturn(tokenString1);
     when(accessTokenValidator.validate(tokenString1)).thenReturn(token1);
-    when(accessTokenValidator.validate(tokenString2)).thenReturn(token2);
+    when(oauthTokenCache.isTokenExpired()).thenReturn(true).thenReturn(false);
+    Mockito.doNothing().when(oauthTokenCache).setCurrentToken(Mockito.any(OAuthBearerToken.class));
+    when(oauthTokenCache.getCurrentToken().value()).thenReturn(tokenString1);
 
     Assert.assertEquals(tokenString1, cachedOauthTokenRetriever.getToken());
 
     //Expects second call to retrieve token to get the cached token1 instead of
-    // making a second network call and getting token2
+    // making a second network call to get a new token
     Assert.assertEquals(tokenString1, cachedOauthTokenRetriever.getToken());
+    Mockito.verify(accessTokenValidator, times(1)).validate(anyString());
+    Mockito.verify(accessTokenRetriever, times(1)).retrieve();
+    Mockito.verify(oauthTokenCache, times(2)).isTokenExpired();
   }
 
   @Test
@@ -98,18 +104,23 @@ public class CachedOauthTokenRetrieverTest {
     when(accessTokenRetriever.retrieve()).thenReturn(tokenString1).thenReturn(tokenString2);
     when(accessTokenValidator.validate(tokenString1)).thenReturn(token1);
     when(accessTokenValidator.validate(tokenString2)).thenReturn(token2);
+    // return true both the times
+    when(oauthTokenCache.isTokenExpired()).thenReturn(true);
+    Mockito.doNothing().when(oauthTokenCache).setCurrentToken(Mockito.any(OAuthBearerToken.class));
+    when(oauthTokenCache.getCurrentToken().value()).thenReturn(tokenString1)
+        .thenReturn(tokenString2);
 
     Assert.assertEquals(tokenString1, cachedOauthTokenRetriever.getToken());
-
-    Thread.sleep((long) (100 * OauthTokenCache.CACHE_EXPIRY_THRESHOLD));
-    // since token has lifespan of 100s second, token cache get expired as soon it is received
-    // and it will retrieve a new token , i.e token2
     Assert.assertEquals(tokenString2, cachedOauthTokenRetriever.getToken());
+    Mockito.verify(accessTokenValidator, times(2)).validate(anyString());
+    Mockito.verify(accessTokenRetriever, times(2)).retrieve();
+    Mockito.verify(oauthTokenCache, times(2)).isTokenExpired();
   }
 
   @Test
   public void TestGetTokenThrowsException() throws IOException {
     String ioError = "Returned 401";
+    when(oauthTokenCache.isTokenExpired()).thenReturn(true);
     // Test whether IO exception is handled first when token retrieval,
     // then test whether Validation exception is handled when token validation
     when(accessTokenRetriever.retrieve()).thenThrow(new IOException(ioError))

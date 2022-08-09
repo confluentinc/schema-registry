@@ -43,7 +43,7 @@ public class OAuthCredentialProviderTest {
 
   private String tokenString = "dummy-token";
 
-  private Map<String, String> CONFIG_MAP;
+  private Map<String, Object> CONFIG_MAP;
 
   @Before
   public void InitializeConfigMap() {
@@ -64,7 +64,7 @@ public class OAuthCredentialProviderTest {
   }
 
   @Test
-  public void TestConfigure() {
+  public void TestConfigureInsufficentConfigs() {
     for (String missingKey : CONFIG_MAP.keySet()) {
       Assert.assertThrows(
           String.format("The OAuth configuration option %s value must be non-null", missingKey),
@@ -76,9 +76,10 @@ public class OAuthCredentialProviderTest {
     }
   }
 
-  private Map<String, String> getInsufficentConfigs(String missingConfig) {
-    Map<String, String> insufficentCofigs = new HashMap<>(CONFIG_MAP);
+  private Map<String, Object> getInsufficentConfigs(String missingConfig) {
+    Map<String, Object> insufficentCofigs = new HashMap<>(CONFIG_MAP);
     insufficentCofigs.remove(missingConfig);
     return insufficentCofigs;
   }
+
 }

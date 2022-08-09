@@ -42,13 +42,21 @@ public class SchemaRegistryClientConfig {
   public static final String MISSING_ID_CACHE_TTL_CONFIG = "missing.id.cache.ttl.sec";
   public static final String MISSING_SCHEMA_CACHE_TTL_CONFIG = "missing.schema.cache.ttl.sec";
 
-  //OAuth related configs
+
+  //OAuth AUTHORIZATION SERVER related configs
   public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL = "bearer.auth.issuer.endpoint.url";
   public static final String BEARER_AUTH_CLIENT_ID = "bearer.auth.client.id";
   public static final String BEARER_AUTH_CLIENT_SECRET = "bearer.auth.client.secret";
   public static final String BEARER_AUTH_SCOPE = "bearer.auth.scope";
+
+  //OAuth configs required by SR
   public static final String BEARER_AUTH_LOGICAL_CLUSTER = "bearer.auth.logical.cluster";
   public static final String BEARER_AUTH_IDENTITY_POOL_ID = "bearer.auth.identity.pool";
+
+  //OAuth config related to token cache
+  public static final String BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS = "bearer.auth.cache.expiry.buffer.seconds";
+  public static final short BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT = 300;
+
 
   public static void withClientSslSupport(ConfigDef configDef, String namespace) {
     org.apache.kafka.common.config.ConfigDef sslConfigDef = new org.apache.kafka.common.config
@@ -91,4 +99,12 @@ public class SchemaRegistryClientConfig {
         ? (Integer) configs.get(MISSING_CACHE_SIZE_CONFIG)
         : 10000;
   }
+
+  public static short getBearerAuthCacheExpiryBufferSeconds(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS)
+        ? (Short) configs.get(BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS)
+        : BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT;
+  }
+
+
 }

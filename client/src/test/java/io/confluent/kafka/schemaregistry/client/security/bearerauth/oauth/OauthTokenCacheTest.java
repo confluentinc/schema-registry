@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
+import java.time.Instant;
 import java.util.Collections;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.secured.BasicOAuthBearerToken;
@@ -24,14 +25,11 @@ import org.junit.Test;
 
 public class OauthTokenCacheTest {
 
-  private OauthTokenCache oAuthTokenCache = new OauthTokenCache();
+  private short cacheExpiryBufferSeconds = 1;
+  private OauthTokenCache oAuthTokenCache = new OauthTokenCache(cacheExpiryBufferSeconds);
 
   private String tokenString1 = "token1";
-  OAuthBearerToken token1 = new BasicOAuthBearerToken(tokenString1,
-      Collections.emptySet(),
-      100L,
-      "random",
-      0L);
+
 
   @Test
   public void TestSetCurrentToken() {
@@ -52,12 +50,12 @@ public class OauthTokenCacheTest {
   }
 
   @Test
-  public void TestIsExpiredWithValidToken() throws InterruptedException {
+  public void TestIsExpiredWithValidCache() throws InterruptedException {
     OAuthBearerToken token1 = new BasicOAuthBearerToken(tokenString1,
         Collections.emptySet(),
-        100L,
+        Instant.now().plusSeconds(2).toEpochMilli(),
         "random",
-        0L);
+        Instant.now().toEpochMilli());
     oAuthTokenCache.setCurrentToken(token1);
     Assert.assertEquals(false, oAuthTokenCache.isTokenExpired());
     Thread.sleep(10);
@@ -65,14 +63,14 @@ public class OauthTokenCacheTest {
   }
 
   @Test
-  public void TestIsExpiredWithExpiredToken() throws InterruptedException {
+  public void TestIsExpiredWithExpiredCache() throws InterruptedException {
     OAuthBearerToken token1 = new BasicOAuthBearerToken(tokenString1,
         Collections.emptySet(),
-        95L,
+        Instant.now().plusSeconds(2).toEpochMilli(),
         "random",
-        0L);
+        Instant.now().toEpochMilli());
     oAuthTokenCache.setCurrentToken(token1);
-    //sleeping till token get expired
+    //sleeping till cache get expired
     Thread.sleep((long) Math.floor(100 * OauthTokenCache.CACHE_EXPIRY_THRESHOLD));
     Assert.assertEquals(true, oAuthTokenCache.isTokenExpired());
   }
