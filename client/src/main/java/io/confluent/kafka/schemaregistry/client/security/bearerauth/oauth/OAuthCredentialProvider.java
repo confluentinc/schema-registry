@@ -75,8 +75,8 @@ public class OAuthCredentialProvider implements BearerAuthCredentialProvider {
   }
 
   private OauthTokenCache getOauthTokenCache(Map<String, ?> map) {
-    short cacheExpiryBufferSeconds = SchemaRegistryClientConfig.
-        getBearerAuthCacheExpiryBufferSeconds(map);
+    short cacheExpiryBufferSeconds = SchemaRegistryClientConfig
+        .getBearerAuthCacheExpiryBufferSeconds(map);
     return new OauthTokenCache(cacheExpiryBufferSeconds);
   }
 

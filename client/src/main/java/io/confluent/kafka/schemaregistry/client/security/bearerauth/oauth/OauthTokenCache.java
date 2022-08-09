@@ -74,10 +74,11 @@ public class OauthTokenCache {
     // the maximum time i.e expiresMs
     if (nowMs > tokenExpiryMs) {
       log.error(
-          "Schema Registry OAuth Token [Principal={}]: Current clock: {} is later than expiry {}. This may indicate a clock skew problem."
+          "Schema Registry OAuth Token [Principal={}]: Current clock: {} is later than expiry {}. "
+              + "This may indicate a clock skew problem."
               + " Check that this host's and remote host's clocks are in sync."
-              + " This process is likely unable to authenticate SASL connections (for example, it is unlikely"
-              + " to be able to authenticate a connection with a Schema Registry).",
+              + " This process is likely unable to authenticate SASL connections (for example, it "
+              + "is unlikely to be able to authenticate a connection with a Schema Registry).",
           currentToken.principalName(), new Date(nowMs), new Date(tokenExpiryMs));
 
       return tokenExpiryMs;
@@ -90,8 +91,8 @@ public class OauthTokenCache {
     if (nowMs + 1000L * cacheExpiryBufferSeconds > tokenExpiryMs) {
       cacheExpiryMs = nowMs + (long) Math.floor((tokenExpiryMs - nowMs) * CACHE_EXPIRY_THRESHOLD);
       log.warn(
-          "Schema Registry OAuth Token [Principal={}]: OAuth token expires at {}, so buffer times {} seconds"
-              + "  cannot be accommodated.  OAuth token cache expires at {}.",
+          "Schema Registry OAuth Token [Principal={}]: OAuth token expires at {}, so buffer times "
+              + "{} seconds cannot be accommodated.  OAuth token cache expires at {}.",
           currentToken.principalName(), new Date(tokenExpiryMs), cacheExpiryBufferSeconds,
           cacheExpiryMs);
       return cacheExpiryMs;
@@ -102,8 +103,9 @@ public class OauthTokenCache {
     long beginningOfEndBufferTimeMs = tokenExpiryMs - cacheExpiryBufferSeconds * 1000;
     if (cacheExpiryMs > beginningOfEndBufferTimeMs) {
       log.info(
-          "Schema Registry OAuth Token [Principal={}]: Proposed token Cache expiry time of {} extends into the desired buffer time of {} "
-              + "seconds before token expiration, so invalidate token cache at the desired buffer begin point, at {}",
+          "Schema Registry OAuth Token [Principal={}]: Proposed token Cache expiry time of {} "
+              + "extends into the desired buffer time of {} seconds before token expiration, "
+              + "so invalidate token cache at the desired buffer begin point, at {}",
           currentToken.principalName(), new Date(cacheExpiryMs), cacheExpiryBufferSeconds,
           new Date(beginningOfEndBufferTimeMs));
       return beginningOfEndBufferTimeMs;

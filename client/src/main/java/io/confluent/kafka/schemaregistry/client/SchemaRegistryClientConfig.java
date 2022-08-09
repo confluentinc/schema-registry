@@ -54,7 +54,8 @@ public class SchemaRegistryClientConfig {
   public static final String BEARER_AUTH_IDENTITY_POOL_ID = "bearer.auth.identity.pool";
 
   //OAuth config related to token cache
-  public static final String BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS = "bearer.auth.cache.expiry.buffer.seconds";
+  public static final String BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS =
+      "bearer.auth.cache.expiry.buffer.seconds";
   public static final short BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT = 300;
 
 
