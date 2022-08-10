@@ -104,8 +104,9 @@ public class OauthTokenCacheTest {
         tokenStartTimeMs);
 
     long expectedCacheExpiryTimeMs = tokenStartTimeMs +
-        (long) (OauthTokenCache.CACHE_EXPIRY_THRESHOLD * (tokenExpiryTimeMs-tokenStartTimeMs));
-    Assert.assertEquals(expectedCacheExpiryTimeMs, oAuthTokenCache.calculateTokenExpiryTime(token1));
+        (long) (OauthTokenCache.CACHE_EXPIRY_THRESHOLD * (tokenExpiryTimeMs - tokenStartTimeMs));
+    Assert.assertEquals(expectedCacheExpiryTimeMs,
+        oAuthTokenCache.calculateTokenExpiryTime(token1));
 
     //cache expiry should honor cacheExpiryBufferSeconds seconds
     lifetimeSeconds = 20L;
@@ -117,8 +118,9 @@ public class OauthTokenCacheTest {
         "random",
         tokenStartTimeMs);
 
-    expectedCacheExpiryTimeMs = tokenExpiryTimeMs-cacheExpiryBufferSeconds*1000L;
-    Assert.assertEquals(expectedCacheExpiryTimeMs, oAuthTokenCache.calculateTokenExpiryTime(token1));
+    expectedCacheExpiryTimeMs = tokenExpiryTimeMs - cacheExpiryBufferSeconds * 1000L;
+    Assert.assertEquals(expectedCacheExpiryTimeMs,
+        oAuthTokenCache.calculateTokenExpiryTime(token1));
 
   }
 
