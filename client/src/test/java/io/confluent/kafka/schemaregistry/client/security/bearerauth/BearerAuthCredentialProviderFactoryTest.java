@@ -17,7 +17,7 @@
 package io.confluent.kafka.schemaregistry.client.security.bearerauth;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.OAuthCredentialProvider;
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.OauthCredentialProvider;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -53,7 +53,7 @@ public class BearerAuthCredentialProviderFactoryTest {
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_URL, "https://okta.com");
 
     assertInstance(BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
-        "OAUTHBEARER", CONFIG_MAP), OAuthCredentialProvider.class);
+        "OAUTHBEARER", CONFIG_MAP), OauthCredentialProvider.class);
   }
 
   @Test

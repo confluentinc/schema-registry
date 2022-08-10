@@ -33,13 +33,13 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
-public class OAuthCredentialProviderTest {
+public class OauthCredentialProviderTest {
 
   @Mock
   CachedOauthTokenRetriever tokenRetriever;
 
   @InjectMocks
-  OAuthCredentialProvider oAuthCredentialProvider = new OAuthCredentialProvider();
+  OauthCredentialProvider oAuthCredentialProvider = new OauthCredentialProvider();
 
   private String tokenString = "dummy-token";
 

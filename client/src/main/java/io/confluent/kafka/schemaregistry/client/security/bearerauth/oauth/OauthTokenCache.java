@@ -23,16 +23,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * <code>OauthTokenCache {</code> is a simple  {@link OAuthBearerToken} Cache.
- * Users can call {@link #isTokenExpired() isTokenExpired()} method to check if expired cache. If
- * the cache is expired then users can call {@link #setCurrentToken(OAuthBearerToken)
- * setCurrentToken(OAuthBearerToken)} to set a newly retrieved token. {@link
- * #calculateTokenExpiryTime calculateTokenRenRefreshTime()} is calculated from the token's  at time
- * of setting the token using {@link #setCurrentToken(OAuthBearerToken)
- * setCurrentToken(OAuthBearerToken)}. In order to encourage fetching a new token in advance before
- * the token expiry, {@link #calculateTokenExpiryTime calculateTokenRenRefreshTime()} is altered by
- * multiplying {@link #CACHE_EXPIRY_THRESHOLD CACHE_EXPIRY_THRESHOLD()}. Thus we consider a shorter
- * lifespan than actual.
+ * <p>
+ * <code>OauthTokenCache </code> is a simple  {@link OAuthBearerToken} Cache.
+ * Users can call {@link #isTokenExpired() isTokenExpired()} method to check if  cache is expired.
+ * If the cache is expired then users can call {@link #setCurrentToken(OAuthBearerToken)
+ * setCurrentToken(OAuthBearerToken)} to set a newly retrieved token.
+ * </p>
+ * <p>
+ * {@link #calculateTokenExpiryTime calculateTokenRenRefreshTime()} is the refresh algorithm to
+ * calculate token expiry time  at time of setting the token, using {@link
+ * #setCurrentToken(OAuthBearerToken) setCurrentToken(OAuthBearerToken)}. In order to encourage
+ * fetching a new token in advance before the actual token expiration, {@link
+ * #calculateTokenExpiryTime calculateTokenRenRefreshTime()} will try to return a cache expiration
+ * time before the token expiration time.
+ * </p>
+ *
+ * @author Varun PV
  */
 
 public class OauthTokenCache {
@@ -41,7 +47,13 @@ public class OauthTokenCache {
   private static final Logger log = LoggerFactory.getLogger(OauthTokenCache.class);
   private final short cacheExpiryBufferSeconds;
   private OAuthBearerToken currentToken;
+
+  /**
+   * Time at which we considered the cache expired. Note that we would want cache expiration to
+   * happen before actual token expiration so that we have some buffer to get a new token.
+   */
   private long cacheExpiryMs;
+
 
   public OauthTokenCache(short cacheExpiryBufferSeconds) {
     /*
@@ -56,6 +68,13 @@ public class OauthTokenCache {
     return currentToken;
   }
 
+
+  /**
+   * This method can be used be to set token right after you fetch the token from the OAuth/OIDC
+   * provider. Time of cache expiration is also calculated the moment we set a new token.
+   *
+   * @param currentToken is a newly fetched token from a OAuth/OIDC provider.
+   */
   public void setCurrentToken(OAuthBearerToken currentToken) {
     if (currentToken == null) {
       // if token null, set cacheExpiryMs to initial state.
@@ -74,7 +93,7 @@ public class OauthTokenCache {
     // If the current time is greater than tokenExpiryMs we log the possible clock skew
     // message return the maximum time i.e tokenExpiryMs
     if (nowMs > tokenExpiryMs) {
-      log.error(
+      log.warn(
           "Schema Registry OAuth Token [Principal={}]: Current clock: {} is later than expiry {}. "
               + "This may indicate a clock skew problem."
               + " Check that this host's and remote host's clocks are in sync."
@@ -115,6 +134,15 @@ public class OauthTokenCache {
 
   }
 
+  /**
+   * This method can be used to decide whether we should a network call to OAuth/OIDC provider and
+   * get a new token or use existing token in the cache. If this method returns true, then we can
+   * fetch a new token and use {@link OauthTokenCache#setCurrentToken(OAuthBearerToken)} to update
+   * this cache with new token. if this method returns false, then we can use token present in this
+   * cache itself.
+   *
+   * @return boolean value whether this cache is expired or not.
+   */
   public boolean isTokenExpired() {
     return Instant.now().toEpochMilli() >= cacheExpiryMs;
   }

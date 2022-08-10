@@ -25,13 +25,21 @@ import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenValidator
 import org.apache.kafka.common.security.oauthbearer.secured.ValidateException;
 
 /**
+ * <p>
  * <code>CachedOauthTokenRetriever</code> is an wrapper around {@link AccessTokenRetriever} that
  * will communicate with an OAuth/OIDC provider directly via HTTP to post client credentials ({@link
  * SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_ID}/
- * {@link SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_SECRET}) to a publicized token endpoint URL
- * ({@link SchemaRegistryClientConfig#BEARER_AUTH_ISSUER_ENDPOINT_URL}).
+ * {@link SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_SECRET})
+ * to a publicized token endpoint URL
+ * ({@link SchemaRegistryClientConfig#BEARER_AUTH_ISSUER_ENDPOINT_URL})
+ * inorder to fetch an access token.
+ * </p>
+ * <p>
  * This class adds caching mechanism over {@link AccessTokenRetriever} using {@link
  * OauthTokenCache}
+ * </p>
+ *
+ * @author Varun PV
  */
 
 class CachedOauthTokenRetriever {

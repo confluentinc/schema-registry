@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
-import java.security.PublicKey;
 import java.time.Instant;
 import java.util.Collections;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
@@ -74,22 +73,53 @@ public class OauthTokenCacheTest {
         Instant.now().toEpochMilli());
     oAuthTokenCache.setCurrentToken(token1);
     //sleeping till cache get expired
-    Thread.sleep((long) Math.floor(1000*lifespanSeconds * OauthTokenCache.CACHE_EXPIRY_THRESHOLD));
+    Thread.sleep(
+        (long) Math.floor(1000 * lifespanSeconds * OauthTokenCache.CACHE_EXPIRY_THRESHOLD));
     Assert.assertEquals(true, oAuthTokenCache.isTokenExpired());
   }
 
   @Test
-  public  void TestCalculateTokenExpiryTime(){
+  public void TestCalculateTokenExpiryTime() {
     //already expired token
-    long tokenStartTime = Instant.now().plusSeconds(-3).toEpochMilli();
-    long tokenExpiryTime= Instant.now().plusSeconds(-1).toEpochMilli();
+    long tokenStartTimeMs = Instant.now().plusSeconds(-3).toEpochMilli();
+    long tokenExpiryTimeMs = Instant.now().plusSeconds(-1).toEpochMilli();
     OAuthBearerToken token1 = new BasicOAuthBearerToken(tokenString1,
         Collections.emptySet(),
-         tokenExpiryTime,
+        tokenExpiryTimeMs,
         "random",
-        tokenStartTime);
-    oAuthTokenCache.setCurrentToken(token1);
-    Assert.assertEquals(tokenExpiryTime,oAuthTokenCache.calculateTokenExpiryTime(token1));
+        tokenStartTimeMs);
+
+    Assert.assertEquals(tokenExpiryTimeMs, oAuthTokenCache.calculateTokenExpiryTime(token1));
+
+    //cache expiry time before requested cacheExpiryBufferSeconds seconds
+    short cacheExpiryBufferSeconds = 5;
+    OauthTokenCache oAuthTokenCache = new OauthTokenCache(cacheExpiryBufferSeconds);
+    long lifetimeSeconds = 60L;
+    tokenStartTimeMs = Instant.now().toEpochMilli();
+    tokenExpiryTimeMs = Instant.now().plusSeconds(lifetimeSeconds).toEpochMilli();
+    token1 = new BasicOAuthBearerToken(tokenString1,
+        Collections.emptySet(),
+        tokenExpiryTimeMs,
+        "random",
+        tokenStartTimeMs);
+
+    long expectedCacheExpiryTimeMs = tokenStartTimeMs +
+        (long) (OauthTokenCache.CACHE_EXPIRY_THRESHOLD * (tokenExpiryTimeMs-tokenStartTimeMs));
+    Assert.assertEquals(expectedCacheExpiryTimeMs, oAuthTokenCache.calculateTokenExpiryTime(token1));
+
+    //cache expiry should honor cacheExpiryBufferSeconds seconds
+    lifetimeSeconds = 20L;
+    tokenStartTimeMs = Instant.now().toEpochMilli();
+    tokenExpiryTimeMs = Instant.now().plusSeconds(lifetimeSeconds).toEpochMilli();
+    token1 = new BasicOAuthBearerToken(tokenString1,
+        Collections.emptySet(),
+        tokenExpiryTimeMs,
+        "random",
+        tokenStartTimeMs);
+
+    expectedCacheExpiryTimeMs = tokenExpiryTimeMs-cacheExpiryBufferSeconds*1000L;
+    Assert.assertEquals(expectedCacheExpiryTimeMs, oAuthTokenCache.calculateTokenExpiryTime(token1));
+
   }
 
 }

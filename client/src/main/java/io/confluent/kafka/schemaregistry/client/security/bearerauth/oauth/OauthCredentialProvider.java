@@ -34,8 +34,10 @@ import org.apache.kafka.common.security.oauthbearer.secured.LoginAccessTokenVali
  * <code>OAuthCredentialProvider</code> is a <code>BearerAuthCredentialProvider</code>
  * implementation used for configuring OAuth in schema registry. This can used when we have setup
  * OAuth Independently from kafka.
+ *
+ * @author Varun PV
  */
-public class OAuthCredentialProvider implements BearerAuthCredentialProvider {
+public class OauthCredentialProvider implements BearerAuthCredentialProvider {
 
   private CachedOauthTokenRetriever tokenRetriever;
   private String targetSchemaRegistry;
