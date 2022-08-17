@@ -1,3 +1,4 @@
+jdk 17 test
 Schema Registry
 ================
 
