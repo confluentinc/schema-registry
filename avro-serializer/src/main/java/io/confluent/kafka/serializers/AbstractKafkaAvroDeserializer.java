@@ -45,11 +45,13 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import org.apache.kafka.common.config.ConfigException;
 
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaSerDe {
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean isKey;
   protected boolean useSpecificAvroReader = false;
+  protected Schema specificAvroReaderSchema = null;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<>();
@@ -91,14 +93,34 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         .build(cacheLoader);
   }
 
+  protected void configure(KafkaAvroDeserializerConfig config) {
+    configure(config, null);
+  }
+
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
    * Useful for testing, where a mock client is injected.
    */
-  protected void configure(KafkaAvroDeserializerConfig config) {
+  protected void configure(KafkaAvroDeserializerConfig config,  Class<?> type) {
     configureClientProperties(config, new AvroSchemaProvider());
     useSpecificAvroReader = config
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
+
+    if (useSpecificAvroReader && type != null) {
+      try {
+        specificAvroReaderSchema = ((SpecificRecord)type.getDeclaredConstructor().newInstance())
+                .getSchema();
+      } catch (Exception e) {
+        throw new ConfigException(
+          String.format(
+            "Error getting specificAvroReaderSchema from '%s'",
+            type.getName()
+          ),
+          e
+        );
+      }
+    }
+
     avroReflectionAllowNull = config
         .getBoolean(KafkaAvroDeserializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
@@ -123,7 +145,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    * @return the deserialized object
    */
   protected Object deserialize(byte[] payload) throws SerializationException {
-    return deserialize(null, isKey, payload, null);
+    return deserialize(null, isKey, payload, specificAvroReaderSchema);
   }
 
   /**
@@ -201,7 +223,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     // explicit from the Connector).
     DeserializationContext context = new DeserializationContext(topic, isKey, payload);
     AvroSchema schema = context.schemaForDeserialize();
-    Object result = context.read(schema.rawSchema(), null);
+    Object result = context.read(schema.rawSchema(), specificAvroReaderSchema);
 
     try {
       Integer version = schemaVersion(topic, isKey, context.getSchemaId(),
@@ -396,7 +418,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
     Object read(Schema writerSchema) {
-      return read(writerSchema, null);
+      return read(writerSchema, specificAvroReaderSchema);
     }
 
     Object read(Schema writerSchema, Schema readerSchema) {
