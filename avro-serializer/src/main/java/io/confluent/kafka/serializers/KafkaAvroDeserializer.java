@@ -33,7 +33,7 @@ import org.slf4j.LoggerFactory;
 public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
     implements Deserializer<Object> {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(KafkaAvroDeserializer.class);
+  private static final Logger log = LoggerFactory.getLogger(KafkaAvroDeserializer.class);
 
   /**
    * Constructor used by Kafka consumer.
@@ -69,8 +69,8 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
     final Class<?> type = config.getClass(specificAvroClassLookupKey);
 
     if (type != null && !config.getBoolean(SPECIFIC_AVRO_READER_CONFIG)) {
-      if (LOGGER.isWarnEnabled()) {
-        LOGGER.warn(
+      if (log.isWarnEnabled()) {
+        log.warn(
             String.format(
               "'%s' value of '%s' is ignored because '%s' is false",
               specificAvroClassLookupKey,
