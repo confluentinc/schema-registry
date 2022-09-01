@@ -27,10 +27,36 @@ import com.fasterxml.jackson.databind.node.BinaryNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
+import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Set;
+import org.everit.json.schema.ArraySchema;
+import org.everit.json.schema.BooleanSchema;
+import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ConditionalSchema;
+import org.everit.json.schema.EmptySchema;
+import org.everit.json.schema.EnumSchema;
+import org.everit.json.schema.FalseSchema;
+import org.everit.json.schema.NotSchema;
+import org.everit.json.schema.NullSchema;
+import org.everit.json.schema.NumberSchema;
+import org.everit.json.schema.ObjectSchema;
+import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
+import org.everit.json.schema.StringSchema;
 import org.everit.json.schema.ValidationException;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.everit.json.schema.loader.SpecificationVersion;
@@ -60,6 +86,8 @@ public class JsonSchema implements ParsedSchema {
   private static final Logger log = LoggerFactory.getLogger(JsonSchema.class);
 
   public static final String TYPE = "JSON";
+
+  public static final String ANNOTATIONS = "confluent.annotations";
 
   private static final String SCHEMA_KEYWORD = "$schema";
 
@@ -343,6 +371,11 @@ public class JsonSchema implements ParsedSchema {
   }
 
   public void validate(Object value) throws JsonProcessingException, ValidationException {
+    validate(rawSchema(), value);
+  }
+
+  private static void validate(Schema schema, Object value)
+      throws JsonProcessingException, ValidationException {
     Object primitiveValue = NONE_MARKER;
     if (isPrimitive(value)) {
       primitiveValue = value;
@@ -358,7 +391,7 @@ public class JsonSchema implements ParsedSchema {
       primitiveValue = ((TextNode) value).asText();
     }
     if (primitiveValue != NONE_MARKER) {
-      rawSchema().validate(primitiveValue);
+      schema.validate(primitiveValue);
     } else {
       Object jsonObject;
       if (value instanceof ArrayNode) {
@@ -370,7 +403,7 @@ public class JsonSchema implements ParsedSchema {
       } else {
         jsonObject = objectMapper.convertValue(value, JSONObject.class);
       }
-      rawSchema().validate(jsonObject);
+      schema.validate(jsonObject);
     }
   }
 
@@ -441,5 +474,218 @@ public class JsonSchema implements ParsedSchema {
   @Override
   public String toString() {
     return canonicalString();
+  }
+
+  @Override
+  public Object fromJson(JsonNode json) throws IOException {
+    return json;
+  }
+
+  @Override
+  public JsonNode toJson(Object message) throws IOException {
+    if (message instanceof JsonNode) {
+      return (JsonNode) message;
+    }
+    return JacksonMapper.INSTANCE.readTree(JsonSchemaUtils.toJson(message));
+  }
+
+  @Override
+  public Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
+      throws RuleException {
+    try {
+      return toTransformedMessage(ctx, rawSchema(), "$", message, transform);
+    } catch (RuntimeException e) {
+      if (e.getCause() instanceof RuleException) {
+        throw (RuleException) e.getCause();
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  private Object toTransformedMessage(
+      RuleContext ctx, Schema schema, String path, Object message, FieldTransform transform) {
+    if (schema == null || message == null) {
+      return message;
+    }
+    if (schema instanceof CombinedSchema) {
+      JsonNode jsonNode = objectMapper.convertValue(message, JsonNode.class);
+      for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
+        boolean valid = false;
+        try {
+          validate(subschema, jsonNode);
+          valid = true;
+        } catch (Exception e) {
+          // noop
+        }
+        if (valid) {
+          return toTransformedMessage(ctx, subschema, path, message, transform);
+        }
+      }
+      return message;
+    } else if (schema instanceof ArraySchema) {
+      if (!(message instanceof Iterable)) {
+        log.warn("Object does not match an array schema");
+        return message;
+      }
+      Schema subschema = ((ArraySchema)schema).getAllItemSchema();
+      List<Object> result = new ArrayList<>();
+      int i = 0;
+      for (Iterator<? extends Object> it = ((Iterable<?>) message).iterator(); it.hasNext();) {
+        result.add(toTransformedMessage(
+            ctx, subschema, path + "[" + i + "]", it.next(), transform));
+        i++;
+      }
+      return result;
+    } else if (schema instanceof ObjectSchema) {
+      Map<String, Schema> propertySchemas = ((ObjectSchema) schema).getPropertySchemas();
+      for (Map.Entry<String, Schema> entry : propertySchemas.entrySet()) {
+        String propertyName = entry.getKey();
+        Schema propertySchema = entry.getValue();
+        String fullName = path + "." + propertyName;
+        try (FieldContext fc = ctx.enterField(ctx, message, fullName, propertyName,
+            getType(propertySchema), getInlineAnnotations(propertySchema))) {
+          FieldAccessor fieldAccessor = getFieldAccessor(message, propertyName);
+          Object value = fieldAccessor.getFieldValue();
+          Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
+          fieldAccessor.setFieldValue(newValue);
+        }
+      }
+      return message;
+    } else if (schema instanceof ReferenceSchema) {
+      return toTransformedMessage(ctx, ((ReferenceSchema)schema).getReferredSchema(),
+          path, message, transform);
+    } else if (schema instanceof ConditionalSchema
+        || schema instanceof EmptySchema
+        || schema instanceof FalseSchema
+        || schema instanceof NotSchema
+        || schema instanceof NullSchema) {
+      return message;
+    } else {
+      FieldContext fc = ctx.currentField();
+      if (fc != null) {
+        try {
+          Set<String> intersect = new HashSet<>(fc.getAnnotations());
+          intersect.retainAll(ctx.rule().getAnnotations());
+          if (!intersect.isEmpty()) {
+            return transform.transform(ctx, fc, message);
+          }
+        } catch (RuleException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      return message;
+    }
+  }
+
+  private RuleContext.Type getType(Schema schema) {
+    if (schema instanceof ObjectSchema) {
+      return isMap((ObjectSchema) schema) ? Type.MAP : Type.RECORD;
+    } else if (schema instanceof EnumSchema) {
+      return Type.ENUM;
+    } else if (schema instanceof ArraySchema) {
+      return Type.ARRAY;
+    } else if (schema instanceof CombinedSchema) {
+      return Type.COMBINED;
+    } else if (schema instanceof StringSchema) {
+      return Type.STRING;
+    } else if (schema instanceof NumberSchema) {
+      NumberSchema numberSchema = (NumberSchema) schema;
+      return numberSchema.requiresInteger() ? Type.INT : Type.DOUBLE;
+    } else if (schema instanceof BooleanSchema) {
+      return Type.BOOLEAN;
+    } else {
+      return Type.NULL;
+    }
+  }
+
+  private static boolean isMap(final ObjectSchema objectSchema) {
+    return objectSchema.getPropertySchemas() == null
+        || objectSchema.getPropertySchemas().size() == 0;
+  }
+
+  private Set<String> getInlineAnnotations(Schema propertySchema) {
+    Set<String> annotations = new HashSet<>();
+    Object prop = propertySchema.getUnprocessedProperties().get(ANNOTATIONS);
+    if (prop instanceof List) {
+      ((List<?>)prop).forEach(p -> annotations.add(p.toString()));
+    }
+    return annotations;
+  }
+
+  interface FieldAccessor {
+    Object getFieldValue();
+
+    void setFieldValue(Object value);
+  }
+
+  private static FieldAccessor getFieldAccessor(Object message, String fieldName) {
+    if (message instanceof ObjectNode) {
+      return new FieldAccessor() {
+        @Override
+        public Object getFieldValue() {
+          return (((ObjectNode) message).get(fieldName));
+        }
+
+        @Override
+        public void setFieldValue(Object value) {
+          ObjectNode objectNode = (ObjectNode) message;
+          if (value instanceof Boolean) {
+            objectNode.put(fieldName, (Boolean) value);
+          } else if (value instanceof BigDecimal) {
+            objectNode.put(fieldName, (BigDecimal) value);
+          } else if (value instanceof BigInteger) {
+            objectNode.put(fieldName, (BigInteger) value);
+          } else if (value instanceof Long) {
+            objectNode.put(fieldName, (Long) value);
+          } else if (value instanceof Double) {
+            objectNode.put(fieldName, (Double) value);
+          } else if (value instanceof Float) {
+            objectNode.put(fieldName, (Float) value);
+          } else if (value instanceof Integer) {
+            objectNode.put(fieldName, (Integer) value);
+          } else if (value instanceof Short) {
+            objectNode.put(fieldName, (Short) value);
+          } else if (value instanceof Byte) {
+            objectNode.put(fieldName, (Byte) value);
+          } else if (value instanceof byte[]) {
+            objectNode.put(fieldName, (byte[]) value);
+          } else {
+            objectNode.put(fieldName, value.toString());
+          }
+        }
+      };
+    } else {
+      Field field = getDeclaredField(message, fieldName);
+      return new FieldAccessor() {
+        @Override
+        public Object getFieldValue() {
+          try {
+            return field.get(message);
+          } catch (IllegalAccessException e) {
+            throw new IllegalStateException("Could not get field " + field.getName(), e);
+          }
+        }
+
+        @Override
+        public void setFieldValue(Object value) {
+          try {
+            field.set(message, value);
+          } catch (IllegalAccessException e) {
+            throw new IllegalStateException("Could not set field " + field.getName(), e);
+          }
+        }
+      };
+    }
+  }
+
+  private static Field getDeclaredField(Object message, String fieldName) {
+    try {
+      Field declaredField = message.getClass().getDeclaredField(fieldName);
+      declaredField.setAccessible(true);
+      return declaredField;
+    } catch (NoSuchFieldException e) {
+      return null;
+    }
   }
 }

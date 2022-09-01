@@ -154,7 +154,7 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
         Message object,
         ParsedSchema schema
     ) {
-      return super.serializeImpl(subject, topic, isKey, object, (ProtobufSchema) schema);
+      return super.serializeImpl(subject, topic, isKey, null, object, (ProtobufSchema) schema);
     }
   }
 }

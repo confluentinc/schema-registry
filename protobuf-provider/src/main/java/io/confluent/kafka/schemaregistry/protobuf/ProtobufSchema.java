@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.AnyProto;
@@ -41,6 +42,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor.Type;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DurationProto;
 import com.google.protobuf.DynamicMessage;
@@ -87,13 +89,19 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.stream.Stream;
 import kotlin.Pair;
@@ -2003,6 +2011,133 @@ public class ProtobufSchema implements ParsedSchema {
       parts[parts.length - 1] = lastPart;
     }
     return String.join(".", parts);
+  }
+
+  @Override
+  public Object fromJson(JsonNode json) throws IOException {
+    return ProtobufSchemaUtils.toObject(json, this);
+  }
+
+  @Override
+  public JsonNode toJson(Object message) throws IOException {
+    if (message instanceof JsonNode) {
+      return (JsonNode) message;
+    }
+    return JacksonMapper.INSTANCE.readTree(ProtobufSchemaUtils.toJson((Message) message));
+  }
+
+  @Override
+  public Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
+      throws RuleException {
+    try {
+      Message msg = (Message) message;
+      // Pass the schema-based descriptor which has the annotations
+      Descriptor desc = toDescriptor(msg.getDescriptorForType().getFullName());
+      return toTransformedMessage(ctx, desc, msg, transform);
+    } catch (RuntimeException e) {
+      if (e.getCause() instanceof RuleException) {
+        throw (RuleException) e.getCause();
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  private Object toTransformedMessage(
+      RuleContext ctx, Descriptor desc, Object message, FieldTransform transform) {
+    if (desc == null || message == null) {
+      return message;
+    }
+    if (message instanceof List) {
+      return ((List<?>) message).stream()
+          .map(it -> toTransformedMessage(ctx, desc, it, transform))
+          .collect(Collectors.toList());
+    } else if (message instanceof Map) {
+      return message;
+    } else if (message instanceof Message) {
+      Message.Builder copy;
+      if (message instanceof Message.Builder) {
+        copy = (Message.Builder) message;
+      } else {
+        copy = ((Message) message).toBuilder();
+      }
+      for (FieldDescriptor fd : copy.getDescriptorForType().getFields()) {
+        FieldDescriptor schemaFd = desc.findFieldByName(fd.getName());
+        try (FieldContext fc = ctx.enterField(
+            ctx, copy, fd.getFullName(), fd.getName(), getType(fd),
+            getInlineAnnotations(schemaFd)) // use schema-based fd which has the annotations
+        ) {
+          Object value = copy.getField(fd); // we can't use the schema-based fd
+          Descriptor d = desc;
+          if (schemaFd.getType() == Type.MESSAGE) {
+            // Pass the schema-based descriptor which has the annotations
+            d = schemaFd.getMessageType();
+          }
+          Object newValue = toTransformedMessage(ctx, d, value, transform);
+          copy.setField(fd, newValue);
+        }
+      }
+      return copy.build();
+    } else {
+      FieldContext fc = ctx.currentField();
+      if (fc != null) {
+        try {
+          Set<String> intersect = new HashSet<>(fc.getAnnotations());
+          intersect.retainAll(ctx.rule().getAnnotations());
+          if (!intersect.isEmpty()) {
+            return transform.transform(ctx, fc, message);
+          }
+        } catch (RuleException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      return message;
+    }
+  }
+
+  private RuleContext.Type getType(FieldDescriptor field) {
+    if (field.isMapField()) {
+      return RuleContext.Type.MAP;
+    } else if (field.isRepeated()) {
+      return RuleContext.Type.ARRAY;
+    }
+    switch (field.getType()) {
+      case MESSAGE:
+        return RuleContext.Type.RECORD;
+      case ENUM:
+        return RuleContext.Type.ENUM;
+      case STRING:
+        return RuleContext.Type.STRING;
+      case BYTES:
+        return RuleContext.Type.BYTES;
+      case INT32:
+      case UINT32:
+      case FIXED32:
+      case SFIXED32:
+        return RuleContext.Type.INT;
+      case INT64:
+      case UINT64:
+      case FIXED64:
+      case SFIXED64:
+        return RuleContext.Type.LONG;
+      case FLOAT:
+        return RuleContext.Type.FLOAT;
+      case DOUBLE:
+        return RuleContext.Type.DOUBLE;
+      case BOOL:
+        return RuleContext.Type.BOOLEAN;
+      default:
+        return RuleContext.Type.NULL;
+    }
+  }
+
+  private Set<String> getInlineAnnotations(FieldDescriptor fd) {
+    Set<String> annotations = new HashSet<>();
+    if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
+      Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
+      annotations.addAll(meta.getAnnotationList());
+    }
+    return annotations;
   }
 
   public enum Format {

@@ -48,6 +48,7 @@
         <module>core</module>
         <module>client</module>
         <module>schema-serializer</module>
+        <module>schema-rules</module>
         <module>avro-serializer</module>
         <module>json-serializer</module>
         <module>schema-converter</module>
@@ -79,7 +80,9 @@
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.6.0</kotlin.version>
-        <jsonata-version>1.7.6</jsonata-version>
+        <antlr.version>4.9.2</antlr.version>
+        <cel-version>0.3.10</cel-version>
+        <jsonata-version>1.7.9</jsonata-version>
         <json-schema.version>1.14.1</json-schema.version>
         <proto-google-common-protos.version>2.5.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
@@ -212,6 +215,18 @@
                         <artifactId>kotlin-stdlib</artifactId>
                     </exclusion>
                 </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.antlr</groupId>
+                <artifactId>antlr4-runtime</artifactId>
+                <version>${antlr.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.projectnessie.cel</groupId>
+                <artifactId>cel-bom</artifactId>
+                <version>${cel-version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>com.ibm.jsonata4java</groupId>

@@ -162,6 +162,11 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
+  default SchemaMetadata getLatestWithMetadata(String subject, Map<String, String> metadata,
+      boolean lookupDeletedSchema) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   @Deprecated
   default int getVersion(String subject, org.apache.avro.Schema schema)
       throws IOException, RestClientException {

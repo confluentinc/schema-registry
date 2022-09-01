@@ -21,6 +21,7 @@ import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -35,6 +36,7 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSerDe {
 
@@ -83,8 +85,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     return new KafkaAvroSerializerConfig(props);
   }
 
+  protected byte[] serializeImpl(String subject, Object object, AvroSchema schema)
+      throws SerializationException, InvalidConfigurationException {
+    return serializeImpl(subject, null, null, object, schema);
+  }
+
   protected byte[] serializeImpl(
-      String subject, Object object, AvroSchema schema)
+      String subject, String topic, Headers headers, Object object, AvroSchema schema)
       throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       StringBuilder userFriendlyMsgBuilder = new StringBuilder();
@@ -111,6 +118,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         schema = (AvroSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
         id = schemaRegistry.getId(subject, schema);
+      } else if (metadata != null) {
+        restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
+        schema = (AvroSchema) getLatestWithMetadata(subject);
+        id = schemaRegistry.getId(subject, schema);
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version of Avro schema";
         schema = (AvroSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
@@ -119,6 +130,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         restClientErrorMsg = "Error retrieving Avro schema";
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
+      object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());

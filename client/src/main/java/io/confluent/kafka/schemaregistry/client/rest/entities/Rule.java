@@ -50,8 +50,8 @@ public class Rule {
               @JsonProperty("annotations") Set<String> annotations,
               @JsonProperty("body") String body) {
     this.name = name;
-    this.kind = kind;
-    this.mode = mode;
+    this.kind = kind != null ? kind : RuleKind.TRANSFORM;
+    this.mode = mode != null ? mode : RuleMode.READWRITE;
     this.type = type;
     SortedSet<String> sortedAnnotations = annotations != null
         ? annotations.stream()

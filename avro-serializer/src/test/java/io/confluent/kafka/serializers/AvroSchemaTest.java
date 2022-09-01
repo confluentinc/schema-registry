@@ -609,7 +609,7 @@ public class AvroSchemaTest {
 
   private static void expectConversionException(Object obj) {
     try {
-      AvroSchemaUtils.toJson(obj);
+      AvroSchemaUtils.getSchema(obj);
       fail("Expected conversion of "
           + (
           obj == null ? "null" : (obj.toString() + " (" + obj.getClass().getName() + ")"))

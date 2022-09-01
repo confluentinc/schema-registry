@@ -166,7 +166,7 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
         JsonNode object,
         ParsedSchema schema
     ) {
-      return super.serializeImpl(subject, object, (JsonSchema) schema);
+      return super.serializeImpl(subject, topic, null, object, (JsonSchema) schema);
     }
   }
 }

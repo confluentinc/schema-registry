@@ -68,6 +68,31 @@ public final class MetaProto {
 
     java.lang.String getParamsOrThrow(
         java.lang.String key);
+
+    /**
+     * <code>repeated string annotation = 3;</code>
+     * @return A list containing the annotation.
+     */
+    java.util.List<java.lang.String>
+        getAnnotationList();
+    /**
+     * <code>repeated string annotation = 3;</code>
+     * @return The count of annotation.
+     */
+    int getAnnotationCount();
+    /**
+     * <code>repeated string annotation = 3;</code>
+     * @param index The index of the element to return.
+     * @return The annotation at the given index.
+     */
+    java.lang.String getAnnotation(int index);
+    /**
+     * <code>repeated string annotation = 3;</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the annotation at the given index.
+     */
+    com.google.protobuf.ByteString
+        getAnnotationBytes(int index);
   }
   /**
    * Protobuf type {@code confluent.Meta}
@@ -83,6 +108,7 @@ public final class MetaProto {
     }
     private Meta() {
       doc_ = "";
+      annotation_ = com.google.protobuf.LazyStringArrayList.EMPTY;
     }
 
     @java.lang.Override
@@ -135,6 +161,15 @@ public final class MetaProto {
                   params__.getKey(), params__.getValue());
               break;
             }
+            case 26: {
+              java.lang.String s = input.readStringRequireUtf8();
+              if (!((mutable_bitField0_ & 0x00000002) != 0)) {
+                annotation_ = new com.google.protobuf.LazyStringArrayList();
+                mutable_bitField0_ |= 0x00000002;
+              }
+              annotation_.add(s);
+              break;
+            }
             default: {
               if (!parseUnknownField(
                   input, unknownFields, extensionRegistry, tag)) {
@@ -150,6 +185,9 @@ public final class MetaProto {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        if (((mutable_bitField0_ & 0x00000002) != 0)) {
+          annotation_ = annotation_.getUnmodifiableView();
+        }
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
@@ -298,6 +336,41 @@ public final class MetaProto {
       return map.get(key);
     }
 
+    public static final int ANNOTATION_FIELD_NUMBER = 3;
+    private com.google.protobuf.LazyStringList annotation_;
+    /**
+     * <code>repeated string annotation = 3;</code>
+     * @return A list containing the annotation.
+     */
+    public com.google.protobuf.ProtocolStringList
+        getAnnotationList() {
+      return annotation_;
+    }
+    /**
+     * <code>repeated string annotation = 3;</code>
+     * @return The count of annotation.
+     */
+    public int getAnnotationCount() {
+      return annotation_.size();
+    }
+    /**
+     * <code>repeated string annotation = 3;</code>
+     * @param index The index of the element to return.
+     * @return The annotation at the given index.
+     */
+    public java.lang.String getAnnotation(int index) {
+      return annotation_.get(index);
+    }
+    /**
+     * <code>repeated string annotation = 3;</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the annotation at the given index.
+     */
+    public com.google.protobuf.ByteString
+        getAnnotationBytes(int index) {
+      return annotation_.getByteString(index);
+    }
+
     private byte memoizedIsInitialized = -1;
     @java.lang.Override
     public final boolean isInitialized() {
@@ -321,6 +394,9 @@ public final class MetaProto {
           internalGetParams(),
           ParamsDefaultEntryHolder.defaultEntry,
           2);
+      for (int i = 0; i < annotation_.size(); i++) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 3, annotation_.getRaw(i));
+      }
       unknownFields.writeTo(output);
     }
 
@@ -343,6 +419,14 @@ public final class MetaProto {
         size += com.google.protobuf.CodedOutputStream
             .computeMessageSize(2, params__);
       }
+      {
+        int dataSize = 0;
+        for (int i = 0; i < annotation_.size(); i++) {
+          dataSize += computeStringSizeNoTag(annotation_.getRaw(i));
+        }
+        size += dataSize;
+        size += 1 * getAnnotationList().size();
+      }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
@@ -362,6 +446,8 @@ public final class MetaProto {
           .equals(other.getDoc())) return false;
       if (!internalGetParams().equals(
           other.internalGetParams())) return false;
+      if (!getAnnotationList()
+          .equals(other.getAnnotationList())) return false;
       if (!unknownFields.equals(other.unknownFields)) return false;
       return true;
     }
@@ -378,6 +464,10 @@ public final class MetaProto {
       if (!internalGetParams().getMap().isEmpty()) {
         hash = (37 * hash) + PARAMS_FIELD_NUMBER;
         hash = (53 * hash) + internalGetParams().hashCode();
+      }
+      if (getAnnotationCount() > 0) {
+        hash = (37 * hash) + ANNOTATION_FIELD_NUMBER;
+        hash = (53 * hash) + getAnnotationList().hashCode();
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
@@ -537,6 +627,8 @@ public final class MetaProto {
         doc_ = "";
 
         internalGetMutableParams().clear();
+        annotation_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+        bitField0_ = (bitField0_ & ~0x00000002);
         return this;
       }
 
@@ -567,6 +659,11 @@ public final class MetaProto {
         result.doc_ = doc_;
         result.params_ = internalGetParams();
         result.params_.makeImmutable();
+        if (((bitField0_ & 0x00000002) != 0)) {
+          annotation_ = annotation_.getUnmodifiableView();
+          bitField0_ = (bitField0_ & ~0x00000002);
+        }
+        result.annotation_ = annotation_;
         onBuilt();
         return result;
       }
@@ -621,6 +718,16 @@ public final class MetaProto {
         }
         internalGetMutableParams().mergeFrom(
             other.internalGetParams());
+        if (!other.annotation_.isEmpty()) {
+          if (annotation_.isEmpty()) {
+            annotation_ = other.annotation_;
+            bitField0_ = (bitField0_ & ~0x00000002);
+          } else {
+            ensureAnnotationIsMutable();
+            annotation_.addAll(other.annotation_);
+          }
+          onChanged();
+        }
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
@@ -857,6 +964,116 @@ public final class MetaProto {
             .putAll(values);
         return this;
       }
+
+      private com.google.protobuf.LazyStringList annotation_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+      private void ensureAnnotationIsMutable() {
+        if (!((bitField0_ & 0x00000002) != 0)) {
+          annotation_ = new com.google.protobuf.LazyStringArrayList(annotation_);
+          bitField0_ |= 0x00000002;
+         }
+      }
+      /**
+       * <code>repeated string annotation = 3;</code>
+       * @return A list containing the annotation.
+       */
+      public com.google.protobuf.ProtocolStringList
+          getAnnotationList() {
+        return annotation_.getUnmodifiableView();
+      }
+      /**
+       * <code>repeated string annotation = 3;</code>
+       * @return The count of annotation.
+       */
+      public int getAnnotationCount() {
+        return annotation_.size();
+      }
+      /**
+       * <code>repeated string annotation = 3;</code>
+       * @param index The index of the element to return.
+       * @return The annotation at the given index.
+       */
+      public java.lang.String getAnnotation(int index) {
+        return annotation_.get(index);
+      }
+      /**
+       * <code>repeated string annotation = 3;</code>
+       * @param index The index of the value to return.
+       * @return The bytes of the annotation at the given index.
+       */
+      public com.google.protobuf.ByteString
+          getAnnotationBytes(int index) {
+        return annotation_.getByteString(index);
+      }
+      /**
+       * <code>repeated string annotation = 3;</code>
+       * @param index The index to set the value at.
+       * @param value The annotation to set.
+       * @return This builder for chaining.
+       */
+      public Builder setAnnotation(
+          int index, java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  ensureAnnotationIsMutable();
+        annotation_.set(index, value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated string annotation = 3;</code>
+       * @param value The annotation to add.
+       * @return This builder for chaining.
+       */
+      public Builder addAnnotation(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  ensureAnnotationIsMutable();
+        annotation_.add(value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated string annotation = 3;</code>
+       * @param values The annotation to add.
+       * @return This builder for chaining.
+       */
+      public Builder addAllAnnotation(
+          java.lang.Iterable<java.lang.String> values) {
+        ensureAnnotationIsMutable();
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, annotation_);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated string annotation = 3;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearAnnotation() {
+        annotation_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+        bitField0_ = (bitField0_ & ~0x00000002);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated string annotation = 3;</code>
+       * @param value The bytes of the annotation to add.
+       * @return This builder for chaining.
+       */
+      public Builder addAnnotationBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        ensureAnnotationIsMutable();
+        annotation_.add(value);
+        onChanged();
+        return this;
+      }
       @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -985,20 +1202,20 @@ public final class MetaProto {
   static {
     java.lang.String[] descriptorData = {
       "\n\nmeta.proto\022\tconfluent\032 google/protobuf" +
-      "/descriptor.proto\"o\n\004Meta\022\013\n\003doc\030\001 \001(\t\022+" +
-      "\n\006params\030\002 \003(\0132\033.confluent.Meta.ParamsEn" +
-      "try\032-\n\013ParamsEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value" +
-      "\030\002 \001(\t:\0028\001:A\n\tfile_meta\022\034.google.protobu" +
-      "f.FileOptions\030\300\010 \001(\0132\017.confluent.Meta:G\n" +
-      "\014message_meta\022\037.google.protobuf.MessageO" +
-      "ptions\030\300\010 \001(\0132\017.confluent.Meta:C\n\nfield_" +
-      "meta\022\035.google.protobuf.FieldOptions\030\300\010 \001" +
-      "(\0132\017.confluent.Meta:A\n\tenum_meta\022\034.googl" +
-      "e.protobuf.EnumOptions\030\300\010 \001(\0132\017.confluen" +
-      "t.Meta:L\n\017enum_value_meta\022!.google.proto" +
-      "buf.EnumValueOptions\030\300\010 \001(\0132\017.confluent." +
-      "MetaB\"\n\025io.confluent.protobufB\tMetaProto" +
-      "b\006proto3"
+      "/descriptor.proto\"\203\001\n\004Meta\022\013\n\003doc\030\001 \001(\t\022" +
+      "+\n\006params\030\002 \003(\0132\033.confluent.Meta.ParamsE" +
+      "ntry\022\022\n\nannotation\030\003 \003(\t\032-\n\013ParamsEntry\022" +
+      "\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\t:\0028\001:A\n\tfile_" +
+      "meta\022\034.google.protobuf.FileOptions\030\300\010 \001(" +
+      "\0132\017.confluent.Meta:G\n\014message_meta\022\037.goo" +
+      "gle.protobuf.MessageOptions\030\300\010 \001(\0132\017.con" +
+      "fluent.Meta:C\n\nfield_meta\022\035.google.proto" +
+      "buf.FieldOptions\030\300\010 \001(\0132\017.confluent.Meta" +
+      ":A\n\tenum_meta\022\034.google.protobuf.EnumOpti" +
+      "ons\030\300\010 \001(\0132\017.confluent.Meta:L\n\017enum_valu" +
+      "e_meta\022!.google.protobuf.EnumValueOption" +
+      "s\030\300\010 \001(\0132\017.confluent.MetaB\"\n\025io.confluen" +
+      "t.protobufB\tMetaProtob\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -1010,7 +1227,7 @@ public final class MetaProto {
     internal_static_confluent_Meta_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_confluent_Meta_descriptor,
-        new java.lang.String[] { "Doc", "Params", });
+        new java.lang.String[] { "Doc", "Params", "Annotation", });
     internal_static_confluent_Meta_ParamsEntry_descriptor =
       internal_static_confluent_Meta_descriptor.getNestedTypes().get(0);
     internal_static_confluent_Meta_ParamsEntry_fieldAccessorTable = new

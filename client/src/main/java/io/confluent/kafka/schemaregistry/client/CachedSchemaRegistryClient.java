@@ -498,6 +498,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public SchemaMetadata getLatestWithMetadata(String subject, Map<String, String> metadata,
+      boolean lookupDeletedSchema) throws IOException, RestClientException {
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
+        = restService.getLatestWithMetadata(subject, metadata, lookupDeletedSchema);
+    return new SchemaMetadata(response);
+  }
+
+  @Override
   public int getVersion(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     return getVersion(subject, schema, false);
