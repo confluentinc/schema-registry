@@ -41,16 +41,19 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.InetSocketAddress;
 import java.net.Proxy;
+import java.net.Authenticator;
+import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.InetSocketAddress;
+import java.net.PasswordAuthentication;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
@@ -222,6 +225,27 @@ public class RestService implements Configurable {
 
     if (isValidProxyConfig(proxyHost, proxyPort)) {
       setProxy(proxyHost, proxyPort);
+      String user = Optional.ofNullable((String) configs.get(SchemaRegistryClientConfig.PROXY_USER)).orElse("");
+      String password = Optional.ofNullable((String) configs.get(SchemaRegistryClientConfig.PROXY_PASSWORD)).orElse("");
+      PasswordAuthentication passwordAuthentication = new PasswordAuthentication(user, password.toCharArray());
+      String hostLowercase = proxyHost.toLowerCase();
+      // override authenticator setting since probability to have only
+      // one corporate proxy setting to reach internet is very high
+      Authenticator.setDefault(new Authenticator() {
+        @Override
+        protected PasswordAuthentication getPasswordAuthentication() {
+          if (getRequestorType() == RequestorType.PROXY) {
+            if (hostLowercase.equals(getRequestingHost().toLowerCase())) {
+              if (proxyPort == getRequestingPort()) {
+                return passwordAuthentication;
+              }
+            }
+          }
+          // Don't have access to Authenticator.getDefault() in order to relay the Authenticator Provider
+          // to another definition because it's available from 1.9+
+          return null;
+        }
+      });
     }
   }
 

@@ -166,6 +166,18 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       "The port number of the proxy server that will be used to connect to the schema registry "
           + "instances.";
 
+  public static final String PROXY_USER = SchemaRegistryClientConfig.PROXY_USER;
+  public static final String PROXY_USER_DEFAULT = "";
+  public static final String PROXY_USER_DOC =
+          "The username used to authenticate with the proxy that will be used to connect to the schema "
+                  + " registry instances.";
+
+  public static final String PROXY_PASSWORD = SchemaRegistryClientConfig.PROXY_PASSWORD;
+  public static final String PROXY_PASSWORD_DEFAULT = "";
+  public static final String PROXY_PASSWORD_DOC =
+          "The password used to authenticate with the proxy that will be used to connect to the schema "
+                  + " registry instances.";
+
   public static ConfigDef baseConfigDef() {
     ConfigDef configDef = new ConfigDef()
         .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
@@ -207,7 +219,11 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .define(PROXY_HOST, Type.STRING, PROXY_HOST_DEFAULT,
                 Importance.LOW, PROXY_HOST_DOC)
         .define(PROXY_PORT, Type.INT, PROXY_PORT_DEFAULT,
-                Importance.LOW, PROXY_PORT_DOC);
+                Importance.LOW, PROXY_PORT_DOC)
+        .define(PROXY_USER, Type.INT, PROXY_USER_DEFAULT,
+                Importance.LOW, PROXY_USER_DOC)
+        .define(PROXY_PASSWORD, Type.INT, PROXY_PASSWORD_DEFAULT,
+                Importance.LOW, PROXY_PASSWORD_DOC);
     SchemaRegistryClientConfig.withClientSslSupport(
         configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
     return configDef;
