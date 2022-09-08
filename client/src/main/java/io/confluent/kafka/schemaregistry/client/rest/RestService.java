@@ -973,25 +973,34 @@ public class RestService implements Configurable {
   public List<Integer> getAllVersions(Map<String, String> requestProperties,
                                       String subject)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions");
-    String path = builder.build(subject).toString();
-
-    List<Integer> response = httpRequest(path, "GET", null, requestProperties,
-                                         ALL_VERSIONS_RESPONSE_TYPE);
-    return response;
+    return getAllVersions(requestProperties, subject, false, false);
   }
 
   public List<Integer> getAllVersions(Map<String, String> requestProperties,
                                       String subject,
                                       boolean lookupDeletedSchema)
           throws IOException, RestClientException {
+    return getAllVersions(requestProperties, subject, lookupDeletedSchema, false);
+  }
+
+  public List<Integer> getAllVersions(Map<String, String> requestProperties,
+                                      String subject,
+                                      boolean lookupDeletedSchema,
+                                      boolean lookupDeletedOnlySchema)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions");
     builder.queryParam("deleted", lookupDeletedSchema);
+    builder.queryParam("deletedOnly", lookupDeletedOnlySchema);
     String path = builder.build(subject).toString();
 
     List<Integer> response = httpRequest(path, "GET", null, requestProperties,
-            ALL_VERSIONS_RESPONSE_TYPE);
+        ALL_VERSIONS_RESPONSE_TYPE);
     return response;
+  }
+
+  public List<Integer> getDeletedOnlyVersions(String subject)
+      throws IOException, RestClientException {
+    return getAllVersions(DEFAULT_REQUEST_PROPERTIES, subject, false, true);
   }
 
   public List<String> getAllContexts()
@@ -1034,8 +1043,17 @@ public class RestService implements Configurable {
                                      String subjectPrefix,
                                      boolean deletedSubjects)
       throws IOException, RestClientException {
+    return getAllSubjects(requestProperties, subjectPrefix, deletedSubjects, false);
+  }
+
+  public List<String> getAllSubjects(Map<String, String> requestProperties,
+                                     String subjectPrefix,
+                                     boolean deletedSubjects,
+                                     boolean deletedOnlySubjects)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects");
     builder.queryParam("deleted", deletedSubjects);
+    builder.queryParam("deletedOnly", deletedOnlySubjects);
     if (subjectPrefix != null) {
       builder.queryParam("subjectPrefix", subjectPrefix);
     }
@@ -1043,6 +1061,11 @@ public class RestService implements Configurable {
     List<String> response = httpRequest(path, "GET", null, requestProperties,
         ALL_TOPICS_RESPONSE_TYPE);
     return response;
+  }
+
+  public List<String> getDeletedOnlySubjects(String subjectPrefix)
+      throws IOException, RestClientException {
+    return getAllSubjects(DEFAULT_REQUEST_PROPERTIES, subjectPrefix, false, true);
   }
 
   public List<String> getAllSubjectsById(int id)

@@ -380,7 +380,7 @@ public class RestApiTest extends ClusterTestHarness {
     restApp.restClient.updateCompatibility(
         CompatibilityLevel.FULL.name, subject);
 
-    // test that compatibility check for incompatible schema returns false and the appropriate 
+    // test that compatibility check for incompatible schema returns false and the appropriate
     // error response from Avro
     restApp.restClient.registerSchema(schema1, subject);
     int versionOfRegisteredSchema =
@@ -1619,10 +1619,16 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Versions Deleted Match", deletedResponse,
             restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject2));
 
+    assertEquals("List Deleted Versions Match", deletedResponse,
+        restApp.restClient.getDeletedOnlyVersions(subject2));
+
     expectedResponse = new ArrayList<>();
     expectedResponse.add(subject1);
     assertEquals("Current Subjects", expectedResponse,
             restApp.restClient.getAllSubjects());
+
+    assertEquals("Deleted Subjects", Collections.singletonList(subject2),
+        restApp.restClient.getDeletedOnlySubjects(null));
 
     expectedResponse = new ArrayList<>();
     expectedResponse.add(subject1);
@@ -1907,6 +1913,5 @@ public class RestApiTest extends ClusterTestHarness {
     // Join base URL and path, collapsing any duplicate forward slash delimiters
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
-  
 }
 
