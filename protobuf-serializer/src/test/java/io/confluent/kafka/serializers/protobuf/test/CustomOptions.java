@@ -907,23 +907,35 @@ public final class CustomOptions {
     int getId();
 
     /**
-     * <code>string doc = 2;</code>
+     * <code>float f = 2;</code>
+     * @return The f.
+     */
+    float getF();
+
+    /**
+     * <code>double d = 3;</code>
+     * @return The d.
+     */
+    double getD();
+
+    /**
+     * <code>string doc = 4;</code>
      * @return The doc.
      */
     java.lang.String getDoc();
     /**
-     * <code>string doc = 2;</code>
+     * <code>string doc = 4;</code>
      * @return The bytes for doc.
      */
     com.google.protobuf.ByteString
         getDocBytes();
 
     /**
-     * <code>map&lt;string, string&gt; params = 3;</code>
+     * <code>map&lt;string, string&gt; params = 5;</code>
      */
     int getParamsCount();
     /**
-     * <code>map&lt;string, string&gt; params = 3;</code>
+     * <code>map&lt;string, string&gt; params = 5;</code>
      */
     boolean containsParams(
         java.lang.String key);
@@ -934,36 +946,36 @@ public final class CustomOptions {
     java.util.Map<java.lang.String, java.lang.String>
     getParams();
     /**
-     * <code>map&lt;string, string&gt; params = 3;</code>
+     * <code>map&lt;string, string&gt; params = 5;</code>
      */
     java.util.Map<java.lang.String, java.lang.String>
     getParamsMap();
     /**
-     * <code>map&lt;string, string&gt; params = 3;</code>
+     * <code>map&lt;string, string&gt; params = 5;</code>
      */
 
     java.lang.String getParamsOrDefault(
         java.lang.String key,
         java.lang.String defaultValue);
     /**
-     * <code>map&lt;string, string&gt; params = 3;</code>
+     * <code>map&lt;string, string&gt; params = 5;</code>
      */
 
     java.lang.String getParamsOrThrow(
         java.lang.String key);
 
     /**
-     * <code>repeated int32 list = 4;</code>
+     * <code>repeated int32 list = 6;</code>
      * @return A list containing the list.
      */
     java.util.List<java.lang.Integer> getListList();
     /**
-     * <code>repeated int32 list = 4;</code>
+     * <code>repeated int32 list = 6;</code>
      * @return The count of list.
      */
     int getListCount();
     /**
-     * <code>repeated int32 list = 4;</code>
+     * <code>repeated int32 list = 6;</code>
      * @param index The index of the element to return.
      * @return The list at the given index.
      */
@@ -1022,13 +1034,23 @@ public final class CustomOptions {
               id_ = input.readInt32();
               break;
             }
-            case 18: {
+            case 21: {
+
+              f_ = input.readFloat();
+              break;
+            }
+            case 25: {
+
+              d_ = input.readDouble();
+              break;
+            }
+            case 34: {
               java.lang.String s = input.readStringRequireUtf8();
 
               doc_ = s;
               break;
             }
-            case 26: {
+            case 42: {
               if (!((mutable_bitField0_ & 0x00000001) != 0)) {
                 params_ = com.google.protobuf.MapField.newMapField(
                     ParamsDefaultEntryHolder.defaultEntry);
@@ -1041,7 +1063,7 @@ public final class CustomOptions {
                   params__.getKey(), params__.getValue());
               break;
             }
-            case 32: {
+            case 48: {
               if (!((mutable_bitField0_ & 0x00000002) != 0)) {
                 list_ = newIntList();
                 mutable_bitField0_ |= 0x00000002;
@@ -1049,7 +1071,7 @@ public final class CustomOptions {
               list_.addInt(input.readInt32());
               break;
             }
-            case 34: {
+            case 50: {
               int length = input.readRawVarint32();
               int limit = input.pushLimit(length);
               if (!((mutable_bitField0_ & 0x00000002) != 0) && input.getBytesUntilLimit() > 0) {
@@ -1094,7 +1116,7 @@ public final class CustomOptions {
     protected com.google.protobuf.MapField internalGetMapField(
         int number) {
       switch (number) {
-        case 3:
+        case 5:
           return internalGetParams();
         default:
           throw new RuntimeException(
@@ -1120,10 +1142,32 @@ public final class CustomOptions {
       return id_;
     }
 
-    public static final int DOC_FIELD_NUMBER = 2;
+    public static final int F_FIELD_NUMBER = 2;
+    private float f_;
+    /**
+     * <code>float f = 2;</code>
+     * @return The f.
+     */
+    @java.lang.Override
+    public float getF() {
+      return f_;
+    }
+
+    public static final int D_FIELD_NUMBER = 3;
+    private double d_;
+    /**
+     * <code>double d = 3;</code>
+     * @return The d.
+     */
+    @java.lang.Override
+    public double getD() {
+      return d_;
+    }
+
+    public static final int DOC_FIELD_NUMBER = 4;
     private volatile java.lang.Object doc_;
     /**
-     * <code>string doc = 2;</code>
+     * <code>string doc = 4;</code>
      * @return The doc.
      */
     @java.lang.Override
@@ -1140,7 +1184,7 @@ public final class CustomOptions {
       }
     }
     /**
-     * <code>string doc = 2;</code>
+     * <code>string doc = 4;</code>
      * @return The bytes for doc.
      */
     @java.lang.Override
@@ -1158,7 +1202,7 @@ public final class CustomOptions {
       }
     }
 
-    public static final int PARAMS_FIELD_NUMBER = 3;
+    public static final int PARAMS_FIELD_NUMBER = 5;
     private static final class ParamsDefaultEntryHolder {
       static final com.google.protobuf.MapEntry<
           java.lang.String, java.lang.String> defaultEntry =
@@ -1185,7 +1229,7 @@ public final class CustomOptions {
       return internalGetParams().getMap().size();
     }
     /**
-     * <code>map&lt;string, string&gt; params = 3;</code>
+     * <code>map&lt;string, string&gt; params = 5;</code>
      */
 
     @java.lang.Override
@@ -1203,7 +1247,7 @@ public final class CustomOptions {
       return getParamsMap();
     }
     /**
-     * <code>map&lt;string, string&gt; params = 3;</code>
+     * <code>map&lt;string, string&gt; params = 5;</code>
      */
     @java.lang.Override
 
@@ -1211,7 +1255,7 @@ public final class CustomOptions {
       return internalGetParams().getMap();
     }
     /**
-     * <code>map&lt;string, string&gt; params = 3;</code>
+     * <code>map&lt;string, string&gt; params = 5;</code>
      */
     @java.lang.Override
 
@@ -1224,7 +1268,7 @@ public final class CustomOptions {
       return map.containsKey(key) ? map.get(key) : defaultValue;
     }
     /**
-     * <code>map&lt;string, string&gt; params = 3;</code>
+     * <code>map&lt;string, string&gt; params = 5;</code>
      */
     @java.lang.Override
 
@@ -1239,10 +1283,10 @@ public final class CustomOptions {
       return map.get(key);
     }
 
-    public static final int LIST_FIELD_NUMBER = 4;
+    public static final int LIST_FIELD_NUMBER = 6;
     private com.google.protobuf.Internal.IntList list_;
     /**
-     * <code>repeated int32 list = 4;</code>
+     * <code>repeated int32 list = 6;</code>
      * @return A list containing the list.
      */
     @java.lang.Override
@@ -1251,14 +1295,14 @@ public final class CustomOptions {
       return list_;
     }
     /**
-     * <code>repeated int32 list = 4;</code>
+     * <code>repeated int32 list = 6;</code>
      * @return The count of list.
      */
     public int getListCount() {
       return list_.size();
     }
     /**
-     * <code>repeated int32 list = 4;</code>
+     * <code>repeated int32 list = 6;</code>
      * @param index The index of the element to return.
      * @return The list at the given index.
      */
@@ -1285,17 +1329,23 @@ public final class CustomOptions {
       if (id_ != 0) {
         output.writeInt32(1, id_);
       }
+      if (java.lang.Float.floatToRawIntBits(f_) != 0) {
+        output.writeFloat(2, f_);
+      }
+      if (java.lang.Double.doubleToRawLongBits(d_) != 0) {
+        output.writeDouble(3, d_);
+      }
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(doc_)) {
-        com.google.protobuf.GeneratedMessageV3.writeString(output, 2, doc_);
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 4, doc_);
       }
       com.google.protobuf.GeneratedMessageV3
         .serializeStringMapTo(
           output,
           internalGetParams(),
           ParamsDefaultEntryHolder.defaultEntry,
-          3);
+          5);
       if (getListList().size() > 0) {
-        output.writeUInt32NoTag(34);
+        output.writeUInt32NoTag(50);
         output.writeUInt32NoTag(listMemoizedSerializedSize);
       }
       for (int i = 0; i < list_.size(); i++) {
@@ -1314,8 +1364,16 @@ public final class CustomOptions {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(1, id_);
       }
+      if (java.lang.Float.floatToRawIntBits(f_) != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeFloatSize(2, f_);
+      }
+      if (java.lang.Double.doubleToRawLongBits(d_) != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(3, d_);
+      }
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(doc_)) {
-        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, doc_);
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(4, doc_);
       }
       for (java.util.Map.Entry<java.lang.String, java.lang.String> entry
            : internalGetParams().getMap().entrySet()) {
@@ -1325,7 +1383,7 @@ public final class CustomOptions {
             .setValue(entry.getValue())
             .build();
         size += com.google.protobuf.CodedOutputStream
-            .computeMessageSize(3, params__);
+            .computeMessageSize(5, params__);
       }
       {
         int dataSize = 0;
@@ -1358,6 +1416,12 @@ public final class CustomOptions {
 
       if (getId()
           != other.getId()) return false;
+      if (java.lang.Float.floatToIntBits(getF())
+          != java.lang.Float.floatToIntBits(
+              other.getF())) return false;
+      if (java.lang.Double.doubleToLongBits(getD())
+          != java.lang.Double.doubleToLongBits(
+              other.getD())) return false;
       if (!getDoc()
           .equals(other.getDoc())) return false;
       if (!internalGetParams().equals(
@@ -1377,6 +1441,12 @@ public final class CustomOptions {
       hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + ID_FIELD_NUMBER;
       hash = (53 * hash) + getId();
+      hash = (37 * hash) + F_FIELD_NUMBER;
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
+          getF());
+      hash = (37 * hash) + D_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getD()));
       hash = (37 * hash) + DOC_FIELD_NUMBER;
       hash = (53 * hash) + getDoc().hashCode();
       if (!internalGetParams().getMap().isEmpty()) {
@@ -1498,7 +1568,7 @@ public final class CustomOptions {
       protected com.google.protobuf.MapField internalGetMapField(
           int number) {
         switch (number) {
-          case 3:
+          case 5:
             return internalGetParams();
           default:
             throw new RuntimeException(
@@ -1509,7 +1579,7 @@ public final class CustomOptions {
       protected com.google.protobuf.MapField internalGetMutableMapField(
           int number) {
         switch (number) {
-          case 3:
+          case 5:
             return internalGetMutableParams();
           default:
             throw new RuntimeException(
@@ -1544,6 +1614,10 @@ public final class CustomOptions {
         super.clear();
         id_ = 0;
 
+        f_ = 0F;
+
+        d_ = 0D;
+
         doc_ = "";
 
         internalGetMutableParams().clear();
@@ -1577,6 +1651,8 @@ public final class CustomOptions {
         io.confluent.kafka.serializers.protobuf.test.CustomOptions.MyMessage result = new io.confluent.kafka.serializers.protobuf.test.CustomOptions.MyMessage(this);
         int from_bitField0_ = bitField0_;
         result.id_ = id_;
+        result.f_ = f_;
+        result.d_ = d_;
         result.doc_ = doc_;
         result.params_ = internalGetParams();
         result.params_.makeImmutable();
@@ -1635,6 +1711,12 @@ public final class CustomOptions {
         if (other == io.confluent.kafka.serializers.protobuf.test.CustomOptions.MyMessage.getDefaultInstance()) return this;
         if (other.getId() != 0) {
           setId(other.getId());
+        }
+        if (other.getF() != 0F) {
+          setF(other.getF());
+        }
+        if (other.getD() != 0D) {
+          setD(other.getD());
         }
         if (!other.getDoc().isEmpty()) {
           doc_ = other.doc_;
@@ -1713,9 +1795,71 @@ public final class CustomOptions {
         return this;
       }
 
+      private float f_ ;
+      /**
+       * <code>float f = 2;</code>
+       * @return The f.
+       */
+      @java.lang.Override
+      public float getF() {
+        return f_;
+      }
+      /**
+       * <code>float f = 2;</code>
+       * @param value The f to set.
+       * @return This builder for chaining.
+       */
+      public Builder setF(float value) {
+        
+        f_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>float f = 2;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearF() {
+        
+        f_ = 0F;
+        onChanged();
+        return this;
+      }
+
+      private double d_ ;
+      /**
+       * <code>double d = 3;</code>
+       * @return The d.
+       */
+      @java.lang.Override
+      public double getD() {
+        return d_;
+      }
+      /**
+       * <code>double d = 3;</code>
+       * @param value The d to set.
+       * @return This builder for chaining.
+       */
+      public Builder setD(double value) {
+        
+        d_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>double d = 3;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearD() {
+        
+        d_ = 0D;
+        onChanged();
+        return this;
+      }
+
       private java.lang.Object doc_ = "";
       /**
-       * <code>string doc = 2;</code>
+       * <code>string doc = 4;</code>
        * @return The doc.
        */
       public java.lang.String getDoc() {
@@ -1731,7 +1875,7 @@ public final class CustomOptions {
         }
       }
       /**
-       * <code>string doc = 2;</code>
+       * <code>string doc = 4;</code>
        * @return The bytes for doc.
        */
       public com.google.protobuf.ByteString
@@ -1748,7 +1892,7 @@ public final class CustomOptions {
         }
       }
       /**
-       * <code>string doc = 2;</code>
+       * <code>string doc = 4;</code>
        * @param value The doc to set.
        * @return This builder for chaining.
        */
@@ -1763,7 +1907,7 @@ public final class CustomOptions {
         return this;
       }
       /**
-       * <code>string doc = 2;</code>
+       * <code>string doc = 4;</code>
        * @return This builder for chaining.
        */
       public Builder clearDoc() {
@@ -1773,7 +1917,7 @@ public final class CustomOptions {
         return this;
       }
       /**
-       * <code>string doc = 2;</code>
+       * <code>string doc = 4;</code>
        * @param value The bytes for doc to set.
        * @return This builder for chaining.
        */
@@ -1816,7 +1960,7 @@ public final class CustomOptions {
         return internalGetParams().getMap().size();
       }
       /**
-       * <code>map&lt;string, string&gt; params = 3;</code>
+       * <code>map&lt;string, string&gt; params = 5;</code>
        */
 
       @java.lang.Override
@@ -1834,7 +1978,7 @@ public final class CustomOptions {
         return getParamsMap();
       }
       /**
-       * <code>map&lt;string, string&gt; params = 3;</code>
+       * <code>map&lt;string, string&gt; params = 5;</code>
        */
       @java.lang.Override
 
@@ -1842,7 +1986,7 @@ public final class CustomOptions {
         return internalGetParams().getMap();
       }
       /**
-       * <code>map&lt;string, string&gt; params = 3;</code>
+       * <code>map&lt;string, string&gt; params = 5;</code>
        */
       @java.lang.Override
 
@@ -1855,7 +1999,7 @@ public final class CustomOptions {
         return map.containsKey(key) ? map.get(key) : defaultValue;
       }
       /**
-       * <code>map&lt;string, string&gt; params = 3;</code>
+       * <code>map&lt;string, string&gt; params = 5;</code>
        */
       @java.lang.Override
 
@@ -1876,7 +2020,7 @@ public final class CustomOptions {
         return this;
       }
       /**
-       * <code>map&lt;string, string&gt; params = 3;</code>
+       * <code>map&lt;string, string&gt; params = 5;</code>
        */
 
       public Builder removeParams(
@@ -1895,7 +2039,7 @@ public final class CustomOptions {
         return internalGetMutableParams().getMutableMap();
       }
       /**
-       * <code>map&lt;string, string&gt; params = 3;</code>
+       * <code>map&lt;string, string&gt; params = 5;</code>
        */
       public Builder putParams(
           java.lang.String key,
@@ -1910,7 +2054,7 @@ public final class CustomOptions {
         return this;
       }
       /**
-       * <code>map&lt;string, string&gt; params = 3;</code>
+       * <code>map&lt;string, string&gt; params = 5;</code>
        */
 
       public Builder putAllParams(
@@ -1928,7 +2072,7 @@ public final class CustomOptions {
          }
       }
       /**
-       * <code>repeated int32 list = 4;</code>
+       * <code>repeated int32 list = 6;</code>
        * @return A list containing the list.
        */
       public java.util.List<java.lang.Integer>
@@ -1937,14 +2081,14 @@ public final class CustomOptions {
                  java.util.Collections.unmodifiableList(list_) : list_;
       }
       /**
-       * <code>repeated int32 list = 4;</code>
+       * <code>repeated int32 list = 6;</code>
        * @return The count of list.
        */
       public int getListCount() {
         return list_.size();
       }
       /**
-       * <code>repeated int32 list = 4;</code>
+       * <code>repeated int32 list = 6;</code>
        * @param index The index of the element to return.
        * @return The list at the given index.
        */
@@ -1952,7 +2096,7 @@ public final class CustomOptions {
         return list_.getInt(index);
       }
       /**
-       * <code>repeated int32 list = 4;</code>
+       * <code>repeated int32 list = 6;</code>
        * @param index The index to set the value at.
        * @param value The list to set.
        * @return This builder for chaining.
@@ -1965,7 +2109,7 @@ public final class CustomOptions {
         return this;
       }
       /**
-       * <code>repeated int32 list = 4;</code>
+       * <code>repeated int32 list = 6;</code>
        * @param value The list to add.
        * @return This builder for chaining.
        */
@@ -1976,7 +2120,7 @@ public final class CustomOptions {
         return this;
       }
       /**
-       * <code>repeated int32 list = 4;</code>
+       * <code>repeated int32 list = 6;</code>
        * @param values The list to add.
        * @return This builder for chaining.
        */
@@ -1989,7 +2133,7 @@ public final class CustomOptions {
         return this;
       }
       /**
-       * <code>repeated int32 list = 4;</code>
+       * <code>repeated int32 list = 6;</code>
        * @return This builder for chaining.
        */
       public Builder clearList() {
@@ -2190,39 +2334,40 @@ public final class CustomOptions {
       "eta.proto\032 google/protobuf/descriptor.pr" +
       "oto\"m\n\024CustomMessageOptions\022 \n\013test_stri" +
       "ng\030\001 \001(\tB\013\270E{\300E\310\003\300E\225\006\022\034\n\010test_int\030\002 \001(\005B" +
-      "\n\202D\007\n\005field:\025\202D\t\n\007message\270E\001\300E\001\300E\000\"\266\001\n\tM" +
-      "yMessage\022\n\n\002id\030\001 \001(\005\022\013\n\003doc\030\002 \001(\t\022S\n\006par" +
-      "ams\030\003 \003(\0132C.io.confluent.kafka.serialize" +
-      "rs.protobuf.test.MyMessage.ParamsEntry\022\014" +
-      "\n\004list\030\004 \003(\005\032-\n\013ParamsEntry\022\013\n\003key\030\001 \001(\t" +
-      "\022\r\n\005value\030\002 \001(\t:\0028\001*\256\001\n\021CustomEnumOption" +
-      "s\022\020\n\007CUSTOM0\020\000\032\003\270E\001\022\023\n\007CUSTOM1\020\001\032\006\300E\001\300E\002" +
-      "\022\034\n\007CUSTOM2\020\002\032\017\202D\014\n\nenum_value\032T\202D\006\n\004enu" +
-      "m\272E\004\022\002hi\272E\002\010\001\302E\033\010\002\022\002hi\032\016\n\005hello\022\005world\"\003" +
-      "\004\005\006\302E\036\010\003\022\003bye\032\020\n\007goodbye\022\005world\"\003\007\010\t*)\n\006" +
-      "MyEnum\022\t\n\005ENUM0\020\000\022\t\n\005ENUM1\020\001\022\t\n\005ENUM2\020\002:" +
-      "2\n\013file_custom\022\034.google.protobuf.FileOpt" +
-      "ions\030\327\010 \001(\t:3\n\014file_custom2\022\034.google.pro" +
-      "tobuf.FileOptions\030\330\010 \003(\t:8\n\016message_cust" +
-      "om\022\037.google.protobuf.MessageOptions\030\327\010 \001" +
-      "(\010:9\n\017message_custom2\022\037.google.protobuf." +
-      "MessageOptions\030\330\010 \003(\010:4\n\014field_custom\022\035." +
-      "google.protobuf.FieldOptions\030\327\010 \001(\005:5\n\rf" +
-      "ield_custom2\022\035.google.protobuf.FieldOpti" +
-      "ons\030\330\010 \003(\005:k\n\013enum_custom\022\034.google.proto" +
-      "buf.EnumOptions\030\327\010 \001(\01327.io.confluent.ka" +
-      "fka.serializers.protobuf.test.MyMessage:" +
-      "l\n\014enum_custom2\022\034.google.protobuf.EnumOp" +
-      "tions\030\330\010 \003(\01327.io.confluent.kafka.serial" +
-      "izers.protobuf.test.MyMessage:s\n\021enum_va" +
-      "lue_custom\022!.google.protobuf.EnumValueOp" +
-      "tions\030\327\010 \001(\01624.io.confluent.kafka.serial" +
-      "izers.protobuf.test.MyEnum:t\n\022enum_value" +
-      "_custom2\022!.google.protobuf.EnumValueOpti" +
-      "ons\030\330\010 \003(\01624.io.confluent.kafka.serializ" +
-      "ers.protobuf.test.MyEnumBE\n,io.confluent" +
-      ".kafka.serializers.protobuf.test\272E\004test\302" +
-      "E\005hello\302E\005worldb\006proto3"
+      "\n\202D\007\n\005field:\025\202D\t\n\007message\270E\001\300E\001\300E\000\"\314\001\n\tM" +
+      "yMessage\022\n\n\002id\030\001 \001(\005\022\t\n\001f\030\002 \001(\002\022\t\n\001d\030\003 \001" +
+      "(\001\022\013\n\003doc\030\004 \001(\t\022S\n\006params\030\005 \003(\0132C.io.con" +
+      "fluent.kafka.serializers.protobuf.test.M" +
+      "yMessage.ParamsEntry\022\014\n\004list\030\006 \003(\005\032-\n\013Pa" +
+      "ramsEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\t:\0028" +
+      "\001*\302\001\n\021CustomEnumOptions\022\020\n\007CUSTOM0\020\000\032\003\270E" +
+      "\001\022\023\n\007CUSTOM1\020\001\032\006\300E\001\300E\002\022\034\n\007CUSTOM2\020\002\032\017\202D\014" +
+      "\n\nenum_value\032h\202D\006\n\004enum\272E\004\"\002hi\272E\002\010\001\272E\005\025\000" +
+      "\000\366B\272E\t\031\000\000\000\000\000\200|@\302E\033\010\002\"\002hi*\016\n\005hello\022\005world" +
+      "2\003\004\005\006\302E\036\010\003\"\003bye*\020\n\007goodbye\022\005world2\003\007\010\t*)" +
+      "\n\006MyEnum\022\t\n\005ENUM0\020\000\022\t\n\005ENUM1\020\001\022\t\n\005ENUM2\020" +
+      "\002:2\n\013file_custom\022\034.google.protobuf.FileO" +
+      "ptions\030\327\010 \001(\t:3\n\014file_custom2\022\034.google.p" +
+      "rotobuf.FileOptions\030\330\010 \003(\t:8\n\016message_cu" +
+      "stom\022\037.google.protobuf.MessageOptions\030\327\010" +
+      " \001(\010:9\n\017message_custom2\022\037.google.protobu" +
+      "f.MessageOptions\030\330\010 \003(\010:4\n\014field_custom\022" +
+      "\035.google.protobuf.FieldOptions\030\327\010 \001(\005:5\n" +
+      "\rfield_custom2\022\035.google.protobuf.FieldOp" +
+      "tions\030\330\010 \003(\005:k\n\013enum_custom\022\034.google.pro" +
+      "tobuf.EnumOptions\030\327\010 \001(\01327.io.confluent." +
+      "kafka.serializers.protobuf.test.MyMessag" +
+      "e:l\n\014enum_custom2\022\034.google.protobuf.Enum" +
+      "Options\030\330\010 \003(\01327.io.confluent.kafka.seri" +
+      "alizers.protobuf.test.MyMessage:s\n\021enum_" +
+      "value_custom\022!.google.protobuf.EnumValue" +
+      "Options\030\327\010 \001(\01624.io.confluent.kafka.seri" +
+      "alizers.protobuf.test.MyEnum:t\n\022enum_val" +
+      "ue_custom2\022!.google.protobuf.EnumValueOp" +
+      "tions\030\330\010 \003(\01624.io.confluent.kafka.serial" +
+      "izers.protobuf.test.MyEnumBE\n,io.conflue" +
+      "nt.kafka.serializers.protobuf.test\272E\004tes" +
+      "t\302E\005hello\302E\005worldb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -2241,7 +2386,7 @@ public final class CustomOptions {
     internal_static_io_confluent_kafka_serializers_protobuf_test_MyMessage_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_io_confluent_kafka_serializers_protobuf_test_MyMessage_descriptor,
-        new java.lang.String[] { "Id", "Doc", "Params", "List", });
+        new java.lang.String[] { "Id", "F", "D", "Doc", "Params", "List", });
     internal_static_io_confluent_kafka_serializers_protobuf_test_MyMessage_ParamsEntry_descriptor =
       internal_static_io_confluent_kafka_serializers_protobuf_test_MyMessage_descriptor.getNestedTypes().get(0);
     internal_static_io_confluent_kafka_serializers_protobuf_test_MyMessage_ParamsEntry_fieldAccessorTable = new

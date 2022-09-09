@@ -32,6 +32,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -1223,7 +1225,7 @@ public class ProtobufSchemaTest {
         + "  /** The content type of the blob contained in metadata **/\n"
         + "  optional string content_type = 1;\n"
         + "  /** The arbitrary encoding of bytes **/\n"
-        + "  optional bytes metadata = 2 [(length).min = 1, (length).max = 1024];\n"
+        + "  optional bytes metadata = 2 [(length).min = 1.0, (length).max = 1024.0];\n"
         + "}\n"
         + "\n"
         + "/** Field level validation options */\n"

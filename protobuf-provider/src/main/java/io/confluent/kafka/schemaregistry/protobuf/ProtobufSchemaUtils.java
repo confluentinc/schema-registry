@@ -54,6 +54,9 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -720,10 +723,13 @@ public class ProtobufSchemaUtils {
         sb.append("\"");
         break;
       case BOOLEAN:
-      case NUMBER:
       case ENUM:
         sb.append(" = ");
         sb.append(value);
+        break;
+      case NUMBER:
+        sb.append(" = ");
+        sb.append(formatNumber(ctx, value));
         break;
       case OPTION:
         sb.append(".");
@@ -813,8 +819,10 @@ public class ProtobufSchemaUtils {
       switch (primitive.getKind()) {
         case BOOLEAN:
         case ENUM:
-        case NUMBER:
           sb.append(primitive.getValue());
+          break;
+        case NUMBER:
+          sb.append(formatNumber(ctx, primitive.getValue()));
           break;
         default:
           sb.append(formatOptionMapValue(ctx, primitive.getValue()));
@@ -929,6 +937,23 @@ public class ProtobufSchemaUtils {
     return buffer.toString();
   }
 
+  private static String formatNumber(FormatContext formatContext, Object value) {
+    if (formatContext.normalize()) {
+      Number num;
+      if (value instanceof Number) {
+        num = (Number) value;
+      } else {
+        try {
+          num = formatContext.numberFormat().parse(value.toString());
+        } catch (ParseException e) {
+          throw new IllegalArgumentException("Could not parse number: " + value);
+        }
+      }
+      value = formatContext.numberFormat().format(num);
+    }
+    return value.toString();
+  }
+
   private static String resolve(Context ctx, String type) {
     String resolved = ctx.resolve(type, true);
     if (resolved == null) {
@@ -940,6 +965,7 @@ public class ProtobufSchemaUtils {
   static class FormatContext extends Context {
     private boolean ignoreExtensions;
     private boolean normalize;
+    private NumberFormat numberFormat;
 
     public FormatContext(boolean ignoreExtensions, boolean normalize) {
       super();
@@ -953,6 +979,14 @@ public class ProtobufSchemaUtils {
 
     public boolean normalize() {
       return normalize;
+    }
+
+    public NumberFormat numberFormat() {
+      if (numberFormat == null) {
+        numberFormat = new DecimalFormat();
+        numberFormat.setGroupingUsed(false);
+      }
+      return numberFormat;
     }
 
     public List<OptionElement> filterOptions(List<OptionElement> options) {
