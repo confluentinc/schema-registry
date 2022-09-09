@@ -1211,6 +1211,62 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testNormalizationWithComplexCustomOptions() {
+    String schemaString = "package acme.common;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_outer_classname = \"ExternalMetadata\";\n"
+        + "option java_package = \"com.acme.protos.common\";\n"
+        + "\n"
+        + "message ExternalMetadata {\n"
+        + "  /** The content type of the blob contained in metadata **/\n"
+        + "  optional string content_type = 1;\n"
+        + "  /** The arbitrary encoding of bytes **/\n"
+        + "  optional bytes metadata = 2 [(length).min = 1, (length).max = 1024];\n"
+        + "}\n"
+        + "\n"
+        + "/** Field level validation options */\n"
+        + "extend google.protobuf.FieldOptions {\n"
+        + "  optional Range length = 22301;\n"
+        + "}\n"
+        + "\n"
+        + "/** A range of numeric values */\n"
+        + "message Range {\n"
+        + "  /** The minimum allowable value */\n"
+        + "  optional double min = 1;\n"
+        + "\n"
+        + "  /** The maximum allowable value */\n"
+        + "  optional double max = 2;\n"
+        + "}\n";
+    String normalized = "package acme.common;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_outer_classname = \"ExternalMetadata\";\n"
+        + "option java_package = \"com.acme.protos.common\";\n"
+        + "\n"
+        + "message ExternalMetadata {\n"
+        + "  optional string content_type = 1;\n"
+        + "  optional bytes metadata = 2 [(acme.common.length) = {\n"
+        + "    max: \"1024\",\n"
+        + "    min: \"1\"\n"
+        + "  }];\n"
+        + "}\n"
+        + "message Range {\n"
+        + "  optional double min = 1;\n"
+        + "  optional double max = 2;\n"
+        + "}\n"
+        + "\n"
+        + "extend .google.protobuf.FieldOptions {\n"
+        + "  optional .acme.common.Range length = 22301;\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    ProtobufSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+  }
+
+  @Test
   public void testNormalizationWithPackagePrefix() {
     String schemaString = "syntax = \"proto3\";\n"
         + "package confluent.package;\n"

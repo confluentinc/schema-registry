@@ -1312,17 +1312,17 @@ public class ProtobufSchema implements ParsedSchema {
 
   private static Map<String, OptionElement> mergeOptions(List<OptionElement> options) {
     // This method is mainly used to merge Confluent meta options
-    // which may not be using the alternative aggregate syntax
+    // which may not be using the alternative aggregate syntax.
+    // This assumes none of the merged options are declared as repeated.
     return options.stream()
         .collect(Collectors.toMap(
             OptionElement::getName,
-            o -> o,
+            o -> transform(o),
             ProtobufSchema::merge));
   }
 
   @SuppressWarnings("unchecked")
-  private static OptionElement merge(OptionElement existing, OptionElement replacement) {
-    existing = transform(existing);
+  protected static OptionElement merge(OptionElement existing, OptionElement replacement) {
     replacement = transform(replacement);
     if (existing.getKind() == Kind.MAP && replacement.getKind() == Kind.MAP) {
       Map<String, ?> existingMap = (Map<String, ?>) existing.getValue();
@@ -1338,7 +1338,7 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
-  private static OptionElement transform(OptionElement option) {
+  protected static OptionElement transform(OptionElement option) {
     if (option.getKind() == Kind.OPTION) {
       OptionElement value = (OptionElement) option.getValue();
       Map<String, ?> map = Collections.singletonMap(value.getName(), value.getValue());

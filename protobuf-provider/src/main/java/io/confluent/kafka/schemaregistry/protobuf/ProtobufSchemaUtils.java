@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.protobuf;
 import static com.squareup.wire.schema.internal.UtilKt.MAX_TAG_VALUE;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.CONFLUENT_PREFIX;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.DEFAULT_LOCATION;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.transform;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,6 +63,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import kotlin.Pair;
 import kotlin.ranges.IntRange;
 
@@ -961,8 +963,32 @@ public class ProtobufSchemaUtils {
             .collect(Collectors.toList());
       }
       if (normalize) {
-        options = new ArrayList<>(options);
-        options.sort(Comparator.comparing(OptionElement::getName));
+        options = options.stream()
+            // qualify names and transform from Kind.OPTION to Kind.MAP
+            .map(o -> !o.isParenthesized() ? o
+                : transform(new OptionElement(
+                    resolve(this::getExtendFieldForFullName, o.getName(), true),
+                    o.getKind(),
+                    o.getValue(),
+                    o.isParenthesized())))
+            .sorted(Comparator.comparing(OptionElement::getName))
+            .collect(Collectors.groupingBy(OptionElement::getName,
+                LinkedHashMap::new,
+                Collectors.toList()))
+            .entrySet()
+            .stream()
+            // merge option maps for non-repeated options
+            .flatMap(entry -> {
+              String name = entry.getKey();
+              List<OptionElement> list = entry.getValue();
+              ExtendFieldElementInfo fieldInfo = getExtendFieldForFullName(name, true);
+              if (fieldInfo != null && !fieldInfo.isRepeated() && list.size() > 0) {
+                return Stream.of(list.stream().reduce(ProtobufSchema::merge).get());
+              } else {
+                return list.stream();
+              }
+            })
+            .collect(Collectors.toList());
       }
       return options;
     }
