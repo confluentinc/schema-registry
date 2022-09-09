@@ -1,0 +1,17 @@
+syntax = "proto2";
+
+import "confluent/meta.proto";
+import "confluent/type/decimal.proto";
+
+option java_package = "io.confluent.kafka.serializers.protobuf.test";
+
+// Wrapper message for `Decimal`.
+message DecimalValuePb2 {
+  option (confluent.message_meta).doc = "message";
+
+  // The bytes value.
+  optional confluent.type.Decimal value = 1 [(confluent.field_meta) = { params: [
+    { key: "precision", value: "8" },
+    { key: "scale", value: "3" }
+  ]}];
+}
