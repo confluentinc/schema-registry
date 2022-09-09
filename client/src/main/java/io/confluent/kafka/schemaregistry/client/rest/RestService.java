@@ -43,6 +43,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
+import java.net.MalformedURLException;
 import java.net.Proxy;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -263,7 +264,7 @@ public class RestService implements Configurable {
 
     HttpURLConnection connection = null;
     try {
-      URL url = new URL(requestUrl);
+      URL url = url(requestUrl);
 
       connection = buildConnection(url, method, requestProperties);
 
@@ -1250,5 +1251,17 @@ public class RestService implements Configurable {
 
   public void setProxy(String proxyHost, int proxyPort) {
     this.proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+  }
+
+  /**
+   * Convert url string to URL. This method is package-private so that it can be mocked for unit
+   * tests.
+   *
+   * @param requestUrl url string
+   * @return {@link URL}
+   * @throws MalformedURLException if the input string is a malformed URL
+   */
+  URL url(String requestUrl) throws MalformedURLException {
+    return new URL(requestUrl);
   }
 }
