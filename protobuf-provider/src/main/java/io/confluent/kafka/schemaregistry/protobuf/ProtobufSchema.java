@@ -687,7 +687,7 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   private static OptionElement toOptionElement(String name, Object value) {
-    return new OptionElement(name, toKind(value), toOptionValue(value), true);
+    return new OptionElement(name, toKind(value), toOptionValue(value, false), true);
   }
 
   private static Kind toKind(Object value) {
@@ -708,21 +708,30 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
-  private static Object toOptionValue(Object value) {
+  private static Object toOptionValue(Object value, boolean isMapValue) {
     if (value instanceof List) {
       return ((List<?>) value).stream()
-          .map(ProtobufSchema::toOptionValue)
+          .map(o -> toOptionValue(o, false))
           .collect(Collectors.toList());
     } else if (value instanceof Message) {
       return toOptionMap((Message) value);
     } else {
+      if (isMapValue) {
+        if (value instanceof Boolean) {
+          return new OptionElement.OptionPrimitive(Kind.BOOLEAN, value);
+        } else if (value instanceof Enum) {
+          return new OptionElement.OptionPrimitive(Kind.ENUM, value);
+        } else if (value instanceof Number) {
+          return new OptionElement.OptionPrimitive(Kind.NUMBER, value);
+        }
+      }
       return value;
     }
   }
 
   private static Map<String, Object> toOptionMap(Message message) {
     return message.getAllFields().entrySet().stream()
-        .map(e -> new Pair<>(e.getKey().getName(), toOptionValue(e.getValue())))
+        .map(e -> new Pair<>(e.getKey().getName(), toOptionValue(e.getValue(), true)))
         .filter(p -> p.getSecond() != null)
         .collect(Collectors.toMap(Pair::getFirst, Pair::getSecond,
             (e1, e2) -> e1, LinkedHashMap::new));
@@ -1341,7 +1350,12 @@ public class ProtobufSchema implements ParsedSchema {
   protected static OptionElement transform(OptionElement option) {
     if (option.getKind() == Kind.OPTION) {
       OptionElement value = (OptionElement) option.getValue();
-      Map<String, ?> map = Collections.singletonMap(value.getName(), value.getValue());
+      Object mapValue = value.getValue();
+      Kind kind = value.getKind();
+      if (kind == Kind.BOOLEAN || kind == Kind.ENUM || kind == Kind.NUMBER) {
+        mapValue = new OptionElement.OptionPrimitive(kind, mapValue);
+      }
+      Map<String, ?> map = Collections.singletonMap(value.getName(), mapValue);
       return new OptionElement(option.getName(), Kind.MAP, map, option.isParenthesized());
     } else {
       return option;
