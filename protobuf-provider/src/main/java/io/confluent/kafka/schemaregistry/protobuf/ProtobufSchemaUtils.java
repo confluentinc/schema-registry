@@ -56,7 +56,6 @@ import java.nio.charset.StandardCharsets;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -70,6 +69,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import kotlin.Pair;
 import kotlin.ranges.IntRange;
+import org.apache.commons.lang3.math.NumberUtils;
 
 public class ProtobufSchemaUtils {
 
@@ -943,13 +943,9 @@ public class ProtobufSchemaUtils {
       if (value instanceof Number) {
         num = (Number) value;
       } else {
-        try {
-          num = formatContext.numberFormat().parse(value.toString());
-        } catch (ParseException e) {
-          throw new IllegalArgumentException("Could not parse number: " + value);
-        }
+        num = formatContext.parseNumber(value.toString());
       }
-      value = formatContext.numberFormat().format(num);
+      value = formatContext.formatNumber(num);
     }
     return value.toString();
   }
@@ -962,7 +958,7 @@ public class ProtobufSchemaUtils {
     return "." + resolved;
   }
 
-  static class FormatContext extends Context {
+  public static class FormatContext extends Context {
     private boolean ignoreExtensions;
     private boolean normalize;
     private NumberFormat numberFormat;
@@ -981,7 +977,15 @@ public class ProtobufSchemaUtils {
       return normalize;
     }
 
-    public NumberFormat numberFormat() {
+    public String formatNumber(Number number) {
+      return numberFormat().format(number);
+    }
+
+    public Number parseNumber(String str) {
+      return NumberUtils.createNumber(str);
+    }
+
+    private NumberFormat numberFormat() {
       if (numberFormat == null) {
         numberFormat = new DecimalFormat();
         numberFormat.setGroupingUsed(false);

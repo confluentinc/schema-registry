@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import java.text.DecimalFormat;
@@ -1340,6 +1341,34 @@ public class ProtobufSchemaTest {
     ProtobufSchema enumSchema2 = new ProtobufSchema(enumDescriptor);
     EnumDescriptor enumDescriptor2 = enumSchema2.getEnumDescriptor("TestEnum.Suit");
     assertEquals(enumDescriptor.getFullName(), enumDescriptor2.getFullName());
+  }
+
+  @Test
+  public void testNumberFormats() throws Exception {
+    FormatContext ctx = new FormatContext(false, true);
+    checkNumber(ctx, "123", "123");
+    checkNumber(ctx, "0123", "83"); // octal
+    checkNumber(ctx, "0x123", "291"); // hex
+    checkNumber(ctx, "0123.0", "123");
+    checkNumber(ctx, "123.", "123");
+    checkNumber(ctx, "123.0", "123");
+    checkNumber(ctx, "123.00", "123");
+    checkNumber(ctx, "123e1", "1230");
+    checkNumber(ctx, "123E1", "1230");
+    checkNumber(ctx, "123E+1", "1230");
+    checkNumber(ctx, "123E-1", "12.3");
+    checkNumber(ctx, ".123E+3", "123");
+    checkNumber(ctx, "1.23E+3", "1230");
+    checkNumber(ctx, "12.3E+3", "12300");
+    checkNumber(ctx, "123.E+3", "123000");
+    checkNumber(ctx, "123.4E+3", "123400");
+    checkNumber(ctx, "123.45E+3", "123450");
+    checkNumber(ctx, "123.456E+3", "123456");
+    checkNumber(ctx, "123.4567E+2", "12345.67");
+  }
+
+  private void checkNumber(FormatContext ctx, String in, String out) {
+    assertEquals(out, ctx.formatNumber(ctx.parseNumber(in)));
   }
 
   private static JsonNode jsonTree(String jsonData) {
