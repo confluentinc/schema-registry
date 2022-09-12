@@ -22,6 +22,8 @@ import com.google.protobuf.Timestamp;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.serializers.protobuf.test.CustomOptions.CustomMessageOptions;
+import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass.DecimalValue;
+import io.confluent.kafka.serializers.protobuf.test.DecimalValuePb2OuterClass.DecimalValuePb2;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -469,16 +471,20 @@ public class KafkaProtobufSerializerTest {
         + "}\n"
         + "message MyMessage {\n"
         + "  int32 id = 1;\n"
-        + "  string doc = 2;\n"
-        + "  map<string, string> params = 3;\n"
-        + "  repeated int32 list = 4;\n"
+        + "  float f = 2;\n"
+        + "  double d = 3;\n"
+        + "  string doc = 4;\n"
+        + "  map<string, string> params = 5;\n"
+        + "  repeated int32 list = 6;\n"
         + "}\n"
         + "enum CustomEnumOptions {\n"
         + "  option (confluent.enum_meta) = {\n"
         + "    doc: \"enum\"\n"
         + "  };\n"
         + "  option (io.confluent.kafka.serializers.protobuf.test.enum_custom) = {\n"
+        + "    d: 456,\n"
         + "    doc: \"hi\",\n"
+        + "    f: 123,\n"
         + "    id: 1\n"
         + "  };\n"
         + "  option (io.confluent.kafka.serializers.protobuf.test.enum_custom2) = {\n"
@@ -572,9 +578,11 @@ public class KafkaProtobufSerializerTest {
         + "}\n"
         + "message MyMessage {\n"
         + "  int32 id = 1;\n"
-        + "  string doc = 2;\n"
-        + "  map<string, string> params = 3;\n"
-        + "  repeated int32 list = 4;\n"
+        + "  float f = 2;\n"
+        + "  double d = 3;\n"
+        + "  string doc = 4;\n"
+        + "  map<string, string> params = 5;\n"
+        + "  repeated int32 list = 6;\n"
         + "}\n"
         + "enum CustomEnumOptions {\n"
         + "  option (confluent.enum_meta) = {\n"
@@ -597,5 +605,69 @@ public class KafkaProtobufSerializerTest {
     protobufSerializer.serialize(topic, CUSTOM_MESSAGE_OPTIONS);
     ParsedSchema retrievedSchema = schemaRegistry.getSchemaBySubjectAndId(topic + "-value", 1);
     assertEquals(expected, retrievedSchema.canonicalString());
+  }
+
+  @Test
+  public void testNormalizeBothPb2andPb3() throws Exception {
+    String expected = "syntax = \"proto3\";\n"
+        + "\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message DecimalValue {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    doc: \"message\"\n"
+        + "  };\n"
+        + "\n"
+        + "  .confluent.type.Decimal value = 1 [(confluent.field_meta) = {\n"
+        + "    params: [\n"
+        + "      {\n"
+        + "        key: \"precision\",\n"
+        + "        value: \"8\"\n"
+        + "      },\n"
+        + "      {\n"
+        + "        key: \"scale\",\n"
+        + "        value: \"3\"\n"
+        + "      }\n"
+        + "    ]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(DecimalValue.getDescriptor());
+    schema = schema.normalize();
+    assertEquals(expected, schema.canonicalString());
+    schema = new ProtobufSchema(schema.canonicalString());
+    assertEquals(expected, schema.canonicalString());
+
+    expected = "\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message DecimalValuePb2 {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    doc: \"message\"\n"
+        + "  };\n"
+        + "\n"
+        + "  optional .confluent.type.Decimal value = 1 [(confluent.field_meta) = {\n"
+        + "    params: [\n"
+        + "      {\n"
+        + "        key: \"precision\",\n"
+        + "        value: \"8\"\n"
+        + "      },\n"
+        + "      {\n"
+        + "        key: \"scale\",\n"
+        + "        value: \"3\"\n"
+        + "      }\n"
+        + "    ]\n"
+        + "  }];\n"
+        + "}\n";
+    schema = new ProtobufSchema(DecimalValuePb2.getDescriptor());
+    schema = schema.normalize();
+    assertEquals(expected, schema.canonicalString());
+    schema = new ProtobufSchema(schema.canonicalString());
+    assertEquals(expected, schema.canonicalString());
   }
 }

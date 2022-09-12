@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.protobuf;
 import static com.squareup.wire.schema.internal.UtilKt.MAX_TAG_VALUE;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.CONFLUENT_PREFIX;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.DEFAULT_LOCATION;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.transform;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +29,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
 
+import com.squareup.wire.Syntax;
 import com.squareup.wire.schema.Field.Label;
 import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.EnumConstantElement;
@@ -52,6 +54,8 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -62,8 +66,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import kotlin.Pair;
 import kotlin.ranges.IntRange;
+import org.apache.commons.lang3.math.NumberUtils;
 
 public class ProtobufSchemaUtils {
 
@@ -121,9 +127,11 @@ public class ProtobufSchemaUtils {
   private static String toString(FormatContext ctx, ProtoFileElement protoFile) {
     StringBuilder sb = new StringBuilder();
     if (protoFile.getSyntax() != null) {
-      sb.append("syntax = \"");
-      sb.append(protoFile.getSyntax());
-      sb.append("\";\n");
+      if (!ctx.normalize() || protoFile.getSyntax() == Syntax.PROTO_3) {
+        sb.append("syntax = \"");
+        sb.append(protoFile.getSyntax());
+        sb.append("\";\n");
+      }
     }
     if (protoFile.getPackageName() != null) {
       sb.append("package ");
@@ -715,10 +723,13 @@ public class ProtobufSchemaUtils {
         sb.append("\"");
         break;
       case BOOLEAN:
-      case NUMBER:
       case ENUM:
         sb.append(" = ");
         sb.append(value);
+        break;
+      case NUMBER:
+        sb.append(" = ");
+        sb.append(formatNumber(ctx, value));
         break;
       case OPTION:
         sb.append(".");
@@ -808,8 +819,10 @@ public class ProtobufSchemaUtils {
       switch (primitive.getKind()) {
         case BOOLEAN:
         case ENUM:
-        case NUMBER:
           sb.append(primitive.getValue());
+          break;
+        case NUMBER:
+          sb.append(formatNumber(ctx, primitive.getValue()));
           break;
         default:
           sb.append(formatOptionMapValue(ctx, primitive.getValue()));
@@ -924,6 +937,19 @@ public class ProtobufSchemaUtils {
     return buffer.toString();
   }
 
+  private static String formatNumber(FormatContext formatContext, Object value) {
+    if (formatContext.normalize()) {
+      Number num;
+      if (value instanceof Number) {
+        num = (Number) value;
+      } else {
+        num = formatContext.parseNumber(value.toString());
+      }
+      value = formatContext.formatNumber(num);
+    }
+    return value.toString();
+  }
+
   private static String resolve(Context ctx, String type) {
     String resolved = ctx.resolve(type, true);
     if (resolved == null) {
@@ -932,9 +958,10 @@ public class ProtobufSchemaUtils {
     return "." + resolved;
   }
 
-  static class FormatContext extends Context {
+  public static class FormatContext extends Context {
     private boolean ignoreExtensions;
     private boolean normalize;
+    private NumberFormat numberFormat;
 
     public FormatContext(boolean ignoreExtensions, boolean normalize) {
       super();
@@ -950,6 +977,22 @@ public class ProtobufSchemaUtils {
       return normalize;
     }
 
+    public String formatNumber(Number number) {
+      return numberFormat().format(number);
+    }
+
+    public Number parseNumber(String str) {
+      return NumberUtils.createNumber(str);
+    }
+
+    private NumberFormat numberFormat() {
+      if (numberFormat == null) {
+        numberFormat = new DecimalFormat();
+        numberFormat.setGroupingUsed(false);
+      }
+      return numberFormat;
+    }
+
     public List<OptionElement> filterOptions(List<OptionElement> options) {
       if (options.isEmpty()) {
         return options;
@@ -961,8 +1004,32 @@ public class ProtobufSchemaUtils {
             .collect(Collectors.toList());
       }
       if (normalize) {
-        options = new ArrayList<>(options);
-        options.sort(Comparator.comparing(OptionElement::getName));
+        options = options.stream()
+            // qualify names and transform from Kind.OPTION to Kind.MAP
+            .map(o -> !o.isParenthesized() ? o
+                : transform(new OptionElement(
+                    resolve(this::getExtendFieldForFullName, o.getName(), true),
+                    o.getKind(),
+                    o.getValue(),
+                    o.isParenthesized())))
+            .sorted(Comparator.comparing(OptionElement::getName))
+            .collect(Collectors.groupingBy(OptionElement::getName,
+                LinkedHashMap::new,
+                Collectors.toList()))
+            .entrySet()
+            .stream()
+            // merge option maps for non-repeated options
+            .flatMap(entry -> {
+              String name = entry.getKey();
+              List<OptionElement> list = entry.getValue();
+              ExtendFieldElementInfo fieldInfo = getExtendFieldForFullName(name, true);
+              if (fieldInfo != null && !fieldInfo.isRepeated() && list.size() > 0) {
+                return Stream.of(list.stream().reduce(ProtobufSchema::merge).get());
+              } else {
+                return list.stream();
+              }
+            })
+            .collect(Collectors.toList());
       }
       return options;
     }
