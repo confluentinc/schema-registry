@@ -21,8 +21,11 @@ message CustomMessageOptions {
 
 enum CustomEnumOptions {
     option (.confluent.enum_meta).doc = "enum";
+    option (enum_custom) = { doc: "hi" };
     option (enum_custom).id = 1;
-    option (enum_custom).doc = "hi";
+    option (enum_custom).f = 123.0;
+    option (enum_custom).d = 456.0;
+    //  Repeated message options must be initialized using an aggregate value.
     option (enum_custom2) = { id: 2, doc: "hi", params: [ {key: "hello", value: "world"} ], list: [ 4, 5, 6]};
     option (enum_custom2) = { id: 3, doc: "bye", params: [ {key: "goodbye", value: "world"} ], list: [ 7, 8, 9]};
 
@@ -33,9 +36,11 @@ enum CustomEnumOptions {
 
 message MyMessage {
     int32 id = 1;
-    string doc = 2;
-    map<string, string> params = 3;
-    repeated int32 list = 4;
+    float f = 2;
+    double d = 3;
+    string doc = 4;
+    map<string, string> params = 5;
+    repeated int32 list = 6;
 }
 
 enum MyEnum {
