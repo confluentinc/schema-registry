@@ -822,6 +822,7 @@ public class ProtobufSchema implements ParsedSchema {
     List<Object> values = new ArrayList<>();
     int start = range.getStart();
     int end = range.getEnd();
+    // inclusive, exclusive
     values.add(start == end - 1 ? start : new IntRange(start, end - 1));
     return new ReservedElement(DEFAULT_LOCATION, "", values);
   }
@@ -830,7 +831,8 @@ public class ProtobufSchema implements ParsedSchema {
     List<Object> values = new ArrayList<>();
     int start = range.getStart();
     int end = range.getEnd();
-    values.add(start == end - 1 ? start : new IntRange(start, end - 1));
+    // inclusive, inclusive
+    values.add(start == end ? start : new IntRange(start, end));
     return new ReservedElement(DEFAULT_LOCATION, "", values);
   }
 
@@ -1401,10 +1403,10 @@ public class ProtobufSchema implements ParsedSchema {
           enumer.addReservedName((String) elem);
         } else if (elem instanceof Integer) {
           int tag = (Integer) elem;
-          enumer.addReservedRange(tag, tag + 1);
+          enumer.addReservedRange(tag, tag);
         } else if (elem instanceof IntRange) {
           IntRange range = (IntRange) elem;
-          enumer.addReservedRange(range.getStart(), range.getEndInclusive() + 1);
+          enumer.addReservedRange(range.getStart(), range.getEndInclusive());
         } else {
           throw new IllegalStateException("Unsupported reserved type: " + elem.getClass()
               .getName());
