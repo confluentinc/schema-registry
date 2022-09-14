@@ -43,7 +43,7 @@ public class RootResource {
   @Operation(summary = "Schema Registry Root Resource",
       description = "The Root resource is a no-op.",
       responses = {@ApiResponse(content = @Content(schema = @Schema(implementation = Map.class)))})
-  @DocumentedName("rootResourceGet")
+  @DocumentedName("getRootResource")
   public Map<String, String> get() {
     // Currently this just provides an endpoint that's a nop
     //and can be used to check for
@@ -54,7 +54,7 @@ public class RootResource {
   }
 
   @POST
-  @DocumentedName("rootResourcePost")
+  @DocumentedName("postRootResource")
   public Map<String, String> post(@Valid Map<String, String> request) {
     // This version allows testing with posted entities
     return new HashMap<>();
