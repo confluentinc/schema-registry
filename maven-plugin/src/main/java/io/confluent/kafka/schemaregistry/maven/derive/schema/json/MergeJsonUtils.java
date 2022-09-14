@@ -16,36 +16,53 @@
 
 package io.confluent.kafka.schemaregistry.maven.derive.schema.json;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.sortJsonArrayList;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.getSortedKeys;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.sortObjectNode;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.json.DeriveJsonSchema.groupItems;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-
 public final class MergeJsonUtils {
 
-  public static ArrayList<ObjectNode> convertItemsToArrayItems(ArrayList<ObjectNode> uniqueList) {
-    // Converting each item to type array and setting items to original value
-    ArrayList<ObjectNode> uniqueListAsArray = new ArrayList<>();
-    for (ObjectNode uniqueSchema : uniqueList) {
-      ObjectNode arrayTypeSchema = mapper.createObjectNode();
-      arrayTypeSchema.put("type", "array");
-      arrayTypeSchema.set("items", uniqueSchema);
-      uniqueListAsArray.add(arrayTypeSchema);
+  static void groupItems(ObjectNode element,
+                         ArrayList<ObjectNode> items,
+                         ArrayList<ObjectNode> records,
+                         ArrayList<ObjectNode> arrays) {
+    if (element.isEmpty() || items.contains(element)) {
+      return;
     }
-    return uniqueListAsArray;
+    // If element is oneOf type, add all elements inside oneOf
+    if (element.has("oneOf")) {
+      ArrayNode elements = (ArrayNode) element.get("oneOf");
+      for (JsonNode oneOfElement : elements) {
+        groupItems((ObjectNode) oneOfElement, items, records, arrays);
+      }
+      return;
+    }
+
+    if (element.has("type")) {
+      String typeOfElement = element.get("type").asText();
+      if (typeOfElement.equals("object")) {
+        records.add(element);
+      } else if (typeOfElement.equals("array")) {
+        arrays.add(element);
+      } else {
+        items.add(element);
+      }
+    } else {
+      items.add(element);
+    }
   }
 
-  public static ObjectNode mergeArrays(ArrayList<ObjectNode> arrayList) {
+  public static ObjectNode mergeArrays(ArrayList<ObjectNode> arrayList, boolean useItems) {
     // Merging different field types into one type
     ObjectNode mergedArray = mapper.createObjectNode();
     mergedArray.put("type", "array");
@@ -56,14 +73,10 @@ public final class MergeJsonUtils {
 
     // Group items of array into record, array and primitive types
     for (ObjectNode array : DeriveSchema.getUnique(arrayList)) {
-      ObjectNode itemsOfArray = (ObjectNode) array.get("items");
-      if (itemsOfArray.has("oneOf")) {
-        ArrayNode elements = (ArrayNode) itemsOfArray.get("oneOf");
-        for (Object element : elements) {
-          groupItems((ObjectNode) element, primitives, records, arrays);
-        }
-      } else if (!itemsOfArray.isEmpty()) {
-        groupItems(itemsOfArray, primitives, records, arrays);
+      if (!useItems) {
+        groupItems(array, primitives, records, arrays);
+      } else {
+        groupItems((ObjectNode) array.get("items"), primitives, records, arrays);
       }
     }
 
@@ -72,16 +85,14 @@ public final class MergeJsonUtils {
     for (ObjectNode item : primitives) {
       jsonItems.add(item);
     }
-
-    // Merge records if there is more than 1 record
+    // Merge records if there is at least 1 record
     if (records.size() > 0) {
       ObjectNode mergedRecords = mergeRecords(records);
       jsonItems.add(mergedRecords);
     }
-
-    // Merge arrays if there is more than 1 array
+    // Merge records if there is at least 1 array
     if (arrays.size() > 0) {
-      ObjectNode mergedArrays = mergeArrays(arrays);
+      ObjectNode mergedArrays = mergeArrays(arrays, true);
       jsonItems.add(mergedArrays);
     }
 
@@ -126,7 +137,7 @@ public final class MergeJsonUtils {
     // Merging type for each field using fieldToItsType map
     for (Map.Entry<String, ArrayList<ObjectNode>> entry : fieldToItsType.entrySet()) {
       ArrayList<ObjectNode> fieldsType = fieldToItsType.get(entry.getKey());
-      ObjectNode items = mergeArrays(convertItemsToArrayItems(fieldsType));
+      ObjectNode items = mergeArrays(fieldsType, false);
       properties.set(entry.getKey(), items.get("items"));
     }
 

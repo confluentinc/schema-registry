@@ -40,7 +40,7 @@ public class DeriveJsonSchemaTest {
     assertEquals(primitiveSchema.get(), mapper.readTree(expectedSchema));
   }
 
-  public void generateSchemaAndCheckPrimitiveNegative(String message)
+  public void generateSchemaAndCheckPrimitiveAbsent(String message)
       throws JsonProcessingException {
     Optional<ObjectNode> primitiveSchema = DeriveJsonSchema.getPrimitiveSchema(mapper.readTree(message));
     assert !primitiveSchema.isPresent();
@@ -48,7 +48,6 @@ public class DeriveJsonSchemaTest {
 
   public void generateSchemaAndCheckExpected(List<String> messages, String expectedSchema)
       throws JsonProcessingException {
-
     List<JsonNode> messagesJson = new ArrayList<>();
     for (String message : messages) {
       messagesJson.add(mapper.readTree(message));
@@ -78,88 +77,60 @@ public class DeriveJsonSchemaTest {
     generateSchemaAndCheckPrimitive("true", "{\"type\":\"boolean\"}");
     generateSchemaAndCheckPrimitive("\"Test\"", "{\"type\":\"string\"}");
     generateSchemaAndCheckPrimitive("", "{\"type\":\"null\"}");
+    generateSchemaAndCheckPrimitive("null", "{\"type\":\"null\"}");
   }
 
   @Test
-  public void testDerivePrimitiveNegative() throws JsonProcessingException {
+  public void testDerivePrimitiveForComplex() throws JsonProcessingException {
     // Checking all complex types, should be empty option
-    generateSchemaAndCheckPrimitiveNegative("[12]");
-    generateSchemaAndCheckPrimitiveNegative("[1.5, true]");
-    generateSchemaAndCheckPrimitiveNegative("{\"F1\":12}");
-    generateSchemaAndCheckPrimitiveNegative("{\"F2\":\"12\"}");
+    generateSchemaAndCheckPrimitiveAbsent("[12]");
+    generateSchemaAndCheckPrimitiveAbsent("[1.5, true]");
+    generateSchemaAndCheckPrimitiveAbsent("{\"F1\":12}");
+    generateSchemaAndCheckPrimitiveAbsent("{\"F2\":\"12\"}");
   }
 
   @Test
-  public void testPrimitiveTypes() throws Exception {
+  public void testDeriveRecordPrimitive() throws Exception {
     // Get schema for record with fields having only primitive data types
-    String primitiveTypes =
-        "{\n"
-            + "    \"String\": \"John Smith\",\n"
-            + "    \"LongName\": 12020210210,\n"
-            + "    \"BigDataType\": 120202102223443433333333331202021022234434333333333312020210,\n"
-            + "    \"Integer\": 12,\n"
-            + "    \"Boolean\": false,\n"
-            + "    \"Float\": 1e16,\n"
-            + "    \"Double\": 624333333333333333333333333333333333333333323232.789012332222222245,\n"
-            + "    \"Null\": null\n"
-            + "  }";
-    String expectedSchema = "{\"type\":\"object\",\"properties\":{\"BigDataType\":{\"type\":\"number\"},\"Boolean\":{\"type\":\"boolean\"},\"Double\":{\"type\":\"number\"},\"Float\":{\"type\":\"number\"},\"Integer\":{\"type\":\"number\"},\"LongName\":{\"type\":\"number\"},\"Null\":{\"type\":\"null\"},\"String\":{\"type\":\"string\"}}}";
-    generateSchemaAndCheckExpected(primitiveTypes, expectedSchema);
+    String stringMessage = "\"String\": \"Test\"";
+    String longMessage = "\"LongName\": 12020210210";
+    String nullMessage = "\"Null\": null";
+    String primitiveTypesMessage = "{" + stringMessage + "," + longMessage + "," + nullMessage + "}";
+    String expectedSchema = "{\"type\":\"object\",\"properties\":{\"LongName\":{\"type\":\"number\"},\"Null\":{\"type\":\"null\"},\"String\":{\"type\":\"string\"}}}";
+    generateSchemaAndCheckExpected(primitiveTypesMessage, expectedSchema);
   }
 
   @Test
-  public void testComplexTypesWithPrimitiveValues() throws IOException {
+  public void testDeriveRecordComplexTypesWithPrimitiveValues() throws IOException {
     // Get schema for record with arrays and records having only primitive data types
-    String complexTypesWithPrimitiveValues =
-        "{\n"
-            + "    \"ArrayEmpty\": [],\n"
-            + "    \"ArrayNull\": [null],\n"
-            + "    \"ArrayString\": [\"John Smith\", \"Tom Davies\"],\n"
-            + "    \"ArrayInteger\": [12, 13, 14],\n"
-            + "    \"ArrayBoolean\": [false, true, false],\n"
-            + "    \"DoubleRecord\": {\"Double1\": 62.4122121, \"Double2\": 62.4122121},\n"
-            + "    \"IntRecord\": {\"Int1\": 62, \"Int2\": 12},\n"
-            + "    \"MixedRecord\": {\"Int1\": 62, \"Double1\": 1.2212, \"name\" : \"Just Testing\"}\n"
-            + "  }";
-    String expectedSchema = "{\"type\":\"object\",\"properties\":{\"ArrayBoolean\":{\"type\":\"array\",\"items\":{\"type\":\"boolean\"}},\"ArrayEmpty\":{\"type\":\"array\",\"items\":{}},\"ArrayInteger\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"ArrayNull\":{\"type\":\"array\",\"items\":{\"type\":\"null\"}},\"ArrayString\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"DoubleRecord\":{\"type\":\"object\",\"properties\":{\"Double1\":{\"type\":\"number\"},\"Double2\":{\"type\":\"number\"}}},\"IntRecord\":{\"type\":\"object\",\"properties\":{\"Int1\":{\"type\":\"number\"},\"Int2\":{\"type\":\"number\"}}},\"MixedRecord\":{\"type\":\"object\",\"properties\":{\"Double1\":{\"type\":\"number\"},\"Int1\":{\"type\":\"number\"},\"name\":{\"type\":\"string\"}}}}}";
+    String arrayOfNullsMessage = "\"arrayOfNulls\":[null, null]";
+    String recordOfMultipleMessage = "\"MixedRecord\": {\"Int1\": 62, \"Double1\": 1.2212, \"name\" : \"Testing\"}";
+    String complexTypesWithPrimitiveValues = "{" + arrayOfNullsMessage + "," + recordOfMultipleMessage + "}";
+    String expectedSchema = "{\"type\":\"object\",\"properties\":{\"MixedRecord\":{\"type\":\"object\",\"properties\":{\"Double1\":{\"type\":\"number\"},\"Int1\":{\"type\":\"number\"},\"name\":{\"type\":\"string\"}}},\"arrayOfNulls\":{\"type\":\"array\",\"items\":{\"type\":\"null\"}}}}";
     generateSchemaAndCheckExpected(complexTypesWithPrimitiveValues, expectedSchema);
   }
 
   @Test
-  public void testComplexTypesRecursive() throws IOException {
+  public void testDeriveRecordComplexTypesRecursive() throws IOException {
     // Get schema for record with arrays and records having complex types
-    String message =
-        "{\n"
-            + "    \"ArrayOfRecords\": [{\"Int1\": 6.1, \"Int2\": 12}, {\"Int2\": 2, \"Int1\": 62.5}],\n"
-            + "    \"RecordOfArrays\": {\"ArrayInt1\": [12, 13,14], \"ArrayBoolean1\": [true, false]},\n"
-            + "    \"RecordOfRecords\": {\"Record1\": {\"name\": \"Tom\", \"place\": \"Bom\"}, \"Record2\": { \"place\": \"Bom\", \"thing\": \"Kom\"}},\n"
-            + "    \"Array2d\": [[1,2], [2,3]],\n"
-            + "    \"Array3d\": [[[1,2]], [[2,3,3,4]]],\n"
-            + "    \"Array2dEmpty\": [[], []],\n"
-            + "    \"Array2dDiff\": [[1], [true]],\n"
-            + "    \"Array2dNull\": [[null], [null]]\n"
-            + "  }";
-    String expectedSchema = "{\"type\":\"object\",\"properties\":{\"Array2d\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}},\"Array2dDiff\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"}]}}},\"Array2dEmpty\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{}}},\"Array2dNull\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"null\"}}},\"Array3d\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}},\"ArrayOfRecords\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"Int1\":{\"type\":\"number\"},\"Int2\":{\"type\":\"number\"}}}},\"RecordOfArrays\":{\"type\":\"object\",\"properties\":{\"ArrayBoolean1\":{\"type\":\"array\",\"items\":{\"type\":\"boolean\"}},\"ArrayInt1\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}},\"RecordOfRecords\":{\"type\":\"object\",\"properties\":{\"Record1\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"place\":{\"type\":\"string\"}}},\"Record2\":{\"type\":\"object\",\"properties\":{\"place\":{\"type\":\"string\"},\"thing\":{\"type\":\"string\"}}}}}}}";
-    generateSchemaAndCheckExpected(message, expectedSchema);
+    String recordOfArrays = "\"RecordOfArrays\": {\"ArrayInt1\": [12, 13], \"ArrayBoolean1\": [true, false]}";
+    String recordOfRecords = "\"RecordOfRecords\": {\"Record1\": {\"name\": \"Tom\"}, \"Record2\": {\"place\": \"Bom\"}}";
+    String complexTypesWithPrimitiveValues = "{" + recordOfArrays + "," + recordOfRecords + "}";
+    String expectedSchema = "{\"type\":\"object\",\"properties\":{\"RecordOfArrays\":{\"type\":\"object\",\"properties\":{\"ArrayBoolean1\":{\"type\":\"array\",\"items\":{\"type\":\"boolean\"}},\"ArrayInt1\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}},\"RecordOfRecords\":{\"type\":\"object\",\"properties\":{\"Record1\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}},\"Record2\":{\"type\":\"object\",\"properties\":{\"place\":{\"type\":\"string\"}}}}}}}";
+    generateSchemaAndCheckExpected(complexTypesWithPrimitiveValues, expectedSchema);
   }
 
   @Test
-  public void testArrayDifferentTypes() throws IOException {
-
+  public void testDeriveRecordWithArrayOfDifferentTypes() throws IOException {
     // Array has elements of type number, float and string represented as oneOf in schema
-    String message =
-        "{\n"
-            + "    \"ArrayOfDifferentTypes\": [2, 13.1, true, \"J\", \"K\"],\n"
-            + "    \"ArrayOfDifferentTypes2\": [{\"J\": true},{\"J\":1}],\n"
-            + "    \"ArrayOfDifferentTypes3\": [[1,2,34,true], [false, \"K\"]]\n"
-            + "  }";
-    String expectedSchema = "{\"type\":\"object\",\"properties\":{\"ArrayOfDifferentTypes\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"},{\"type\":\"string\"}]}},\"ArrayOfDifferentTypes2\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"J\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"}]}}}},\"ArrayOfDifferentTypes3\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"},{\"type\":\"string\"}]}}}}}";
-    generateSchemaAndCheckExpected(message, expectedSchema);
+    String arrayOfDifferentTypes = "{\"ArrayOfDifferentTypes\": [2, 13.1, true, \"J\", \"K\"]}";
+    String expectedSchema = "{\"type\":\"object\",\"properties\":{\"ArrayOfDifferentTypes\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"},{\"type\":\"string\"}]}}}}";
+    generateSchemaAndCheckExpected(arrayOfDifferentTypes, expectedSchema);
 
     // Array of Records with arrays and different records, checking recursive merging of records
-    String message2 = "{\"ArrayOfRecords\": [[ {\"J\":[1,11]}, {\"J\":{\"J\":12}},  {\"J\":{\"J\": true}}]]}";
-    String expectedSchema2 = "{\"type\":\"object\",\"properties\":{\"ArrayOfRecords\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"J\":{\"oneOf\":[{\"type\":\"array\",\"items\":{\"type\":\"number\"}},{\"type\":\"object\",\"properties\":{\"J\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"}]}}}]}}}}}}}";
-    generateSchemaAndCheckExpected(message2, expectedSchema2);
+    String arrayOfRecordsAndArrays = "{\"ArrayOfRecordsAndArrays\": [ {\"J\":[1,11]}, {\"J\":{\"J\":12}},  {\"J\":{\"J\": true}}]}";
+    String expectedSchema2 = "{\"type\":\"object\",\"properties\":{\"ArrayOfRecordsAndArrays\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"J\":{\"oneOf\":[{\"type\":\"array\",\"items\":{\"type\":\"number\"}},{\"type\":\"object\",\"properties\":{\"J\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"}]}}}]}}}}}}";
+    generateSchemaAndCheckExpected(arrayOfRecordsAndArrays, expectedSchema2);
   }
 
   @Test
@@ -190,12 +161,27 @@ public class DeriveJsonSchemaTest {
   }
 
   @Test
+  public void testDeriveArrayTypeArrayComplex() throws JsonProcessingException {
+    // Testing recursive nesting of arrays
+    String array2d = "[[], []]";
+    String expectedSchema2d = "{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{}}}}";
+    generateSchemaAndCheckExpected(Arrays.asList(array2d, array2d), expectedSchema2d);
+    String array3d = "[ [[1,2]], [[1,22]] ]";
+    String expectedSchema3d = "{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}}}";
+    generateSchemaAndCheckExpected(Arrays.asList(array3d, array2d), expectedSchema3d);
+  }
+
+  @Test
   public void testDeriveArrayRecords() throws JsonProcessingException {
     // Merging Records with different field names
     String arrayOfStrings = "{\"ArrayString\": [\"John Smith\", \"Tom Davies\"]}";
     String arrayOfIntegers = "{\"ArrayInteger\": [1, 2]}";
     String expectedSchema = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"ArrayInteger\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"ArrayString\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}";
     generateSchemaAndCheckExpected(Arrays.asList(arrayOfStrings, arrayOfIntegers, arrayOfStrings, arrayOfIntegers), expectedSchema);
-  }
 
+    // Merging Records with same name different type
+    String arrayOfIntegersSameName = "{\"ArrayString\": [1, 2]}";
+    String expectedSchemaSameName = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"ArrayString\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"number\"},{\"type\":\"string\"}]}}}}}";
+    generateSchemaAndCheckExpected(Arrays.asList(arrayOfStrings, arrayOfIntegersSameName), expectedSchemaSameName);
+  }
 }

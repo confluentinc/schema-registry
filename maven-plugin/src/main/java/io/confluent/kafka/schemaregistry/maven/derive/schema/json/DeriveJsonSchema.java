@@ -28,7 +28,6 @@ import java.util.ArrayList;
 import java.util.Optional;
 
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.json.MergeJsonUtils.convertItemsToArrayItems;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.json.MergeJsonUtils.mergeArrays;
 
 public class DeriveJsonSchema {
@@ -47,20 +46,6 @@ public class DeriveJsonSchema {
         "boolean");
     classToDataType.put(com.fasterxml.jackson.databind.node.NullNode.class.getName(), "null");
     classToDataType.put(com.fasterxml.jackson.databind.node.MissingNode.class.getName(), "null");
-  }
-
-  static void groupItems(ObjectNode element,
-                         ArrayList<ObjectNode> items,
-                         ArrayList<ObjectNode> records,
-                         ArrayList<ObjectNode> arrays) {
-    // Group items into records, arrays and primitive types
-    if (element.get("type").asText().equals("object")) {
-      records.add(element);
-    } else if (element.get("type").asText().equals("array")) {
-      arrays.add(element);
-    } else if (!items.contains(element)) {
-      items.add(element);
-    }
   }
 
   public static Optional<ObjectNode> getPrimitiveSchema(Object field)
@@ -105,7 +90,7 @@ public class DeriveJsonSchema {
     ObjectNode schema = mapper.createObjectNode();
     schema.put("type", "array");
     ArrayList<ObjectNode> schemaList = getSchemaOfAllElements(messages, name);
-    ObjectNode items = mergeArrays(convertItemsToArrayItems(schemaList));
+    ObjectNode items = mergeArrays(schemaList, false);
     schema.set("items", items.get("items"));
     return schema;
   }
