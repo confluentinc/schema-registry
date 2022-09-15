@@ -26,6 +26,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
 
+import com.squareup.wire.Syntax;
 import com.squareup.wire.schema.Field.Label;
 import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.EnumConstantElement;
@@ -110,9 +111,11 @@ public class ProtobufSchemaUtils {
   private static String toString(Context ctx, ProtoFileElement protoFile, boolean normalize) {
     StringBuilder sb = new StringBuilder();
     if (protoFile.getSyntax() != null) {
-      sb.append("syntax = \"");
-      sb.append(protoFile.getSyntax());
-      sb.append("\";\n");
+      if (!normalize || protoFile.getSyntax() == Syntax.PROTO_3) {
+        sb.append("syntax = \"");
+        sb.append(protoFile.getSyntax());
+        sb.append("\";\n");
+      }
     }
     if (protoFile.getPackageName() != null) {
       sb.append("package ");
