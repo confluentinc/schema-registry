@@ -111,7 +111,7 @@ public class ProtobufSchemaUtils {
   private static String toString(Context ctx, ProtoFileElement protoFile, boolean normalize) {
     StringBuilder sb = new StringBuilder();
     if (protoFile.getSyntax() != null) {
-      if (normalize || protoFile.getSyntax() == Syntax.PROTO_3) {
+      if (!normalize || protoFile.getSyntax() == Syntax.PROTO_3) {
         sb.append("syntax = \"");
         sb.append(protoFile.getSyntax());
         sb.append("\";\n");
