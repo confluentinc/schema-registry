@@ -70,7 +70,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             if (writerSchemaIsPrimitive) {
               if (avroUseLogicalTypeConverters) {
                 return new GenericDatumReader<>(writerSchema, finalReaderSchema,
-                    AvroData.getGenericData());
+                    AvroSchemaUtils.getGenericData());
               } else {
                 return new GenericDatumReader<>(writerSchema, finalReaderSchema);
               }
@@ -81,7 +81,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             } else {
               if (avroUseLogicalTypeConverters) {
                 return new GenericDatumReader<>(writerSchema, finalReaderSchema,
-                    AvroData.getGenericData());
+                    AvroSchemaUtils.getGenericData());
               } else {
                 return new GenericDatumReader<>(writerSchema, finalReaderSchema);
               }
