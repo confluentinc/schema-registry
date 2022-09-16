@@ -34,19 +34,26 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.avro.AvroRuntimeException;
+import org.apache.avro.Conversions;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.data.TimeConversions;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.reflect.ReflectData;
+import org.apache.avro.reflect.ReflectDatumWriter;
+import org.apache.avro.specific.SpecificDatumWriter;
+import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayInputStream;
@@ -61,6 +68,32 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 public class AvroSchemaUtils {
+
+  private static final GenericData INSTANCE = new GenericData();
+
+  static {
+    addLogicalTypeConversion(INSTANCE);
+  }
+
+  public static GenericData getGenericData() {
+    return INSTANCE;
+  }
+
+  public static void addLogicalTypeConversion(GenericData avroData) {
+    avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+    avroData.addLogicalTypeConversion(new Conversions.UUIDConversion());
+
+    avroData.addLogicalTypeConversion(new TimeConversions.DateConversion());
+
+    avroData.addLogicalTypeConversion(new TimeConversions.TimeMillisConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.TimeMicrosConversion());
+
+    avroData.addLogicalTypeConversion(new TimeConversions.TimestampMillisConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.TimestampMicrosConversion());
+
+    avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMillisConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMicrosConversion());
+  }
 
   private static final EncoderFactory encoderFactory = EncoderFactory.get();
   private static final DecoderFactory decoderFactory = DecoderFactory.get();
@@ -197,10 +230,14 @@ public class AvroSchemaUtils {
   }
 
   public static Object toObject(JsonNode value, AvroSchema schema) throws IOException {
+    return toObject(value, schema, new GenericDatumReader<>(schema.rawSchema()));
+  }
+
+  public static Object toObject(
+      JsonNode value, AvroSchema schema, DatumReader<Object> reader) throws IOException {
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       Schema rawSchema = schema.rawSchema();
       jsonMapper.writeValue(out, value);
-      DatumReader<Object> reader = new GenericDatumReader<Object>(rawSchema);
       Object object = reader.read(null,
           decoderFactory.jsonDecoder(rawSchema, new ByteArrayInputStream(out.toByteArray()))
       );
@@ -209,8 +246,12 @@ public class AvroSchemaUtils {
   }
 
   public static Object toObject(String value, AvroSchema schema) throws IOException {
+    return toObject(value, schema, new GenericDatumReader<>(schema.rawSchema()));
+  }
+
+  public static Object toObject(
+      String value, AvroSchema schema, DatumReader<Object> reader) throws IOException {
     Schema rawSchema = schema.rawSchema();
-    DatumReader<Object> reader = new GenericDatumReader<Object>(rawSchema);
     Object object = reader.read(null,
         decoderFactory.jsonDecoder(rawSchema, value));
     return object;
@@ -226,10 +267,11 @@ public class AvroSchemaUtils {
     }
   }
 
+  @SuppressWarnings("unchecked")
   public static void toJson(Object value, OutputStream out) throws IOException {
     Schema schema = getSchema(value);
     JsonEncoder encoder = encoderFactory.jsonEncoder(schema, out);
-    DatumWriter<Object> writer = new GenericDatumWriter<>(schema);
+    DatumWriter<Object> writer = (DatumWriter<Object>) getDatumWriter(value, schema, true);
     // Some types require wrapping/conversion
     Object wrappedValue = value;
     if (value instanceof byte[]) {
@@ -237,6 +279,21 @@ public class AvroSchemaUtils {
     }
     writer.write(wrappedValue, encoder);
     encoder.flush();
+  }
+
+  public static DatumWriter<?> getDatumWriter(
+      Object value, Schema schema, boolean avroUseLogicalTypeConverters) {
+    if (value instanceof SpecificRecord) {
+      return new SpecificDatumWriter<>(schema);
+    } else if (value instanceof GenericRecord) {
+      if (avroUseLogicalTypeConverters) {
+        return new GenericDatumWriter<>(schema, getGenericData());
+      } else {
+        return new GenericDatumWriter<>(schema);
+      }
+    } else {
+      return new ReflectDatumWriter<>(schema);
+    }
   }
 
   protected static String toNormalizedString(AvroSchema schema) {

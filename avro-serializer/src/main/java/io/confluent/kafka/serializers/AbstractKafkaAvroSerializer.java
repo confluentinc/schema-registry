@@ -20,6 +20,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -29,13 +30,9 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
-import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.reflect.ReflectDatumWriter;
-import org.apache.avro.specific.SpecificDatumWriter;
-import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -84,20 +81,6 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   protected KafkaAvroSerializerConfig serializerConfig(Properties props) {
     return new KafkaAvroSerializerConfig(props);
-  }
-
-  protected DatumWriter<?> getDatumWriter(Object value, Schema schema) {
-    if (value instanceof SpecificRecord) {
-      return new SpecificDatumWriter<>(schema);
-    } else if (useSchemaReflection) {
-      return new ReflectDatumWriter<>(schema);
-    } else {
-      if (avroUseLogicalTypeConverters) {
-        return new GenericDatumWriter<>(schema, AvroData.getGenericData());
-      } else {
-        return new GenericDatumWriter<>(schema);
-      }
-    }
   }
 
   protected byte[] serializeImpl(
@@ -169,13 +152,15 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     }
   }
 
+  @SuppressWarnings("unchecked")
   private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
           throws ExecutionException, IOException {
     BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
 
     DatumWriter<Object> writer;
     writer = datumWriterCache.get(rawSchema,
-        () -> (DatumWriter<Object>) getDatumWriter(value, rawSchema)
+        () -> (DatumWriter<Object>) AvroSchemaUtils.getDatumWriter(
+            value, rawSchema, avroUseLogicalTypeConverters)
     );
     writer.write(value, encoder);
     encoder.flush();

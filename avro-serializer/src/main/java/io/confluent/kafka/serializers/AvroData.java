@@ -16,35 +16,18 @@
 
 package io.confluent.kafka.serializers;
 
-import org.apache.avro.Conversions;
-import org.apache.avro.data.TimeConversions;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import org.apache.avro.generic.GenericData;
 
 public class AvroData {
 
-  private static final GenericData INSTANCE = new GenericData();
-
-  static {
-    addLogicalTypeConversion(INSTANCE);
-  }
-
+  @Deprecated
   public static GenericData getGenericData() {
-    return INSTANCE;
+    return AvroSchemaUtils.getGenericData();
   }
 
+  @Deprecated
   public static void addLogicalTypeConversion(GenericData avroData) {
-    avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
-    avroData.addLogicalTypeConversion(new Conversions.UUIDConversion());
-
-    avroData.addLogicalTypeConversion(new TimeConversions.DateConversion());
-
-    avroData.addLogicalTypeConversion(new TimeConversions.TimeMillisConversion());
-    avroData.addLogicalTypeConversion(new TimeConversions.TimeMicrosConversion());
-
-    avroData.addLogicalTypeConversion(new TimeConversions.TimestampMillisConversion());
-    avroData.addLogicalTypeConversion(new TimeConversions.TimestampMicrosConversion());
-
-    avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMillisConversion());
-    avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMicrosConversion());
+    AvroSchemaUtils.addLogicalTypeConversion(avroData);
   }
 }
