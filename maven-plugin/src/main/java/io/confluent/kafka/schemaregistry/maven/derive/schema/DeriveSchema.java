@@ -18,89 +18,60 @@ package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.json.DeriveJsonSchema;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
-import java.util.Comparator;
-import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.Optional;
+import java.util.ArrayList;
+
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.getListFromArray;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.mapper;
 
 public abstract class DeriveSchema {
 
-  public static final ObjectMapper mapper = new ObjectMapper();
+  protected final HashMap<String, String> classToDataType = new HashMap<>();
 
-  public static ArrayNode sortJsonArrayList(ArrayNode node) {
-    List<JsonNode> dataNodes = getListFromArray(node);
-    // Sort items of arrayNode using type as the comparator
-    List<JsonNode> sortedDataNodes = dataNodes
-        .stream()
-        .distinct()
-        .sorted(Comparator.comparing(o -> o.get("type").asText()))
-        .collect(Collectors.toList());
-    //return the same Json structure as in method parameter
-    return mapper.createObjectNode().arrayNode().addAll(sortedDataNodes);
-  }
-
-  public static ObjectNode sortObjectNode(ObjectNode node) {
-    ObjectNode sortedObjectNode = mapper.createObjectNode();
-    List<String> sortedKeys = getSortedKeys(node);
-    for (String key : sortedKeys) {
-      sortedObjectNode.set(key, node.get(key));
-    }
-    return sortedObjectNode;
-  }
-
-  public static ArrayList<ObjectNode> getUnique(ArrayList<ObjectNode> schemas) {
-    Set<ObjectNode> setWithWrappedObjects = new HashSet<>(schemas);
-    ArrayList<ObjectNode> uniqueList = new ArrayList<>();
-    for (ObjectNode objectNode : setWithWrappedObjects) {
-      if (objectNode != null && !objectNode.isEmpty()) {
-        uniqueList.add(objectNode);
-      }
-    }
-    return uniqueList;
-  }
-
-  public static List<JsonNode> getListFromArray(ArrayNode field) {
-    List<JsonNode> objectList = new ArrayList<>();
-    for (JsonNode fieldItem : field) {
-      objectList.add(fieldItem);
-    }
-    return objectList;
-  }
-
-  public static List<String> getSortedKeys(ObjectNode message) {
-    ArrayList<String> keys = new ArrayList<>();
-    for (Iterator<String> it = message.fieldNames(); it.hasNext(); ) {
-      keys.add(it.next());
-    }
-    Collections.sort(keys);
-    return keys;
-  }
-
-  public static List<ObjectNode> getSchemaInformation(String schemaType,
-                                                      boolean strictCheck,
-                                                      ArrayList<String> messages)
+  public Optional<ObjectNode> getPrimitiveSchema(Object field)
       throws JsonProcessingException {
-    List<ObjectNode> schemaList = new ArrayList<>();
-    if (schemaType == null) {
-      throw new IllegalArgumentException("Schema Type not set");
+    // Generate Schema for Primitive type
+    String jsonInferredType = field.getClass().getName();
+    if (classToDataType.containsKey(jsonInferredType)) {
+      String schemaString = String.format("{\"type\" : \"%s\"}",
+          classToDataType.get(jsonInferredType));
+      return Optional.of(mapper.readValue(schemaString, ObjectNode.class));
     }
+    return Optional.empty();
+  }
 
-    if ("json".equalsIgnoreCase(schemaType)) {
-      ObjectNode schema = DeriveJsonSchema.getSchemaForMultipleMessages(messages);
-      schemaList.add(schema);
-    } else {
-      throw new IllegalArgumentException("Schema type not understood. "
-          + "Use Avro, Json or Protobuf");
+  protected ArrayList<ObjectNode> getSchemaOfAllElements(List<JsonNode> messages, String name)
+      throws JsonProcessingException {
+    // Get schema of each message based on type
+    ArrayList<ObjectNode> schemaList = new ArrayList<>();
+    for (JsonNode message : messages) {
+      schemaList.add(getSchemaOfElement(message, name));
     }
     return schemaList;
   }
+
+  protected ObjectNode getSchemaOfElement(JsonNode message, String name)
+      throws JsonProcessingException {
+    // Get schema of message based on type
+    Optional<ObjectNode> primitiveSchema = getPrimitiveSchema(message);
+    if (primitiveSchema.isPresent()) {
+      return primitiveSchema.get();
+    } else if (message instanceof ArrayNode) {
+      return getSchemaForArray(getListFromArray((ArrayNode) message), name);
+    } else {
+      ObjectNode objectNode = mapper.valueToTree(message);
+      return getSchemaForRecord(objectNode);
+    }
+  }
+
+  protected abstract ObjectNode getSchemaForArray(List<JsonNode> messages, String name)
+      throws JsonProcessingException;
+
+  protected abstract ObjectNode getSchemaForRecord(ObjectNode message)
+      throws JsonProcessingException;
 }

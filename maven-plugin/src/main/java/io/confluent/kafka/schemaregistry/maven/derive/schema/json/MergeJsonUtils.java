@@ -19,16 +19,16 @@ package io.confluent.kafka.schemaregistry.maven.derive.schema.json;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.sortJsonArrayList;
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.getSortedKeys;
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.sortObjectNode;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.mapper;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.sortObjectNode;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.getUnique;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.getSortedKeys;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.sortJsonArrayList;
 
 public final class MergeJsonUtils {
 
@@ -72,7 +72,7 @@ public final class MergeJsonUtils {
     ArrayList<ObjectNode> arrays = new ArrayList<>();
 
     // Group items of array into record, array and primitive types
-    for (ObjectNode array : DeriveSchema.getUnique(arrayList)) {
+    for (ObjectNode array : getUnique(arrayList)) {
       if (!useItems) {
         groupItems(array, primitives, records, arrays);
       } else {
@@ -90,7 +90,7 @@ public final class MergeJsonUtils {
       ObjectNode mergedRecords = mergeRecords(records);
       jsonItems.add(mergedRecords);
     }
-    // Merge records if there is at least 1 array
+    // Merge arrays if there is at least 1 array
     if (arrays.size() > 0) {
       ObjectNode mergedArrays = mergeArrays(arrays, true);
       jsonItems.add(mergedArrays);

@@ -19,12 +19,12 @@ package io.confluent.kafka.schemaregistry.maven.derive.schema.json;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.getUnique;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.json.MergeJsonUtils.*;
 import static org.junit.Assert.assertEquals;
 
@@ -47,7 +47,7 @@ public class MergeJsonUtilsTest {
       throws JsonProcessingException {
     ObjectNode schema = (ObjectNode) mapper.readTree(schemaString1);
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema, schema, schema));
-    ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemas);
+    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 1);
     assert (uniqueSchemas.get(0).equals(schema));
   }
@@ -89,7 +89,7 @@ public class MergeJsonUtilsTest {
     ObjectNode schema3 = (ObjectNode) mapper.readTree(recordWithString);
     ObjectNode schema4 = (ObjectNode) mapper.readTree(recordWithArrayOfStrings);
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema1, schema2, schema2, schema3, schema4));
-    ArrayList<ObjectNode> uniqueSchemas = DeriveSchema.getUnique(schemas);
+    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 4);
     for (ObjectNode schema : schemas) {
       assert (uniqueSchemas.contains(schema));

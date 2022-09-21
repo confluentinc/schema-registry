@@ -28,21 +28,23 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.mapper;
 import static org.junit.Assert.assertEquals;
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema.mapper;
 
 public class DeriveJsonSchemaTest {
 
+  DeriveJsonSchema derive = new DeriveJsonSchema();
+
   public void generateSchemaAndCheckPrimitive(String message, String expectedSchema)
       throws JsonProcessingException {
-    Optional<ObjectNode> primitiveSchema = DeriveJsonSchema.getPrimitiveSchema(mapper.readTree(message));
+    Optional<ObjectNode> primitiveSchema = derive.getPrimitiveSchema(mapper.readTree(message));
     assert primitiveSchema.isPresent();
     assertEquals(primitiveSchema.get(), mapper.readTree(expectedSchema));
   }
 
   public void generateSchemaAndCheckPrimitiveAbsent(String message)
       throws JsonProcessingException {
-    Optional<ObjectNode> primitiveSchema = DeriveJsonSchema.getPrimitiveSchema(mapper.readTree(message));
+    Optional<ObjectNode> primitiveSchema = derive.getPrimitiveSchema(mapper.readTree(message));
     assert !primitiveSchema.isPresent();
   }
 
@@ -52,8 +54,7 @@ public class DeriveJsonSchemaTest {
     for (String message : messages) {
       messagesJson.add(mapper.readTree(message));
     }
-    JsonSchema jsonSchema = new JsonSchema(
-        DeriveJsonSchema.getSchemaForArray(messagesJson, "ArrayObject"));
+    JsonSchema jsonSchema = new JsonSchema(derive.getSchemaForArray(messagesJson, "ArrayObject"));
     assertEquals(expectedSchema, jsonSchema.toString());
     jsonSchema.validate();
   }
@@ -61,8 +62,7 @@ public class DeriveJsonSchemaTest {
   public void generateSchemaAndCheckExpected(String message, String expectedSchema)
       throws JsonProcessingException {
     ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
-    JsonSchema jsonSchema = new JsonSchema(
-        DeriveJsonSchema.getSchemaForRecord(messageObject).toString());
+    JsonSchema jsonSchema = new JsonSchema(derive.getSchemaForRecord(messageObject).toString());
     assertEquals(expectedSchema, jsonSchema.toString());
     jsonSchema.validate(messageObject);
     jsonSchema.validate();
@@ -183,5 +183,15 @@ public class DeriveJsonSchemaTest {
     String arrayOfIntegersSameName = "{\"ArrayString\": [1, 2]}";
     String expectedSchemaSameName = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"ArrayString\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"number\"},{\"type\":\"string\"}]}}}}}";
     generateSchemaAndCheckExpected(Arrays.asList(arrayOfStrings, arrayOfIntegersSameName), expectedSchemaSameName);
+  }
+
+  @Test
+  public void testDeriveMultipleMessages() throws JsonProcessingException {
+    // Merging Records with different field names
+    String arrayOfStrings = "{\"ArrayString\": \"1\"}";
+    String arrayOfIntegers = "{\"ArrayInteger\": 12}";
+    String expectedSchema = "{\"schema\":{\"type\":\"object\",\"properties\":{\"ArrayInteger\":{\"type\":\"number\"},\"ArrayString\":{\"type\":\"string\"}}}}";
+    ObjectNode schema = derive.getSchemaForMultipleMessages(Arrays.asList(arrayOfStrings, arrayOfIntegers, arrayOfStrings, arrayOfIntegers));
+    assertEquals(expectedSchema, schema.toString());
   }
 }
