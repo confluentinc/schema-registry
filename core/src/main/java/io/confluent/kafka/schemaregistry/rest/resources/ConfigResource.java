@@ -35,6 +35,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,6 +64,7 @@ import java.util.Map;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ConfigResource {
 
+  private static final String apiTag = "Config (v1)";
   private static final Logger log = LoggerFactory.getLogger(ConfigResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -86,6 +89,7 @@ public class ConfigResource {
         @ApiResponse(responseCode = "500", description =
            "Error code 50001 -- Error in the backend data store\n"
                 + "Error code 50003 -- Error while forwarding the request to the primary")})
+  @Tags(@Tag(name = apiTag))
   public ConfigUpdateRequest updateSubjectLevelConfig(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -136,6 +140,7 @@ public class ConfigResource {
         @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store")
       })
+  @Tags(@Tag(name = apiTag))
   public Config getSubjectLevelConfig(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -176,6 +181,7 @@ public class ConfigResource {
         @ApiResponse(responseCode = "500", description =
             "Error code 50001 -- Error in the backend data store\n"
                + "Error code 50003 -- Error while forwarding the request to the primary\n")})
+  @Tags(@Tag(name = apiTag))
   public ConfigUpdateRequest updateTopLevelConfig(
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
@@ -211,6 +217,7 @@ public class ConfigResource {
       @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store")
   })
+  @Tags(@Tag(name = apiTag))
   public Config getTopLevelConfig() {
     Config config;
     try {
@@ -231,6 +238,7 @@ public class ConfigResource {
         @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "datastore")
       })
+  @Tags(@Tag(name = apiTag))
   public void deleteTopLevelConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers) {
@@ -269,6 +277,7 @@ public class ConfigResource {
         @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "datastore")
       })
+  @Tags(@Tag(name = apiTag))
   public void deleteSubjectConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
