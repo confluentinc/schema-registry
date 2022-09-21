@@ -26,6 +26,8 @@ import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -42,6 +44,7 @@ import java.util.List;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ContextsResource {
 
+  private static final String apiTag = "Contexts (v1)";
   private final KafkaSchemaRegistry schemaRegistry;
 
   public ContextsResource(KafkaSchemaRegistry schemaRegistry) {
@@ -58,6 +61,7 @@ public class ContextsResource {
         @ApiResponse(responseCode = "500",
                      description = "Error code 50001 -- Error in the backend data store")
       })
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("contexts.list")
   public List<String> listContexts() {
     try {

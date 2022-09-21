@@ -34,6 +34,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,6 +67,7 @@ import java.util.Set;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SubjectsResource {
 
+  private static final String apiTag = "Subjects (v1)";
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
@@ -87,6 +90,7 @@ public class SubjectsResource {
           + "Error code 40403 -- Schema not found"),
         @ApiResponse(responseCode = "500", description = "Internal server error")
       })
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("subjects.get-schema")
   public void lookUpSchemaUnderSubject(
       final @Suspended AsyncResponse asyncResponse,
@@ -138,6 +142,7 @@ public class SubjectsResource {
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend datastore")
       })
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("subjects.list")
   public Set<String> list(
       @DefaultValue(QualifiedSubject.CONTEXT_WILDCARD)
@@ -172,6 +177,7 @@ public class SubjectsResource {
         @ApiResponse(responseCode = "500",
           description = "Error code 50001 -- Error in the backend datastore")
       })
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("subjects.delete-subject")
   public void deleteSubject(
       final @Suspended AsyncResponse asyncResponse,
