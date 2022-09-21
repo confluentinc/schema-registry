@@ -35,6 +35,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,6 +65,7 @@ import java.util.Map;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ModeResource {
 
+  private static final String apiTag = "Modes (v1)";
   private static final Logger log = LoggerFactory.getLogger(ModeResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -87,6 +90,7 @@ public class ModeResource {
             description = "Error code 50001 -- Error in the backend data store\n"
             + "Error code 50003 -- Error while forwarding the request to the primary\n"
             + "Error code 50004 -- Unknown leader")})
+  @Tags(@Tag(name = apiTag))
   public ModeUpdateRequest updateMode(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -143,6 +147,7 @@ public class ModeResource {
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store")
       })
+  @Tags(@Tag(name = apiTag))
   public Mode getMode(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -178,6 +183,7 @@ public class ModeResource {
             "Error code 50001 -- Error in the backend data store\n"
                 + "Error code 50003 -- Error while forwarding the request to the primary\n"
                 + "Error code 50004 -- Unknown leader")})
+  @Tags(@Tag(name = apiTag))
   public ModeUpdateRequest updateTopLevelMode(
       @Context HttpHeaders headers,
       @Parameter(description = "Update Request", required = true)
@@ -198,6 +204,7 @@ public class ModeResource {
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store")
       })
+  @Tags(@Tag(name = apiTag))
   public Mode getTopLevelMode() {
     return getMode(null, false);
   }
@@ -215,6 +222,7 @@ public class ModeResource {
         @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "datastore")
       })
+  @Tags(@Tag(name = apiTag))
   public void deleteSubjectMode(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,

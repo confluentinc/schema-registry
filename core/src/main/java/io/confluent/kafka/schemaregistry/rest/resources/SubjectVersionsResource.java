@@ -46,6 +46,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,6 +78,7 @@ import java.util.Map;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SubjectVersionsResource {
 
+  private static final String apiTag = "Subject Versions (v1)";
   private static final Logger log = LoggerFactory.getLogger(SubjectVersionsResource.class);
 
   private final KafkaSchemaRegistry schemaRegistry;
@@ -113,6 +116,7 @@ public class SubjectVersionsResource {
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class)))
       })
+  @Tags(@Tag(name = apiTag))
   public Schema getSchemaByVersion(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -172,6 +176,7 @@ public class SubjectVersionsResource {
           @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
               + "backend data store")
       })
+  @Tags(@Tag(name = apiTag))
   public String getSchemaOnly(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -198,6 +203,7 @@ public class SubjectVersionsResource {
         @ApiResponse(responseCode = "500",
           description = "Error code 50001 -- Error in the backend data store")
       })
+  @Tags(@Tag(name = apiTag))
   public List<Integer> getReferencedBy(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -245,6 +251,7 @@ public class SubjectVersionsResource {
           @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
           @ApiResponse(responseCode = "500", description =
               "Error code 50001 -- Error in the backend data store")})
+  @Tags(@Tag(name = apiTag))
   public List<Integer> listVersions(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -315,6 +322,7 @@ public class SubjectVersionsResource {
               + "Error code 50002 -- Operation timed out\n"
               + "Error code 50003 -- Error while forwarding the request to the primary")
       })
+  @Tags(@Tag(name = apiTag))
   public void register(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
@@ -394,6 +402,7 @@ public class SubjectVersionsResource {
         @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store")
       })
+  @Tags(@Tag(name = apiTag))
   public void deleteSchemaVersion(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,

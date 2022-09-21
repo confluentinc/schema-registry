@@ -32,6 +32,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +59,7 @@ import java.util.List;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class CompatibilityResource {
 
+  private static final String apiTag = "Compatibility (v1)";
   private static final Logger log = LoggerFactory.getLogger(CompatibilityResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -86,6 +89,7 @@ public class CompatibilityResource {
           @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
               + "backend data store")
       })
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("compatibility.subjects.versions.verify")
   public void testCompatibilityBySubjectName(
       final @Suspended AsyncResponse asyncResponse,
@@ -176,7 +180,7 @@ public class CompatibilityResource {
           @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
               + "backend data store")
       })
-
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("compatibility.subjects.versions.verify")
   public void testCompatibilityForSubject(
       final @Suspended AsyncResponse asyncResponse,

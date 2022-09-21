@@ -29,6 +29,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +55,7 @@ import java.util.Set;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SchemasResource {
 
+  private static final String apiTag = "Schemas (v1)";
   private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -72,6 +75,7 @@ public class SchemasResource {
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store\n")
       })
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("schemas.get-schemas")
   public List<Schema> getSchemas(
       @Parameter(description = "Filters results by the respective subject prefix")
@@ -121,6 +125,7 @@ public class SchemasResource {
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store\n")
       })
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("schemas.ids.get-schema")
   public SchemaString getSchema(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
@@ -162,6 +167,7 @@ public class SchemasResource {
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store\n")
       })
+  @Tags(@Tag(name = apiTag))
   public Set<String> getSubjects(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
@@ -205,6 +211,7 @@ public class SchemasResource {
         @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
             + "backend data store\n")
       })
+  @Tags(@Tag(name = apiTag))
   public List<SubjectVersion> getVersions(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
@@ -245,6 +252,7 @@ public class SchemasResource {
           @ApiResponse(responseCode = "500", description = "Error code "
                   + "50001 -- Error in the backend data store\n")
       })
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("schemas.ids.get-schema.only")
   public String getSchemaOnly(
       @Parameter(description = "Globally unique "
@@ -284,6 +292,7 @@ public class SchemasResource {
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store\n")
       })
+  @Tags(@Tag(name = apiTag))
   public Set<String> getSchemaTypes() {
     return schemaRegistry.schemaTypes();
   }
