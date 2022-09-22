@@ -233,8 +233,9 @@ public class ConfigResource {
   @DocumentedName("deleteGlobalConfig")
   @Operation(summary = "Deletes the Global-level compatibility level config and "
       + "revert to the global default.", responses = {
-        @ApiResponse(content = @Content(
-            schema = @Schema(implementation = CompatibilityLevel.class))),
+        @ApiResponse(responseCode = "200", description = "Operation succeeded. "
+                  + "Returns old global compatibility level",
+                  content = @Content(schema = @Schema(implementation = CompatibilityLevel.class))),
         @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "datastore")
       })
