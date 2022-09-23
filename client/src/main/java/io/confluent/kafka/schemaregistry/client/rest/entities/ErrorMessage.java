@@ -26,6 +26,7 @@ import java.util.Objects;
 /**
  * Generic JSON error message.
  */
+@Schema(description = "Error message")
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ErrorMessage {
