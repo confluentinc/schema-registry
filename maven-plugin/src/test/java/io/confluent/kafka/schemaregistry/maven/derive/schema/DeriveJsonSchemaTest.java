@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.maven.derive.schema.json;
+package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.junit.Test;
@@ -28,11 +29,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.mapper;
 import static org.junit.Assert.assertEquals;
 
 public class DeriveJsonSchemaTest {
 
+  private final ObjectMapper mapper = new ObjectMapper();
   DeriveJsonSchema derive = new DeriveJsonSchema();
 
   public void generateSchemaAndCheckPrimitive(String message, String expectedSchema)

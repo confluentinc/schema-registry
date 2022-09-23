@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.maven.derive.schema.json;
+package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.stream.Collectors;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.getSortedKeys;
 import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.mapper;
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.json.MergeJsonUtils.mergeArrays;
 
 public class DeriveJsonSchema extends DeriveSchema {
 
@@ -44,31 +44,54 @@ public class DeriveJsonSchema extends DeriveSchema {
     classToDataType.put(com.fasterxml.jackson.databind.node.MissingNode.class.getName(), "null");
   }
 
-  protected ObjectNode getSchemaForArray(List<JsonNode> messages, String name)
-      throws JsonProcessingException {
-    // Generate Schema for Array type
-    ObjectNode schema = mapper.createObjectNode();
-    schema.put("type", "array");
-    ArrayList<ObjectNode> schemaList = getSchemaOfAllElements(messages, name);
-    ObjectNode items = mergeArrays(schemaList, false);
-    schema.set("items", items.get("items"));
-    return schema;
+  public static ArrayNode sortJsonArrayList(ArrayNode node) {
+    List<JsonNode> dataNodes = DeriveSchemaUtils.getListFromArray(node);
+    // Sort items of arrayNode using type as the comparator
+    List<JsonNode> sortedDataNodes = dataNodes
+        .stream()
+        .distinct()
+        .sorted(Comparator.comparing(o -> o.get("type").asText()))
+        .collect(Collectors.toList());
+    //return the same Json structure as in method parameter
+    return mapper.createObjectNode().arrayNode().addAll(sortedDataNodes);
   }
 
-  protected ObjectNode getSchemaForRecord(ObjectNode message)
-      throws JsonProcessingException {
-    // Generate Schema for Record type
-    ObjectNode schema = mapper.createObjectNode();
-    schema.put("type", "object");
-    schema.set("properties", mapper.createObjectNode());
+  protected ObjectNode mergeMultipleDataTypes(ObjectNode mergedArray,
+                                              ArrayList<ObjectNode> primitives,
+                                              ArrayList<ObjectNode> records,
+                                              ArrayList<ObjectNode> arrays) {
 
-    // Loop over each field, get type of each field and insert into schema
-    for (String fieldName : getSortedKeys(message)) {
-      JsonNode field = message.get(fieldName);
-      ObjectNode fields = (ObjectNode) schema.get("properties");
-      fields.set(fieldName, getSchemaOfElement(field, fieldName));
+    ArrayNode jsonItems = DeriveSchemaUtils.mapper.createArrayNode();
+    // Adding primitive types to items' list
+    for (ObjectNode item : primitives) {
+      jsonItems.add(item);
     }
-    return schema;
+    // Merge records if there is at least 1 record
+    if (records.size() > 0) {
+      ObjectNode mergedRecords = mergeRecords(records);
+      jsonItems.add(mergedRecords);
+    }
+    // Merge arrays if there is at least 1 array
+    if (arrays.size() > 0) {
+      ObjectNode mergedArrays = mergeArrays(arrays, true);
+      jsonItems.add(mergedArrays);
+    }
+
+    if (jsonItems.size() > 1) {
+      // If there are more than 1 different items, use oneOf to represent them
+      ObjectNode oneOfDataType = DeriveSchemaUtils.mapper.createObjectNode();
+      ArrayNode sortedJsonItems = sortJsonArrayList(jsonItems);
+      oneOfDataType.set("oneOf", sortedJsonItems);
+      mergedArray.set("items", oneOfDataType);
+    } else if (jsonItems.size() == 1) {
+      // Exactly one type of item, hence oneOf is not used
+      mergedArray.set("items", jsonItems.get(0));
+    } else {
+      // No items found, setting items as empty object
+      mergedArray.set("items", DeriveSchemaUtils.mapper.createObjectNode());
+    }
+
+    return mergedArray;
   }
 
   public ObjectNode getSchemaForMultipleMessages(List<String> messages)

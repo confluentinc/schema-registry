@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.maven.derive.schema.json;
+package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,14 +24,15 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.getUnique;
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.json.MergeJsonUtils.*;
 import static org.junit.Assert.assertEquals;
 
-public class MergeJsonUtilsTest {
+/**
+ * Testing mergeArrays and mergeRecords functions
+ **/
+public class DeriveSchemaTest {
 
   private final ObjectMapper mapper = new ObjectMapper();
-
+  DeriveJsonSchema derive = new DeriveJsonSchema();
   String emptyArray = "{\"type\":\"array\",\"items\":{}}";
   String arrayOfNumbers = "{\"type\":\"array\",\"items\":{\"type\":\"number\"}}";
   String arrayOfStrings = "{\"type\":\"array\",\"items\":{\"type\":\"string\"}}";
@@ -43,15 +44,6 @@ public class MergeJsonUtilsTest {
   String recordWithString = "{\"type\":\"object\",\"properties\":{\"F1\":{\"type\":\"string\"}}}";
   String recordWithArrayOfStrings = "{\"type\":\"object\",\"properties\":{\"F1\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}";
 
-  public void generateSchemaAndCheckUnique(String schemaString1)
-      throws JsonProcessingException {
-    ObjectNode schema = (ObjectNode) mapper.readTree(schemaString1);
-    ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema, schema, schema));
-    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
-    assertEquals(uniqueSchemas.size(), 1);
-    assert (uniqueSchemas.get(0).equals(schema));
-  }
-
   public void generateSchemasAndMatchExpectedMergeArrays(String schemaString1,
                                                          String schemaString2,
                                                          String ExpectedSchema)
@@ -59,7 +51,7 @@ public class MergeJsonUtilsTest {
     ObjectNode schema1 = (ObjectNode) mapper.readTree(schemaString1);
     ObjectNode schema2 = (ObjectNode) mapper.readTree(schemaString2);
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
-    ObjectNode schema = mergeArrays(schemas, true);
+    ObjectNode schema = derive.mergeArrays(schemas, true);
     assertEquals(ExpectedSchema, schema.toString());
   }
 
@@ -70,16 +62,8 @@ public class MergeJsonUtilsTest {
     ObjectNode schema1 = (ObjectNode) mapper.readTree(schemaString1);
     ObjectNode schema2 = (ObjectNode) mapper.readTree(schemaString2);
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
-    ObjectNode schema = mergeRecords(schemas);
+    ObjectNode schema = derive.mergeRecords(schemas);
     assertEquals(ExpectedSchema, schema.toString());
-  }
-
-  @Test
-  public void shouldGetOneUnique() throws JsonProcessingException {
-    generateSchemaAndCheckUnique(arrayOfNumbers);
-    generateSchemaAndCheckUnique(arrayOfArrayOfNumbers);
-    generateSchemaAndCheckUnique(recordWithString);
-    generateSchemaAndCheckUnique(recordWithArrayOfStrings);
   }
 
   @Test
@@ -89,7 +73,7 @@ public class MergeJsonUtilsTest {
     ObjectNode schema3 = (ObjectNode) mapper.readTree(recordWithString);
     ObjectNode schema4 = (ObjectNode) mapper.readTree(recordWithArrayOfStrings);
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema1, schema2, schema2, schema3, schema4));
-    ArrayList<ObjectNode> uniqueSchemas = getUnique(schemas);
+    ArrayList<ObjectNode> uniqueSchemas = DeriveSchemaUtils.getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 4);
     for (ObjectNode schema : schemas) {
       assert (uniqueSchemas.contains(schema));
@@ -126,7 +110,6 @@ public class MergeJsonUtilsTest {
     String expectedSchema = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"F1\":{\"oneOf\":[{\"type\":\"number\"},{\"type\":\"string\"}]}}}}";
     generateSchemasAndMatchExpectedMergeArrays(arrayOfObjectWithNumber, arrayOfObjectWithString, expectedSchema);
     generateSchemasAndMatchExpectedMergeArrays(arrayOfObjectWithString, arrayOfObjectWithNumber, expectedSchema);
-
   }
 
   @Test

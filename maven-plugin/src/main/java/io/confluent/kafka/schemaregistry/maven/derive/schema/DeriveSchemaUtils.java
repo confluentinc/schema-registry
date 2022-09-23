@@ -22,39 +22,15 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Iterator;
 import java.util.Collections;
 
-import java.util.stream.Collectors;
-
 public class DeriveSchemaUtils {
 
   public static final ObjectMapper mapper = new ObjectMapper();
-
-  public static ArrayNode sortJsonArrayList(ArrayNode node) {
-    List<JsonNode> dataNodes = getListFromArray(node);
-    // Sort items of arrayNode using type as the comparator
-    List<JsonNode> sortedDataNodes = dataNodes
-        .stream()
-        .distinct()
-        .sorted(Comparator.comparing(o -> o.get("type").asText()))
-        .collect(Collectors.toList());
-    //return the same Json structure as in method parameter
-    return mapper.createObjectNode().arrayNode().addAll(sortedDataNodes);
-  }
-
-  public static ObjectNode sortObjectNode(ObjectNode node) {
-    ObjectNode sortedObjectNode = mapper.createObjectNode();
-    List<String> sortedKeys = getSortedKeys(node);
-    for (String key : sortedKeys) {
-      sortedObjectNode.set(key, node.get(key));
-    }
-    return sortedObjectNode;
-  }
 
   public static ArrayList<ObjectNode> getUnique(ArrayList<ObjectNode> schemas) {
     Set<ObjectNode> setWithWrappedObjects = new HashSet<>(schemas);
@@ -83,4 +59,44 @@ public class DeriveSchemaUtils {
     Collections.sort(keys);
     return keys;
   }
+
+  static void groupItems(ObjectNode element,
+                         ArrayList<ObjectNode> items,
+                         ArrayList<ObjectNode> records,
+                         ArrayList<ObjectNode> arrays) {
+    if (element.isEmpty() || items.contains(element)) {
+      return;
+    }
+    // If element is oneOf type, add all elements inside oneOf
+    if (element.has("oneOf")) {
+      ArrayNode elements = (ArrayNode) element.get("oneOf");
+      for (JsonNode oneOfElement : elements) {
+        groupItems((ObjectNode) oneOfElement, items, records, arrays);
+      }
+      return;
+    }
+
+    if (element.has("type")) {
+      String typeOfElement = element.get("type").asText();
+      if (typeOfElement.equals("object")) {
+        records.add(element);
+      } else if (typeOfElement.equals("array")) {
+        arrays.add(element);
+      } else {
+        items.add(element);
+      }
+    } else {
+      items.add(element);
+    }
+  }
+
+  static ObjectNode sortObjectNode(ObjectNode node) {
+    ObjectNode sortedObjectNode = DeriveSchemaUtils.mapper.createObjectNode();
+    List<String> sortedKeys = DeriveSchemaUtils.getSortedKeys(node);
+    for (String key : sortedKeys) {
+      sortedObjectNode.set(key, node.get(key));
+    }
+    return sortedObjectNode;
+  }
+
 }
