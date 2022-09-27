@@ -1828,22 +1828,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private boolean shouldInclude(boolean isDeleted, LookupFilter filter) {
-    boolean shouldInclude;
+  private static boolean shouldInclude(boolean isDeleted, LookupFilter filter) {
     switch (filter) {
       case DEFAULT:
-        shouldInclude = !isDeleted;
-        break;
+        return !isDeleted;
       case INCLUDE_DELETED:
-        shouldInclude = true;
-        break;
+        return true;
       case DELETED_ONLY:
-        shouldInclude =  isDeleted;
-        break;
+        return isDeleted;
       default:
-        shouldInclude = false;
+        return false;
     }
-    return shouldInclude;
   }
 
   @Override
