@@ -1619,16 +1619,10 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Versions Deleted Match", deletedResponse,
             restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject2));
 
-    assertEquals("List Deleted Versions Match", deletedResponse,
-        restApp.restClient.getDeletedOnlyVersions(subject2));
-
     expectedResponse = new ArrayList<>();
     expectedResponse.add(subject1);
     assertEquals("Current Subjects", expectedResponse,
             restApp.restClient.getAllSubjects());
-
-    assertEquals("Deleted Subjects", Collections.singletonList(subject2),
-        restApp.restClient.getDeletedOnlySubjects(null));
 
     expectedResponse = new ArrayList<>();
     expectedResponse.add(subject1);
@@ -1644,6 +1638,35 @@ public class RestApiTest extends ClusterTestHarness {
     expectedResponse.add(subject1);
     assertEquals("Current Subjects", expectedResponse,
             restApp.restClient.getAllSubjects());
+  }
+
+  @Test
+  public void testListSoftDeletedSubjectsAndSchemas() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(3);
+    String subject1 = "test1";
+    String subject2 = "test2";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject1);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject1);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(2), 3, subject2);
+
+    assertEquals((Integer) 1,
+        restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "1"));
+    assertEquals((Integer) 1,
+        restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
+
+    assertEquals("List All Versions Match",
+        Collections.singletonList(2), restApp.restClient.getAllVersions(subject1));
+    assertEquals("List All Versions Include deleted Match",
+        Arrays.asList(1, 2), restApp.restClient.getAllVersions(RestService.DEFAULT_REQUEST_PROPERTIES, subject1, true));
+    assertEquals("List Deleted Versions Match",
+        Collections.singletonList(1), restApp.restClient.getDeletedOnlyVersions(subject1));
+
+    assertEquals("List All Subjects Match",
+        Collections.singletonList(subject1), restApp.restClient.getAllSubjects());
+    assertEquals("List All Subjects Include deleted Match",
+        Arrays.asList(subject1, subject2), restApp.restClient.getAllSubjects(true));
+    assertEquals("List Deleted Only Subjects Match",
+        Collections.singletonList(subject2), restApp.restClient.getDeletedOnlySubjects(null));
   }
 
   @Test

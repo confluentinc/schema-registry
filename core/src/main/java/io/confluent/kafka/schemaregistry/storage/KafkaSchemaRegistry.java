@@ -66,6 +66,7 @@ import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -1292,22 +1293,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public Set<String> listSubjects(LookupFilter filter)
           throws SchemaRegistryException {
-    try (CloseableIterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys()) {
-      return extractUniqueSubjects(allKeys, filter);
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException(
-          "Error from the backend Kafka store", e);
-    }
+    return listSubjectsWithPrefix(CONTEXT_WILDCARD, filter);
   }
 
   public Set<String> listSubjectsWithPrefix(String prefix, LookupFilter filter)
       throws SchemaRegistryException {
-    Set<String> subjects = new LinkedHashSet<>();
-    Iterator<Schema> iter = getVersionsWithSubjectPrefix(prefix, filter, false);
-    while (iter.hasNext()) {
-      subjects.add(iter.next().getSubject());
+    try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
+      return extractUniqueSubjects(allVersions, filter);
     }
-    return subjects;
   }
 
   public Set<String> listSubjectsForId(int id, String subject) throws SchemaRegistryException {
@@ -1366,21 +1359,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys,
-                                            LookupFilter filter)
-      throws StoreException {
-    Set<String> subjects = new LinkedHashSet<>();
-    while (allKeys.hasNext()) {
-      SchemaRegistryKey k = allKeys.next();
-      if (k instanceof SchemaKey) {
-        SchemaKey key = (SchemaKey) k;
-        SchemaValue value = (SchemaValue) kafkaStore.get(key);
-        if (value != null && shouldInclude(value.isDeleted(), filter)) {
-          subjects.add(key.getSubject());
-        }
-      }
+  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryValue> allVersions,
+                                            LookupFilter filter) {
+    Map<String, Boolean> subjects = new HashMap<>();
+    while (allVersions.hasNext()) {
+      SchemaValue value = (SchemaValue) allVersions.next();
+      subjects.merge(value.getSubject(), value.isDeleted(), (v1, v2) -> v1 && v2);
     }
-    return subjects;
+
+    return subjects.keySet().stream()
+        .filter(k -> shouldInclude(subjects.get(k), filter))
+        .collect(Collectors.toCollection(TreeSet::new));
   }
 
   public Set<String> subjects(String subject,
