@@ -66,7 +66,6 @@ import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import java.util.LinkedHashSet;
 import java.util.Objects;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -1369,7 +1368,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
     return subjects.keySet().stream()
         .filter(k -> shouldInclude(subjects.get(k), filter))
-        .collect(Collectors.toCollection(TreeSet::new));
+        .sorted()
+        .collect(Collectors.toCollection(LinkedHashSet::new));
   }
 
   public Set<String> subjects(String subject,
