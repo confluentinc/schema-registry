@@ -94,7 +94,7 @@ public class SubjectsResource {
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
                   ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
-          description = "Internal Server Error. ",
+          description = "Internal Server Error.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
                   ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))

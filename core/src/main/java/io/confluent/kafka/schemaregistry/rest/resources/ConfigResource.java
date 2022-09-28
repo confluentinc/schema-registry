@@ -82,7 +82,7 @@ public class ConfigResource {
       description = "Update compatibility level for the specified subject. "
         + "On success, echoes the original request back to the client.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The original request",
+        @ApiResponse(responseCode = "200", description = "The original request.",
             content = @Content(schema = @Schema(implementation = ConfigUpdateRequest.class))),
         @ApiResponse(responseCode = "404",
             description = "Not Found. Error code 40401 indicates subject not found.",
