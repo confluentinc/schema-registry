@@ -249,7 +249,8 @@ paths:
     get:
       tags:
       - Config (v1)
-      summary: Get global compatibility level.
+      summary: Get global compatibility level
+      description: Retrieves the global compatibility level.
       operationId: getTopLevelConfig
       responses:
         "200":
@@ -343,8 +344,9 @@ paths:
     delete:
       tags:
       - Config (v1)
-      summary: Deletes the Global-level compatibility level config and revert to the
-        global default.
+      summary: Delete global compatibility level
+      description: Deletes the global compatibility level config and reverts to the
+        default.
       operationId: deleteTopLevelConfig
       responses:
         "200":
@@ -1864,7 +1866,7 @@ paths:
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly_1
+      operationId: getSchemaOnly
       parameters:
       - name: subject
         in: path
@@ -1955,7 +1957,7 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly_2
+      operationId: getSchemaOnly_1
       parameters:
       - name: id
         in: path
