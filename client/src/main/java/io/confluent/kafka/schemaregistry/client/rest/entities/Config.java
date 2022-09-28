@@ -37,8 +37,8 @@ public class Config {
   }
 
   @Schema(description = "Compatibility Level",
-      allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
-          + "FULL_TRANSITIVE, NONE")
+      allowableValues = {"BACKWARD", "BACKWARD_TRANSITIVE", "FORWARD", "FORWARD_TRANSITIVE",
+        "FULL", "FULL_TRANSITIVE", "NONE"})
   @JsonProperty("compatibilityLevel")
   public String getCompatibilityLevel() {
     return compatibilityLevel;
