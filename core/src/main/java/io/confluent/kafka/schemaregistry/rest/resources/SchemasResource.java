@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -69,12 +70,14 @@ public class SchemasResource {
       description = "Get the schemas matching the specified parameters.",
       responses = {
         @ApiResponse(responseCode = "200",
-          description = "The schemas matching the specified parameters", content = @Content(
+          description = "List of schemas matching the specified parameters.", content = @Content(
               array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
-                  implementation = String.class)))),
+                  implementation = Schema.class)))),
         @ApiResponse(responseCode = "500",
-            description = "Error code 50001 -- Error in the backend data store\n")
-      })
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("schemas.get-schemas")
   public List<Schema> getSchemas(
@@ -118,13 +121,18 @@ public class SchemasResource {
   @Operation(summary = "Get schema string by ID",
       description = "Retrieves the schema string identified by the input ID.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The schema string",
+        @ApiResponse(responseCode = "200", description = "The schema string.",
             content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                 implementation = SchemaString.class))),
-        @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not found\n"),
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. Error code 40403 indicates schema not found.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
-            description = "Error code 50001 -- Error in the backend data store\n")
-      })
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("schemas.ids.get-schema")
   public SchemaString getSchema(
@@ -160,13 +168,18 @@ public class SchemasResource {
       description = "Retrieves all the subjects associated with a particular schema ID.",
       responses = {
         @ApiResponse(responseCode = "200",
-            description = "The subjects matching the specified parameters", content = @Content(
-                array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
-                    implementation = String.class)))),
-        @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not found\n"),
+          description = "List of subjects matching the specified parameters.",
+          content = @Content(array = @ArraySchema(
+            schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class)))),
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. Error code 40403 indicates schema not found.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                    ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
-            description = "Error code 50001 -- Error in the backend data store\n")
-      })
+            description = "Internal Server Error. "
+                    + "Error code 50001 indicates a failure in the backend data store.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                    ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   public Set<String> getSubjects(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
@@ -202,15 +215,19 @@ public class SchemasResource {
       description = "Get all the subject-version pairs associated with the input ID.",
       responses = {
         @ApiResponse(responseCode = "200",
-            description = "The subject versions matching the specified parameters",
-            content = @Content(array = @ArraySchema(
-                schema = @io.swagger.v3.oas.annotations.media.Schema(
-                    implementation = SubjectVersion.class)))),
-        @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not "
-            + "found\n"),
-        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
-            + "backend data store\n")
-      })
+          description = "List of subject versions matching the specified parameters.",
+          content = @Content(array = @ArraySchema(
+                  schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                          SubjectVersion.class)))),
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. Error code 40403 indicates schema not found.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   public List<SubjectVersion> getVersions(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
@@ -245,13 +262,17 @@ public class SchemasResource {
   @Operation(summary = "Get schema by ID",
       description = "Retrieves the schema identified by the input ID.",
       responses = {
-          @ApiResponse(responseCode = "200", description = "schema", content = @Content(
+          @ApiResponse(responseCode = "200", description = "Raw schema string.", content = @Content(
              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class))),
-          @ApiResponse(responseCode = "404", description = "Error code "
-                  + "40403 -- Schema not found\n"),
-          @ApiResponse(responseCode = "500", description = "Error code "
-                  + "50001 -- Error in the backend data store\n")
-      })
+          @ApiResponse(responseCode = "404",
+            description = "Not Found. Error code 40403 indicates schema not found.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                    ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+            description = "Internal Server Error. "
+                    + "Error code 50001 indicates a failure in the backend data store.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                    ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("schemas.ids.get-schema.only")
   public String getSchemaOnly(
@@ -285,13 +306,15 @@ public class SchemasResource {
   @Operation(summary = "List supported schema types",
       description = "Retrieve the schema types supported by this registry.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The supported schema types",
+        @ApiResponse(responseCode = "200", description = "List of supported schema types.",
             content = @Content(array = @ArraySchema(
                 schema = @io.swagger.v3.oas.annotations.media.Schema(
                     implementation = String.class)))),
         @ApiResponse(responseCode = "500",
-            description = "Error code 50001 -- Error in the backend data store\n")
-      })
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   public Set<String> getSchemaTypes() {
     return schemaRegistry.schemaTypes();
