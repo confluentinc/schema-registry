@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -78,16 +79,25 @@ public class CompatibilityResource {
               + "compatibility level was never changed, then the global compatibility level "
               + "applies (http:get:: /config).",
       responses = {
-          @ApiResponse(responseCode = "200", description = "Compatibility check result",
+          @ApiResponse(responseCode = "200", description = "Compatibility check result.",
             content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
               CompatibilityCheckResponse.class))),
-          @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
-              + "Error code 40402 -- Version not found"),
-          @ApiResponse(responseCode = "422", description =
-              "Error code 42201 -- Invalid schema or schema type\n"
-                  + "Error code 42202 -- Invalid version"),
-          @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
-              + "backend data store")
+          @ApiResponse(responseCode = "404",
+            description = "Not Found. Error code 40401 indicates subject not found. "
+              + "Error code 40402 indicates version not found.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+              ErrorMessage.class))),
+          @ApiResponse(responseCode = "422",
+            description = "Unprocessable entity. "
+                  + "Error code 42201 indicates an invalid schema or schema type. "
+                  + "Error code 42202 indicates an invalid version.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+              ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+            description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+              ErrorMessage.class)))
       })
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("compatibility.subjects.versions.verify")
@@ -171,14 +181,20 @@ public class CompatibilityResource {
               + "compatibility level was never changed, then the global compatibility level "
               + "applies (http:get:: /config).",
       responses = {
-          @ApiResponse(responseCode = "200", description = "Compatibility check result",
+          @ApiResponse(responseCode = "200", description = "Compatibility check result.",
             content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
               CompatibilityCheckResponse.class))),
-          @ApiResponse(responseCode = "422", description =
-              "Error code 42201 -- Invalid schema or schema type\n"
-                  + "Error code 42202 -- Invalid version"),
-          @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
-              + "backend data store")
+          @ApiResponse(responseCode = "422",
+            description = "Unprocessable Entity. "
+                    + "Error code 42201 indicates an invalid schema or schema type. "
+                    + "Error code 42202 indicates an invalid version.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+              ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+            description = "Internal Server Error. "
+                    + "Error code 50001 indicates a failure in the backend data store.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+              ErrorMessage.class)))
       })
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("compatibility.subjects.versions.verify")
