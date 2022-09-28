@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
@@ -84,12 +85,18 @@ public class SubjectsResource {
       + " If so, this returns the schema string along with its globally unique identifier, its "
       + "version under this subject and the subject name.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The schema", content = @Content(schema =
+        @ApiResponse(responseCode = "200", description = "The schema.", content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(implementation = Schema.class))),
-        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
-          + "Error code 40403 -- Schema not found"),
-        @ApiResponse(responseCode = "500", description = "Internal server error")
-      })
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. "
+                  + "Error code 40401 indicates subject not found. "
+                  + "Error code 40403 indicates schema not found.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+          description = "Internal Server Error. ",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("subjects.get-schema")
   public void lookUpSchemaUnderSubject(
@@ -136,11 +143,14 @@ public class SubjectsResource {
       description = "Retrieves a list of registered subjects matching specified parameters.",
       responses = {
         @ApiResponse(responseCode = "200",
-            description = "The subjects matching the specified parameters", content = @Content(
-                array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
-                    implementation = String.class)))),
+          description = "List of subjects matching the specified parameters.", content = @Content(
+                  array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                          implementation = String.class)))),
         @ApiResponse(responseCode = "500",
-            description = "Error code 50001 -- Error in the backend datastore")
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))
       })
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("subjects.list")
@@ -173,10 +183,15 @@ public class SubjectsResource {
         @ApiResponse(responseCode = "200", description = "Operation succeeded. "
           + "Returns list of schema versions deleted", content = @Content(array = @ArraySchema(
             schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class)))),
-        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. Error code 40401 indicates subject not found.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
-          description = "Error code 50001 -- Error in the backend datastore")
-      })
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("subjects.delete-subject")
   public void deleteSubject(
