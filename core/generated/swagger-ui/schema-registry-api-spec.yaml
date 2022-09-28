@@ -1864,7 +1864,7 @@ paths:
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly_2
+      operationId: getSchemaOnly_1
       parameters:
       - name: subject
         in: path
@@ -1955,7 +1955,7 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly
+      operationId: getSchemaOnly_2
       parameters:
       - name: id
         in: path
@@ -2082,8 +2082,13 @@ components:
           type: string
           description: Compatibility Level
           enum:
-          - "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE,\
-            \ NONE"
+          - BACKWARD
+          - BACKWARD_TRANSITIVE
+          - FORWARD
+          - FORWARD_TRANSITIVE
+          - FULL
+          - FULL_TRANSITIVE
+          - NONE
       description: Config
     ConfigUpdateRequest:
       type: object
@@ -2092,8 +2097,13 @@ components:
           type: string
           description: Compatibility Level
           enum:
-          - "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE,\
-            \ NONE"
+          - BACKWARD
+          - BACKWARD_TRANSITIVE
+          - FORWARD
+          - FORWARD_TRANSITIVE
+          - FULL
+          - FULL_TRANSITIVE
+          - NONE
       description: Config update request
     Mode:
       type: object
@@ -2102,7 +2112,10 @@ components:
           type: string
           description: Schema Registry operating mode
           enum:
-          - "READWRITE, READONLY, READONLY_OVERRIDE, IMPORT"
+          - READWRITE
+          - READONLY
+          - READONLY_OVERRIDE
+          - IMPORT
       description: Schema Registry operating mode
     ModeUpdateRequest:
       type: object
@@ -2111,7 +2124,10 @@ components:
           type: string
           description: Schema Registry operating mode
           enum:
-          - "READWRITE, READONLY, READONLY_OVERRIDE, IMPORT"
+          - READWRITE
+          - READONLY
+          - READONLY_OVERRIDE
+          - IMPORT
       description: Mode update request
     SchemaString:
       type: object
