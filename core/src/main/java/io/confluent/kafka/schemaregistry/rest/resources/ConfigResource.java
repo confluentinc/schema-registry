@@ -225,10 +225,11 @@ public class ConfigResource {
 
   @GET
   @DocumentedName("getGlobalConfig")
-  @Operation(summary = "Get global compatibility level.", responses = {
-      @ApiResponse(responseCode = "200", description = "The global compatibility level.",
+  @Operation(summary = "Get global compatibility level",
+      description = "Retrieves the global compatibility level.", responses = {
+        @ApiResponse(responseCode = "200", description = "The global compatibility level.",
           content = @Content(schema = @Schema(implementation = Config.class))),
-      @ApiResponse(responseCode = "500",
+        @ApiResponse(responseCode = "500",
           description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
@@ -246,8 +247,9 @@ public class ConfigResource {
 
   @DELETE
   @DocumentedName("deleteGlobalConfig")
-  @Operation(summary = "Deletes the Global-level compatibility level config and "
-          + "revert to the global default.", responses = {
+  @Operation(summary = "Delete global compatibility level",
+          description = "Deletes the global compatibility level config and reverts to the default.",
+          responses = {
             @ApiResponse(responseCode = "200",
               description = "Operation succeeded. Returns old global compatibility level.",
               content = @Content(schema = @Schema(implementation = CompatibilityLevel.class))),
