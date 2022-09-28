@@ -26,8 +26,6 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaUtils.mapper;
-
 public class DeriveJsonSchema extends DeriveSchema {
 
   public DeriveJsonSchema() {
@@ -61,7 +59,7 @@ public class DeriveJsonSchema extends DeriveSchema {
                                               ArrayList<ObjectNode> records,
                                               ArrayList<ObjectNode> arrays) {
 
-    ArrayNode jsonItems = DeriveSchemaUtils.mapper.createArrayNode();
+    ArrayNode jsonItems = mapper.createArrayNode();
     // Adding primitive types to items' list
     for (ObjectNode item : primitives) {
       jsonItems.add(item);
@@ -79,7 +77,7 @@ public class DeriveJsonSchema extends DeriveSchema {
 
     if (jsonItems.size() > 1) {
       // If there are more than 1 different items, use oneOf to represent them
-      ObjectNode oneOfDataType = DeriveSchemaUtils.mapper.createObjectNode();
+      ObjectNode oneOfDataType = mapper.createObjectNode();
       ArrayNode sortedJsonItems = sortJsonArrayList(jsonItems);
       oneOfDataType.set("oneOf", sortedJsonItems);
       mergedArray.set("items", oneOfDataType);
@@ -88,7 +86,7 @@ public class DeriveJsonSchema extends DeriveSchema {
       mergedArray.set("items", jsonItems.get(0));
     } else {
       // No items found, setting items as empty object
-      mergedArray.set("items", DeriveSchemaUtils.mapper.createObjectNode());
+      mergedArray.set("items", mapper.createObjectNode());
     }
 
     return mergedArray;

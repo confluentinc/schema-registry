@@ -17,30 +17,24 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.Iterator;
 import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+
+import java.util.stream.Collectors;
 
 public class DeriveSchemaUtils {
 
-  public static final ObjectMapper mapper = new ObjectMapper();
-
-  public static ArrayList<ObjectNode> getUnique(ArrayList<ObjectNode> schemas) {
-    Set<ObjectNode> setWithWrappedObjects = new HashSet<>(schemas);
-    ArrayList<ObjectNode> uniqueList = new ArrayList<>();
-    for (ObjectNode objectNode : setWithWrappedObjects) {
-      if (objectNode != null && !objectNode.isEmpty()) {
-        uniqueList.add(objectNode);
-      }
-    }
-    return uniqueList;
+  public static List<ObjectNode> getUnique(List<ObjectNode> schemas) {
+    return schemas
+        .stream()
+        .distinct()
+        .collect(Collectors.toList());
   }
 
   public static List<JsonNode> getListFromArray(ArrayNode field) {
@@ -91,12 +85,10 @@ public class DeriveSchemaUtils {
   }
 
   static ObjectNode sortObjectNode(ObjectNode node) {
-    ObjectNode sortedObjectNode = DeriveSchemaUtils.mapper.createObjectNode();
-    List<String> sortedKeys = DeriveSchemaUtils.getSortedKeys(node);
-    for (String key : sortedKeys) {
+    ObjectNode sortedObjectNode = JacksonMapper.INSTANCE.createObjectNode();
+    for (String key : DeriveSchemaUtils.getSortedKeys(node)) {
       sortedObjectNode.set(key, node.get(key));
     }
     return sortedObjectNode;
   }
-
 }

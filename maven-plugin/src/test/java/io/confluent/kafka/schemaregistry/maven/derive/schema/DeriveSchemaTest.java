@@ -23,6 +23,7 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
@@ -73,7 +74,7 @@ public class DeriveSchemaTest {
     ObjectNode schema3 = (ObjectNode) mapper.readTree(recordWithString);
     ObjectNode schema4 = (ObjectNode) mapper.readTree(recordWithArrayOfStrings);
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema1, schema2, schema2, schema3, schema4));
-    ArrayList<ObjectNode> uniqueSchemas = DeriveSchemaUtils.getUnique(schemas);
+    List<ObjectNode> uniqueSchemas = DeriveSchemaUtils.getUnique(schemas);
     assertEquals(uniqueSchemas.size(), 4);
     for (ObjectNode schema : schemas) {
       assert (uniqueSchemas.contains(schema));

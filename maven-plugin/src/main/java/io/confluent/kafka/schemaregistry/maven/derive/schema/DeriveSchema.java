@@ -18,8 +18,10 @@ package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,6 +32,7 @@ import java.util.Map;
 public abstract class DeriveSchema {
 
   protected final HashMap<String, String> classToDataType = new HashMap<>();
+  protected static final ObjectMapper mapper = JacksonMapper.INSTANCE;
 
   private ArrayList<ObjectNode> getSchemaOfAllElements(List<JsonNode> messages, String name)
       throws JsonProcessingException {
@@ -50,7 +53,7 @@ public abstract class DeriveSchema {
     } else if (message instanceof ArrayNode) {
       return getSchemaForArray(DeriveSchemaUtils.getListFromArray((ArrayNode) message), name);
     } else {
-      ObjectNode objectNode = DeriveSchemaUtils.mapper.valueToTree(message);
+      ObjectNode objectNode = mapper.valueToTree(message);
       return getSchemaForRecord(objectNode);
     }
   }
@@ -62,7 +65,7 @@ public abstract class DeriveSchema {
     if (classToDataType.containsKey(jsonInferredType)) {
       String schemaString = String.format("{\"type\" : \"%s\"}",
           classToDataType.get(jsonInferredType));
-      return Optional.of(DeriveSchemaUtils.mapper.readValue(schemaString, ObjectNode.class));
+      return Optional.of(mapper.readValue(schemaString, ObjectNode.class));
     }
     return Optional.empty();
   }
@@ -70,7 +73,7 @@ public abstract class DeriveSchema {
   public ObjectNode getSchemaForArray(List<JsonNode> messages, String name)
       throws JsonProcessingException {
     // Generate Schema for Array type
-    ObjectNode schema = DeriveSchemaUtils.mapper.createObjectNode();
+    ObjectNode schema = mapper.createObjectNode();
     schema.put("type", "array");
     ArrayList<ObjectNode> schemaList = getSchemaOfAllElements(messages, name);
     ObjectNode items = mergeArrays(schemaList, false);
@@ -81,9 +84,9 @@ public abstract class DeriveSchema {
   public ObjectNode getSchemaForRecord(ObjectNode message)
       throws JsonProcessingException {
     // Generate Schema for Record type
-    ObjectNode schema = DeriveSchemaUtils.mapper.createObjectNode();
+    ObjectNode schema = mapper.createObjectNode();
     schema.put("type", "object");
-    schema.set("properties", DeriveSchemaUtils.mapper.createObjectNode());
+    schema.set("properties", mapper.createObjectNode());
 
     // Loop over each field, get type of each field and insert into schema
     for (String fieldName : DeriveSchemaUtils.getSortedKeys(message)) {
@@ -96,9 +99,9 @@ public abstract class DeriveSchema {
 
   public ObjectNode mergeRecords(ArrayList<ObjectNode> recordList) {
     // Merge all fields in all the records together into one record
-    ObjectNode mergedRecord = DeriveSchemaUtils.mapper.createObjectNode();
+    ObjectNode mergedRecord = mapper.createObjectNode();
     mergedRecord.put("type", "object");
-    ObjectNode properties = DeriveSchemaUtils.mapper.createObjectNode();
+    ObjectNode properties = mapper.createObjectNode();
     HashMap<String, ArrayList<ObjectNode>> fieldToItsType = new HashMap<>();
 
     /*
@@ -128,7 +131,7 @@ public abstract class DeriveSchema {
 
   public ObjectNode mergeArrays(ArrayList<ObjectNode> arrayList, boolean useItems) {
     // Merging different field types into one type
-    ObjectNode mergedArray = DeriveSchemaUtils.mapper.createObjectNode();
+    ObjectNode mergedArray = mapper.createObjectNode();
     mergedArray.put("type", "array");
 
     ArrayList<ObjectNode> primitives = new ArrayList<>();
