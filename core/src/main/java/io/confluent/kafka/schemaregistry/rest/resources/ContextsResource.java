@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -56,11 +57,12 @@ public class ContextsResource {
   @Operation(summary = "List contexts",
       description = "Retrieves a list of contexts.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The contexts", content = @Content(
+        @ApiResponse(responseCode = "200", description = "The contexts.", content = @Content(
             array = @ArraySchema(schema = @Schema(implementation = String.class)))),
         @ApiResponse(responseCode = "500",
-                     description = "Error code 50001 -- Error in the backend data store")
-      })
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store. ",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("contexts.list")
   public List<String> listContexts() {
