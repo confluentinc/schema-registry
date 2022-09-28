@@ -21,6 +21,7 @@ import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
@@ -81,14 +82,20 @@ public class ConfigResource {
       description = "Update compatibility level for the specified subject. "
         + "On success, echoes the original request back to the client.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The original request", content = @Content(
-            schema = @Schema(implementation = ConfigUpdateRequest.class))),
-        @ApiResponse(responseCode = "422", description =
-            "Error code 42203 -- Invalid compatibility level\n"
-                + "Error code 40402 -- Version not found"),
-        @ApiResponse(responseCode = "500", description =
-           "Error code 50001 -- Error in the backend data store\n"
-                + "Error code 50003 -- Error while forwarding the request to the primary")})
+        @ApiResponse(responseCode = "200", description = "The original request",
+            content = @Content(schema = @Schema(implementation = ConfigUpdateRequest.class))),
+        @ApiResponse(responseCode = "404",
+            description = "Not Found. Error code 40401 indicates subject not found.",
+            content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "422",
+            description = "Unprocessable Entity. "
+                    + "Error code 42203 indicates invalid compatibility level.",
+            content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+            description = "Internal Server Error. "
+                    + "Error code 50001 indicates a failure in the backend data store. "
+                    + "Error code 50003 indicates a failure forwarding the request to the primary.",
+            content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   public ConfigUpdateRequest updateSubjectLevelConfig(
       @Parameter(description = "Name of the subject", required = true)
@@ -134,12 +141,15 @@ public class ConfigResource {
   @Operation(summary = "Get subject compatibility level",
       description = "Retrieves compatibility level for a subject.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The subject compatibility level",
+        @ApiResponse(responseCode = "200", description = "The subject compatibility level.",
             content = @Content(schema = @Schema(implementation = Config.class))),
-        @ApiResponse(responseCode = "404", description = "Subject not found"),
-        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
-          + "data store")
-      })
+        @ApiResponse(responseCode = "404",
+            description = "Not Found. Error code 40401 indicates subject not found.",
+            content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+            description = "Internal Server Error. "
+                    + "Error code 50001 indicates a failure in the backend data store.",
+            content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   public Config getSubjectLevelConfig(
       @Parameter(description = "Name of the subject", required = true)
@@ -174,13 +184,17 @@ public class ConfigResource {
   @Operation(summary = "Update global compatibility level",
       description = "Updates the global compatibility level. "
       + "On success, echoes the original request back to the client.", responses = {
-        @ApiResponse(responseCode = "200", description = "The original request",
+        @ApiResponse(responseCode = "200", description = "The original request.",
             content = @Content(schema = @Schema(implementation = ConfigUpdateRequest.class))),
-        @ApiResponse(responseCode = "422", description = "Error code 42203 -- Invalid compatibility"
-            + " level"),
-        @ApiResponse(responseCode = "500", description =
-            "Error code 50001 -- Error in the backend data store\n"
-               + "Error code 50003 -- Error while forwarding the request to the primary\n")})
+        @ApiResponse(responseCode = "422",
+            description = "Unprocessable Entity. "
+                    + "Error code 42203 indicates invalid compatibility level.",
+            content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store. "
+                  + "Error code 50003 indicates a failure forwarding the request to the primary.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   public ConfigUpdateRequest updateTopLevelConfig(
       @Context HttpHeaders headers,
@@ -212,11 +226,12 @@ public class ConfigResource {
   @GET
   @DocumentedName("getGlobalConfig")
   @Operation(summary = "Get global compatibility level.", responses = {
-      @ApiResponse(responseCode = "200", description = "The global compatibility level",
+      @ApiResponse(responseCode = "200", description = "The global compatibility level.",
           content = @Content(schema = @Schema(implementation = Config.class))),
-      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
-          + "data store")
-  })
+      @ApiResponse(responseCode = "500",
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   public Config getTopLevelConfig() {
     Config config;
@@ -232,13 +247,14 @@ public class ConfigResource {
   @DELETE
   @DocumentedName("deleteGlobalConfig")
   @Operation(summary = "Deletes the Global-level compatibility level config and "
-      + "revert to the global default.", responses = {
-        @ApiResponse(responseCode = "200", description = "Operation succeeded. "
-                  + "Returns old global compatibility level",
-                  content = @Content(schema = @Schema(implementation = CompatibilityLevel.class))),
-        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
-          + "datastore")
-      })
+          + "revert to the global default.", responses = {
+            @ApiResponse(responseCode = "200",
+              description = "Operation succeeded. Returns old global compatibility level.",
+              content = @Content(schema = @Schema(implementation = CompatibilityLevel.class))),
+            @ApiResponse(responseCode = "500",
+              description = "Internal Server Error. "
+                          + "Error code 50001 indicates a failure in the backend data store.",
+              content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   public void deleteTopLevelConfig(
       final @Suspended AsyncResponse asyncResponse,
@@ -271,13 +287,16 @@ public class ConfigResource {
   @Operation(summary = "Delete subject compatibility level",
       description = "Deletes the specified subject-level compatibility level config and "
       + "reverts to the global default.", responses = {
-        @ApiResponse(responseCode = "200", description = "Operation succeeded. "
-          + "Returns old compatibility level",
+        @ApiResponse(responseCode = "200",
+          description = "Operation succeeded. Returns old compatibility level.",
           content = @Content(schema = @Schema(implementation = CompatibilityLevel.class))),
-        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
-        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
-          + "datastore")
-      })
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. Error code 40401 indicates subject not found.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   public void deleteSubjectConfig(
       final @Suspended AsyncResponse asyncResponse,
