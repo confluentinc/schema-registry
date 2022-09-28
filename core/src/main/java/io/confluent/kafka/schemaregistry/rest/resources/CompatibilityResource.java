@@ -97,8 +97,7 @@ public class CompatibilityResource {
             description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store.",
             content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
-              ErrorMessage.class)))
-      })
+              ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("compatibility.subjects.versions.verify")
   public void testCompatibilityBySubjectName(
@@ -194,8 +193,7 @@ public class CompatibilityResource {
             description = "Internal Server Error. "
                     + "Error code 50001 indicates a failure in the backend data store.",
             content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
-              ErrorMessage.class)))
-      })
+              ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("compatibility.subjects.versions.verify")
   public void testCompatibilityForSubject(
