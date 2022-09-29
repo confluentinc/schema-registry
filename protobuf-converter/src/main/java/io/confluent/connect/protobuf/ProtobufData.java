@@ -1062,7 +1062,8 @@ public class ProtobufData {
 
   private SchemaBuilder toMapSchema(ToConnectContext ctx, Descriptor descriptor) {
     List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
-    String name = ProtobufSchema.toMapField(descriptor.getName());
+    String name = ProtobufSchema.toMapField(
+        enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName());
     return SchemaBuilder.map(toConnectSchema(ctx, fieldDescriptors.get(0)),
         toConnectSchema(ctx, fieldDescriptors.get(1))
     ).name(name);
