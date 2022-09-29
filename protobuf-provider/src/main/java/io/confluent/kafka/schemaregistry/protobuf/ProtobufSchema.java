@@ -1716,10 +1716,13 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public static String toMapField(String s) {
-    if (s.endsWith(MAP_ENTRY_SUFFIX)) {
-      s = s.substring(0, s.length() - MAP_ENTRY_SUFFIX.length());
-      s = UPPER_CAMEL.to(LOWER_UNDERSCORE, s);
+    String[] parts = s.split("\\.");
+    String lastPart = parts[parts.length - 1];
+    if (lastPart.endsWith(MAP_ENTRY_SUFFIX)) {
+      lastPart = lastPart.substring(0, lastPart.length() - MAP_ENTRY_SUFFIX.length());
+      lastPart = UPPER_CAMEL.to(LOWER_UNDERSCORE, lastPart);
+      parts[parts.length - 1] = lastPart;
     }
-    return s;
+    return String.join(".", parts);
   }
 }
