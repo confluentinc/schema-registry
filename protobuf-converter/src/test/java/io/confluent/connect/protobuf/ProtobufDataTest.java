@@ -2179,6 +2179,36 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testToConnectFullyQualifiedMapSchema() {
+    String schema = "syntax = \"proto3\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.connect.protobuf.test\";\n"
+        + "\n"
+        + "message Customer {\n"
+        + "  map<string,string> tags = 1;\n"
+        + "  Meta meta = 2;\n"
+        + "}\n"
+        + "\n"
+        + "message Meta {\n"
+        + "  map<string,Value> tags = 2;\n"
+        + "}\n"
+        + "\n"
+        + "message Value{\n"
+        + "  float a=1;\n"
+        + "  float b=2;\n"
+        + "}\n";
+
+    ProtobufSchema protobufSchema = new ProtobufSchema(schema);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(ProtobufDataConfig.ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG, true);
+    ProtobufData protobufData = new ProtobufData(new ProtobufDataConfig(configs));
+    Schema actual = protobufData.toConnectSchema(protobufSchema);
+    assertEquals("Customer.tags",
+        actual.field("tags").schema().name());
+    assertEquals("Meta.tags", actual.field("meta").schema().field("tags").schema().name());
+  }
+
+  @Test
   public void testToConnectMultipleMapReferences() throws Exception {
     AttributeFieldEntry entry1 = AttributeFieldEntry.newBuilder()
         .setKey("key1").setValue("value1").build();
