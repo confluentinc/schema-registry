@@ -17,16 +17,13 @@
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
@@ -47,17 +44,6 @@ public class DeriveJsonSchemaTest {
       throws JsonProcessingException {
     Optional<ObjectNode> primitiveSchema = derive.getPrimitiveSchema(mapper.readTree(message));
     assert !primitiveSchema.isPresent();
-  }
-
-  public void generateSchemaAndCheckExpected(List<String> messages, String expectedSchema)
-      throws JsonProcessingException {
-    List<JsonNode> messagesJson = new ArrayList<>();
-    for (String message : messages) {
-      messagesJson.add(mapper.readTree(message));
-    }
-    JsonSchema jsonSchema = new JsonSchema(derive.getSchemaForArray(messagesJson, "ArrayObject"));
-    assertEquals(expectedSchema, jsonSchema.toString());
-    jsonSchema.validate();
   }
 
   public void generateSchemaAndCheckExpected(String message, String expectedSchema)
@@ -132,58 +118,6 @@ public class DeriveJsonSchemaTest {
     String arrayOfRecordsAndArrays = "{\"ArrayOfRecordsAndArrays\": [ {\"J\":[1,11]}, {\"J\":{\"J\":12}},  {\"J\":{\"J\": true}}]}";
     String expectedSchema2 = "{\"type\":\"object\",\"properties\":{\"ArrayOfRecordsAndArrays\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"J\":{\"oneOf\":[{\"type\":\"array\",\"items\":{\"type\":\"number\"}},{\"type\":\"object\",\"properties\":{\"J\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"}]}}}]}}}}}}";
     generateSchemaAndCheckExpected(arrayOfRecordsAndArrays, expectedSchema2);
-  }
-
-  @Test
-  public void testDeriveArrayPrimitive() throws JsonProcessingException {
-    // Merging number types
-    String number12 = "12";
-    String number45 = "45";
-    String expectedSchema = "{\"type\":\"array\",\"items\":{\"type\":\"number\"}}";
-    generateSchemaAndCheckExpected(Arrays.asList(number12, number45, number12), expectedSchema);
-  }
-
-  @Test
-  public void testDeriveArrayDifferentPrimitive() throws JsonProcessingException {
-    // Merging number types and boolean types
-    String number12 = "12";
-    String number45 = "true";
-    String expectedSchema = "{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"}]}}";
-    generateSchemaAndCheckExpected(Arrays.asList(number12, number45, number12), expectedSchema);
-  }
-
-  @Test
-  public void testDeriveArrayTypeArray() throws JsonProcessingException {
-    // Merging Arrays of different types
-    String arrayOfStrings = "[1, 2]";
-    String arrayOfIntegers = "[3.5, true]";
-    String expectedSchema = "{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"boolean\"},{\"type\":\"number\"}]}}}";
-    generateSchemaAndCheckExpected(Arrays.asList(arrayOfStrings, arrayOfIntegers, arrayOfStrings, arrayOfIntegers), expectedSchema);
-  }
-
-  @Test
-  public void testDeriveArrayTypeArrayComplex() throws JsonProcessingException {
-    // Testing recursive nesting of arrays
-    String array2d = "[[], []]";
-    String expectedSchema2d = "{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{}}}}";
-    generateSchemaAndCheckExpected(Arrays.asList(array2d, array2d), expectedSchema2d);
-    String array3d = "[ [[1,2]], [[1,22]] ]";
-    String expectedSchema3d = "{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}}}";
-    generateSchemaAndCheckExpected(Arrays.asList(array3d, array2d), expectedSchema3d);
-  }
-
-  @Test
-  public void testDeriveArrayRecords() throws JsonProcessingException {
-    // Merging Records with different field names
-    String arrayOfStrings = "{\"ArrayString\": [\"John Smith\", \"Tom Davies\"]}";
-    String arrayOfIntegers = "{\"ArrayInteger\": [1, 2]}";
-    String expectedSchema = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"ArrayInteger\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"ArrayString\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}";
-    generateSchemaAndCheckExpected(Arrays.asList(arrayOfStrings, arrayOfIntegers, arrayOfStrings, arrayOfIntegers), expectedSchema);
-
-    // Merging Records with same name different type
-    String arrayOfIntegersSameName = "{\"ArrayString\": [1, 2]}";
-    String expectedSchemaSameName = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"ArrayString\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"number\"},{\"type\":\"string\"}]}}}}}";
-    generateSchemaAndCheckExpected(Arrays.asList(arrayOfStrings, arrayOfIntegersSameName), expectedSchemaSameName);
   }
 
   @Test

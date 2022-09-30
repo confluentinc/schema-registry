@@ -50,7 +50,6 @@ public class DeriveJsonSchema extends DeriveSchema {
         .distinct()
         .sorted(Comparator.comparing(o -> o.get("type").asText()))
         .collect(Collectors.toList());
-    //return the same Json structure as in method parameter
     return mapper.createObjectNode().arrayNode().addAll(sortedDataNodes);
   }
 

@@ -22,9 +22,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 
 import java.util.stream.Collectors;
 
@@ -90,5 +92,20 @@ public class DeriveSchemaUtils {
       sortedObjectNode.set(key, node.get(key));
     }
     return sortedObjectNode;
+  }
+
+  static void mergeNumberTypes(List<ObjectNode> primitives) {
+    // Checking if anyone element is double type
+    Optional<ObjectNode> decimalType = primitives.stream()
+        .filter(o -> o.get("type").asText().equals("double")).findAny();
+    if (!decimalType.isPresent()) {
+      return;
+    }
+
+    // If any other element is of type integer/long is marked as double
+    List<String> integerTypes = Arrays.asList("int", "int32", "int64", "long");
+    primitives.stream()
+        .filter(o -> integerTypes.contains(o.get("type").asText()))
+        .forEach(o -> o.put("type", "double"));
   }
 }

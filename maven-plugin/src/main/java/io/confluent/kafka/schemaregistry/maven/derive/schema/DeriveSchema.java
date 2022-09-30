@@ -76,9 +76,14 @@ public abstract class DeriveSchema {
     ObjectNode schema = mapper.createObjectNode();
     schema.put("type", "array");
     ArrayList<ObjectNode> schemaList = getSchemaOfAllElements(messages, name);
-    ObjectNode items = mergeArrays(schemaList, false);
-    schema.set("items", items.get("items"));
-    return schema;
+    try {
+      ObjectNode items = mergeArrays(schemaList, false);
+      schema.set("items", items.get("items"));
+      return schema;
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException(
+          String.format("unable to find schema for array %s", name), e);
+    }
   }
 
   public ObjectNode getSchemaForRecord(ObjectNode message)
@@ -102,7 +107,7 @@ public abstract class DeriveSchema {
     ObjectNode mergedRecord = mapper.createObjectNode();
     mergedRecord.put("type", "object");
     ObjectNode properties = mapper.createObjectNode();
-    HashMap<String, ArrayList<ObjectNode>> fieldToItsType = new HashMap<>();
+    HashMap<String, ArrayList<ObjectNode>> fieldToType = new HashMap<>();
 
     /*
       Loop through every record group schemas by field name
@@ -112,17 +117,23 @@ public abstract class DeriveSchema {
       ObjectNode fields = (ObjectNode) record.get("properties");
       for (String fieldName : DeriveSchemaUtils.getSortedKeys(fields)) {
         ArrayList<ObjectNode> listOfTypesForField =
-            fieldToItsType.getOrDefault(fieldName, new ArrayList<>());
+            fieldToType.getOrDefault(fieldName, new ArrayList<>());
         listOfTypesForField.add((ObjectNode) fields.get(fieldName));
-        fieldToItsType.put(fieldName, listOfTypesForField);
+        fieldToType.put(fieldName, listOfTypesForField);
       }
     }
 
-    // Merging type for each field using fieldToItsType map
-    for (Map.Entry<String, ArrayList<ObjectNode>> entry : fieldToItsType.entrySet()) {
-      ArrayList<ObjectNode> fieldsType = fieldToItsType.get(entry.getKey());
-      ObjectNode items = mergeArrays(fieldsType, false);
-      properties.set(entry.getKey(), items.get("items"));
+    // Merging type for each field using fieldToType map
+    for (Map.Entry<String, ArrayList<ObjectNode>> entry : fieldToType.entrySet()) {
+      ArrayList<ObjectNode> fieldsType = fieldToType.get(entry.getKey());
+      try {
+        ObjectNode items = mergeArrays(fieldsType, false);
+        properties.set(entry.getKey(), items.get("items"));
+      } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException(
+            String.format("unable to merge field %s with types: %s",
+                entry.getKey(), fieldsType), e);
+      }
     }
 
     mergedRecord.set("properties", DeriveSchemaUtils.sortObjectNode(properties));
