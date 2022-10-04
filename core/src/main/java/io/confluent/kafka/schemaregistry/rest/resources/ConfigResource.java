@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOBAL_RESOURCE_NAME;
+import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.GLOBAL_RESOURCE_NAME;
 
 import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
@@ -24,12 +24,13 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -68,11 +69,11 @@ public class ConfigResource {
 
   public static final String apiTag = "Config (v1)";
   private static final Logger log = LoggerFactory.getLogger(ConfigResource.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
-  public ConfigResource(KafkaSchemaRegistry schemaRegistry) {
+  public ConfigResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
@@ -131,6 +132,9 @@ public class ConfigResource {
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding update config request"
                                                     + " to the leader", e);
+    } catch (SchemaRegistryException e) {
+      // TODO
+      throw new RuntimeException(e);
     }
 
     return request;
@@ -175,6 +179,9 @@ public class ConfigResource {
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get the configs for subject "
                                   + subject, e);
+    } catch (SchemaRegistryException e) {
+      // TODO
+      throw new RuntimeException(e);
     }
 
     return config;
@@ -219,6 +226,9 @@ public class ConfigResource {
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding update config request"
                                                     + " to the leader", e);
+    } catch (SchemaRegistryException e) {
+      // TODO
+      throw new RuntimeException(e);
     }
 
     return request;
@@ -242,6 +252,9 @@ public class ConfigResource {
       config = new Config(compatibilityLevel == null ? null : compatibilityLevel.name);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get compatibility level", e);
+    } catch (SchemaRegistryException e) {
+      // TODO
+      throw new RuntimeException(e);
     }
     return config;
   }
@@ -270,7 +283,7 @@ public class ConfigResource {
       CompatibilityLevel currentCompatibility = schemaRegistry.getCompatibilityLevel(null);
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteCompatibilityConfigOrForward(null, headerProperties);
+      schemaRegistry.deleteCompatibilityConfig(null, headerProperties);
       deletedConfig = new Config(currentCompatibility.name);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
@@ -281,6 +294,9 @@ public class ConfigResource {
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding delete config request"
           + " to the leader", e);
+    } catch (SchemaRegistryException e) {
+      // TODO
+      throw new RuntimeException(e);
     }
     asyncResponse.resume(deletedConfig);
   }
@@ -321,7 +337,7 @@ public class ConfigResource {
 
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteCompatibilityConfigOrForward(subject, headerProperties);
+      schemaRegistry.deleteCompatibilityConfig(subject, headerProperties);
       deletedConfig = new Config(currentCompatibility.name);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
@@ -332,6 +348,9 @@ public class ConfigResource {
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding delete config request"
           + " to the leader", e);
+    } catch (SchemaRegistryException e) {
+      // TODO
+      throw new RuntimeException(e);
     }
     asyncResponse.resume(deletedConfig);
   }

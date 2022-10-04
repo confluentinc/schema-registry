@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOBAL_RESOURCE_NAME;
+import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.GLOBAL_RESOURCE_NAME;
 
 import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
@@ -38,7 +38,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedE
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -81,7 +81,7 @@ public class SubjectVersionsResource {
   public static final String apiTag = SubjectsResource.apiTag;
   private static final Logger log = LoggerFactory.getLogger(SubjectVersionsResource.class);
 
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
@@ -90,7 +90,7 @@ public class SubjectVersionsResource {
       + "returns the last registered schema under the specified subject. Note that there may be a "
       + "new latest schema that gets registered right after this request is served.";
 
-  public SubjectVersionsResource(KafkaSchemaRegistry registry) {
+  public SubjectVersionsResource(SchemaRegistry registry) {
     this.schemaRegistry = registry;
   }
 
@@ -387,7 +387,7 @@ public class SubjectVersionsResource {
     Schema schema = new Schema(subjectName, request);
     int id;
     try {
-      id = schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
+      id = schemaRegistry.register(subjectName, schema, normalize, headerProperties);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
@@ -505,7 +505,7 @@ public class SubjectVersionsResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
               headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
+      schemaRegistry.deleteSchemaVersion(headerProperties, subject,
               schema, permanentDelete);
     } catch (SchemaVersionNotSoftDeletedException e) {
       throw Errors.schemaVersionNotSoftDeletedException(e.getSubject(),

@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.rest.resources.ServerMetadataResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectVersionsResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfigException;
@@ -47,7 +48,7 @@ import java.util.Properties;
 public class SchemaRegistryRestApplication extends Application<SchemaRegistryConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryRestApplication.class);
-  private KafkaSchemaRegistry schemaRegistry = null;
+  private SchemaRegistry schemaRegistry = null;
   private List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions = null;
 
   public SchemaRegistryRestApplication(Properties props) throws RestConfigException {
@@ -157,7 +158,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   }
 
   // for testing purpose only
-  public KafkaSchemaRegistry schemaRegistry() {
+  public SchemaRegistry schemaRegistry() {
     return schemaRegistry;
   }
 }

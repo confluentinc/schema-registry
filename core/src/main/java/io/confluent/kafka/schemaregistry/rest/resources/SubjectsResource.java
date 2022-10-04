@@ -27,7 +27,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -70,10 +70,10 @@ public class SubjectsResource {
 
   public static final String apiTag = "Subjects (v1)";
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
-  public SubjectsResource(KafkaSchemaRegistry schemaRegistry) {
+  public SubjectsResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
@@ -216,7 +216,7 @@ public class SubjectsResource {
       }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties,
+      deletedVersions = schemaRegistry.deleteSubject(headerProperties,
               subject,
               permanentDelete);
     } catch (ReferenceExistsException e) {

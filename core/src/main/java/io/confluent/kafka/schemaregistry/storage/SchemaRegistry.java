@@ -20,26 +20,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 
 public interface SchemaRegistry extends SchemaVersionFetcher {
 
   String DEFAULT_TENANT = QualifiedSubject.DEFAULT_TENANT;
+  String GLOBAL_RESOURCE_NAME = "__GLOBAL";
 
   void init() throws SchemaRegistryException;
 
   Set<String> schemaTypes();
-
-  default int register(String subject, Schema schema) throws SchemaRegistryException {
-    return register(subject, schema, false);
-  }
-
-  int register(String subject, Schema schema, boolean normalize) throws SchemaRegistryException;
 
   default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {
     try {
@@ -48,11 +47,6 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       throw new RuntimeException(e);
     }
   }
-
-  Schema get(String subject, int version, boolean returnDeletedSchema)
-      throws SchemaRegistryException;
-
-  SchemaString get(int id, String subject) throws SchemaRegistryException;
 
   default Set<String> listSubjects() throws SchemaRegistryException {
     return listSubjects(false);
@@ -69,9 +63,6 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       throws SchemaRegistryException;
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
-
-  List<Integer> deleteSubject(String subject, boolean permanentDelete)
-      throws SchemaRegistryException;
 
   default Schema lookUpSchemaUnderSubject(
       String subject, Schema schema, boolean lookupDeletedSchema)
@@ -93,9 +84,6 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   void close();
 
-  void deleteSchemaVersion(String subject, Schema schema,
-                           boolean permanentDelete) throws SchemaRegistryException;
-
   default String tenant() {
     return DEFAULT_TENANT;
   }
@@ -112,4 +100,83 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   // Can be used to pass values between extensions
   Map<String, Object> properties();
+
+  void updateConfigOrForward(String subject, CompatibilityLevel compatibilityLevel,
+                             Map<String, String> headerProperties) throws SchemaRegistryException;
+
+  CompatibilityLevel getCompatibilityLevelInScope(String subject) throws SchemaRegistryException;
+
+  CompatibilityLevel getCompatibilityLevel(String subject) throws SchemaRegistryException;
+
+  void deleteCompatibilityConfig(String subject, Map<String, String> headerProperties)
+      throws SchemaRegistryException;
+
+  List<String> listContexts() throws SchemaRegistryException;
+
+  Schema lookUpSchemaUnderSubjectUsingContexts(String subject, Schema schema, boolean normalize,
+       boolean lookupDeletedSchema) throws SchemaRegistryException;
+
+  boolean hasSubjects(String subject, boolean lookupDeletedSchema) throws SchemaRegistryException;
+
+  Set<String> listSubjectsWithPrefix(String prefix, boolean lookupDeletedSubjects)
+      throws SchemaRegistryException;
+
+  List<Integer> deleteSubject(String subject, boolean permanentDelete)
+      throws SchemaRegistryException;
+
+  List<Integer> deleteSubject(Map<String, String> headerProperties, String subject,
+                              boolean permanentDelete) throws SchemaRegistryException;
+
+  Schema get(String subject, int version, boolean returnDeletedSchema)
+      throws SchemaRegistryException;
+
+  SchemaString get(int id, String subject) throws SchemaRegistryException;
+
+  SchemaString get(int id, String subject, String format, boolean fetchMaxId)
+      throws SchemaRegistryException;
+
+  Set<String> listSubjectsForId(int id, String subject, boolean returnDeleted)
+      throws SchemaRegistryException;
+
+  List<SubjectVersion> listVersionsForId(int id, String subject, boolean lookupDeleted)
+      throws SchemaRegistryException;
+
+  Schema getUsingContexts(String subject, int versionId,
+                          boolean lookupDeletedSchema) throws SchemaRegistryException;
+
+  List<Integer> getReferencedBy(String subject, VersionId versionId) throws SchemaRegistryException;
+
+  int register(String subject, Schema schema, boolean normalize) throws SchemaRegistryException;
+
+  default int register(String subject, Schema schema) throws SchemaRegistryException {
+    return register(subject, schema, false);
+  }
+
+  int register(String subjectName, Schema schema, boolean normalize,
+               Map<String, String> headerProperties) throws SchemaRegistryException;
+
+  void setMode(String subject, Mode mode, boolean force,
+               Map<String, String> headerProperties) throws SchemaRegistryException;
+
+  Mode getModeInScope(String subject) throws SchemaRegistryException;
+
+  Mode getMode(String subject) throws SchemaRegistryException;
+
+  void deleteSubjectMode(String subject, Map<String, String> headerProperties)
+      throws SchemaRegistryException;
+
+  boolean schemaVersionExists(String subject, VersionId versionId, boolean returnDeletedSchema)
+      throws SchemaRegistryException;
+
+  void deleteSchemaVersion(String subject, Schema schema,
+                           boolean permanentDelete) throws SchemaRegistryException;
+
+  void deleteSchemaVersion(Map<String, String> headerProperties, String subject,
+                           Schema schema, boolean permanentDelete) throws SchemaRegistryException;
+
+  String getKafkaClusterId();
+
+  String getGroupId();
+
+  MetricsContainer getMetricsContainer();
 }

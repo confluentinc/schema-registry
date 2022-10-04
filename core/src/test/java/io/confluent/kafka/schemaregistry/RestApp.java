@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.eclipse.jetty.server.Server;
@@ -97,22 +98,22 @@ public class RestApp {
   }
 
   public boolean isLeader() {
-    return restApp.schemaRegistry().isLeader();
+    return ((KafkaSchemaRegistry) restApp.schemaRegistry()).isLeader();
   }
 
   public void setLeader(SchemaRegistryIdentity schemaRegistryIdentity)
       throws SchemaRegistryException {
-    restApp.schemaRegistry().setLeader(schemaRegistryIdentity);
+    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setLeader(schemaRegistryIdentity);
   }
 
   public SchemaRegistryIdentity myIdentity() {
-    return restApp.schemaRegistry().myIdentity();
+    return ((KafkaSchemaRegistry) restApp.schemaRegistry()).myIdentity();
   }
 
   public SchemaRegistryIdentity leaderIdentity() {
-    return restApp.schemaRegistry().leaderIdentity();
+    return ((KafkaSchemaRegistry) restApp.schemaRegistry()).leaderIdentity();
   }
-  
+
   public SchemaRegistry schemaRegistry() {
     return restApp.schemaRegistry();
   }

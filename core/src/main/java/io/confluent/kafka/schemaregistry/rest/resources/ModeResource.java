@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOBAL_RESOURCE_NAME;
+import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.GLOBAL_RESOURCE_NAME;
 
 import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
@@ -29,7 +29,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -68,11 +68,11 @@ public class ModeResource {
 
   public static final String apiTag = "Modes (v1)";
   private static final Logger log = LoggerFactory.getLogger(ModeResource.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
-  public ModeResource(KafkaSchemaRegistry schemaRegistry) {
+  public ModeResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
@@ -126,7 +126,7 @@ public class ModeResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.setModeOrForward(subject, mode, force, headerProperties);
+      schemaRegistry.setMode(subject, mode, force, headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -136,6 +136,9 @@ public class ModeResource {
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding update mode request"
                                                     + " to the leader", e);
+    } catch (SchemaRegistryException e) {
+      // TODO
+      throw new RuntimeException(e);
     }
 
     return request;
@@ -259,7 +262,7 @@ public class ModeResource {
 
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteSubjectModeOrForward(subject, headerProperties);
+      schemaRegistry.deleteSubjectMode(subject, headerProperties);
       deleteModeResponse = new Mode(deletedMode.name());
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
@@ -270,6 +273,9 @@ public class ModeResource {
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding delete mode request"
           + " to the leader", e);
+    } catch (SchemaRegistryException e) {
+      // TODO
+      throw new RuntimeException(e);
     }
     asyncResponse.resume(deleteModeResponse);
   }

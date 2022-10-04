@@ -106,7 +106,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    */
   public static final int MIN_VERSION = 1;
   // Subject name under which global permissions are stored.
-  public static final String GLOBAL_RESOURCE_NAME = "__GLOBAL";
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
@@ -592,6 +591,39 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
+  public int register(String subject,
+                      Schema schema,
+                      boolean normalize,
+                      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
+    if (existingSchema != null) {
+      if (schema.getId() == null
+          || schema.getId() < 0
+          || schema.getId().equals(existingSchema.getId())
+      ) {
+        return existingSchema.getId();
+      }
+    }
+
+    kafkaStore.lockFor(subject).lock();
+    try {
+      if (isLeader()) {
+        return register(subject, schema, normalize);
+      } else {
+        // forward registering request to the leader
+        if (leaderIdentity != null) {
+          return forwardRegisterRequestToLeader(subject, schema, normalize, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Register schema request failed since leader is "
+              + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
   private void checkRegisterMode(
       String subject, Schema schema
   ) throws OperationNotPermittedException, SchemaRegistryStoreException {
@@ -615,39 +647,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
     Mode subjectMode = getModeInScope(subject);
     return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
-  }
-
-  public int registerOrForward(String subject,
-                               Schema schema,
-                               boolean normalize,
-                               Map<String, String> headerProperties)
-      throws SchemaRegistryException {
-    Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
-    if (existingSchema != null) {
-      if (schema.getId() == null
-          || schema.getId() < 0
-          || schema.getId().equals(existingSchema.getId())
-      ) {
-        return existingSchema.getId();
-      }
-    }
-
-    kafkaStore.lockFor(subject).lock();
-    try {
-      if (isLeader()) {
-        return register(subject, schema, normalize);
-      } else {
-        // forward registering request to the leader
-        if (leaderIdentity != null) {
-          return forwardRegisterRequestToLeader(subject, schema, normalize, headerProperties);
-        } else {
-          throw new UnknownLeaderException("Register schema request failed since leader is "
-                                           + "unknown");
-        }
-      }
-    } finally {
-      kafkaStore.lockFor(subject).unlock();
-    }
   }
 
   @Override
@@ -693,7 +692,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public void deleteSchemaVersionOrForward(
+  public void deleteSchemaVersion(
       Map<String, String> headerProperties, String subject,
       Schema schema, boolean permanentDelete) throws SchemaRegistryException {
 
@@ -705,10 +704,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         // forward registering request to the leader
         if (leaderIdentity != null) {
           forwardDeleteSchemaVersionRequestToLeader(headerProperties, subject,
-                  schema.getVersion(), permanentDelete);
+              schema.getVersion(), permanentDelete);
         } else {
           throw new UnknownLeaderException("Register schema request failed since leader is "
-                                           + "unknown");
+              + "unknown");
         }
       }
     } finally {
@@ -768,7 +767,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public List<Integer> deleteSubjectOrForward(
+  public List<Integer> deleteSubject(
       Map<String, String> requestProperties,
       String subject,
       boolean permanentDelete) throws SchemaRegistryException {
@@ -1538,8 +1537,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public void deleteCompatibilityConfigOrForward(String subject,
-                                                        Map<String, String> headerProperties)
+  public void deleteCompatibilityConfig(String subject,
+                                        Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownLeaderException {
     kafkaStore.lockFor(subject).lock();
@@ -1708,7 +1707,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public void setModeOrForward(String subject, Mode mode, boolean force,
+  public void setMode(String subject, Mode mode, boolean force,
       Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownLeaderException {
@@ -1744,7 +1743,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public void deleteSubjectModeOrForward(String subject, Map<String, String> headerProperties)
+  public void deleteSubjectMode(String subject, Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownLeaderException {
     kafkaStore.lockFor(subject).lock();
