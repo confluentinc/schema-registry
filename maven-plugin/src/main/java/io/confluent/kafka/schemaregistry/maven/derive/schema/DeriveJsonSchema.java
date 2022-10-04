@@ -65,20 +65,17 @@ public class DeriveJsonSchema extends DeriveSchema {
     }
     // Merge records if there is at least 1 record
     if (records.size() > 0) {
-      ObjectNode mergedRecords = mergeRecords(records);
-      jsonItems.add(mergedRecords);
+      jsonItems.add(mergeRecords(records));
     }
     // Merge arrays if there is at least 1 array
     if (arrays.size() > 0) {
-      ObjectNode mergedArrays = mergeArrays(arrays, true);
-      jsonItems.add(mergedArrays);
+      jsonItems.add(mergeArrays(arrays, true));
     }
 
     if (jsonItems.size() > 1) {
       // If there are more than 1 different items, use oneOf to represent them
       ObjectNode oneOfDataType = mapper.createObjectNode();
-      ArrayNode sortedJsonItems = sortJsonArrayList(jsonItems);
-      oneOfDataType.set("oneOf", sortedJsonItems);
+      oneOfDataType.set("oneOf", sortJsonArrayList(jsonItems));
       mergedArray.set("items", oneOfDataType);
     } else if (jsonItems.size() == 1) {
       // Exactly one type of item, hence oneOf is not used
@@ -93,10 +90,8 @@ public class DeriveJsonSchema extends DeriveSchema {
 
   public ObjectNode getSchemaForMultipleMessages(List<String> messages)
       throws JsonProcessingException {
-    /*
-     Get schema for multiple messages. Exactly one schema is returned
-     Treated same as array of records, the items derived is returned
-     */
+    // Get schema for multiple messages. Exactly one schema is returned
+    // Treated same as array of records, the items derived is returned
     List<JsonNode> messageObjects = new ArrayList<>();
     for (String message : messages) {
       messageObjects.add(mapper.readTree(message));

@@ -90,7 +90,7 @@ public class DeriveJsonSchemaTest {
   @Test
   public void testDeriveRecordComplexTypesWithPrimitiveValues() throws IOException {
     // Get schema for record with arrays and records having only primitive data types
-    String arrayOfNullsMessage = "\"arrayOfNulls\":[null, null]";
+    String arrayOfNullsMessage = "\"arrayOfNulls\":[null]";
     String recordOfMultipleMessage = "\"MixedRecord\": {\"Int1\": 62, \"Double1\": 1.2212, \"name\" : \"Testing\"}";
     String complexTypesWithPrimitiveValues = "{" + arrayOfNullsMessage + "," + recordOfMultipleMessage + "}";
     String expectedSchema = "{\"type\":\"object\",\"properties\":{\"MixedRecord\":{\"type\":\"object\",\"properties\":{\"Double1\":{\"type\":\"number\"},\"Int1\":{\"type\":\"number\"},\"name\":{\"type\":\"string\"}}},\"arrayOfNulls\":{\"type\":\"array\",\"items\":{\"type\":\"null\"}}}}";
@@ -100,10 +100,10 @@ public class DeriveJsonSchemaTest {
   @Test
   public void testDeriveRecordComplexTypesRecursive() throws IOException {
     // Get schema for record with arrays and records having complex types
-    String recordOfArrays = "\"RecordOfArrays\": {\"ArrayInt1\": [12, 13], \"ArrayBoolean1\": [true, false]}";
+    String recordOfArrays = "\"RecordOfArrays\": {\"ArrayInt1\": [12], \"ArrayEmpty\": []}";
     String recordOfRecords = "\"RecordOfRecords\": {\"Record1\": {\"name\": \"Tom\"}, \"Record2\": {\"place\": \"Bom\"}}";
     String complexTypesWithPrimitiveValues = "{" + recordOfArrays + "," + recordOfRecords + "}";
-    String expectedSchema = "{\"type\":\"object\",\"properties\":{\"RecordOfArrays\":{\"type\":\"object\",\"properties\":{\"ArrayBoolean1\":{\"type\":\"array\",\"items\":{\"type\":\"boolean\"}},\"ArrayInt1\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}},\"RecordOfRecords\":{\"type\":\"object\",\"properties\":{\"Record1\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}},\"Record2\":{\"type\":\"object\",\"properties\":{\"place\":{\"type\":\"string\"}}}}}}}";
+    String expectedSchema = "{\"type\":\"object\",\"properties\":{\"RecordOfArrays\":{\"type\":\"object\",\"properties\":{\"ArrayEmpty\":{\"type\":\"array\",\"items\":{}},\"ArrayInt1\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}},\"RecordOfRecords\":{\"type\":\"object\",\"properties\":{\"Record1\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}},\"Record2\":{\"type\":\"object\",\"properties\":{\"place\":{\"type\":\"string\"}}}}}}}";
     generateSchemaAndCheckExpected(complexTypesWithPrimitiveValues, expectedSchema);
   }
 

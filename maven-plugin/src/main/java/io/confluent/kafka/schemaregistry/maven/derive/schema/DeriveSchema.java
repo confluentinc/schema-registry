@@ -34,12 +34,17 @@ public abstract class DeriveSchema {
   protected final HashMap<String, String> classToDataType = new HashMap<>();
   protected static final ObjectMapper mapper = JacksonMapper.INSTANCE;
 
-  private ArrayList<ObjectNode> getSchemaOfAllElements(List<JsonNode> messages, String name)
+  ArrayList<ObjectNode> getSchemaOfAllElements(List<JsonNode> messages, String name)
       throws JsonProcessingException {
     // Get schema of each message based on type
     ArrayList<ObjectNode> schemaList = new ArrayList<>();
-    for (JsonNode message : messages) {
-      schemaList.add(getSchemaOfElement(message, name));
+    for (int i = 0; i < messages.size(); i++) {
+      try {
+        schemaList.add(getSchemaOfElement(messages.get(i), name));
+      } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException(
+            String.format("unable to find schema for message %d: %s", i, messages.get(i)), e);
+      }
     }
     return schemaList;
   }
@@ -75,7 +80,7 @@ public abstract class DeriveSchema {
     // Generate Schema for Array type
     ObjectNode schema = mapper.createObjectNode();
     schema.put("type", "array");
-    ArrayList<ObjectNode> schemaList = getSchemaOfAllElements(messages, name);
+    List<ObjectNode> schemaList = getSchemaOfAllElements(messages, name);
     try {
       ObjectNode items = mergeArrays(schemaList, false);
       schema.set("items", items.get("items"));
@@ -102,7 +107,7 @@ public abstract class DeriveSchema {
     return schema;
   }
 
-  public ObjectNode mergeRecords(ArrayList<ObjectNode> recordList) {
+  public ObjectNode mergeRecords(List<ObjectNode> recordList) {
     // Merge all fields in all the records together into one record
     ObjectNode mergedRecord = mapper.createObjectNode();
     mergedRecord.put("type", "object");
@@ -140,7 +145,7 @@ public abstract class DeriveSchema {
     return mergedRecord;
   }
 
-  public ObjectNode mergeArrays(ArrayList<ObjectNode> arrayList, boolean useItems) {
+  public ObjectNode mergeArrays(List<ObjectNode> arrayList, boolean useItems) {
     // Merging different field types into one type
     ObjectNode mergedArray = mapper.createObjectNode();
     mergedArray.put("type", "array");

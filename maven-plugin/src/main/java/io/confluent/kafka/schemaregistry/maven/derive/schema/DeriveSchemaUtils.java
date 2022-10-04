@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -26,23 +27,28 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 
 import java.util.stream.Collectors;
 
 public class DeriveSchemaUtils {
 
   public static List<ObjectNode> getUnique(List<ObjectNode> schemas) {
-    return schemas
-        .stream()
-        .distinct()
-        .collect(Collectors.toList());
+    return schemas.stream().distinct().collect(Collectors.toList());
   }
 
   public static List<JsonNode> getListFromArray(ArrayNode field) {
     List<JsonNode> objectList = new ArrayList<>();
     for (JsonNode fieldItem : field) {
       objectList.add(fieldItem);
+    }
+    return objectList;
+  }
+
+  public static List<JsonNode> getObjectListFromStringList(List<String> messages)
+      throws JsonProcessingException {
+    List<JsonNode> objectList = new ArrayList<>();
+    for (String message : messages) {
+      objectList.add(JacksonMapper.INSTANCE.readTree(message));
     }
     return objectList;
   }
@@ -72,15 +78,11 @@ public class DeriveSchemaUtils {
       return;
     }
 
-    if (element.has("type")) {
-      String typeOfElement = element.get("type").asText();
-      if (typeOfElement.equals("object")) {
-        records.add(element);
-      } else if (typeOfElement.equals("array")) {
-        arrays.add(element);
-      } else {
-        items.add(element);
-      }
+    String typeOfElement = element.get("type").asText();
+    if (typeOfElement.equals("object")) {
+      records.add(element);
+    } else if (typeOfElement.equals("array")) {
+      arrays.add(element);
     } else {
       items.add(element);
     }
@@ -96,16 +98,12 @@ public class DeriveSchemaUtils {
 
   static void mergeNumberTypes(List<ObjectNode> primitives) {
     // Checking if anyone element is double type
-    Optional<ObjectNode> decimalType = primitives.stream()
-        .filter(o -> o.get("type").asText().equals("double")).findAny();
-    if (!decimalType.isPresent()) {
+    if (primitives.stream().noneMatch(o -> o.get("type").asText().equals("double"))) {
       return;
     }
-
-    // If any other element is of type integer/long is marked as double
+    // If any other element is of type integer/long, it is marked as double
     List<String> integerTypes = Arrays.asList("int", "int32", "int64", "long");
-    primitives.stream()
-        .filter(o -> integerTypes.contains(o.get("type").asText()))
+    primitives.stream().filter(o -> integerTypes.contains(o.get("type").asText()))
         .forEach(o -> o.put("type", "double"));
   }
 }
