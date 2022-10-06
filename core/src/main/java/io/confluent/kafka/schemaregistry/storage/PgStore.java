@@ -10,7 +10,10 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.Properties;
+
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.WILDCARD;
 
 public class PgStore {
   private Connection conn;
@@ -42,20 +45,22 @@ public class PgStore {
   }
 
   public Schema lookupSchemaBySubject(QualifiedSubject qs, Schema schema,
-                                      String subject, String tenant, byte[] hash,
+                                      String subject, byte[] hash,
                                       boolean lookupDeletedSchema) throws SchemaRegistryException {
-    StringBuilder sql = new StringBuilder();
-    sql.append("SELECT s.id, s.version FROM contexts c JOIN subjects sub on c.id = sub.context_id ")
-        .append("JOIN schemas s on s.subject_id = sub.id ")
-        .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? AND hash = ? ");
-    if (!lookupDeletedSchema) {
-      sql.append("AND NOT deleted");
-    }
-
     ResultSet rs = null;
+    PreparedStatement ps;
+
     try {
-      PreparedStatement ps = conn.prepareStatement(sql.toString());
-      ps.setString(1, tenant);
+      StringBuilder sql = new StringBuilder();
+      sql.append("SELECT s.id, s.version FROM contexts c ")
+          .append("JOIN subjects sub on c.id = sub.context_id ")
+          .append("JOIN schemas s on s.subject_id = sub.id ")
+          .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? AND hash = ? ");
+      if (!lookupDeletedSchema) {
+        sql.append("AND NOT deleted");
+      }
+      ps = conn.prepareStatement(sql.toString());
+      ps.setString(1, qs.getTenant());
       ps.setString(2, qs.getContext());
       ps.setString(3, qs.getSubject());
       ps.setBytes(4, hash);
@@ -78,7 +83,78 @@ public class PgStore {
     return null;
   }
 
-  public int getOrCreateContext(String tenant, QualifiedSubject qs) throws SchemaRegistryException {
+  public Schema getSubjectVersion(QualifiedSubject qs, int version,
+                                  boolean lookupDeletedSchema) throws SchemaRegistryException {
+    ResultSet rs = null;
+    PreparedStatement ps;
+
+    try {
+      StringBuilder sql = new StringBuilder();
+      sql.append("SELECT s.id, sub.subject, s.version, s.type, s.str FROM contexts c ")
+          .append("JOIN subjects sub on c.id = sub.context_id ")
+          .append("JOIN schemas s on s.subject_id = sub.id ")
+          .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? AND version = ? ");
+      if (!lookupDeletedSchema) {
+        sql.append("AND NOT deleted");
+      }
+      ps = conn.prepareStatement(sql.toString());
+      ps.setString(1, qs.getTenant());
+      ps.setString(2, qs.getContext());
+      ps.setString(3, qs.getSubject());
+      ps.setInt(4, version);
+      rs = ps.executeQuery();
+      if (rs != null) {
+        if (rs.next()) {
+          return populateSchema(rs);
+        }
+      }
+    } catch (Exception e) {
+      throw new SchemaRegistryException("LookupSchemaBySubject error");
+    } finally {
+      closeResultSet(rs);
+    }
+
+    return null;
+  }
+
+  public Schema getLatestSubjectVersion(QualifiedSubject qs)
+      throws SchemaRegistryException {
+    ResultSet rs = null;
+    PreparedStatement ps;
+
+    try {
+      StringBuilder sql = new StringBuilder();
+      // TODO not handling refs
+      sql.append("SELECT s.id, sub.subject, s.version, s.type, s.str FROM contexts c ")
+          .append("JOIN subjects sub on c.id = sub.context_id ")
+          .append("JOIN schemas s on s.subject_id = sub.id ")
+          .append("WHERE c.tenant = ? AND sub.subject = ? ");
+      if (!qs.getContext().equals(WILDCARD)) {
+        sql.append("AND c.context = ? ");
+      }
+      sql.append("ORDER BY s.version DESC LIMIT 1");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setString(1, qs.getTenant());
+      ps.setString(2, qs.getSubject());
+      if (!qs.getContext().equals(WILDCARD)) {
+        ps.setString(3, qs.getContext());
+      }
+      rs = ps.executeQuery();
+      if (rs != null) {
+        if (rs.next()) {
+          return populateSchema(rs);
+        }
+      }
+    } catch (Exception e) {
+      throw new SchemaRegistryException("GetLatestSubjectVersion error");
+    } finally {
+      closeResultSet(rs);
+    }
+
+    return null;
+  }
+
+  public int getOrCreateContext(QualifiedSubject qs) throws SchemaRegistryException {
     ResultSet rs = null;
     PreparedStatement ps;
     int contextId = -1;
@@ -87,7 +163,7 @@ public class PgStore {
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT id FROM contexts WHERE tenant = ? AND context = ?");
       ps = conn.prepareStatement(sql.toString());
-      ps.setString(1, tenant);
+      ps.setString(1, qs.getTenant());
       ps.setString(2, qs.getContext());
       rs = ps.executeQuery();
       if (rs != null) {
@@ -101,7 +177,7 @@ public class PgStore {
         sql.append("INSERT INTO contexts VALUES (DEFAULT, ?, ?, ?) ")
             .append("RETURNING id");
         ps = conn.prepareStatement(sql.toString());
-        ps.setString(1, tenant);
+        ps.setString(1, qs.getTenant());
         ps.setString(2, qs.getContext());
         ps.setInt(3, 0);
         rs = ps.executeQuery();
@@ -231,6 +307,15 @@ public class PgStore {
     }
 
     return schemaId;
+  }
+
+  private Schema populateSchema(ResultSet rs) throws SQLException {
+    int id = rs.getInt(1);
+    String subject = rs.getString(2);
+    int version = rs.getInt(3);
+    String type = rs.getString(4);
+    String str = rs.getString(5);
+    return new Schema(subject, version, id, type, Collections.emptyList(), str);
   }
 
   private void closeResultSet(ResultSet rs) {

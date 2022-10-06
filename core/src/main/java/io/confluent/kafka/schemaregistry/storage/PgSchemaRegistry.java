@@ -47,6 +47,8 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+
 public class PgSchemaRegistry implements SchemaRegistry {
   private static final Logger log = LoggerFactory.getLogger(PgSchemaRegistry.class);
   private final SchemaRegistryConfig config;
@@ -101,7 +103,8 @@ public class PgSchemaRegistry implements SchemaRegistry {
 
   @Override
   public Schema getLatestVersion(String subject) throws SchemaRegistryException {
-    return null;
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    return pgStore.getLatestSubjectVersion(qs);
   }
 
   @Override
@@ -115,8 +118,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
     }
 
     // TODO not handling the case where a schema is sent with all references resolved
-    return pgStore.lookupSchemaBySubject(qs, schema, subject, tenant(),
-        md5.bytes(), lookupDeletedSchema);
+    return pgStore.lookupSchemaBySubject(qs, schema, subject, md5.bytes(), lookupDeletedSchema);
   }
 
   @Override
@@ -213,7 +215,12 @@ public class PgSchemaRegistry implements SchemaRegistry {
   @Override
   public Schema get(String subject, int version, boolean returnDeletedSchema)
       throws SchemaRegistryException {
-    return null;
+    VersionId versionId = new VersionId(version);
+    if (versionId.isLatest()) {
+      return getLatestVersion(subject);
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    return pgStore.getSubjectVersion(qs, version, returnDeletedSchema);
   }
 
   @Override
@@ -240,8 +247,13 @@ public class PgSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Schema getUsingContexts(String subject, int versionId, boolean lookupDeletedSchema)
+  public Schema getUsingContexts(String subject, int version, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
+    Schema schema = get(subject, version, lookupDeletedSchema);
+    if (schema != null) {
+      return schema;
+    }
+
     return null;
   }
 
@@ -291,7 +303,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subjectName);
     if (qs != null) {
       try {
-        int contextId = pgStore.getOrCreateContext(tenant(), qs);
+        int contextId = pgStore.getOrCreateContext(qs);
         int subjectId = pgStore.getOrCreateSubject(contextId, qs);
         int version = pgStore.getMaxVersion(subjectId) + 1;
         schemaId = pgStore.createSchema(contextId, subjectId, version, parsedSchema,
