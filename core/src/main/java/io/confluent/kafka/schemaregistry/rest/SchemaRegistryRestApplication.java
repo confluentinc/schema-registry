@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.rest.resources.ServerMetadataResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectVersionsResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.PgSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.rest.Application;
@@ -66,20 +67,20 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   }
 
 
-  protected KafkaSchemaRegistry initSchemaRegistry(SchemaRegistryConfig config) {
-    KafkaSchemaRegistry kafkaSchemaRegistry = null;
+  protected SchemaRegistry initSchemaRegistry(SchemaRegistryConfig config) {
+//    KafkaSchemaRegistry kafkaSchemaRegistry = null;
+    SchemaRegistry schemaRegistry = null;
     try {
-      kafkaSchemaRegistry = new KafkaSchemaRegistry(
-          config,
-          new SchemaRegistrySerializer()
+      schemaRegistry = new PgSchemaRegistry(
+          config
       );
-      kafkaSchemaRegistry.init();
+      schemaRegistry.init();
     } catch (SchemaRegistryException e) {
       log.error("Error starting the schema registry", e);
       onShutdown();
       System.exit(1);
     }
-    return kafkaSchemaRegistry;
+    return schemaRegistry;
   }
 
   @Override
@@ -108,9 +109,9 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new ModeResource(schemaRegistry));
     config.register(new ServerMetadataResource(schemaRegistry));
     config.register(new ContextFilter());
-    config.register(new RestCallMetricFilter(
-            schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
-            schemaRegistry.getMetricsContainer().getApiCallsFailure()));
+//    config.register(new RestCallMetricFilter(
+//            schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
+//            schemaRegistry.getMetricsContainer().getApiCallsFailure()));
 
     if (schemaRegistryResourceExtensions != null) {
       try {
