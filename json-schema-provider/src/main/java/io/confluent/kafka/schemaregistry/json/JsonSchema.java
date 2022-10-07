@@ -512,6 +512,11 @@ public class JsonSchema implements ParsedSchema {
     if (schema == null || message == null) {
       return message;
     }
+    message = getValue(message);
+    FieldContext fieldCtx = ctx.currentField();
+    if (fieldCtx != null) {
+      fieldCtx.setType(getType(schema));
+    }
     if (schema instanceof CombinedSchema) {
       JsonNode jsonNode = objectMapper.convertValue(message, JsonNode.class);
       for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
@@ -549,7 +554,8 @@ public class JsonSchema implements ParsedSchema {
         String fullName = path + "." + propertyName;
         try (FieldContext fc = ctx.enterField(ctx, message, fullName, propertyName,
             getType(propertySchema), getInlineTags(propertySchema))) {
-          PropertyAccessor propertyAccessor = getPropertyAccessor(ctx, message, propertyName);
+          PropertyAccessor propertyAccessor =
+              getPropertyAccessor(ctx, message, propertyName);
           Object value = propertyAccessor.getPropertyValue();
           Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
           propertyAccessor.setPropertyValue(newValue);
@@ -566,18 +572,29 @@ public class JsonSchema implements ParsedSchema {
         || schema instanceof NullSchema) {
       return message;
     } else {
-      FieldContext fc = ctx.currentField();
-      if (fc != null) {
+      if (fieldCtx != null) {
         try {
-          Set<String> intersect = new HashSet<>(fc.getTags());
+          Set<String> intersect = new HashSet<>(fieldCtx.getTags());
           intersect.retainAll(ctx.rule().getTags());
           if (!intersect.isEmpty()) {
-            return transform.transform(ctx, fc, message);
+            return transform.transform(ctx, fieldCtx, message);
           }
         } catch (RuleException e) {
           throw new RuntimeException(e);
         }
       }
+      return message;
+    }
+  }
+
+  private Object getValue(Object message) {
+    if (message instanceof TextNode) {
+      return ((TextNode) message).asText();
+    } else if (message instanceof NumericNode) {
+      return ((NumericNode)message).numberValue();
+    } else if (message instanceof BooleanNode) {
+      return ((BooleanNode) message).asBoolean();
+    } else {
       return message;
     }
   }
@@ -629,13 +646,18 @@ public class JsonSchema implements ParsedSchema {
       return new PropertyAccessor() {
         @Override
         public Object getPropertyValue() {
-          return (((ObjectNode) message).get(propertyName));
+          return ((ObjectNode) message).get(propertyName);
         }
 
         @Override
         public void setPropertyValue(Object value) {
           ObjectNode objectNode = (ObjectNode) message;
-          if (value instanceof Boolean) {
+          if (value instanceof List) {
+            ArrayNode arrayNode = objectNode.putArray(propertyName);
+            ((List<?>) value).forEach(v -> addArrayValue(arrayNode, v));
+          } else if (value instanceof JsonNode) {
+            objectNode.set(propertyName, (JsonNode) value);
+          } else if (value instanceof Boolean) {
             objectNode.put(propertyName, (Boolean) value);
           } else if (value instanceof BigDecimal) {
             objectNode.put(propertyName, (BigDecimal) value);
@@ -657,6 +679,34 @@ public class JsonSchema implements ParsedSchema {
             objectNode.put(propertyName, (byte[]) value);
           } else {
             objectNode.put(propertyName, value.toString());
+          }
+        }
+
+        private void addArrayValue(ArrayNode arrayNode, Object value) {
+          if (value instanceof JsonNode) {
+            arrayNode.add((JsonNode) value);
+          } else if (value instanceof Boolean) {
+            arrayNode.add((Boolean) value);
+          } else if (value instanceof BigDecimal) {
+            arrayNode.add((BigDecimal) value);
+          } else if (value instanceof BigInteger) {
+            arrayNode.add((BigInteger) value);
+          } else if (value instanceof Long) {
+            arrayNode.add((Long) value);
+          } else if (value instanceof Double) {
+            arrayNode.add((Double) value);
+          } else if (value instanceof Float) {
+            arrayNode.add((Float) value);
+          } else if (value instanceof Integer) {
+            arrayNode.add((Integer) value);
+          } else if (value instanceof Short) {
+            arrayNode.add((Short) value);
+          } else if (value instanceof Byte) {
+            arrayNode.add((Byte) value);
+          } else if (value instanceof byte[]) {
+            arrayNode.add((byte[]) value);
+          } else {
+            arrayNode.add(value.toString());
           }
         }
       };

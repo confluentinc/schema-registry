@@ -74,6 +74,7 @@ public class AvroSchema implements ParsedSchema {
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
+
   public AvroSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null);
   }
@@ -479,6 +480,10 @@ public class AvroSchema implements ParsedSchema {
     if (schema == null || message == null) {
       return message;
     }
+    FieldContext fieldCtx = ctx.currentField();
+    if (fieldCtx != null) {
+      fieldCtx.setType(getType(schema));
+    }
     GenericData data;
     Schema.Type st = schema.getType();
     switch (st) {
@@ -509,7 +514,7 @@ public class AvroSchema implements ParsedSchema {
         for (Schema.Field f : schema.getFields()) {
           String fullName = schema.getFullName() + "." + f.name();
           try (FieldContext fc = ctx.enterField(
-              ctx, message, fullName, f.name(), getType(f), getInlineTags(f))) {
+              ctx, message, fullName, f.name(), getType(f.schema()), getInlineTags(f))) {
             Object value = data.getField(message, f.name(), f.pos());
             Object newValue = toTransformedMessage(ctx, f.schema(), value, transform);
             data.setField(message, f.name(), f.pos(), newValue);
@@ -517,13 +522,12 @@ public class AvroSchema implements ParsedSchema {
         }
         return message;
       default:
-        FieldContext fc = ctx.currentField();
-        if (fc != null) {
+        if (fieldCtx != null) {
           try {
-            Set<String> intersect = new HashSet<>(fc.getTags());
+            Set<String> intersect = new HashSet<>(fieldCtx.getTags());
             intersect.retainAll(ctx.rule().getTags());
             if (!intersect.isEmpty()) {
-              return transform.transform(ctx, fc, message);
+              return transform.transform(ctx, fieldCtx, message);
             }
           } catch (RuleException e) {
             throw new RuntimeException(e);
@@ -533,8 +537,8 @@ public class AvroSchema implements ParsedSchema {
     }
   }
 
-  private RuleContext.Type getType(Schema.Field field) {
-    switch (field.schema().getType()) {
+  private RuleContext.Type getType(Schema schema) {
+    switch (schema.getType()) {
       case RECORD:
         return Type.RECORD;
       case ENUM:

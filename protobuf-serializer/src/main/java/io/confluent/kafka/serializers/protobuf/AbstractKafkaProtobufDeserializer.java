@@ -170,9 +170,15 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       if (readerSchema != null) {
         schema = (ProtobufSchema) readerSchema;
       }
-      message = executeRules(
-          subject, topic, headers, payload, RuleMode.READ, null, schema, message
-      );
+      if (schema.ruleSet() != null && schema.ruleSet().hasRules(RuleMode.READ)) {
+        if (message == null) {
+          message = DynamicMessage.parseFrom(schema.toDescriptor(),
+              new ByteArrayInputStream(buffer.array(), start, length));
+        }
+        message = executeRules(
+            subject, topic, headers, payload, RuleMode.READ, null, schema, message
+        );
+      }
 
       if (message != null) {
         buffer = ByteBuffer.wrap(((Message) message).toByteArray());
