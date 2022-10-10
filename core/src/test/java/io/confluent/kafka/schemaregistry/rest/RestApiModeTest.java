@@ -36,6 +36,13 @@ public class RestApiModeTest extends ClusterTestHarness {
           + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
       .canonicalString();
 
+  private static String SCHEMA2_STRING = AvroUtils.parseSchema(
+          "{\"type\":\"record\","
+              + "\"name\":\"myrecord\","
+              + "\"fields\":"
+              + "[{\"type\":\"int\",\"name\":\"f1\"}]}")
+      .canonicalString();
+
   public RestApiModeTest() {
     super(1, true, CompatibilityLevel.BACKWARD.name);
   }
@@ -225,5 +232,47 @@ public class RestApiModeTest extends ClusterTestHarness {
     assertEquals("Getting schema by id should succeed",
             SCHEMA_STRING,
             restApp.restClient.getVersion(subject, 1).getSchema());
+  }
+
+  @Test
+  public void testRegisterIncompatibleSchemaDuringImport() throws Exception {
+    String subject = "testSubject";
+    String mode = "READWRITE";
+
+    // set mode to read write
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering without id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+
+    // delete subject so we can switch to import mode
+    restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
+
+    mode = "IMPORT";
+
+    // set mode to import
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    // register same schema with same id
+    expectedIdSchema1 = 1;
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+
+    // register same schema with same id
+    expectedIdSchema1 = 2;
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA2_STRING, subject, 2, expectedIdSchema1));
+
+    assertEquals("Getting schema by id should succeed",
+        SCHEMA2_STRING,
+        restApp.restClient.getVersion(subject, 2).getSchema());
   }
 }
