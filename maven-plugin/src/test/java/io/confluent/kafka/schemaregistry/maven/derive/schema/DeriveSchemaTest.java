@@ -52,7 +52,7 @@ public class DeriveSchemaTest {
     ObjectNode schema1 = (ObjectNode) mapper.readTree(schemaString1);
     ObjectNode schema2 = (ObjectNode) mapper.readTree(schemaString2);
     ArrayList<ObjectNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
-    ObjectNode schema = derive.mergeArrays(schemas, true);
+    ObjectNode schema = derive.mergeArrays(schemas, true, false);
     assertEquals(ExpectedSchema, schema.toString());
   }
 

@@ -56,30 +56,30 @@ public class DeriveJsonSchema extends DeriveSchema {
   protected ObjectNode mergeMultipleDataTypes(ObjectNode mergedArray,
                                               ArrayList<ObjectNode> primitives,
                                               ArrayList<ObjectNode> records,
-                                              ArrayList<ObjectNode> arrays) {
-
-    ArrayNode jsonItems = mapper.createArrayNode();
+                                              ArrayList<ObjectNode> arrays,
+                                              boolean check2dArray) {
+    ArrayNode items = mapper.createArrayNode();
     // Adding primitive types to items' list
     for (ObjectNode item : primitives) {
-      jsonItems.add(item);
+      items.add(item);
     }
     // Merge records if there is at least 1 record
     if (records.size() > 0) {
-      jsonItems.add(mergeRecords(records));
+      items.add(mergeRecords(records));
     }
     // Merge arrays if there is at least 1 array
     if (arrays.size() > 0) {
-      jsonItems.add(mergeArrays(arrays, true));
+      items.add(mergeArrays(arrays, true, false));
     }
 
-    if (jsonItems.size() > 1) {
+    if (items.size() > 1) {
       // If there are more than 1 different items, use oneOf to represent them
       ObjectNode oneOfDataType = mapper.createObjectNode();
-      oneOfDataType.set("oneOf", sortJsonArrayList(jsonItems));
+      oneOfDataType.set("oneOf", sortJsonArrayList(items));
       mergedArray.set("items", oneOfDataType);
-    } else if (jsonItems.size() == 1) {
+    } else if (items.size() == 1) {
       // Exactly one type of item, hence oneOf is not used
-      mergedArray.set("items", jsonItems.get(0));
+      mergedArray.set("items", items.get(0));
     } else {
       // No items found, setting items as empty object
       mergedArray.set("items", mapper.createObjectNode());

@@ -63,26 +63,28 @@ public abstract class DeriveSchema {
     }
   }
 
-  public Optional<ObjectNode> getPrimitiveSchema(Object field)
-      throws JsonProcessingException {
+  public Optional<ObjectNode> getPrimitiveSchema(JsonNode field) {
     // Generate Schema for Primitive data types
-    String jsonInferredType = field.getClass().getName();
-    if (classToDataType.containsKey(jsonInferredType)) {
-      String schemaString = String.format("{\"type\" : \"%s\"}",
-          classToDataType.get(jsonInferredType));
-      return Optional.of(mapper.readValue(schemaString, ObjectNode.class));
+    String inferredType = field.getClass().getName();
+    if (classToDataType.containsKey(inferredType)) {
+      try {
+        String schema = String.format("{\"type\":\"%s\"}", classToDataType.get(inferredType));
+        return Optional.of(mapper.readValue(schema, ObjectNode.class));
+      } catch (JsonProcessingException e) {
+        throw new RuntimeException(e);
+      }
     }
     return Optional.empty();
   }
 
   public ObjectNode getSchemaForArray(List<JsonNode> messages, String name)
       throws JsonProcessingException {
-    // Generate Schema for Array type
+    // Generate schema for array in json format, this schema is used as template by other formats
     ObjectNode schema = mapper.createObjectNode();
     schema.put("type", "array");
     List<ObjectNode> schemaList = getSchemaOfAllElements(messages, name);
     try {
-      ObjectNode items = mergeArrays(schemaList, false);
+      ObjectNode items = mergeArrays(schemaList, false, true);
       schema.set("items", items.get("items"));
       return schema;
     } catch (IllegalArgumentException e) {
@@ -93,7 +95,7 @@ public abstract class DeriveSchema {
 
   public ObjectNode getSchemaForRecord(ObjectNode message)
       throws JsonProcessingException {
-    // Generate Schema for Record type
+    // Generate schema for record in json format, this schema is used as template by other formats
     ObjectNode schema = mapper.createObjectNode();
     schema.put("type", "object");
     schema.set("properties", mapper.createObjectNode());
@@ -114,10 +116,8 @@ public abstract class DeriveSchema {
     ObjectNode properties = mapper.createObjectNode();
     HashMap<String, ArrayList<ObjectNode>> fieldToType = new HashMap<>();
 
-    /*
-      Loop through every record group schemas by field name
-      Then for each field treat the list of schemas as array and try to merge
-    */
+    // Loop through every record and group them by field name
+    // Then for each field, treat the list of schemas as array and try to merge
     for (ObjectNode record : recordList) {
       ObjectNode fields = (ObjectNode) record.get("properties");
       for (String fieldName : DeriveSchemaUtils.getSortedKeys(fields)) {
@@ -132,7 +132,7 @@ public abstract class DeriveSchema {
     for (Map.Entry<String, ArrayList<ObjectNode>> entry : fieldToType.entrySet()) {
       ArrayList<ObjectNode> fieldsType = fieldToType.get(entry.getKey());
       try {
-        ObjectNode items = mergeArrays(fieldsType, false);
+        ObjectNode items = mergeArrays(fieldsType, false, false);
         properties.set(entry.getKey(), items.get("items"));
       } catch (IllegalArgumentException e) {
         throw new IllegalArgumentException(
@@ -145,11 +145,11 @@ public abstract class DeriveSchema {
     return mergedRecord;
   }
 
-  public ObjectNode mergeArrays(List<ObjectNode> arrayList, boolean useItems) {
+  public ObjectNode mergeArrays(List<ObjectNode> arrayList, boolean useItems,
+                                boolean check2dArray) {
     // Merging different field types into one type
     ObjectNode mergedArray = mapper.createObjectNode();
     mergedArray.put("type", "array");
-
     ArrayList<ObjectNode> primitives = new ArrayList<>();
     ArrayList<ObjectNode> records = new ArrayList<>();
     ArrayList<ObjectNode> arrays = new ArrayList<>();
@@ -163,13 +163,14 @@ public abstract class DeriveSchema {
             (ObjectNode) arrayElements.get("items"), primitives, records, arrays);
       }
     }
-    return mergeMultipleDataTypes(mergedArray, primitives, records, arrays);
+    return mergeMultipleDataTypes(mergedArray, primitives, records, arrays, check2dArray);
   }
 
   protected abstract ObjectNode mergeMultipleDataTypes(ObjectNode mergedArray,
                                                        ArrayList<ObjectNode> primitives,
                                                        ArrayList<ObjectNode> records,
-                                                       ArrayList<ObjectNode> arrays);
+                                                       ArrayList<ObjectNode> arrays,
+                                                       boolean check2dArray);
 
   protected abstract ObjectNode getSchemaForMultipleMessages(List<String> messages)
       throws JsonProcessingException;
