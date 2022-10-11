@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.4.0-cc-docker-ksql.124-215-rc1</version>
+        <version>7.4.0-cc-docker-ksql.124-215-rc2</version>
     </parent>
 
     <licenses>
