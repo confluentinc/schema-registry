@@ -1,3 +1,8 @@
+DROP TABLE IF EXISTS refs CASCADE;
+DROP TABLE IF EXISTS schemas CASCADE;
+DROP TABLE IF EXISTS contexts CASCADE;
+DROP TABLE IF EXISTS subjects CASCADE;
+
 CREATE TABLE contexts (id SERIAL PRIMARY KEY, tenant text, context text, schemas int);
 CREATE UNIQUE INDEX unique_context ON contexts (tenant, context);
 
@@ -11,7 +16,6 @@ CREATE TABLE schemas (
                          version int,
                          type text,
                          str text,
-                         refs int[],
                          hash bytea,
                          deleted bool
 );
@@ -19,3 +23,6 @@ ALTER TABLE schemas ADD PRIMARY KEY (id, subject_id);
 CREATE UNIQUE INDEX unique_schema ON schemas (subject_id, version);
 CREATE INDEX hash_idx ON schemas (hash);
 ALTER TABLE schemas ADD CONSTRAINT subject_id_fk FOREIGN KEY (subject_id) REFERENCES subjects (id);
+
+CREATE TABLE refs (subject_id int, schema_id int, name text, ref_subject_id int, ref_schema_id int);
+ALTER TABLE refs ADD PRIMARY KEY (subject_id, schema_id, name);

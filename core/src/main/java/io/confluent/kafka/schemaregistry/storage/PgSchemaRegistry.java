@@ -47,8 +47,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
-
 public class PgSchemaRegistry implements SchemaRegistry {
   private static final Logger log = LoggerFactory.getLogger(PgSchemaRegistry.class);
   private final SchemaRegistryConfig config;
@@ -117,8 +115,26 @@ public class PgSchemaRegistry implements SchemaRegistry {
       throw new SchemaRegistryException("Invalid QualifiedSubject");
     }
 
-    // TODO not handling the case where a schema is sent with all references resolved
-    return pgStore.lookupSchemaBySubject(qs, schema, subject, md5.bytes(), lookupDeletedSchema);
+    Schema res = pgStore.lookupSchemaBySubject(qs, schema, subject, md5.bytes(), lookupDeletedSchema);
+    if (res != null) {
+      return res;
+    }
+
+    List<Schema> allVersions = pgStore.getAllVersionsDesc(qs);
+    ParsedSchema parsedSchema = canonicalizeSchema(schema, false, normalize);
+    for (Schema s : allVersions) {
+      // TODO deal with deleted
+      if ( parsedSchema.references().isEmpty()
+          && !s.getReferences().isEmpty()) {
+        ParsedSchema prevSchema = parseSchema(s);
+        if (parsedSchema.deepEquals(prevSchema)) {
+          // This handles the case where a schema is sent with all references resolved
+          return s;
+        }
+      }
+    }
+
+    return null;
   }
 
   @Override
@@ -287,6 +303,19 @@ public class PgSchemaRegistry implements SchemaRegistry {
     int schemaId = schema.getId();
     ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
 
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), schema.getSubject());
+    List<Schema> allVersions = pgStore.getAllVersionsDesc(qs);
+    for (Schema s : allVersions) {
+      // TODO deal with deleted
+      ParsedSchema undeletedSchema = parseSchema(s);
+      if (parsedSchema.references().isEmpty()
+          && !undeletedSchema.references().isEmpty()
+          && parsedSchema.deepEquals(undeletedSchema)) {
+        // This handles the case where a schema is sent with all references resolved
+        return s.getId();
+      }
+    }
+
     try {
       if (normalize) {
         parsedSchema = parsedSchema.normalize();
@@ -300,7 +329,6 @@ public class PgSchemaRegistry implements SchemaRegistry {
     schema.setSchema(parsedSchema.canonicalString());
     schema.setReferences(parsedSchema.references());
 
-    QualifiedSubject qs = QualifiedSubject.create(tenant(), subjectName);
     if (qs != null) {
       try {
         int contextId = pgStore.getOrCreateContext(qs);

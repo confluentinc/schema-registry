@@ -10,7 +10,8 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.WILDCARD;
@@ -75,7 +76,7 @@ public class PgStore {
         }
       }
     } catch (Exception e) {
-      throw new SchemaRegistryException("LookupSchemaBySubject error");
+      throw new SchemaRegistryException("LookupSchemaBySubject error", e);
     } finally {
       closeResultSet(rs);
     }
@@ -90,9 +91,9 @@ public class PgStore {
 
     try {
       StringBuilder sql = new StringBuilder();
-      sql.append("SELECT s.id, sub.subject, s.version, s.type, s.str FROM contexts c ")
-          .append("JOIN subjects sub on c.id = sub.context_id ")
-          .append("JOIN schemas s on s.subject_id = sub.id ")
+      sql.append("SELECT s.id, sub.subject, s.version, s.type, s.str, sub.id FROM contexts c ")
+          .append("JOIN subjects sub ON c.id = sub.context_id ")
+          .append("JOIN schemas s ON s.subject_id = sub.id ")
           .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? AND version = ? ");
       if (!lookupDeletedSchema) {
         sql.append("AND NOT deleted");
@@ -109,12 +110,75 @@ public class PgStore {
         }
       }
     } catch (Exception e) {
-      throw new SchemaRegistryException("LookupSchemaBySubject error");
+      throw new SchemaRegistryException("LookupSchemaBySubject error", e);
     } finally {
       closeResultSet(rs);
     }
 
     return null;
+  }
+
+  public List<Schema> getAllVersionsDesc(QualifiedSubject qs)
+      throws SchemaRegistryException {
+    List<Schema> list = new ArrayList<>();
+    ResultSet rs = null;
+    PreparedStatement ps;
+
+    try {
+      StringBuilder sql = new StringBuilder();
+      sql.append("SELECT s.id, sub.subject, s.version, s.type, s.str, sub.id FROM contexts c ")
+          .append("JOIN subjects sub on c.id = sub.context_id ")
+          .append("JOIN schemas s on s.subject_id = sub.id ")
+          .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? ")
+          .append("ORDER BY version DESC");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setString(1, qs.getTenant());
+      ps.setString(2, qs.getContext());
+      ps.setString(3, qs.getSubject());
+      rs = ps.executeQuery();
+      if (rs != null) {
+        while (rs.next()) {
+          list.add(populateSchema(rs));
+        }
+      }
+    } catch (Exception e) {
+      throw new SchemaRegistryException("LookupSchemaBySubject error", e);
+    } finally {
+      closeResultSet(rs);
+    }
+
+    return list;
+  }
+
+  public List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> getReferences(
+      int subjectId, int schemaId) throws SchemaRegistryException {
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> list
+        = new ArrayList<>();
+    ResultSet rs = null;
+    PreparedStatement ps;
+
+    try {
+      StringBuilder sql = new StringBuilder();
+      sql.append("SELECT r.name, sub.subject, s.version FROM refs r ")
+          .append("JOIN schemas s ON r.ref_schema_id = s.id AND r.ref_subject_id = s.subject_id ")
+          .append("JOIN subjects sub on r.ref_subject_id = sub.id ")
+          .append("WHERE r.subject_id = ? AND r.schema_id = ? ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setInt(1, subjectId);
+      ps.setInt(2, schemaId);
+      rs = ps.executeQuery();
+      if (rs != null) {
+        while (rs.next()) {
+          list.add(populateSchemaReference(rs));
+        }
+      }
+    } catch (Exception e) {
+      throw new SchemaRegistryException("LookupSchemaBySubject error", e);
+    } finally {
+      closeResultSet(rs);
+    }
+
+    return list;
   }
 
   public Schema getLatestSubjectVersion(QualifiedSubject qs)
@@ -124,8 +188,7 @@ public class PgStore {
 
     try {
       StringBuilder sql = new StringBuilder();
-      // TODO not handling refs
-      sql.append("SELECT s.id, sub.subject, s.version, s.type, s.str FROM contexts c ")
+      sql.append("SELECT s.id, sub.subject, s.version, s.type, s.str, sub.id FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
           .append("JOIN schemas s on s.subject_id = sub.id ")
           .append("WHERE c.tenant = ? AND sub.subject = ? ");
@@ -146,7 +209,7 @@ public class PgStore {
         }
       }
     } catch (Exception e) {
-      throw new SchemaRegistryException("GetLatestSubjectVersion error");
+      throw new SchemaRegistryException("GetLatestSubjectVersion error", e);
     } finally {
       closeResultSet(rs);
     }
@@ -188,7 +251,7 @@ public class PgStore {
         }
       }
     } catch (Exception e) {
-      throw new SchemaRegistryException("GetOrCreateContext error");
+      throw new SchemaRegistryException("GetOrCreateContext error", e);
     } finally {
       closeResultSet(rs);
     }
@@ -230,7 +293,7 @@ public class PgStore {
         }
       }
     } catch (Exception e) {
-      throw new SchemaRegistryException("GetOrCreateSubject error");
+      throw new SchemaRegistryException("GetOrCreateSubject error", e);
     } finally {
       closeResultSet(rs);
     }
@@ -255,7 +318,7 @@ public class PgStore {
         }
       }
     } catch (Exception e) {
-      throw new SchemaRegistryException("GetMaxVersion error");
+      throw new SchemaRegistryException("GetMaxVersion error", e);
     } finally {
       closeResultSet(rs);
     }
@@ -283,7 +346,7 @@ public class PgStore {
       }
 
       sql.setLength(0);
-      sql.append("INSERT INTO schemas VALUES (?, ?, ?, ?, ?, ?, ?, ?) ")
+      sql.append("INSERT INTO schemas VALUES (?, ?, ?, ?, ?, ?, ?) ")
           .append("RETURNING id");
       ps = conn.prepareStatement(sql.toString());
       ps.setInt(1, schemaId);
@@ -291,17 +354,33 @@ public class PgStore {
       ps.setInt(3, version);
       ps.setString(4, parsedSchema.schemaType());
       ps.setString(5, parsedSchema.canonicalString());
-      ps.setObject(6, new int[0]);
-      ps.setBytes(7, hash);
-      ps.setBoolean(8, false);
+      ps.setBytes(6, hash);
+      ps.setBoolean(7, false);
       rs = ps.executeQuery();
       if (rs != null) {
         while (rs.next()) {
           schemaId = rs.getInt(1);
         }
       }
+
+      for (io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference r :
+          parsedSchema.references()) {
+        sql.setLength(0);
+        sql.append("INSERT INTO refs (subject_id, schema_id, name, ref_subject_id, ref_schema_id) ")
+            .append("SELECT ?, ?, ?, sub.id, s.id ")
+            .append("FROM subjects sub JOIN schemas s on sub.id = s.subject_id ")
+            .append("WHERE sub.context_id = ? AND sub.subject = ? AND s.version = ? ");
+        ps = conn.prepareStatement(sql.toString());
+        ps.setInt(1, subjectId);
+        ps.setInt(2, schemaId);
+        ps.setString(3, r.getName());
+        ps.setInt(4, contextId);
+        ps.setString(5, QualifiedSubject.create("", r.getSubject()).getSubject());
+        ps.setInt(6, r.getVersion());
+        ps.executeUpdate();
+      }
     } catch (Exception e) {
-      throw new SchemaRegistryException("CreateSchema error");
+      throw new SchemaRegistryException("CreateSchema error", e);
     } finally {
       closeResultSet(rs);
     }
@@ -309,13 +388,24 @@ public class PgStore {
     return schemaId;
   }
 
-  private Schema populateSchema(ResultSet rs) throws SQLException {
+  private Schema populateSchema(ResultSet rs) throws Exception {
     int id = rs.getInt(1);
     String subject = rs.getString(2);
     int version = rs.getInt(3);
     String type = rs.getString(4);
     String str = rs.getString(5);
-    return new Schema(subject, version, id, type, Collections.emptyList(), str);
+    int subjectId = rs.getInt(6);
+    // TODO not handling N + 1 problem
+    return new Schema(subject, version, id, type, getReferences(subjectId, id), str);
+  }
+
+  private io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference
+    populateSchemaReference(ResultSet rs) throws SQLException {
+    String name = rs.getString(1);
+    String subject = rs.getString(2);
+    int version = rs.getInt(3);
+    return new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
+        name, subject, version);
   }
 
   private void closeResultSet(ResultSet rs) {
