@@ -20,6 +20,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.annotations.VisibleForTesting;
 
 import java.util.Comparator;
 import java.util.List;
@@ -28,39 +29,43 @@ import java.util.stream.Collectors;
 
 public class DeriveJsonSchema extends DeriveSchema {
 
+  public static final String NUMBER = "number";
+  public static final String STRING = "string";
+  public static final String BOOLEAN = "boolean";
+  public static final String NULL = "null";
+
   public DeriveJsonSchema() {
     // Map jackson node data type to type understood by json
-    classToDataType.put(com.fasterxml.jackson.databind.node.DoubleNode.class.getName(), "number");
-    classToDataType.put(com.fasterxml.jackson.databind.node.TextNode.class.getName(), "string");
+    classToDataType.put(com.fasterxml.jackson.databind.node.DoubleNode.class.getName(), NUMBER);
+    classToDataType.put(com.fasterxml.jackson.databind.node.TextNode.class.getName(), STRING);
     classToDataType.put(com.fasterxml.jackson.databind.node.BigIntegerNode.class.getName(),
-        "number");
-    classToDataType.put(com.fasterxml.jackson.databind.node.IntNode.class.getName(), "number");
-    classToDataType.put(com.fasterxml.jackson.databind.node.LongNode.class.getName(), "number");
+        NUMBER);
+    classToDataType.put(com.fasterxml.jackson.databind.node.IntNode.class.getName(), NUMBER);
+    classToDataType.put(com.fasterxml.jackson.databind.node.LongNode.class.getName(), NUMBER);
     classToDataType.put(com.fasterxml.jackson.databind.node.BooleanNode.class.getName(),
-        "boolean");
-    classToDataType.put(com.fasterxml.jackson.databind.node.NullNode.class.getName(), "null");
-    classToDataType.put(com.fasterxml.jackson.databind.node.MissingNode.class.getName(), "null");
+        BOOLEAN);
+    classToDataType.put(com.fasterxml.jackson.databind.node.NullNode.class.getName(), NULL);
+    classToDataType.put(com.fasterxml.jackson.databind.node.MissingNode.class.getName(), NULL);
   }
 
-  public static ArrayNode sortJsonArrayList(ArrayNode node) {
+  @VisibleForTesting
+  protected ArrayNode sortJsonArrayList(ArrayNode node) {
     List<JsonNode> dataNodes = DeriveSchemaUtils.getListFromArray(node);
     // Sort items of arrayNode using type as the comparator
-    List<JsonNode> sortedDataNodes = dataNodes
-        .stream()
-        .distinct()
+    List<JsonNode> sortedDataNodes = dataNodes.stream().distinct()
         .sorted(Comparator.comparing(o -> o.get("type").asText()))
         .collect(Collectors.toList());
     return mapper.createObjectNode().arrayNode().addAll(sortedDataNodes);
   }
 
   protected ObjectNode mergeMultipleDataTypes(ObjectNode mergedArray,
-                                              ArrayList<ObjectNode> primitives,
-                                              ArrayList<ObjectNode> records,
-                                              ArrayList<ObjectNode> arrays,
+                                              List<JsonNode> primitives,
+                                              List<JsonNode> records,
+                                              List<JsonNode> arrays,
                                               boolean check2dArray) {
     ArrayNode items = mapper.createArrayNode();
     // Adding primitive types to items' list
-    for (ObjectNode item : primitives) {
+    for (JsonNode item : primitives) {
       items.add(item);
     }
     // Merge records if there is at least 1 record

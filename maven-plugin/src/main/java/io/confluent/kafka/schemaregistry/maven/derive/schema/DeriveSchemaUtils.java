@@ -16,9 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
@@ -32,11 +30,11 @@ import java.util.stream.Collectors;
 
 public class DeriveSchemaUtils {
 
-  public static List<ObjectNode> getUnique(List<ObjectNode> schemas) {
+  public static List<JsonNode> getUnique(List<JsonNode> schemas) {
     return schemas.stream().distinct().collect(Collectors.toList());
   }
 
-  public static List<JsonNode> getListFromArray(ArrayNode field) {
+  public static List<JsonNode> getListFromArray(JsonNode field) {
     List<JsonNode> objectList = new ArrayList<>();
     for (JsonNode fieldItem : field) {
       objectList.add(fieldItem);
@@ -44,17 +42,8 @@ public class DeriveSchemaUtils {
     return objectList;
   }
 
-  public static List<JsonNode> getObjectListFromStringList(List<String> messages)
-      throws JsonProcessingException {
-    List<JsonNode> objectList = new ArrayList<>();
-    for (String message : messages) {
-      objectList.add(JacksonMapper.INSTANCE.readTree(message));
-    }
-    return objectList;
-  }
-
-  public static List<String> getSortedKeys(ObjectNode message) {
-    ArrayList<String> keys = new ArrayList<>();
+  public static List<String> getSortedKeys(JsonNode message) {
+    List<String> keys = new ArrayList<>();
     for (Iterator<String> it = message.fieldNames(); it.hasNext(); ) {
       keys.add(it.next());
     }
@@ -62,18 +51,18 @@ public class DeriveSchemaUtils {
     return keys;
   }
 
-  static void groupItems(ObjectNode element,
-                         ArrayList<ObjectNode> items,
-                         ArrayList<ObjectNode> records,
-                         ArrayList<ObjectNode> arrays) {
+  public static void groupItems(JsonNode element,
+                                List<JsonNode> items,
+                                List<JsonNode> records,
+                                List<JsonNode> arrays) {
     if (element.isEmpty() || items.contains(element)) {
       return;
     }
     // If element is oneOf type, add all elements inside oneOf
     if (element.has("oneOf")) {
-      ArrayNode elements = (ArrayNode) element.get("oneOf");
+      JsonNode elements = element.get("oneOf");
       for (JsonNode oneOfElement : elements) {
-        groupItems((ObjectNode) oneOfElement, items, records, arrays);
+        groupItems(oneOfElement, items, records, arrays);
       }
       return;
     }
@@ -88,7 +77,7 @@ public class DeriveSchemaUtils {
     }
   }
 
-  static ObjectNode sortObjectNode(ObjectNode node) {
+  public static ObjectNode sortObjectNode(ObjectNode node) {
     ObjectNode sortedObjectNode = JacksonMapper.INSTANCE.createObjectNode();
     for (String key : DeriveSchemaUtils.getSortedKeys(node)) {
       sortedObjectNode.set(key, node.get(key));
@@ -96,7 +85,8 @@ public class DeriveSchemaUtils {
     return sortedObjectNode;
   }
 
-  static void mergeNumberTypes(List<ObjectNode> primitives) {
+  public static void mergeNumberTypes(List<ObjectNode> primitives) {
+    // TODO: Change constants when protobuf and avro classes are introduced
     // Checking if anyone element is double type
     if (primitives.stream().noneMatch(o -> o.get("type").asText().equals("double"))) {
       return;
