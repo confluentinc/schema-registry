@@ -16,8 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import java.util.Collections;
 import java.util.Objects;
@@ -43,8 +45,12 @@ public class Metadata {
   private final SortedMap<String, String> properties;
   private final SortedSet<String> sensitive;
 
-  public Metadata(SortedMap<String, SortedSet<String>> annotations,
-      SortedMap<String, String> properties, SortedSet<String> sensitive) {
+  @JsonCreator
+  public Metadata(
+      @JsonProperty("annotations") SortedMap<String, SortedSet<String>> annotations,
+      @JsonProperty("properties") SortedMap<String, String> properties,
+      @JsonProperty("sensitive") SortedSet<String> sensitive
+  ) {
     this.annotations = Collections.unmodifiableSortedMap(annotations);
     this.properties = Collections.unmodifiableSortedMap(properties);
     this.sensitive = Collections.unmodifiableSortedSet(sensitive);

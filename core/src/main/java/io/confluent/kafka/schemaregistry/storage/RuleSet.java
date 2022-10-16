@@ -16,8 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -38,7 +40,11 @@ public class RuleSet {
   private final List<Rule> migrationRules;
   private final List<Rule> domainRules;
 
-  public RuleSet(List<Rule> migrationRules, List<Rule> domainRules) {
+  @JsonCreator
+  public RuleSet(
+      @JsonProperty("migrationRules") List<Rule> migrationRules,
+      @JsonProperty("domainRules") List<Rule> domainRules
+  ) {
     this.migrationRules = Collections.unmodifiableList(migrationRules);
     this.domainRules = Collections.unmodifiableList(domainRules);
   }

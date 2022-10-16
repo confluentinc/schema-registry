@@ -16,8 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -51,8 +53,12 @@ public class Metadata {
   private final SortedMap<String, String> properties;
   private final SortedSet<String> sensitive;
 
-  public Metadata(Map<String, ? extends Set<String>> annotations,
-      Map<String, String> properties, Set<String> sensitive) {
+  @JsonCreator
+  public Metadata(
+      @JsonProperty("annotations") Map<String, ? extends Set<String>> annotations,
+      @JsonProperty("properties") Map<String, String> properties,
+      @JsonProperty("sensitive") Set<String> sensitive
+  ) {
     SortedMap<String, SortedSet<String>> sortedAnnotations = annotations.entrySet().stream()
         .sorted(Map.Entry.comparingByKey())
         .collect(Collectors.toMap(
