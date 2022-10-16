@@ -59,23 +59,29 @@ public class Metadata {
       @JsonProperty("properties") Map<String, String> properties,
       @JsonProperty("sensitive") Set<String> sensitive
   ) {
-    SortedMap<String, SortedSet<String>> sortedAnnotations = annotations.entrySet().stream()
+    SortedMap<String, SortedSet<String>> sortedAnnotations = annotations != null
+        ? annotations.entrySet().stream()
         .sorted(Map.Entry.comparingByKey())
         .collect(Collectors.toMap(
             Entry::getKey,
             e -> e.getValue().stream().sorted().collect(Collectors.toCollection(TreeSet::new)),
             (e1, e2) -> e1,
-            TreeMap::new));
-    SortedMap<String, String> sortedProperties = properties.entrySet().stream()
+            TreeMap::new))
+        : Collections.emptySortedMap();
+    SortedMap<String, String> sortedProperties = properties != null
+        ? properties.entrySet().stream()
         .sorted(Map.Entry.comparingByKey())
         .collect(Collectors.toMap(
             Entry::getKey,
             Entry::getValue,
             (e1, e2) -> e1,
-            TreeMap::new));
-    SortedSet<String> sortedSensitive = sensitive.stream()
+            TreeMap::new))
+        : Collections.emptySortedMap();
+    SortedSet<String> sortedSensitive = sensitive != null
+        ? sensitive.stream()
         .sorted()
-        .collect(Collectors.toCollection(TreeSet::new));
+        .collect(Collectors.toCollection(TreeSet::new))
+        : Collections.emptySortedSet();
     this.annotations = Collections.unmodifiableSortedMap(sortedAnnotations);
     this.properties = Collections.unmodifiableSortedMap(sortedProperties);
     this.sensitive = Collections.unmodifiableSortedSet(sortedSensitive);

@@ -51,9 +51,15 @@ public class Metadata {
       @JsonProperty("properties") SortedMap<String, String> properties,
       @JsonProperty("sensitive") SortedSet<String> sensitive
   ) {
-    this.annotations = Collections.unmodifiableSortedMap(annotations);
-    this.properties = Collections.unmodifiableSortedMap(properties);
-    this.sensitive = Collections.unmodifiableSortedSet(sensitive);
+    this.annotations = annotations != null
+        ? Collections.unmodifiableSortedMap(annotations)
+        : Collections.emptySortedMap();
+    this.properties = properties != null
+        ? Collections.unmodifiableSortedMap(properties)
+        : Collections.emptySortedMap();
+    this.sensitive = sensitive != null
+        ? Collections.unmodifiableSortedSet(sensitive)
+        : Collections.emptySortedSet();
   }
 
   public Metadata(io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata) {

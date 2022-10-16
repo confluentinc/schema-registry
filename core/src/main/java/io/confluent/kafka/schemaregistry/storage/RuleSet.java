@@ -45,8 +45,12 @@ public class RuleSet {
       @JsonProperty("migrationRules") List<Rule> migrationRules,
       @JsonProperty("domainRules") List<Rule> domainRules
   ) {
-    this.migrationRules = Collections.unmodifiableList(migrationRules);
-    this.domainRules = Collections.unmodifiableList(domainRules);
+    this.migrationRules = migrationRules != null
+        ? Collections.unmodifiableList(migrationRules)
+        : Collections.emptyList();
+    this.domainRules = domainRules != null
+        ? Collections.unmodifiableList(domainRules)
+        : Collections.emptyList();
   }
 
   public RuleSet(io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet) {

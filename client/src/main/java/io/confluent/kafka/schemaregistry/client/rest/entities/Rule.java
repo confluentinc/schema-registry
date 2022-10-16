@@ -23,8 +23,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Collections;
 import java.util.Objects;
+import java.util.Set;
 import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -43,13 +47,18 @@ public class Rule {
               @JsonProperty("kind") RuleKind kind,
               @JsonProperty("mode") RuleMode mode,
               @JsonProperty("type") String type,
-              @JsonProperty("annotations") SortedSet<String> annotations,
+              @JsonProperty("annotations") Set<String> annotations,
               @JsonProperty("body") String body) {
+    SortedSet<String> sortedAnnotations = annotations != null
+        ? annotations.stream()
+        .sorted()
+        .collect(Collectors.toCollection(TreeSet::new))
+        : Collections.emptySortedSet();
     this.name = name;
     this.kind = kind;
     this.mode = mode;
     this.type = type;
-    this.annotations = annotations;
+    this.annotations = sortedAnnotations;
     this.body = body;
   }
 
