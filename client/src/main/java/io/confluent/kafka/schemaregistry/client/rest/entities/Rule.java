@@ -49,15 +49,15 @@ public class Rule {
               @JsonProperty("type") String type,
               @JsonProperty("annotations") Set<String> annotations,
               @JsonProperty("body") String body) {
+    this.name = name;
+    this.kind = kind;
+    this.mode = mode;
+    this.type = type;
     SortedSet<String> sortedAnnotations = annotations != null
         ? annotations.stream()
         .sorted()
         .collect(Collectors.toCollection(TreeSet::new))
         : Collections.emptySortedSet();
-    this.name = name;
-    this.kind = kind;
-    this.mode = mode;
-    this.type = type;
     this.annotations = sortedAnnotations;
     this.body = body;
   }
