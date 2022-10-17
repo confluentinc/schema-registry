@@ -20,10 +20,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -162,12 +164,59 @@ public abstract class DeriveSchema {
     return mergeMultipleDataTypes(mergedArray, primitives, records, arrays, check2dArray);
   }
 
+  protected JsonNode getNullSchema() {
+    return getPrimitiveSchema(mapper.convertValue(null, NullNode.class)).get();
+  }
+
+  protected ObjectNode getSchemaForMultipleMessages(List<JsonNode> messages)
+      throws JsonProcessingException {
+    // Get schema for each message
+    List<JsonNode> schemas = getSchemaOfAllElements(messages, "Schema");
+    ArrayNode schemaInfoList = mapper.createArrayNode();
+    List<JsonNode> mergedSchemas = new ArrayList<>();
+
+    // Let's say we have n different messages, now we generated have n different schemas
+    // Out of the n schemas, some schemas could be identical
+    // schemas might differ due to a record having an extra field or record is of type union
+    // schemas might differ due to same field having int and double type in different messages
+    // In the above cases, schemas can be merged together. So, we pick one and merge with rest
+    for (int i = 0; i < schemas.size(); i++) {
+      ArrayNode messagesMatched = mapper.createArrayNode();
+      JsonNode mergedSchema = schemas.get(i);
+      for (int j = 0; j < schemas.size(); j++) {
+        try {
+          mergedSchema = mergeRecords(Arrays.asList(mergedSchema, schemas.get(j)));
+          messagesMatched.add(j);
+        } catch (IllegalArgumentException ignored) {
+          // ignore
+        }
+      }
+      if (!mergedSchemas.contains(mergedSchema)) {
+        updateSchemaInformation(mergedSchema, messagesMatched, mergedSchemas, schemaInfoList);
+      }
+    }
+    // create json object to return with complete schema information
+    ObjectNode schemaInformation = mapper.createObjectNode();
+    schemaInformation.set("schemas", schemaInfoList);
+    return schemaInformation;
+  }
+
+  private void updateSchemaInformation(JsonNode mergedSchema,
+                                       ArrayNode messagesMatched,
+                                       List<JsonNode> mergedSchemas,
+                                       ArrayNode schemaInformationList) {
+    mergedSchemas.add(mergedSchema);
+    ObjectNode schemaElement = mapper.createObjectNode();
+    schemaElement.set("schema", convertToFormat(mergedSchema, "Schema"));
+    schemaElement.set("messagesMatched", messagesMatched);
+    schemaInformationList.add(schemaElement);
+  }
+
+  protected abstract JsonNode convertToFormat(JsonNode schema, String name);
+
   protected abstract ObjectNode mergeMultipleDataTypes(ObjectNode mergedArray,
                                                        List<JsonNode> primitives,
                                                        List<JsonNode> records,
                                                        List<JsonNode> arrays,
                                                        boolean check2dArray);
-
-  protected abstract ObjectNode getSchemaForMultipleMessages(List<String> messages)
-      throws JsonProcessingException;
 }

@@ -20,10 +20,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 public class DeriveJsonSchema extends DeriveSchema {
@@ -89,17 +89,23 @@ public class DeriveJsonSchema extends DeriveSchema {
     return mergedArray;
   }
 
-  public ObjectNode getSchemaForMultipleMessages(List<String> messages)
+  @Override
+  public ObjectNode getSchemaForMultipleMessages(List<JsonNode> messages)
       throws JsonProcessingException {
     // Get schema for multiple messages. Exactly one schema is returned
     // Treated same as array of records, the items derived is returned
-    List<JsonNode> messageObjects = new ArrayList<>();
-    for (String message : messages) {
-      messageObjects.add(mapper.readTree(message));
-    }
-    JsonNode schema = getSchemaForArray(messageObjects, "").get("items");
+    JsonNode schema = getSchemaForArray(messages, "").get("items");
+    convertToFormat(schema, "");
     ObjectNode schemaInformation = mapper.createObjectNode();
     schemaInformation.set("schema", schema);
     return schemaInformation;
   }
+
+  protected JsonNode convertToFormat(JsonNode schema, String name) {
+    // Generate json schema and check for any errors
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    jsonSchema.validate();
+    return schema;
+  }
+
 }

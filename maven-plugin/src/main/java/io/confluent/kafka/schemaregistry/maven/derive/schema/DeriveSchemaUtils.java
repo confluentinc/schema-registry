@@ -78,7 +78,7 @@ public class DeriveSchemaUtils {
     return sortedObjectNode;
   }
 
-  public static void mergeNumberTypes(List<ObjectNode> primitives) {
+  public static void mergeNumberTypes(List<JsonNode> primitives) {
     // TODO: Change constants when protobuf and avro classes are introduced
     // Checking if anyone element is double type
     if (primitives.stream().noneMatch(o -> o.get("type").asText().equals("double"))) {
@@ -86,7 +86,10 @@ public class DeriveSchemaUtils {
     }
     // If any other element is of type integer/long, it is marked as double
     List<String> integerTypes = Arrays.asList("int", "int32", "int64", "long");
-    primitives.stream().filter(o -> integerTypes.contains(o.get("type").asText()))
-        .forEach(o -> o.put("type", "double"));
+    for (JsonNode node : primitives) {
+      if (integerTypes.contains(node.get("type").asText())) {
+        ((ObjectNode) node).put("type", "double");
+      }
+    }
   }
 }

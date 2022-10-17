@@ -81,12 +81,12 @@ public class DeriveSchemaUtilsTest {
 
   @Test
   public void shouldMergeNumberTypes() throws JsonProcessingException {
-    List<ObjectNode> schemas = new ArrayList<>();
+    List<JsonNode> schemas = new ArrayList<>();
     for (String schema : Arrays.asList(TYPE_INT, TYPE_LONG, TYPE_INT_32, TYPE_INT_64, TYPE_DOUBLE)) {
       schemas.add(mapper.readValue(schema, ObjectNode.class));
     }
     DeriveSchemaUtils.mergeNumberTypes(schemas);
-    for (ObjectNode schema : schemas) {
+    for (JsonNode schema : schemas) {
       assertEquals(schema, mapper.readValue(TYPE_DOUBLE, ObjectNode.class));
     }
   }

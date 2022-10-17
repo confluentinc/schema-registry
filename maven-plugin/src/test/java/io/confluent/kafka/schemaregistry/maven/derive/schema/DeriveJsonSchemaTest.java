@@ -185,8 +185,8 @@ public class DeriveJsonSchemaTest {
   @Test
   public void testDeriveMultipleMessages() throws JsonProcessingException {
     // Merging Records with different field names
-    String stringMessage = "{\"string\": \"1\"}";
-    String integerMessage = "{\"number\": 12}";
+    JsonNode stringMessage = mapper.readTree("{\"string\": \"1\"}");
+    JsonNode integerMessage = mapper.readTree("{\"number\": 12}");
     String expectedSchema = "{\"schema\":{\"type\":\"object\",\"properties\":{\"number\":{\"type\":\"number\"},\"string\":{\"type\":\"string\"}}}}";
     ObjectNode schema = derive.getSchemaForMultipleMessages(Arrays.asList(stringMessage, integerMessage, stringMessage, integerMessage));
     assertEquals(expectedSchema, schema.toString());
