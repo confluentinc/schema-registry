@@ -36,9 +36,7 @@ public class DeriveSchemaUtils {
 
   public static List<JsonNode> getListFromArray(JsonNode field) {
     List<JsonNode> objectList = new ArrayList<>();
-    for (JsonNode fieldItem : field) {
-      objectList.add(fieldItem);
-    }
+    field.forEach(objectList::add);
     return objectList;
   }
 
@@ -60,10 +58,7 @@ public class DeriveSchemaUtils {
     }
     // If element is oneOf type, add all elements inside oneOf
     if (element.has("oneOf")) {
-      JsonNode elements = element.get("oneOf");
-      for (JsonNode oneOfElement : elements) {
-        groupItems(oneOfElement, items, records, arrays);
-      }
+      element.get("oneOf").forEach(o -> groupItems(o, items, records, arrays));
       return;
     }
 
@@ -79,9 +74,7 @@ public class DeriveSchemaUtils {
 
   public static ObjectNode sortObjectNode(ObjectNode node) {
     ObjectNode sortedObjectNode = JacksonMapper.INSTANCE.createObjectNode();
-    for (String key : DeriveSchemaUtils.getSortedKeys(node)) {
-      sortedObjectNode.set(key, node.get(key));
-    }
+    DeriveSchemaUtils.getSortedKeys(node).forEach(key -> sortedObjectNode.set(key, node.get(key)));
     return sortedObjectNode;
   }
 

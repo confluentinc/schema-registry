@@ -59,8 +59,7 @@ public abstract class DeriveSchema {
     } else if (message instanceof ArrayNode) {
       return getSchemaForArray(DeriveSchemaUtils.getListFromArray(message), name);
     } else {
-      ObjectNode objectNode = mapper.valueToTree(message);
-      return getSchemaForRecord(objectNode);
+      return getSchemaForRecord(mapper.valueToTree(message));
     }
   }
 
@@ -115,8 +114,7 @@ public abstract class DeriveSchema {
     ObjectNode mergedRecord = mapper.createObjectNode();
     mergedRecord.put("type", "object");
     ObjectNode properties = mapper.createObjectNode();
-    HashMap<String, List<JsonNode>> fieldToType = new HashMap<>();
-
+    Map<String, List<JsonNode>> fieldToType = new HashMap<>();
     // Loop through every record and group them by field name
     // Then for each field, treat the list of schemas as array and try to merge
     for (JsonNode record : recordList) {
@@ -140,7 +138,6 @@ public abstract class DeriveSchema {
                 entry.getKey(), fieldsType), e);
       }
     }
-
     mergedRecord.set("properties", DeriveSchemaUtils.sortObjectNode(properties));
     return mergedRecord;
   }

@@ -92,8 +92,7 @@ public class DeriveJsonSchemaTest {
       throws JsonProcessingException {
     JsonNode schema1 = mapper.readTree(schemaString1);
     JsonNode schema2 = mapper.readTree(schemaString2);
-    List<JsonNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
-    ObjectNode schema = derive.mergeArrays(schemas, true, false);
+    ObjectNode schema = derive.mergeArrays(Arrays.asList(schema1, schema2), true, false);
     assertEquals(ExpectedSchema, schema.toString());
   }
 
@@ -103,8 +102,7 @@ public class DeriveJsonSchemaTest {
       throws JsonProcessingException {
     JsonNode schema1 = mapper.readTree(schemaString1);
     JsonNode schema2 = mapper.readTree(schemaString2);
-    List<JsonNode> schemas = new ArrayList<>(Arrays.asList(schema1, schema2));
-    ObjectNode schema = derive.mergeRecords(schemas);
+    ObjectNode schema = derive.mergeRecords(Arrays.asList(schema1, schema2));
     assertEquals(ExpectedSchema, schema.toString());
   }
 

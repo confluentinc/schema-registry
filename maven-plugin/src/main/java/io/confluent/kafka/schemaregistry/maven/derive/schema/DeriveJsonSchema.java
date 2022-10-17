@@ -20,7 +20,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.util.Comparator;
 import java.util.List;
@@ -48,7 +47,6 @@ public class DeriveJsonSchema extends DeriveSchema {
     classToDataType.put(com.fasterxml.jackson.databind.node.MissingNode.class.getName(), NULL);
   }
 
-  @VisibleForTesting
   protected ArrayNode sortJsonArrayList(ArrayNode node) {
     List<JsonNode> dataNodes = DeriveSchemaUtils.getListFromArray(node);
     // Sort items of arrayNode using type as the comparator
@@ -65,9 +63,7 @@ public class DeriveJsonSchema extends DeriveSchema {
                                               boolean check2dArray) {
     ArrayNode items = mapper.createArrayNode();
     // Adding primitive types to items' list
-    for (JsonNode item : primitives) {
-      items.add(item);
-    }
+    items.addAll(primitives);
     // Merge records if there is at least 1 record
     if (records.size() > 0) {
       items.add(mergeRecords(records));
