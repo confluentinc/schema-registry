@@ -56,7 +56,7 @@ public class SchemaString {
     return JacksonMapper.INSTANCE.readValue(json, SchemaString.class);
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC, example = AvroSchema.TYPE)
   @JsonProperty("schemaType")
   @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
@@ -68,7 +68,8 @@ public class SchemaString {
     this.schemaType = schemaType;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = "Schema string identified by the ID")
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Schema string identified by the ID",
+      example = Schema.SCHEMA_EXAMPLE)
   @JsonProperty("schema")
   public String getSchemaString() {
     return schemaString;
@@ -90,7 +91,7 @@ public class SchemaString {
     this.references = references;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = "Maximum ID")
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Maximum ID", example = "1")
   @JsonProperty("maxId")
   public Integer getMaxId() {
     return maxId;
