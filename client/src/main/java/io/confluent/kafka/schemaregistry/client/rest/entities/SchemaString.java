@@ -56,7 +56,8 @@ public class SchemaString {
     return JacksonMapper.INSTANCE.readValue(json, SchemaString.class);
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC, example = AvroSchema.TYPE)
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC,
+      example = Schema.TYPE_EXAMPLE)
   @JsonProperty("schemaType")
   @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
