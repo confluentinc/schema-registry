@@ -16,7 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EMPTY_METADATA;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET;
+
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import java.util.HashMap;
@@ -46,6 +51,8 @@ public class AvroSchema implements ParsedSchema {
   private final Integer version;
   private final List<SchemaReference> references;
   private final Map<String, String> resolvedReferences;
+  private final Metadata metadata;
+  private final RuleSet ruleSet;
   private final boolean isNew;
 
   private transient int hashCode = NO_HASHCODE;
@@ -68,6 +75,17 @@ public class AvroSchema implements ParsedSchema {
                     Map<String, String> resolvedReferences,
                     Integer version,
                     boolean isNew) {
+    this(schemaString, references, resolvedReferences,
+        EMPTY_METADATA, EMPTY_RULESET, version, isNew);
+  }
+
+  public AvroSchema(String schemaString,
+                    List<SchemaReference> references,
+                    Map<String, String> resolvedReferences,
+                    Metadata metadata,
+                    RuleSet ruleSet,
+                    Integer version,
+                    boolean isNew) {
     this.isNew = isNew;
     Schema.Parser parser = getParser();
     for (String schema : resolvedReferences.values()) {
@@ -76,6 +94,8 @@ public class AvroSchema implements ParsedSchema {
     this.schemaObj = parser.parse(schemaString);
     this.references = Collections.unmodifiableList(references);
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
+    this.metadata = metadata;
+    this.ruleSet = ruleSet;
     this.version = version;
   }
 
@@ -88,6 +108,8 @@ public class AvroSchema implements ParsedSchema {
     this.schemaObj = schemaObj;
     this.references = Collections.emptyList();
     this.resolvedReferences = Collections.emptyMap();
+    this.metadata = EMPTY_METADATA;
+    this.ruleSet = EMPTY_RULESET;
     this.version = version;
   }
 
@@ -96,6 +118,8 @@ public class AvroSchema implements ParsedSchema {
       String canonicalString,
       List<SchemaReference> references,
       Map<String, String> resolvedReferences,
+      Metadata metadata,
+      RuleSet ruleSet,
       Integer version,
       boolean isNew
   ) {
@@ -104,15 +128,48 @@ public class AvroSchema implements ParsedSchema {
     this.canonicalString = canonicalString;
     this.references = references;
     this.resolvedReferences = resolvedReferences;
+    this.metadata = metadata;
+    this.ruleSet = ruleSet;
     this.version = version;
   }
 
+  @Override
   public AvroSchema copy() {
     return new AvroSchema(
         this.schemaObj,
         this.canonicalString,
         this.references,
         this.resolvedReferences,
+        this.metadata,
+        this.ruleSet,
+        this.version,
+        this.isNew
+    );
+  }
+
+  @Override
+  public AvroSchema copy(Integer version) {
+    return new AvroSchema(
+        this.schemaObj,
+        this.canonicalString,
+        this.references,
+        this.resolvedReferences,
+        this.metadata,
+        this.ruleSet,
+        version,
+        this.isNew
+    );
+  }
+
+  @Override
+  public AvroSchema copy(Metadata metadata, RuleSet ruleSet) {
+    return new AvroSchema(
+        this.schemaObj,
+        this.canonicalString,
+        this.references,
+        this.resolvedReferences,
+        metadata,
+        ruleSet,
         this.version,
         this.isNew
     );
@@ -159,6 +216,7 @@ public class AvroSchema implements ParsedSchema {
     return canonicalString;
   }
 
+  @Override
   public Integer version() {
     return version;
   }
@@ -170,6 +228,16 @@ public class AvroSchema implements ParsedSchema {
 
   public Map<String, String> resolvedReferences() {
     return resolvedReferences;
+  }
+
+  @Override
+  public Metadata metadata() {
+    return metadata;
+  }
+
+  @Override
+  public RuleSet ruleSet() {
+    return ruleSet;
   }
 
   public boolean isNew() {
@@ -220,6 +288,8 @@ public class AvroSchema implements ParsedSchema {
     return Objects.equals(version, that.version)
         && Objects.equals(references, that.references)
         && Objects.equals(schemaObj, that.schemaObj)
+        && Objects.equals(metadata, that.metadata)
+        && Objects.equals(ruleSet, that.ruleSet)
         && metaEqual(schemaObj, that.schemaObj, new HashMap<>());
   }
 
@@ -308,7 +378,7 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      hashCode = Objects.hash(schemaObj, references, version)
+      hashCode = Objects.hash(schemaObj, references, version, metadata, ruleSet)
           + metaHash(schemaObj, new IdentityHashMap<>());
     }
     return hashCode;
