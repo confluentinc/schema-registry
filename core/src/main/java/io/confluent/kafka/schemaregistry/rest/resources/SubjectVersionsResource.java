@@ -78,7 +78,7 @@ import java.util.Map;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SubjectVersionsResource {
 
-  private static final String apiTag = "Subject Versions (v1)";
+  public static final String apiTag = SubjectsResource.apiTag;
   private static final Logger log = LoggerFactory.getLogger(SubjectVersionsResource.class);
 
   private final KafkaSchemaRegistry schemaRegistry;

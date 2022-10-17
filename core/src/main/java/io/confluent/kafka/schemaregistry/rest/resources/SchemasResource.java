@@ -56,7 +56,7 @@ import java.util.Set;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SchemasResource {
 
-  private static final String apiTag = "Schemas (v1)";
+  public static final String apiTag = "Schemas (v1)";
   private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 

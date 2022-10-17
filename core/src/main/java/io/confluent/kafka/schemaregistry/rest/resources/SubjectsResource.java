@@ -68,7 +68,7 @@ import java.util.Set;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SubjectsResource {
 
-  private static final String apiTag = "Subjects (v1)";
+  public static final String apiTag = "Subjects (v1)";
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();

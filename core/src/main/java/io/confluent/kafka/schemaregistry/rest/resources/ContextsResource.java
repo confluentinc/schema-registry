@@ -45,7 +45,7 @@ import java.util.List;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ContextsResource {
 
-  private static final String apiTag = "Contexts (v1)";
+  public static final String apiTag = "Contexts (v1)";
   private final KafkaSchemaRegistry schemaRegistry;
 
   public ContextsResource(KafkaSchemaRegistry schemaRegistry) {

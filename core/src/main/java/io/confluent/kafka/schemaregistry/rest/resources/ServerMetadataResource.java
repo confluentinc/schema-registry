@@ -42,7 +42,7 @@ import javax.ws.rs.Produces;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ServerMetadataResource {
 
-  private static final String apiTag = "Server Metadata (v1)";
+  public static final String apiTag = "Server Metadata (v1)";
   private static final Logger log = LoggerFactory.getLogger(ServerMetadataResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 

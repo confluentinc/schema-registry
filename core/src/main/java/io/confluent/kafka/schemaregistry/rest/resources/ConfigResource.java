@@ -65,7 +65,7 @@ import java.util.Map;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ConfigResource {
 
-  private static final String apiTag = "Config (v1)";
+  public static final String apiTag = "Config (v1)";
   private static final Logger log = LoggerFactory.getLogger(ConfigResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
