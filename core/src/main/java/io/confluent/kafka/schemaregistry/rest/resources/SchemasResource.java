@@ -312,7 +312,7 @@ public class SchemasResource {
         @ApiResponse(responseCode = "200", description = "List of supported schema types.",
             content = @Content(array = @ArraySchema(
                 schema = @io.swagger.v3.oas.annotations.media.Schema(
-                    implementation = String.class, example = AvroSchema.TYPE)))),
+                    implementation = String.class, example = Schema.TYPE_EXAMPLE)))),
         @ApiResponse(responseCode = "500",
           description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store.",
