@@ -1201,9 +1201,7 @@ public class RestService implements Configurable {
             DEFAULT_REQUEST_PROPERTIES, GET_SR_VERSION_RESPONSE_TYPE);
   }
 
-  private static List<String> parseBase
-  
-  String baseUrl) {
+  private static List<String> parseBaseUrl(String baseUrl) {
     List<String> baseUrls = Arrays.asList(baseUrl.split("\\s*,\\s*"));
     if (baseUrls.isEmpty()) {
       throw new IllegalArgumentException("Missing required schema registry url list");
