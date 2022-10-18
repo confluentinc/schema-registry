@@ -11,8 +11,11 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.WILDCARD;
 
@@ -58,7 +61,7 @@ public class PgStore {
           .append("JOIN schemas s on s.subject_id = sub.id ")
           .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? AND hash = ? ");
       if (!lookupDeletedSchema) {
-        sql.append("AND NOT deleted");
+        sql.append("AND NOT s.deleted");
       }
       ps = conn.prepareStatement(sql.toString());
       ps.setString(1, qs.getTenant());
@@ -96,7 +99,7 @@ public class PgStore {
           .append("JOIN schemas s ON s.subject_id = sub.id ")
           .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? AND version = ? ");
       if (!lookupDeletedSchema) {
-        sql.append("AND NOT deleted");
+        sql.append("AND NOT s.deleted");
       }
       ps = conn.prepareStatement(sql.toString());
       ps.setString(1, qs.getTenant());
@@ -118,7 +121,236 @@ public class PgStore {
     return null;
   }
 
-  public List<Schema> getAllVersionsDesc(QualifiedSubject qs)
+  public boolean subjectExists(QualifiedSubject qs, boolean lookupDeletedSchema)
+      throws SchemaRegistryException {
+    ResultSet rs = null;
+    PreparedStatement ps;
+
+    try {
+      StringBuilder sql = new StringBuilder();
+      sql.append("SELECT sub.id FROM contexts c ")
+          .append("JOIN subjects sub ON c.id = sub.context_id ")
+          .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? ");
+      if (!lookupDeletedSchema) {
+        sql.append("AND NOT deleted");
+      }
+      ps = conn.prepareStatement(sql.toString());
+      ps.setString(1, qs.getTenant());
+      ps.setString(2, qs.getContext());
+      ps.setString(3, qs.getSubject());
+      rs = ps.executeQuery();
+      if (rs != null) {
+        if (rs.next()) {
+          return true;
+        }
+      }
+    } catch (Exception e) {
+      throw new SchemaRegistryException("SubjectExists error", e);
+    } finally {
+      closeResultSet(rs);
+    }
+
+    return false;
+  }
+
+  public Set<Integer> referencesSchema(QualifiedSubject qs, Optional<Integer> version)
+      throws SchemaRegistryException {
+    Set<Integer> set = new HashSet<>();
+    ResultSet rs = null;
+    PreparedStatement ps;
+
+    try {
+      StringBuilder sql = new StringBuilder();
+      sql.append("SELECT r.schema_id FROM contexts c ")
+          .append("JOIN subjects sub ON c.id = sub.context_id ")
+          .append("JOIN schemas s ON s.subject_id = sub.id ")
+          .append("JOIN refs r ON s.subject_id = r.ref_subject_id AND s.id = r.ref_schema_id ")
+          .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? ");
+      if (version.isPresent()) {
+        sql.append("AND version = ? ");
+      }
+      ps = conn.prepareStatement(sql.toString());
+      ps.setString(1, qs.getTenant());
+      ps.setString(2, qs.getContext());
+      ps.setString(3, qs.getSubject());
+      if (version.isPresent()) {
+        ps.setInt(4, version.get());
+      }
+      rs = ps.executeQuery();
+      if (rs != null) {
+        while (rs.next()) {
+          set.add(rs.getInt(1));
+        }
+      }
+    } catch (Exception e) {
+      throw new SchemaRegistryException("ReferencesSchema error", e);
+    } finally {
+      closeResultSet(rs);
+    }
+
+    return set;
+  }
+
+  public void softDeleteSchema(QualifiedSubject qs, int version) throws SchemaRegistryException {
+    PreparedStatement ps;
+
+    try {
+      StringBuilder sql = new StringBuilder();
+      sql.append("UPDATE schemas SET deleted = true WHERE (subject_id, version) IN ")
+          .append("(SELECT sub.id, ? FROM subjects sub ")
+          .append("JOIN contexts c ON sub.context_id = c.id ")
+          .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ?) ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setInt(1, version);
+      ps.setString(2, qs.getTenant());
+      ps.setString(3, qs.getContext());
+      ps.setString(4, qs.getSubject());
+      ps.executeUpdate();
+    } catch (Exception e) {
+      throw new SchemaRegistryException("SoftDeleteSchema error", e);
+    }
+  }
+
+  public void hardDeleteSchema(QualifiedSubject qs, int version) throws SchemaRegistryException {
+    ResultSet rs = null;
+    PreparedStatement ps;
+    Integer subjectId = null, schemaId = null;
+
+    try {
+      StringBuilder sql = new StringBuilder();
+
+      sql.append("SELECT sub.id, s.id FROM contexts c ")
+          .append("JOIN subjects sub ON c.id = sub.context_id ")
+          .append("JOIN schemas s ON s.subject_id = sub.id ")
+          .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? AND version = ? ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setString(1, qs.getTenant());
+      ps.setString(2, qs.getContext());
+      ps.setString(3, qs.getSubject());
+      ps.setInt(4, version);
+      rs = ps.executeQuery();
+      if (rs != null) {
+        if (rs.next()) {
+          subjectId = rs.getInt(1);
+          schemaId = rs.getInt(2);
+        }
+      }
+
+      if (subjectId == null)
+        return;
+
+      sql.setLength(0);
+      sql.append("DELETE FROM refs WHERE subject_id = ? AND schema_id = ?");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setInt(1, subjectId);
+      ps.setInt(2, schemaId);
+      ps.executeUpdate();
+
+      sql.setLength(0);
+      sql.append("DELETE FROM schemas WHERE subject_id = ? AND id = ? ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setInt(1, subjectId);
+      ps.setInt(2, schemaId);
+      ps.executeUpdate();
+    } catch (Exception e) {
+      throw new SchemaRegistryException("HardDeleteSchema error", e);
+    } finally {
+      closeResultSet(rs);
+    }
+  }
+
+  public void softDeleteSubject(QualifiedSubject qs) throws SchemaRegistryException {
+    ResultSet rs = null;
+    PreparedStatement ps;
+    Integer subjectId = null;
+
+    try {
+      StringBuilder sql = new StringBuilder();
+      sql.append("SELECT sub.id FROM subjects sub ")
+          .append("JOIN contexts c ON sub.context_id = c.id ")
+          .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setString(1, qs.getTenant());
+      ps.setString(2, qs.getContext());
+      ps.setString(3, qs.getSubject());
+      rs = ps.executeQuery();
+      if (rs != null) {
+        if (rs.next()) {
+          subjectId = rs.getInt(1);
+        }
+      }
+
+      if (subjectId == null)
+        return;
+
+      sql.setLength(0);
+      sql.append("UPDATE schemas SET deleted = true WHERE subject_id = ? ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setInt(1, subjectId);
+      ps.executeUpdate();
+
+      sql.setLength(0);
+      sql.append("UPDATE subjects SET deleted = true WHERE id = ? ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setInt(1, subjectId);
+      ps.executeUpdate();
+    } catch (Exception e) {
+      throw new SchemaRegistryException("SoftDeleteSubject error", e);
+    } finally {
+      closeResultSet(rs);
+    }
+  }
+
+  public void hardDeleteSubject(QualifiedSubject qs) throws SchemaRegistryException {
+    ResultSet rs = null;
+    PreparedStatement ps;
+    Integer subjectId = null;
+
+    try {
+      StringBuilder sql = new StringBuilder();
+
+      sql.append("SELECT sub.id FROM contexts c ")
+          .append("JOIN subjects sub ON c.id = sub.context_id ")
+          .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setString(1, qs.getTenant());
+      ps.setString(2, qs.getContext());
+      ps.setString(3, qs.getSubject());
+      rs = ps.executeQuery();
+      if (rs != null) {
+        if (rs.next()) {
+          subjectId = rs.getInt(1);
+        }
+      }
+
+      if (subjectId == null)
+        return;
+
+      sql.setLength(0);
+      sql.append("DELETE FROM refs WHERE subject_id = ? ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setInt(1, subjectId);
+      ps.executeUpdate();
+
+      sql.setLength(0);
+      sql.append("DELETE FROM schemas WHERE subject_id = ? ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setInt(1, subjectId);
+      ps.executeUpdate();
+
+      sql.setLength(0);
+      sql.append("DELETE FROM subjects WHERE id = ? ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setInt(1, subjectId);
+      ps.executeUpdate();
+    } catch (Exception e) {
+      throw new SchemaRegistryException("HardDeleteSubject error", e);
+    } finally {
+      closeResultSet(rs);
+    }
+  }
+
+  public List<Schema> getAllVersionsDesc(QualifiedSubject qs, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     List<Schema> list = new ArrayList<>();
     ResultSet rs = null;
@@ -129,8 +361,11 @@ public class PgStore {
       sql.append("SELECT s.id, sub.subject, s.version, s.type, s.str, sub.id FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
           .append("JOIN schemas s on s.subject_id = sub.id ")
-          .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? ")
-          .append("ORDER BY version DESC");
+          .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? ");
+      if (!lookupDeletedSchema) {
+        sql.append("AND NOT s.deleted ");
+      }
+      sql.append("ORDER BY version DESC");
       ps = conn.prepareStatement(sql.toString());
       ps.setString(1, qs.getTenant());
       ps.setString(2, qs.getContext());
@@ -142,7 +377,7 @@ public class PgStore {
         }
       }
     } catch (Exception e) {
-      throw new SchemaRegistryException("LookupSchemaBySubject error", e);
+      throw new SchemaRegistryException("GetAllVersionsDesc error", e);
     } finally {
       closeResultSet(rs);
     }

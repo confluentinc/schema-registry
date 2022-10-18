@@ -27,7 +27,10 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
+import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -43,9 +46,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 public class PgSchemaRegistry implements SchemaRegistry {
   private static final Logger log = LoggerFactory.getLogger(PgSchemaRegistry.class);
@@ -120,11 +125,10 @@ public class PgSchemaRegistry implements SchemaRegistry {
       return res;
     }
 
-    List<Schema> allVersions = pgStore.getAllVersionsDesc(qs);
+    List<Schema> allVersions = pgStore.getAllVersionsDesc(qs, lookupDeletedSchema);
     ParsedSchema parsedSchema = canonicalizeSchema(schema, false, normalize);
     for (Schema s : allVersions) {
-      // TODO deal with deleted
-      if ( parsedSchema.references().isEmpty()
+      if (parsedSchema.references().isEmpty()
           && !s.getReferences().isEmpty()) {
         ParsedSchema prevSchema = parseSchema(s);
         if (parsedSchema.deepEquals(prevSchema)) {
@@ -206,7 +210,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
   @Override
   public boolean hasSubjects(String subject, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
-    return false;
+    return pgStore.subjectExists(QualifiedSubject.create(tenant(), subject), lookupDeletedSchema);
   }
 
   @Override
@@ -218,14 +222,37 @@ public class PgSchemaRegistry implements SchemaRegistry {
   @Override
   public List<Integer> deleteSubject(String subject, boolean permanentDelete)
       throws SchemaRegistryException {
-    return null;
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (!pgStore.referencesSchema(qs, Optional.empty()).isEmpty()) {
+      throw new ReferenceExistsException(subject);
+    }
+    List<Schema> fetchedSchemas = pgStore.getAllVersionsDesc(qs, false);
+    if (permanentDelete && !fetchedSchemas.isEmpty()) {
+      throw new SubjectNotSoftDeletedException(subject);
+    }
+
+    List<Integer> deletedVersions = pgStore.getAllVersionsDesc(qs, true)
+        .stream().map(Schema::getVersion).collect(Collectors.toList());
+    try {
+      if (!permanentDelete) {
+        pgStore.softDeleteSubject(qs);
+        // TODO not handling mode/compatibility
+      } else {
+        pgStore.hardDeleteSubject(qs);
+      }
+      pgStore.commit();
+    } catch (Exception e) {
+      pgStore.rollback();
+      throw new SchemaRegistryException("DeleteSubject failed");
+    }
+    return deletedVersions;
   }
 
   @Override
   public List<Integer> deleteSubject(Map<String, String> headerProperties,
                                      String subject, boolean permanentDelete)
       throws SchemaRegistryException {
-    return null;
+    return deleteSubject(subject, permanentDelete);
   }
 
   @Override
@@ -304,7 +331,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
     ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
 
     QualifiedSubject qs = QualifiedSubject.create(tenant(), schema.getSubject());
-    List<Schema> allVersions = pgStore.getAllVersionsDesc(qs);
+    List<Schema> allVersions = pgStore.getAllVersionsDesc(qs, true);
     for (Schema s : allVersions) {
       // TODO deal with deleted
       ParsedSchema undeletedSchema = parseSchema(s);
@@ -373,20 +400,42 @@ public class PgSchemaRegistry implements SchemaRegistry {
   public boolean schemaVersionExists(String subject,
                                      VersionId versionId, boolean returnDeletedSchema)
       throws SchemaRegistryException {
-    return false;
+    final int version = versionId.getVersionId();
+    Schema schema = this.get(subject, version, returnDeletedSchema);
+    return (schema != null);
   }
 
   @Override
   public void deleteSchemaVersion(String subject, Schema schema, boolean permanentDelete)
       throws SchemaRegistryException {
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (!pgStore.referencesSchema(qs, Optional.of(schema.getVersion())).isEmpty()) {
+      throw new ReferenceExistsException(subject + ":" + schema.getVersion());
+    }
+    Schema fetchedSchema = pgStore.getSubjectVersion(qs, schema.getVersion(), false);
+    if (permanentDelete && fetchedSchema != null) {
+      throw new SchemaVersionNotSoftDeletedException(subject, schema.getVersion().toString());
+    }
 
+    try {
+      if (!permanentDelete) {
+        pgStore.softDeleteSchema(qs, schema.getVersion());
+        // TODO not handling mode/compatibility
+      } else {
+        pgStore.hardDeleteSchema(qs, schema.getVersion());
+      }
+      pgStore.commit();
+    } catch (Exception e) {
+      pgStore.rollback();
+      throw new SchemaRegistryException("DeleteSchemaVersion failed");
+    }
   }
 
   @Override
   public void deleteSchemaVersion(Map<String, String> headerProperties,
                                   String subject, Schema schema, boolean permanentDelete)
       throws SchemaRegistryException {
-
+    deleteSchemaVersion(subject, schema, permanentDelete);
   }
 
   @Override
