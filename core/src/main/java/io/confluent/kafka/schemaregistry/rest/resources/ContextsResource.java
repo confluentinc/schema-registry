@@ -45,7 +45,7 @@ import java.util.List;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ContextsResource {
 
-  private static final String apiTag = "Contexts (v1)";
+  public static final String apiTag = "Contexts (v1)";
   private final KafkaSchemaRegistry schemaRegistry;
 
   public ContextsResource(KafkaSchemaRegistry schemaRegistry) {
@@ -58,7 +58,7 @@ public class ContextsResource {
       description = "Retrieves a list of contexts.",
       responses = {
         @ApiResponse(responseCode = "200", description = "The contexts.", content = @Content(
-            array = @ArraySchema(schema = @Schema(implementation = String.class)))),
+            array = @ArraySchema(schema = @Schema(implementation = String.class, example = ".")))),
         @ApiResponse(responseCode = "500",
           description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store. ",
