@@ -65,7 +65,7 @@ import java.util.Map;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ConfigResource {
 
-  private static final String apiTag = "Config (v1)";
+  public static final String apiTag = "Config (v1)";
   private static final Logger log = LoggerFactory.getLogger(ConfigResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -291,7 +291,8 @@ public class ConfigResource {
       + "reverts to the global default.", responses = {
         @ApiResponse(responseCode = "200",
           description = "Operation succeeded. Returns old compatibility level.",
-          content = @Content(schema = @Schema(implementation = CompatibilityLevel.class))),
+          content = @Content(schema = @Schema(implementation = CompatibilityLevel.class,
+                  example = "FULL_TRANSITIVE"))),
         @ApiResponse(responseCode = "404",
           description = "Not Found. Error code 40401 indicates subject not found.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class))),

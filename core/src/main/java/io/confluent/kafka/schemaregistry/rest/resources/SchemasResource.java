@@ -56,7 +56,7 @@ import java.util.Set;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SchemasResource {
 
-  private static final String apiTag = "Schemas (v1)";
+  public static final String apiTag = "Schemas (v1)";
   private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -170,7 +170,8 @@ public class SchemasResource {
         @ApiResponse(responseCode = "200",
           description = "List of subjects matching the specified parameters.",
           content = @Content(array = @ArraySchema(
-            schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class)))),
+            schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class,
+                    example = Schema.SUBJECT_EXAMPLE)))),
         @ApiResponse(responseCode = "404",
           description = "Not Found. Error code 40403 indicates schema not found.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
@@ -263,7 +264,8 @@ public class SchemasResource {
       description = "Retrieves the schema identified by the input ID.",
       responses = {
           @ApiResponse(responseCode = "200", description = "Raw schema string.", content = @Content(
-             schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class))),
+             schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class,
+                     example = Schema.SCHEMA_EXAMPLE))),
           @ApiResponse(responseCode = "404",
             description = "Not Found. Error code 40403 indicates schema not found.",
             content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
@@ -309,7 +311,7 @@ public class SchemasResource {
         @ApiResponse(responseCode = "200", description = "List of supported schema types.",
             content = @Content(array = @ArraySchema(
                 schema = @io.swagger.v3.oas.annotations.media.Schema(
-                    implementation = String.class)))),
+                    implementation = String.class, example = Schema.TYPE_EXAMPLE)))),
         @ApiResponse(responseCode = "500",
           description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store.",

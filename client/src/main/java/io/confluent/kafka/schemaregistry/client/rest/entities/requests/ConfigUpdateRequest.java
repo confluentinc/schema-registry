@@ -38,7 +38,8 @@ public class ConfigUpdateRequest {
 
   @Schema(description = "Compatibility Level",
       allowableValues = {"BACKWARD", "BACKWARD_TRANSITIVE", "FORWARD", "FORWARD_TRANSITIVE", "FULL",
-        "FULL_TRANSITIVE", "NONE"})
+        "FULL_TRANSITIVE", "NONE"},
+      example = "FULL_TRANSITIVE")
   @JsonProperty("compatibility")
   public String getCompatibilityLevel() {
     return this.compatibilityLevel;

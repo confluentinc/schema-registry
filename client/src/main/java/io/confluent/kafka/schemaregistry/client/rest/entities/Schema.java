@@ -41,13 +41,23 @@ import java.util.Objects;
 public class Schema implements Comparable<Schema> {
 
   public static final String SUBJECT_DESC = "Name of the subject";
+  public static final String SUBJECT_EXAMPLE = "User";
+
   public static final String VERSION_DESC = "Version number";
+  public static final String VERSION_EXAMPLE = "1";
+
   public static final String ID_DESC = "Globally unique identifier of the schema";
+  public static final String ID_EXAMPLE = "100001";
+
   public static final String TYPE_DESC = "Schema type";
+  public static final String TYPE_EXAMPLE = AvroSchema.TYPE;
+
   public static final String REFERENCES_DESC = "References to other schemas";
   public static final String METADATA_DESC = "User-defined metadata";
   public static final String RULESET_DESC = "Schema rule set";
+
   public static final String SCHEMA_DESC = "Schema definition string";
+  public static final String SCHEMA_EXAMPLE = "{\"schema\": \"{\"type\": \"string\"}\"}";
 
   private String subject;
   private Integer version;
@@ -149,7 +159,7 @@ public class Schema implements Comparable<Schema> {
     return new Schema(subject, version, id, schemaType, references, metadata, ruleSet, schema);
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC, example = SUBJECT_EXAMPLE)
   @JsonProperty("subject")
   public String getSubject() {
     return subject;
@@ -160,7 +170,7 @@ public class Schema implements Comparable<Schema> {
     this.subject = subject;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = VERSION_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(description = VERSION_DESC, example = VERSION_EXAMPLE)
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
@@ -171,7 +181,7 @@ public class Schema implements Comparable<Schema> {
     this.version = version;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = ID_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(description = ID_DESC, example = ID_EXAMPLE)
   @JsonProperty("id")
   public Integer getId() {
     return this.id;
@@ -182,7 +192,7 @@ public class Schema implements Comparable<Schema> {
     this.id = id;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = TYPE_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(description = TYPE_DESC, example = TYPE_EXAMPLE)
   @JsonProperty("schemaType")
   @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
@@ -227,7 +237,7 @@ public class Schema implements Comparable<Schema> {
     this.ruleSet = ruleSet;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = SCHEMA_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(description = SCHEMA_DESC, example = SCHEMA_EXAMPLE)
   @JsonProperty("schema")
   public String getSchema() {
     return this.schema;

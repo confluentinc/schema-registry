@@ -1452,7 +1452,7 @@ paths:
   /subjects/{subject}/versions:
     get:
       tags:
-      - Subject Versions (v1)
+      - Subjects (v1)
       summary: List versions under subject
       description: Retrieves a list of versions registered under the specified subject.
       operationId: listVersions
@@ -1517,7 +1517,7 @@ paths:
                 $ref: '#/components/schemas/ErrorMessage'
     post:
       tags:
-      - Subject Versions (v1)
+      - Subjects (v1)
       summary: Register schema under a subject
       description: |-
         Register a new schema under the specified subject. If successfully registered, this returns the unique identifier of this schema in the registry. The returned identifier should be used to retrieve this schema from the schemas resource and is different from the schema's version which is associated with the subject. If the same schema is registered under a different subject, the same identifier will be returned. However, the version of the schema may be different under different subjects.
@@ -1607,7 +1607,7 @@ paths:
   /subjects/{subject}/versions/{version}:
     get:
       tags:
-      - Subject Versions (v1)
+      - Subjects (v1)
       summary: Get schema by version
       description: Retrieves a specific version of the schema registered under this
         subject.
@@ -1688,7 +1688,7 @@ paths:
                 $ref: '#/components/schemas/ErrorMessage'
     delete:
       tags:
-      - Subject Versions (v1)
+      - Subjects (v1)
       summary: Delete schema version
       description: "Deletes a specific version of the schema registered under this\
         \ subject. This only deletes the version and the schema ID remains intact\
@@ -1777,7 +1777,7 @@ paths:
   /subjects/{subject}/versions/{version}/referencedby:
     get:
       tags:
-      - Subject Versions (v1)
+      - Subjects (v1)
       summary: List schemas referencing a schema
       description: Retrieves the IDs of schemas that reference the specified schema.
       operationId: getReferencedBy
@@ -1862,11 +1862,11 @@ paths:
   /subjects/{subject}/versions/{version}/schema:
     get:
       tags:
-      - Subject Versions (v1)
+      - Subjects (v1)
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly
+      operationId: getSchemaOnly_2
       parameters:
       - name: subject
         in: path
@@ -1957,7 +1957,7 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly_1
+      operationId: getSchemaOnly
       parameters:
       - name: id
         in: path
@@ -2069,13 +2069,16 @@ components:
         name:
           type: string
           description: Reference name
+          example: io.confluent.kafka.example.User
         subject:
           type: string
           description: Name of the referenced subject
+          example: User
         version:
           type: integer
           description: Version number of the referenced subject
           format: int32
+          example: 1
       description: Schema reference
     Config:
       type: object
@@ -2083,6 +2086,7 @@ components:
         compatibilityLevel:
           type: string
           description: Compatibility Level
+          example: FULL_TRANSITIVE
           enum:
           - BACKWARD
           - BACKWARD_TRANSITIVE
@@ -2098,6 +2102,7 @@ components:
         compatibility:
           type: string
           description: Compatibility Level
+          example: FULL_TRANSITIVE
           enum:
           - BACKWARD
           - BACKWARD_TRANSITIVE
@@ -2113,6 +2118,7 @@ components:
         mode:
           type: string
           description: Schema Registry operating mode
+          example: READWRITE
           enum:
           - READWRITE
           - READONLY
@@ -2137,9 +2143,11 @@ components:
         schemaType:
           type: string
           description: Schema type
+          example: AVRO
         schema:
           type: string
           description: Schema string identified by the ID
+          example: "{\"schema\": \"{\"type\": \"string\"}\"}"
         references:
           type: array
           description: References to other schemas
@@ -2149,6 +2157,7 @@ components:
           type: integer
           description: Maximum ID
           format: int32
+          example: 1
       description: Schema definition
     Schema:
       type: object
@@ -2156,17 +2165,21 @@ components:
         subject:
           type: string
           description: Name of the subject
+          example: User
         version:
           type: integer
           description: Version number
           format: int32
+          example: 1
         id:
           type: integer
           description: Globally unique identifier of the schema
           format: int32
+          example: 100001
         schemaType:
           type: string
           description: Schema type
+          example: AVRO
         references:
           type: array
           description: References to other schemas
@@ -2175,6 +2188,7 @@ components:
         schema:
           type: string
           description: Schema definition string
+          example: "{\"schema\": \"{\"type\": \"string\"}\"}"
       description: Schema
     SubjectVersion:
       type: object
@@ -2182,10 +2196,12 @@ components:
         subject:
           type: string
           description: Name of the subject
+          example: User
         version:
           type: integer
           description: Version number
           format: int32
+          example: 1
       description: Subject version pair
     ServerClusterId:
       type: object
@@ -2203,6 +2219,7 @@ components:
           type: integer
           description: Globally unique identifier of the schema
           format: int32
+          example: 100001
       description: Schema register response
     ErrorMessage:
       type: object

@@ -60,7 +60,7 @@ import java.util.List;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class CompatibilityResource {
 
-  private static final String apiTag = "Compatibility (v1)";
+  public static final String apiTag = "Compatibility (v1)";
   private static final Logger log = LoggerFactory.getLogger(CompatibilityResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 

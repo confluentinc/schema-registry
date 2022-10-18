@@ -66,7 +66,7 @@ import java.util.Map;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ModeResource {
 
-  private static final String apiTag = "Modes (v1)";
+  public static final String apiTag = "Modes (v1)";
   private static final Logger log = LoggerFactory.getLogger(ModeResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 

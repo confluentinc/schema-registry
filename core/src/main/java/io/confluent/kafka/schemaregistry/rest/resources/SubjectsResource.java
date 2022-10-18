@@ -68,7 +68,7 @@ import java.util.Set;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SubjectsResource {
 
-  private static final String apiTag = "Subjects (v1)";
+  public static final String apiTag = "Subjects (v1)";
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
@@ -145,7 +145,7 @@ public class SubjectsResource {
         @ApiResponse(responseCode = "200",
           description = "List of subjects matching the specified parameters.", content = @Content(
                   array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
-                          implementation = String.class)))),
+                          implementation = String.class, example = Schema.SUBJECT_EXAMPLE)))),
         @ApiResponse(responseCode = "500",
           description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store.",
@@ -182,7 +182,8 @@ public class SubjectsResource {
       responses = {
         @ApiResponse(responseCode = "200", description = "Operation succeeded. "
           + "Returns list of schema versions deleted", content = @Content(array = @ArraySchema(
-            schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class)))),
+            schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class,
+                    example = Schema.VERSION_EXAMPLE)))),
         @ApiResponse(responseCode = "404",
           description = "Not Found. Error code 40401 indicates subject not found.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
