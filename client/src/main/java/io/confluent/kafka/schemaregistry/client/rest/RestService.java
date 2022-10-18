@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -42,6 +43,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
+import java.net.MalformedURLException;
 import java.net.Proxy;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -143,6 +145,9 @@ public class RestService implements Configurable {
   private static final TypeReference<ServerClusterId> GET_CLUSTER_ID_RESPONSE_TYPE =
       new TypeReference<ServerClusterId>() {
       };
+  private static final TypeReference<SchemaRegistryServerVersion> GET_SR_VERSION_RESPONSE_TYPE =
+          new TypeReference<SchemaRegistryServerVersion>() {
+          };
 
   private static final int HTTP_CONNECT_TIMEOUT_MS = 60000;
   private static final int HTTP_READ_TIMEOUT_MS = 60000;
@@ -261,8 +266,8 @@ public class RestService implements Configurable {
 
     HttpURLConnection connection = null;
     try {
-      URL url = new URL(requestUrl);
-
+      URL url = url(requestUrl);
+      
       connection = buildConnection(url, method, requestProperties);
 
       if (requestBodyData != null) {
@@ -840,6 +845,23 @@ public class RestService implements Configurable {
     return response;
   }
 
+  public String getOnlySchemaById(int id) throws RestClientException, IOException {
+    return getOnlySchemaById(DEFAULT_REQUEST_PROPERTIES, id, null);
+  }
+
+  public String getOnlySchemaById(Map<String, String> requestProperties,
+                                  int id, String subject)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/schema");
+    if (subject != null) {
+      builder.queryParam("subject", subject);
+    }
+    String path = builder.build(id).toString();
+    JsonNode response = httpRequest(path, "GET", null,
+            requestProperties, GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
+    return response.toString();
+  }
+
   public List<String> getSchemaTypes() throws IOException, RestClientException {
     return getSchemaTypes(DEFAULT_REQUEST_PROPERTIES);
   }
@@ -1173,7 +1195,15 @@ public class RestService implements Configurable {
                         requestProperties, GET_CLUSTER_ID_RESPONSE_TYPE);
   }
 
-  private static List<String> parseBaseUrl(String baseUrl) {
+  public SchemaRegistryServerVersion getSchemaRegistryServerVersion()
+          throws IOException, RestClientException {
+    return httpRequest("/v1/metadata/version", "GET", null,
+            DEFAULT_REQUEST_PROPERTIES, GET_SR_VERSION_RESPONSE_TYPE);
+  }
+
+  private static List<String> parseBase
+  
+  String baseUrl) {
     List<String> baseUrls = Arrays.asList(baseUrl.split("\\s*,\\s*"));
     if (baseUrls.isEmpty()) {
       throw new IllegalArgumentException("Missing required schema registry url list");
@@ -1235,5 +1265,17 @@ public class RestService implements Configurable {
 
   public void setProxy(String proxyHost, int proxyPort) {
     this.proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+  }
+
+  /**
+   * Convert url string to URL. This method is package-private so that it can be mocked for unit
+   * tests.
+   *
+   * @param requestUrl url string
+   * @return {@link URL}
+   * @throws MalformedURLException if the input string is a malformed URL
+   */
+  URL url(String requestUrl) throws MalformedURLException {
+    return new URL(requestUrl);
   }
 }

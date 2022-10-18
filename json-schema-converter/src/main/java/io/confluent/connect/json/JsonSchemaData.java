@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.connect.schema.ConnectEnum;
@@ -68,6 +69,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import org.json.JSONObject;
 
 import static io.confluent.connect.json.JsonSchemaDataConfig.SCHEMAS_CACHE_SIZE_CONFIG;
 import static io.confluent.connect.json.JsonSchemaDataConfig.SCHEMAS_CACHE_SIZE_DEFAULT;
@@ -370,10 +372,10 @@ public class JsonSchemaData {
     });
   }
 
-  private JsonSchemaDataConfig config;
-  private Map<Schema, org.everit.json.schema.Schema> fromConnectSchemaCache;
-  private Map<JsonSchema, Schema> toConnectSchemaCache;
-  private boolean generalizedSumTypeSupport;
+  private final JsonSchemaDataConfig config;
+  private final Map<Schema, JsonSchema> fromConnectSchemaCache;
+  private final Map<JsonSchema, Schema> toConnectSchemaCache;
+  private final boolean generalizedSumTypeSupport;
 
   public JsonSchemaData() {
     this(new JsonSchemaDataConfig.Builder().with(
@@ -400,7 +402,7 @@ public class JsonSchemaData {
         // Any schema is valid and we don't have a default, so treat this as an optional schema
         return null;
       }
-      if (schema.defaultValue() != null) {
+      if (schema.defaultValue() != null && !config.ignoreDefaultForNullables()) {
         return fromConnectData(schema, schema.defaultValue());
       }
       if (schema.isOptional()) {
@@ -519,7 +521,8 @@ public class JsonSchemaData {
           // one of the union types.
           if (isUnionSchema(schema)) {
             for (Field field : schema.fields()) {
-              Object object = struct.get(field);
+              Object object = config.ignoreDefaultForNullables()
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
               if (object != null) {
                 return fromConnectData(field.schema(), object);
               }
@@ -528,7 +531,9 @@ public class JsonSchemaData {
           } else {
             ObjectNode obj = JSON_NODE_FACTORY.objectNode();
             for (Field field : schema.fields()) {
-              JsonNode jsonNode = fromConnectData(field.schema(), struct.get(field));
+              Object fieldValue = config.ignoreDefaultForNullables()
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
+              JsonNode jsonNode = fromConnectData(field.schema(), fieldValue);
               if (jsonNode != null) {
                 obj.set(field.name(), jsonNode);
               }
@@ -613,22 +618,22 @@ public class JsonSchemaData {
   }
 
   public JsonSchema fromConnectSchema(Schema schema) {
+    if (schema == null) {
+      return null;
+    }
+    JsonSchema cachedSchema = fromConnectSchemaCache.get(schema);
+    if (cachedSchema != null) {
+      return cachedSchema;
+    }
     FromConnectContext ctx = new FromConnectContext();
-    return new JsonSchema(rawSchemaFromConnectSchema(ctx, schema));
+    JsonSchema resultSchema = new JsonSchema(rawSchemaFromConnectSchema(ctx, schema));
+    fromConnectSchemaCache.put(schema, resultSchema);
+    return resultSchema;
   }
 
   private org.everit.json.schema.Schema rawSchemaFromConnectSchema(
       FromConnectContext ctx, Schema schema) {
-    if (schema == null) {
-      return null;
-    }
-    org.everit.json.schema.Schema cachedSchema = fromConnectSchemaCache.get(schema);
-    if (cachedSchema != null) {
-      return cachedSchema;
-    }
-    org.everit.json.schema.Schema resultSchema = rawSchemaFromConnectSchema(ctx, schema, null);
-    fromConnectSchemaCache.put(schema, resultSchema);
-    return resultSchema;
+    return rawSchemaFromConnectSchema(ctx, schema, null);
   }
 
   private org.everit.json.schema.Schema rawSchemaFromConnectSchema(
@@ -703,8 +708,19 @@ public class JsonSchemaData {
         unprocessedProps.put(CONNECT_TYPE_PROP, CONNECT_TYPE_BYTES);
         break;
       case ARRAY:
-        builder = ArraySchema.builder().allItemSchema(
-            rawSchemaFromConnectSchema(ctx, schema.valueSchema()));
+        Schema arrayValueSchema = schema.valueSchema();
+        String refId = null;
+        if (arrayValueSchema.parameters() != null
+            && arrayValueSchema.parameters().containsKey(JSON_ID_PROP)) {
+          refId = arrayValueSchema.parameters().get(JSON_ID_PROP);
+        }
+        org.everit.json.schema.Schema itemsSchema;
+        if (ctx.contains(refId)) {
+          itemsSchema = ReferenceSchema.builder().refValue(refId).build();
+        } else {
+          itemsSchema = rawSchemaFromConnectSchema(ctx, arrayValueSchema);
+        }
+        builder = ArraySchema.builder().allItemSchema(itemsSchema);
         break;
       case MAP:
         // JSON Schema only supports string keys
@@ -749,14 +765,14 @@ public class JsonSchemaData {
           ObjectSchema.Builder objectBuilder = ObjectSchema.builder();
           for (Field field : schema.fields()) {
             Schema fieldSchema = field.schema();
-            String refId = null;
+            String fieldRefId = null;
             if (fieldSchema.parameters() != null
                 && fieldSchema.parameters().containsKey(JSON_ID_PROP)) {
-              refId = fieldSchema.parameters().get(JSON_ID_PROP);
+              fieldRefId = fieldSchema.parameters().get(JSON_ID_PROP);
             }
             org.everit.json.schema.Schema jsonSchema;
-            if (refId != null && ctx.contains(refId)) {
-              jsonSchema = ReferenceSchema.builder().refValue(refId).build();
+            if (ctx.contains(fieldRefId)) {
+              jsonSchema = ReferenceSchema.builder().refValue(fieldRefId).build();
             } else {
               jsonSchema = rawSchemaFromConnectSchema(ctx, fieldSchema, field.index());
             }
@@ -793,7 +809,7 @@ public class JsonSchemaData {
         }
       }
       if (schema.defaultValue() != null) {
-        builder.defaultValue(schema.defaultValue());
+        builder.defaultValue(fromConnectData(schema, schema.defaultValue()));
       }
 
       if (!ignoreOptional) {
@@ -955,7 +971,7 @@ public class JsonSchemaData {
     } else if (jsonSchema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) jsonSchema;
       CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
-      String name = null;
+      String name;
       if (criterion == CombinedSchema.ONE_CRITERION || criterion == CombinedSchema.ANY_CRITERION) {
         if (generalizedSumTypeSupport) {
           name = GENERALIZED_TYPE_UNION_PREFIX + ctx.getAndIncrementUnionIndex();
@@ -1077,7 +1093,10 @@ public class JsonSchemaData {
       builder.parameters(parameters);
     }
     if (jsonSchema.hasDefaultValue()) {
-      JsonNode jsonNode = OBJECT_MAPPER.convertValue(jsonSchema.getDefaultValue(), JsonNode.class);
+      Object defaultVal = jsonSchema.getDefaultValue();
+      JsonNode jsonNode = defaultVal == JSONObject.NULL
+          ? NullNode.getInstance()
+          : OBJECT_MAPPER.convertValue(defaultVal, JsonNode.class);
       builder.defaultValue(toConnectData(builder, jsonNode));
     }
 
@@ -1160,11 +1179,12 @@ public class JsonSchemaData {
       org.everit.json.schema.Schema schema,
       Map<String, org.everit.json.schema.Schema> properties,
       Map<String, Boolean> required,
-      Set<org.everit.json.schema.Schema> visited) {
-    if (visited.contains(schema)) {
+      Set<JsonSchema> visited) {
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    if (visited.contains(jsonSchema)) {
       return;
     } else {
-      visited.add(schema);
+      visited.add(jsonSchema);
     }
     if (schema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) schema;
@@ -1389,7 +1409,7 @@ public class JsonSchemaData {
     }
 
     public boolean contains(String id) {
-      return id != null ? ids.contains(id) : false;
+      return id != null && ids.contains(id);
     }
 
     public void add(String id) {

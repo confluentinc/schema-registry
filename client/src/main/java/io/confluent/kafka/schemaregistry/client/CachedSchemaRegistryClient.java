@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client;
 import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import org.apache.kafka.common.config.SslConfigs;
 import org.slf4j.Logger;
@@ -236,6 +237,19 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
+  private HostnameVerifier getHostnameVerifier(Map<String, Object> config) {
+    String sslEndpointIdentificationAlgo =
+            (String) config.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
+
+    if (sslEndpointIdentificationAlgo == null
+            || sslEndpointIdentificationAlgo.equals("none")
+            || sslEndpointIdentificationAlgo.isEmpty()) {
+      return (hostname, session) -> true;
+    }
+
+    return null;
+  }
+
   @Override
   public Optional<ParsedSchema> parseSchema(
       String schemaType,
@@ -252,34 +266,37 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return schemaProvider.parseSchema(schemaString, references);
   }
 
+  @Override
+  public Optional<ParsedSchema> parseSchema(Schema schema) {
+    String schemaType = schema.getSchemaType();
+    if (schemaType == null) {
+      schemaType = AvroSchema.TYPE;
+    }
+    SchemaProvider schemaProvider = providers.get(schemaType);
+    if (schemaProvider == null) {
+      log.error("Invalid schema type " + schemaType);
+      return Optional.empty();
+    }
+    return schemaProvider.parseSchema(schema, false);
+  }
+
   public Map<String, SchemaProvider> getSchemaProviders() {
     return providers;
   }
 
-  private HostnameVerifier getHostnameVerifier(Map<String, Object> config) {
-    String sslEndpointIdentificationAlgo =
-        (String) config.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
-
-    if (sslEndpointIdentificationAlgo == null
-        || sslEndpointIdentificationAlgo.equals("none")
-        || sslEndpointIdentificationAlgo.isEmpty()) {
-      return (hostname, session) -> true;
-    }
-
-    return null;
-  }
-
   private int registerAndGetId(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    return restService.registerSchema(schema.canonicalString(), schema.schemaType(),
-        schema.references(), subject, normalize);
+    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    return restService.registerSchema(request, subject, normalize);
   }
 
   private int registerAndGetId(
       String subject, ParsedSchema schema, int version, int id, boolean normalize)
       throws IOException, RestClientException {
-    return restService.registerSchema(schema.canonicalString(), schema.schemaType(),
-        schema.references(), subject, version, id, normalize);
+    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    request.setVersion(version);
+    request.setId(id);
+    return restService.registerSchema(request, subject, normalize);
   }
 
   protected ParsedSchema getSchemaByIdFromRegistry(int id, String subject)
@@ -298,8 +315,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       }
       throw rce;
     }
-    Optional<ParsedSchema> schema = parseSchema(
-        restSchema.getSchemaType(), restSchema.getSchemaString(), restSchema.getReferences());
+    Optional<ParsedSchema> schema = parseSchema(new Schema(null, null, null, restSchema));
     return schema.orElseThrow(() -> new IOException("Invalid schema " + restSchema.getSchemaString()
             + " with refs " + restSchema.getReferences()
             + " of type " + restSchema.getSchemaType()));
@@ -311,8 +327,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
     try {
-      response = restService.lookUpSubjectVersion(schema.canonicalString(),
-              schema.schemaType(), schema.references(), subject, normalize, true);
+      RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+      response = restService.lookUpSubjectVersion(request, subject, normalize, true);
     } catch (RestClientException rce) {
       if (isSchemaNotFoundException(rce)) {
         missingSchemaCache.put(
@@ -330,8 +346,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
     try {
-      response = restService.lookUpSubjectVersion(schema.canonicalString(),
-              schema.schemaType(), schema.references(), subject, normalize, false);
+      RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+      response = restService.lookUpSubjectVersion(request, subject, normalize, false);
     } catch (RestClientException rce) {
       if (isSchemaNotFoundException(rce)) {
         missingSchemaCache.put(
@@ -366,15 +382,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
 
     Integer cachedId = schemaIdMap.get(schema);
-    if (cachedId != null) {
-      checkId(id, cachedId);
+    if (cachedId != null && (id < 0 || id == cachedId)) {
       return cachedId;
     }
 
     synchronized (this) {
       cachedId = schemaIdMap.get(schema);
-      if (cachedId != null) {
-        checkId(id, cachedId);
+      if (cachedId != null && (id < 0 || id == cachedId)) {
         return cachedId;
       }
 
@@ -387,13 +401,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           context, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
       idSchemaMap.put(retrievedId, schema);
       return retrievedId;
-    }
-  }
-
-  private void checkId(int id, Integer cachedId) {
-    if (id >= 0 && id != cachedId) {
-      throw new IllegalStateException("Schema already registered with id "
-          + cachedId + " instead of input id " + id);
     }
   }
 
@@ -440,11 +447,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
             lookupDeletedSchema,
             latestOnly);
     return restSchemas.stream()
-        .map(restSchema -> parseSchema(
-                  restSchema.getSchemaType(),
-                  restSchema.getSchema(),
-                  restSchema.getReferences())
-        )
+        .map(this::parseSchema)
         .filter(Optional::isPresent)
         .map(Optional::get)
         .collect(Collectors.toList());
@@ -475,11 +478,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
         = restService.getVersion(subject, version);
-    int id = response.getId();
-    String schemaType = response.getSchemaType();
-    String schema = response.getSchema();
-    List<SchemaReference> references = response.getReferences();
-    return new SchemaMetadata(id, version, schemaType, references, schema);
+    return new SchemaMetadata(response);
   }
 
   @Override
@@ -487,11 +486,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
         = restService.getVersion(subject, version, lookupDeletedSchema);
-    int id = response.getId();
-    String schemaType = response.getSchemaType();
-    String schema = response.getSchema();
-    List<SchemaReference> references = response.getReferences();
-    return new SchemaMetadata(id, version, schemaType, references, schema);
+    return new SchemaMetadata(response);
   }
 
   @Override
@@ -499,12 +494,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
         = restService.getLatestVersion(subject);
-    int id = response.getId();
-    int version = response.getVersion();
-    String schemaType = response.getSchemaType();
-    String schema = response.getSchema();
-    List<SchemaReference> references = response.getReferences();
-    return new SchemaMetadata(id, version, schemaType, references, schema);
+    return new SchemaMetadata(response);
   }
 
   @Override
@@ -622,15 +612,15 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public boolean testCompatibility(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
-    return restService.testCompatibility(schema.canonicalString(), schema.schemaType(),
-        schema.references(), subject, "latest", false).isEmpty();
+    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    return restService.testCompatibility(request, subject, "latest", false).isEmpty();
   }
 
   @Override
   public List<String> testCompatibilityVerbose(String subject, ParsedSchema schema)
           throws IOException, RestClientException {
-    return restService.testCompatibility(schema.canonicalString(), schema.schemaType(),
-            schema.references(), subject, "latest", true);
+    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    return restService.testCompatibility(request, subject, "latest", true);
   }
 
   @Override

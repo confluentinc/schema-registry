@@ -31,10 +31,12 @@ import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
+import com.google.protobuf.UInt32Value;
 import com.google.protobuf.util.Timestamps;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
+import io.confluent.connect.protobuf.test.KeyValue;
 import io.confluent.connect.protobuf.test.KeyValueOptional;
 import io.confluent.connect.protobuf.test.KeyValueWrapper;
 import io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry;
@@ -92,7 +94,6 @@ import static io.confluent.connect.protobuf.ProtobufData.GENERALIZED_TYPE_UNION;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_ENUM;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_PROP;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
-import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION_PREFIX;
 import static io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue.newBuilder;
 import static org.junit.Assert.assertArrayEquals;
@@ -1326,6 +1327,9 @@ public class ProtobufDataTest {
         .field("mapNonStringKeys",
             SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build()
         )
+        .field("mapNullValues",
+            SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA).build()
+        )
         .field("enum", SchemaBuilder.string()
             .name("Status")
             .optional()
@@ -1347,6 +1351,7 @@ public class ProtobufDataTest {
         .put("array", Arrays.asList("a", "b", "c"))
         .put("map", Collections.singletonMap("field", 1))
         .put("mapNonStringKeys", Collections.singletonMap(1, 1))
+        .put("mapNullValues", Collections.singletonMap("field", null))
         .put("enum", "INACTIVE");
 
     ProtobufSchemaAndValue convertedRecord = new ProtobufData().fromConnectData(schema, struct);
@@ -1391,6 +1396,9 @@ public class ProtobufDataTest {
     assertEquals("mapNonStringKeys", fieldElem.getName());
     assertEquals("ConnectDefault3Entry", fieldElem.getType());
     fieldElem = messageElem.getFields().get(12);
+    assertEquals("mapNullValues", fieldElem.getName());
+    assertEquals("ConnectDefault4Entry", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(13);
     assertEquals("enum", fieldElem.getName());
     assertEquals("Status", fieldElem.getType());
 
@@ -1431,6 +1439,14 @@ public class ProtobufDataTest {
     assertEquals(1, dynamicMessage.getField(fieldDescriptor));
     fieldDescriptor = dynamicMessage.getDescriptorForType().findFieldByName("value");
     assertEquals(1, dynamicMessage.getField(fieldDescriptor));
+
+    fieldDescriptor = message.getDescriptorForType().findFieldByName("mapNullValues");
+    value = message.getField(fieldDescriptor);
+    dynamicMessage = ((List<DynamicMessage>) value).get(0);
+    fieldDescriptor = dynamicMessage.getDescriptorForType().findFieldByName("key");
+    assertEquals("field", dynamicMessage.getField(fieldDescriptor));
+    fieldDescriptor = dynamicMessage.getDescriptorForType().findFieldByName("value");
+    assertEquals("", dynamicMessage.getField(fieldDescriptor));
 
     fieldDescriptor = message.getDescriptorForType().findFieldByName("enum");
     EnumValueDescriptor enumValueDescriptor =
@@ -1881,6 +1897,44 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testFromConnectIgnoreDefaultForNullables() throws Exception {
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.IGNORE_DEFAULT_FOR_NULLABLES_CONFIG, true)
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    KeyValue.KeyValueMessage message =
+        KeyValue.KeyValueMessage.newBuilder()
+            .setKey(123)
+            .build();
+    Schema connectSchema = getIgnoreDefaultForNullablesSchema();
+    Struct data = getIgnoreDefaultForNullablesData();
+
+    byte[] messageBytes = getMessageBytes(protobufData, new SchemaAndValue(connectSchema, data));
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  private Schema getIgnoreDefaultForNullablesSchema() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("KeyValueMessage");
+    schemaBuilder.field("key",
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    schemaBuilder.field("value",
+        SchemaBuilder.string().optional().defaultValue("string-value")
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    return schemaBuilder.build();
+  }
+
+  private Struct getIgnoreDefaultForNullablesData() {
+    Schema schema = getIgnoreDefaultForNullablesSchema();
+    Struct result = new Struct(schema.schema());
+    result.put("key", 123);
+    result.put("value", null);
+    return result;
+  }
+
+  @Test
   public void testNameScrubbing() {
     assertEquals("abc_2B____", ProtobufData.doScrubName("abc+-.*_"));
     assertEquals("abc_def", ProtobufData.doScrubName("abc-def"));
@@ -1897,6 +1951,7 @@ public class ProtobufDataTest {
             KeyValueWrapper.KeyValueWrapperMessage.newBuilder()
                     .setKey(123)
                     .setWrappedValue(StringValue.newBuilder().setValue("hi").build())
+                    .setWrappedValue2(UInt32Value.newBuilder().setValue(456).build())
                     .build();
     SchemaAndValue schemaAndValue = getSchemaAndValue(message);
     Schema expectedSchema = getExpectedNoWrapperForNullablesSchema();
@@ -1919,6 +1974,14 @@ public class ProtobufDataTest {
                     .field("value", SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build())
                     .build()
     );
+    schemaBuilder.field("wrappedValue2",
+            SchemaBuilder.struct().name("UInt32Value").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3))
+                    .field("value", SchemaBuilder.int64().optional()
+                        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+                        .parameter(PROTOBUF_TYPE_PROP, "uint32")
+                        .build())
+                    .build()
+    );
     return schemaBuilder.build();
   }
 
@@ -1927,8 +1990,11 @@ public class ProtobufDataTest {
     Struct result = new Struct(schema.schema());
     Struct value = new Struct(schema.field("wrappedValue").schema());
     value.put("value", "hi");
+    Struct value2 = new Struct(schema.field("wrappedValue2").schema());
+    value2.put("value", 456L);
     result.put("key", 123);
     result.put("wrappedValue", value);
+    result.put("wrappedValue2", value2);
     return result;
   }
 
@@ -1942,6 +2008,7 @@ public class ProtobufDataTest {
             KeyValueWrapper.KeyValueWrapperMessage.newBuilder()
                     .setKey(123)
                     .setWrappedValue(StringValue.newBuilder().setValue("hi").build())
+                    .setWrappedValue2(UInt32Value.newBuilder().setValue(456).build())
                     .build();
     SchemaAndValue schemaAndValue = getSchemaAndValue(protobufData, message);
     Schema expectedSchema = getExpectedWrapperForNullablesSchema();
@@ -1962,6 +2029,9 @@ public class ProtobufDataTest {
     schemaBuilder.field("wrappedValue",
             SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
     );
+    schemaBuilder.field("wrappedValue2",
+            SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3)).build()
+    );
     return schemaBuilder.build();
   }
 
@@ -1970,6 +2040,7 @@ public class ProtobufDataTest {
     Struct result = new Struct(schema.schema());
     result.put("key", 123);
     result.put("wrappedValue", "hi");
+    result.put("wrappedValue2", 456L);
     return result;
   }
 
@@ -2108,6 +2179,36 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testToConnectFullyQualifiedMapSchema() {
+    String schema = "syntax = \"proto3\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.connect.protobuf.test\";\n"
+        + "\n"
+        + "message Customer {\n"
+        + "  map<string,string> tags = 1;\n"
+        + "  Meta meta = 2;\n"
+        + "}\n"
+        + "\n"
+        + "message Meta {\n"
+        + "  map<string,Value> tags = 2;\n"
+        + "}\n"
+        + "\n"
+        + "message Value{\n"
+        + "  float a=1;\n"
+        + "  float b=2;\n"
+        + "}\n";
+
+    ProtobufSchema protobufSchema = new ProtobufSchema(schema);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(ProtobufDataConfig.ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG, true);
+    ProtobufData protobufData = new ProtobufData(new ProtobufDataConfig(configs));
+    Schema actual = protobufData.toConnectSchema(protobufSchema);
+    assertEquals("Customer.tags",
+        actual.field("tags").schema().name());
+    assertEquals("Meta.tags", actual.field("meta").schema().field("tags").schema().name());
+  }
+
+  @Test
   public void testToConnectMultipleMapReferences() throws Exception {
     AttributeFieldEntry entry1 = AttributeFieldEntry.newBuilder()
         .setKey("key1").setValue("value1").build();
@@ -2200,7 +2301,6 @@ public class ProtobufDataTest {
     assertEquals(expectedKey.getNumber(), actualKey.getNumber());
     assertEquals(expectedValue.getType(), actualValue.getType());
     assertEquals(expectedValue.getNumber(), actualValue.getNumber());
-    assertEquals(actual, actualKeyValue.getMessageType());  // Checks recursive reference
     assertEquals(expectedKeyValue.getNumber(), actualKeyValue.getNumber());
   }
 

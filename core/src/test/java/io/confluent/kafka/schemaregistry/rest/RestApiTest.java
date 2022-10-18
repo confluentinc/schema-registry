@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -30,6 +31,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import org.apache.avro.Schema.Parser;
@@ -706,6 +708,16 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Latest schema should be the same as version 2",
                  schemas.get(1),
                  restApp.restClient.getLatestVersion(subject).getSchema());
+  }
+
+  @Test
+  public void testGetOnlySchemaById() throws Exception {
+    String schema = String.valueOf(TestUtils.getRandomCanonicalAvroString(1));
+    String subject = "test";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
+    assertEquals("Schema with ID 1 should match.",
+            schema,
+            restApp.restClient.getOnlySchemaById(1));
   }
 
   @Test
@@ -1794,6 +1806,13 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException rce) {
       fail("The operation shouldn't have failed");
     }
+  }
+
+  @Test
+  public void testGetSchemaRegistryServerVersion() throws Exception {
+      SchemaRegistryServerVersion srVersion = restApp.restClient.getSchemaRegistryServerVersion();
+      assertEquals(AppInfoParser.getVersion(), srVersion.getVersion());
+      assertEquals(AppInfoParser.getCommitId(), srVersion.getCommitId());
   }
 
   @Test

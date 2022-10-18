@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.Objects;
 import java.util.Optional;
@@ -38,10 +39,8 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
@@ -52,7 +51,7 @@ public abstract class AbstractKafkaSchemaSerDe {
 
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
-  private static int DEFAULT_CACHE_CAPACITY = 1000;
+  protected static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   protected SchemaRegistryClient schemaRegistry;
   protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
@@ -66,23 +65,17 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected void configureClientProperties(
       AbstractKafkaSchemaSerDeConfig config,
       SchemaProvider provider) {
-    List<String> urls = config.getSchemaRegistryUrls();
-    int maxSchemaObject = config.getMaxSchemasPerSubject();
-    Map<String, Object> originals = config.originalsWithPrefix("");
-    if (null == schemaRegistry) {
-      String mockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(urls);
-      List<SchemaProvider> providers = Collections.singletonList(provider);
-      if (mockScope != null) {
-        schemaRegistry = MockSchemaRegistry.getClientForScope(mockScope, providers);
-      } else {
-        schemaRegistry = new CachedSchemaRegistryClient(
-            urls,
-            maxSchemaObject,
-            providers,
-            originals,
-            config.requestHeaders()
-        );
-      }
+    if (schemaRegistry == null) {
+      List<String> urls = config.getSchemaRegistryUrls();
+      int maxSchemaObject = config.getMaxSchemasPerSubject();
+      Map<String, Object> originals = config.originalsWithPrefix("");
+      schemaRegistry = SchemaRegistryClientFactory.newClient(
+          urls,
+          maxSchemaObject,
+          Collections.singletonList(provider),
+          originals,
+          config.requestHeaders()
+      );
     }
 
     contextNameStrategy = config.contextNameStrategy();
@@ -195,7 +188,8 @@ public abstract class AbstractKafkaSchemaSerDe {
       throw new IOException("Incompatible schema " + lookupSchema.canonicalString()
           + " with refs " + lookupSchema.references()
           + " of type " + lookupSchema.schemaType()
-          + " for schema " + schema.canonicalString());
+          + " for schema " + schema.canonicalString()
+          + ". Set id.compatibility.strict=false to disable this check");
     }
     return lookupSchema;
   }
@@ -222,9 +216,8 @@ public abstract class AbstractKafkaSchemaSerDe {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestSchemaMetadata(subject);
       Optional<ParsedSchema> optSchema =
           schemaRegistry.parseSchema(
-              schemaMetadata.getSchemaType(),
-              schemaMetadata.getSchema(),
-              schemaMetadata.getReferences());
+              new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
+                  null, schemaMetadata));
       latestVersion = optSchema.orElseThrow(
           () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
               + " with refs " + schemaMetadata.getReferences()
@@ -235,7 +228,8 @@ public abstract class AbstractKafkaSchemaSerDe {
         throw new IOException("Incompatible schema " + schemaMetadata.getSchema()
             + " with refs " + schemaMetadata.getReferences()
             + " of type " + schemaMetadata.getSchemaType()
-            + " for schema " + schema.canonicalString());
+            + " for schema " + schema.canonicalString()
+            + ". Set latest.compatibility.strict=false to disable this check");
       }
       if (cache != null) {
         cache.put(ss, latestVersion);
@@ -253,7 +247,7 @@ public abstract class AbstractKafkaSchemaSerDe {
   }
 
   protected static KafkaException toKafkaException(RestClientException e, String errorMessage) {
-    if (e.getErrorCode() / 100 == 5 /* HTTP 500 Server Error */) {
+    if (e.getErrorCode() / 100 == 4 /* Client Error */) {
       return new InvalidConfigurationException(e.getMessage());
     } else {
       return new SerializationException(errorMessage, e);

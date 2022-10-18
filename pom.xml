@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[7.2.0-0, 7.2.1-0)</version>
+        <version>[7.3.0-0, 7.3.1-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>7.2.0-0</version>
+    <version>7.3.0-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -78,14 +78,16 @@
         <podam.version>6.0.2.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
-        <kotlin.version>1.4.21</kotlin.version>
-        <json-schema.version>1.14.0</json-schema.version>
+        <kotlin.version>1.6.0</kotlin.version>
+        <json-schema.version>1.14.1</json-schema.version>
         <proto-google-common-protos.version>2.5.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
-        <wire.version>4.0.0</wire.version>
+        <okio.version>3.0.0</okio.version>
+        <wire.version>4.3.0</wire.version>
         <swagger.version>2.1.10</swagger.version>
-        <io.confluent.schema-registry.version>7.2.0-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>7.3.0-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
+        <commons.lang3.version>3.12.0</commons.lang3.version>
     </properties>
 
     <repositories>
@@ -108,9 +110,19 @@
                 <version>${avro.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.google.code.gson</groupId>
+                <artifactId>gson</artifactId>
+                <version>${gson.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-compress</artifactId>
                 <version>${commons.compress.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>${commons.lang3.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.guava</groupId>
@@ -155,6 +167,11 @@
                 </exclusions>
             </dependency>
             <dependency>
+                <groupId>com.squareup.okio</groupId>
+                <artifactId>okio-jvm</artifactId>
+                <version>${okio.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.fasterxml.jackson.datatype</groupId>
                 <artifactId>jackson-datatype-guava</artifactId>
                 <version>${jackson.version}</version>
@@ -180,8 +197,8 @@
                 <version>${jackson.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.github.everit-org.json-schema</groupId>
-                <artifactId>org.everit.json.schema</artifactId>
+                <groupId>com.github.erosb</groupId>
+                <artifactId>everit-json-schema</artifactId>
                 <version>${json-schema.version}</version>
             </dependency>
             <dependency>
@@ -347,12 +364,12 @@
                     <configuration>
                         <documentationUrl>https://docs.confluent.io/${io.confluent.schema-registry.version}/schema-registry/docs/connect.html</documentationUrl>
                         <sourceUrl>https://github.com/confluentinc/schema-registry</sourceUrl>
-                        
+
                         <supportProviderName>${project.organization.name}</supportProviderName>
                         <supportSummary>Confluent supports the Avro Converter alongside community members as part of its Confluent Platform offering.</supportSummary>
                         <supportUrl>https://docs.confluent.io/current/</supportUrl>
                         <supportLogo>logos/confluent.png</supportLogo>
-                        
+
                         <ownerUsername>confluentinc</ownerUsername>
                         <ownerType>organization</ownerType>
                         <ownerName>${project.organization.name}</ownerName>
@@ -436,4 +453,35 @@
         </plugins>
 
     </build>
+
+    <profiles>
+        <profile>
+            <id>surefire-failsafe</id>
+            <activation>
+                <jdk>(1.8,)</jdk>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <argLine>
+                                --add-opens java.base/java.lang=ALL-UNNAMED
+                            </argLine>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <configuration>
+                            <argLine>
+                                --add-opens java.security.jgss/sun.security.krb5=ALL-UNNAMED
+                            </argLine>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

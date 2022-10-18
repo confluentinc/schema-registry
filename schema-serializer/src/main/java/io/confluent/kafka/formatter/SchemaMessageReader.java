@@ -20,9 +20,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
-import kafka.common.KafkaException;
 import kafka.common.MessageReader;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -61,8 +61,8 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   private Boolean parseKey = false;
   private String keySeparator = "\t";
   private boolean ignoreError = false;
-  private ParsedSchema keySchema = null;
-  private ParsedSchema valueSchema = null;
+  protected ParsedSchema keySchema = null;
+  protected ParsedSchema valueSchema = null;
   private String keySubject = null;
   private String valueSubject = null;
   private SchemaMessageSerializer<T> serializer;
@@ -84,8 +84,8 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     this.keySchema = keySchema;
     this.valueSchema = valueSchema;
     this.topic = topic;
-    this.keySubject = topic + "-key";
-    this.valueSubject = topic + "-value";
+    this.keySubject = topic != null ? topic + "-key" : null;
+    this.valueSubject = topic != null ? topic + "-value" : null;
     this.parseKey = parseKey;
     this.reader = reader;
     this.serializer = createSerializer(

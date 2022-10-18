@@ -25,6 +25,7 @@ import com.google.protobuf.Value;
 import io.confluent.connect.protobuf.test.KeyValueOptional.KeyValueOptionalMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.serializers.protobuf.test.KeyTimestampValueOuterClass.KeyTimestampValue;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue;
 import java.util.List;
@@ -82,6 +83,11 @@ public class ProtobufConverterTest {
       .build();
   private static final TimestampValue TIMESTAMP_VALUE = TimestampValue.newBuilder()
       .setValue(Timestamp.newBuilder().setSeconds(1000).build())
+      .build();
+  private static final KeyTimestampValue KEY_TIMESTAMP_VALUE = KeyTimestampValue.newBuilder()
+      .setKey(123)
+      .setValue(TIMESTAMP_VALUE)
+      .setValue2(Timestamp.newBuilder().setSeconds(2000).build())
       .build();
   private static final KeyValueOptionalMessage KEY_VALUE_OPT = KeyValueOptionalMessage.newBuilder()
       .setKey(123)
@@ -370,6 +376,67 @@ public class ProtobufConverterTest {
     byte[] result = converter.fromConnectData("my-topic",
         schema,
         struct
+    );
+
+    assertArrayEquals(expected, Arrays.copyOfRange(result, PROTOBUF_BYTES_START, result.length));
+  }
+
+  @Test
+  public void testFromConnectDataWithNestedReferenceUsingLatest() throws Exception {
+    final byte[] expected = KEY_TIMESTAMP_VALUE.toByteArray();
+
+    Map<String, Object> config = new HashMap<>();
+    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost");
+    config.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
+    config.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
+    config.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, "false");
+    converter.configure(config, false);
+    schemaRegistry.register("google/protobuf/timestamp.proto", new ProtobufSchema(Timestamp.getDescriptor()));
+    SchemaReference ref1 = new SchemaReference("google/protobuf/timestamp.proto", "google/protobuf/timestamp.proto", 1);
+    schemaRegistry.register("TimestampValue.proto", new ProtobufSchema(TimestampValue.getDescriptor(), ImmutableList.of(ref1)));
+    SchemaReference ref2 = new SchemaReference("TimestampValue.proto", "TimestampValue.proto", 1);
+    schemaRegistry.register("my-topic-value", new ProtobufSchema(KeyTimestampValue.getDescriptor(), ImmutableList.of(ref1, ref2)));
+
+    String tsFullName = "io.confluent.kafka.serializers.protobuf.test.TimestampValue";
+    Schema timestampSchema =
+        getTimestampBuilder().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build();
+    SchemaBuilder tsBuilder = SchemaBuilder.struct();
+    tsBuilder.name(tsFullName);
+    tsBuilder.field(
+        "value",
+        timestampSchema
+    );
+    tsBuilder.parameter(PROTOBUF_TYPE_TAG, String.valueOf(2));
+    Schema tsSchema = tsBuilder.version(1).build();
+    Struct tsStruct = new Struct(tsSchema);
+    tsStruct.put("value", getTimestampStruct(timestampSchema, 1000L, 0));
+
+    Schema timestampSchema2 =
+        getTimestampBuilder().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3)).build();
+    String keyTsFullName = "io.confluent.kafka.serializers.protobuf.test.KeyTimestampValue";
+    SchemaBuilder keyTsBuilder = SchemaBuilder.struct();
+    keyTsBuilder.name(keyTsFullName);
+    keyTsBuilder.field(
+        "key",
+        SchemaBuilder.int32().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    keyTsBuilder.field(
+        "value",
+        tsSchema
+    );
+    keyTsBuilder.field(
+        "value2",
+        timestampSchema2
+    );
+    Schema keyTsSchema = keyTsBuilder.version(1).build();
+    Struct keyTsStruct = new Struct(keyTsSchema);
+    keyTsStruct.put("key", 123);
+    keyTsStruct.put("value", tsStruct);
+    keyTsStruct.put("value2", getTimestampStruct(timestampSchema2, 2000L, 0));
+
+    byte[] result = converter.fromConnectData("my-topic",
+        keyTsSchema,
+        keyTsStruct
     );
 
     assertArrayEquals(expected, Arrays.copyOfRange(result, PROTOBUF_BYTES_START, result.length));

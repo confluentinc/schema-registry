@@ -37,7 +37,7 @@ public class TopicRecordNameStrategy extends RecordNameStrategy {
 
   @Override
   public String subjectName(String topic, boolean isKey, ParsedSchema schema) {
-    if (schema == null) {
+    if (topic == null || schema == null) {
       return null;
     }
     return topic + "-" + getRecordName(schema, isKey);

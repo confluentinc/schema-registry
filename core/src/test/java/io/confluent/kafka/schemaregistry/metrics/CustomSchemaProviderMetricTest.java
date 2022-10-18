@@ -18,14 +18,19 @@ package io.confluent.kafka.schemaregistry.metrics;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import org.junit.Test;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import java.lang.management.ManagementFactory;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_CUSTOM_SCHEMA_PROVIDER;
 import static org.junit.Assert.assertEquals;
 
 public class CustomSchemaProviderMetricTest extends ClusterTestHarness {
@@ -41,9 +46,11 @@ public class CustomSchemaProviderMetricTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testCustomSchemaProviderMetricCount() {
-    MetricsContainer container = restApp.restApp.schemaRegistry().getMetricsContainer();
-    assertEquals(1, container.getCustomSchemaProviderCount().get());
+  public void testCustomSchemaProviderMetricCount() throws Exception {
+    MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+    ObjectName customSchemaProviderCount =
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_CUSTOM_SCHEMA_PROVIDER);
+    assertEquals(1.0, mBeanServer.getAttribute(customSchemaProviderCount, METRIC_NAME_CUSTOM_SCHEMA_PROVIDER));
   }
 
   public static class CustomSchemaProvider implements SchemaProvider {
@@ -61,9 +68,7 @@ public class CustomSchemaProviderMetricTest extends ClusterTestHarness {
     }
 
     @Override
-    public ParsedSchema parseSchemaOrElseThrow(String schemaString,
-                                               List<SchemaReference> references,
-                                               boolean isNew) {
+    public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew) {
       return null;
     }
   }

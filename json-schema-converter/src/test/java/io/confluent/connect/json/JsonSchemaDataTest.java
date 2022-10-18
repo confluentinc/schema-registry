@@ -67,7 +67,6 @@ import static io.confluent.connect.json.JsonSchemaData.CONNECT_TYPE_PROP;
 import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_ENUM;
 import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_UNION;
 import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_UNION_FIELD_PREFIX;
-import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_UNION_PREFIX;
 import static io.confluent.connect.json.JsonSchemaData.JSON_TYPE_ENUM;
 import static io.confluent.connect.json.JsonSchemaData.JSON_TYPE_ONE_OF;
 import static io.confluent.connect.json.JsonSchemaData.KEY_FIELD;
@@ -514,6 +513,42 @@ public class JsonSchemaDataTest {
     checkNonObjectConversion(schema, obj, actualSchema, struct);
   }
 
+  @Test
+  public void testFromConnectRecordIgnoreDefaultForNullables() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.IGNORE_DEFAULT_FOR_NULLABLES_CONFIG, "true")));
+    NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
+        .build();
+    StringSchema stringSchema = StringSchema.builder()
+        .defaultValue(TextNode.valueOf("default-string"))
+        .build();
+    CombinedSchema oneof = CombinedSchema.oneOf(ImmutableList.of(NullSchema.INSTANCE,
+            stringSchema
+        ))
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+        .build();
+    ObjectSchema schema = ObjectSchema.builder()
+        .addPropertySchema("int8", numberSchema)
+        .addPropertySchema("string", oneof)
+        .title("Record")
+        .build();
+    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+    obj.set("int8", ShortNode.valueOf((short) 12));
+    obj.set("string", NullNode.getInstance());
+    Schema connectStringSchema = SchemaBuilder.string().optional().defaultValue("default-string").build();
+    // The string field is not set
+    Schema actualSchema = SchemaBuilder.struct()
+        .name("Record")
+        .field("int8", Schema.INT8_SCHEMA)
+        .field("string", connectStringSchema)
+        .build();
+    Struct struct = new Struct(actualSchema).put("int8", (byte) 12);
+    checkNonObjectConversion(schema, obj, actualSchema, struct);
+  }
+
   private void checkNonObjectConversion(
       org.everit.json.schema.Schema expectedSchema, Object expected, Schema schema, Object value
   ) {
@@ -651,6 +686,7 @@ public class JsonSchemaDataTest {
     Schema expectedSchema = Schema.STRING_SCHEMA;
     checkNonObjectConversion(expectedSchema, "teststring", schema, TextNode.valueOf("teststring"));
   }
+
 
   @Test
   public void testToConnectBytes() {
@@ -1916,6 +1952,68 @@ public class JsonSchemaDataTest {
             .doc("Task title")
             .build()
     );
+    return schemaBuilder.build();
+  }
+
+  @Test
+  public void testToConnectRecursiveSchema2() {
+    JsonSchema jsonSchema = getRecursiveJsonSchema2();
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema expected = getRecursiveSchema2();
+    Schema actual = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertEquals(expected.field("title"), actual.field("title"));
+    Schema expectedNested = expected.field("foos").schema();
+    Schema actualNested = actual.field("foos").schema();
+    assertEquals(expectedNested.name(), actualNested.name());
+    assertEquals(expectedNested.type(), actualNested.type());
+  }
+
+  @Test
+  public void testFromConnectRecursiveSchema2() {
+    JsonSchema expected = getRecursiveJsonSchema2();
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    JsonSchema jsonSchema = jsonSchemaData.fromConnectSchema(getRecursiveSchema2());
+    assertEquals(expected.name(), jsonSchema.name());
+  }
+
+  private JsonSchema getRecursiveJsonSchema2() {
+    String schema = "{\n"
+        + "    \"title\": \"Foo\",\n"
+        + "    \"$ref\": \"#/$defs/Foo\",\n"
+        + "    \"$defs\": {\n"
+        + "        \"Foo\": {\n"
+        + "            \"properties\": {\n"
+        + "                \"foos\": {\n"
+        + "                    \"oneOf\": [\n"
+        + "                        {\n"
+        + "                            \"items\": {\n"
+        + "                                \"$ref\": \"#/$defs/Foo\"\n"
+        + "                            },\n"
+        + "                            \"type\": \"array\"\n"
+        + "                        },\n"
+        + "                        {\n"
+        + "                            \"type\": \"null\"\n"
+        + "                        }\n"
+        + "                    ],\n"
+        + "                    \"items\": {\n"
+        + "                        \"$ref\": \"#/$defs/Foo\"\n"
+        + "                    },\n"
+        + "                    \"type\": \"array\"\n"
+        + "                }\n"
+        + "            },\n"
+        + "            \"type\": \"object\"\n"
+        + "        }\n"
+        + "    }\n"
+        + "}";
+    return new JsonSchema(schema);
+  }
+
+  private Schema getRecursiveSchema2() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("Foo");
+    schemaBuilder.parameter(JsonSchemaData.JSON_ID_PROP, "#id1");
+    Schema arraySchema = SchemaBuilder.array(schemaBuilder).build();
+    schemaBuilder.field("foos", arraySchema);
     return schemaBuilder.build();
   }
 }

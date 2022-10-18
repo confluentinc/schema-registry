@@ -16,11 +16,15 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +42,7 @@ import javax.ws.rs.Produces;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ServerMetadataResource {
 
+  public static final String apiTag = "Server Metadata (v1)";
   private static final Logger log = LoggerFactory.getLogger(ServerMetadataResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -47,14 +52,28 @@ public class ServerMetadataResource {
 
   @GET
   @Path("/id")
+  @DocumentedName("getClusterId")
   @Operation(summary = "Get the server metadata", responses = {
       @ApiResponse(responseCode = "500",
                        description = "Error code 50001 -- Error in the backend data store\n")
   })
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("metadata.id")
   public ServerClusterId getClusterId() {
     String kafkaClusterId = schemaRegistry.getKafkaClusterId();
     String schemaRegistryClusterId = schemaRegistry.getGroupId();
     return ServerClusterId.of(kafkaClusterId, schemaRegistryClusterId);
+  }
+
+  @GET
+  @Path("/version")
+  @DocumentedName("getSchemaRegistryServerVersion")
+  @Operation(summary = "Get Schema Registry server version", responses = {
+      @ApiResponse(responseCode = "500",
+                      description = "Error code 50001 -- Error in the backend data store\n")
+  })
+  @Tags(@Tag(name = apiTag))
+  public SchemaRegistryServerVersion getSchemaRegistryVersion() {
+    return new SchemaRegistryServerVersion(AppInfoParser.getVersion(), AppInfoParser.getCommitId());
   }
 }

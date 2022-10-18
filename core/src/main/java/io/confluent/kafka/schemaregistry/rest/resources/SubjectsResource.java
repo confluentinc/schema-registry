@@ -15,13 +15,16 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
@@ -32,6 +35,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,6 +68,7 @@ import java.util.Set;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SubjectsResource {
 
+  public static final String apiTag = "Subjects (v1)";
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
@@ -72,16 +78,26 @@ public class SubjectsResource {
   }
 
   @POST
+  @DocumentedName("lookUpSchemaUnderSubject")
   @Path("/{subject}")
-  @Operation(summary = "Check if a schema has already been registered under the specified subject."
+  @Operation(summary = "Lookup schema under subject",
+      description = "Check if a schema has already been registered under the specified subject."
       + " If so, this returns the schema string along with its globally unique identifier, its "
-      + "version under this subject and the subject name.", responses = {
-        @ApiResponse(responseCode = "200", content = @Content(schema =
+      + "version under this subject and the subject name.",
+      responses = {
+        @ApiResponse(responseCode = "200", description = "The schema.", content = @Content(schema =
           @io.swagger.v3.oas.annotations.media.Schema(implementation = Schema.class))),
-        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
-          + "Error code 40403 -- Schema not found"),
-        @ApiResponse(responseCode = "500", description = "Internal server error")
-      })
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. "
+                  + "Error code 40401 indicates subject not found. "
+                  + "Error code 40403 indicates schema not found.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+          description = "Internal Server Error.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("subjects.get-schema")
   public void lookUpSchemaUnderSubject(
       final @Suspended AsyncResponse asyncResponse,
@@ -99,14 +115,7 @@ public class SubjectsResource {
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     // returns version if the schema exists. Otherwise returns 404
-    Schema schema = new Schema(
-        subject,
-        0,
-        -1,
-        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
-        request.getReferences(),
-        request.getSchema()
-    );
+    Schema schema = new Schema(subject, request);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
     try {
       matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
@@ -118,6 +127,8 @@ public class SubjectsResource {
           throw Errors.schemaNotFoundException();
         }
       }
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);
@@ -126,13 +137,22 @@ public class SubjectsResource {
   }
 
   @GET
+  @DocumentedName("getAllSubjects")
   @Valid
-  @Operation(summary = "Get a list of registered subjects.", responses = {
-      @ApiResponse(responseCode = "200",
-          description = "The subjects matching the specified parameters"),
-      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
-          + "datastore")
-  })
+  @Operation(summary = "List subjects",
+      description = "Retrieves a list of registered subjects matching specified parameters.",
+      responses = {
+        @ApiResponse(responseCode = "200",
+          description = "List of subjects matching the specified parameters.", content = @Content(
+                  array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                          implementation = String.class, example = Schema.SUBJECT_EXAMPLE)))),
+        @ApiResponse(responseCode = "500",
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))
+      })
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("subjects.list")
   public Set<String> list(
       @DefaultValue(QualifiedSubject.CONTEXT_WILDCARD)
@@ -153,16 +173,27 @@ public class SubjectsResource {
   }
 
   @DELETE
+  @DocumentedName("deleteSubject")
   @Path("/{subject}")
-  @Operation(summary = "Deletes the specified subject and its associated compatibility level if "
-      + "registered. It is recommended to use this API only when a topic needs to be recycled or "
-      + "in development environment.", responses = {
-        @ApiResponse(responseCode = "200", content = @Content(array = @ArraySchema(schema =
-          @io.swagger.v3.oas.annotations.media.Schema(implementation = Integer.class)))),
-        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
+  @Operation(summary = "Delete subject",
+      description = "Deletes the specified subject and its associated compatibility level if "
+        + "registered. It is recommended to use this API only when a topic needs to be recycled or "
+        + "in development environment.",
+      responses = {
+        @ApiResponse(responseCode = "200", description = "Operation succeeded. "
+          + "Returns list of schema versions deleted", content = @Content(array = @ArraySchema(
+            schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class,
+                    example = Schema.VERSION_EXAMPLE)))),
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. Error code 40401 indicates subject not found.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
-          description = "Error code 50001 -- Error in the backend datastore")
-      })
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("subjects.delete-subject")
   public void deleteSubject(
       final @Suspended AsyncResponse asyncResponse,
@@ -192,6 +223,10 @@ public class SubjectsResource {
       throw Errors.referenceExistsException(e.getMessage());
     } catch (SubjectNotSoftDeletedException e) {
       throw Errors.subjectNotSoftDeletedException(subject);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
+    } catch (SchemaRegistryTimeoutException e) {
+      throw Errors.operationTimeoutException("Delete subject operation timed out", e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting the subject " + subject,
                                            e);

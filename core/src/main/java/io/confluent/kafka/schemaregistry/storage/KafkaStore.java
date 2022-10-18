@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.storage.exceptions.EntryTooLargeException;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -27,6 +28,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -362,7 +364,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
     } catch (InterruptedException e) {
       throw new StoreException("Put operation interrupted while waiting for an ack from Kafka", e);
     } catch (ExecutionException e) {
-      throw new StoreException("Put operation failed while waiting for an ack from Kafka", e);
+      if (e.getCause() instanceof RecordTooLargeException) {
+        throw new EntryTooLargeException("Put operation failed because entry is too large");
+      } else {
+        throw new StoreException("Put operation failed while waiting for an ack from Kafka", e);
+      }
     } catch (TimeoutException e) {
       throw new StoreTimeoutException(
           "Put operation timed out while waiting for an ack from Kafka", e);

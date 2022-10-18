@@ -295,6 +295,7 @@ public class ProtobufData {
   private final Map<Schema, ProtobufSchema> fromConnectSchemaCache;
   private final Map<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean generalizedSumTypeSupport;
+  private boolean ignoreDefaultForNullables;
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
   private boolean useIntForEnums;
@@ -316,7 +317,8 @@ public class ProtobufData {
   public ProtobufData(ProtobufDataConfig protobufDataConfig) {
     fromConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
     toConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
-    this.generalizedSumTypeSupport = protobufDataConfig.isGeneralizedSumTypeSupportDefault();
+    this.generalizedSumTypeSupport = protobufDataConfig.isGeneralizedSumTypeSupport();
+    this.ignoreDefaultForNullables = protobufDataConfig.ignoreDefaultForNullables();
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
     this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
     this.useIntForEnums = protobufDataConfig.useIntForEnums();
@@ -466,6 +468,9 @@ public class ProtobufData {
                 mapEntry.getKey(),
                 protobufSchema
             );
+            if (entryKey != null) {
+              mapBuilder.setField(keyDescriptor, entryKey);
+            }
             Object entryValue = fromConnectData(
                 getFieldType(valueDescriptor),
                 schema.valueSchema(),
@@ -473,8 +478,9 @@ public class ProtobufData {
                 mapEntry.getValue(),
                 protobufSchema
             );
-            mapBuilder.setField(keyDescriptor, entryKey);
-            mapBuilder.setField(valueDescriptor, entryValue);
+            if (entryValue != null) {
+              mapBuilder.setField(valueDescriptor, entryValue);
+            }
             newMapValue.add(mapBuilder.build());
           }
           return newMapValue;
@@ -487,7 +493,8 @@ public class ProtobufData {
           // one of the union types.
           if (isUnionSchema(schema)) {
             for (Field field : schema.fields()) {
-              Object object = struct.get(field);
+              Object object = ignoreDefaultForNullables
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
               if (object != null) {
                 String fieldName = scrubName(field.name());
                 Object fieldCtx = getFieldType(ctx, fieldName);
@@ -507,11 +514,13 @@ public class ProtobufData {
             for (Field field : schema.fields()) {
               String fieldName = scrubName(field.name());
               Object fieldCtx = getFieldType(ctx, fieldName);
+              Object connectFieldVal = ignoreDefaultForNullables
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
               Object fieldValue = fromConnectData(
                   fieldCtx,
                   field.schema(),
                   scopedStructName + ".",
-                  struct.get(field),
+                  connectFieldVal,
                   protobufSchema
               );
               if (fieldValue != null) {
@@ -528,7 +537,9 @@ public class ProtobufData {
                 if (fieldDescriptor == null) {
                   throw new DataException("Cannot find field with name " + fieldName);
                 }
-                messageBuilder.setField(fieldDescriptor, fieldValue);
+                if (fieldValue != null) {
+                  messageBuilder.setField(fieldDescriptor, fieldValue);
+                }
               }
             }
             return messageBuilder.build();
@@ -640,7 +651,6 @@ public class ProtobufData {
     String[] split = splitName(fullName);
     String namespace = split[0];
     String name = split[1];
-    ctx.add(fullName);
     Descriptor descriptor = descriptorFromConnectSchema(ctx, namespace, name, schema);
     ProtobufSchema resultSchema = new ProtobufSchema(descriptor);
     fromConnectSchemaCache.put(schema, resultSchema);
@@ -812,8 +822,8 @@ public class ProtobufData {
         oneofDefinitionFromConnectSchema(ctx, schema, message, fieldSchema, unionName);
         return null;
       } else {
-        if (!ctx.contains(fieldSchemaName)) {
-          ctx.add(fieldSchemaName);
+        if (!ctx.contains(message.getName(), type)) {
+          ctx.add(message.getName(), type);
           message.addMessageDefinition(messageDefinitionFromConnectSchema(
               ctx,
               schema,
@@ -1174,17 +1184,22 @@ public class ProtobufData {
       Object converted = null;
       switch (schema.type()) {
         case INT8:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : ((Number) value).byteValue();
+          if (value instanceof Message) {
+            value = getWrappedValue((Message) value);
+          }
+          converted = ((Number) value).byteValue();
           break;
         case INT16:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : ((Number) value).shortValue();
+          if (value instanceof Message) {
+            value = getWrappedValue((Message) value);
+          }
+          converted = ((Number) value).shortValue();
           break;
         case INT32:
           if (value instanceof Message) {
-            converted = getWrappedValue((Message) value);
-          } else if (value instanceof Number) {
+            value = getWrappedValue((Message) value);
+          }
+          if (value instanceof Number) {
             converted = ((Number) value).intValue();
           } else if (value instanceof Enum) {
             converted = ((Enum) value).ordinal();
@@ -1194,33 +1209,39 @@ public class ProtobufData {
           break;
         case INT64:
           if (value instanceof Message) {
-            converted = getWrappedValue((Message) value);
-          } else {
-            long longValue;
-            if (value instanceof Long) {
-              longValue = (Long) value;
-            } else {
-              longValue = Integer.toUnsignedLong(((Number) value).intValue());
-            }
-            converted = longValue;
+            value = getWrappedValue((Message) value);
           }
+          long longValue;
+          if (value instanceof Long) {
+            longValue = (Long) value;
+          } else {
+            longValue = Integer.toUnsignedLong(((Number) value).intValue());
+          }
+          converted = longValue;
           break;
         case FLOAT32:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : ((Number) value).floatValue();
+          if (value instanceof Message) {
+            value = getWrappedValue((Message) value);
+          }
+          converted = ((Number) value).floatValue();
           break;
         case FLOAT64:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : ((Number) value).doubleValue();
+          if (value instanceof Message) {
+            value = getWrappedValue((Message) value);
+          }
+          converted = ((Number) value).doubleValue();
           break;
         case BOOLEAN:
-          converted = value instanceof Message
-              ? getWrappedValue((Message) value) : (Boolean) value;
+          if (value instanceof Message) {
+            value = getWrappedValue((Message) value);
+          }
+          converted = value;
           break;
         case STRING:
           if (value instanceof Message) {
-            converted = getWrappedValue((Message) value);
-          } else if (value instanceof String) {
+            value = getWrappedValue((Message) value);
+          }
+          if (value instanceof String) {
             converted = value;
           } else if (value instanceof CharSequence
               || value instanceof Enum
@@ -1234,9 +1255,9 @@ public class ProtobufData {
           break;
         case BYTES:
           if (value instanceof Message) {
-            converted = ByteBuffer.wrap(
-                ((ByteString) getWrappedValue((Message) value)).toByteArray());
-          } else if (value instanceof byte[]) {
+            value = getWrappedValue((Message) value);
+          }
+          if (value instanceof byte[]) {
             converted = ByteBuffer.wrap((byte[]) value);
           } else if (value instanceof ByteBuffer) {
             converted = value;
@@ -1646,7 +1667,8 @@ public class ProtobufData {
 
   private SchemaBuilder toMapSchema(ToConnectContext ctx, Descriptor descriptor) {
     List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
-    String name = ProtobufSchema.toMapField(descriptor.getName());
+    String name = ProtobufSchema.toMapField(
+        enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName());
     return SchemaBuilder.map(toConnectSchema(ctx, fieldDescriptors.get(0)),
         toConnectSchema(ctx, fieldDescriptors.get(1))
     ).name(name);
@@ -1881,20 +1903,25 @@ public class ProtobufData {
    * Class that holds the context for performing {@code fromConnectSchema}
    */
   private static class FromConnectContext {
-    private final Set<String> structNames;
+    private final Map<String, Set<String>> messageNames;
     private int defaultSchemaNameIndex = 0;
 
     public FromConnectContext() {
-      this.structNames = new HashSet<>();
+      this.messageNames = new HashMap<>();
     }
 
-    public boolean contains(String structName) {
-      return structName != null ? structNames.contains(structName) : false;
+    public boolean contains(String parent, String child) {
+      Set<String> children = messageNames.get(parent);
+      if (child == null || children == null) {
+        return false;
+      }
+      return children.contains(child);
     }
 
-    public void add(String structName) {
-      if (structName != null) {
-        structNames.add(structName);
+    public void add(String parent, String child) {
+      if (child != null) {
+        Set<String> children = messageNames.computeIfAbsent(parent, k -> new HashSet<>());
+        children.add(child);
       }
     }
 

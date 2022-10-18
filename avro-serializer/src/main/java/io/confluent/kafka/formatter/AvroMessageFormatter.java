@@ -88,8 +88,8 @@ public class AvroMessageFormatter extends SchemaMessageFormatter<Object> {
   }
 
   @Override
-  protected void writeTo(byte[] data, PrintStream output) throws IOException {
-    Object object = deserializer.deserialize(data);
+  protected void writeTo(String topic, byte[] data, PrintStream output) throws IOException {
+    Object object = deserializer.deserialize(topic, data);
     try {
       AvroSchemaUtils.toJson(object, output);
     } catch (AvroRuntimeException e) {
@@ -129,8 +129,8 @@ public class AvroMessageFormatter extends SchemaMessageFormatter<Object> {
     }
 
     @Override
-    public Object deserialize(byte[] payload) throws SerializationException {
-      return super.deserialize(payload);
+    public Object deserialize(String topic, byte[] payload) throws SerializationException {
+      return super.deserialize(topic, isKey, payload, null);
     }
   }
 }

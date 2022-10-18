@@ -21,6 +21,7 @@ import static io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema.t
 
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
+import com.google.protobuf.DescriptorProtos.EnumDescriptorProto.EnumReservedRange;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -66,6 +67,10 @@ public class EnumDefinition {
   public static class Builder {
     // --- public ---
 
+    public String getName() {
+      return mEnumTypeBuilder.getName();
+    }
+
     public Builder addValue(String name, int num) {
       return addValue(name, num, null, null, null);
     }
@@ -89,6 +94,20 @@ public class EnumDefinition {
         enumValBuilder.mergeOptions(optionsBuilder.build());
       }
       mEnumTypeBuilder.addValue(enumValBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder addReservedName(String reservedName) {
+      mEnumTypeBuilder.addReservedName(reservedName);
+      return this;
+    }
+
+    // Note: added
+    public Builder addReservedRange(int start, int end) {
+      EnumReservedRange.Builder rangeBuilder = EnumReservedRange.newBuilder();
+      rangeBuilder.setStart(start).setEnd(end);
+      mEnumTypeBuilder.addReservedRange(rangeBuilder.build());
       return this;
     }
 

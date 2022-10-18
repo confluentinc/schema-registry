@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
@@ -338,8 +339,8 @@ public class JsonSchemaTest {
   @Test
   public void testParseSchema() {
     SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
-    ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(recordSchemaString,
-            new ArrayList<>(), false);
+    ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), recordSchemaString), false);
     Optional<ParsedSchema> parsedSchemaOptional = jsonSchemaProvider.parseSchema(recordSchemaString,
             new ArrayList<>(), false);
 
@@ -350,8 +351,8 @@ public class JsonSchemaTest {
   @Test(expected = IllegalArgumentException.class)
   public void testParseSchemaThrowException() {
     SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
-    jsonSchemaProvider.parseSchemaOrElseThrow(invalidSchemaString,
-            new ArrayList<>(), false);
+    jsonSchemaProvider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), invalidSchemaString), false);
   }
 
   @Test

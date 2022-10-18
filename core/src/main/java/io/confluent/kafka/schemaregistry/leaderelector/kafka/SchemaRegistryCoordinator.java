@@ -168,7 +168,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     log.debug("Member information: {}", memberConfigs);
 
     if (nodeCountMetric != null) {
-      nodeCountMetric.set(memberConfigs.size());
+      nodeCountMetric.record(memberConfigs.size());
     }
 
     // Compute the leader as the leader-eligible member with the "smallest" (lexicographically) ID.
@@ -212,7 +212,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   }
 
   @Override
-  protected boolean onJoinPrepare(int generation, String memberId) {
+  protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
     log.debug("Revoking previous assignment {}", assignmentSnapshot);
     if (assignmentSnapshot != null) {
       listener.onRevoked();

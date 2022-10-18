@@ -15,8 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -33,6 +33,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +60,7 @@ import java.util.List;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class CompatibilityResource {
 
+  public static final String apiTag = "Compatibility (v1)";
   private static final Logger log = LoggerFactory.getLogger(CompatibilityResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -67,25 +70,35 @@ public class CompatibilityResource {
 
   @POST
   @Path("/subjects/{subject}/versions/{version}")
-  @Operation(summary = "Test input schema against a particular version of a subject's schema for "
-      + "compatibility.",
+  @DocumentedName("testVersionCompatibility")
+  @Operation(summary = "Test schema compatibility against a particular schema subject-version",
       description =
-          "the compatibility level applied for the check is the configured compatibility level "
-              + "for the subject (http:get:: /config/(string: subject)). If this subject's "
+          "Test input schema against a particular version of a subject's schema for compatibility. "
+              + "The compatibility level applied for the check is the configured compatibility "
+              + "level for the subject (http:get:: /config/(string: subject)). If this subject's "
               + "compatibility level was never changed, then the global compatibility level "
               + "applies (http:get:: /config).",
       responses = {
-          @ApiResponse(responseCode = "200", content = @Content(schema =
-          @io.swagger.v3.oas.annotations.media.Schema(implementation =
+          @ApiResponse(responseCode = "200", description = "Compatibility check result.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
               CompatibilityCheckResponse.class))),
-          @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
-              + "Error code 40402 -- Version not found"),
-          @ApiResponse(responseCode = "422", description =
-              "Error code 42201 -- Invalid schema or schema type\n"
-                  + "Error code 42202 -- Invalid version"),
-          @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
-              + "backend data store")
-      })
+          @ApiResponse(responseCode = "404",
+            description = "Not Found. Error code 40401 indicates subject not found. "
+              + "Error code 40402 indicates version not found.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+              ErrorMessage.class))),
+          @ApiResponse(responseCode = "422",
+            description = "Unprocessable entity. "
+                  + "Error code 42201 indicates an invalid schema or schema type. "
+                  + "Error code 42202 indicates an invalid version.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+              ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+            description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+              ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("compatibility.subjects.versions.verify")
   public void testCompatibilityBySubjectName(
       final @Suspended AsyncResponse asyncResponse,
@@ -127,14 +140,7 @@ public class CompatibilityResource {
     if (schemaForSpecifiedVersion == null && !versionId.isLatest()) {
       throw Errors.versionNotFoundException(versionId.getVersionId());
     }
-    Schema schema = new Schema(
-        subject,
-        0,
-        -1,
-        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
-        request.getReferences(),
-        request.getSchema()
-    );
+    Schema schema = new Schema(subject, request);
     try {
       errorMessages = schemaRegistry.isCompatible(
           subject, schema,
@@ -163,25 +169,32 @@ public class CompatibilityResource {
 
   @POST
   @Path("/subjects/{subject}/versions")
-  @Operation(summary = "Test input schema against a subject's schemas for compatibility, "
-      + "based on the compatibility level of the subject configured. In other word, "
-      + "it will perform the same compatibility check as register for that subject",
+  @DocumentedName("testSubjectCompatibility")
+  @Operation(summary = "Test schema compatibility against all schemas under a subject",
       description =
-          "the compatibility level applied for the check is the configured compatibility level "
-              + "for the subject (http:get:: /config/(string: subject)). If this subject's "
+          "Test input schema against a subject's schemas for compatibility, "
+              + "based on the configured compatibility level of the subject. In other words, "
+              + "it will perform the same compatibility check as register for that subject. "
+              + "The compatibility level applied for the check is the configured compatibility "
+              + "level for the subject (http:get:: /config/(string: subject)). If this subject's "
               + "compatibility level was never changed, then the global compatibility level "
               + "applies (http:get:: /config).",
       responses = {
-          @ApiResponse(responseCode = "200", content = @Content(schema =
-          @io.swagger.v3.oas.annotations.media.Schema(implementation =
+          @ApiResponse(responseCode = "200", description = "Compatibility check result.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
               CompatibilityCheckResponse.class))),
-          @ApiResponse(responseCode = "422", description =
-              "Error code 42201 -- Invalid schema or schema type\n"
-                  + "Error code 42202 -- Invalid version"),
-          @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
-              + "backend data store")
-      })
-
+          @ApiResponse(responseCode = "422",
+            description = "Unprocessable Entity. "
+                    + "Error code 42201 indicates an invalid schema or schema type. "
+                    + "Error code 42202 indicates an invalid version.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+              ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+            description = "Internal Server Error. "
+                    + "Error code 50001 indicates a failure in the backend data store.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+              ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("compatibility.subjects.versions.verify")
   public void testCompatibilityForSubject(
       final @Suspended AsyncResponse asyncResponse,
@@ -208,14 +221,7 @@ public class CompatibilityResource {
       throw Errors.storeException("Error while retrieving schema for subject "
           + subject, e);
     }
-    Schema schema = new Schema(
-        subject,
-        0,
-        -1,
-        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
-        request.getReferences(),
-        request.getSchema()
-    );
+    Schema schema = new Schema(subject, request);
     try {
       errorMessages = schemaRegistry.isCompatible(subject, schema, previousSchemas);
     } catch (InvalidSchemaException e) {

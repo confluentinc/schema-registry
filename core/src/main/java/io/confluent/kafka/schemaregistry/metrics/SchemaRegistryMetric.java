@@ -16,31 +16,27 @@
 package io.confluent.kafka.schemaregistry.metrics;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Value;
-
-import java.util.concurrent.atomic.AtomicLong;
 
 public class SchemaRegistryMetric {
-  private final AtomicLong count = new AtomicLong();
   private final Sensor sensor;
 
-  public SchemaRegistryMetric(Metrics metrics, String sensorName, MetricName metricName) {
+  public SchemaRegistryMetric(Metrics metrics, String sensorName, MetricName metricName,
+                              MeasurableStat measurableStat) {
+    // a new sensor is only created if the sensor name doesn't already exist in metrics
     sensor = metrics.sensor(sensorName);
-    sensor.add(metricName, new Value());
+    // a new metric is only created if the metric name doesn't already exist in the sensor
+    sensor.add(metricName, measurableStat);
   }
 
-  public void increment() {
-    sensor.record(count.addAndGet(1));
+  public void record() {
+    // equivalent to record(1.0);
+    sensor.record();
   }
 
-  public void set(long value) {
-    count.set(value);
+  public void record(double value) {
     sensor.record(value);
-  }
-
-  public long get() {
-    return count.get();
   }
 }

@@ -16,19 +16,13 @@
 
 package io.confluent.connect.protobuf;
 
+import io.confluent.connect.schema.AbstractDataConfig;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 
-public class ProtobufDataConfig extends AbstractConfig {
-
-  public static final String GENERALIZED_SUM_TYPE_SUPPORT_CONFIG = "generalized.sum.type.support";
-  public static final boolean GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT = false;
-  public static final String GENERALIZED_SUM_TYPE_SUPPORT_DOC =
-      "Toggle for enabling/disabling generalized sum type support: interoperability of enum/union "
-          + "with other schema formats";
+public class ProtobufDataConfig extends AbstractDataConfig {
 
   public static final String ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG =
       "enhanced.protobuf.schema.support";
@@ -61,17 +55,8 @@ public class ProtobufDataConfig extends AbstractConfig {
   public static final String WRAPPER_FOR_RAW_PRIMITIVES_DOC = "Whether a wrapper message "
       + "should be interpreted as a raw primitive at the root level";
 
-  public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.config";
-  public static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
-  public static final String SCHEMAS_CACHE_SIZE_DOC = "Size of the converted schemas cache";
-
   public static ConfigDef baseConfigDef() {
-    return new ConfigDef()
-        .define(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG,
-            ConfigDef.Type.BOOLEAN,
-            GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT,
-            ConfigDef.Importance.MEDIUM,
-            GENERALIZED_SUM_TYPE_SUPPORT_DOC)
+    return AbstractDataConfig.baseConfigDef()
         .define(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG,
             ConfigDef.Type.BOOLEAN,
             ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DEFAULT,
@@ -98,21 +83,12 @@ public class ProtobufDataConfig extends AbstractConfig {
             ConfigDef.Type.BOOLEAN,
             WRAPPER_FOR_RAW_PRIMITIVES_DEFAULT,
             ConfigDef.Importance.MEDIUM,
-            WRAPPER_FOR_RAW_PRIMITIVES_DOC)
-        .define(SCHEMAS_CACHE_SIZE_CONFIG,
-            ConfigDef.Type.INT,
-            SCHEMAS_CACHE_SIZE_DEFAULT,
-            ConfigDef.Importance.LOW,
-            SCHEMAS_CACHE_SIZE_DOC
+            WRAPPER_FOR_RAW_PRIMITIVES_DOC
         );
   }
 
   public ProtobufDataConfig(Map<?, ?> props) {
     super(baseConfigDef(), props);
-  }
-
-  public boolean isGeneralizedSumTypeSupportDefault() {
-    return this.getBoolean(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG);
   }
 
   public boolean isEnhancedProtobufSchemaSupport() {
@@ -137,10 +113,6 @@ public class ProtobufDataConfig extends AbstractConfig {
 
   public boolean useWrapperForRawPrimitives() {
     return this.getBoolean(WRAPPER_FOR_RAW_PRIMITIVES_CONFIG);
-  }
-
-  public int schemaCacheSize() {
-    return Math.max(1, this.getInt(SCHEMAS_CACHE_SIZE_CONFIG));
   }
 
   public static class Builder {

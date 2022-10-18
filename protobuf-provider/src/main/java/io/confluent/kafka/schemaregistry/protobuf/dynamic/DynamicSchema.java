@@ -20,6 +20,9 @@ package io.confluent.kafka.schemaregistry.protobuf.dynamic;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
+import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
 import com.google.protobuf.DescriptorProtos.FileOptions;
@@ -366,6 +369,10 @@ public class DynamicSchema {
   public static class Builder {
     // --- public ---
 
+    public String getName() {
+      return mFileDescProtoBuilder.getName();
+    }
+
     /**
      * Builds a dynamic schema
      *
@@ -435,6 +442,29 @@ public class DynamicSchema {
 
     public Builder addServiceDefinition(ServiceDefinition serviceDef) {
       mFileDescProtoBuilder.addService(serviceDef.getServiceType());
+      return this;
+    }
+
+    public Builder addExtendDefinition(
+        String extendee,
+        String label,
+        String type,
+        String name,
+        int num,
+        String defaultVal,
+        String jsonName,
+        String doc,
+        Map<String, String> params,
+        CType ctype,
+        Boolean isPacked,
+        JSType jstype,
+        Boolean isDeprecated
+    ) {
+      FieldDescriptorProto.Builder fieldBuilder = MessageDefinition.getFieldBuilder(label, false,
+          type, name, num, defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated,
+          null);
+      fieldBuilder.setExtendee(extendee);
+      mFileDescProtoBuilder.addExtension(fieldBuilder.build());
       return this;
     }
 

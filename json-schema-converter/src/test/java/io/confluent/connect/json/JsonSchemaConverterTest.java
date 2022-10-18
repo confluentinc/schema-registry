@@ -19,10 +19,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import org.apache.kafka.connect.data.Date;
+import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -117,6 +124,70 @@ public class JsonSchemaConverterTest {
         .put("bytes", "foo".getBytes())
         .put("array", Arrays.asList("a", "b", "c"))
         .put("map", Collections.singletonMap("field", 1));
+
+    byte[] converted = converter.fromConnectData(TOPIC, original.schema(), original);
+    SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
+    assertEquals(expected, schemaAndValue.value());
+  }
+
+  @Test
+  public void testComplexWithDefaults() {
+    int dateDefVal = 100;
+    int timeDefVal = 1000 * 60 * 60 * 2;
+    long tsDefVal = 1000 * 60 * 60 * 24 * 365 + 100;
+    java.util.Date dateDef = Date.toLogical(Date.SCHEMA, dateDefVal);
+    java.util.Date timeDef = Time.toLogical(Time.SCHEMA, timeDefVal);
+    java.util.Date tsDef = Timestamp.toLogical(Timestamp.SCHEMA, tsDefVal);
+    BigDecimal decimalDef = new BigDecimal(BigInteger.valueOf(314159L), 5);
+    SchemaBuilder builder = SchemaBuilder.struct()
+        .field("int8", SchemaBuilder.int8().defaultValue((byte) 2).doc("int8 field").build())
+        .field("int16", SchemaBuilder.int16().defaultValue((short)12).doc("int16 field").build())
+        .field("int32", SchemaBuilder.int32().defaultValue(12).doc("int32 field").build())
+        .field("int64", SchemaBuilder.int64().defaultValue(12L).doc("int64 field").build())
+        .field("float32", SchemaBuilder.float32().defaultValue(12.2f).doc("float32 field").build())
+        .field("float64", SchemaBuilder.float64().defaultValue(12.2).doc("float64 field").build())
+        .field("boolean", SchemaBuilder.bool().defaultValue(true).doc("bool field").build())
+        .field("string", SchemaBuilder.string().defaultValue("foo").doc("string field").build())
+        .field("bytes", SchemaBuilder.bytes().defaultValue("foo".getBytes()).doc("bytes field").build())
+        .field("array", SchemaBuilder.array(Schema.STRING_SCHEMA).defaultValue(Arrays.asList("a", "b", "c")).build())
+        .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).defaultValue(Collections.singletonMap("field", 1)).build())
+        .field("date", Date.builder().defaultValue(dateDef).doc("date field").build())
+        .field("time", Time.builder().defaultValue(timeDef).doc("time field").build())
+        .field("ts", Timestamp.builder().defaultValue(tsDef).doc("ts field").build())
+        .field("decimal", Decimal.builder(5).defaultValue(decimalDef).doc("decimal field").build());
+    Schema schema = builder.build();
+    Struct original = new Struct(schema).put("int8", (byte) 12)
+        .put("int16", (short) 12)
+        .put("int32", 12)
+        .put("int64", 12L)
+        .put("float32", 12.2f)
+        .put("float64", 12.2)
+        .put("boolean", true)
+        .put("string", "foo")
+        .put("bytes", "foo".getBytes())
+        .put("array", Arrays.asList("a", "b", "c"))
+        .put("map", Collections.singletonMap("field", 1))
+        .put("date", dateDef)
+        .put("time", timeDef)
+        .put("ts", tsDef)
+        .put("decimal", decimalDef);
+    // Because of registration in schema registry and lookup, we'll have added a version number
+    Schema expectedSchema = builder.version(1).build();
+    Struct expected = new Struct(expectedSchema).put("int8", (byte) 12)
+        .put("int16", (short) 12)
+        .put("int32", 12)
+        .put("int64", 12L)
+        .put("float32", 12.2f)
+        .put("float64", 12.2)
+        .put("boolean", true)
+        .put("string", "foo")
+        .put("bytes", "foo".getBytes())
+        .put("array", Arrays.asList("a", "b", "c"))
+        .put("map", Collections.singletonMap("field", 1))
+        .put("date", dateDef)
+        .put("time", timeDef)
+        .put("ts", tsDef)
+        .put("decimal", decimalDef);
 
     byte[] converted = converter.fromConnectData(TOPIC, original.schema(), original);
     SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);

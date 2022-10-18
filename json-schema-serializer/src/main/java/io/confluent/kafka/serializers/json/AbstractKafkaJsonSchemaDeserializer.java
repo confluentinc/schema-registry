@@ -40,6 +40,7 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
 public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKafkaSchemaSerDe {
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
+  protected boolean isKey;
   protected Class<T> type;
   protected String typeProperty;
   protected boolean validate;
@@ -75,6 +76,10 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return new KafkaJsonSchemaDeserializerConfig(props);
   }
 
+  public ObjectMapper objectMapper() {
+    return objectMapper;
+  }
+
   /**
    * Deserializes the payload without including schema information for primitive types, maps, and
    * arrays. Just the resulting deserialized object is returned.
@@ -86,7 +91,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
    */
   protected T deserialize(byte[] payload)
       throws SerializationException, InvalidConfigurationException {
-    return (T) deserialize(false, null, null, payload);
+    return (T) deserialize(false, null, isKey, payload);
   }
 
   // The Object return type is a bit messy, but this is the simplest way to have
