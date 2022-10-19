@@ -58,7 +58,7 @@ public class ContextsResource {
       description = "Retrieves a list of contexts.",
       responses = {
         @ApiResponse(responseCode = "200", description = "The contexts.", content = @Content(
-            array = @ArraySchema(schema = @Schema(implementation = String.class, example = ".")))),
+            array = @ArraySchema(schema = @Schema(example = ".")))),
         @ApiResponse(responseCode = "500",
           description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store. ",

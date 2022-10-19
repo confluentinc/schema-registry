@@ -48,6 +48,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import io.swagger.v3.oas.models.media.IntegerSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -172,8 +173,8 @@ public class SubjectVersionsResource {
         + "Only the unescaped schema string is returned.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The schema string.", content = @Content(
-              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class,
-                example = Schema.SCHEMA_EXAMPLE))),
+              schema = @io.swagger.v3.oas.annotations.media.Schema(example =
+                      Schema.SCHEMA_EXAMPLE))),
           @ApiResponse(responseCode = "404",
             description = "Not Found. "
                     + "Error code 40401 indicates subject not found. "
@@ -209,8 +210,7 @@ public class SubjectVersionsResource {
         @ApiResponse(responseCode = "200",
           description = "List of IDs for schemas that reference the specified schema.",
           content = @Content(array = @ArraySchema(
-              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class,
-              example = Schema.ID_EXAMPLE)))),
+              schema = @io.swagger.v3.oas.annotations.media.Schema(example = Schema.ID_EXAMPLE)))),
         @ApiResponse(responseCode = "404",
           description = "Not Found. "
                   + "Error code 40401 indicates subject not found. "
@@ -270,7 +270,7 @@ public class SubjectVersionsResource {
               description = "List of version numbers matching the specified parameters.",
               content = @Content(array = @ArraySchema(
                   schema = @io.swagger.v3.oas.annotations.media.Schema(
-                      implementation = int.class, example = Schema.VERSION_EXAMPLE)))),
+                      example = Schema.VERSION_EXAMPLE)))),
           @ApiResponse(responseCode = "404",
             description = "Not Found. "
                     + "Error code 40401 indicates subject not found. ",
@@ -432,7 +432,7 @@ public class SubjectVersionsResource {
       responses = {
         @ApiResponse(responseCode = "200", description = "Operation succeeded. "
           + "Returns the schema version.", content = @Content(schema =
-            @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class,
+            @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class, // TODO
                     example = Schema.VERSION_EXAMPLE))),
         @ApiResponse(responseCode = "404",
           description = "Not Found. "
@@ -459,6 +459,7 @@ public class SubjectVersionsResource {
       @PathParam("version") String version,
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
+    IntegerSchema
     log.info("Deleting schema version {} from subject {}", version, subject);
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
