@@ -17,17 +17,14 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 public enum RuleKind {
-  MESSAGE_XFORM,
-  FIELD_XFORM,
+  TRANSFORM,
   CONSTRAINT;
 
   public static RuleKind fromEntity(
       io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind r) {
     switch (r) {
-      case MESSAGE_XFORM:
-        return RuleKind.MESSAGE_XFORM;
-      case FIELD_XFORM:
-        return RuleKind.FIELD_XFORM;
+      case TRANSFORM:
+        return RuleKind.TRANSFORM;
       case CONSTRAINT:
         return RuleKind.CONSTRAINT;
       default:
@@ -37,10 +34,8 @@ public enum RuleKind {
 
   public io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind toEntity() {
     switch (this) {
-      case MESSAGE_XFORM:
-        return io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind.MESSAGE_XFORM;
-      case FIELD_XFORM:
-        return io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind.FIELD_XFORM;
+      case TRANSFORM:
+        return io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind.TRANSFORM;
       case CONSTRAINT:
         return io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind.CONSTRAINT;
       default:

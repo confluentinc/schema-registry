@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 public enum RuleKind {
-  MESSAGE_XFORM,
-  FIELD_XFORM,
+  TRANSFORM,
   CONSTRAINT
 }
