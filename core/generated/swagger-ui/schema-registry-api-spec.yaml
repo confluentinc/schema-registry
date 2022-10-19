@@ -363,6 +363,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+              example: FULL_TRANSITIVE
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: string
@@ -374,6 +375,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+              example: FULL_TRANSITIVE
             application/json; qs=0.5:
               schema:
                 type: string
@@ -385,6 +387,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+              example: FULL_TRANSITIVE
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
@@ -2066,9 +2069,11 @@ components:
         messages:
           type: array
           description: Error messages
+          example: []
           items:
             type: string
             description: Error messages
+            example: "[]"
       description: Compatibility check response
     RegisterSchemaRequest:
       type: object
@@ -2161,6 +2166,7 @@ components:
         mode:
           type: string
           description: Schema Registry operating mode
+          example: READWRITE
           enum:
           - READWRITE
           - READONLY
