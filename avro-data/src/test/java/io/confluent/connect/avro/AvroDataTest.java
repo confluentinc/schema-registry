@@ -3151,4 +3151,49 @@ public class AvroDataTest {
     assertEquals(sv, testAvroData.toConnectData(avroSchema, record, version));
     assertEquals(record, testAvroData.fromConnectData(sv.schema(), sv.value()));
   }
+
+  @Test
+  public void testRecordDefaultAtFieldLevel() {
+    String schemaStr = "{\n"
+        + "   \"name\": \"top\",\n"
+        + "   \"type\": \"record\",\n"
+        + "   \"fields\": [\n"
+        + "        {\n"
+        + "            \"default\": {},\n"
+        + "            \"name\": \"settlement\",\n"
+        + "            \"type\": {\n"
+        + "                \"fields\": [\n"
+        + "                    {\n"
+        + "                        \"default\": \"\",\n"
+        + "                        \"name\": \"time\",\n"
+        + "                        \"type\": \"string\"\n"
+        + "                    },\n"
+        + "                    {\n"
+        + "                        \"default\": 0,\n"
+        + "                        \"name\": \"cycle\",\n"
+        + "                        \"type\": \"int\"\n"
+        + "                    },\n"
+        + "                    {\n"
+        + "                        \"default\": \"\",\n"
+        + "                        \"name\": \"date\",\n"
+        + "                        \"type\": \"string\"\n"
+        + "                    },\n"
+        + "                    {\n"
+        + "                        \"default\": \"\",\n"
+        + "                        \"name\": \"priority\",\n"
+        + "                        \"type\": \"string\"\n"
+        + "                    }\n"
+        + "                ],\n"
+        + "                \"name\": \"settlement\",\n"
+        + "                \"type\": \"record\"\n"
+        + "            }\n"
+        + "        }\n"
+        + "    ] \n"
+        + "}";
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().setValidateDefaults(true).parse(schemaStr);
+    Schema schema = avroData.toConnectSchema(avroSchema);
+    assertNotNull(avroData.fromConnectSchema(schema));
+  }
+
 }
