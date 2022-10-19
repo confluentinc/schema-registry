@@ -1620,8 +1620,9 @@ public class AvroData {
             Struct result = new Struct(schema);
             for (Field field : schema.fields()) {
               String fieldName = scrubName(field.name());
-              Object convertedFieldValue =
-                  toConnectData(field.schema(), original.get(fieldName), toConnectContext);
+              Object convertedFieldValue = toConnectData(field.schema(),
+                  original.getOrDefault(fieldName, field.schema().defaultValue()),
+                  toConnectContext);
               result.put(field, convertedFieldValue);
             }
             return result;
