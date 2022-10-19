@@ -570,6 +570,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+              example: FULL_TRANSITIVE
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: string
@@ -581,6 +582,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+              example: FULL_TRANSITIVE
             application/json; qs=0.5:
               schema:
                 type: string
@@ -592,6 +594,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+              example: FULL_TRANSITIVE
         "404":
           description: Not Found. Error code 40401 indicates subject not found.
           content:
@@ -1893,7 +1896,7 @@ paths:
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly
+      operationId: getSchemaOnly_2
       parameters:
       - name: subject
         in: path
@@ -1987,7 +1990,7 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly_1
+      operationId: getSchemaOnly
       parameters:
       - name: id
         in: path
