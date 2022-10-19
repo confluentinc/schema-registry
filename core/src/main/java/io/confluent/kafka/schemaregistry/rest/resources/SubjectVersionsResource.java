@@ -459,7 +459,6 @@ public class SubjectVersionsResource {
       @PathParam("version") String version,
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
-    IntegerSchema
     log.info("Deleting schema version {} from subject {}", version, subject);
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
