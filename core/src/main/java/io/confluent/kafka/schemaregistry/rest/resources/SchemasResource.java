@@ -170,8 +170,8 @@ public class SchemasResource {
         @ApiResponse(responseCode = "200",
           description = "List of subjects matching the specified parameters.",
           content = @Content(array = @ArraySchema(
-            schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class,
-                    example = Schema.SUBJECT_EXAMPLE)))),
+            schema = @io.swagger.v3.oas.annotations.media.Schema(example =
+                    Schema.SUBJECT_EXAMPLE)))),
         @ApiResponse(responseCode = "404",
           description = "Not Found. Error code 40403 indicates schema not found.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
@@ -264,8 +264,8 @@ public class SchemasResource {
       description = "Retrieves the schema identified by the input ID.",
       responses = {
           @ApiResponse(responseCode = "200", description = "Raw schema string.", content = @Content(
-             schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class,
-                     example = Schema.SCHEMA_EXAMPLE))),
+             schema = @io.swagger.v3.oas.annotations.media.Schema(example =
+                     Schema.SCHEMA_EXAMPLE))),
           @ApiResponse(responseCode = "404",
             description = "Not Found. Error code 40403 indicates schema not found.",
             content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
@@ -310,8 +310,8 @@ public class SchemasResource {
       responses = {
         @ApiResponse(responseCode = "200", description = "List of supported schema types.",
             content = @Content(array = @ArraySchema(
-                schema = @io.swagger.v3.oas.annotations.media.Schema(
-                    implementation = String.class, example = Schema.TYPE_EXAMPLE)))),
+                schema = @io.swagger.v3.oas.annotations.media.Schema(example =
+                        Schema.TYPE_EXAMPLE)))),
         @ApiResponse(responseCode = "500",
           description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store.",

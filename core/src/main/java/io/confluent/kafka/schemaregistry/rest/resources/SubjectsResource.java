@@ -145,7 +145,7 @@ public class SubjectsResource {
         @ApiResponse(responseCode = "200",
           description = "List of subjects matching the specified parameters.", content = @Content(
                   array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
-                          implementation = String.class, example = Schema.SUBJECT_EXAMPLE)))),
+                          example = Schema.SUBJECT_EXAMPLE)))),
         @ApiResponse(responseCode = "500",
           description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store.",
@@ -182,8 +182,8 @@ public class SubjectsResource {
       responses = {
         @ApiResponse(responseCode = "200", description = "Operation succeeded. "
           + "Returns list of schema versions deleted", content = @Content(array = @ArraySchema(
-            schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class,
-                    example = Schema.VERSION_EXAMPLE)))),
+            schema = @io.swagger.v3.oas.annotations.media.Schema(type = "integer",
+                    format = "int32", example = Schema.VERSION_EXAMPLE)))),
         @ApiResponse(responseCode = "404",
           description = "Not Found. Error code 40401 indicates subject not found.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
