@@ -182,8 +182,8 @@ public class SubjectsResource {
       responses = {
         @ApiResponse(responseCode = "200", description = "Operation succeeded. "
           + "Returns list of schema versions deleted", content = @Content(array = @ArraySchema(
-            schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class, // TODO
-                    example = Schema.VERSION_EXAMPLE)))),
+            schema = @io.swagger.v3.oas.annotations.media.Schema(type = "integer",
+                    format = "int32", example = Schema.VERSION_EXAMPLE)))),
         @ApiResponse(responseCode = "404",
           description = "Not Found. Error code 40401 indicates subject not found.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =

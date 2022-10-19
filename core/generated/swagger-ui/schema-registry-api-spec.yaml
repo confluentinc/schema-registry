@@ -630,16 +630,19 @@ paths:
                 type: array
                 items:
                   type: string
+                  example: "."
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: array
                 items:
                   type: string
+                  example: "."
             application/json; qs=0.5:
               schema:
                 type: array
                 items:
                   type: string
+                  example: "."
         "500":
           description: 'Internal Server Error. Error code 50001 indicates a failure
             in the backend data store. '
@@ -1108,16 +1111,19 @@ paths:
                 type: array
                 items:
                   type: string
+                  example: User
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: array
                 items:
                   type: string
+                  example: User
             application/json; qs=0.5:
               schema:
                 type: array
                 items:
                   type: string
+                  example: User
         "404":
           description: Not Found. Error code 40403 indicates schema not found.
           content:
@@ -1228,16 +1234,19 @@ paths:
                 type: array
                 items:
                   type: string
+                  example: AVRO
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: array
                 items:
                   type: string
+                  example: AVRO
             application/json; qs=0.5:
               schema:
                 type: array
                 items:
                   type: string
+                  example: AVRO
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
@@ -1279,16 +1288,19 @@ paths:
                 type: array
                 items:
                   type: string
+                  example: User
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: array
                 items:
                   type: string
+                  example: User
             application/json; qs=0.5:
               schema:
                 type: array
                 items:
                   type: string
+                  example: User
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
@@ -1412,18 +1424,21 @@ paths:
                 items:
                   type: integer
                   format: int32
+                  example: 1
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: array
                 items:
                   type: integer
                   format: int32
+                  example: 1
             application/json; qs=0.5:
               schema:
                 type: array
                 items:
                   type: integer
                   format: int32
+                  example: 1
         "404":
           description: Not Found. Error code 40401 indicates subject not found.
           content:
@@ -1478,18 +1493,21 @@ paths:
                 items:
                   type: integer
                   format: int32
+                  example: 1
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: array
                 items:
                   type: integer
                   format: int32
+                  example: 1
             application/json; qs=0.5:
               schema:
                 type: array
                 items:
                   type: integer
                   format: int32
+                  example: 1
         "404":
           description: 'Not Found. Error code 40401 indicates subject not found. '
           content:
@@ -1727,14 +1745,17 @@ paths:
               schema:
                 type: integer
                 format: int32
+                example: 1
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: integer
                 format: int32
+                example: 1
             application/json; qs=0.5:
               schema:
                 type: integer
                 format: int32
+                example: 1
         "404":
           description: Not Found. Error code 40401 indicates subject not found. Error
             code 40402 indicates version not found.
@@ -1808,18 +1829,21 @@ paths:
                 items:
                   type: integer
                   format: int32
+                  example: 100001
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: array
                 items:
                   type: integer
                   format: int32
+                  example: 100001
             application/json; qs=0.5:
               schema:
                 type: array
                 items:
                   type: integer
                   format: int32
+                  example: 100001
         "404":
           description: Not Found. Error code 40401 indicates subject not found. Error
             code 40402 indicates version not found.
@@ -1866,7 +1890,7 @@ paths:
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly_2
+      operationId: getSchemaOnly_1
       parameters:
       - name: subject
         in: path
@@ -1896,12 +1920,15 @@ paths:
             application/vnd.schemaregistry.v1+json:
               schema:
                 type: string
+                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: string
+                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
             application/json; qs=0.5:
               schema:
                 type: string
+                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
         "404":
           description: Not Found. Error code 40401 indicates subject not found. Error
             code 40402 indicates version not found.
@@ -1957,7 +1984,7 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly
+      operationId: getSchemaOnly_2
       parameters:
       - name: id
         in: path
@@ -1984,12 +2011,15 @@ paths:
             application/vnd.schemaregistry.v1+json:
               schema:
                 type: string
+                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: string
+                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
             application/json; qs=0.5:
               schema:
                 type: string
+                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
         "404":
           description: Not Found. Error code 40403 indicates schema not found.
           content:
