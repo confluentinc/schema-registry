@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,6 +52,8 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 
 public class PgSchemaRegistry implements SchemaRegistry {
   private static final Logger log = LoggerFactory.getLogger(PgSchemaRegistry.class);
@@ -95,13 +98,30 @@ public class PgSchemaRegistry implements SchemaRegistry {
   @Override
   public Iterator<Schema> getAllVersions(String subject, boolean returnDeletedSchemas)
       throws SchemaRegistryException {
-    return null;
+    return pgStore.getAllVersionsDesc(
+        QualifiedSubject.create(tenant(), subject), returnDeletedSchemas).iterator();
   }
 
   @Override
   public Iterator<Schema> getVersionsWithSubjectPrefix(String prefix, boolean returnDeletedSchemas,
       boolean latestOnly) throws SchemaRegistryException {
-    return null;
+    Iterator<Schema> iter;
+    if (prefix.contains(CONTEXT_WILDCARD)) {
+      if (latestOnly) {
+        iter = pgStore.getLatestVersionsInAllContexts(tenant(), returnDeletedSchemas).iterator();
+      } else {
+        iter = pgStore.getAllVersionsInAllContexts(tenant(), returnDeletedSchemas).iterator();
+      }
+    } else {
+      if (latestOnly) {
+        iter = pgStore.getLatestVersionsBySubjectPrefix(
+            QualifiedSubject.create(tenant(), prefix), returnDeletedSchemas).iterator();
+      } else {
+        iter = pgStore.getAllVersionsBySubjectPrefix(
+            QualifiedSubject.create(tenant(), prefix), returnDeletedSchemas).iterator();
+      }
+    }
+    return iter;
   }
 
   @Override
@@ -216,7 +236,16 @@ public class PgSchemaRegistry implements SchemaRegistry {
   @Override
   public Set<String> listSubjectsWithPrefix(String prefix, boolean lookupDeletedSubjects)
       throws SchemaRegistryException {
-    return null;
+    Set<String> subjects;
+    if (prefix.contains(CONTEXT_WILDCARD)) {
+      subjects = pgStore.getAllVersionsInAllContexts(tenant(), lookupDeletedSubjects)
+          .stream().map(Schema::getSubject).collect(Collectors.toCollection(LinkedHashSet::new));
+    } else {
+      subjects = pgStore.getAllVersionsBySubjectPrefix(
+          QualifiedSubject.create(tenant(), prefix), lookupDeletedSubjects)
+          .stream().map(Schema::getSubject).collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+    return subjects;
   }
 
   @Override
