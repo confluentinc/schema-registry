@@ -242,10 +242,12 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, BEARER_AUTH_TOKEN_DOC)
         .define(BEARER_AUTH_ISSUER_ENDPOINT_URL, Type.STRING,null, Importance.MEDIUM,
             BEARER_AUTH_ISSUER_ENDPOINT_URL_DOC)
-        .define(BEARER_AUTH_CLIENT_ID, Type.STRING,null, Importance.MEDIUM, BEARER_AUTH_CLIENT_ID_DOC)
+        .define(BEARER_AUTH_CLIENT_ID, Type.STRING,null, Importance.MEDIUM,
+            BEARER_AUTH_CLIENT_ID_DOC)
         .define(BEARER_AUTH_CLIENT_SECRET, Type.STRING, null, Importance.MEDIUM,
             BEARER_AUTH_CLIENT_SECRET_DOC)
-        .define(BEARER_AUTH_SCOPE, Type.STRING,null, Importance.MEDIUM ,BEARER_AUTH_SCOPE_DOC)
+        .define(BEARER_AUTH_SCOPE, Type.STRING,null, Importance.MEDIUM ,
+            BEARER_AUTH_SCOPE_DOC)
         .define(BEARER_AUTH_IDENTITY_POOL_ID, Type.STRING,null, Importance.MEDIUM,
             BEARER_AUTH_IDENTITY_POOL_ID_DOC)
         .define(BEARER_AUTH_LOGICAL_CLUSTER, Type.STRING,null, Importance.MEDIUM,
