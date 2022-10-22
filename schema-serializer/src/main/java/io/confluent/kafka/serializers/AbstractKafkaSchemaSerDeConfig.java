@@ -251,8 +251,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .define(BEARER_AUTH_LOGICAL_CLUSTER, Type.STRING, Importance.MEDIUM,
             BEARER_AUTH_LOGICAL_CLUSTER_DOC)
         .define(BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS,
-            Type.SHORT, BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT, Range.between(0, 3600)
-            ,Importance.LOW,
+            Type.SHORT, BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT, Range.between(0, 3600),
+            Importance.LOW,
             BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DOC)
         .define(CONTEXT_NAME_STRATEGY, Type.CLASS, CONTEXT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, CONTEXT_NAME_STRATEGY_DOC)
