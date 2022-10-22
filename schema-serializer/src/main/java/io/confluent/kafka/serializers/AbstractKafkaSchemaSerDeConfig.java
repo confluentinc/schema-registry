@@ -240,15 +240,15 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
         .define(BEARER_AUTH_TOKEN_CONFIG, Type.PASSWORD, BEARER_AUTH_TOKEN_DEFAULT,
                 Importance.MEDIUM, BEARER_AUTH_TOKEN_DOC)
-        .define(BEARER_AUTH_ISSUER_ENDPOINT_URL, Type.STRING, Importance.MEDIUM,
+        .define(BEARER_AUTH_ISSUER_ENDPOINT_URL, Type.STRING,null, Importance.MEDIUM,
             BEARER_AUTH_ISSUER_ENDPOINT_URL_DOC)
-        .define(BEARER_AUTH_CLIENT_ID, Type.STRING, Importance.MEDIUM, BEARER_AUTH_CLIENT_ID_DOC)
-        .define(BEARER_AUTH_CLIENT_SECRET, Type.STRING, Importance.MEDIUM,
+        .define(BEARER_AUTH_CLIENT_ID, Type.STRING,null, Importance.MEDIUM, BEARER_AUTH_CLIENT_ID_DOC)
+        .define(BEARER_AUTH_CLIENT_SECRET, Type.STRING, null, Importance.MEDIUM,
             BEARER_AUTH_CLIENT_SECRET_DOC)
-        .define(BEARER_AUTH_SCOPE, Type.STRING, Importance.MEDIUM ,BEARER_AUTH_SCOPE_DOC)
-        .define(BEARER_AUTH_IDENTITY_POOL_ID, Type.STRING, Importance.MEDIUM,
+        .define(BEARER_AUTH_SCOPE, Type.STRING,null, Importance.MEDIUM ,BEARER_AUTH_SCOPE_DOC)
+        .define(BEARER_AUTH_IDENTITY_POOL_ID, Type.STRING,null, Importance.MEDIUM,
             BEARER_AUTH_IDENTITY_POOL_ID_DOC)
-        .define(BEARER_AUTH_LOGICAL_CLUSTER, Type.STRING, Importance.MEDIUM,
+        .define(BEARER_AUTH_LOGICAL_CLUSTER, Type.STRING,null, Importance.MEDIUM,
             BEARER_AUTH_LOGICAL_CLUSTER_DOC)
         .define(BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS,
             Type.SHORT, BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT, Range.between(0, 3600),
