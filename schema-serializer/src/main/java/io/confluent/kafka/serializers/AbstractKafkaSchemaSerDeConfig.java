@@ -129,17 +129,17 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String BEARER_AUTH_TOKEN_DEFAULT = "";
   public static final String BEARER_AUTH_TOKEN_DOC =
       "Specify the Bearer token to be used for authentication";
-  public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL = SchemaRegistryClientConfig.
-      BEARER_AUTH_ISSUER_ENDPOINT_URL;
+  public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL = SchemaRegistryClientConfig
+      .BEARER_AUTH_ISSUER_ENDPOINT_URL;
   public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL_DOC = "The HTTP(S)-based URL for the "
       + "OAuth/OIDC identity provider which issues access token";
-  public static final String BEARER_AUTH_CLIENT_ID = SchemaRegistryClientConfig.
-      BEARER_AUTH_CLIENT_ID;
+  public static final String BEARER_AUTH_CLIENT_ID = SchemaRegistryClientConfig
+      .BEARER_AUTH_CLIENT_ID;
   public static final String BEARER_AUTH_CLIENT_ID_DOC = "Client Id used to obtain Client "
       + "Credentials Grant from OAuth/OIDC identity provider"
       + " <a href=\"rfc-editor.org/rfc/rfc6749.html#section-4.4\"> ";
-  public static final String BEARER_AUTH_CLIENT_SECRET = SchemaRegistryClientConfig.
-      BEARER_AUTH_CLIENT_SECRET;
+  public static final String BEARER_AUTH_CLIENT_SECRET = SchemaRegistryClientConfig
+      .BEARER_AUTH_CLIENT_SECRET;
   public static final String BEARER_AUTH_CLIENT_SECRET_DOC = "Client secret used to obtain Client "
       + "Credentials Grant from OAuth/OIDC identity provider "
       + "<a href=\"rfc-editor.org/rfc/rfc6749.html#section-4.4\"> ";
@@ -149,12 +149,12 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       + "<a href=\"rfc-editor.org/rfc/rfc6749.html#section-3.3\"> ";
 
 
-  public static final String BEARER_AUTH_LOGICAL_CLUSTER = SchemaRegistryClientConfig.
-      BEARER_AUTH_LOGICAL_CLUSTER;
+  public static final String BEARER_AUTH_LOGICAL_CLUSTER = SchemaRegistryClientConfig
+      .BEARER_AUTH_LOGICAL_CLUSTER;
   public static final String BEARER_AUTH_LOGICAL_CLUSTER_DOC = "Additional property which "
       + "can added in Request header to Schema Registry";
-  public static final String BEARER_AUTH_IDENTITY_POOL_ID = SchemaRegistryClientConfig.
-      BEARER_AUTH_IDENTITY_POOL_ID;
+  public static final String BEARER_AUTH_IDENTITY_POOL_ID = SchemaRegistryClientConfig
+      .BEARER_AUTH_IDENTITY_POOL_ID;
   public static final String BEARER_AUTH_IDENTITY_POOL_ID_DOC = "Additional property which "
       + "can added in Request header to Schema Registry. This maybe used as Principal Id for "
       + "Authorization";
@@ -164,12 +164,12 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       SchemaRegistryClientConfig.BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS;
   public static final Short BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT =
       SchemaRegistryClientConfig.BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT;
-  public static final String BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DOC =" The amount of buffer time "
-      + "between expiration times of the OAuth Token and corresponding cache which hold the token. "
-      + "Ideally we would want to get a new token before the current one expires. Legal values are "
-      + "between 0 and 3600 (1 hour); a default value of  300 (5 minutes) is used if no value is "
-      + "specified. This value is ignored if it exceeds the remaining lifetime of a token from"
-      + "the moment it is retrieved into schema registry.";
+  public static final String BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DOC = "The amount of buffer "
+      + "time between expiration times of the OAuth Token and corresponding cache which hold the "
+      + "token. Ideally we would want to get a new token before the current one expires. Legal "
+      + "values are between 0 and 3600 (1 hour); a default value of  300 (5 minutes) is used "
+      + "if no value is specified. This value is ignored if it exceeds the remaining lifetime "
+      + "of a token from the moment it is retrieved into schema registry.";
 
   public static final short DEFAULT_LOGIN_REFRESH_BUFFER_SECONDS = 300;
 
@@ -240,17 +240,19 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
         .define(BEARER_AUTH_TOKEN_CONFIG, Type.PASSWORD, BEARER_AUTH_TOKEN_DEFAULT,
                 Importance.MEDIUM, BEARER_AUTH_TOKEN_DOC)
-        .define(BEARER_AUTH_ISSUER_ENDPOINT_URL,Type.STRING, Importance.MEDIUM,
+        .define(BEARER_AUTH_ISSUER_ENDPOINT_URL, Type.STRING, Importance.MEDIUM,
             BEARER_AUTH_ISSUER_ENDPOINT_URL_DOC)
-        .define(BEARER_AUTH_CLIENT_ID, Type.STRING, Importance.MEDIUM,BEARER_AUTH_CLIENT_ID_DOC)
+        .define(BEARER_AUTH_CLIENT_ID, Type.STRING, Importance.MEDIUM, BEARER_AUTH_CLIENT_ID_DOC)
         .define(BEARER_AUTH_CLIENT_SECRET, Type.STRING, Importance.MEDIUM,
             BEARER_AUTH_CLIENT_SECRET_DOC)
-        .define(BEARER_AUTH_SCOPE,Type.STRING, Importance.MEDIUM,BEARER_AUTH_SCOPE_DOC)
+        .define(BEARER_AUTH_SCOPE, Type.STRING, Importance.MEDIUM ,BEARER_AUTH_SCOPE_DOC)
         .define(BEARER_AUTH_IDENTITY_POOL_ID, Type.STRING, Importance.MEDIUM,
             BEARER_AUTH_IDENTITY_POOL_ID_DOC)
         .define(BEARER_AUTH_LOGICAL_CLUSTER, Type.STRING, Importance.MEDIUM,
             BEARER_AUTH_LOGICAL_CLUSTER_DOC)
-        .define(BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS, Type.SHORT, BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT,Range.between(0, 3600) ,Importance.LOW,
+        .define(BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS,
+            Type.SHORT, BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT, Range.between(0, 3600)
+            ,Importance.LOW,
             BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DOC)
         .define(CONTEXT_NAME_STRATEGY, Type.CLASS, CONTEXT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, CONTEXT_NAME_STRATEGY_DOC)
