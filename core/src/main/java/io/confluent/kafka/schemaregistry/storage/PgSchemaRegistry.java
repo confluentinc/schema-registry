@@ -40,6 +40,7 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -134,13 +135,12 @@ public class PgSchemaRegistry implements SchemaRegistry {
   public Schema lookUpSchemaUnderSubject(String subject, Schema schema,
                                          boolean normalize, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
-    MD5 md5 = MD5.ofSchema(schema);
     QualifiedSubject qs = QualifiedSubject.create(tenant(), schema.getSubject());
     if (qs == null) {
       throw new SchemaRegistryException("Invalid QualifiedSubject");
     }
 
-    Schema res = pgStore.lookupSchemaBySubject(qs, schema, subject, md5.bytes(), lookupDeletedSchema);
+    Schema res = pgStore.lookupSchemaBySubject(qs, schema, subject, lookupDeletedSchema);
     if (res != null) {
       return res;
     }
@@ -303,7 +303,20 @@ public class PgSchemaRegistry implements SchemaRegistry {
   @Override
   public SchemaString get(int id, String subject, String format, boolean fetchMaxId)
       throws SchemaRegistryException {
-    return null;
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject == null ? "" : subject);
+    Schema schema = pgStore.getSchemaById(qs, id);
+    if (schema == null) {
+      return null;
+    }
+    SchemaString schemaString = new SchemaString(schema);
+    if (format != null && !format.trim().isEmpty()) {
+      ParsedSchema parsedSchema = parseSchema(schema, false);
+      schemaString.setSchemaString(parsedSchema.formattedString(format));
+    } else {
+      schemaString.setSchemaString(schema.getSchema());
+    }
+    // TODO handle fetchMaxId
+    return schemaString;
   }
 
   @Override
@@ -356,13 +369,28 @@ public class PgSchemaRegistry implements SchemaRegistry {
       }
     }
 
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), schema.getSubject());
+    int contextId = pgStore.getOrCreateContext(qs);
+    int subjectId = pgStore.getOrCreateSubject(contextId, qs);
+    int version = pgStore.getMaxVersion(subjectId) + 1;
+
+    existingSchema = lookUpSchemaUnderSubject(subjectName, schema, normalize, true);
+    if (existingSchema != null) {
+      pgStore.registerDeleted(qs, existingSchema, version, subjectId);
+      try {
+        pgStore.commit();
+      } catch (Exception e) {
+        pgStore.rollback();
+        throw new SchemaRegistryException("register failed");
+      }
+      return existingSchema.getId();
+    }
+
     int schemaId = schema.getId();
     ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
 
-    QualifiedSubject qs = QualifiedSubject.create(tenant(), schema.getSubject());
     List<Schema> allVersions = pgStore.getAllVersionsDesc(qs, true);
     for (Schema s : allVersions) {
-      // TODO deal with deleted
       ParsedSchema undeletedSchema = parseSchema(s);
       if (parsedSchema.references().isEmpty()
           && !undeletedSchema.references().isEmpty()
@@ -387,9 +415,6 @@ public class PgSchemaRegistry implements SchemaRegistry {
 
     if (qs != null) {
       try {
-        int contextId = pgStore.getOrCreateContext(qs);
-        int subjectId = pgStore.getOrCreateSubject(contextId, qs);
-        int version = pgStore.getMaxVersion(subjectId) + 1;
         schemaId = pgStore.createSchema(contextId, subjectId, version, parsedSchema,
             MD5.ofSchema(schema).bytes());
 
@@ -448,10 +473,10 @@ public class PgSchemaRegistry implements SchemaRegistry {
 
     try {
       if (!permanentDelete) {
-        pgStore.softDeleteSchema(qs, schema.getVersion());
+        pgStore.softDeleteSchema(qs, schema);
         // TODO not handling mode/compatibility
       } else {
-        pgStore.hardDeleteSchema(qs, schema.getVersion());
+        pgStore.hardDeleteSchema(qs, schema);
       }
       pgStore.commit();
     } catch (Exception e) {

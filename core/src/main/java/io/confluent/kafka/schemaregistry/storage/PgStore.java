@@ -1,26 +1,48 @@
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import io.lettuce.core.KeyValue;
+import io.lettuce.core.RedisClient;
+import io.lettuce.core.RedisFuture;
+import io.lettuce.core.RedisURI;
+import io.lettuce.core.SetArgs;
+import io.lettuce.core.TransactionResult;
+import io.lettuce.core.Value;
+import io.lettuce.core.api.async.RedisAsyncCommands;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.WILDCARD;
 
 public class PgStore {
+  private static final Logger log = LoggerFactory.getLogger(PgStore.class);
   private Connection conn;
+  private RedisClient redisClient;
+  private RedisAsyncCommands<String, String> redisCommands;
+  private ObjectMapper objectMapper;
 
   public void init() throws SchemaRegistryException {
     String url = "jdbc:postgresql://localhost:5555/ewu";
@@ -34,6 +56,10 @@ public class PgStore {
     } catch (SQLException e) {
       throw new SchemaRegistryException(e);
     }
+    this.redisClient = RedisClient.create(
+        RedisURI.create("redis://localhost:6379"));
+    this.redisCommands = redisClient.connect().async();
+    this.objectMapper = new ObjectMapper();
   }
 
   public void commit() throws SQLException {
@@ -48,9 +74,21 @@ public class PgStore {
     }
   }
 
-  public Schema lookupSchemaBySubject(QualifiedSubject qs, Schema schema,
-                                      String subject, byte[] hash,
+  public void shutdown() {
+    // TODO
+  }
+
+  public Schema lookupSchemaBySubject(QualifiedSubject qs, Schema schema, String subject,
                                       boolean lookupDeletedSchema) throws SchemaRegistryException {
+    MD5 md5 = MD5.ofSchema(schema);
+    String hash = Base64.getEncoder().encodeToString(md5.bytes());
+    String key = qs.toQualifiedSubject() + ":hash:" + hash + ":";
+    Optional<Schema> maybeSchema = fetchFromCache(key, lookupDeletedSchema);
+    if (maybeSchema.isPresent()) {
+      log.info("Cache hit");
+      return maybeSchema.get();
+    }
+
     ResultSet rs = null;
     PreparedStatement ps;
 
@@ -67,7 +105,7 @@ public class PgStore {
       ps.setString(1, qs.getTenant());
       ps.setString(2, qs.getContext());
       ps.setString(3, qs.getSubject());
-      ps.setBytes(4, hash);
+      ps.setBytes(4, md5.bytes());
       rs = ps.executeQuery();
       if (rs != null) {
         if (rs.next()) {
@@ -89,12 +127,19 @@ public class PgStore {
 
   public Schema getSubjectVersion(QualifiedSubject qs, int version,
                                   boolean lookupDeletedSchema) throws SchemaRegistryException {
+    String key = qs.toQualifiedSubject() + ":" + version + ":";
+    Optional<Schema> maybeSchema = fetchFromCache(key, lookupDeletedSchema);
+    if (maybeSchema.isPresent()) {
+      log.info("Cache hit");
+      return maybeSchema.get();
+    }
+
     ResultSet rs = null;
     PreparedStatement ps;
 
     try {
       StringBuilder sql = new StringBuilder();
-      sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id FROM contexts c ")
+      sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
           .append("JOIN subjects sub ON c.id = sub.context_id ")
           .append("JOIN schemas s ON s.subject_id = sub.id ")
           .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? AND version = ? ");
@@ -113,7 +158,58 @@ public class PgStore {
         }
       }
     } catch (Exception e) {
-      throw new SchemaRegistryException("LookupSchemaBySubject error", e);
+      throw new SchemaRegistryException("GetSubjectVersion error", e);
+    } finally {
+      closeResultSet(rs);
+    }
+
+    return null;
+  }
+
+  public Schema getSchemaById(QualifiedSubject qs, int id) throws SchemaRegistryException {
+    String pattern = qs.toQualifiedSubject() + "*" + ":id:" + id + ":";
+    try {
+      String value = redisCommands.keys(pattern).thenApply(ks -> {
+        if (ks.isEmpty()) return "";
+        Collections.sort(ks);
+        return ks.get(0);
+      }).thenCompose(k -> redisCommands.get(k)).toCompletableFuture().get();
+      if (value != null && !value.isEmpty()) {
+        log.info("Cache hit");
+        return objectMapper.readValue(value, Schema.class);
+      }
+    } catch (Exception e) {
+      log.error("Redis error");
+    }
+
+    ResultSet rs = null;
+    PreparedStatement ps;
+
+    try {
+      StringBuilder sql = new StringBuilder();
+      sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
+          .append("JOIN subjects sub ON c.id = sub.context_id ")
+          .append("JOIN schemas s ON s.subject_id = sub.id ")
+          .append("WHERE c.tenant = ? AND c.context like ? AND s.id = ? ");
+      if (!qs.getSubject().isEmpty()) {
+        sql.append("AND sub.subject = ? ");
+      }
+      sql.append("ORDER BY c.context LIMIT 1 ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setString(1, qs.getTenant());
+      ps.setString(2, qs.getContext() + "%");
+      ps.setInt(3, id);
+      if (!qs.getSubject().isEmpty()) {
+        ps.setString(4, qs.getSubject());
+      }
+      rs = ps.executeQuery();
+      if (rs != null) {
+        if (rs.next()) {
+          return populateSchema(rs);
+        }
+      }
+    } catch (Exception e) {
+      throw new SchemaRegistryException("GetSchemaById error", e);
     } finally {
       closeResultSet(rs);
     }
@@ -123,6 +219,19 @@ public class PgStore {
 
   public boolean subjectExists(QualifiedSubject qs, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
+    // TODO consider using a bloom filter
+
+    String pattern = qs.toQualifiedSubject() + ":*:";
+    try {
+      List<String> keys = redisCommands.keys(pattern).get();
+      if (keys.stream().filter(Objects::nonNull)
+          .anyMatch(k -> lookupDeletedSchema || !k.endsWith(":deleted:"))) {
+        return true;
+      }
+    } catch (ExecutionException | InterruptedException e) {
+      log.error("Redis error");
+    }
+
     ResultSet rs = null;
     PreparedStatement ps;
 
@@ -191,17 +300,29 @@ public class PgStore {
     return set;
   }
 
-  public void softDeleteSchema(QualifiedSubject qs, int version) throws SchemaRegistryException {
+  public void softDeleteSchema(QualifiedSubject qs, Schema schema) throws SchemaRegistryException {
     PreparedStatement ps;
 
     try {
+      String subjectVersionKey = qs.toQualifiedSubject() + ":" + schema.getVersion() + ":";
+      String hashKey = qs.toQualifiedSubject() + ":hash:" + Base64.getEncoder().encodeToString(MD5.ofSchema(schema).bytes()) + ":";
+      String value = objectMapper.writeValueAsString(schema);
+      log.info("Redis set {}", subjectVersionKey);
+      redisCommands.multi();
+      redisCommands.del(subjectVersionKey, hashKey);
+      redisCommands.set(subjectVersionKey + "deleted:", value, SetArgs.Builder.ex(Duration.ofMinutes(5)));
+      redisCommands.set(hashKey + "deleted:", value, SetArgs.Builder.ex(Duration.ofMinutes(5)));
+      RedisFuture<TransactionResult> exec = redisCommands.exec();
+
+      log.info(exec.get().toString());
+
       StringBuilder sql = new StringBuilder();
       sql.append("UPDATE schemas SET deleted = true WHERE (subject_id, version) IN ")
           .append("(SELECT sub.id, ? FROM subjects sub ")
           .append("JOIN contexts c ON sub.context_id = c.id ")
           .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ?) ");
       ps = conn.prepareStatement(sql.toString());
-      ps.setInt(1, version);
+      ps.setInt(1, schema.getVersion());
       ps.setString(2, qs.getTenant());
       ps.setString(3, qs.getContext());
       ps.setString(4, qs.getSubject());
@@ -211,12 +332,20 @@ public class PgStore {
     }
   }
 
-  public void hardDeleteSchema(QualifiedSubject qs, int version) throws SchemaRegistryException {
+  public void hardDeleteSchema(QualifiedSubject qs, Schema schema) throws SchemaRegistryException {
     ResultSet rs = null;
     PreparedStatement ps;
     Integer subjectId = null, schemaId = null;
 
     try {
+      String subjectVersionKey = qs.toQualifiedSubject() + ":" + schema.getVersion() + ":deleted:";
+      String hashKey = qs.toQualifiedSubject() + ":hash:" + Base64.getEncoder().encodeToString(MD5.ofSchema(schema).bytes()) + ":deleted:";
+      redisCommands.multi();
+      redisCommands.del(subjectVersionKey, hashKey);
+      RedisFuture<TransactionResult> exec = redisCommands.exec();
+
+      log.info(exec.get().toString());
+
       StringBuilder sql = new StringBuilder();
 
       sql.append("SELECT sub.id, s.id FROM contexts c ")
@@ -227,7 +356,7 @@ public class PgStore {
       ps.setString(1, qs.getTenant());
       ps.setString(2, qs.getContext());
       ps.setString(3, qs.getSubject());
-      ps.setInt(4, version);
+      ps.setInt(4, schema.getVersion());
       rs = ps.executeQuery();
       if (rs != null) {
         if (rs.next()) {
@@ -358,7 +487,7 @@ public class PgStore {
 
     try {
       StringBuilder sql = new StringBuilder();
-      sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id FROM contexts c ")
+      sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
           .append("JOIN schemas s on s.subject_id = sub.id ")
           .append("WHERE c.tenant = ? ");
@@ -392,7 +521,7 @@ public class PgStore {
     try {
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT * FROM (")
-          .append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, ")
+          .append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted, ")
           .append("ROW_NUMBER() OVER (PARTITION BY s.subject_id ORDER BY sub.subject, s.version DESC) AS r ")
           .append("FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
@@ -428,7 +557,7 @@ public class PgStore {
 
     try {
       StringBuilder sql = new StringBuilder();
-      sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id FROM contexts c ")
+      sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
           .append("JOIN schemas s on s.subject_id = sub.id ")
           .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject like ? ");
@@ -464,7 +593,7 @@ public class PgStore {
     try {
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT * FROM (")
-          .append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, ")
+          .append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted, ")
           .append("ROW_NUMBER() OVER (PARTITION BY s.subject_id ORDER BY sub.subject, s.version DESC) AS r ")
           .append("FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
@@ -502,7 +631,7 @@ public class PgStore {
 
     try {
       StringBuilder sql = new StringBuilder();
-      sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id FROM contexts c ")
+      sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
           .append("JOIN schemas s on s.subject_id = sub.id ")
           .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? ");
@@ -567,7 +696,7 @@ public class PgStore {
 
     try {
       StringBuilder sql = new StringBuilder();
-      sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id FROM contexts c ")
+      sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
           .append("JOIN schemas s on s.subject_id = sub.id ")
           .append("WHERE c.tenant = ? AND sub.subject = ? ");
@@ -767,6 +896,41 @@ public class PgStore {
     return schemaId;
   }
 
+  public void registerDeleted(QualifiedSubject qs, Schema schema, int newVersion, int subjectId)
+      throws SchemaRegistryException {
+    int oldVersion = schema.getVersion();
+    String oldHashKey = qs.toQualifiedSubject() + ":hash:" + Base64.getEncoder().encodeToString(MD5.ofSchema(schema).bytes()) + ":";
+    schema.setVersion(newVersion);
+    String oldSubjectVersionKey = qs.toQualifiedSubject() + ":" + oldVersion + ":";
+    String hashKey = qs.toQualifiedSubject() + ":hash:" + Base64.getEncoder().encodeToString(MD5.ofSchema(schema).bytes()) + ":";
+    String subjectVersionKey = qs.toQualifiedSubject() + ":" + newVersion + ":";
+
+    PreparedStatement ps;
+
+    try {
+      String value = objectMapper.writeValueAsString(schema);
+      log.info("Redis reset {}", subjectVersionKey);
+      redisCommands.multi();
+      redisCommands.del(oldSubjectVersionKey + "deleted:", oldHashKey + "deleted:");
+      redisCommands.set(subjectVersionKey, value, SetArgs.Builder.ex(Duration.ofMinutes(5)));
+      redisCommands.set(hashKey, value, SetArgs.Builder.ex(Duration.ofMinutes(5)));
+      RedisFuture<TransactionResult> exec = redisCommands.exec();
+
+      log.info(exec.get().toString());
+
+      StringBuilder sql = new StringBuilder();
+      sql.append("UPDATE schemas SET deleted = false, version = ? ")
+          .append("WHERE id = ? AND subject_id = ? ");
+      ps = conn.prepareStatement(sql.toString());
+      ps.setInt(1, newVersion);
+      ps.setInt(2, schema.getId());
+      ps.setInt(3, subjectId);
+      ps.executeUpdate();
+    } catch (Exception e) {
+      throw new SchemaRegistryException("RegisterDeleted error", e);
+    }
+  }
+
   private Schema populateSchema(ResultSet rs) throws Exception {
     String tenant = rs.getString(1);
     String context = rs.getString(2);
@@ -776,9 +940,26 @@ public class PgStore {
     String type = rs.getString(6);
     String str = rs.getString(7);
     int subjectId = rs.getInt(8);
+    boolean deleted = rs.getBoolean(9);
     QualifiedSubject qs = new QualifiedSubject(tenant, context, subject);
     // TODO not handling N + 1 problem
-    return new Schema(subject, version, id, type, getReferences(qs, subjectId, id), str);
+    Schema schema = new Schema(qs.toQualifiedSubject(), version, id, type, getReferences(qs, subjectId, id), str);
+
+    String subjectVersionKey = qs.toQualifiedSubject() + ":" + version + ":";
+    String hashKey = qs.toQualifiedSubject() + ":hash:" + Base64.getEncoder().encodeToString(MD5.ofSchema(schema).bytes()) + ":";
+    String value = objectMapper.writeValueAsString(schema);
+    log.info("Redis set {}", subjectVersionKey);
+
+    if (deleted) {
+      redisCommands.set(subjectVersionKey + "deleted:", value, SetArgs.Builder.ex(Duration.ofMinutes(5)));
+      redisCommands.set(hashKey + "deleted:", value, SetArgs.Builder.ex(Duration.ofMinutes(5)));
+    } else {
+      redisCommands.set(subjectVersionKey, value, SetArgs.Builder.ex(Duration.ofMinutes(5)));
+      redisCommands.set(hashKey, value, SetArgs.Builder.ex(Duration.ofMinutes(5)));
+    }
+    String idKey = qs.toQualifiedSubject() + ":id:" + id + ":";
+    redisCommands.set(idKey, value, SetArgs.Builder.ex(Duration.ofMinutes(5)));
+    return schema;
   }
 
   private io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference
@@ -789,6 +970,31 @@ public class PgStore {
     QualifiedSubject refQs = new QualifiedSubject(qs.getTenant(), qs.getContext(), subject);
     return new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
         name, refQs.toQualifiedSubject(), version);
+  }
+
+  private Optional<Schema> fetchFromCache(String key, boolean lookupDeletedSchema) {
+    Optional<Schema> maybeSchema;
+    RedisFuture<List<KeyValue<String, String>>> mget;
+    if (lookupDeletedSchema) {
+      mget = redisCommands.mget(key, key + "deleted:");
+    } else {
+      mget = redisCommands.mget(key);
+    }
+    try {
+      List<KeyValue<String, String>> keyValues = mget.get();
+      maybeSchema = keyValues.stream().filter(Value::hasValue).map(Value::getValue)
+          .filter(Objects::nonNull).map(v -> {
+            try {
+              return objectMapper.readValue(v, Schema.class);
+            } catch (JsonProcessingException e) {
+              return null;
+            }
+          }).filter(Objects::nonNull).findFirst();
+    } catch (ExecutionException | InterruptedException e) {
+      log.error("Redis error");
+      maybeSchema = Optional.empty();
+    }
+    return maybeSchema;
   }
 
   private void closeResultSet(ResultSet rs) {
