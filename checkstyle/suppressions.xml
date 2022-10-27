@@ -31,7 +31,7 @@
               files="(AbstractKafkaAvroSerializer|AvroData|AvroSchemaUtils|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema|ProtobufSchemaUtils).java"/>
 
     <suppress checks="MethodLength"
-              files="(AvroData|ProtobufSchema).java"/>
+              files="(AvroData|ProtobufSchema|ProtobufSchemaUtils).java"/>
 
     <suppress checks="AbbreviationAsWordInName"
               files="(.*SchemaRegistryClient|JSON.*).java"/>
