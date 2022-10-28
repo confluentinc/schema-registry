@@ -40,7 +40,6 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -55,6 +54,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 public class PgSchemaRegistry implements SchemaRegistry {
   private static final Logger log = LoggerFactory.getLogger(PgSchemaRegistry.class);
@@ -99,8 +99,8 @@ public class PgSchemaRegistry implements SchemaRegistry {
   @Override
   public Iterator<Schema> getAllVersions(String subject, boolean returnDeletedSchemas)
       throws SchemaRegistryException {
-    return pgStore.getAllVersionsDesc(
-        QualifiedSubject.create(tenant(), subject), returnDeletedSchemas).iterator();
+    return pgStore.getAllVersions(
+        QualifiedSubject.create(tenant(), subject), returnDeletedSchemas, false).iterator();
   }
 
   @Override
@@ -145,7 +145,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
       return res;
     }
 
-    List<Schema> allVersions = pgStore.getAllVersionsDesc(qs, lookupDeletedSchema);
+    List<Schema> allVersions = pgStore.getAllVersions(qs, lookupDeletedSchema, true);
     ParsedSchema parsedSchema = canonicalizeSchema(schema, false, normalize);
     for (Schema s : allVersions) {
       if (parsedSchema.references().isEmpty()
@@ -216,7 +216,11 @@ public class PgSchemaRegistry implements SchemaRegistry {
 
   @Override
   public List<String> listContexts() throws SchemaRegistryException {
-    return null;
+    List<String> allContexts = pgStore.getAllContexts(tenant());
+    if (allContexts.isEmpty()) {
+      allContexts.add(".");
+    }
+    return allContexts;
   }
 
   @Override
@@ -224,6 +228,26 @@ public class PgSchemaRegistry implements SchemaRegistry {
                                                       Schema schema, boolean normalize,
                                                       boolean lookupDeletedSchema)
       throws SchemaRegistryException {
+    Schema matchingSchema =
+        lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema);
+    if (matchingSchema != null) {
+      return matchingSchema;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
+    if (isQualifiedSubject) {
+      return null;
+    }
+    for (String c : listContexts()) {
+      QualifiedSubject qualSub = new QualifiedSubject(tenant(), c, qs.getSubject());
+      Schema qualSchema = schema.copy();
+      qualSchema.setSubject(qualSub.toQualifiedSubject());
+      matchingSchema = lookUpSchemaUnderSubject(
+          qualSub.toQualifiedSubject(), qualSchema, normalize, lookupDeletedSchema);
+      if (matchingSchema != null) {
+        return matchingSchema;
+      }
+    }
     return null;
   }
 
@@ -252,15 +276,15 @@ public class PgSchemaRegistry implements SchemaRegistry {
   public List<Integer> deleteSubject(String subject, boolean permanentDelete)
       throws SchemaRegistryException {
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
-    if (!pgStore.referencesSchema(qs, Optional.empty()).isEmpty()) {
+    if (!pgStore.getReferencedBy(qs, Optional.empty()).isEmpty()) {
       throw new ReferenceExistsException(subject);
     }
-    List<Schema> fetchedSchemas = pgStore.getAllVersionsDesc(qs, false);
+    List<Schema> fetchedSchemas = pgStore.getAllVersions(qs, false, true);
     if (permanentDelete && !fetchedSchemas.isEmpty()) {
       throw new SubjectNotSoftDeletedException(subject);
     }
 
-    List<Integer> deletedVersions = pgStore.getAllVersionsDesc(qs, true)
+    List<Integer> deletedVersions = pgStore.getAllVersions(qs, true, false)
         .stream().map(Schema::getVersion).collect(Collectors.toList());
     try {
       if (!permanentDelete) {
@@ -322,13 +346,19 @@ public class PgSchemaRegistry implements SchemaRegistry {
   @Override
   public Set<String> listSubjectsForId(int id, String subject, boolean returnDeleted)
       throws SchemaRegistryException {
-    return null;
+    List<SubjectVersion> versions = listVersionsForId(id, subject, returnDeleted);
+    return versions != null
+        ? versions.stream()
+        .map(SubjectVersion::getSubject)
+        .collect(Collectors.toCollection(LinkedHashSet::new))
+        : null;
   }
 
   @Override
   public List<SubjectVersion> listVersionsForId(int id, String subject, boolean lookupDeleted)
       throws SchemaRegistryException {
-    return null;
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject == null ? "" : subject);
+    return pgStore.getSubjectVersionsForId(qs, id, lookupDeleted);
   }
 
   @Override
@@ -345,7 +375,12 @@ public class PgSchemaRegistry implements SchemaRegistry {
   @Override
   public List<Integer> getReferencedBy(String subject, VersionId versionId)
       throws SchemaRegistryException {
-    return null;
+    int version = versionId.getVersionId();
+    if (versionId.isLatest()) {
+      version = getLatestVersion(subject).getVersion();
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    return pgStore.getReferencedBy(qs, Optional.of(version));
   }
 
   @Override
@@ -355,41 +390,37 @@ public class PgSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public int register(String subjectName, Schema schema,
+  public int register(String subject, Schema schema,
                       boolean normalize, Map<String, String> headerProperties)
       throws SchemaRegistryException {
     // TODO skip mode check
-    Schema existingSchema = lookUpSchemaUnderSubject(subjectName, schema, normalize, false);
-    if (existingSchema != null) {
-      if (schema.getId() == null
-          || schema.getId() < 0
-          || schema.getId().equals(existingSchema.getId())
-      ) {
-        return existingSchema.getId();
-      }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), schema.getSubject());
+    String subjectName = QualifiedSubject.create(tenant(), subject).getSubject();
+    Map<String, Integer> subjects = pgStore.getSubjectByHash(qs, schema, false);
+    if (subjects.containsKey(subjectName)) {
+      return subjects.get(subjectName);
     }
 
-    QualifiedSubject qs = QualifiedSubject.create(tenant(), schema.getSubject());
     int contextId = pgStore.getOrCreateContext(qs);
     int subjectId = pgStore.getOrCreateSubject(contextId, qs);
     int version = pgStore.getMaxVersion(subjectId) + 1;
 
-    existingSchema = lookUpSchemaUnderSubject(subjectName, schema, normalize, true);
-    if (existingSchema != null) {
-      pgStore.registerDeleted(qs, existingSchema, version, subjectId);
+    subjects = pgStore.getSubjectByHash(qs, schema, true);
+    if (subjects.containsKey(subjectName)) {
+      pgStore.registerDeleted(qs, schema, version, subjectId);
       try {
         pgStore.commit();
+        return subjects.get(subjectName);
       } catch (Exception e) {
         pgStore.rollback();
         throw new SchemaRegistryException("register failed");
       }
-      return existingSchema.getId();
     }
 
-    int schemaId = schema.getId();
+    int schemaId = !subjects.isEmpty() ? subjects.values().iterator().next() : schema.getId();
     ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
 
-    List<Schema> allVersions = pgStore.getAllVersionsDesc(qs, true);
+    List<Schema> allVersions = pgStore.getAllVersions(qs, true, true);
     for (Schema s : allVersions) {
       ParsedSchema undeletedSchema = parseSchema(s);
       if (parsedSchema.references().isEmpty()
@@ -415,7 +446,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
 
     if (qs != null) {
       try {
-        schemaId = pgStore.createSchema(contextId, subjectId, version, parsedSchema,
+        schemaId = pgStore.createSchema(contextId, subjectId, version, schemaId, parsedSchema,
             MD5.ofSchema(schema).bytes());
 
         pgStore.commit();
@@ -463,7 +494,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
   public void deleteSchemaVersion(String subject, Schema schema, boolean permanentDelete)
       throws SchemaRegistryException {
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
-    if (!pgStore.referencesSchema(qs, Optional.of(schema.getVersion())).isEmpty()) {
+    if (!pgStore.getReferencedBy(qs, Optional.of(schema.getVersion())).isEmpty()) {
       throw new ReferenceExistsException(subject + ":" + schema.getVersion());
     }
     Schema fetchedSchema = pgStore.getSubjectVersion(qs, schema.getVersion(), false);
