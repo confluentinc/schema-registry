@@ -347,7 +347,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
   public Set<String> listSubjectsForId(int id, String subject, boolean returnDeleted)
       throws SchemaRegistryException {
     List<SubjectVersion> versions = listVersionsForId(id, subject, returnDeleted);
-    return versions != null
+    return versions != null && !versions.isEmpty()
         ? versions.stream()
         .map(SubjectVersion::getSubject)
         .collect(Collectors.toCollection(LinkedHashSet::new))
@@ -396,9 +396,11 @@ public class PgSchemaRegistry implements SchemaRegistry {
     // TODO skip mode check
     QualifiedSubject qs = QualifiedSubject.create(tenant(), schema.getSubject());
     String subjectName = QualifiedSubject.create(tenant(), subject).getSubject();
-    Map<String, Integer> subjects = pgStore.getSubjectByHash(qs, schema, false);
+    int schemaId = schema.getId();
+    ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
+    Map<String, Integer[]> subjects = pgStore.getSubjectByHash(qs, schema, false);
     if (subjects.containsKey(subjectName)) {
-      return subjects.get(subjectName);
+      return subjects.get(subjectName)[0];
     }
 
     int contextId = pgStore.getOrCreateContext(qs);
@@ -407,18 +409,21 @@ public class PgSchemaRegistry implements SchemaRegistry {
 
     subjects = pgStore.getSubjectByHash(qs, schema, true);
     if (subjects.containsKey(subjectName)) {
-      pgStore.registerDeleted(qs, schema, version, subjectId);
+      int id = subjects.get(subjectName)[0];
+      int oldVersion = subjects.get(subjectName)[1];
       try {
+        schema.setId(id);
+        schema.setVersion(oldVersion);
+        pgStore.registerDeleted(qs, schema, version, subjectId);
         pgStore.commit();
-        return subjects.get(subjectName);
+        return id;
       } catch (Exception e) {
         pgStore.rollback();
         throw new SchemaRegistryException("register failed");
       }
     }
 
-    int schemaId = !subjects.isEmpty() ? subjects.values().iterator().next() : schema.getId();
-    ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
+    schemaId = !subjects.isEmpty() ? subjects.values().iterator().next()[0] : schema.getId();
 
     List<Schema> allVersions = pgStore.getAllVersions(qs, true, true);
     for (Schema s : allVersions) {
