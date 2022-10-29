@@ -761,7 +761,7 @@ public class PgStore {
       rs = ps.executeQuery();
       if (rs != null) {
         while (rs.next()) {
-          String subject = rs.getString(1);
+          String subject = new QualifiedSubject(qs.getTenant(), qs.getContext(), rs.getString(1)).toQualifiedSubject();
           int version = rs.getInt(2);
           list.add(new SubjectVersion(subject, version));
         }
