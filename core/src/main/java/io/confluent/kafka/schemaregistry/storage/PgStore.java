@@ -290,12 +290,14 @@ public class PgStore {
 
     try {
       StringBuilder sql = new StringBuilder();
-      sql.append("SELECT sub.id FROM contexts c ")
+      sql.append("SELECT s.subject_id FROM contexts c ")
           .append("JOIN subjects sub ON c.id = sub.context_id ")
+          .append("JOIN schemas s ON s.subject_id = sub.id ")
           .append("WHERE c.tenant = ? AND c.context = ? AND sub.subject = ? ");
       if (!lookupDeletedSchema) {
-        sql.append("AND NOT deleted");
+        sql.append("AND NOT s.deleted ");
       }
+      sql.append("GROUP BY s.subject_id HAVING COUNT(*) > 0 ");
       ps = conn.prepareStatement(sql.toString());
       ps.setString(1, qs.getTenant());
       ps.setString(2, qs.getContext());
@@ -453,13 +455,6 @@ public class PgStore {
       ps = conn.prepareStatement(sql.toString());
       ps.setInt(1, subjectId);
       ps.executeUpdate();
-
-      sql.setLength(0);
-      sql.append("UPDATE subjects SET deleted = true WHERE id = ? ");
-      ps = conn.prepareStatement(sql.toString());
-      ps.setInt(1, subjectId);
-      ps.executeUpdate();
-
     } catch (Exception e) {
       throw new SchemaRegistryException("SoftDeleteSubject error", e);
     } finally {

@@ -279,13 +279,14 @@ public class PgSchemaRegistry implements SchemaRegistry {
     if (!pgStore.getReferencedBy(qs, Optional.empty()).isEmpty()) {
       throw new ReferenceExistsException(subject);
     }
-    List<Schema> fetchedSchemas = pgStore.getAllVersions(qs, false, true);
+    List<Schema> fetchedSchemas = pgStore.getAllVersions(qs, false, false);
     if (permanentDelete && !fetchedSchemas.isEmpty()) {
       throw new SubjectNotSoftDeletedException(subject);
     }
 
-    List<Integer> deletedVersions = pgStore.getAllVersions(qs, true, false)
-        .stream().map(Schema::getVersion).collect(Collectors.toList());
+    List<Integer> deletedVersions = permanentDelete ? pgStore.getAllVersions(qs, true, false)
+        .stream().map(Schema::getVersion).collect(Collectors.toList()) :
+        fetchedSchemas.stream().map(Schema::getVersion).collect(Collectors.toList());
     try {
       if (!permanentDelete) {
         pgStore.softDeleteSubject(qs);
@@ -540,7 +541,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
 
   @Override
   public MetricsContainer getMetricsContainer() {
-    return null;
+    return metricsContainer;
   }
 
   private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {

@@ -6,7 +6,7 @@ DROP TABLE IF EXISTS subjects CASCADE;
 CREATE TABLE contexts (id SERIAL PRIMARY KEY, tenant text, context text, schemas int);
 CREATE UNIQUE INDEX unique_context ON contexts (tenant, context);
 
-CREATE TABLE subjects (id SERIAL PRIMARY KEY, context_id int, subject text, deleted bool);
+CREATE TABLE subjects (id SERIAL PRIMARY KEY, context_id int, subject text);
 CREATE UNIQUE INDEX unique_subject ON subjects (context_id, subject);
 ALTER TABLE subjects ADD CONSTRAINT context_id_fk FOREIGN KEY (context_id) REFERENCES contexts (id);
 
