@@ -138,6 +138,7 @@ public class PgStore {
       closeResultSet(rs);
     }
 
+    log.info("getSubjectByHash: {}", result);
     return result;
   }
 
@@ -565,6 +566,8 @@ public class PgStore {
       sql.append("ORDER BY sub.subject, s.version DESC ");
       ps = conn.prepareStatement(sql.toString());
       ps.setString(1, tenant);
+      log.info("getAllVersionsInAllContexts lookupDeletedSchema: {}, tenant: {}",
+          lookupDeletedSchema, tenant);
       rs = ps.executeQuery();
       if (rs != null) {
         while (rs.next()) {
@@ -602,6 +605,8 @@ public class PgStore {
           .append("WHERE t.r <= 1");
       ps = conn.prepareStatement(sql.toString());
       ps.setString(1, tenant);
+      log.info("getLatestVersionsInAllContexts lookupDeletedSchema: {}, tenant: {}",
+          lookupDeletedSchema, tenant);
       rs = ps.executeQuery();
       if (rs != null) {
         while (rs.next()) {
@@ -637,6 +642,8 @@ public class PgStore {
       ps.setString(1, qs.getTenant());
       ps.setString(2, qs.getContext());
       ps.setString(3, qs.getSubject() + "%");
+      log.info("getAllVersionsBySubjectPrefix lookupDeletedSchema: {}, tenant: {}, context: {}, subject: {}",
+          lookupDeletedSchema, qs.getTenant(), qs.getContext(), qs.getSubject());
       rs = ps.executeQuery();
       if (rs != null) {
         while (rs.next()) {
@@ -676,6 +683,8 @@ public class PgStore {
       ps.setString(1, qs.getTenant());
       ps.setString(2, qs.getContext());
       ps.setString(3, qs.getSubject() + "%");
+      log.info("getLatestVersionsBySubjectPrefix lookupDeletedSchema: {}, tenant: {}, context: {}, subject: {}",
+          lookupDeletedSchema, qs.getTenant(), qs.getContext(), qs.getSubject());
       rs = ps.executeQuery();
       if (rs != null) {
         while (rs.next()) {

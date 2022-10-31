@@ -37,6 +37,8 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,9 +50,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
@@ -64,11 +68,11 @@ public class PgSchemaRegistry implements SchemaRegistry {
   private final LoadingCache<RawSchema, ParsedSchema> schemaCache;
   private final PgStore pgStore;
 
-  public PgSchemaRegistry(SchemaRegistryConfig config) {
+  public PgSchemaRegistry(SchemaRegistryConfig config) throws SchemaRegistryException {
     this.config = config;
     this.providers = initProviders(config);
     this.pgStore = new PgStore();
-    this.metricsContainer = new MetricsContainer(config, null);
+    this.metricsContainer = new MetricsContainer(config, kafkaClusterId(config));
     this.schemaCache = CacheBuilder.newBuilder()
         .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
         .expireAfterAccess(
@@ -297,7 +301,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
       pgStore.commit();
     } catch (Exception e) {
       pgStore.rollback();
-      throw new SchemaRegistryException("DeleteSubject failed");
+      throw new SchemaRegistryException("DeleteSubject failed", e);
     }
     return deletedVersions;
   }
@@ -420,7 +424,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
         return id;
       } catch (Exception e) {
         pgStore.rollback();
-        throw new SchemaRegistryException("register failed");
+        throw new SchemaRegistryException("register failed", e);
       }
     }
 
@@ -458,7 +462,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
         pgStore.commit();
       } catch (Exception e) {
         pgStore.rollback();
-        throw new SchemaRegistryException("register failed");
+        throw new SchemaRegistryException("register failed", e);
       }
     }
     return schemaId;
@@ -518,7 +522,7 @@ public class PgSchemaRegistry implements SchemaRegistry {
       pgStore.commit();
     } catch (Exception e) {
       pgStore.rollback();
-      throw new SchemaRegistryException("DeleteSchemaVersion failed");
+      throw new SchemaRegistryException("DeleteSchemaVersion failed", e);
     }
   }
 
@@ -723,13 +727,19 @@ public class PgSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  public static class SchemeAndPort {
-    public int port;
-    public String scheme;
+  // Just to make MetricsContainer happy
+  private String kafkaClusterId(SchemaRegistryConfig config) throws SchemaRegistryException {
+    Properties adminClientProps = new Properties();
+    KafkaStore.addSchemaRegistryConfigsToClientProperties(config, adminClientProps);
+    adminClientProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapBrokers());
 
-    public SchemeAndPort(String scheme, int port) {
-      this.port = port;
-      this.scheme = scheme;
+    try (AdminClient adminClient = AdminClient.create(adminClientProps)) {
+      return adminClient
+          .describeCluster()
+          .clusterId()
+          .get(config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+      throw new SchemaRegistryException("Failed to get Kafka cluster ID", e);
     }
   }
 }
