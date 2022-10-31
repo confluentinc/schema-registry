@@ -56,13 +56,16 @@ public class DeriveJsonSchema extends DeriveSchema {
     return mapper.createObjectNode().arrayNode().addAll(sortedDataNodes);
   }
 
+  /**
+   * Merge different records into one record and different arrays into one array
+   * Multiple data types are combined through oneOf
+   */
   protected ObjectNode mergeMultipleDataTypes(ObjectNode mergedArray,
                                               List<JsonNode> primitives,
                                               List<JsonNode> records,
                                               List<JsonNode> arrays,
                                               boolean check2dArray) {
     ArrayNode items = mapper.createArrayNode();
-    // Adding primitive types to items' list
     items.addAll(primitives);
     // Merge records if there is at least 1 record
     if (records.size() > 0) {
@@ -79,7 +82,6 @@ public class DeriveJsonSchema extends DeriveSchema {
       oneOfDataType.set("oneOf", sortJsonArrayList(items));
       mergedArray.set("items", oneOfDataType);
     } else if (items.size() == 1) {
-      // Exactly one type of item, hence oneOf is not used
       mergedArray.set("items", items.get(0));
     } else {
       // No items found, setting items as empty object
@@ -89,11 +91,13 @@ public class DeriveJsonSchema extends DeriveSchema {
     return mergedArray;
   }
 
+  /**
+   * Treated same as array of records, the items derived is returned as schema
+   * Exactly one schema is returned
+   */
   @Override
   public ObjectNode getSchemaForMultipleMessages(List<JsonNode> messages)
       throws JsonProcessingException {
-    // Get schema for multiple messages. Exactly one schema is returned
-    // Treated same as array of records, the items derived is returned
     JsonNode schema = getSchemaForArray(messages, "").get("items");
     convertToFormat(schema, "");
     ObjectNode schemaInformation = mapper.createObjectNode();
@@ -101,8 +105,10 @@ public class DeriveJsonSchema extends DeriveSchema {
     return schemaInformation;
   }
 
+  /**
+   * Generate json schema and check for any errors
+   */
   protected JsonNode convertToFormat(JsonNode schema, String name) {
-    // Generate json schema and check for any errors
     JsonSchema jsonSchema = new JsonSchema(schema);
     jsonSchema.validate();
     return schema;

@@ -35,15 +35,14 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.*;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveJsonSchemaTest.ARRAY_OF_NUMBERS;
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveJsonSchemaTest.RECORD_WITH_ARRAY_OF_STRINGS;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveJsonSchemaTest.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
 public class DeriveProtoBufSchemaTest {
 
   private final ObjectMapper mapper = new ObjectMapper();
-  DeriveProtobufSchema derive = new DeriveProtobufSchema();
+  private final DeriveProtobufSchema derive = new DeriveProtobufSchema();
   private final KafkaProtobufSerializer<DynamicMessage> protobufSerializer;
   private final KafkaProtobufDeserializer<Message> protobufDeserializer;
 
@@ -109,8 +108,8 @@ public class DeriveProtoBufSchemaTest {
   @Test
   public void testConvertToFormatArray() throws JsonProcessingException {
     // Converting json array to protobuf format
-    String arraySchema = derive.convertToFormatArray(mapper.readTree(ARRAY_OF_NUMBERS), "", 1);
-    assertEquals(arraySchema, "repeated number  = 1;\n");
+    String arraySchema = derive.convertToFormatArray(mapper.readTree(ARRAY_OF_NUMBERS), "array", 1);
+    assertEquals(arraySchema, "repeated number array = 1;\n");
   }
 
   @Test
@@ -126,14 +125,26 @@ public class DeriveProtoBufSchemaTest {
   public void testDeriveRecordPrimitive() throws Exception {
     // Get schema for record with fields having only primitive data types
     String longMessage = "\"Long\": 1202021212121009";
-    String nullMessage = "\"Bool\": true";
-    String primitiveTypesMessage = "{" + longMessage + "," + nullMessage + "}";
+    String boolMessage = "\"Bool\": true";
+    String primitiveTypesMessage = "{" + longMessage + "," + boolMessage + "}";
     String expectedSchema = "syntax = \"proto3\";\n" + "\n" +
         "message Schema {\n" +
         "  bool Bool = 1;\n" +
         "  int64 Long = 2;\n" +
         "}\n";
     generateSchemaAndCheckExpected(primitiveTypesMessage, expectedSchema);
+  }
+
+  @Test
+  public void testDeriveMergeArrays() throws Exception {
+    // Check merging of int and double type
+    String intMessage = "{\"type\":\"array\",\"items\":{\"type\":\"int32\"}}";
+    String doubleMessage = "{\"type\":\"array\",\"items\":{\"type\":\"double\"}}";
+    ObjectNode mergedArray = derive.mergeArrays(Arrays.asList(mapper.readTree(intMessage), mapper.readTree(doubleMessage)), true, true);
+    assertEquals(mergedArray.toString(), "{\"type\":\"array\",\"items\":{\"type\":\"double\"}}");
+
+    // nested arrays should raise error
+    assertThrows(IllegalArgumentException.class, () -> derive.mergeArrays(Collections.singletonList(mapper.readTree(ARRAY_OF_ARRAY_OF_NUMBERS)), false, true));
   }
 
   @Test
@@ -164,10 +175,6 @@ public class DeriveProtoBufSchemaTest {
     // recursive merging of field N with different types should also throw error
     String recordOfRecords = "{\"RecordOfRecords\": [{\"R1\": {\"N\": 1}}, {\"R1\": {\"N\": \"B\"}}]}";
     assertThrows(IllegalArgumentException.class, () -> generateSchemaAndCheckExpected(recordOfRecords, ""));
-
-    // nested arrays should raise error
-    String array2D = "{\"Array2d\": [[1, 1.5]]}";
-    assertThrows(IllegalArgumentException.class, () -> generateSchemaAndCheckExpected(array2D, ""));
   }
 
   @Test
