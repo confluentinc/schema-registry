@@ -66,6 +66,11 @@ public class OauthCredentialProviderTest {
   @Test
   public void TestConfigureInsufficentConfigs() {
     for (String missingKey : CONFIG_MAP.keySet()) {
+      // ignoring optional keys
+      if (missingKey == SchemaRegistryClientConfig.BEARER_AUTH_SCOPE) {
+        continue;
+      }
+
       Assert.assertThrows(
           String.format("The OAuth configuration option %s value must be non-null", missingKey),
           ConfigException.class,

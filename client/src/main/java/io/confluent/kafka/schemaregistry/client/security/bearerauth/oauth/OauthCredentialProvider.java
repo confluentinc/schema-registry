@@ -86,7 +86,7 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
 
     String clientId = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_ID);
     String clientSecret = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET);
-    String scope = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE);
+    String scope = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE , false);
 
     //Keeping following configs needed by HttpAccessTokenRetriever as constants and not exposed to
     //users for modifications
