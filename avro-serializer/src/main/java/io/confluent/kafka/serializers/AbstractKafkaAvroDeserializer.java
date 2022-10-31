@@ -482,6 +482,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           }
         }
 
+        // First apply migration rules
         if (!migrations.isEmpty()) {
           result = executeMigrations(migrations, getSubject(), topic, headers, result);
         }
@@ -495,6 +496,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
               (JsonNode) result, readerAvroSchema, (DatumReader<Object>) reader);
         }
 
+        // Next apply domain rules
         result = executeRules(
           getSubject(), topic, headers, RuleMode.READ, null, readerAvroSchema, result
         );

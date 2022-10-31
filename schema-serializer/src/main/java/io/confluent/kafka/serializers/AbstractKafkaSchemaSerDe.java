@@ -214,9 +214,6 @@ public abstract class AbstractKafkaSchemaSerDe {
     }
 
     List<ParsedSchema> versions = getSchemasBetween(subject, first, last);
-    if (versions.size() <= 1) {
-      return migrations;
-    }
     ParsedSchema previous = null;
     for (int i = 0; i < versions.size(); i++) {
       ParsedSchema current = versions.get(i);

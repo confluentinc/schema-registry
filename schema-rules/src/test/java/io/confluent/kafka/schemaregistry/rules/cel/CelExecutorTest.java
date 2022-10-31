@@ -61,6 +61,7 @@ import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.reflect.ReflectData;
+import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 public class CelExecutorTest {
@@ -175,6 +176,20 @@ public class CelExecutorTest {
 
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaAvroSerializerConstraintException() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
+        CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"");
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    avroDeserializer.deserialize(topic, bytes);
   }
 
   @Test
