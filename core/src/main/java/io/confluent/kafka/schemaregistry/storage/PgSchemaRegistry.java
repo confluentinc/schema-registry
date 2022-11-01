@@ -291,17 +291,11 @@ public class PgSchemaRegistry implements SchemaRegistry {
     List<Integer> deletedVersions = permanentDelete ? pgStore.getAllVersions(qs, true, false)
         .stream().map(Schema::getVersion).collect(Collectors.toList()) :
         fetchedSchemas.stream().map(Schema::getVersion).collect(Collectors.toList());
-    try {
-      if (!permanentDelete) {
-        pgStore.softDeleteSubject(qs);
-        // TODO not handling mode/compatibility
-      } else {
-        pgStore.hardDeleteSubject(qs);
-      }
-      pgStore.commit();
-    } catch (Exception e) {
-      pgStore.rollback();
-      throw new SchemaRegistryException("DeleteSubject failed", e);
+    if (!permanentDelete) {
+      pgStore.softDeleteSubject(qs);
+      // TODO not handling mode/compatibility
+    } else {
+      pgStore.hardDeleteSubject(qs);
     }
     return deletedVersions;
   }
@@ -410,22 +404,15 @@ public class PgSchemaRegistry implements SchemaRegistry {
 
     int contextId = pgStore.getOrCreateContext(qs);
     int subjectId = pgStore.getOrCreateSubject(contextId, qs);
-    int version = pgStore.getMaxVersion(subjectId) + 1;
 
     subjects = pgStore.getSubjectByHash(qs, schema, true);
     if (subjects.containsKey(subjectName)) {
       int id = subjects.get(subjectName)[0];
       int oldVersion = subjects.get(subjectName)[1];
-      try {
-        schema.setId(id);
-        schema.setVersion(oldVersion);
-        pgStore.registerDeleted(qs, schema, version, subjectId);
-        pgStore.commit();
-        return id;
-      } catch (Exception e) {
-        pgStore.rollback();
-        throw new SchemaRegistryException("register failed", e);
-      }
+      schema.setId(id);
+      schema.setVersion(oldVersion);
+      pgStore.registerDeleted(qs, schema, subjectId);
+      return id;
     }
 
     schemaId = !subjects.isEmpty() ? subjects.values().iterator().next()[0] : schema.getId();
@@ -455,15 +442,8 @@ public class PgSchemaRegistry implements SchemaRegistry {
     schema.setReferences(parsedSchema.references());
 
     if (qs != null) {
-      try {
-        schemaId = pgStore.createSchema(contextId, subjectId, version, schemaId, parsedSchema,
-            MD5.ofSchema(schema).bytes());
-
-        pgStore.commit();
-      } catch (Exception e) {
-        pgStore.rollback();
-        throw new SchemaRegistryException("register failed", e);
-      }
+      schemaId = pgStore.createSchema(contextId, subjectId, schemaId, parsedSchema,
+          MD5.ofSchema(schema).bytes());
     }
     return schemaId;
   }
@@ -512,17 +492,11 @@ public class PgSchemaRegistry implements SchemaRegistry {
       throw new SchemaVersionNotSoftDeletedException(subject, schema.getVersion().toString());
     }
 
-    try {
-      if (!permanentDelete) {
-        pgStore.softDeleteSchema(qs, schema);
-        // TODO not handling mode/compatibility
-      } else {
-        pgStore.hardDeleteSchema(qs, schema);
-      }
-      pgStore.commit();
-    } catch (Exception e) {
-      pgStore.rollback();
-      throw new SchemaRegistryException("DeleteSchemaVersion failed", e);
+    if (!permanentDelete) {
+      pgStore.softDeleteSchema(qs, schema);
+      // TODO not handling mode/compatibility
+    } else {
+      pgStore.hardDeleteSchema(qs, schema);
     }
   }
 
