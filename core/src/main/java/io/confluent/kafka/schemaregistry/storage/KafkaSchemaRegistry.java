@@ -868,6 +868,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
+  public Schema getLatestWithMetadata(
+      String subject, Map<String, String> metadata, boolean lookupDeletedSchema)
+      throws SchemaRegistryException {
+    List<SchemaValue> allVersions = getAllSchemaValues(subject);
+    Collections.reverse(allVersions);
+
+    for (SchemaValue schemaValue : allVersions) {
+      if (lookupDeletedSchema || !schemaValue.isDeleted()) {
+        Schema schema = getSchemaEntityFromSchemaValue(schemaValue);
+        if (schema.getMetadata() != null) {
+          Map<String, String> props = schema.getMetadata().getProperties();
+          if (props != null && props.entrySet().containsAll(metadata.entrySet())) {
+            return schema;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
   public void checkIfSchemaWithIdExist(int id, Schema schema)
       throws SchemaRegistryException, StoreException {
     SchemaKey existingKey = this.lookupCache.schemaKeyById(id, schema.getSubject());

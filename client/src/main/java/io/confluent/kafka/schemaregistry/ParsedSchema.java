@@ -16,8 +16,13 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -182,5 +187,18 @@ public interface ParsedSchema {
    */
   default boolean deepEquals(ParsedSchema schema) {
     return Objects.equals(rawSchema(), schema.rawSchema());
+  }
+
+  default Object fromJson(JsonNode json) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  default JsonNode toJson(Object object) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  default Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
+      throws RuleException {
+    throw new UnsupportedOperationException();
   }
 }

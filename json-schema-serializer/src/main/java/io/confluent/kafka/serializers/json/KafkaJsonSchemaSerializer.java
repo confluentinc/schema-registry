@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.json;
 
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.IOException;
@@ -32,7 +33,6 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
-  private boolean isKey;
   private Map<Class<?>, JsonSchema> schemaCache;
 
   /**
@@ -64,8 +64,14 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     configure(new KafkaJsonSchemaSerializerConfig(config));
   }
 
+
   @Override
   public byte[] serialize(String topic, T record) {
+    return serialize(topic, null, record);
+  }
+
+  @Override
+  public byte[] serialize(String topic, Headers headers, T record) {
     if (record == null) {
       return null;
     }
@@ -76,7 +82,8 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
       schema = schemaCache.computeIfAbsent(record.getClass(), k -> getSchema(record));
     }
     Object value = JsonSchemaUtils.getValue(record);
-    return serializeImpl(getSubjectName(topic, isKey, value, schema), (T) value, schema);
+    return serializeImpl(
+        getSubjectName(topic, isKey, value, schema), topic, headers, (T) value, schema);
   }
 
   private JsonSchema getSchema(T record) {

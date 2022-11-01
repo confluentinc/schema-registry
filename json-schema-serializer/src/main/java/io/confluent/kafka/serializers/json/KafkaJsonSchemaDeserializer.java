@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers.json;
 
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
@@ -75,8 +76,13 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
   }
 
   @Override
-  public T deserialize(String topic, byte[] bytes) {
-    return (T) deserialize(false, topic, isKey, bytes);
+  public T deserialize(String topic, byte[] data) {
+    return deserialize(topic, null, data);
+  }
+
+  @Override
+  public T deserialize(String topic, Headers headers, byte[] bytes) {
+    return (T) deserialize(false, topic, isKey, headers, bytes);
   }
 
   @Override

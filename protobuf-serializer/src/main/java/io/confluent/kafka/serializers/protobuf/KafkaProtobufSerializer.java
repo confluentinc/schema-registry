@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.IOException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -36,7 +37,6 @@ public class KafkaProtobufSerializer<T extends Message>
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
-  private boolean isKey;
   private Map<Descriptor, ProtobufSchema> schemaCache;
 
   /**
@@ -69,7 +69,12 @@ public class KafkaProtobufSerializer<T extends Message>
   }
 
   @Override
-  public byte[] serialize(String topic, T record) {
+  public byte[] serialize(String topic, T data) {
+    return serialize(topic, null, data);
+  }
+
+  @Override
+  public byte[] serialize(String topic, Headers headers, T record) {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
           "SchemaRegistryClient not found. You need to configure the serializer "
@@ -94,7 +99,7 @@ public class KafkaProtobufSerializer<T extends Message>
       schemaCache.put(record.getDescriptorForType(), schema);
     }
     return serializeImpl(getSubjectName(topic, isKey, record, schema),
-        topic, isKey, record, schema);
+        topic, isKey, headers, record, schema);
   }
 
   @Override

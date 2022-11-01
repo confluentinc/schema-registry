@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package io.confluent.kafka.schemaregistry.rules;
+
+option java_package = "io.confluent.kafka.schemaregistry.rules";
+option java_outer_classname = "NewWidgetProto";
+option java_multiple_files = false;
+
+message NewWidget {
+    string name = 1;
+    repeated string ssn = 2;
+    repeated Pii pii_array = 3;
+    map<string, Pii> pii_map = 4;
+    int32 height = 5;
+    int32 version = 6;
+}
+
+message Pii {
+    string pii = 1;
+}

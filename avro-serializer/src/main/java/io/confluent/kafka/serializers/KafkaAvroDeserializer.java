@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
@@ -96,7 +97,12 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   @Override
   public Object deserialize(String topic, byte[] bytes) {
-    return deserialize(topic, isKey, bytes, specificAvroReaderSchema);
+    return deserialize(topic, null, bytes);
+  }
+
+  @Override
+  public Object deserialize(String topic, Headers headers, byte[] bytes) {
+    return deserialize(topic, isKey, headers, bytes, specificAvroReaderSchema);
   }
 
   /**

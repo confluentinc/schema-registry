@@ -19,14 +19,26 @@ package io.confluent.kafka.schemaregistry.avro;
 import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EMPTY_METADATA;
 import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
+import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.SchemaCompatibility.Incompatibility;
@@ -37,6 +49,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.reflect.ReflectData;
+import org.apache.avro.specific.SpecificData;
+import org.apache.avro.specific.SpecificRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,6 +62,8 @@ public class AvroSchema implements ParsedSchema {
   private static final Logger log = LoggerFactory.getLogger(AvroSchema.class);
 
   public static final String TYPE = "AVRO";
+
+  public static final String ANNOTATIONS = "confluent.annotations";
 
   private final Schema schemaObj;
   private String canonicalString;
@@ -430,6 +449,145 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public String toString() {
     return canonicalString();
+  }
+
+  @Override
+  public Object fromJson(JsonNode json) throws IOException {
+    return AvroSchemaUtils.toObject(json, this);
+  }
+
+  @Override
+  public JsonNode toJson(Object message) throws IOException {
+    if (message instanceof JsonNode) {
+      return (JsonNode) message;
+    }
+    return JacksonMapper.INSTANCE.readTree(AvroSchemaUtils.toJson(message));
+  }
+
+  @Override
+  public Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
+      throws RuleException {
+    try {
+      return toTransformedMessage(ctx, this.rawSchema(), message, transform);
+    } catch (RuntimeException e) {
+      if (e.getCause() instanceof RuleException) {
+        throw (RuleException) e.getCause();
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  private Object toTransformedMessage(
+      RuleContext ctx, Schema schema, Object message, FieldTransform transform) {
+    if (schema == null || message == null) {
+      return message;
+    }
+    GenericData data;
+    Schema.Type st = schema.getType();
+    switch (st) {
+      case UNION:
+        data = getData(message);
+        int unionIndex = data.resolveUnion(schema, message);
+        return toTransformedMessage(ctx, schema.getTypes().get(unionIndex), message, transform);
+      case ARRAY:
+        if (!(message instanceof Iterable)) {
+          log.warn("Object does not match an array schema");
+          return message;
+        }
+        return StreamSupport.stream(((Iterable<?>) message).spliterator(), false)
+            .map(it -> toTransformedMessage(ctx, schema.getElementType(), it, transform))
+            .collect(Collectors.toList());
+      case MAP:
+        if (!(message instanceof Map)) {
+          log.warn("Object does not match a map schema");
+          return message;
+        }
+        return ((Map<?, ?>) message).entrySet().stream()
+            .collect(Collectors.toMap(
+                Entry::getKey,
+                e -> toTransformedMessage(ctx, schema.getValueType(), e.getValue(), transform),
+                (e1, e2) -> e1));
+      case RECORD:
+        data = getData(message);
+        for (Schema.Field f : schema.getFields()) {
+          String fullName = schema.getFullName() + "." + f.name();
+          try (FieldContext fc = ctx.enterField(
+              ctx, message, fullName, f.name(), getType(f), getInlineAnnotations(f))) {
+            Object value = data.getField(message, f.name(), f.pos());
+            Object newValue = toTransformedMessage(ctx, f.schema(), value, transform);
+            data.setField(message, f.name(), f.pos(), newValue);
+          }
+        }
+        return message;
+      default:
+        FieldContext fc = ctx.currentField();
+        if (fc != null) {
+          try {
+            Set<String> intersect = new HashSet<>(fc.getAnnotations());
+            intersect.retainAll(ctx.rule().getAnnotations());
+            if (!intersect.isEmpty()) {
+              return transform.transform(ctx, fc, message);
+            }
+          } catch (RuleException e) {
+            throw new RuntimeException(e);
+          }
+        }
+        return message;
+    }
+  }
+
+  private RuleContext.Type getType(Schema.Field field) {
+    switch (field.schema().getType()) {
+      case RECORD:
+        return Type.RECORD;
+      case ENUM:
+        return Type.ENUM;
+      case ARRAY:
+        return Type.ARRAY;
+      case MAP:
+        return Type.MAP;
+      case UNION:
+        return Type.COMBINED;
+      case FIXED:
+        return Type.FIXED;
+      case STRING:
+        return Type.STRING;
+      case BYTES:
+        return Type.BYTES;
+      case INT:
+        return Type.INT;
+      case LONG:
+        return Type.LONG;
+      case FLOAT:
+        return Type.FLOAT;
+      case DOUBLE:
+        return Type.DOUBLE;
+      case BOOLEAN:
+        return Type.BOOLEAN;
+      case NULL:
+      default:
+        return Type.NULL;
+    }
+  }
+
+  private Set<String> getInlineAnnotations(Schema.Field field) {
+    Set<String> annotations = new HashSet<>();
+    Object prop = field.getObjectProp(ANNOTATIONS);
+    if (prop instanceof List) {
+      ((List<?>)prop).forEach(p -> annotations.add(p.toString()));
+    }
+    return annotations;
+  }
+
+  private static GenericData getData(Object message) {
+    if (message instanceof SpecificRecord) {
+      return SpecificData.get();
+    } else if (message instanceof GenericRecord) {
+      return GenericData.get();
+    } else {
+      return  ReflectData.get();
+    }
   }
 
   static class IdentityPair<K, V> {

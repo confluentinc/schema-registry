@@ -16,8 +16,11 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.LinkedHashSet;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -388,6 +391,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public SchemaMetadata getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException {
+    return getSchemaMetadata(subject, version, false);
+  }
+
+  @Override
+  public SchemaMetadata getSchemaMetadata(String subject, int version,
+      boolean lookupDeletedSchema) throws IOException, RestClientException {
     ParsedSchema schema = null;
     Map<ParsedSchema, Integer> schemaVersionMap = versionCache.get(subject);
     if (schemaVersionMap == null) {
@@ -416,6 +425,35 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     int version = getLatestVersion(subject);
     return getSchemaMetadata(subject, version);
+  }
+
+  @Override
+  public SchemaMetadata getLatestWithMetadata(String subject, Map<String, String> metadata,
+      boolean lookupDeletedSchema) throws IOException, RestClientException {
+    Map<ParsedSchema, Integer> versions = versionCache.get(subject);
+    SortedMap<Integer, ParsedSchema> reverseMap = new TreeMap<>(Collections.reverseOrder());
+    for (Map.Entry<ParsedSchema, Integer> entry : versions.entrySet()) {
+      reverseMap.put(entry.getValue(), entry.getKey());
+    }
+    for (Map.Entry<Integer, ParsedSchema> entry : reverseMap.entrySet()) {
+      Integer version = entry.getKey();
+      ParsedSchema schema = entry.getValue();
+      Metadata schemaMetadata = schema.metadata();
+      if (schemaMetadata != null) {
+        Map<String, String> props = schemaMetadata.getProperties();
+        if (props != null && props.entrySet().containsAll(metadata.entrySet())) {
+          int id = -1;
+          Map<Integer, ParsedSchema> idSchemaMap = idCache.get(subject);
+          for (Map.Entry<Integer, ParsedSchema> e : idSchemaMap.entrySet()) {
+            if (schemasEqual(e.getValue(), schema)) {
+              id = e.getKey();
+            }
+          }
+          return new SchemaMetadata(new Schema(subject, version, id, schema));
+        }
+      }
+    }
+    throw new RestClientException("Schema Not Found", 404, 40403);
   }
 
   @Override

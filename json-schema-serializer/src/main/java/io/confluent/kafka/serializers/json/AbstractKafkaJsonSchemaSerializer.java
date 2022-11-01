@@ -19,10 +19,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.everit.json.schema.ValidationException;
 
 import java.io.ByteArrayOutputStream;
@@ -89,6 +91,17 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       T object,
       JsonSchema schema
   ) throws SerializationException, InvalidConfigurationException {
+    return serializeImpl(subject, null, null, object, schema);
+  }
+
+  @SuppressWarnings("unchecked")
+  protected byte[] serializeImpl(
+      String subject,
+      String topic,
+      Headers headers,
+      T object,
+      JsonSchema schema
+  ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
           "SchemaRegistryClient not found. You need to configure the serializer "
@@ -113,6 +126,10 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
         schema = (JsonSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
         id = schemaRegistry.getId(subject, schema);
+      } else if (metadata != null) {
+        restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
+        schema = (JsonSchema) getLatestWithMetadata(subject);
+        id = schemaRegistry.getId(subject, schema);
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
         schema = (JsonSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
@@ -121,6 +138,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
         restClientErrorMsg = "Error retrieving JSON schema: ";
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
+      object = (T) executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
       if (validate) {
         validateJson(object, schema);
       }

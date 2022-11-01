@@ -145,11 +145,12 @@ public class AvroSchemaUtils {
   }
 
   public static Schema getSchema(Object object) {
-    return getSchema(object, false, false, false);
+    return getSchema(object, false, false, false, true);
   }
 
   public static Schema getSchema(Object object, boolean useReflection,
-                                 boolean reflectionAllowNull, boolean removeJavaProperties) {
+                                 boolean reflectionAllowNull, boolean removeJavaProperties,
+                                 boolean throwError) {
     if (object == null) {
       return primitiveSchemas.get("Null");
     } else if (object instanceof Boolean) {
@@ -192,12 +193,24 @@ public class AvroSchemaUtils {
         // no data will be added to the map.
         return Schema.createMap(primitiveSchemas.get("Null"));
       }
-      Schema valueSchema = getSchema(mapValue.values().iterator().next());
+      Schema valueSchema = getSchema(mapValue.values().iterator().next(),
+          useReflection, reflectionAllowNull, removeJavaProperties, throwError);
       return Schema.createMap(valueSchema);
-    } else {
+    } else if (throwError) {
       throw new IllegalArgumentException(
           "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, "
               + "Float, Double, String, byte[] and IndexedRecord");
+
+    } else {
+      // Try reflection as last resort
+      Schema schema = reflectionAllowNull ? ReflectData.AllowNull.get().getSchema(object.getClass())
+          : ReflectData.get().getSchema(object.getClass());
+      if (schema == null) {
+        throw new SerializationException("Schema is null for object of class " + object.getClass()
+            .getCanonicalName());
+      } else {
+        return schema;
+      }
     }
   }
 
@@ -269,7 +282,7 @@ public class AvroSchemaUtils {
 
   @SuppressWarnings("unchecked")
   public static void toJson(Object value, OutputStream out) throws IOException {
-    Schema schema = getSchema(value);
+    Schema schema = getSchema(value, false, false, false, false);
     JsonEncoder encoder = encoderFactory.jsonEncoder(schema, out);
     DatumWriter<Object> writer = (DatumWriter<Object>) getDatumWriter(value, schema, true);
     // Some types require wrapping/conversion
