@@ -1270,8 +1270,7 @@ public class ProtobufSchema implements ParsedSchema {
               .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
           Boolean isDeprecated = findOption(DEPRECATED, options)
               .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-          Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
-          ProtobufMeta metadata = findMeta(options);
+          ProtobufMeta metadata = findMeta(CONFLUENT_FIELD_META, options);
           schema.addExtendDefinition(
               extendElement.getName(),
               label,
@@ -1382,7 +1381,7 @@ public class ProtobufSchema implements ParsedSchema {
       if (rubyPackage != null) {
         schema.setRubyPackage(rubyPackage.getValue().toString());
       }
-      ProtobufMeta meta = findMeta(options);
+      ProtobufMeta meta = findMeta(CONFLUENT_FILE_META, options);
       schema.setMeta(meta);
       schema.setName(name);
       return schema.build();
@@ -1460,7 +1459,7 @@ public class ProtobufSchema implements ParsedSchema {
             .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
         Boolean isDeprecated = findOption(DEPRECATED, options)
             .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-        ProtobufMeta meta = findMeta(options);
+        ProtobufMeta meta = findMeta(CONFLUENT_FIELD_META, options);
         oneofBuilder.addField(
             false,
             field.getType(),
@@ -1496,7 +1495,7 @@ public class ProtobufSchema implements ParsedSchema {
           .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
       Boolean isDeprecated = findOption(DEPRECATED, options)
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      ProtobufMeta meta = findMeta(options);
+      ProtobufMeta meta = findMeta(CONFLUENT_FIELD_META, options);
       ProtoType protoType = ProtoType.get(fieldType);
       ProtoType keyType = protoType.getKeyType();
       ProtoType valueType = protoType.getValueType();
@@ -1588,7 +1587,7 @@ public class ProtobufSchema implements ParsedSchema {
     if (isMapEntry != null) {
       message.setMapEntry(isMapEntry);
     }
-    ProtobufMeta meta = findMeta(options);
+    ProtobufMeta meta = findMeta(CONFLUENT_MESSAGE_META, options);
     message.setMeta(meta);
     return message.build();
   }
@@ -1603,8 +1602,8 @@ public class ProtobufSchema implements ParsedSchema {
     return Optional.ofNullable(options.get(name));
   }
 
-  public static ProtobufMeta findMeta(Map<String, OptionElement> options) {
-    Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
+  public static ProtobufMeta findMeta(String name, Map<String, OptionElement> options) {
+    Optional<OptionElement> meta = findOption(name, options);
     if (!meta.isPresent()) {
       return null;
     }
@@ -1682,10 +1681,10 @@ public class ProtobufSchema implements ParsedSchema {
       Map<String, OptionElement> constantOptions = mergeOptions(constant.getOptions());
       Boolean isConstDeprecated = findOption(DEPRECATED, constantOptions)
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      ProtobufMeta meta = findMeta(constantOptions);
+      ProtobufMeta meta = findMeta(CONFLUENT_ENUM_VALUE_META, constantOptions);
       enumer.addValue(constant.getName(), constant.getTag(), meta, isConstDeprecated);
     }
-    ProtobufMeta meta = findMeta(enumOptions);
+    ProtobufMeta meta = findMeta(CONFLUENT_ENUM_META, enumOptions);
     enumer.setMeta(meta);
     return enumer.build();
   }
