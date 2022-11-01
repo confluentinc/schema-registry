@@ -89,11 +89,11 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
@@ -147,6 +147,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final String DOC_FIELD = "doc";
   public static final String PARAMS_FIELD = "params";
+  public static final String ANNOTATIONS_FIELD = "annotations";
   public static final String PRECISION_KEY = "precision";
   public static final String SCALE_KEY = "scale";
 
@@ -923,6 +924,10 @@ public class ProtobufSchema implements ParsedSchema {
       }
       map.put(PARAMS_FIELD, keyValues);
     }
+    List<String> annotations = meta.getAnnotationList();
+    if (annotations != null && !annotations.isEmpty()) {
+      map.put(ANNOTATIONS_FIELD, annotations);
+    }
     return map.isEmpty() ? null : new OptionElement(name, Kind.MAP, map, true);
   }
 
@@ -1266,8 +1271,7 @@ public class ProtobufSchema implements ParsedSchema {
           Boolean isDeprecated = findOption(DEPRECATED, options)
               .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
           Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
-          String doc = findDoc(meta);
-          Map<String, String> params = findParams(meta);
+          ProtobufMeta metadata = findMeta(options);
           schema.addExtendDefinition(
               extendElement.getName(),
               label,
@@ -1276,8 +1280,7 @@ public class ProtobufSchema implements ParsedSchema {
               field.getTag(),
               defaultVal,
               jsonName,
-              doc,
-              params,
+              metadata,
               ctype,
               isPacked,
               jstype,
@@ -1379,10 +1382,8 @@ public class ProtobufSchema implements ParsedSchema {
       if (rubyPackage != null) {
         schema.setRubyPackage(rubyPackage.getValue().toString());
       }
-      Optional<OptionElement> meta = findOption(CONFLUENT_FILE_META, options);
-      String doc = findDoc(meta);
-      Map<String, String> params = findParams(meta);
-      schema.setMeta(doc, params);
+      ProtobufMeta meta = findMeta(options);
+      schema.setMeta(meta);
       schema.setName(name);
       return schema.build();
     } catch (Descriptors.DescriptorValidationException e) {
@@ -1459,9 +1460,7 @@ public class ProtobufSchema implements ParsedSchema {
             .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
         Boolean isDeprecated = findOption(DEPRECATED, options)
             .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-        Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
-        String doc = findDoc(meta);
-        Map<String, String> params = findParams(meta);
+        ProtobufMeta meta = findMeta(options);
         oneofBuilder.addField(
             false,
             field.getType(),
@@ -1469,8 +1468,7 @@ public class ProtobufSchema implements ParsedSchema {
             field.getTag(),
             defaultVal,
             jsonName,
-            doc,
-            params,
+            meta,
             ctype,
             jstype,
             isDeprecated
@@ -1498,9 +1496,7 @@ public class ProtobufSchema implements ParsedSchema {
           .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
       Boolean isDeprecated = findOption(DEPRECATED, options)
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
-      String doc = findDoc(meta);
-      Map<String, String> params = findParams(meta);
+      ProtobufMeta meta = findMeta(options);
       ProtoType protoType = ProtoType.get(fieldType);
       ProtoType keyType = protoType.getKeyType();
       ProtoType valueType = protoType.getValueType();
@@ -1510,8 +1506,8 @@ public class ProtobufSchema implements ParsedSchema {
         fieldType = toMapEntry(field.getName());
         MessageDefinition.Builder mapMessage = MessageDefinition.newBuilder(fieldType);
         mapMessage.setMapEntry(true);
-        mapMessage.addField(null, keyType.toString(), KEY_FIELD, 1, null, null, null);
-        mapMessage.addField(null, valueType.toString(), VALUE_FIELD, 2, null, null, null);
+        mapMessage.addField(null, keyType.toString(), KEY_FIELD, 1, null, null);
+        mapMessage.addField(null, valueType.toString(), VALUE_FIELD, 2, null, null);
         message.addMessageDefinition(mapMessage.build());
       }
       if (isProto3Optional) {
@@ -1524,8 +1520,7 @@ public class ProtobufSchema implements ParsedSchema {
             field.getTag(),
             defaultVal,
             jsonName,
-            doc,
-            params,
+            meta,
             ctype,
             jstype,
             isDeprecated
@@ -1538,8 +1533,7 @@ public class ProtobufSchema implements ParsedSchema {
             field.getTag(),
             defaultVal,
             jsonName,
-            doc,
-            params,
+            meta,
             ctype,
             isPacked,
             jstype,
@@ -1594,10 +1588,8 @@ public class ProtobufSchema implements ParsedSchema {
     if (isMapEntry != null) {
       message.setMapEntry(isMapEntry);
     }
-    Optional<OptionElement> meta = findOption(CONFLUENT_MESSAGE_META, options);
-    String doc = findDoc(meta);
-    Map<String, String> params = findParams(meta);
-    message.setMeta(doc, params);
+    ProtobufMeta meta = findMeta(options);
+    message.setMeta(meta);
     return message.build();
   }
 
@@ -1611,13 +1603,22 @@ public class ProtobufSchema implements ParsedSchema {
     return Optional.ofNullable(options.get(name));
   }
 
-  public static String findDoc(Optional<OptionElement> meta) {
-    return (String) findMeta(meta, DOC_FIELD);
+  public static ProtobufMeta findMeta(Map<String, OptionElement> options) {
+    Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
+    if (!meta.isPresent()) {
+      return null;
+    }
+    return new ProtobufMeta(findDoc(meta), findParams(meta), findAnnotations(meta));
+  }
+
+  private static String findDoc(Optional<OptionElement> meta) {
+    return (String) findMetaField(meta, DOC_FIELD);
   }
 
   @SuppressWarnings("unchecked")
-  public static Map<String, String> findParams(Optional<OptionElement> meta) {
-    List<Map<String, String>> keyValues = (List<Map<String, String>>) findMeta(meta, PARAMS_FIELD);
+  private static Map<String, String> findParams(Optional<OptionElement> meta) {
+    List<Map<String, String>> keyValues = (List<Map<String, String>>)
+        findMetaField(meta, PARAMS_FIELD);
     if (keyValues == null) {
       return null;
     }
@@ -1630,11 +1631,12 @@ public class ProtobufSchema implements ParsedSchema {
     return params;
   }
 
+  private static List<String> findAnnotations(Optional<OptionElement> meta) {
+    return (List<String>) findMetaField(meta, ANNOTATIONS_FIELD);
+  }
+
   @SuppressWarnings("unchecked")
-  public static Object findMeta(Optional<OptionElement> meta, String name) {
-    if (!meta.isPresent()) {
-      return null;
-    }
+  private static Object findMetaField(Optional<OptionElement> meta, String name) {
     OptionElement options = meta.get();
     switch (options.getKind()) {
       case OPTION:
@@ -1680,15 +1682,11 @@ public class ProtobufSchema implements ParsedSchema {
       Map<String, OptionElement> constantOptions = mergeOptions(constant.getOptions());
       Boolean isConstDeprecated = findOption(DEPRECATED, constantOptions)
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      Optional<OptionElement> meta = findOption(CONFLUENT_ENUM_VALUE_META, constantOptions);
-      String doc = findDoc(meta);
-      Map<String, String> params = findParams(meta);
-      enumer.addValue(constant.getName(), constant.getTag(), doc, params, isConstDeprecated);
+      ProtobufMeta meta = findMeta(constantOptions);
+      enumer.addValue(constant.getName(), constant.getTag(), meta, isConstDeprecated);
     }
-    Optional<OptionElement> meta = findOption(CONFLUENT_ENUM_META, enumOptions);
-    String doc = findDoc(meta);
-    Map<String, String> params = findParams(meta);
-    enumer.setMeta(doc, params);
+    ProtobufMeta meta = findMeta(enumOptions);
+    enumer.setMeta(meta);
     return enumer.build();
   }
 
@@ -2174,6 +2172,55 @@ public class ProtobufSchema implements ParsedSchema {
     @Override
     public String toString() {
       return symbol();
+    }
+  }
+
+  public static class ProtobufMeta {
+    private String doc;
+    private Map<String, String> params;
+    private List<String> annotations;
+
+    public ProtobufMeta(String doc, Map<String, String> params, List<String> annotations) {
+      this.doc = doc;
+      this.params = params;
+      this.annotations = annotations;
+    }
+
+    public String getDoc() {
+      return doc;
+    }
+
+    public Map<String, String> getParams() {
+      return params;
+    }
+
+    public List<String> getAnnotations() {
+      return annotations;
+    }
+
+    public boolean isEmpty() {
+      return doc == null
+          && (params == null || params.isEmpty())
+          && (annotations == null || annotations.isEmpty());
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      ProtobufMeta metadata = (ProtobufMeta) o;
+      return Objects.equals(doc, metadata.doc)
+          && Objects.equals(params, metadata.params)
+          && Objects.equals(annotations, metadata.annotations);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(doc, params, annotations);
     }
   }
 }

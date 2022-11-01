@@ -9,8 +9,8 @@ option java_outer_classname = "WidgetProto";
 option java_multiple_files = false;
 
 message Widget {
-    string name = 1 [(.confluent.field_meta).annotation = "PII"];
-    repeated string ssn = 2 [(.confluent.field_meta).annotation = "PII"];
+    string name = 1 [(.confluent.field_meta).annotation = "PII", (.confluent.field_meta).annotation = "PUBLIC"];
+    repeated string ssn = 2 [(.confluent.field_meta).annotation = "PII", (.confluent.field_meta).annotation = "PRIVATE"];
     repeated Pii pii_array = 3;
     map<string, Pii> pii_map = 4;
     int32 size = 5;

@@ -40,7 +40,7 @@
               files="(SchemaRegistryConfig|ProtobufData|JsonSchemaData).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
-              files="(AvroData|JsonSchema|ProtobufData|CelExecutor).java"/>
+              files="(AvroData|JsonSchema|ProtobufData|ProtobufSchema|CelExecutor).java"/>
 
     <suppress checks="MemberName"
               files="(DynamicSchema|EnumDefinition|MessageDefinition|ServiceDefinition).java"/>

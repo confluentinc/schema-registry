@@ -27,6 +27,7 @@ import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.util.HashMap;
@@ -79,11 +80,10 @@ public class MessageDefinition {
         String name,
         int num,
         String defaultVal,
-        String doc,
-        Map<String, String> params
+        ProtobufMeta meta
     ) {
       return addField(label, type, name, num, defaultVal,
-          null, doc, params, null, null, null, null);
+          null, meta, null, null, null, null);
     }
 
     public Builder addField(
@@ -93,15 +93,14 @@ public class MessageDefinition {
         int num,
         String defaultVal,
         String jsonName,
-        String doc,
-        Map<String, String> params,
+        ProtobufMeta meta,
         CType ctype,
         Boolean isPacked,
         JSType jstype,
         Boolean isDeprecated
     ) {
       doAddField(label, false, type, name, num,
-              defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated, null);
+              defaultVal, jsonName, meta, ctype, isPacked, jstype, isDeprecated, null);
       return this;
     }
 
@@ -191,12 +190,12 @@ public class MessageDefinition {
     }
 
     // Note: added
-    public Builder setMeta(String doc, Map<String, String> params) {
-      Meta meta = toMeta(doc, params);
-      if (meta != null) {
+    public Builder setMeta(ProtobufMeta meta) {
+      Meta m = toMeta(meta);
+      if (m != null) {
         DescriptorProtos.MessageOptions.Builder optionsBuilder =
                 DescriptorProtos.MessageOptions.newBuilder();
-        optionsBuilder.setExtension(MetaProto.messageMeta, meta);
+        optionsBuilder.setExtension(MetaProto.messageMeta, m);
         mMsgTypeBuilder.mergeOptions(optionsBuilder.build());
       }
       return this;
@@ -221,8 +220,7 @@ public class MessageDefinition {
         int num,
         String defaultVal,
         String jsonName,
-        String doc,
-        Map<String, String> params,
+        ProtobufMeta meta,
         CType ctype,
         Boolean isPacked,
         JSType jstype,
@@ -230,7 +228,7 @@ public class MessageDefinition {
         OneofBuilder oneofBuilder
     ) {
       FieldDescriptorProto.Builder fieldBuilder = getFieldBuilder(label, isProto3Optional,
-          type, name, num, defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated,
+          type, name, num, defaultVal, jsonName, meta, ctype, isPacked, jstype, isDeprecated,
           oneofBuilder);
       mMsgTypeBuilder.addField(fieldBuilder.build());
     }
@@ -250,9 +248,8 @@ public class MessageDefinition {
         String name,
         int num,
         String defaultVal,
-        String doc,
-        Map<String, String> params) {
-      return addField(false, type, name, num, defaultVal, null, doc, params, null, null, false);
+        ProtobufMeta meta) {
+      return addField(false, type, name, num, defaultVal, null, meta, null, null, false);
     }
 
     public OneofBuilder addField(
@@ -261,10 +258,9 @@ public class MessageDefinition {
         String name,
         int num,
         String defaultVal,
-        String doc,
-        Map<String, String> params) {
+        ProtobufMeta meta) {
       return addField(
-          isProto3Optional, type, name, num, defaultVal, null, doc, params, null, null, false);
+          isProto3Optional, type, name, num, defaultVal, null, meta, null, null, false);
     }
 
     public OneofBuilder addField(
@@ -274,8 +270,7 @@ public class MessageDefinition {
         int num,
         String defaultVal,
         String jsonName,
-        String doc,
-        Map<String, String> params,
+        ProtobufMeta meta,
         CType ctype,
         JSType jstype,
         Boolean deprecated
@@ -288,8 +283,7 @@ public class MessageDefinition {
           num,
           defaultVal,
           jsonName,
-          doc,
-          params,
+          meta,
           ctype,
           null,
           jstype,
@@ -326,8 +320,7 @@ public class MessageDefinition {
       int num,
       String defaultVal,
       String jsonName,
-      String doc,
-      Map<String, String> params,
+      ProtobufMeta meta,
       CType ctype,
       Boolean isPacked,
       JSType jstype,
@@ -383,19 +376,19 @@ public class MessageDefinition {
       optionsBuilder.setDeprecated(isDeprecated);
       fieldBuilder.mergeOptions(optionsBuilder.build());
     }
-    setFieldMeta(fieldBuilder, doc, params);
+    setFieldMeta(fieldBuilder, meta);
     return fieldBuilder;
   }
 
   // --- private static ---
 
   private static void setFieldMeta(
-      FieldDescriptorProto.Builder fieldBuilder, String doc, Map<String, String> params) {
-    Meta meta = toMeta(doc, params);
-    if (meta != null) {
+      FieldDescriptorProto.Builder fieldBuilder, ProtobufMeta meta) {
+    Meta m = toMeta(meta);
+    if (m != null) {
       DescriptorProtos.FieldOptions.Builder optionsBuilder =
           DescriptorProtos.FieldOptions.newBuilder();
-      optionsBuilder.setExtension(MetaProto.fieldMeta, meta);
+      optionsBuilder.setExtension(MetaProto.fieldMeta, m);
       fieldBuilder.mergeOptions(optionsBuilder.build());
     }
   }

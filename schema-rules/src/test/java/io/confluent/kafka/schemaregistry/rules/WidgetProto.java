@@ -2227,18 +2227,19 @@ public final class WidgetProto {
   static {
     java.lang.String[] descriptorData = {
       "\n\014Widget.proto\022\'io.confluent.kafka.schem" +
-      "aregistry.rules\032\024confluent/meta.proto\"\302\002" +
-      "\n\006Widget\022\026\n\004name\030\001 \001(\tB\010\202D\005\032\003PII\022\025\n\003ssn\030" +
-      "\002 \003(\tB\010\202D\005\032\003PII\022?\n\tpii_array\030\003 \003(\0132,.io." +
-      "confluent.kafka.schemaregistry.rules.Pii" +
-      "\022L\n\007pii_map\030\004 \003(\0132;.io.confluent.kafka.s" +
-      "chemaregistry.rules.Widget.PiiMapEntry\022\014" +
-      "\n\004size\030\005 \001(\005\022\017\n\007version\030\006 \001(\005\032[\n\013PiiMapE" +
-      "ntry\022\013\n\003key\030\001 \001(\t\022;\n\005value\030\002 \001(\0132,.io.co" +
-      "nfluent.kafka.schemaregistry.rules.Pii:\002" +
-      "8\001\"\034\n\003Pii\022\025\n\003pii\030\001 \001(\tB\010\202D\005\032\003PIIB8\n\'io.c" +
-      "onfluent.kafka.schemaregistry.rulesB\013Wid" +
-      "getProtoP\000b\006proto3"
+      "aregistry.rules\032\024confluent/meta.proto\"\331\002" +
+      "\n\006Widget\022!\n\004name\030\001 \001(\tB\023\202D\005\032\003PII\202D\010\032\006PUB" +
+      "LIC\022!\n\003ssn\030\002 \003(\tB\024\202D\005\032\003PII\202D\t\032\007PRIVATE\022?" +
+      "\n\tpii_array\030\003 \003(\0132,.io.confluent.kafka.s" +
+      "chemaregistry.rules.Pii\022L\n\007pii_map\030\004 \003(\013" +
+      "2;.io.confluent.kafka.schemaregistry.rul" +
+      "es.Widget.PiiMapEntry\022\014\n\004size\030\005 \001(\005\022\017\n\007v" +
+      "ersion\030\006 \001(\005\032[\n\013PiiMapEntry\022\013\n\003key\030\001 \001(\t" +
+      "\022;\n\005value\030\002 \001(\0132,.io.confluent.kafka.sch" +
+      "emaregistry.rules.Pii:\0028\001\"\034\n\003Pii\022\025\n\003pii\030" +
+      "\001 \001(\tB\010\202D\005\032\003PIIB8\n\'io.confluent.kafka.sc" +
+      "hemaregistry.rulesB\013WidgetProtoP\000b\006proto" +
+      "3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
