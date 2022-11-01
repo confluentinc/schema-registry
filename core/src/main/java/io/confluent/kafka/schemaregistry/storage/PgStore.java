@@ -52,7 +52,7 @@ public class PgStore {
     try {
       this.conn = DriverManager.getConnection(url, props);
       this.conn.setAutoCommit(false);
-      this.conn.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
+      this.conn.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
     } catch (SQLException e) {
       throw new SchemaRegistryException(e);
     }
