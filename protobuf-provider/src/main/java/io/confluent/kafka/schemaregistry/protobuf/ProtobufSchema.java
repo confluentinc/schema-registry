@@ -1610,12 +1610,12 @@ public class ProtobufSchema implements ParsedSchema {
     return new ProtobufMeta(findDoc(meta), findParams(meta), findAnnotations(meta));
   }
 
-  private static String findDoc(Optional<OptionElement> meta) {
+  public static String findDoc(Optional<OptionElement> meta) {
     return (String) findMetaField(meta, DOC_FIELD);
   }
 
   @SuppressWarnings("unchecked")
-  private static Map<String, String> findParams(Optional<OptionElement> meta) {
+  public static Map<String, String> findParams(Optional<OptionElement> meta) {
     List<Map<String, String>> keyValues = (List<Map<String, String>>)
         findMetaField(meta, PARAMS_FIELD);
     if (keyValues == null) {
@@ -1630,7 +1630,7 @@ public class ProtobufSchema implements ParsedSchema {
     return params;
   }
 
-  private static List<String> findAnnotations(Optional<OptionElement> meta) {
+  public static List<String> findAnnotations(Optional<OptionElement> meta) {
     return (List<String>) findMetaField(meta, ANNOTATIONS_FIELD);
   }
 
