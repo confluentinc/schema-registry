@@ -24,6 +24,6 @@ package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.excep
 public class SchemaRegistryOauthTokenRetrieverException extends RuntimeException {
 
   public SchemaRegistryOauthTokenRetrieverException(String message, Throwable cause) {
-    super("Error while fetching Oauth Token for Schema Registry: "+message, cause);
+    super("Error while fetching Oauth Token for Schema Registry: " + message, cause);
   }
 }

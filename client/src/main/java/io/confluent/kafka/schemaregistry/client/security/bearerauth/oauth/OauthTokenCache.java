@@ -109,8 +109,9 @@ public class OauthTokenCache {
     long startMs = optionalStartTime != null ? optionalStartTime.longValue() : nowMs;
 
     long cacheExpiryMs;
-    long CacheExpiryBufferMs = TimeUnit.MILLISECONDS.convert(cacheExpiryBufferSeconds, TimeUnit.SECONDS);
-    if (nowMs + CacheExpiryBufferMs > tokenExpiryMs) {
+    long cacheExpiryBufferMs = TimeUnit.MILLISECONDS.convert(cacheExpiryBufferSeconds, 
+        TimeUnit.SECONDS);
+    if (nowMs + cacheExpiryBufferMs > tokenExpiryMs) {
       cacheExpiryMs = nowMs + (long) Math.floor((tokenExpiryMs - nowMs) * CACHE_EXPIRY_THRESHOLD);
       log.warn(
           "Schema Registry OAuth Token [Principal={}]: OAuth token expires at {}, so buffer times "
@@ -122,7 +123,7 @@ public class OauthTokenCache {
 
     cacheExpiryMs = startMs + (long) ((tokenExpiryMs - startMs) * CACHE_EXPIRY_THRESHOLD);
     // Don't let it violate the requested end buffer time
-    long beginningOfEndBufferTimeMs = tokenExpiryMs - CacheExpiryBufferMs;
+    long beginningOfEndBufferTimeMs = tokenExpiryMs - cacheExpiryBufferMs;
     if (cacheExpiryMs > beginningOfEndBufferTimeMs) {
       log.info(
           "Schema Registry OAuth Token [Principal={}]: Proposed token Cache expiry time of {} "
