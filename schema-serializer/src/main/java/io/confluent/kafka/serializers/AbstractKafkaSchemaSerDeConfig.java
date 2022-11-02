@@ -150,18 +150,20 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String BEARER_AUTH_SCOPE_CLAIM_NAME =
       SchemaRegistryClientConfig.BEARER_AUTH_SCOPE_CLAIM_NAME;
   public static final String DEFAULT_BEARER_AUTH_SCOPE_CLAIM_NAME =
-      SchemaRegistryClientConfig.BEARER_AUTH_SCOPE_CLAIM_NAME_DEFAULT;;
+      SchemaRegistryClientConfig.BEARER_AUTH_SCOPE_CLAIM_NAME_DEFAULT;
   public static final String BEARER_AUTH_SCOPE_CLAIM_NAME_DOC = "The OAuth claim for the scope "
       + "is often named \"" + DEFAULT_BEARER_AUTH_SCOPE_CLAIM_NAME + "\", but this (optional)"
       + " setting can provide a different name to use for the scope included in the JWT payload's"
       + " claims if the OAuth/OIDC provider uses a different"
       + " name for that claim.";
-  public static final String BEARER_AUTH_SUB_CLAIM_NAME = SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME;
+  public static final String BEARER_AUTH_SUB_CLAIM_NAME =
+      SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME;
   public static final String DEFAULT_BEARER_AUTH_SUB_CLAIM_NAME =
       SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME_DEFAULT;
-  public static final String BEARER_AUTH_SUB_CLAIM_NAME_DOC = "The OAuth claim for the subject is often named \"" + DEFAULT_BEARER_AUTH_SUB_CLAIM_NAME + "\", but this (optional)"
-      + " setting can provide a different name to use for the subject included in the JWT payload's claims if the OAuth/OIDC provider uses a different"
-      + " name for that claim.";
+  public static final String BEARER_AUTH_SUB_CLAIM_NAME_DOC = "The OAuth claim for the subject is "
+      + "often named \"" + DEFAULT_BEARER_AUTH_SUB_CLAIM_NAME + "\", but this (optional)"
+      + " setting can provide a different name to use for the subject included in the JWT payload's"
+      + " claims if the OAuth/OIDC provider uses a different name for that claim.";
 
 
   public static final String BEARER_AUTH_LOGICAL_CLUSTER = SchemaRegistryClientConfig
