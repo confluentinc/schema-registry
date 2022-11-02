@@ -61,7 +61,7 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
     }
     AvroSchema schema = new AvroSchema(
         AvroSchemaUtils.getSchema(record, useSchemaReflection,
-            avroReflectionAllowNull, removeJavaProperties, true));
+            avroReflectionAllowNull, removeJavaProperties));
     return serializeImpl(
         getSubjectName(topic, isKey, record, schema), topic, headers, record, schema);
   }
