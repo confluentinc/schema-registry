@@ -149,6 +149,11 @@ public class AvroSchemaUtils {
   }
 
   public static Schema getSchema(Object object, boolean useReflection,
+                                 boolean reflectionAllowNull, boolean removeJavaProperties) {
+    return getSchema(object, useReflection, reflectionAllowNull, removeJavaProperties, true);
+  }
+
+  public static Schema getSchema(Object object, boolean useReflection,
                                  boolean reflectionAllowNull, boolean removeJavaProperties,
                                  boolean throwError) {
     if (object == null) {
