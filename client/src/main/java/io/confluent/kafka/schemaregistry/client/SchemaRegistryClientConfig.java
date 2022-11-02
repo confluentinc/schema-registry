@@ -49,7 +49,9 @@ public class SchemaRegistryClientConfig {
   public static final String BEARER_AUTH_CLIENT_SECRET = "bearer.auth.client.secret";
   public static final String BEARER_AUTH_SCOPE = "bearer.auth.scope";
   public static final String BEARER_AUTH_SCOPE_CLAIM_NAME = "bearer.auth.scope.claim.name";
+  public static final String BEARER_AUTH_SCOPE_CLAIM_NAME_DEFAULT = "scope";
   public static final String BEARER_AUTH_SUB_CLAIM_NAME = "bearer.auth.sub.claim.name";
+  public static final String BEARER_AUTH_SUB_CLAIM_NAME_DEFAULT = "sub";
 
   //OAuth configs required by SR
   public static final String BEARER_AUTH_LOGICAL_CLUSTER = "bearer.auth.logical.cluster";
@@ -109,5 +111,16 @@ public class SchemaRegistryClientConfig {
         : BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT;
   }
 
+  public static String getBearerAuthScopeClaimName(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(BEARER_AUTH_SCOPE_CLAIM_NAME)
+        ? (String) configs.get(BEARER_AUTH_SCOPE_CLAIM_NAME)
+        : BEARER_AUTH_SCOPE_CLAIM_NAME_DEFAULT;
+  }
+
+  public static String getBearerAuthSubClaimName(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(BEARER_AUTH_SUB_CLAIM_NAME)
+        ? (String) configs.get(BEARER_AUTH_SUB_CLAIM_NAME)
+        : BEARER_AUTH_SUB_CLAIM_NAME_DEFAULT;
+  }
 
 }

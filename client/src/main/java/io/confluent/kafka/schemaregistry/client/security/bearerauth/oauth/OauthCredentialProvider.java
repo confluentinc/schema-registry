@@ -73,7 +73,7 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
         SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID);
 
     tokenRetriever = new CachedOauthTokenRetriever();
-    tokenRetriever.configure(getTokenRetriever(cu), getTokenValidator(cu), getOauthTokenCache(map));
+    tokenRetriever.configure(getTokenRetriever(cu), getTokenValidator(map), getOauthTokenCache(map));
   }
 
   private OauthTokenCache getOauthTokenCache(Map<String, ?> map) {
@@ -106,13 +106,11 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
     );
   }
 
-  private AccessTokenValidator getTokenValidator(ConfigurationUtils cu) {
+  private AccessTokenValidator getTokenValidator(Map<String, ?> configs) {
     //Keeping following configs needed by LoginAccessTokenValidator as constants and not exposed to
     //users for modifications
-    String scopeClaimName = cu.validateString(
-        SchemaRegistryClientConfig.BEARER_AUTH_SCOPE_CLAIM_NAME);
-    String subClaimName = cu.validateString(
-        SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME);
+    String scopeClaimName = SchemaRegistryClientConfig.getBearerAuthScopeClaimName(configs);
+    String subClaimName = SchemaRegistryClientConfig.getBearerAuthSubClaimName(configs);
     return new LoginAccessTokenValidator(scopeClaimName, subClaimName);
   }
 
