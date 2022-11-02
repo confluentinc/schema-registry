@@ -21,7 +21,9 @@ import static org.mockito.Mockito.when;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Assert;
@@ -65,9 +67,12 @@ public class OauthCredentialProviderTest {
 
   @Test
   public void TestConfigureInsufficentConfigs() {
+    List<String> optionalConfigs = Arrays.asList(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE,
+        SchemaRegistryClientConfig.BEARER_AUTH_SCOPE_CLAIM_NAME,
+        SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME);
     for (String missingKey : CONFIG_MAP.keySet()) {
       // ignoring optional keys
-      if (missingKey == SchemaRegistryClientConfig.BEARER_AUTH_SCOPE) {
+      if (optionalConfigs.contains(missingKey)) {
         continue;
       }
 
