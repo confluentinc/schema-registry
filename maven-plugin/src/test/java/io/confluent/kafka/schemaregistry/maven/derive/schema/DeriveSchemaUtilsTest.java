@@ -28,7 +28,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveJsonSchemaTest.*;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaTest.*;
 import static org.junit.Assert.assertEquals;
 
 public class DeriveSchemaUtilsTest {

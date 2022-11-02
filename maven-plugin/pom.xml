@@ -56,9 +56,9 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-protobuf-serializer</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 
     <build>
