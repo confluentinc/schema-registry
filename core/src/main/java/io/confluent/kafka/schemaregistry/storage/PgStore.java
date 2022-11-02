@@ -2,6 +2,8 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -18,8 +20,8 @@ import io.lettuce.core.api.async.RedisAsyncCommands;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -40,23 +42,24 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.WILDCARD;
 public class PgStore {
   private static final Logger log = LoggerFactory.getLogger(PgStore.class);
   private static final Duration CACHE_TIMEOUT = Duration.ofMinutes(60);
-  private Connection conn;
+  private DataSource ds;
   private RedisClient redisClient;
   private RedisAsyncCommands<String, String> redisCommands;
   private ObjectMapper objectMapper;
 
   public void init() throws SchemaRegistryException {
-    String url = "jdbc:postgresql://localhost:5555/ewu-test";
-    Properties props = new Properties();
-    props.setProperty("user", "postgres");
-    props.setProperty("password", "postgres");
-    try {
-      this.conn = DriverManager.getConnection(url, props);
-      this.conn.setAutoCommit(false);
-      this.conn.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
-    } catch (SQLException e) {
-      throw new SchemaRegistryException(e);
-    }
+    HikariConfig config = new HikariConfig();
+
+    config.setDataSourceClassName("org.postgresql.ds.PGSimpleDataSource");
+    config.addDataSourceProperty("serverName", "localhost");
+    config.addDataSourceProperty("portNumber", "5555");
+    config.addDataSourceProperty("databaseName", "ewu-test");
+    config.addDataSourceProperty("user", "postgres");
+    config.addDataSourceProperty("password", "postgres");
+    config.setTransactionIsolation("TRANSACTION_READ_COMMITTED");
+
+    this.ds = new HikariDataSource(config);
+
     this.redisClient = RedisClient.create(
         RedisURI.create("redis://localhost:6379"));
     this.redisCommands = redisClient.connect().async();
@@ -71,7 +74,6 @@ public class PgStore {
                                                  Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     Map<String, Integer[]> result = new HashMap<>(); // subject : [schema_id, version]
-    long start = System.currentTimeMillis();
       // Redis performance issue
 //    String pattern = qs.toQualifiedContext() + ":hash:"
 //        + Base64.getEncoder().encodeToString(MD5.ofSchema(schema).bytes()) + ":"
@@ -100,9 +102,10 @@ public class PgStore {
 
     ResultSet rs = null;
     PreparedStatement ps = null;
-    start = System.currentTimeMillis();
+    long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT sub.subject, s.id, s.version FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
@@ -124,11 +127,8 @@ public class PgStore {
           result.put(subject, new Integer[]{id, version});
         }
       }
-
-      commit();
       log.info("getSubjectByHash query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetSubjectByHash error", e);
     } finally {
       closeResultSet(rs);
@@ -145,7 +145,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT s.id, s.version FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
@@ -169,11 +170,8 @@ public class PgStore {
           return matchingSchema;
         }
       }
-
-      commit();
       log.info("lookupSchemaBySubject query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("LookupSchemaBySubject error", e);
     } finally {
       closeResultSet(rs);
@@ -199,7 +197,8 @@ public class PgStore {
     PreparedStatement ps = null;
     start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
           .append("JOIN subjects sub ON c.id = sub.context_id ")
@@ -220,10 +219,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getSubjectVersion query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetSubjectVersion error", e);
     } finally {
       closeResultSet(rs);
@@ -234,7 +231,6 @@ public class PgStore {
   }
 
   public Schema getSchemaById(QualifiedSubject qs, int id) throws SchemaRegistryException {
-    long start = System.currentTimeMillis();
     // Redis performance issue
 //    String pattern = qs.toQualifiedSubject() + "*" + ":id:" + id + ":";
 //    try {
@@ -255,9 +251,10 @@ public class PgStore {
 
     ResultSet rs = null;
     PreparedStatement ps = null;
-    start = System.currentTimeMillis();
+    long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
           .append("JOIN subjects sub ON c.id = sub.context_id ")
@@ -281,10 +278,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getSchemaById query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetSchemaById error", e);
     } finally {
       closeResultSet(rs);
@@ -296,7 +291,6 @@ public class PgStore {
 
   public boolean subjectExists(QualifiedSubject qs, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
-    long start = System.currentTimeMillis();
     // Redis performance issue
 //    String pattern = qs.toQualifiedSubject() + ":version:*:";
 //    try {
@@ -314,9 +308,10 @@ public class PgStore {
 
     ResultSet rs = null;
     PreparedStatement ps = null;
-    start = System.currentTimeMillis();
+    long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT s.subject_id FROM contexts c ")
           .append("JOIN subjects sub ON c.id = sub.context_id ")
@@ -337,10 +332,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("subjectExists query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("SubjectExists error", e);
     } finally {
       closeResultSet(rs);
@@ -354,7 +347,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("UPDATE schemas SET deleted = true WHERE (subject_id, version) IN ")
           .append("(SELECT sub.id, ? FROM subjects sub ")
@@ -367,7 +361,6 @@ public class PgStore {
       ps.setString(4, qs.getSubject());
       ps.executeUpdate();
 
-      commit();
       log.info("softDeleteSchema query {} ms", System.currentTimeMillis() - start);
 
       try {
@@ -389,7 +382,6 @@ public class PgStore {
         log.error("Redis error", e);
       }
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("SoftDeleteSchema error", e);
     } finally {
       closePreparedStatement(ps);
@@ -397,12 +389,15 @@ public class PgStore {
   }
 
   public void hardDeleteSchema(QualifiedSubject qs, Schema schema) throws SchemaRegistryException {
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     Integer subjectId = null, schemaId = null;
     long start = System.currentTimeMillis();
 
     try {
+      conn = ds.getConnection();
+      conn.setAutoCommit(false);
       StringBuilder sql = new StringBuilder();
 
       sql.append("SELECT sub.id, s.id FROM contexts c ")
@@ -423,7 +418,7 @@ public class PgStore {
       }
 
       if (subjectId == null) {
-        commit();
+        commit(conn);
         log.info("hardDeleteSchema query {} ms", System.currentTimeMillis() - start);
         return;
       }
@@ -442,7 +437,7 @@ public class PgStore {
       ps.setInt(2, schemaId);
       ps.executeUpdate();
 
-      commit();
+      commit(conn);
       log.info("hardDeleteSchema query {} ms", System.currentTimeMillis() - start);
 
       try {
@@ -461,21 +456,25 @@ public class PgStore {
         log.error("Redis error", e);
       }
     } catch (Exception e) {
-      rollback();
+      rollback(conn);
       throw new SchemaRegistryException("HardDeleteSchema error", e);
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
   }
 
   public void softDeleteSubject(QualifiedSubject qs) throws SchemaRegistryException {
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     Integer subjectId = null;
     long start = System.currentTimeMillis();
 
     try {
+      conn = ds.getConnection();
+      conn.setAutoCommit(false);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT sub.id FROM subjects sub ")
           .append("JOIN contexts c ON sub.context_id = c.id ")
@@ -492,7 +491,7 @@ public class PgStore {
       }
 
       if (subjectId == null) {
-        commit();
+        commit(conn);
         log.info("softDeleteSubject query {} ms", System.currentTimeMillis() - start);
         return;
       }
@@ -503,7 +502,7 @@ public class PgStore {
       ps.setInt(1, subjectId);
       ps.executeUpdate();
 
-      commit();
+      commit(conn);
       log.info("softDeleteSubject query {} ms", System.currentTimeMillis() - start);
 
       try {
@@ -529,21 +528,25 @@ public class PgStore {
         log.error("Redis error", e);
       }
     } catch (Exception e) {
-      rollback();
+      rollback(conn);
       throw new SchemaRegistryException("SoftDeleteSubject error", e);
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
   }
 
   public void hardDeleteSubject(QualifiedSubject qs) throws SchemaRegistryException {
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     Integer subjectId = null;
     long start = System.currentTimeMillis();
 
     try {
+      conn = ds.getConnection();
+      conn.setAutoCommit(false);
       StringBuilder sql = new StringBuilder();
 
       sql.append("SELECT sub.id FROM contexts c ")
@@ -561,7 +564,7 @@ public class PgStore {
       }
 
       if (subjectId == null) {
-        commit();
+        commit(conn);
         log.info("hardDeleteSubject query {} ms", System.currentTimeMillis() - start);
         return;
       }
@@ -584,7 +587,7 @@ public class PgStore {
       ps.setInt(1, subjectId);
       ps.executeUpdate();
 
-      commit();
+      commit(conn);
       log.info("hardDeleteSubject query {} ms", System.currentTimeMillis() - start);
 
       try {
@@ -607,11 +610,12 @@ public class PgStore {
         log.error("Redis error", e);
       }
     } catch (Exception e) {
-      rollback();
+      rollback(conn);
       throw new SchemaRegistryException("HardDeleteSubject error", e);
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
   }
 
@@ -622,7 +626,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
@@ -643,10 +648,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getAllVersionsInAllContexts query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetAllVersionsInAllContexts error", e);
     } finally {
       closeResultSet(rs);
@@ -663,7 +666,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT * FROM (")
           .append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted, ")
@@ -688,10 +692,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getLatestVersionsInAllContexts query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetLatestVersionsInAllContexts error", e);
     } finally {
       closeResultSet(rs);
@@ -708,7 +710,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
@@ -731,10 +734,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getAllVersionsBySubjectPrefix query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetAllVersionsBySubjectPrefix error", e);
     } finally {
       closeResultSet(rs);
@@ -751,7 +752,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT * FROM (")
           .append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted, ")
@@ -778,10 +780,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getLatestVersionsBySubjectPrefix query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetLatestVersionsBySubjectPrefix error", e);
     } finally {
       closeResultSet(rs);
@@ -797,7 +797,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT context FROM contexts WHERE tenant = ? ORDER BY context ");
       ps = conn.prepareStatement(sql.toString());
@@ -809,10 +810,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getAllContexts query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetAllContexts error", e);
     } finally {
       closeResultSet(rs);
@@ -829,7 +828,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
@@ -854,10 +854,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getAllVersions query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetAllVersionsDesc error", e);
     } finally {
       closeResultSet(rs);
@@ -874,7 +872,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT sub.subject, s.version FROM schemas s ")
           .append("JOIN subjects sub ON s.subject_id = sub.id ")
@@ -902,10 +901,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getSubjectVersionsForId query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetSubjectVersionsForId error", e);
     } finally {
       closeResultSet(rs);
@@ -922,7 +919,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT s.id FROM schemas s JOIN ")
           .append("(SELECT r.schema_id, r.subject_id FROM refs r ")
@@ -951,10 +949,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getReferencedBy query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetReferencedBy error", e);
     } finally {
       closeResultSet(rs);
@@ -972,7 +968,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT r.name, sub.subject, s.version FROM refs r ")
           .append("JOIN schemas s ON r.ref_schema_id = s.id AND r.ref_subject_id = s.subject_id ")
@@ -988,10 +985,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getReferences query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetReferences error", e);
     } finally {
       closeResultSet(rs);
@@ -1007,7 +1002,8 @@ public class PgStore {
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
+      conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
           .append("JOIN subjects sub on c.id = sub.context_id ")
@@ -1030,10 +1026,8 @@ public class PgStore {
         }
       }
 
-      commit();
       log.info("getLatestSubjectVersion query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("GetLatestSubjectVersion error", e);
     } finally {
       closeResultSet(rs);
@@ -1044,12 +1038,15 @@ public class PgStore {
   }
 
   public int getOrCreateContext(QualifiedSubject qs) throws SchemaRegistryException {
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     int contextId = -1;
     long start = System.currentTimeMillis();
 
     try {
+      conn = ds.getConnection();
+      conn.setAutoCommit(false);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT id FROM contexts WHERE tenant = ? AND context = ?");
       ps = conn.prepareStatement(sql.toString());
@@ -1078,26 +1075,30 @@ public class PgStore {
         }
       }
 
-      commit();
+      commit(conn);
       log.info("getOrCreateContext query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
+      rollback(conn);
       throw new SchemaRegistryException("GetOrCreateContext error", e);
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return contextId;
   }
 
   public int getOrCreateSubject(int contextId, QualifiedSubject qs) throws SchemaRegistryException {
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     int subjectId = -1;
     long start = System.currentTimeMillis();
 
     try {
+      conn = ds.getConnection();
+      conn.setAutoCommit(false);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT id FROM subjects WHERE context_id = ? ")
           .append("AND subject = ?");
@@ -1126,14 +1127,15 @@ public class PgStore {
         }
       }
 
-      commit();
+      commit(conn);
       log.info("getOrCreateSubject query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
+      rollback(conn);
       throw new SchemaRegistryException("GetOrCreateSubject error", e);
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return subjectId;
@@ -1141,11 +1143,14 @@ public class PgStore {
 
   public int createSchema(int contextId, int subjectId, int schemaId,
                           ParsedSchema parsedSchema, byte[] hash) throws SchemaRegistryException {
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
     try {
+      conn = ds.getConnection();
+      conn.setAutoCommit(false);
       StringBuilder sql = new StringBuilder();
       if (schemaId < 0) {
         sql.append("UPDATE contexts SET schemas = schemas + 1 ")
@@ -1208,14 +1213,15 @@ public class PgStore {
         ps.executeUpdate();
       }
 
-      commit();
+      commit(conn);
       log.info("createSchema query {} ms", System.currentTimeMillis() - start);
     } catch (Exception e) {
-      rollback();
+      rollback(conn);
       throw new SchemaRegistryException("CreateSchema error", e);
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return schemaId;
@@ -1227,7 +1233,7 @@ public class PgStore {
     ResultSet rs = null;
     long start = System.currentTimeMillis();
 
-    try {
+    try (Connection conn = ds.getConnection()) {
       int oldVersion = schema.getVersion();
       int newVersion = 1;
       StringBuilder sql = new StringBuilder();
@@ -1260,7 +1266,6 @@ public class PgStore {
       ps.setInt(3, subjectId);
       ps.executeUpdate();
 
-      commit();
       log.info("registerDeleted query {} ms", System.currentTimeMillis() - start);
 
       try {
@@ -1279,7 +1284,6 @@ public class PgStore {
         log.error("Redis error", e);
       }
     } catch (Exception e) {
-      rollback();
       throw new SchemaRegistryException("RegisterDeleted error", e);
     } finally {
       closeResultSet(rs);
@@ -1379,16 +1383,31 @@ public class PgStore {
     }
   }
 
-  private void commit() throws SQLException {
-    conn.commit();
+  private void commit(Connection conn) throws SQLException {
+    if (conn != null) {
+      conn.commit();
+    }
   }
 
-  private void rollback() {
+  private void rollback(Connection conn) {
     try {
-      conn.rollback();
+      if (conn != null) {
+        conn.rollback();
+      }
     } catch (SQLException ex) {
       log.error("Rollback failed", ex);
       throw new RuntimeException(ex);
+    }
+  }
+
+  private void closeConn(Connection conn) {
+    if (conn != null) {
+      try {
+        conn.close();
+      } catch (SQLException e) {
+        log.error("Rollback failed", e);
+        throw new RuntimeException(e);
+      }
     }
   }
 }
