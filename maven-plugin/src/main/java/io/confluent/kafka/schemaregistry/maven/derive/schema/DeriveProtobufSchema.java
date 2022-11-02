@@ -60,6 +60,8 @@ public class DeriveProtobufSchema extends DeriveSchema {
     ArrayNode items = mapper.createArrayNode();
     if (arrays.size() > 0 && check2dArray) {
       throw new IllegalArgumentException(String.format("Found nested array: %s", arrays));
+    } else if (primitives.stream().anyMatch(o -> o.get("type").asText().equals(ANY_FIELD))) {
+      throw new IllegalArgumentException("Repeated field elements cannot be null");
     }
 
     DeriveSchemaUtils.mergeNumberTypes(primitives);
@@ -79,6 +81,19 @@ public class DeriveProtobufSchema extends DeriveSchema {
       mergedArray.set("items", getNullSchema());
     }
     return mergedArray;
+  }
+
+  protected void checkName(String name) {
+    if (name.isEmpty()) {
+      throw new IllegalArgumentException("Name cannot be empty");
+    }
+    if (!name.matches("[a-zA-Z\\d-._]+")) {
+      throw new IllegalArgumentException("Name must only contain alphanumerics "
+          + "or one of \"-\", \"_\" and \".\" ");
+    }
+    if (Character.isDigit(name.charAt(0))) {
+      throw new IllegalArgumentException("Name cannot begin with a digit");
+    }
   }
 
   /**

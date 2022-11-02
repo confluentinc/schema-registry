@@ -39,14 +39,13 @@ import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveJsonSc
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
-public class DeriveProtoBufSchemaTest {
+public class DeriveProtoBufSchemaTest extends DeriveSchemaTest {
 
-  private final ObjectMapper mapper = new ObjectMapper();
-  private final DeriveProtobufSchema derive = new DeriveProtobufSchema();
   private final KafkaProtobufSerializer<DynamicMessage> protobufSerializer;
   private final KafkaProtobufDeserializer<Message> protobufDeserializer;
 
   public DeriveProtoBufSchemaTest() {
+    derive = new DeriveProtobufSchema();
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
@@ -54,35 +53,15 @@ public class DeriveProtoBufSchemaTest {
     protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry);
   }
 
-  private void serializeAndDeserializeCheck(String message, ProtobufSchema schema) throws IOException {
+  protected void matchAndValidate(String message, JsonNode schemaString, String expectedSchema)
+      throws IOException {
+    ProtobufSchema schema = new ProtobufSchema(schemaString.asText());
     schema.validate();
+    assertEquals(schema.toString(), expectedSchema);
     String formattedString = mapper.readTree(message).toString();
     Object protobufObject = ProtobufSchemaUtils.toObject(formattedString, schema);
     DynamicMessage dynamicMessage = (DynamicMessage) protobufObject;
     assertEquals(protobufObject, protobufDeserializer.deserialize("test", protobufSerializer.serialize("test", dynamicMessage)));
-  }
-
-  private void generateSchemaAndCheckPrimitive(String message, String expectedSchema)
-      throws JsonProcessingException {
-    Optional<JsonNode> primitiveSchema = derive.getPrimitiveSchema(mapper.readTree(message));
-    assert primitiveSchema.isPresent();
-    assertEquals(primitiveSchema.get(), mapper.readTree(expectedSchema));
-  }
-
-  private void generateSchemaAndCheckPrimitiveAbsent(String message)
-      throws JsonProcessingException {
-    Optional<JsonNode> primitiveSchema = derive.getPrimitiveSchema(mapper.readTree(message));
-    assert !primitiveSchema.isPresent();
-  }
-
-  private void generateSchemaAndCheckExpected(String message, String expectedSchema)
-      throws IOException {
-    ObjectNode messageObject = (ObjectNode) mapper.readTree(message);
-    ObjectNode schemaForRecord = derive.getSchemaForRecord(messageObject);
-    TextNode protobufSchema = derive.convertToFormat(schemaForRecord, "Schema");
-    ProtobufSchema schema = new ProtobufSchema(protobufSchema.asText());
-    assertEquals(schema.toString(), expectedSchema);
-    serializeAndDeserializeCheck(message, schema);
   }
 
   @Test
@@ -107,15 +86,15 @@ public class DeriveProtoBufSchemaTest {
 
   @Test
   public void testConvertToFormatArray() throws JsonProcessingException {
-    // Converting json array to protobuf format
-    String arraySchema = derive.convertToFormatArray(mapper.readTree(ARRAY_OF_NUMBERS), "array", 1);
+    DeriveProtobufSchema deriveProtobuf = (DeriveProtobufSchema) derive;
+    String arraySchema = deriveProtobuf.convertToFormatArray(mapper.readTree(ARRAY_OF_NUMBERS), "array", 1);
     assertEquals(arraySchema, "repeated number array = 1;\n");
   }
 
   @Test
   public void testConvertToFormatRecord() throws JsonProcessingException {
-    // Converting json record to protobuf format
-    String recordSchema = derive.convertToFormatRecord(mapper.readTree(RECORD_WITH_ARRAY_OF_STRINGS), "Test");
+    DeriveProtobufSchema deriveProtobuf = (DeriveProtobufSchema) derive;
+    String recordSchema = deriveProtobuf.convertToFormatRecord(mapper.readTree(RECORD_WITH_ARRAY_OF_STRINGS), "Test");
     assertEquals(recordSchema, "message Test { \n" +
         "repeated string F1 = 1;\n" +
         "}\n");
@@ -175,6 +154,20 @@ public class DeriveProtoBufSchemaTest {
     // recursive merging of field N with different types should also throw error
     String recordOfRecords = "{\"RecordOfRecords\": [{\"R1\": {\"N\": 1}}, {\"R1\": {\"N\": \"B\"}}]}";
     assertThrows(IllegalArgumentException.class, () -> generateSchemaAndCheckExpected(recordOfRecords, ""));
+
+    // array of nulls should raise error
+    String arrayOfNulls = "{\"RecordOfRecords\": [null]}";
+    assertThrows(IllegalArgumentException.class, () -> generateSchemaAndCheckExpected(arrayOfNulls, ""));
+  }
+
+  @Test
+  public void testCheckName() {
+    // empty name should throw error
+    assertThrows(IllegalArgumentException.class, () -> derive.checkName(""));
+    // name starting with digit should also throw error
+    assertThrows(IllegalArgumentException.class, () -> derive.checkName("1"));
+    // name starting with digit should also throw error
+    assertThrows(IllegalArgumentException.class, () -> derive.checkName("^"));
   }
 
   @Test

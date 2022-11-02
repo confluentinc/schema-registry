@@ -54,6 +54,7 @@ public abstract class DeriveSchema {
   private JsonNode getSchemaOfElement(JsonNode message, String name)
       throws JsonProcessingException {
     Optional<JsonNode> primitiveSchema = getPrimitiveSchema(message);
+    checkName(name);
     if (primitiveSchema.isPresent()) {
       return primitiveSchema.get();
     } else if (message instanceof ArrayNode) {
@@ -61,6 +62,11 @@ public abstract class DeriveSchema {
     } else {
       return getSchemaForRecord(mapper.valueToTree(message));
     }
+  }
+
+  protected void checkName(String name) {
+    // Do nothing, json has no name restrictions and avro errors are suggestive
+    // Overridden by protobuf to throw naming errors
   }
 
   public Optional<JsonNode> getPrimitiveSchema(JsonNode field) {
