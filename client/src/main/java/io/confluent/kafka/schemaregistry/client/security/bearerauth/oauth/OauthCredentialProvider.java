@@ -73,7 +73,8 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
         SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID);
 
     tokenRetriever = new CachedOauthTokenRetriever();
-    tokenRetriever.configure(getTokenRetriever(cu), getTokenValidator(map), getOauthTokenCache(map));
+    tokenRetriever.configure(getTokenRetriever(cu), getTokenValidator(map),
+        getOauthTokenCache(map));
   }
 
   private OauthTokenCache getOauthTokenCache(Map<String, ?> map) {
