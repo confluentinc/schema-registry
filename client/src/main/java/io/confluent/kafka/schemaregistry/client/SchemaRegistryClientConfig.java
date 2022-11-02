@@ -48,6 +48,8 @@ public class SchemaRegistryClientConfig {
   public static final String BEARER_AUTH_CLIENT_ID = "bearer.auth.client.id";
   public static final String BEARER_AUTH_CLIENT_SECRET = "bearer.auth.client.secret";
   public static final String BEARER_AUTH_SCOPE = "bearer.auth.scope";
+  public static final String BEARER_AUTH_SCOPE_CLAIM_NAME = "bearer.auth.scope.claim.name";
+  public static final String BEARER_AUTH_SUB_CLAIM_NAME = "bearer.auth.sub.claim.name";
 
   //OAuth configs required by SR
   public static final String BEARER_AUTH_LOGICAL_CLUSTER = "bearer.auth.logical.cluster";

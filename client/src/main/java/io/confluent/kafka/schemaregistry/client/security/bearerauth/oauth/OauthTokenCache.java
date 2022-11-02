@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
 import java.time.Instant;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,7 +109,8 @@ public class OauthTokenCache {
     long startMs = optionalStartTime != null ? optionalStartTime.longValue() : nowMs;
 
     long cacheExpiryMs;
-    if (nowMs + 1000L * cacheExpiryBufferSeconds > tokenExpiryMs) {
+    long CacheExpiryBufferMs = TimeUnit.MILLISECONDS.convert(cacheExpiryBufferSeconds, TimeUnit.SECONDS);
+    if (nowMs + CacheExpiryBufferMs > tokenExpiryMs) {
       cacheExpiryMs = nowMs + (long) Math.floor((tokenExpiryMs - nowMs) * CACHE_EXPIRY_THRESHOLD);
       log.warn(
           "Schema Registry OAuth Token [Principal={}]: OAuth token expires at {}, so buffer times "
@@ -120,7 +122,7 @@ public class OauthTokenCache {
 
     cacheExpiryMs = startMs + (long) ((tokenExpiryMs - startMs) * CACHE_EXPIRY_THRESHOLD);
     // Don't let it violate the requested end buffer time
-    long beginningOfEndBufferTimeMs = tokenExpiryMs - cacheExpiryBufferSeconds * 1000;
+    long beginningOfEndBufferTimeMs = tokenExpiryMs - CacheExpiryBufferMs;
     if (cacheExpiryMs > beginningOfEndBufferTimeMs) {
       log.info(
           "Schema Registry OAuth Token [Principal={}]: Proposed token Cache expiry time of {} "

@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
 import java.time.Instant;
 import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.secured.BasicOAuthBearerToken;
 import org.junit.Assert;
@@ -118,7 +119,7 @@ public class OauthTokenCacheTest {
         "random",
         tokenStartTimeMs);
 
-    expectedCacheExpiryTimeMs = tokenExpiryTimeMs - cacheExpiryBufferSeconds * 1000L;
+    expectedCacheExpiryTimeMs = tokenExpiryTimeMs - TimeUnit.MILLISECONDS.convert(cacheExpiryBufferSeconds, TimeUnit.SECONDS);
     Assert.assertEquals(expectedCacheExpiryTimeMs,
         oAuthTokenCache.calculateTokenExpiryTime(token1));
 

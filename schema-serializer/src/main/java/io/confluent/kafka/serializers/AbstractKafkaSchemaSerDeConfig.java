@@ -147,6 +147,19 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String BEARER_AUTH_SCOPE_DOC = "Access Token Scope used to obtain Client "
       + "Credentials Grant OAuth/OIDC identity provider "
       + "<a href=\"rfc-editor.org/rfc/rfc6749.html#section-3.3\"> ";
+  public static final String BEARER_AUTH_SCOPE_CLAIM_NAME =
+      SchemaRegistryClientConfig.BEARER_AUTH_SCOPE_CLAIM_NAME;
+  public static final String DEFAULT_BEARER_AUTH_SCOPE_CLAIM_NAME = "scope";
+  public static final String BEARER_AUTH_SCOPE_CLAIM_NAME_DOC = "The OAuth claim for the scope "
+      + "is often named \"" + DEFAULT_BEARER_AUTH_SCOPE_CLAIM_NAME + "\", but this (optional)"
+      + " setting can provide a different name to use for the scope included in the JWT payload's"
+      + " claims if the OAuth/OIDC provider uses a different"
+      + " name for that claim.";
+  public static final String BEARER_AUTH_SUB_CLAIM_NAME = SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME;
+  public static final String DEFAULT_BEARER_AUTH_SUB_CLAIM_NAME = "sub";
+  public static final String BEARER_AUTH_SUB_CLAIM_NAME_DOC = "The OAuth claim for the subject is often named \"" + DEFAULT_BEARER_AUTH_SUB_CLAIM_NAME + "\", but this (optional)"
+      + " setting can provide a different name to use for the subject included in the JWT payload's claims if the OAuth/OIDC provider uses a different"
+      + " name for that claim.";
 
 
   public static final String BEARER_AUTH_LOGICAL_CLUSTER = SchemaRegistryClientConfig
@@ -159,7 +172,6 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       + "can added in Request header to Schema Registry. This maybe used as Principal Id for "
       + "Authorization";
 
-
   public static final String BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS =
       SchemaRegistryClientConfig.BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS;
   public static final Short BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT =
@@ -170,8 +182,6 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       + "values are between 0 and 3600 (1 hour); a default value of  300 (5 minutes) is used "
       + "if no value is specified. This value is ignored if it exceeds the remaining lifetime "
       + "of a token from the moment it is retrieved into schema registry.";
-
-  public static final short DEFAULT_LOGIN_REFRESH_BUFFER_SECONDS = 300;
 
   public static final String CONTEXT_NAME_STRATEGY = "context.name.strategy";
   public static final String CONTEXT_NAME_STRATEGY_DEFAULT =
@@ -248,6 +258,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
             BEARER_AUTH_CLIENT_SECRET_DOC)
         .define(BEARER_AUTH_SCOPE, Type.STRING,null, Importance.MEDIUM ,
             BEARER_AUTH_SCOPE_DOC)
+        .define(BEARER_AUTH_SCOPE_CLAIM_NAME, Type.STRING, DEFAULT_BEARER_AUTH_SCOPE_CLAIM_NAME,
+            Importance.LOW, BEARER_AUTH_SCOPE_CLAIM_NAME_DOC)
+        .define(BEARER_AUTH_SUB_CLAIM_NAME, Type.STRING, DEFAULT_BEARER_AUTH_SUB_CLAIM_NAME,
+            Importance.LOW, BEARER_AUTH_SUB_CLAIM_NAME_DOC)
         .define(BEARER_AUTH_IDENTITY_POOL_ID, Type.STRING,null, Importance.MEDIUM,
             BEARER_AUTH_IDENTITY_POOL_ID_DOC)
         .define(BEARER_AUTH_LOGICAL_CLUSTER, Type.STRING,null, Importance.MEDIUM,
