@@ -169,6 +169,8 @@ public class RestService implements Configurable {
   private UrlList baseUrls;
   private SSLSocketFactory sslSocketFactory;
   private HostnameVerifier hostnameVerifier;
+  private int httpConnectTimeoutMs = HTTP_CONNECT_TIMEOUT_MS;
+  private int httpReadTimeoutMs = HTTP_READ_TIMEOUT_MS;
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
   private BearerAuthCredentialProvider bearerAuthCredentialProvider;
   private Map<String, String> httpHeaders;
@@ -242,6 +244,14 @@ public class RestService implements Configurable {
 
   public void setHostnameVerifier(HostnameVerifier hostnameVerifier) {
     this.hostnameVerifier = hostnameVerifier;
+  }
+
+  public void setHttpConnectTimeoutMs(int httpConnectTimeoutMs) {
+    this.httpConnectTimeoutMs = httpConnectTimeoutMs;
+  }
+
+  public void setHttpReadTimeoutMs(int httpReadTimeoutMs) {
+    this.httpReadTimeoutMs = httpReadTimeoutMs;
   }
 
   /**
@@ -321,8 +331,8 @@ public class RestService implements Configurable {
       connection = (HttpURLConnection) url.openConnection(proxy);
     }
 
-    connection.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-    connection.setReadTimeout(HTTP_READ_TIMEOUT_MS);
+    connection.setConnectTimeout(httpConnectTimeoutMs);
+    connection.setReadTimeout(httpReadTimeoutMs);
 
     setupSsl(connection);
     connection.setRequestMethod(method);

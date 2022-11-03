@@ -128,6 +128,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private SchemaRegistryIdentity leaderIdentity;
   private RestService leaderRestService;
   private SslFactory sslFactory;
+  private int leaderConnectTimeoutMs;
+  private int leaderReadTimeoutMs;
   private IdGenerator idGenerator = null;
   private LeaderElector leaderElector = null;
   private final MetricsContainer metricsContainer;
@@ -160,6 +162,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         isEligibleForLeaderElector, schemeAndPort.scheme);
     this.sslFactory =
         new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(config.values()));
+    this.leaderConnectTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_CONNECT_TIMEOUT_MS);
+    this.leaderReadTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_READ_TIMEOUT_MS);
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
@@ -390,6 +394,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         leaderRestService = null;
       } else {
         leaderRestService = new RestService(leaderIdentity.getUrl());
+        leaderRestService.setHttpConnectTimeoutMs(leaderConnectTimeoutMs);
+        leaderRestService.setHttpReadTimeoutMs(leaderReadTimeoutMs);
         if (sslFactory != null && sslFactory.sslContext() != null) {
           leaderRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
           leaderRestService.setHostnameVerifier(getHostnameVerifier());
