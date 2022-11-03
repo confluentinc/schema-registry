@@ -57,6 +57,9 @@ public class PgStore {
     config.addDataSourceProperty("user", "postgres");
     config.addDataSourceProperty("password", "postgres");
     config.setTransactionIsolation("TRANSACTION_READ_COMMITTED");
+    config.setMaximumPoolSize(20);
+    config.setLeakDetectionThreshold(2000);
+    config.setMinimumIdle(10);
 
     this.ds = new HikariDataSource(config);
 
@@ -100,11 +103,13 @@ public class PgStore {
 //
 //    log.info("Cache missed getSubjectByHash {} ms", System.currentTimeMillis() - start);
 
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT sub.subject, s.id, s.version FROM contexts c ")
@@ -133,6 +138,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     log.info("getSubjectByHash: {}", result);
@@ -141,11 +147,13 @@ public class PgStore {
 
   public Schema lookupSchemaBySubject(QualifiedSubject qs, Schema schema, String subject,
                                       boolean lookupDeletedSchema) throws SchemaRegistryException {
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT s.id, s.version FROM contexts c ")
@@ -176,6 +184,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return null;
@@ -193,11 +202,13 @@ public class PgStore {
 
     log.info("Cache missed getSubjectVersion {} ms", System.currentTimeMillis() - start);
 
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
@@ -215,7 +226,7 @@ public class PgStore {
       rs = ps.executeQuery();
       if (rs != null) {
         if (rs.next()) {
-          return populateSchema(rs);
+          return populateSchema(conn, rs);
         }
       }
 
@@ -225,6 +236,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return null;
@@ -249,11 +261,13 @@ public class PgStore {
 //
 //    log.info("Cache missed getSchemaById {} ms", System.currentTimeMillis() - start);
 
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
@@ -274,7 +288,7 @@ public class PgStore {
       rs = ps.executeQuery();
       if (rs != null) {
         if (rs.next()) {
-          return populateSchema(rs);
+          return populateSchema(conn, rs);
         }
       }
 
@@ -284,6 +298,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return null;
@@ -306,11 +321,13 @@ public class PgStore {
 //
 //    log.info("Cache missed subjectExists {} ms", System.currentTimeMillis() - start);
 
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT s.subject_id FROM contexts c ")
@@ -338,16 +355,19 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return false;
   }
 
   public void softDeleteSchema(QualifiedSubject qs, Schema schema) throws SchemaRegistryException {
+    Connection conn = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("UPDATE schemas SET deleted = true WHERE (subject_id, version) IN ")
@@ -385,6 +405,7 @@ public class PgStore {
       throw new SchemaRegistryException("SoftDeleteSchema error", e);
     } finally {
       closePreparedStatement(ps);
+      closeConn(conn);
     }
   }
 
@@ -622,11 +643,13 @@ public class PgStore {
   public List<Schema> getAllVersionsInAllContexts(String tenant, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     List<Schema> list = new ArrayList<>();
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
@@ -644,7 +667,7 @@ public class PgStore {
       rs = ps.executeQuery();
       if (rs != null) {
         while (rs.next()) {
-          list.add(populateSchema(rs));
+          list.add(populateSchema(conn, rs));
         }
       }
 
@@ -654,6 +677,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return list;
@@ -662,11 +686,13 @@ public class PgStore {
   public List<Schema> getLatestVersionsInAllContexts(String tenant, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     List<Schema> list = new ArrayList<>();
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT * FROM (")
@@ -688,7 +714,7 @@ public class PgStore {
       rs = ps.executeQuery();
       if (rs != null) {
         while (rs.next()) {
-          list.add(populateSchema(rs));
+          list.add(populateSchema(conn, rs));
         }
       }
 
@@ -698,6 +724,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return list;
@@ -706,11 +733,13 @@ public class PgStore {
   public List<Schema> getAllVersionsBySubjectPrefix(QualifiedSubject qs, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     List<Schema> list = new ArrayList<>();
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
@@ -730,7 +759,7 @@ public class PgStore {
       rs = ps.executeQuery();
       if (rs != null) {
         while (rs.next()) {
-          list.add(populateSchema(rs));
+          list.add(populateSchema(conn, rs));
         }
       }
 
@@ -740,6 +769,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return list;
@@ -748,11 +778,13 @@ public class PgStore {
   public List<Schema> getLatestVersionsBySubjectPrefix(QualifiedSubject qs, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     List<Schema> list = new ArrayList<>();
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT * FROM (")
@@ -776,7 +808,7 @@ public class PgStore {
       rs = ps.executeQuery();
       if (rs != null) {
         while (rs.next()) {
-          list.add(populateSchema(rs));
+          list.add(populateSchema(conn, rs));
         }
       }
 
@@ -786,6 +818,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return list;
@@ -793,11 +826,13 @@ public class PgStore {
 
   public List<String> getAllContexts(String tenant) throws SchemaRegistryException {
     List<String> list = new ArrayList<>();
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT context FROM contexts WHERE tenant = ? ORDER BY context ");
@@ -816,6 +851,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return list;
@@ -824,11 +860,13 @@ public class PgStore {
   public List<Schema> getAllVersions(QualifiedSubject qs, boolean lookupDeletedSchema,
                                      boolean desc) throws SchemaRegistryException {
     List<Schema> list = new ArrayList<>();
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
@@ -850,7 +888,7 @@ public class PgStore {
       rs = ps.executeQuery();
       if (rs != null) {
         while (rs.next()) {
-          list.add(populateSchema(rs));
+          list.add(populateSchema(conn, rs));
         }
       }
 
@@ -860,6 +898,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return list;
@@ -868,11 +907,13 @@ public class PgStore {
   public List<SubjectVersion> getSubjectVersionsForId(QualifiedSubject qs, int id, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     List<SubjectVersion> list = new ArrayList<>();
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT sub.subject, s.version FROM schemas s ")
@@ -907,6 +948,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return list;
@@ -915,11 +957,13 @@ public class PgStore {
   public List<Integer> getReferencedBy(QualifiedSubject qs, Optional<Integer> version)
       throws SchemaRegistryException {
     List<Integer> list = new ArrayList<>();
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT s.id FROM schemas s JOIN ")
@@ -955,21 +999,21 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return list;
   }
 
   public List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> getReferences(
-      QualifiedSubject qs, int subjectId, int schemaId) throws SchemaRegistryException {
+      Connection conn, QualifiedSubject qs, int subjectId, int schemaId) throws SchemaRegistryException {
     List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> list
         = new ArrayList<>();
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
-      conn.setAutoCommit(true);
+    try {
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT r.name, sub.subject, s.version FROM refs r ")
           .append("JOIN schemas s ON r.ref_schema_id = s.id AND r.ref_subject_id = s.subject_id ")
@@ -998,11 +1042,13 @@ public class PgStore {
 
   public Schema getLatestSubjectVersion(QualifiedSubject qs)
       throws SchemaRegistryException {
+    Connection conn = null;
     ResultSet rs = null;
     PreparedStatement ps = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
       conn.setAutoCommit(true);
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT c.tenant, c.context, s.id, sub.subject, s.version, s.type, s.str, sub.id, s.deleted FROM contexts c ")
@@ -1022,7 +1068,7 @@ public class PgStore {
       rs = ps.executeQuery();
       if (rs != null) {
         if (rs.next()) {
-          return populateSchema(rs);
+          return populateSchema(conn, rs);
         }
       }
 
@@ -1032,6 +1078,7 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
 
     return null;
@@ -1229,11 +1276,14 @@ public class PgStore {
 
   public void registerDeleted(QualifiedSubject qs, Schema schema, int subjectId)
       throws SchemaRegistryException {
+    Connection conn = null;
     PreparedStatement ps = null;
     ResultSet rs = null;
     long start = System.currentTimeMillis();
 
-    try (Connection conn = ds.getConnection()) {
+    try {
+      conn = ds.getConnection();
+      conn.setAutoCommit(true);
       int oldVersion = schema.getVersion();
       int newVersion = 1;
       StringBuilder sql = new StringBuilder();
@@ -1288,10 +1338,11 @@ public class PgStore {
     } finally {
       closeResultSet(rs);
       closePreparedStatement(ps);
+      closeConn(conn);
     }
   }
 
-  private Schema populateSchema(ResultSet rs) throws Exception {
+  private Schema populateSchema(Connection conn, ResultSet rs) throws Exception {
     String tenant = rs.getString(1);
     String context = rs.getString(2);
     int id = rs.getInt(3);
@@ -1303,7 +1354,7 @@ public class PgStore {
     boolean deleted = rs.getBoolean(9);
     QualifiedSubject qs = new QualifiedSubject(tenant, context, subject);
     // TODO not handling N + 1 problem
-    Schema schema = new Schema(qs.toQualifiedSubject(), version, id, type, getReferences(qs, subjectId, id), str);
+    Schema schema = new Schema(qs.toQualifiedSubject(), version, id, type, getReferences(conn, qs, subjectId, id), str);
 
     try {
       String subjectVersionKey = qs.toQualifiedSubject() + ":version:" + version + ":";
@@ -1396,7 +1447,6 @@ public class PgStore {
       }
     } catch (SQLException ex) {
       log.error("Rollback failed", ex);
-      throw new RuntimeException(ex);
     }
   }
 
@@ -1405,8 +1455,7 @@ public class PgStore {
       try {
         conn.close();
       } catch (SQLException e) {
-        log.error("Rollback failed", e);
-        throw new RuntimeException(e);
+        log.error("closeConn failed", e);
       }
     }
   }
