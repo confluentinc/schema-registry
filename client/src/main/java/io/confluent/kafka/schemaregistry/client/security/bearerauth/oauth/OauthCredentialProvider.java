@@ -32,8 +32,8 @@ import org.apache.kafka.common.security.oauthbearer.secured.LoginAccessTokenVali
 
 /**
  * <code>OAuthCredentialProvider</code> is a <code>BearerAuthCredentialProvider</code>
- * implementation used for configuring OAuth in schema registry. This can used when we have setup
- * OAuth Independently from kafka.
+ * implementation used for configuring OAuth in schema registry. This can be used when we want to
+ * set up OAuth Independently to that of kafka.
  *
  * @author Varun PV
  */
@@ -108,8 +108,6 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
   }
 
   private AccessTokenValidator getTokenValidator(Map<String, ?> configs) {
-    //Keeping following configs needed by LoginAccessTokenValidator as constants and not exposed to
-    //users for modifications
     String scopeClaimName = SchemaRegistryClientConfig.getBearerAuthScopeClaimName(configs);
     String subClaimName = SchemaRegistryClientConfig.getBearerAuthSubClaimName(configs);
     return new LoginAccessTokenValidator(scopeClaimName, subClaimName);
