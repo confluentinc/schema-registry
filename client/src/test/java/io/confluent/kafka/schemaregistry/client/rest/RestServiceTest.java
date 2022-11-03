@@ -135,6 +135,8 @@ public class RestServiceTest {
     when(url.openConnection()).thenReturn(httpURLConnection);
     when(httpURLConnection.getURL()).thenReturn(url);
     when(bearerAuthCredentialProvider.getBearerToken(any(URL.class))).thenReturn("auth-token");
+    when(bearerAuthCredentialProvider.getTargetSchemaRegistry()).thenReturn("lsrc-dummy");
+    when(bearerAuthCredentialProvider.getTargetIdentityPoolId()).thenReturn("my-pool-id");
     when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_OK);
 
     when(httpURLConnection.getInputStream()).thenReturn(inputStream);
@@ -147,8 +149,11 @@ public class RestServiceTest {
 
     restServiceSpy.getAllSubjects();
 
+
     // Make sure that the Authorization header is set with the correct token
     verify(httpURLConnection).setRequestProperty("Authorization", "Bearer auth-token");
+    verify(httpURLConnection).setRequestProperty("target-sr-cluster", "lsrc-dummy");
+    verify(httpURLConnection).setRequestProperty("target-identity-pool-id", "my-pool-id");
   }
 
   /*

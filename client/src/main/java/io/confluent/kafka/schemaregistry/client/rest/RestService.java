@@ -156,6 +156,8 @@ public class RestService implements Configurable {
   private static ObjectMapper jsonDeserializer = JacksonMapper.INSTANCE;
 
   private static final String AUTHORIZATION_HEADER = "Authorization";
+  private static final String TARGET_SR_CLUSTER = "target-sr-cluster";
+  private static final String TARGET_IDENTITY_POOL_ID = "target-identity-pool-id";
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
@@ -265,7 +267,7 @@ public class RestService implements Configurable {
     HttpURLConnection connection = null;
     try {
       URL url = url(requestUrl);
-
+      
       connection = buildConnection(url, method, requestProperties);
 
       if (requestBodyData != null) {
@@ -1225,6 +1227,16 @@ public class RestService implements Configurable {
       String bearerToken = bearerAuthCredentialProvider.getBearerToken(connection.getURL());
       if (bearerToken != null) {
         connection.setRequestProperty(AUTHORIZATION_HEADER, "Bearer " + bearerToken);
+      }
+
+      String targetIdentityPoolId = bearerAuthCredentialProvider.getTargetIdentityPoolId();
+      if (targetIdentityPoolId != null) {
+        connection.setRequestProperty(TARGET_IDENTITY_POOL_ID, targetIdentityPoolId);
+      }
+
+      String targetSchemaRegistry = bearerAuthCredentialProvider.getTargetSchemaRegistry();
+      if (targetSchemaRegistry != null) {
+        connection.setRequestProperty(TARGET_SR_CLUSTER, targetSchemaRegistry);
       }
     }
   }

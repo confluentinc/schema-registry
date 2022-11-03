@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Confluent Inc.
+ * Copyright 2022 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,16 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.client.security.bearerauth;
 
-import java.net.URL;
-import org.apache.kafka.common.Configurable;
+package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions;
 
-public interface BearerAuthCredentialProvider extends Configurable {
+/**
+ * <code>SchemaRegistryOauthTokenRetrieverException</code> can be used to differentiate OAuth
+ * error/exception of schema registry from that of kafka.
+ */
+public class SchemaRegistryOauthTokenRetrieverException extends RuntimeException {
 
-  String alias();
-
-  String getBearerToken(URL url);
-
-  default String getTargetSchemaRegistry() {
-    return null;
-  }
-
-  default String getTargetIdentityPoolId() {
-    return null;
+  public SchemaRegistryOauthTokenRetrieverException(String message, Throwable cause) {
+    super("Error while fetching Oauth Token for Schema Registry: " + message, cause);
   }
 }
