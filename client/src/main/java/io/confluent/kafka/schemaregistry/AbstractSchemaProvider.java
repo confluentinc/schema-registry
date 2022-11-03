@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import java.util.Set;
 
 public abstract class AbstractSchemaProvider implements SchemaProvider {
 
@@ -44,16 +46,23 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       return Collections.emptyMap();
     }
     Map<String, String> result = new LinkedHashMap<>();
-    resolveReferences(references, result);
+    Set<String> visited = new HashSet<>();
+    resolveReferences(references, result, visited);
     return result;
   }
 
-  private void resolveReferences(List<SchemaReference> references, Map<String, String> schemas) {
+  private void resolveReferences(
+      List<SchemaReference> references, Map<String, String> schemas, Set<String> visited) {
     for (SchemaReference reference : references) {
       if (reference.getName() == null
           || reference.getSubject() == null
           || reference.getVersion() == null) {
         throw new IllegalStateException("Invalid reference: " + reference);
+      }
+      if (visited.contains(reference.getName())) {
+        continue;
+      } else {
+        visited.add(reference.getName());
       }
       String subject = reference.getSubject();
       if (!schemas.containsKey(reference.getName())) {
@@ -68,7 +77,7 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
           // Update the version with the latest
           reference.setVersion(schema.getVersion());
         }
-        resolveReferences(schema.getReferences(), schemas);
+        resolveReferences(schema.getReferences(), schemas, visited);
         schemas.put(reference.getName(), schema.getSchema());
       }
     }
