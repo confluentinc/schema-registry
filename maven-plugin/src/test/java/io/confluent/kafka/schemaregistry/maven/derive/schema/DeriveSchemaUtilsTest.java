@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -12,7 +28,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
-import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveJsonSchemaTest.*;
+import static io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchemaTest.*;
 import static org.junit.Assert.assertEquals;
 
 public class DeriveSchemaUtilsTest {
@@ -81,12 +97,12 @@ public class DeriveSchemaUtilsTest {
 
   @Test
   public void shouldMergeNumberTypes() throws JsonProcessingException {
-    List<ObjectNode> schemas = new ArrayList<>();
+    List<JsonNode> schemas = new ArrayList<>();
     for (String schema : Arrays.asList(TYPE_INT, TYPE_LONG, TYPE_INT_32, TYPE_INT_64, TYPE_DOUBLE)) {
       schemas.add(mapper.readValue(schema, ObjectNode.class));
     }
     DeriveSchemaUtils.mergeNumberTypes(schemas);
-    for (ObjectNode schema : schemas) {
+    for (JsonNode schema : schemas) {
       assertEquals(schema, mapper.readValue(TYPE_DOUBLE, ObjectNode.class));
     }
   }

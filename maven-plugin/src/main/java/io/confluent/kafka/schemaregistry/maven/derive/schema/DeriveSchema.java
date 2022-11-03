@@ -20,10 +20,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -37,14 +39,13 @@ public abstract class DeriveSchema {
 
   protected List<JsonNode> getSchemaOfAllElements(List<JsonNode> messages, String name)
       throws JsonProcessingException {
-    // Get schema of each message based on type
     List<JsonNode> schemaList = new ArrayList<>();
     for (int i = 0; i < messages.size(); i++) {
       try {
         schemaList.add(getSchemaOfElement(messages.get(i), name));
       } catch (IllegalArgumentException e) {
         throw new IllegalArgumentException(
-            String.format("unable to find schema for message %d: %s", i, messages.get(i)), e);
+            String.format("Unable to find schema for message %d: %s", i, messages.get(i)), e);
       }
     }
     return schemaList;
@@ -52,8 +53,8 @@ public abstract class DeriveSchema {
 
   private JsonNode getSchemaOfElement(JsonNode message, String name)
       throws JsonProcessingException {
-    // Get schema of message based on type
     Optional<JsonNode> primitiveSchema = getPrimitiveSchema(message);
+    checkName(name);
     if (primitiveSchema.isPresent()) {
       return primitiveSchema.get();
     } else if (message instanceof ArrayNode) {
@@ -63,8 +64,12 @@ public abstract class DeriveSchema {
     }
   }
 
+  protected void checkName(String name) {
+    // Do nothing, json has no name restrictions and avro errors are suggestive
+    // Overridden by protobuf to throw naming errors
+  }
+
   public Optional<JsonNode> getPrimitiveSchema(JsonNode field) {
-    // Generate Schema for Primitive data types
     String inferredType = field.getClass().getName();
     if (classToDataType.containsKey(inferredType)) {
       try {
@@ -77,11 +82,12 @@ public abstract class DeriveSchema {
     return Optional.empty();
   }
 
+  /**
+   * Generate schema for array in json format, this schema is used as template by other formats
+   */
   public ObjectNode getSchemaForArray(List<JsonNode> messages, String name)
       throws JsonProcessingException {
-    // Generate schema for array in json format, this schema is used as template by other formats
-    ObjectNode schema = mapper.createObjectNode();
-    schema.put("type", "array");
+    ObjectNode schema = mapper.createObjectNode().put("type", "array");
     List<JsonNode> schemaList = getSchemaOfAllElements(messages, name);
     try {
       ObjectNode items = mergeArrays(schemaList, false, true);
@@ -89,15 +95,16 @@ public abstract class DeriveSchema {
       return schema;
     } catch (IllegalArgumentException e) {
       throw new IllegalArgumentException(
-          String.format("unable to find schema for array %s", name), e);
+          String.format("Unable to find schema for array %s", name), e);
     }
   }
 
+  /**
+   * Generate schema for record in json format, this schema is used as template by other formats
+   */
   public ObjectNode getSchemaForRecord(ObjectNode message)
       throws JsonProcessingException {
-    // Generate schema for record in json format, this schema is used as template by other formats
-    ObjectNode schema = mapper.createObjectNode();
-    schema.put("type", "object");
+    ObjectNode schema = mapper.createObjectNode().put("type", "object");
     schema.set("properties", mapper.createObjectNode());
 
     // Loop over each field, get type of each field and insert into schema
@@ -109,12 +116,14 @@ public abstract class DeriveSchema {
     return schema;
   }
 
+  /**
+   * Merge fields in all the records together into one record
+   */
   public ObjectNode mergeRecords(List<JsonNode> recordList) {
-    // Merge all fields in all the records together into one record
-    ObjectNode mergedRecord = mapper.createObjectNode();
-    mergedRecord.put("type", "object");
+    ObjectNode mergedRecord = mapper.createObjectNode().put("type", "object");
     ObjectNode properties = mapper.createObjectNode();
     Map<String, List<JsonNode>> fieldToType = new HashMap<>();
+
     // Loop through every record and group them by field name
     // Then for each field, treat the list of schemas as array and try to merge
     for (JsonNode record : recordList) {
@@ -134,7 +143,7 @@ public abstract class DeriveSchema {
         properties.set(entry.getKey(), items.get("items"));
       } catch (IllegalArgumentException e) {
         throw new IllegalArgumentException(
-            String.format("unable to merge field %s with types: %s",
+            String.format("Unable to merge field %s with types: %s",
                 entry.getKey(), fieldsType), e);
       }
     }
@@ -142,16 +151,16 @@ public abstract class DeriveSchema {
     return mergedRecord;
   }
 
-  public ObjectNode mergeArrays(List<JsonNode> arrayList, boolean useItems,
-                                boolean check2dArray) {
-    // Merging different field types into one type
-    ObjectNode mergedArray = mapper.createObjectNode();
-    mergedArray.put("type", "array");
+  /**
+   * Merging different field types of array into one type
+   */
+  public ObjectNode mergeArrays(List<JsonNode> arrayList, boolean useItems, boolean check2dArray) {
+    ObjectNode mergedArray = mapper.createObjectNode().put("type", "array");
     List<JsonNode> primitives = new ArrayList<>();
     List<JsonNode> records = new ArrayList<>();
     List<JsonNode> arrays = new ArrayList<>();
 
-    // Group items of array into record, array and primitive types
+    // Group items in the array into record, array and primitive types
     for (JsonNode arrayElements : DeriveSchemaUtils.getUnique(arrayList)) {
       if (!useItems) {
         DeriveSchemaUtils.groupItems(arrayElements, primitives, records, arrays);
@@ -162,12 +171,58 @@ public abstract class DeriveSchema {
     return mergeMultipleDataTypes(mergedArray, primitives, records, arrays, check2dArray);
   }
 
+  protected JsonNode getNullSchema() {
+    return getPrimitiveSchema(mapper.convertValue(null, NullNode.class)).get();
+  }
+
+  public ObjectNode getSchemaForMultipleMessages(List<JsonNode> messages)
+      throws JsonProcessingException {
+    List<JsonNode> schemas = getSchemaOfAllElements(messages, "Schema");
+    ArrayNode schemaInfoList = mapper.createArrayNode();
+    List<JsonNode> mergedSchemas = new ArrayList<>();
+
+    // Let's say we have n different messages, getSchemaOfAllElements gives n different schemas
+    // Out of the n schemas, some schemas could be identical
+    // schemas might differ due to a record having an extra field or record is of type union
+    // schemas might differ due to same field having int and double type in different messages
+    // In the above cases schemas can be merged together. So, we pick one and try to merge with rest
+    for (int i = 0; i < schemas.size(); i++) {
+      ArrayNode messagesMatched = mapper.createArrayNode();
+      JsonNode mergedSchema = schemas.get(i);
+      for (int j = 0; j < schemas.size(); j++) {
+        try {
+          mergedSchema = mergeArrays(Arrays.asList(mergedSchema, schemas.get(j)),
+              false, false).get("items");
+          messagesMatched.add(j);
+        } catch (IllegalArgumentException ignored) {
+          // If there are conflicting types, schemas cannot be merged. Result is ignored
+        }
+      }
+      if (!mergedSchemas.contains(mergedSchema)) {
+        updateSchemaInformation(mergedSchema, messagesMatched, mergedSchemas, schemaInfoList);
+      }
+    }
+
+    // Return json object with complete schema information
+    return mapper.createObjectNode().set("schemas", schemaInfoList);
+  }
+
+  private void updateSchemaInformation(JsonNode mergedSchema,
+                                       ArrayNode messagesMatched,
+                                       List<JsonNode> mergedSchemas,
+                                       ArrayNode schemaInformationList) {
+    mergedSchemas.add(mergedSchema);
+    ObjectNode schemaElement = mapper.createObjectNode();
+    schemaElement.set("schema", convertToFormat(mergedSchema, "Schema"));
+    schemaElement.set("messagesMatched", messagesMatched);
+    schemaInformationList.add(schemaElement);
+  }
+
+  protected abstract JsonNode convertToFormat(JsonNode schema, String name);
+
   protected abstract ObjectNode mergeMultipleDataTypes(ObjectNode mergedArray,
                                                        List<JsonNode> primitives,
                                                        List<JsonNode> records,
                                                        List<JsonNode> arrays,
                                                        boolean check2dArray);
-
-  protected abstract ObjectNode getSchemaForMultipleMessages(List<String> messages)
-      throws JsonProcessingException;
 }
