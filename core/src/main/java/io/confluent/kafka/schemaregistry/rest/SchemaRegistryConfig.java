@@ -114,6 +114,16 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_ELIGIBILITY = "leader.eligibility";
   public static final boolean DEFAULT_LEADER_ELIGIBILITY = true;
   /**
+   * <code>leader.connect.timeout.ms</code>*
+   */
+  public static final String LEADER_CONNECT_TIMEOUT_MS = "leader.connect.timeout.ms";
+  public static final int DEFAULT_LEADER_CONNECT_TIMEOUT_MS = 60000;
+  /**
+   * <code>leader.read.timeout.ms</code>*
+   */
+  public static final String LEADER_READ_TIMEOUT_MS = "leader.read.timeout.ms";
+  public static final int DEFAULT_LEADER_READ_TIMEOUT_MS = 60000;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -276,6 +286,10 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String LEADER_ELIGIBILITY_DOC =
       "If true, this node can participate in leader election. In a multi-colo setup, turn this off "
       + "for clusters in the follower data center.";
+  protected static final String LEADER_CONNECT_TIMEOUT_MS_DOC =
+      "The timeout for connections when forwarding requests to the leader.";
+  protected static final String LEADER_READ_TIMEOUT_MS_DOC =
+      "The timeout for reading responses after forwarding requests to the leader.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
@@ -441,6 +455,12 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELIGIBILITY,
         ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC
+    )
+    .define(LEADER_CONNECT_TIMEOUT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_CONNECT_TIMEOUT_MS,
+        ConfigDef.Importance.LOW, LEADER_CONNECT_TIMEOUT_MS_DOC
+    )
+    .define(LEADER_READ_TIMEOUT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_READ_TIMEOUT_MS,
+        ConfigDef.Importance.LOW, LEADER_READ_TIMEOUT_MS_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
