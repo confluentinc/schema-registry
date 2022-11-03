@@ -582,6 +582,41 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerWithCyclicReference() throws IOException, RestClientException {
+    IndexedRecord record = createSpecificAvroRecord();
+    AvroSchema schema = new AvroSchema(record.getSchema());
+    schemaRegistry.register("user", schema);
+    schemaRegistry.register("account",
+        new AvroSchema(createAccountSchema().toString(),
+            ImmutableList.of(
+                new SchemaReference("io.confluent.kafka.example.User", "user", -1)
+                ),
+            ImmutableMap.of(
+                "io.confluent.kafka.example.User",
+                schema.toString()
+            ),
+            null
+        ));
+    schemaRegistry.register("user",
+        new AvroSchema(schema.toString(),
+            ImmutableList.of(
+                new SchemaReference("example.avro.Account", "account", -1)
+            ),
+            ImmutableMap.of(
+                "example.avro.Account",
+                createAccountSchema().toString()
+            ),
+            null
+        ));
+    assertNotNull(schemaRegistry.parseSchema(
+        AvroSchema.TYPE,
+        createAccountSchema().toString(),
+        ImmutableList.of(
+            new SchemaReference("io.confluent.kafka.example.User", "user", -1)
+        )));
+  }
+
+  @Test
   public void testKafkaAvroSerializerWithArraySpecific() throws IOException, RestClientException {
     Map serializerConfigs = ImmutableMap.of(
         KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
