@@ -98,6 +98,16 @@ public class DeriveProtoBufSchemaTest extends DeriveSchemaTest {
   }
 
   @Test
+  public void testConvertToFormat() throws JsonProcessingException {
+    DeriveProtobufSchema deriveProtobuf = (DeriveProtobufSchema) derive;
+    JsonNode recordSchema = deriveProtobuf.convertToFormat(mapper.readTree(RECORD_WITH_ARRAY_OF_STRINGS), "Test");
+    assertEquals(recordSchema.asText(), "syntax = \"proto3\";\n" + "\n" +
+        "message Test {\n" +
+        "  repeated string F1 = 1;\n" +
+        "}\n");
+  }
+
+  @Test
   public void testDeriveRecordPrimitive() throws Exception {
     // Get schema for record with fields having only primitive data types
     String longMessage = "\"Long\": 1202021212121009";

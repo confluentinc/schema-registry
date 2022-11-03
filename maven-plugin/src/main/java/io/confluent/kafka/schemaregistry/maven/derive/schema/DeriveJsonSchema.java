@@ -65,8 +65,7 @@ public class DeriveJsonSchema extends DeriveSchema {
                                               List<JsonNode> records,
                                               List<JsonNode> arrays,
                                               boolean check2dArray) {
-    ArrayNode items = mapper.createArrayNode();
-    items.addAll(primitives);
+    ArrayNode items = mapper.createArrayNode().addAll(primitives);
     // Merge records if there is at least 1 record
     if (records.size() > 0) {
       items.add(mergeRecords(records));
@@ -78,8 +77,7 @@ public class DeriveJsonSchema extends DeriveSchema {
 
     if (items.size() > 1) {
       // If there are more than 1 different items, use oneOf to represent them
-      ObjectNode oneOfDataType = mapper.createObjectNode();
-      oneOfDataType.set("oneOf", sortJsonArrayList(items));
+      ObjectNode oneOfDataType = mapper.createObjectNode().set("oneOf", sortJsonArrayList(items));
       mergedArray.set("items", oneOfDataType);
     } else if (items.size() == 1) {
       mergedArray.set("items", items.get(0));
@@ -100,9 +98,7 @@ public class DeriveJsonSchema extends DeriveSchema {
       throws JsonProcessingException {
     JsonNode schema = getSchemaForArray(messages, "").get("items");
     convertToFormat(schema, "");
-    ObjectNode schemaInformation = mapper.createObjectNode();
-    schemaInformation.set("schema", schema);
-    return schemaInformation;
+    return mapper.createObjectNode().set("schema", schema);
   }
 
   /**
@@ -111,7 +107,7 @@ public class DeriveJsonSchema extends DeriveSchema {
   protected JsonNode convertToFormat(JsonNode schema, String name) {
     JsonSchema jsonSchema = new JsonSchema(schema);
     jsonSchema.validate();
+    // Input schema is in json format, hence no conversion is needed. Returning schema as is
     return schema;
   }
-
 }

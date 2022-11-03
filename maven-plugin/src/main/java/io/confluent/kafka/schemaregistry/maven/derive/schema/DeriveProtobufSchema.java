@@ -56,12 +56,14 @@ public class DeriveProtobufSchema extends DeriveSchema {
                                               List<JsonNode> primitives,
                                               List<JsonNode> records,
                                               List<JsonNode> arrays,
-                                              boolean check2dArray) {
+                                              boolean checkElements) {
     ArrayNode items = mapper.createArrayNode();
-    if (arrays.size() > 0 && check2dArray) {
-      throw new IllegalArgumentException(String.format("Found nested array: %s", arrays));
-    } else if (primitives.stream().anyMatch(o -> o.get("type").asText().equals(ANY_FIELD))) {
-      throw new IllegalArgumentException("Repeated field elements cannot be null");
+    if (checkElements) {
+      if (arrays.size() > 0) {
+        throw new IllegalArgumentException(String.format("Found nested array: %s", arrays));
+      } else if (primitives.stream().anyMatch(o -> o.get("type").asText().equals(ANY_FIELD))) {
+        throw new IllegalArgumentException("Repeated field elements cannot be null");
+      }
     }
 
     DeriveSchemaUtils.mergeNumberTypes(primitives);
