@@ -23,12 +23,12 @@ import java.util.Collections;
 import java.util.Map;
 import javax.net.ssl.SSLSocketFactory;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.secured.HttpAccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.secured.JaasOptionsUtils;
-import org.apache.kafka.common.security.oauthbearer.secured.LoginAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
 
 /**
  * <code>OAuthCredentialProvider</code> is a <code>BearerAuthCredentialProvider</code>
