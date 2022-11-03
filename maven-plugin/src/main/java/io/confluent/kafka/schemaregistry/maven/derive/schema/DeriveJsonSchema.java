@@ -20,10 +20,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 public class DeriveJsonSchema extends DeriveSchema {
@@ -56,14 +56,16 @@ public class DeriveJsonSchema extends DeriveSchema {
     return mapper.createObjectNode().arrayNode().addAll(sortedDataNodes);
   }
 
+  /**
+   * Merge different records into one record and different arrays into one array
+   * Multiple data types are combined through oneOf
+   */
   protected ObjectNode mergeMultipleDataTypes(ObjectNode mergedArray,
                                               List<JsonNode> primitives,
                                               List<JsonNode> records,
                                               List<JsonNode> arrays,
                                               boolean check2dArray) {
-    ArrayNode items = mapper.createArrayNode();
-    // Adding primitive types to items' list
-    items.addAll(primitives);
+    ArrayNode items = mapper.createArrayNode().addAll(primitives);
     // Merge records if there is at least 1 record
     if (records.size() > 0) {
       items.add(mergeRecords(records));
@@ -75,11 +77,9 @@ public class DeriveJsonSchema extends DeriveSchema {
 
     if (items.size() > 1) {
       // If there are more than 1 different items, use oneOf to represent them
-      ObjectNode oneOfDataType = mapper.createObjectNode();
-      oneOfDataType.set("oneOf", sortJsonArrayList(items));
+      ObjectNode oneOfDataType = mapper.createObjectNode().set("oneOf", sortJsonArrayList(items));
       mergedArray.set("items", oneOfDataType);
     } else if (items.size() == 1) {
-      // Exactly one type of item, hence oneOf is not used
       mergedArray.set("items", items.get(0));
     } else {
       // No items found, setting items as empty object
@@ -89,17 +89,25 @@ public class DeriveJsonSchema extends DeriveSchema {
     return mergedArray;
   }
 
-  public ObjectNode getSchemaForMultipleMessages(List<String> messages)
+  /**
+   * Treated same as array of records, the items derived is returned as schema
+   * Exactly one schema is returned
+   */
+  @Override
+  public ObjectNode getSchemaForMultipleMessages(List<JsonNode> messages)
       throws JsonProcessingException {
-    // Get schema for multiple messages. Exactly one schema is returned
-    // Treated same as array of records, the items derived is returned
-    List<JsonNode> messageObjects = new ArrayList<>();
-    for (String message : messages) {
-      messageObjects.add(mapper.readTree(message));
-    }
-    JsonNode schema = getSchemaForArray(messageObjects, "").get("items");
-    ObjectNode schemaInformation = mapper.createObjectNode();
-    schemaInformation.set("schema", schema);
-    return schemaInformation;
+    JsonNode schema = getSchemaForArray(messages, "").get("items");
+    convertToFormat(schema, "");
+    return mapper.createObjectNode().set("schema", schema);
+  }
+
+  /**
+   * Generate json schema and check for any errors
+   */
+  protected JsonNode convertToFormat(JsonNode schema, String name) {
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    jsonSchema.validate();
+    // Input schema is in json format, hence no conversion is needed. Returning schema as is
+    return schema;
   }
 }
