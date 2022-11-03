@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.client;
 
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.SaslConfigs;
 
 public class SchemaRegistryClientConfig {
 
@@ -49,9 +50,11 @@ public class SchemaRegistryClientConfig {
   public static final String BEARER_AUTH_CLIENT_SECRET = "bearer.auth.client.secret";
   public static final String BEARER_AUTH_SCOPE = "bearer.auth.scope";
   public static final String BEARER_AUTH_SCOPE_CLAIM_NAME = "bearer.auth.scope.claim.name";
-  public static final String BEARER_AUTH_SCOPE_CLAIM_NAME_DEFAULT = "scope";
+  public static final String BEARER_AUTH_SCOPE_CLAIM_NAME_DEFAULT =
+      SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
   public static final String BEARER_AUTH_SUB_CLAIM_NAME = "bearer.auth.sub.claim.name";
-  public static final String BEARER_AUTH_SUB_CLAIM_NAME_DEFAULT = "sub";
+  public static final String BEARER_AUTH_SUB_CLAIM_NAME_DEFAULT =
+      SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 
   //OAuth configs required by SR
   public static final String BEARER_AUTH_LOGICAL_CLUSTER = "bearer.auth.logical.cluster";
