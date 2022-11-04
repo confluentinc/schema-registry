@@ -33,7 +33,9 @@ public class Rule {
   private RuleMode mode;
   private String type;
   private SortedSet<String> annotations;
-  private String body;
+  private String expr;
+  private String onSuccess;
+  private String onFailure;
 
   @JsonCreator
   public Rule(@JsonProperty("name") String name,
@@ -41,13 +43,17 @@ public class Rule {
               @JsonProperty("mode") RuleMode mode,
               @JsonProperty("type") String type,
               @JsonProperty("annotations") SortedSet<String> annotations,
-              @JsonProperty("body") String body) {
+              @JsonProperty("expr") String expr,
+              @JsonProperty("onSuccess") String onSuccess,
+              @JsonProperty("onFailure") String onFailure) {
     this.name = name;
     this.kind = kind;
     this.mode = mode;
     this.type = type;
     this.annotations = annotations;
-    this.body = body;
+    this.expr = expr;
+    this.onSuccess = onSuccess;
+    this.onFailure = onFailure;
   }
 
   public Rule(io.confluent.kafka.schemaregistry.client.rest.entities.Rule rule) {
@@ -56,7 +62,9 @@ public class Rule {
     this.mode = RuleMode.fromEntity(rule.getMode());
     this.type = rule.getType();
     this.annotations = rule.getAnnotations();
-    this.body = rule.getBody();
+    this.expr = rule.getExpr();
+    this.onSuccess = rule.getOnSuccess();
+    this.onFailure = rule.getOnFailure();
   }
 
   @Schema(description = "Rule name")
@@ -114,15 +122,37 @@ public class Rule {
     this.annotations = annotations;
   }
 
-  @Schema(description = "Rule body")
-  @JsonProperty("body")
-  public String getBody() {
-    return body;
+  @Schema(description = "Rule expression")
+  @JsonProperty("expr")
+  public String getExpr() {
+    return expr;
   }
 
-  @JsonProperty("body")
-  public void setBody(String body) {
-    this.body = body;
+  @JsonProperty("expr")
+  public void setExpr(String expr) {
+    this.expr = expr;
+  }
+
+  @Schema(description = "Rule action on success")
+  @JsonProperty("onSuccess")
+  public String getOnSuccess() {
+    return onSuccess;
+  }
+
+  @JsonProperty("onSuccess")
+  public void setOnSuccess(String onSuccess) {
+    this.onSuccess = onSuccess;
+  }
+
+  @Schema(description = "Rule action on failure")
+  @JsonProperty("onFailure")
+  public String getOnFailure() {
+    return onFailure;
+  }
+
+  @JsonProperty("onFailure")
+  public void setOnFailure(String onFailure) {
+    this.onFailure = onFailure;
   }
 
   @Override
@@ -139,12 +169,14 @@ public class Rule {
         && mode == rule.mode
         && Objects.equals(type, rule.type)
         && Objects.equals(annotations, rule.annotations)
-        && Objects.equals(body, rule.body);
+        && Objects.equals(expr, rule.expr)
+        && Objects.equals(onSuccess, rule.onSuccess)
+        && Objects.equals(onFailure, rule.onFailure);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, kind, mode, type, annotations, body);
+    return Objects.hash(name, kind, mode, type, annotations, expr, onSuccess, onFailure);
   }
 
   @Override
@@ -155,7 +187,9 @@ public class Rule {
         + ", mode=" + mode
         + ", type='" + type + '\''
         + ", annotations='" + annotations + '\''
-        + ", body='" + body + '\''
+        + ", expr='" + expr + '\''
+        + ", onSuccess='" + onSuccess + '\''
+        + ", onFailure='" + onFailure + '\''
         + '}';
   }
 
@@ -166,7 +200,9 @@ public class Rule {
         getMode().toEntity(),
         getType(),
         getAnnotations(),
-        getBody()
+        getExpr(),
+        getOnSuccess(),
+        getOnFailure()
     );
   }
 }

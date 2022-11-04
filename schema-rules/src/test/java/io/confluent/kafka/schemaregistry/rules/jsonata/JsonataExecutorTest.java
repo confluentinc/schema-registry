@@ -191,7 +191,7 @@ public class JsonataExecutorTest {
     schema = createNewGenericWidgetSchema();
     avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.UPGRADE,
-        JsonataExecutor.TYPE, null, ruleString);
+        JsonataExecutor.TYPE, null, ruleString, null, null);
     RuleSet ruleSet = new RuleSet(Collections.singletonList(rule), Collections.emptyList());
     props = ImmutableSortedMap.of("application.version", "v2");
     metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
@@ -232,7 +232,7 @@ public class JsonataExecutorTest {
     schema = ReflectData.get().getSchema(NewWidget.class);
     avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.UPGRADE,
-        JsonataExecutor.TYPE, null, ruleString);
+        JsonataExecutor.TYPE, null, ruleString, null, null);
     RuleSet ruleSet = new RuleSet(Collections.singletonList(rule), Collections.emptyList());
     props = ImmutableSortedMap.of("application.version", "v2");
     metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
@@ -273,7 +273,7 @@ public class JsonataExecutorTest {
     schema = NewSpecificWidget.getClassSchema();
     avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.UPGRADE,
-        JsonataExecutor.TYPE, null, ruleString);
+        JsonataExecutor.TYPE, null, ruleString, null, null);
     RuleSet ruleSet = new RuleSet(Collections.singletonList(rule), Collections.emptyList());
     props = ImmutableSortedMap.of("application.version", "v2");
     metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
@@ -320,9 +320,9 @@ public class JsonataExecutorTest {
     schema = ReflectData.get().getSchema(NewWidget.class);
     avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule1", RuleKind.TRANSFORM, RuleMode.UPGRADE,
-        JsonataExecutor.TYPE, null, rule1To2);
+        JsonataExecutor.TYPE, null, rule1To2, null, null);
     Rule rule2 = new Rule("myRule2", RuleKind.TRANSFORM, RuleMode.DOWNGRADE,
-        JsonataExecutor.TYPE, null, rule2To1);
+        JsonataExecutor.TYPE, null, rule2To1, null, null);
     RuleSet ruleSet = new RuleSet(ImmutableList.of(rule, rule2), Collections.emptyList());
     props = ImmutableSortedMap.of("application.version", "v2");
     metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
@@ -332,9 +332,9 @@ public class JsonataExecutorTest {
     schema = ReflectData.get().getSchema(NewerWidget.class);
     avroSchema = new AvroSchema(schema);
     rule = new Rule("myRule1", RuleKind.TRANSFORM, RuleMode.UPGRADE,
-        JsonataExecutor.TYPE, null, rule2To3);
+        JsonataExecutor.TYPE, null, rule2To3, null, null);
     rule2 = new Rule("myRule2", RuleKind.TRANSFORM, RuleMode.DOWNGRADE,
-        JsonataExecutor.TYPE, null, rule3To2);
+        JsonataExecutor.TYPE, null, rule3To2, null, null);
     ruleSet = new RuleSet(ImmutableList.of(rule, rule2), Collections.emptyList());
     props = ImmutableSortedMap.of("application.version", "v3");
     metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
@@ -409,7 +409,7 @@ public class JsonataExecutorTest {
 
     protobufSchema = new ProtobufSchema(NewWidgetProto.NewWidget.getDescriptor());
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.UPGRADE,
-        JsonataExecutor.TYPE, null, ruleString);
+        JsonataExecutor.TYPE, null, ruleString, null, null);
     RuleSet ruleSet = new RuleSet(Collections.singletonList(rule), Collections.emptyList());
     props = ImmutableSortedMap.of("application.version", "v2");
     metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
@@ -449,7 +449,7 @@ public class JsonataExecutorTest {
 
     protobufSchema = new ProtobufSchema(NewWidgetProto.NewWidget.getDescriptor());
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.UPGRADE,
-        JsonataExecutor.TYPE, null, ruleString);
+        JsonataExecutor.TYPE, null, ruleString, null, null);
     RuleSet ruleSet = new RuleSet(Collections.singletonList(rule), Collections.emptyList());
     props = ImmutableSortedMap.of("application.version", "v2");
     metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
@@ -490,7 +490,7 @@ public class JsonataExecutorTest {
     NewWidget newWidget = new NewWidget("alice");
     jsonSchema = JsonSchemaUtils.getSchema(newWidget);
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.UPGRADE,
-        JsonataExecutor.TYPE, null, ruleString);
+        JsonataExecutor.TYPE, null, ruleString, null, null);
     RuleSet ruleSet = new RuleSet(Collections.singletonList(rule), Collections.emptyList());
     props = ImmutableSortedMap.of("application.version", "v2");
     metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
@@ -530,7 +530,7 @@ public class JsonataExecutorTest {
     NewWidget newWidget = new NewWidget("alice");
     jsonSchema = JsonSchemaUtils.getSchema(newWidget);
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.UPGRADE,
-        JsonataExecutor.TYPE, null, ruleString);
+        JsonataExecutor.TYPE, null, ruleString, null, null);
     RuleSet ruleSet = new RuleSet(Collections.singletonList(rule), Collections.emptyList());
     props = ImmutableSortedMap.of("application.version", "v2");
     metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
