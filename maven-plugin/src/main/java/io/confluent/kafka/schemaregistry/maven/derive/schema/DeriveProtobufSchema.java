@@ -74,14 +74,7 @@ public class DeriveProtobufSchema extends DeriveSchema {
     if (records.size() > 0) {
       items.add(mergeRecords(records));
     }
-
-    if (items.size() > 1) {
-      throw new IllegalArgumentException(String.format("Found multiple data types: %s", items));
-    } else if (items.size() == 1) {
-      mergedArray.set("items", items.get(0));
-    } else {
-      mergedArray.set("items", getNullSchema());
-    }
+    getSingleDataType(mergedArray, items);
     return mergedArray;
   }
 
