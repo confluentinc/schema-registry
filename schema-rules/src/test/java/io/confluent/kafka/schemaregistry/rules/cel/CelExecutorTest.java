@@ -170,7 +170,7 @@ public class CelExecutorTest {
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
         CelExecutor.TYPE, null, "message.name == \"testUser\" && message.kind == \"ONE\"",
-        null, null, true);
+        null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
@@ -185,7 +185,7 @@ public class CelExecutorTest {
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
         CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
-        null, null, true);
+        null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
@@ -203,7 +203,7 @@ public class CelExecutorTest {
     Schema schema = ReflectData.get().getSchema(widget.getClass());
     AvroSchema avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
-        CelExecutor.TYPE, null, "message.name == \"alice\"", null, null, true);
+        CelExecutor.TYPE, null, "message.name == \"alice\"", null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
@@ -232,7 +232,7 @@ public class CelExecutorTest {
     AvroSchema avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
-        null, null, true);
+        null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
@@ -272,7 +272,7 @@ public class CelExecutorTest {
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
-        null, null, true);
+        null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     protobufSchema = protobufSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
     schemaRegistry.register(topic + "-value", protobufSchema);
@@ -348,7 +348,7 @@ public class CelExecutorTest {
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
-        null, null, true);
+        null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     jsonSchema = jsonSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
     schemaRegistry.register(topic + "-value", jsonSchema);

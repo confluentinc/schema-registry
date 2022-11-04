@@ -36,7 +36,7 @@ public class Rule {
   private String expr;
   private String onSuccess;
   private String onFailure;
-  private boolean enabled = true;
+  private boolean disabled;
 
   @JsonCreator
   public Rule(@JsonProperty("name") String name,
@@ -47,7 +47,7 @@ public class Rule {
               @JsonProperty("expr") String expr,
               @JsonProperty("onSuccess") String onSuccess,
               @JsonProperty("onFailure") String onFailure,
-              @JsonProperty("enabled") boolean enabled) {
+              @JsonProperty("disabled") boolean disabled) {
     this.name = name;
     this.kind = kind;
     this.mode = mode;
@@ -56,7 +56,7 @@ public class Rule {
     this.expr = expr;
     this.onSuccess = onSuccess;
     this.onFailure = onFailure;
-    this.enabled = enabled;
+    this.disabled = disabled;
   }
 
   public Rule(io.confluent.kafka.schemaregistry.client.rest.entities.Rule rule) {
@@ -68,7 +68,7 @@ public class Rule {
     this.expr = rule.getExpr();
     this.onSuccess = rule.getOnSuccess();
     this.onFailure = rule.getOnFailure();
-    this.enabled = rule.isEnabled();
+    this.disabled = rule.isDisabled();
   }
 
   @Schema(description = "Rule name")
@@ -159,15 +159,15 @@ public class Rule {
     this.onFailure = onFailure;
   }
 
-  @Schema(description = "Whether the rule is enabled")
-  @JsonProperty("enabled")
-  public boolean isEnabled() {
-    return enabled;
+  @Schema(description = "Whether the rule is disabled")
+  @JsonProperty("disabled")
+  public boolean isDisabled() {
+    return disabled;
   }
 
-  @JsonProperty("enabled")
-  public void setEnabled(boolean enabled) {
-    this.enabled = enabled;
+  @JsonProperty("disabled")
+  public void setDisabled(boolean disabled) {
+    this.disabled = disabled;
   }
 
   @Override
@@ -187,12 +187,12 @@ public class Rule {
         && Objects.equals(expr, rule.expr)
         && Objects.equals(onSuccess, rule.onSuccess)
         && Objects.equals(onFailure, rule.onFailure)
-        && enabled == rule.enabled;
+        && disabled == rule.disabled;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, kind, mode, type, annotations, expr, onSuccess, onFailure, enabled);
+    return Objects.hash(name, kind, mode, type, annotations, expr, onSuccess, onFailure, disabled);
   }
 
   @Override
@@ -206,7 +206,7 @@ public class Rule {
         + ", expr='" + expr + '\''
         + ", onSuccess='" + onSuccess + '\''
         + ", onFailure='" + onFailure + '\''
-        + ", enabled='" + enabled + '\''
+        + ", disabled='" + disabled + '\''
         + '}';
   }
 
@@ -220,7 +220,7 @@ public class Rule {
         getExpr(),
         getOnSuccess(),
         getOnFailure(),
-        isEnabled()
+        isDisabled()
     );
   }
 }
