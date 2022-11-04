@@ -59,6 +59,12 @@
             <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

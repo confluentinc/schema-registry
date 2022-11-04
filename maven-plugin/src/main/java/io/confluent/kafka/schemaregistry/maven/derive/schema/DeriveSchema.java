@@ -218,6 +218,17 @@ public abstract class DeriveSchema {
     schemaInformationList.add(schemaElement);
   }
 
+  protected void getSingleDataType(ObjectNode mergedArray, ArrayNode items) {
+    if (items.size() > 1) {
+      throw new IllegalArgumentException(String.format("Found multiple data types: %s", items));
+    } else if (items.size() == 1) {
+      mergedArray.set("items", items.get(0));
+    } else {
+      // No items found, setting items as null
+      mergedArray.set("items", getNullSchema());
+    }
+  }
+
   protected abstract JsonNode convertToFormat(JsonNode schema, String name);
 
   protected abstract ObjectNode mergeMultipleDataTypes(ObjectNode mergedArray,
