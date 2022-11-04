@@ -42,7 +42,7 @@ public class JsonataExecutor implements RuleExecutor {
     JsonNode jsonObj = (JsonNode) message;
     Expressions expr;
     try {
-      expr = Expressions.parse(ctx.rule().getBody());
+      expr = Expressions.parse(ctx.rule().getExpr());
     } catch (ParseException e) {
       throw new RuleException("Could not parse expression", e);
     } catch (EvaluateRuntimeException ere) {

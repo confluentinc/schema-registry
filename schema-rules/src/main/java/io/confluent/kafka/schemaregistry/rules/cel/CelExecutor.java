@@ -65,7 +65,7 @@ public class CelExecutor implements RuleExecutor {
   protected Object execute(
       RuleContext ctx, Object obj, Map<String, Object> args)
       throws RuleException {
-    return execute(ctx.rule().getBody(), obj, args);
+    return execute(ctx.rule().getExpr(), obj, args);
   }
 
   private Object execute(String rule, Object obj, Map<String, Object> args)
