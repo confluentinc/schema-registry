@@ -36,6 +36,7 @@ public class Rule {
   private String expr;
   private String onSuccess;
   private String onFailure;
+  private boolean enabled = true;
 
   @JsonCreator
   public Rule(@JsonProperty("name") String name,
@@ -45,7 +46,8 @@ public class Rule {
               @JsonProperty("annotations") SortedSet<String> annotations,
               @JsonProperty("expr") String expr,
               @JsonProperty("onSuccess") String onSuccess,
-              @JsonProperty("onFailure") String onFailure) {
+              @JsonProperty("onFailure") String onFailure,
+              @JsonProperty("enabled") boolean enabled) {
     this.name = name;
     this.kind = kind;
     this.mode = mode;
@@ -54,6 +56,7 @@ public class Rule {
     this.expr = expr;
     this.onSuccess = onSuccess;
     this.onFailure = onFailure;
+    this.enabled = enabled;
   }
 
   public Rule(io.confluent.kafka.schemaregistry.client.rest.entities.Rule rule) {
@@ -65,6 +68,7 @@ public class Rule {
     this.expr = rule.getExpr();
     this.onSuccess = rule.getOnSuccess();
     this.onFailure = rule.getOnFailure();
+    this.enabled = rule.isEnabled();
   }
 
   @Schema(description = "Rule name")
@@ -155,6 +159,17 @@ public class Rule {
     this.onFailure = onFailure;
   }
 
+  @Schema(description = "Whether the rule is enabled")
+  @JsonProperty("enabled")
+  public boolean isEnabled() {
+    return enabled;
+  }
+
+  @JsonProperty("enabled")
+  public void setEnabled(boolean enabled) {
+    this.enabled = enabled;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -171,12 +186,13 @@ public class Rule {
         && Objects.equals(annotations, rule.annotations)
         && Objects.equals(expr, rule.expr)
         && Objects.equals(onSuccess, rule.onSuccess)
-        && Objects.equals(onFailure, rule.onFailure);
+        && Objects.equals(onFailure, rule.onFailure)
+        && enabled == rule.enabled;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, kind, mode, type, annotations, expr, onSuccess, onFailure);
+    return Objects.hash(name, kind, mode, type, annotations, expr, onSuccess, onFailure, enabled);
   }
 
   @Override
@@ -190,6 +206,7 @@ public class Rule {
         + ", expr='" + expr + '\''
         + ", onSuccess='" + onSuccess + '\''
         + ", onFailure='" + onFailure + '\''
+        + ", enabled='" + enabled + '\''
         + '}';
   }
 
@@ -202,7 +219,8 @@ public class Rule {
         getAnnotations(),
         getExpr(),
         getOnSuccess(),
-        getOnFailure()
+        getOnFailure(),
+        isEnabled()
     );
   }
 }
