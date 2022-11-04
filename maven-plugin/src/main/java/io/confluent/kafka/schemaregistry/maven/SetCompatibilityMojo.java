@@ -34,6 +34,11 @@ public class SetCompatibilityMojo extends SchemaRegistryMojo {
   Map<String, String> compatibilityLevels = new HashMap<>();
 
   public void execute() throws MojoExecutionException {
+    if (skip) {
+      getLog().info("Plugin execution has been skipped");
+      return;
+    }
+
     for (Map.Entry<String, String> entry : compatibilityLevels.entrySet()) {
       if (entry.getValue().equalsIgnoreCase("null")) {
         deleteConfig(entry.getKey());
