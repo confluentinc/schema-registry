@@ -557,8 +557,6 @@ public class ProtobufSchema implements ParsedSchema {
         imports.add(depName);
       }
     }
-    ImmutableList.Builder<ExtendElement> extendElements =
-        toExtendElements(file, file.getExtensionList());
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (file.getOptions().hasJavaPackage()) {
       options.add(new OptionElement(
@@ -644,6 +642,8 @@ public class ProtobufSchema implements ParsedSchema {
       }
     }
     options.addAll(toCustomOptions(file.getOptions()));
+    ImmutableList.Builder<ExtendElement> extendElements =
+        toExtendElements(file, file.getExtensionList());
     return new ProtoFileElement(DEFAULT_LOCATION,
         packageName,
         syntax,
@@ -787,8 +787,6 @@ public class ProtobufSchema implements ParsedSchema {
       ExtensionsElement extension = toExtension(extensionRange);
       extensions.add(extension);
     }
-    ImmutableList.Builder<ExtendElement> extendElements =
-        toExtendElements(file, descriptor.getExtensionList());
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (descriptor.getOptions().hasNoStandardDescriptorAccessor()) {
       OptionElement option = new OptionElement(
@@ -819,6 +817,8 @@ public class ProtobufSchema implements ParsedSchema {
       }
     }
     options.addAll(toCustomOptions(descriptor.getOptions()));
+    ImmutableList.Builder<ExtendElement> extendElements =
+        toExtendElements(file, descriptor.getExtensionList());
     // NOTE: skip groups
     return new MessageElement(DEFAULT_LOCATION,
         name,
