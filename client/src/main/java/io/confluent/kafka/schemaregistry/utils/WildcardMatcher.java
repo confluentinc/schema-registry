@@ -27,11 +27,11 @@ public class WildcardMatcher {
   /**
    * Matches fully-qualified names that use dot (.) as the name boundary.
    *
-   * A '?' matches a single character.
+   * <p>A '?' matches a single character.
    * A '*' matches one or more characters within a name boundary.
    * A '**' matches one or more characters across name boundaries.
    *
-   * Examples:
+   * <p>Examples:
    * <pre>
    * wildcardMatch("eve", "eve*")                  --&gt; true
    * wildcardMatch("alice.bob.eve", "a*.bob.eve")  --&gt; true
