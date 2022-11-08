@@ -47,5 +47,12 @@ public class WildcardMatcherTest {
     assertFalse(WildcardMatcher.match("BARFOO", "*Foo"));
     assertFalse(WildcardMatcher.match("FOO", "Foo*"));
     assertFalse(WildcardMatcher.match("FOOBAR", "Foo*"));
+    assertTrue(WildcardMatcher.match("eve", "eve*"));
+    assertTrue(WildcardMatcher.match("alice.bob.eve", "a*.bob.eve"));
+    assertTrue(WildcardMatcher.match("alice.bob.eve", "a*.bob.e*"));
+    assertFalse(WildcardMatcher.match("alice.bob.eve", "a*"));
+    assertTrue(WildcardMatcher.match("alice.bob.eve", "a**"));
+    assertFalse(WildcardMatcher.match("alice.bob.eve", "alice.bob*"));
+    assertTrue(WildcardMatcher.match("alice.bob.eve", "alice.bob**"));
   }
 }
