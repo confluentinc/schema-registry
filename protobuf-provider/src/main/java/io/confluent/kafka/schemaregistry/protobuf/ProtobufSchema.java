@@ -1580,9 +1580,7 @@ public class ProtobufSchema implements ParsedSchema {
             .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
         Boolean isDeprecated = findOption(DEPRECATED, options)
             .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-        Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
-        String doc = findDoc(meta);
-        Map<String, String> params = findParams(meta);
+        ProtobufMeta metadata = findMeta(CONFLUENT_FIELD_META, options);
         message.addExtendDefinition(
             extendElement.getName(),
             label,
@@ -1591,8 +1589,7 @@ public class ProtobufSchema implements ParsedSchema {
             field.getTag(),
             defaultVal,
             jsonName,
-            doc,
-            params,
+            metadata,
             ctype,
             isPacked,
             jstype,
