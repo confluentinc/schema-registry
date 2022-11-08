@@ -545,22 +545,6 @@ public class ProtobufSchema implements ParsedSchema {
       ServiceElement service = toService(sd);
       services.add(service);
     }
-    Map<String, ImmutableList.Builder<FieldElement>> extendFieldElements = new LinkedHashMap<>();
-    for (FieldDescriptorProto fd : file.getExtensionList()) {
-      // Note that the extendee is a fully qualified name
-      ImmutableList.Builder<FieldElement> fields = extendFieldElements.computeIfAbsent(
-          fd.getExtendee(), k -> ImmutableList.builder());
-      fields.add(toField(file, fd, false));
-    }
-    for (DescriptorProto md : file.getMessageTypeList()) {
-      addExtendFieldElements(file, md, extendFieldElements);
-    }
-    ImmutableList.Builder<ExtendElement> extendElements = ImmutableList.builder();
-    for (Map.Entry<String, ImmutableList.Builder<FieldElement>> extendFieldElement :
-        extendFieldElements.entrySet()) {
-      extendElements.add(new ExtendElement(DEFAULT_LOCATION,
-          extendFieldElement.getKey(), "", extendFieldElement.getValue().build()));
-    }
     ImmutableList.Builder<String> imports = ImmutableList.builder();
     ImmutableList.Builder<String> publicImports = ImmutableList.builder();
     List<String> dependencyList = file.getDependencyList();
@@ -658,6 +642,8 @@ public class ProtobufSchema implements ParsedSchema {
       }
     }
     options.addAll(toCustomOptions(file.getOptions()));
+    ImmutableList.Builder<ExtendElement> extendElements =
+        toExtendElements(file, file.getExtensionList());
     return new ProtoFileElement(DEFAULT_LOCATION,
         packageName,
         syntax,
@@ -668,6 +654,24 @@ public class ProtobufSchema implements ParsedSchema {
         extendElements.build(),
         options.build()
     );
+  }
+
+  private static ImmutableList.Builder<ExtendElement> toExtendElements(
+      FileDescriptorProto file, List<FieldDescriptorProto> fields) {
+    Map<String, ImmutableList.Builder<FieldElement>> extendFieldElements = new LinkedHashMap<>();
+    for (FieldDescriptorProto fd : fields) {
+      // Note that the extendee is a fully qualified name
+      ImmutableList.Builder<FieldElement> extendFields = extendFieldElements.computeIfAbsent(
+          fd.getExtendee(), k -> ImmutableList.builder());
+      extendFields.add(toField(file, fd, false));
+    }
+    ImmutableList.Builder<ExtendElement> extendElements = ImmutableList.builder();
+    for (Map.Entry<String, ImmutableList.Builder<FieldElement>> extendFieldElement :
+        extendFieldElements.entrySet()) {
+      extendElements.add(new ExtendElement(DEFAULT_LOCATION,
+          extendFieldElement.getKey(), "", extendFieldElement.getValue().build()));
+    }
+    return extendElements;
   }
 
   private static List<OptionElement> toCustomOptions(ExtendableMessage<?> options) {
@@ -813,6 +817,8 @@ public class ProtobufSchema implements ParsedSchema {
       }
     }
     options.addAll(toCustomOptions(descriptor.getOptions()));
+    ImmutableList.Builder<ExtendElement> extendElements =
+        toExtendElements(file, descriptor.getExtensionList());
     // NOTE: skip groups
     return new MessageElement(DEFAULT_LOCATION,
         name,
@@ -826,7 +832,8 @@ public class ProtobufSchema implements ParsedSchema {
             .filter(e -> !e.getFields().isEmpty())
             .collect(Collectors.toList()),
         extensions.build(),
-        Collections.emptyList()
+        Collections.emptyList(),
+        extendElements.build()
     );
   }
 
@@ -1001,19 +1008,6 @@ public class ProtobufSchema implements ParsedSchema {
     }
     options.addAll(toCustomOptions(sd.getOptions()));
     return new ServiceElement(DEFAULT_LOCATION, name, "", methods.build(), options.build());
-  }
-
-  private static void addExtendFieldElements(FileDescriptorProto file, DescriptorProto descriptor,
-      Map<String, ImmutableList.Builder<FieldElement>> extendFieldElements) {
-    for (FieldDescriptorProto fd : descriptor.getExtensionList()) {
-      // Note that the extendee is a fully qualified name
-      ImmutableList.Builder<FieldElement> fields = extendFieldElements.computeIfAbsent(
-          fd.getExtendee(), k -> ImmutableList.builder());
-      fields.add(toField(file, fd, false));
-    }
-    for (DescriptorProto nestedDesc : descriptor.getNestedTypeList()) {
-      addExtendFieldElements(file, nestedDesc, extendFieldElements);
-    }
   }
 
   private static FieldElement toField(
@@ -1506,6 +1500,42 @@ public class ProtobufSchema implements ParsedSchema {
           throw new IllegalStateException("Unsupported extensions type: " + elem.getClass()
               .getName());
         }
+      }
+    }
+    for (ExtendElement extendElement : messageElem.getExtendDeclarations()) {
+      for (FieldElement field : extendElement.getFields()) {
+        Field.Label fieldLabel = field.getLabel();
+        String label = fieldLabel != null ? fieldLabel.toString().toLowerCase() : null;
+        String fieldType = field.getType();
+        String defaultVal = field.getDefaultValue();
+        String jsonName = field.getJsonName();
+        Map<String, OptionElement> options = mergeOptions(field.getOptions());
+        CType ctype = findOption(CTYPE, options)
+            .map(o -> CType.valueOf(o.getValue().toString())).orElse(null);
+        Boolean isPacked = findOption(PACKED, options)
+            .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+        JSType jstype = findOption(JSTYPE, options)
+            .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
+        Boolean isDeprecated = findOption(DEPRECATED, options)
+            .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+        Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
+        String doc = findDoc(meta);
+        Map<String, String> params = findParams(meta);
+        message.addExtendDefinition(
+            extendElement.getName(),
+            label,
+            fieldType,
+            field.getName(),
+            field.getTag(),
+            defaultVal,
+            jsonName,
+            doc,
+            params,
+            ctype,
+            isPacked,
+            jstype,
+            isDeprecated
+        );
       }
     }
     Map<String, OptionElement> options = mergeOptions(messageElem.getOptions());
