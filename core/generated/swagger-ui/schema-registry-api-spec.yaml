@@ -1285,6 +1285,11 @@ paths:
         description: Whether to look up deleted subjects
         schema:
           type: boolean
+      - name: deletedOnly
+        in: query
+        description: Whether to return deleted subjects only
+        schema:
+          type: boolean
       responses:
         "200":
           description: List of subjects matching the specified parameters.
@@ -1487,6 +1492,11 @@ paths:
       - name: deleted
         in: query
         description: Whether to include deleted schemas
+        schema:
+          type: boolean
+      - name: deletedOnly
+        in: query
+        description: Whether to return deleted schemas only
         schema:
           type: boolean
       responses:

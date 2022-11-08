@@ -55,17 +55,17 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   SchemaString get(int id, String subject) throws SchemaRegistryException;
 
   default Set<String> listSubjects() throws SchemaRegistryException {
-    return listSubjects(false);
+    return listSubjects(LookupFilter.DEFAULT);
   }
 
-  Set<String> listSubjects(boolean returnDeletedSubjects)
+  Set<String> listSubjects(LookupFilter filter)
           throws SchemaRegistryException;
 
-  Iterator<Schema> getAllVersions(String subject, boolean returnDeletedSchemas)
+  Iterator<Schema> getAllVersions(String subject, LookupFilter filter)
       throws SchemaRegistryException;
 
   Iterator<Schema> getVersionsWithSubjectPrefix(
-      String prefix, boolean returnDeletedSchemas, boolean latestOnly)
+      String prefix, LookupFilter filter, boolean latestOnly)
       throws SchemaRegistryException;
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
