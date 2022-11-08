@@ -170,15 +170,14 @@ public class MessageDefinition {
         int num,
         String defaultVal,
         String jsonName,
-        String doc,
-        Map<String, String> params,
+        ProtobufMeta meta,
         CType ctype,
         Boolean isPacked,
         JSType jstype,
         Boolean isDeprecated
     ) {
       FieldDescriptorProto.Builder fieldBuilder = MessageDefinition.getFieldBuilder(label, false,
-          type, name, num, defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated,
+          type, name, num, defaultVal, jsonName, meta, ctype, isPacked, jstype, isDeprecated,
           null);
       fieldBuilder.setExtendee(extendee);
       mMsgTypeBuilder.addExtension(fieldBuilder.build());
