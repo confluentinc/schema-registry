@@ -103,8 +103,8 @@ public class Context {
       boolean isOriginal
   ) {
     setPackageName(protoFile.getPackageName(), isOriginal);
-    collectTypeInfo(ref, protoFile.getTypes(), isOriginal);
     collectExtendInfo(ref, protoFile.getExtendDeclarations(), isOriginal);
+    collectTypeInfo(ref, protoFile.getTypes(), isOriginal);
   }
 
   private void collectTypeInfo(
@@ -119,6 +119,7 @@ public class Context {
         Optional<FieldElement> value = Optional.empty();
         if (typeElement instanceof MessageElement) {
           MessageElement messageElement = (MessageElement) typeElement;
+          collectExtendInfo(ref, messageElement.getExtendDeclarations(), isOriginal);
           isMap = ProtobufSchema.findOption("map_entry", messageElement.getOptions())
               .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(false);
           if (isMap) {
@@ -155,8 +156,8 @@ public class Context {
       boolean isOriginal
   ) {
     for (ExtendElement extendElement : extendElements) {
-      try (Context.NamedScope namedScope = enterName(extendElement.getName())) {
-        for (FieldElement fieldElement : extendElement.getFields()) {
+      for (FieldElement fieldElement : extendElement.getFields()) {
+        try (Context.NamedScope namedScope = enterName(fieldElement.getName())) {
           addExtendField(ref, fieldElement, isOriginal);
         }
       }
@@ -165,7 +166,7 @@ public class Context {
 
   private void addExtendField(
       final SchemaReference ref, final FieldElement field, final boolean isOriginal) {
-    String name = field.getName();
+    String name = String.join(".", fullPath);
     String packageName = isOriginal ? originalPackageName : updatePackageName;
     if (!packageName.isEmpty()) {
       name = packageName + "." + name;

@@ -162,6 +162,29 @@ public class MessageDefinition {
       return this;
     }
 
+    public Builder addExtendDefinition(
+        String extendee,
+        String label,
+        String type,
+        String name,
+        int num,
+        String defaultVal,
+        String jsonName,
+        String doc,
+        Map<String, String> params,
+        CType ctype,
+        Boolean isPacked,
+        JSType jstype,
+        Boolean isDeprecated
+    ) {
+      FieldDescriptorProto.Builder fieldBuilder = MessageDefinition.getFieldBuilder(label, false,
+          type, name, num, defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated,
+          null);
+      fieldBuilder.setExtendee(extendee);
+      mMsgTypeBuilder.addExtension(fieldBuilder.build());
+      return this;
+    }
+
     // Note: added
     public Builder setNoStandardDescriptorAccessor(boolean noStandardDescriptorAccessor) {
       DescriptorProtos.MessageOptions.Builder optionsBuilder =

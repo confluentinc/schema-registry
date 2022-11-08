@@ -470,6 +470,26 @@ public class ProtobufSchemaUtils {
         appendIndented(sb, toString(ctx, extension));
       }
     }
+    if (!ctx.ignoreExtensions() && !type.getExtendDeclarations().isEmpty()) {
+      sb.append('\n');
+      List<ExtendElement> extendElems = type.getExtendDeclarations();
+      if (ctx.normalize()) {
+        extendElems = extendElems.stream()
+            .flatMap(e -> e.getFields().stream().map(f -> new Pair<>(resolve(ctx, e.getName()), f)))
+            .collect(Collectors.groupingBy(
+                Pair::getFirst,
+                LinkedHashMap::new,  // deterministic order
+                Collectors.mapping(Pair::getSecond, Collectors.toList()))
+            )
+            .entrySet()
+            .stream()
+            .map(e -> new ExtendElement(DEFAULT_LOCATION, e.getKey(), "", e.getValue()))
+            .collect(Collectors.toList());
+      }
+      for (ExtendElement extendElem : extendElems) {
+        appendIndented(sb, toString(ctx, extendElem));
+      }
+    }
     List<TypeElement> types = filterTypes(ctx, type.getNestedTypes());
     if (!types.isEmpty()) {
       sb.append('\n');
