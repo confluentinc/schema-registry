@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -95,9 +96,9 @@ public class SchemasResource {
     Iterator<Schema> schemas;
     List<Schema> filteredSchemas = new ArrayList<>();
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
+    LookupFilter filter = lookupDeletedSchema ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT;
     try {
-      schemas = schemaRegistry.getVersionsWithSubjectPrefix(
-          subjectPrefix, lookupDeletedSchema, latestOnly);
+      schemas = schemaRegistry.getVersionsWithSubjectPrefix(subjectPrefix, filter, latestOnly);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {

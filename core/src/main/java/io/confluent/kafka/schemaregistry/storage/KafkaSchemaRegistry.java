@@ -679,7 +679,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         schemaValue = new SchemaValue(schema);
         schemaValue.setDeleted(true);
         kafkaStore.put(key, schemaValue);
-        if (!getAllVersions(subject, false).hasNext()) {
+        if (!getAllVersions(subject, LookupFilter.DEFAULT).hasNext()) {
           if (getMode(subject) != null) {
             deleteMode(subject);
           }
@@ -733,7 +733,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       List<Integer> deletedVersions = new ArrayList<>();
       int deleteWatermarkVersion = 0;
-      Iterator<Schema> schemasToBeDeleted = getAllVersions(subject, permanentDelete);
+      Iterator<Schema> schemasToBeDeleted = getAllVersions(subject,
+          permanentDelete ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT);
       while (schemasToBeDeleted.hasNext()) {
         deleteWatermarkVersion = schemasToBeDeleted.next().getVersion();
         SchemaKey key = new SchemaKey(subject, deleteWatermarkVersion);
@@ -1289,24 +1290,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   @Override
-  public Set<String> listSubjects(boolean returnDeletedSubjects)
+  public Set<String> listSubjects(LookupFilter filter)
           throws SchemaRegistryException {
-    try (CloseableIterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys()) {
-      return extractUniqueSubjects(allKeys, returnDeletedSubjects);
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException(
-          "Error from the backend Kafka store", e);
-    }
+    return listSubjectsWithPrefix(CONTEXT_WILDCARD, filter);
   }
 
-  public Set<String> listSubjectsWithPrefix(String prefix, boolean returnDeletedSubjects)
+  public Set<String> listSubjectsWithPrefix(String prefix, LookupFilter filter)
       throws SchemaRegistryException {
-    Set<String> subjects = new LinkedHashSet<>();
-    Iterator<Schema> iter = getVersionsWithSubjectPrefix(prefix, returnDeletedSubjects, false);
-    while (iter.hasNext()) {
-      subjects.add(iter.next().getSubject());
+    try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
+      return extractUniqueSubjects(allVersions, filter);
     }
-    return subjects;
   }
 
   public Set<String> listSubjectsForId(int id, String subject) throws SchemaRegistryException {
@@ -1365,22 +1358,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys,
-                                            boolean returnDeletedSubjects)
-      throws StoreException {
-    Set<String> subjects = new LinkedHashSet<>();
-    while (allKeys.hasNext()) {
-      SchemaRegistryKey k = allKeys.next();
-      if (k instanceof SchemaKey) {
-        SchemaKey key = (SchemaKey) k;
-        SchemaValue value = (SchemaValue) kafkaStore.get(key);
-        if (value != null
-                && (!value.isDeleted() || returnDeletedSubjects)) {
-          subjects.add(key.getSubject());
-        }
-      }
+  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryValue> allVersions,
+                                            LookupFilter filter) {
+    Map<String, Boolean> subjects = new HashMap<>();
+    while (allVersions.hasNext()) {
+      SchemaValue value = (SchemaValue) allVersions.next();
+      subjects.merge(value.getSubject(), value.isDeleted(), (v1, v2) -> v1 && v2);
     }
-    return subjects;
+
+    return subjects.keySet().stream()
+        .filter(k -> shouldInclude(subjects.get(k), filter))
+        .sorted()
+        .collect(Collectors.toCollection(LinkedHashSet::new));
   }
 
   public Set<String> subjects(String subject,
@@ -1406,20 +1395,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   @Override
-  public Iterator<Schema> getAllVersions(String subject, boolean returnDeletedSchemas)
+  public Iterator<Schema> getAllVersions(String subject, LookupFilter filter)
       throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
-      return sortSchemasByVersion(allVersions, returnDeletedSchemas).iterator();
+      return sortSchemasByVersion(allVersions, filter).iterator();
     }
   }
 
   @Override
   public Iterator<Schema> getVersionsWithSubjectPrefix(String prefix,
-      boolean returnDeletedSchemas,
-      boolean returnLatestOnly)
+                                                       LookupFilter filter,
+                                                       boolean returnLatestOnly)
       throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
-      return sortSchemasByVersion(allVersions, returnDeletedSchemas, returnLatestOnly)
+      return sortSchemasByVersion(allVersions, filter, returnLatestOnly)
           .iterator();
     }
   }
@@ -1776,18 +1765,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private List<Schema> sortSchemasByVersion(CloseableIterator<SchemaRegistryValue> schemas,
-                                            boolean returnDeletedSchemas) {
-    return sortSchemasByVersion(schemas, returnDeletedSchemas, false);
+                                            LookupFilter filter) {
+    return sortSchemasByVersion(schemas, filter, false);
   }
 
   private List<Schema> sortSchemasByVersion(CloseableIterator<SchemaRegistryValue> schemas,
-                                            boolean returnDeletedSchemas,
+                                            LookupFilter filter,
                                             boolean returnLatestOnly) {
     List<Schema> schemaList = new ArrayList<>();
     Schema previousSchema = null;
     while (schemas.hasNext()) {
       SchemaValue schemaValue = (SchemaValue) schemas.next();
-      if (!returnDeletedSchemas && schemaValue.isDeleted()) {
+      boolean shouldInclude = shouldInclude(schemaValue.isDeleted(), filter);
+      if (!shouldInclude) {
         continue;
       }
       Schema schema = getSchemaEntityFromSchemaValue(schemaValue);
@@ -1835,6 +1825,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throw new SchemaRegistryStoreException(
           "Error while retrieving schema from the backend Kafka"
           + " store", e);
+    }
+  }
+
+  private static boolean shouldInclude(boolean isDeleted, LookupFilter filter) {
+    switch (filter) {
+      case DEFAULT:
+        return !isDeleted;
+      case INCLUDE_DELETED:
+        return true;
+      case DELETED_ONLY:
+        return isDeleted;
+      default:
+        return false;
     }
   }
 

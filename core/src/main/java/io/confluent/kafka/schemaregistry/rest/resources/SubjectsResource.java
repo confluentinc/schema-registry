@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -159,12 +160,20 @@ public class SubjectsResource {
       @Parameter(description = "Subject name prefix")
       @QueryParam("subjectPrefix") String subjectPrefix,
       @Parameter(description = "Whether to look up deleted subjects")
-      @QueryParam("deleted") boolean lookupDeletedSubjects
+      @QueryParam("deleted") boolean lookupDeletedSubjects,
+      @Parameter(description = "Whether to return deleted subjects only")
+      @QueryParam("deletedOnly") boolean lookupDeletedOnlySubjects
   ) {
+    LookupFilter filter = LookupFilter.DEFAULT;
+    // if both deleted && deletedOnly are true, return deleted only
+    if (lookupDeletedOnlySubjects) {
+      filter = LookupFilter.DELETED_ONLY;
+    } else if (lookupDeletedSubjects) {
+      filter = LookupFilter.INCLUDE_DELETED;
+    }
     try {
       return schemaRegistry.listSubjectsWithPrefix(
-          subjectPrefix != null ? subjectPrefix : QualifiedSubject.CONTEXT_WILDCARD,
-          lookupDeletedSubjects);
+          subjectPrefix != null ? subjectPrefix : QualifiedSubject.CONTEXT_WILDCARD, filter);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {

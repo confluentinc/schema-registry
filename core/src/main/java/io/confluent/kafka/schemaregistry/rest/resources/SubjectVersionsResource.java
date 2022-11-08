@@ -39,6 +39,7 @@ import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -286,18 +287,20 @@ public class SubjectVersionsResource {
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = "Whether to include deleted schemas")
-      @QueryParam("deleted") boolean lookupDeletedSchema) {
+      @QueryParam("deleted") boolean lookupDeletedSchema,
+      @Parameter(description = "Whether to return deleted schemas only")
+      @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     // check if subject exists. If not, throw 404
-    Iterator<Schema> allSchemasForThisTopic;
+    Iterator<Schema> resultSchemas;
     List<Integer> allVersions = new ArrayList<>();
     String errorMessage = "Error while validating that subject "
                           + subject
                           + " exists in the registry";
     try {
-      if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
+      if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema || lookupDeletedOnlySchema)) {
         throw Errors.subjectNotFoundException(subject);
       }
     } catch (SchemaRegistryStoreException e) {
@@ -307,16 +310,22 @@ public class SubjectVersionsResource {
     }
     errorMessage = "Error while listing all versions for subject "
                    + subject;
+    LookupFilter filter = LookupFilter.DEFAULT;
+    // if both deleted && deletedOnly are true, return deleted only
+    if (lookupDeletedOnlySchema) {
+      filter = LookupFilter.DELETED_ONLY;
+    } else if (lookupDeletedSchema) {
+      filter = LookupFilter.INCLUDE_DELETED;
+    }
     try {
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject,
-              lookupDeletedSchema);
+      resultSchemas = schemaRegistry.getAllVersions(subject, filter);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    while (allSchemasForThisTopic.hasNext()) {
-      Schema schema = allSchemasForThisTopic.next();
+    while (resultSchemas.hasNext()) {
+      Schema schema = resultSchemas.next();
       allVersions.add(schema.getVersion());
     }
     return allVersions;
