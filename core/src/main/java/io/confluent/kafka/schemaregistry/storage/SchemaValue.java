@@ -33,10 +33,8 @@ import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue {
+public class SchemaValue extends SubjectValue implements Comparable<SchemaValue> {
 
-  @NotEmpty
-  private String subject;
   @Min(1)
   private Integer version;
   @Min(0)
@@ -54,7 +52,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
                      @JsonProperty("id") Integer id,
                      @JsonProperty("schema") String schema,
                      @JsonProperty("deleted") boolean deleted) {
-    this.subject = subject;
+    super(subject);
     this.version = version;
     this.id = id;
     this.schema = schema;
@@ -69,7 +67,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
                      @JsonProperty("references") List<SchemaReference> references,
                      @JsonProperty("schema") String schema,
                      @JsonProperty("deleted") boolean deleted) {
-    this.subject = subject;
+    super(subject);
     this.version = version;
     this.id = id;
     this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
@@ -79,7 +77,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
   }
 
   public SchemaValue(Schema schemaEntity) {
-    this.subject = schemaEntity.getSubject();
+    super(schemaEntity.getSubject());
     this.version = schemaEntity.getVersion();
     this.id = schemaEntity.getId();
     this.schemaType = schemaEntity.getSchemaType();
@@ -90,16 +88,6 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
         .collect(Collectors.toList());
     this.schema = schemaEntity.getSchema();
     this.deleted = false;
-  }
-
-  @JsonProperty("subject")
-  public String getSubject() {
-    return subject;
-  }
-
-  @JsonProperty("subject")
-  public void setSubject(String subject) {
-    this.subject = subject;
   }
 
   @JsonProperty("version")
@@ -171,12 +159,12 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
+    if (!super.equals(o)) {
+      return false;
+    }
 
     SchemaValue that = (SchemaValue) o;
 
-    if (!this.subject.equals(that.subject)) {
-      return false;
-    }
     if (!this.version.equals(that.version)) {
       return false;
     }
@@ -201,7 +189,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
 
   @Override
   public int hashCode() {
-    int result = subject.hashCode();
+    int result = super.hashCode();
     result = 31 * result + version;
     result = 31 * result + id.intValue();
     result = 31 * result + (schemaType != null ? schemaType.hashCode() : 0);
@@ -214,7 +202,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("{subject=" + this.subject + ",");
+    sb.append("{subject=" + this.getSubject() + ",");
     sb.append("version=" + this.version + ",");
     sb.append("id=" + this.id + ",");
     sb.append("schemaType=" + this.schemaType + ",");
@@ -226,11 +214,16 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
 
   @Override
   public int compareTo(SchemaValue that) {
-    int result = this.subject.compareTo(that.subject);
+    int result = this.getSubject().compareTo(that.getSubject());
     if (result != 0) {
       return result;
     }
     result = this.version - that.version;
     return result;
+  }
+
+  @Override
+  public SchemaKey toKey() {
+    return new SchemaKey(getSubject(), getVersion());
   }
 }
