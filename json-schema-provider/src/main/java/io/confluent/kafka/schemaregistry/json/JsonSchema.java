@@ -20,9 +20,9 @@ import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EM
 import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.BeanDescription;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,6 +46,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -122,9 +123,15 @@ public class JsonSchema implements ParsedSchema {
   private transient int hashCode = NO_HASHCODE;
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
+  private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
   private static final ObjectMapper objectMapperWithOrderedProps = Jackson.newObjectMapper(true);
+
+  private static final Map<String, Map<String, BeanPropertyWriter>> beanGetters =
+      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+  private static final Map<String, Map<String, SettableBeanProperty>> beanSetters =
+      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
 
   public JsonSchema(JsonNode jsonNode) {
     this(jsonNode, Collections.emptyList(), Collections.emptyMap(), null);
@@ -697,10 +704,8 @@ public class JsonSchema implements ParsedSchema {
   @SuppressWarnings("unchecked")
   private static BeanPropertyWriter getBeanGetter(
       RuleContext ctx, Object message, String propertyName) {
-    Map<String, Map<String, BeanPropertyWriter>> map =
-        (Map<String, Map<String, BeanPropertyWriter>>)
-            ctx.customData().computeIfAbsent(BEAN_GETTERS, k -> new HashMap<>());
-    Map<String, BeanPropertyWriter> props = map.computeIfAbsent(message.getClass().getName(),
+    Map<String, BeanPropertyWriter> props = beanGetters.computeIfAbsent(
+        message.getClass().getName(),
         k -> {
           try {
             Map<String, BeanPropertyWriter> m = new HashMap<>();
@@ -725,25 +730,22 @@ public class JsonSchema implements ParsedSchema {
   @SuppressWarnings("unchecked")
   private static SettableBeanProperty getBeanSetter(
       RuleContext ctx, Object message, String propertyName) {
-    Map<String, Map<String, SettableBeanProperty>> map =
-        (Map<String, Map<String, SettableBeanProperty>>)
-            ctx.customData().computeIfAbsent(BEAN_SETTERS, k -> new HashMap<>());
-    Map<String, SettableBeanProperty> props = map.computeIfAbsent(message.getClass().getName(),
+    Map<String, SettableBeanProperty> props = beanSetters.computeIfAbsent(
+        message.getClass().getName(),
         k -> {
           try {
             Map<String, SettableBeanProperty> m = new HashMap<>();
             JavaType type = objectMapper.constructType(message.getClass());
-            BeanDescription beanDesc = objectMapper.getDeserializationConfig().introspect(type);
-            // Alternatively we can use the blueprint default serialization ctxt on objectMapper
             DeserializationContext ctxt =
                 new DefaultDeserializationContext.Impl(BeanDeserializerFactory.instance)
                     .createDummyInstance(objectMapper.getDeserializationConfig());
-            BeanDeserializer deser = (BeanDeserializer)
-                ctxt.getFactory().createBeanDeserializer(ctxt, type, beanDesc);
-            Iterator<SettableBeanProperty> propIter = deser.properties();
-            while (propIter.hasNext()) {
-              SettableBeanProperty p = propIter.next();
-              m.put(p.getName(), p);
+            JsonDeserializer<Object> deser = ctxt.findRootValueDeserializer(type);
+            if (deser instanceof BeanDeserializer) {
+              Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
+              while (propIter.hasNext()) {
+                SettableBeanProperty p = propIter.next();
+                m.put(p.getName(), p);
+              }
             }
             return m;
           } catch (Exception e) {
