@@ -698,9 +698,6 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  private static final String BEAN_GETTERS = "beanGetters";
-  private static final String BEAN_SETTERS = "beanSetters";
-
   @SuppressWarnings("unchecked")
   private static BeanPropertyWriter getBeanGetter(
       RuleContext ctx, Object message, String propertyName) {
