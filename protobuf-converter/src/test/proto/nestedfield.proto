@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option java_package = "io.confluent.connect.protobuf.test";
+option java_outer_classname = "NestedKeyValue";
+
+import "google/protobuf/descriptor.proto";
+
+message NestedKeyValueMessage {
+  AttributeFieldEntry field1 = 1;
+}
+
+message AttributeFieldEntry {
+  int32 i32 = 1;
+  double d = 2;
+}
