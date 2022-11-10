@@ -745,7 +745,7 @@ public class JsonSchema implements ParsedSchema {
             return m;
           } catch (Exception e) {
             throw new IllegalArgumentException(
-                "Could not find JSON serializer for " + message.getClass(), e);
+                "Could not find JSON deserializer for " + message.getClass(), e);
           }
         });
     return props.get(propertyName);
