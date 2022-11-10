@@ -27,8 +27,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.BeanDeserializer;
-import com.fasterxml.jackson.databind.deser.BeanDeserializerFactory;
-import com.fasterxml.jackson.databind.deser.DefaultDeserializationContext;
+import com.fasterxml.jackson.databind.deser.DefaultDeserializationContext.Impl;
 import com.fasterxml.jackson.databind.deser.SettableBeanProperty;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BinaryNode;
@@ -733,9 +732,8 @@ public class JsonSchema implements ParsedSchema {
           try {
             Map<String, SettableBeanProperty> m = new HashMap<>();
             JavaType type = objectMapper.constructType(message.getClass());
-            DeserializationContext ctxt =
-                new DefaultDeserializationContext.Impl(BeanDeserializerFactory.instance)
-                    .createDummyInstance(objectMapper.getDeserializationConfig());
+            DeserializationContext ctxt = ((Impl) objectMapper.getDeserializationContext())
+                .createDummyInstance(objectMapper.getDeserializationConfig());
             JsonDeserializer<Object> deser = ctxt.findRootValueDeserializer(type);
             if (deser instanceof BeanDeserializer) {
               Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
