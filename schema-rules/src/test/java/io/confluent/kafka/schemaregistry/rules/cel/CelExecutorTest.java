@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.rules.cel;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -57,7 +58,6 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.reflect.ReflectData;
@@ -74,6 +74,7 @@ public class CelExecutorTest {
   private final KafkaProtobufSerializer<Widget> protobufSerializer;
   private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
+  private final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
   private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   private final String topic;
 
@@ -113,6 +114,7 @@ public class CelExecutorTest {
     protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, new HashMap(defaultConfig));
 
     jsonSchemaSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(defaultConfig));
+    jsonSchemaSerializer2 = new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(defaultConfig));
     jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, new HashMap(defaultConfig));
   }
 
@@ -387,6 +389,70 @@ public class CelExecutorTest {
     );
   }
 
+  @Test
+  public void testKafkaJsonSchemaSerializerAnnotatedFieldTransform() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    AnnotatedOldWidget widget = new AnnotatedOldWidget("alice");
+    widget.setSize(123);
+    widget.setAnnotatedSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new AnnotatedOldPii("789"), new AnnotatedOldPii("012")));
+    String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
+        + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent.annotations\": [ \"PII\" ]},"
+        + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
+        + "\"confluent.annotations\": [ \"PII\" ]},"
+        + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"size\":{\"type\":\"integer\"},"
+        + "\"version\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"size\",\"version\"],"
+        + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
+        + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent.annotations\": [ \"PII\" ]}}}}}";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    bytes = jsonSchemaSerializer2.serialize(topic, widget);
+
+    obj = jsonSchemaDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Widget",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice-suffix",
+        ((JsonNode)obj).get("name").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "123-suffix",
+        ((JsonNode)obj).get("ssn").get(0).textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "456-suffix",
+        ((JsonNode)obj).get("ssn").get(1).textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "789-suffix",
+        ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "012-suffix",
+        ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
+    );
+  }
+
   public static class OldWidget {
     private String name;
     private List<String> ssn = new ArrayList<>();
@@ -494,6 +560,121 @@ public class CelExecutorTest {
     @Override
     public int hashCode() {
       return Objects.hash(pii);
+    }
+  }
+
+  public static class AnnotatedOldWidget {
+    private String annotatedName;
+    private List<String> annotatedSsn = new ArrayList<>();
+    private List<AnnotatedOldPii> piiArray = new ArrayList<>();
+    private Map<String, AnnotatedOldPii> piiMap = new HashMap<>();
+    private int size;
+    private int version;
+
+    public AnnotatedOldWidget() {}
+    public AnnotatedOldWidget(String annotatedName) {
+      this.annotatedName = annotatedName;
+    }
+
+    @JsonProperty("name")
+    public String getAnnotatedName() {
+      return annotatedName;
+    }
+
+    @JsonProperty("name")
+    public void setAnnotatedName(String name) {
+      this.annotatedName = name;
+    }
+
+    @JsonProperty("ssn")
+    public List<String> getAnnotatedSsn() {
+      return annotatedSsn;
+    }
+
+    @JsonProperty("ssn")
+    public void setAnnotatedSsn(List<String> ssn) {
+      this.annotatedSsn = ssn;
+    }
+
+    public List<AnnotatedOldPii> getPiiArray() {
+      return piiArray;
+    }
+
+    public void setPiiArray(List<AnnotatedOldPii> pii) {
+      this.piiArray = pii;
+    }
+
+    public Map<String, AnnotatedOldPii> getPiiMap() {
+      return piiMap;
+    }
+
+    public void setPiiMap(Map<String, AnnotatedOldPii> pii) {
+      this.piiMap = pii;
+    }
+
+    public int getSize() {
+      return size;
+    }
+
+    public void setSize(int size) {
+      this.size = size;
+    }
+
+    public int getVersion() {
+      return version;
+    }
+
+    public void setVersion(int version) {
+      this.version = version;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      OldWidget widget = (OldWidget) o;
+      return annotatedName.equals(widget.name)
+          && Objects.equals(annotatedSsn, widget.ssn)
+          && Objects.equals(piiArray, widget.piiArray)
+          && Objects.equals(piiMap, widget.piiMap)
+          && size == widget.size
+          && version == widget.version;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(annotatedName, annotatedSsn, piiArray, piiMap, size, version);
+    }
+  }
+
+  public static class AnnotatedOldPii {
+    @JsonProperty("pii")
+    private String annotatedPii;
+
+    public AnnotatedOldPii() {}
+    public AnnotatedOldPii(String annotatedPii) {
+      this.annotatedPii = annotatedPii;
+    }
+
+    public String getAnnotatedPii() {
+      return annotatedPii;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      AnnotatedOldPii pii1 = (AnnotatedOldPii) o;
+      return Objects.equals(annotatedPii, pii1.annotatedPii);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(annotatedPii);
     }
   }
 }

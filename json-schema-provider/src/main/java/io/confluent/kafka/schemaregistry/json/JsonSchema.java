@@ -20,8 +20,16 @@ import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EM
 import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.BeanDescription;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.deser.BeanDeserializer;
+import com.fasterxml.jackson.databind.deser.BeanDeserializerFactory;
+import com.fasterxml.jackson.databind.deser.DefaultDeserializationContext;
+import com.fasterxml.jackson.databind.deser.SettableBeanProperty;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BinaryNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
@@ -29,6 +37,8 @@ import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
+import com.fasterxml.jackson.databind.ser.PropertyWriter;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
@@ -37,9 +47,9 @@ import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
-import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
@@ -545,10 +555,10 @@ public class JsonSchema implements ParsedSchema {
         String fullName = path + "." + propertyName;
         try (FieldContext fc = ctx.enterField(ctx, message, fullName, propertyName,
             getType(propertySchema), getInlineAnnotations(propertySchema))) {
-          FieldAccessor fieldAccessor = getFieldAccessor(message, propertyName);
-          Object value = fieldAccessor.getFieldValue();
+          PropertyAccessor propertyAccessor = getPropertyAccessor(ctx, message, propertyName);
+          Object value = propertyAccessor.getPropertyValue();
           Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
-          fieldAccessor.setFieldValue(newValue);
+          propertyAccessor.setPropertyValue(newValue);
         }
       }
       return message;
@@ -613,79 +623,134 @@ public class JsonSchema implements ParsedSchema {
     return annotations;
   }
 
-  interface FieldAccessor {
-    Object getFieldValue();
+  interface PropertyAccessor {
+    Object getPropertyValue();
 
-    void setFieldValue(Object value);
+    void setPropertyValue(Object value);
   }
 
-  private static FieldAccessor getFieldAccessor(Object message, String fieldName) {
+  private static PropertyAccessor getPropertyAccessor(
+      RuleContext ctx, Object message, String propertyName) {
     if (message instanceof ObjectNode) {
-      return new FieldAccessor() {
+      return new PropertyAccessor() {
         @Override
-        public Object getFieldValue() {
-          return (((ObjectNode) message).get(fieldName));
+        public Object getPropertyValue() {
+          return (((ObjectNode) message).get(propertyName));
         }
 
         @Override
-        public void setFieldValue(Object value) {
+        public void setPropertyValue(Object value) {
           ObjectNode objectNode = (ObjectNode) message;
           if (value instanceof Boolean) {
-            objectNode.put(fieldName, (Boolean) value);
+            objectNode.put(propertyName, (Boolean) value);
           } else if (value instanceof BigDecimal) {
-            objectNode.put(fieldName, (BigDecimal) value);
+            objectNode.put(propertyName, (BigDecimal) value);
           } else if (value instanceof BigInteger) {
-            objectNode.put(fieldName, (BigInteger) value);
+            objectNode.put(propertyName, (BigInteger) value);
           } else if (value instanceof Long) {
-            objectNode.put(fieldName, (Long) value);
+            objectNode.put(propertyName, (Long) value);
           } else if (value instanceof Double) {
-            objectNode.put(fieldName, (Double) value);
+            objectNode.put(propertyName, (Double) value);
           } else if (value instanceof Float) {
-            objectNode.put(fieldName, (Float) value);
+            objectNode.put(propertyName, (Float) value);
           } else if (value instanceof Integer) {
-            objectNode.put(fieldName, (Integer) value);
+            objectNode.put(propertyName, (Integer) value);
           } else if (value instanceof Short) {
-            objectNode.put(fieldName, (Short) value);
+            objectNode.put(propertyName, (Short) value);
           } else if (value instanceof Byte) {
-            objectNode.put(fieldName, (Byte) value);
+            objectNode.put(propertyName, (Byte) value);
           } else if (value instanceof byte[]) {
-            objectNode.put(fieldName, (byte[]) value);
+            objectNode.put(propertyName, (byte[]) value);
           } else {
-            objectNode.put(fieldName, value.toString());
+            objectNode.put(propertyName, value.toString());
           }
         }
       };
     } else {
-      Field field = getDeclaredField(message, fieldName);
-      return new FieldAccessor() {
+      BeanPropertyWriter getter = getBeanGetter(ctx, message, propertyName);
+      SettableBeanProperty setter = getBeanSetter(ctx, message, propertyName);
+      return new PropertyAccessor() {
         @Override
-        public Object getFieldValue() {
+        public Object getPropertyValue() {
           try {
-            return field.get(message);
-          } catch (IllegalAccessException e) {
-            throw new IllegalStateException("Could not get field " + field.getName(), e);
+            return getter.get(message);
+          } catch (Exception e) {
+            throw new IllegalStateException("Could not get property " + propertyName, e);
           }
         }
 
         @Override
-        public void setFieldValue(Object value) {
+        public void setPropertyValue(Object value) {
           try {
-            field.set(message, value);
-          } catch (IllegalAccessException e) {
-            throw new IllegalStateException("Could not set field " + field.getName(), e);
+            setter.set(message, value);
+          } catch (IOException e) {
+            throw new IllegalStateException("Could not set property " + propertyName, e);
           }
         }
       };
     }
   }
 
-  private static Field getDeclaredField(Object message, String fieldName) {
-    try {
-      Field declaredField = message.getClass().getDeclaredField(fieldName);
-      declaredField.setAccessible(true);
-      return declaredField;
-    } catch (NoSuchFieldException e) {
-      return null;
-    }
+  private static final String BEAN_GETTERS = "beanGetters";
+  private static final String BEAN_SETTERS = "beanSetters";
+
+  @SuppressWarnings("unchecked")
+  private static BeanPropertyWriter getBeanGetter(
+      RuleContext ctx, Object message, String propertyName) {
+    Map<String, Map<String, BeanPropertyWriter>> map =
+        (Map<String, Map<String, BeanPropertyWriter>>)
+            ctx.customData().computeIfAbsent(BEAN_GETTERS, k -> new HashMap<>());
+    Map<String, BeanPropertyWriter> props = map.computeIfAbsent(message.getClass().getName(),
+        k -> {
+          try {
+            Map<String, BeanPropertyWriter> m = new HashMap<>();
+            JsonSerializer<?> ser = objectMapper.getSerializerProviderInstance()
+                .findValueSerializer(message.getClass());
+            Iterator<PropertyWriter> propIter = ser.properties();
+            while (propIter.hasNext()) {
+              PropertyWriter p = propIter.next();
+              if (p instanceof BeanPropertyWriter) {
+                m.put(p.getName(), (BeanPropertyWriter) p);
+              }
+            }
+            return m;
+          } catch (Exception e) {
+            throw new IllegalArgumentException(
+                "Could not find JSON serializer for " + message.getClass(), e);
+          }
+        });
+    return props.get(propertyName);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static SettableBeanProperty getBeanSetter(
+      RuleContext ctx, Object message, String propertyName) {
+    Map<String, Map<String, SettableBeanProperty>> map =
+        (Map<String, Map<String, SettableBeanProperty>>)
+            ctx.customData().computeIfAbsent(BEAN_SETTERS, k -> new HashMap<>());
+    Map<String, SettableBeanProperty> props = map.computeIfAbsent(message.getClass().getName(),
+        k -> {
+          try {
+            Map<String, SettableBeanProperty> m = new HashMap<>();
+            JavaType type = objectMapper.constructType(message.getClass());
+            BeanDescription beanDesc = objectMapper.getDeserializationConfig().introspect(type);
+            // Alternatively we can use the blueprint default serialization ctxt on objectMapper
+            DeserializationContext ctxt =
+                new DefaultDeserializationContext.Impl(BeanDeserializerFactory.instance)
+                    .createDummyInstance(objectMapper.getDeserializationConfig());
+            BeanDeserializer deser = (BeanDeserializer)
+                ctxt.getFactory().createBeanDeserializer(ctxt, type, beanDesc);
+            Iterator<SettableBeanProperty> propIter = deser.properties();
+            while (propIter.hasNext()) {
+              SettableBeanProperty p = propIter.next();
+              m.put(p.getName(), p);
+            }
+            return m;
+          } catch (Exception e) {
+            throw new IllegalArgumentException(
+                "Could not find JSON serializer for " + message.getClass(), e);
+          }
+        });
+    return props.get(propertyName);
   }
 }
