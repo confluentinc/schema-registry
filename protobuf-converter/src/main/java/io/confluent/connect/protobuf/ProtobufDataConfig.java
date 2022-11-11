@@ -59,6 +59,11 @@ public class ProtobufDataConfig extends AbstractDataConfig {
   public static final String WRAPPER_FOR_RAW_PRIMITIVES_DOC = "Whether a wrapper message "
       + "should be interpreted as a raw primitive at the root level";
 
+  public static final String EXPOSE_NULL_STRUCTS_CONFIG = "expose.null.structs";
+  public static final boolean EXPOSE_NULL_STRUCTS_DEFAULT = false;
+  public static final String EXPOSE_NULL_STRUCTS_DOC = "Whether to generate a default value "
+      + "for null structs";
+
   public static ConfigDef baseConfigDef() {
     return AbstractDataConfig.baseConfigDef()
         .define(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG,
@@ -92,7 +97,12 @@ public class ProtobufDataConfig extends AbstractDataConfig {
             ConfigDef.Type.BOOLEAN,
             WRAPPER_FOR_RAW_PRIMITIVES_DEFAULT,
             ConfigDef.Importance.MEDIUM,
-            WRAPPER_FOR_RAW_PRIMITIVES_DOC
+            WRAPPER_FOR_RAW_PRIMITIVES_DOC)
+        .define(EXPOSE_NULL_STRUCTS_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            EXPOSE_NULL_STRUCTS_DEFAULT,
+            ConfigDef.Importance.LOW,
+            EXPOSE_NULL_STRUCTS_DOC
         );
   }
 
@@ -126,6 +136,10 @@ public class ProtobufDataConfig extends AbstractDataConfig {
 
   public boolean useWrapperForRawPrimitives() {
     return this.getBoolean(WRAPPER_FOR_RAW_PRIMITIVES_CONFIG);
+  }
+
+  public boolean exposeNullStructs() {
+    return this.getBoolean(EXPOSE_NULL_STRUCTS_CONFIG);
   }
 
   public static class Builder {

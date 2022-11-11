@@ -753,13 +753,35 @@ public class ProtobufDataTest {
     NestedKeyValue.NestedKeyValueMessage.Builder builder = NestedKeyValue.NestedKeyValueMessage.newBuilder();
     NestedKeyValue.NestedKeyValueMessage message = builder.build();
 
-    SchemaAndValue result = getSchemaAndValue(message, true);
-    Object schema = result.schema();
-    Object value = result.value();
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+            .with(ProtobufDataConfig.WRAPPER_FOR_RAW_PRIMITIVES_CONFIG, true)
+            .with(ProtobufDataConfig.EXPOSE_NULL_STRUCTS_CONFIG, true)
+            .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue result = getSchemaAndValue(protobufData, message);
 
-    assertNotNull(result);
-    assertNotNull(schema);
-    assertNotNull(value);
+    Schema schema = result.schema();
+    Struct value = (Struct) result.value();
+
+    assertNotNull(value.get(schema.field("wrapper_field").schema().field("nested_field")));
+  }
+
+  @Test
+  public void testToConnectNestedNullNegative() throws Exception {
+    NestedKeyValue.NestedKeyValueMessage.Builder builder = NestedKeyValue.NestedKeyValueMessage.newBuilder();
+    NestedKeyValue.NestedKeyValueMessage message = builder.build();
+
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+            .with(ProtobufDataConfig.WRAPPER_FOR_RAW_PRIMITIVES_CONFIG, true)
+            .with(ProtobufDataConfig.EXPOSE_NULL_STRUCTS_CONFIG, false)
+            .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue result = getSchemaAndValue(protobufData, message);
+
+    Schema schema = result.schema();
+    Struct value = (Struct) result.value();
+
+    assertNull(value.get(schema.field("wrapper_field").schema().field("nested_field")));
   }
 
   @Test
