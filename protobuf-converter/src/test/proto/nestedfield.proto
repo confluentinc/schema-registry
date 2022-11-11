@@ -6,10 +6,10 @@ option java_outer_classname = "NestedKeyValue";
 import "google/protobuf/descriptor.proto";
 
 message NestedKeyValueMessage {
-  AttributeFieldEntry field1 = 1;
+  AttributeFieldEntry wrapper_field = 1;
+  double inner_field = 2;
 }
 
 message AttributeFieldEntry {
-  int32 i32 = 1;
-  double d = 2;
+  double nested_field = 1;
 }

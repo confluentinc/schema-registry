@@ -42,6 +42,7 @@ import io.confluent.connect.protobuf.test.KeyValueProto2;
 import io.confluent.connect.protobuf.test.KeyValueWrapper;
 import io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry;
 import io.confluent.connect.protobuf.test.MapReferences.MapReferencesMessage;
+import io.confluent.connect.protobuf.test.NestedKeyValue;
 import io.confluent.connect.protobuf.test.RecursiveKeyValue;
 import io.confluent.kafka.serializers.protobuf.test.DateValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.DateValueOuterClass.DateValue;
@@ -746,6 +747,20 @@ public class ProtobufDataTest {
   }
 
   // Data Conversion tests
+
+  @Test
+  public void testToConnectNestedNull() throws Exception {
+    NestedKeyValue.NestedKeyValueMessage.Builder builder = NestedKeyValue.NestedKeyValueMessage.newBuilder();
+    NestedKeyValue.NestedKeyValueMessage message = builder.build();
+
+    SchemaAndValue result = getSchemaAndValue(message, true);
+    Object schema = result.schema();
+    Object value = result.value();
+
+    assertNotNull(result);
+    assertNotNull(schema);
+    assertNotNull(value);
+  }
 
   @Test
   public void testToConnectNull() {

@@ -19,19 +19,25 @@ public final class NestedKeyValue {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>.AttributeFieldEntry field1 = 1;</code>
-     * @return Whether the field1 field is set.
+     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+     * @return Whether the wrapperField field is set.
      */
-    boolean hasField1();
+    boolean hasWrapperField();
     /**
-     * <code>.AttributeFieldEntry field1 = 1;</code>
-     * @return The field1.
+     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+     * @return The wrapperField.
      */
-    io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getField1();
+    io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getWrapperField();
     /**
-     * <code>.AttributeFieldEntry field1 = 1;</code>
+     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
      */
-    io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder getField1OrBuilder();
+    io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder getWrapperFieldOrBuilder();
+
+    /**
+     * <code>double inner_field = 2;</code>
+     * @return The innerField.
+     */
+    double getInnerField();
   }
   /**
    * Protobuf type {@code NestedKeyValueMessage}
@@ -73,30 +79,41 @@ public final class NestedKeyValue {
               io.confluent.connect.protobuf.test.NestedKeyValue.NestedKeyValueMessage.class, io.confluent.connect.protobuf.test.NestedKeyValue.NestedKeyValueMessage.Builder.class);
     }
 
-    public static final int FIELD1_FIELD_NUMBER = 1;
-    private io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry field1_;
+    public static final int WRAPPER_FIELD_FIELD_NUMBER = 1;
+    private io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry wrapperField_;
     /**
-     * <code>.AttributeFieldEntry field1 = 1;</code>
-     * @return Whether the field1 field is set.
+     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+     * @return Whether the wrapperField field is set.
      */
     @java.lang.Override
-    public boolean hasField1() {
-      return field1_ != null;
+    public boolean hasWrapperField() {
+      return wrapperField_ != null;
     }
     /**
-     * <code>.AttributeFieldEntry field1 = 1;</code>
-     * @return The field1.
+     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+     * @return The wrapperField.
      */
     @java.lang.Override
-    public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getField1() {
-      return field1_ == null ? io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance() : field1_;
+    public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getWrapperField() {
+      return wrapperField_ == null ? io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance() : wrapperField_;
     }
     /**
-     * <code>.AttributeFieldEntry field1 = 1;</code>
+     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
      */
     @java.lang.Override
-    public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder getField1OrBuilder() {
-      return getField1();
+    public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder getWrapperFieldOrBuilder() {
+      return getWrapperField();
+    }
+
+    public static final int INNER_FIELD_FIELD_NUMBER = 2;
+    private double innerField_;
+    /**
+     * <code>double inner_field = 2;</code>
+     * @return The innerField.
+     */
+    @java.lang.Override
+    public double getInnerField() {
+      return innerField_;
     }
 
     private byte memoizedIsInitialized = -1;
@@ -113,8 +130,11 @@ public final class NestedKeyValue {
     @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      if (field1_ != null) {
-        output.writeMessage(1, getField1());
+      if (wrapperField_ != null) {
+        output.writeMessage(1, getWrapperField());
+      }
+      if (java.lang.Double.doubleToRawLongBits(innerField_) != 0) {
+        output.writeDouble(2, innerField_);
       }
       getUnknownFields().writeTo(output);
     }
@@ -125,9 +145,13 @@ public final class NestedKeyValue {
       if (size != -1) return size;
 
       size = 0;
-      if (field1_ != null) {
+      if (wrapperField_ != null) {
         size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(1, getField1());
+          .computeMessageSize(1, getWrapperField());
+      }
+      if (java.lang.Double.doubleToRawLongBits(innerField_) != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(2, innerField_);
       }
       size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
@@ -144,11 +168,14 @@ public final class NestedKeyValue {
       }
       io.confluent.connect.protobuf.test.NestedKeyValue.NestedKeyValueMessage other = (io.confluent.connect.protobuf.test.NestedKeyValue.NestedKeyValueMessage) obj;
 
-      if (hasField1() != other.hasField1()) return false;
-      if (hasField1()) {
-        if (!getField1()
-            .equals(other.getField1())) return false;
+      if (hasWrapperField() != other.hasWrapperField()) return false;
+      if (hasWrapperField()) {
+        if (!getWrapperField()
+            .equals(other.getWrapperField())) return false;
       }
+      if (java.lang.Double.doubleToLongBits(getInnerField())
+          != java.lang.Double.doubleToLongBits(
+              other.getInnerField())) return false;
       if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
@@ -160,10 +187,13 @@ public final class NestedKeyValue {
       }
       int hash = 41;
       hash = (19 * hash) + getDescriptor().hashCode();
-      if (hasField1()) {
-        hash = (37 * hash) + FIELD1_FIELD_NUMBER;
-        hash = (53 * hash) + getField1().hashCode();
+      if (hasWrapperField()) {
+        hash = (37 * hash) + WRAPPER_FIELD_FIELD_NUMBER;
+        hash = (53 * hash) + getWrapperField().hashCode();
       }
+      hash = (37 * hash) + INNER_FIELD_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getInnerField()));
       hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -292,12 +322,14 @@ public final class NestedKeyValue {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        if (field1Builder_ == null) {
-          field1_ = null;
+        if (wrapperFieldBuilder_ == null) {
+          wrapperField_ = null;
         } else {
-          field1_ = null;
-          field1Builder_ = null;
+          wrapperField_ = null;
+          wrapperFieldBuilder_ = null;
         }
+        innerField_ = 0D;
+
         return this;
       }
 
@@ -324,11 +356,12 @@ public final class NestedKeyValue {
       @java.lang.Override
       public io.confluent.connect.protobuf.test.NestedKeyValue.NestedKeyValueMessage buildPartial() {
         io.confluent.connect.protobuf.test.NestedKeyValue.NestedKeyValueMessage result = new io.confluent.connect.protobuf.test.NestedKeyValue.NestedKeyValueMessage(this);
-        if (field1Builder_ == null) {
-          result.field1_ = field1_;
+        if (wrapperFieldBuilder_ == null) {
+          result.wrapperField_ = wrapperField_;
         } else {
-          result.field1_ = field1Builder_.build();
+          result.wrapperField_ = wrapperFieldBuilder_.build();
         }
+        result.innerField_ = innerField_;
         onBuilt();
         return result;
       }
@@ -377,8 +410,11 @@ public final class NestedKeyValue {
 
       public Builder mergeFrom(io.confluent.connect.protobuf.test.NestedKeyValue.NestedKeyValueMessage other) {
         if (other == io.confluent.connect.protobuf.test.NestedKeyValue.NestedKeyValueMessage.getDefaultInstance()) return this;
-        if (other.hasField1()) {
-          mergeField1(other.getField1());
+        if (other.hasWrapperField()) {
+          mergeWrapperField(other.getWrapperField());
+        }
+        if (other.getInnerField() != 0D) {
+          setInnerField(other.getInnerField());
         }
         this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
@@ -408,11 +444,16 @@ public final class NestedKeyValue {
                 break;
               case 10: {
                 input.readMessage(
-                    getField1FieldBuilder().getBuilder(),
+                    getWrapperFieldFieldBuilder().getBuilder(),
                     extensionRegistry);
 
                 break;
               } // case 10
+              case 17: {
+                innerField_ = input.readDouble();
+
+                break;
+              } // case 17
               default: {
                 if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                   done = true; // was an endgroup tag
@@ -429,123 +470,154 @@ public final class NestedKeyValue {
         return this;
       }
 
-      private io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry field1_;
+      private io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry wrapperField_;
       private com.google.protobuf.SingleFieldBuilderV3<
-          io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder> field1Builder_;
+          io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder> wrapperFieldBuilder_;
       /**
-       * <code>.AttributeFieldEntry field1 = 1;</code>
-       * @return Whether the field1 field is set.
+       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+       * @return Whether the wrapperField field is set.
        */
-      public boolean hasField1() {
-        return field1Builder_ != null || field1_ != null;
+      public boolean hasWrapperField() {
+        return wrapperFieldBuilder_ != null || wrapperField_ != null;
       }
       /**
-       * <code>.AttributeFieldEntry field1 = 1;</code>
-       * @return The field1.
+       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+       * @return The wrapperField.
        */
-      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getField1() {
-        if (field1Builder_ == null) {
-          return field1_ == null ? io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance() : field1_;
+      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getWrapperField() {
+        if (wrapperFieldBuilder_ == null) {
+          return wrapperField_ == null ? io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance() : wrapperField_;
         } else {
-          return field1Builder_.getMessage();
+          return wrapperFieldBuilder_.getMessage();
         }
       }
       /**
-       * <code>.AttributeFieldEntry field1 = 1;</code>
+       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
        */
-      public Builder setField1(io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry value) {
-        if (field1Builder_ == null) {
+      public Builder setWrapperField(io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry value) {
+        if (wrapperFieldBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
           }
-          field1_ = value;
+          wrapperField_ = value;
           onChanged();
         } else {
-          field1Builder_.setMessage(value);
+          wrapperFieldBuilder_.setMessage(value);
         }
 
         return this;
       }
       /**
-       * <code>.AttributeFieldEntry field1 = 1;</code>
+       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
        */
-      public Builder setField1(
+      public Builder setWrapperField(
           io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder builderForValue) {
-        if (field1Builder_ == null) {
-          field1_ = builderForValue.build();
+        if (wrapperFieldBuilder_ == null) {
+          wrapperField_ = builderForValue.build();
           onChanged();
         } else {
-          field1Builder_.setMessage(builderForValue.build());
+          wrapperFieldBuilder_.setMessage(builderForValue.build());
         }
 
         return this;
       }
       /**
-       * <code>.AttributeFieldEntry field1 = 1;</code>
+       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
        */
-      public Builder mergeField1(io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry value) {
-        if (field1Builder_ == null) {
-          if (field1_ != null) {
-            field1_ =
-              io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.newBuilder(field1_).mergeFrom(value).buildPartial();
+      public Builder mergeWrapperField(io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry value) {
+        if (wrapperFieldBuilder_ == null) {
+          if (wrapperField_ != null) {
+            wrapperField_ =
+              io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.newBuilder(wrapperField_).mergeFrom(value).buildPartial();
           } else {
-            field1_ = value;
+            wrapperField_ = value;
           }
           onChanged();
         } else {
-          field1Builder_.mergeFrom(value);
+          wrapperFieldBuilder_.mergeFrom(value);
         }
 
         return this;
       }
       /**
-       * <code>.AttributeFieldEntry field1 = 1;</code>
+       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
        */
-      public Builder clearField1() {
-        if (field1Builder_ == null) {
-          field1_ = null;
+      public Builder clearWrapperField() {
+        if (wrapperFieldBuilder_ == null) {
+          wrapperField_ = null;
           onChanged();
         } else {
-          field1_ = null;
-          field1Builder_ = null;
+          wrapperField_ = null;
+          wrapperFieldBuilder_ = null;
         }
 
         return this;
       }
       /**
-       * <code>.AttributeFieldEntry field1 = 1;</code>
+       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
        */
-      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder getField1Builder() {
+      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder getWrapperFieldBuilder() {
         
         onChanged();
-        return getField1FieldBuilder().getBuilder();
+        return getWrapperFieldFieldBuilder().getBuilder();
       }
       /**
-       * <code>.AttributeFieldEntry field1 = 1;</code>
+       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
        */
-      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder getField1OrBuilder() {
-        if (field1Builder_ != null) {
-          return field1Builder_.getMessageOrBuilder();
+      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder getWrapperFieldOrBuilder() {
+        if (wrapperFieldBuilder_ != null) {
+          return wrapperFieldBuilder_.getMessageOrBuilder();
         } else {
-          return field1_ == null ?
-              io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance() : field1_;
+          return wrapperField_ == null ?
+              io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance() : wrapperField_;
         }
       }
       /**
-       * <code>.AttributeFieldEntry field1 = 1;</code>
+       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder> 
-          getField1FieldBuilder() {
-        if (field1Builder_ == null) {
-          field1Builder_ = new com.google.protobuf.SingleFieldBuilderV3<
+          getWrapperFieldFieldBuilder() {
+        if (wrapperFieldBuilder_ == null) {
+          wrapperFieldBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder>(
-                  getField1(),
+                  getWrapperField(),
                   getParentForChildren(),
                   isClean());
-          field1_ = null;
+          wrapperField_ = null;
         }
-        return field1Builder_;
+        return wrapperFieldBuilder_;
+      }
+
+      private double innerField_ ;
+      /**
+       * <code>double inner_field = 2;</code>
+       * @return The innerField.
+       */
+      @java.lang.Override
+      public double getInnerField() {
+        return innerField_;
+      }
+      /**
+       * <code>double inner_field = 2;</code>
+       * @param value The innerField to set.
+       * @return This builder for chaining.
+       */
+      public Builder setInnerField(double value) {
+        
+        innerField_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>double inner_field = 2;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearInnerField() {
+        
+        innerField_ = 0D;
+        onChanged();
+        return this;
       }
       @java.lang.Override
       public final Builder setUnknownFields(
@@ -616,16 +688,10 @@ public final class NestedKeyValue {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>int32 i32 = 1;</code>
-     * @return The i32.
+     * <code>double nested_field = 1;</code>
+     * @return The nestedField.
      */
-    int getI32();
-
-    /**
-     * <code>double d = 2;</code>
-     * @return The d.
-     */
-    double getD();
+    double getNestedField();
   }
   /**
    * Protobuf type {@code AttributeFieldEntry}
@@ -667,26 +733,15 @@ public final class NestedKeyValue {
               io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.class, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder.class);
     }
 
-    public static final int I32_FIELD_NUMBER = 1;
-    private int i32_;
+    public static final int NESTED_FIELD_FIELD_NUMBER = 1;
+    private double nestedField_;
     /**
-     * <code>int32 i32 = 1;</code>
-     * @return The i32.
+     * <code>double nested_field = 1;</code>
+     * @return The nestedField.
      */
     @java.lang.Override
-    public int getI32() {
-      return i32_;
-    }
-
-    public static final int D_FIELD_NUMBER = 2;
-    private double d_;
-    /**
-     * <code>double d = 2;</code>
-     * @return The d.
-     */
-    @java.lang.Override
-    public double getD() {
-      return d_;
+    public double getNestedField() {
+      return nestedField_;
     }
 
     private byte memoizedIsInitialized = -1;
@@ -703,11 +758,8 @@ public final class NestedKeyValue {
     @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      if (i32_ != 0) {
-        output.writeInt32(1, i32_);
-      }
-      if (java.lang.Double.doubleToRawLongBits(d_) != 0) {
-        output.writeDouble(2, d_);
+      if (java.lang.Double.doubleToRawLongBits(nestedField_) != 0) {
+        output.writeDouble(1, nestedField_);
       }
       getUnknownFields().writeTo(output);
     }
@@ -718,13 +770,9 @@ public final class NestedKeyValue {
       if (size != -1) return size;
 
       size = 0;
-      if (i32_ != 0) {
+      if (java.lang.Double.doubleToRawLongBits(nestedField_) != 0) {
         size += com.google.protobuf.CodedOutputStream
-          .computeInt32Size(1, i32_);
-      }
-      if (java.lang.Double.doubleToRawLongBits(d_) != 0) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeDoubleSize(2, d_);
+          .computeDoubleSize(1, nestedField_);
       }
       size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
@@ -741,11 +789,9 @@ public final class NestedKeyValue {
       }
       io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry other = (io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry) obj;
 
-      if (getI32()
-          != other.getI32()) return false;
-      if (java.lang.Double.doubleToLongBits(getD())
+      if (java.lang.Double.doubleToLongBits(getNestedField())
           != java.lang.Double.doubleToLongBits(
-              other.getD())) return false;
+              other.getNestedField())) return false;
       if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
@@ -757,11 +803,9 @@ public final class NestedKeyValue {
       }
       int hash = 41;
       hash = (19 * hash) + getDescriptor().hashCode();
-      hash = (37 * hash) + I32_FIELD_NUMBER;
-      hash = (53 * hash) + getI32();
-      hash = (37 * hash) + D_FIELD_NUMBER;
+      hash = (37 * hash) + NESTED_FIELD_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-          java.lang.Double.doubleToLongBits(getD()));
+          java.lang.Double.doubleToLongBits(getNestedField()));
       hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -890,9 +934,7 @@ public final class NestedKeyValue {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        i32_ = 0;
-
-        d_ = 0D;
+        nestedField_ = 0D;
 
         return this;
       }
@@ -920,8 +962,7 @@ public final class NestedKeyValue {
       @java.lang.Override
       public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry buildPartial() {
         io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry result = new io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry(this);
-        result.i32_ = i32_;
-        result.d_ = d_;
+        result.nestedField_ = nestedField_;
         onBuilt();
         return result;
       }
@@ -970,11 +1011,8 @@ public final class NestedKeyValue {
 
       public Builder mergeFrom(io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry other) {
         if (other == io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance()) return this;
-        if (other.getI32() != 0) {
-          setI32(other.getI32());
-        }
-        if (other.getD() != 0D) {
-          setD(other.getD());
+        if (other.getNestedField() != 0D) {
+          setNestedField(other.getNestedField());
         }
         this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
@@ -1002,16 +1040,11 @@ public final class NestedKeyValue {
               case 0:
                 done = true;
                 break;
-              case 8: {
-                i32_ = input.readInt32();
+              case 9: {
+                nestedField_ = input.readDouble();
 
                 break;
-              } // case 8
-              case 17: {
-                d_ = input.readDouble();
-
-                break;
-              } // case 17
+              } // case 9
               default: {
                 if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                   done = true; // was an endgroup tag
@@ -1028,64 +1061,33 @@ public final class NestedKeyValue {
         return this;
       }
 
-      private int i32_ ;
+      private double nestedField_ ;
       /**
-       * <code>int32 i32 = 1;</code>
-       * @return The i32.
+       * <code>double nested_field = 1;</code>
+       * @return The nestedField.
        */
       @java.lang.Override
-      public int getI32() {
-        return i32_;
+      public double getNestedField() {
+        return nestedField_;
       }
       /**
-       * <code>int32 i32 = 1;</code>
-       * @param value The i32 to set.
+       * <code>double nested_field = 1;</code>
+       * @param value The nestedField to set.
        * @return This builder for chaining.
        */
-      public Builder setI32(int value) {
+      public Builder setNestedField(double value) {
         
-        i32_ = value;
+        nestedField_ = value;
         onChanged();
         return this;
       }
       /**
-       * <code>int32 i32 = 1;</code>
+       * <code>double nested_field = 1;</code>
        * @return This builder for chaining.
        */
-      public Builder clearI32() {
+      public Builder clearNestedField() {
         
-        i32_ = 0;
-        onChanged();
-        return this;
-      }
-
-      private double d_ ;
-      /**
-       * <code>double d = 2;</code>
-       * @return The d.
-       */
-      @java.lang.Override
-      public double getD() {
-        return d_;
-      }
-      /**
-       * <code>double d = 2;</code>
-       * @param value The d to set.
-       * @return This builder for chaining.
-       */
-      public Builder setD(double value) {
-        
-        d_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>double d = 2;</code>
-       * @return This builder for chaining.
-       */
-      public Builder clearD() {
-        
-        d_ = 0D;
+        nestedField_ = 0D;
         onChanged();
         return this;
       }
@@ -1173,11 +1175,12 @@ public final class NestedKeyValue {
   static {
     java.lang.String[] descriptorData = {
       "\n\021nestedfield.proto\032 google/protobuf/des" +
-      "criptor.proto\"=\n\025NestedKeyValueMessage\022$" +
-      "\n\006field1\030\001 \001(\0132\024.AttributeFieldEntry\"-\n\023" +
-      "AttributeFieldEntry\022\013\n\003i32\030\001 \001(\005\022\t\n\001d\030\002 " +
-      "\001(\001B4\n\"io.confluent.connect.protobuf.tes" +
-      "tB\016NestedKeyValueb\006proto3"
+      "criptor.proto\"Y\n\025NestedKeyValueMessage\022+" +
+      "\n\rwrapper_field\030\001 \001(\0132\024.AttributeFieldEn" +
+      "try\022\023\n\013inner_field\030\002 \001(\001\"+\n\023AttributeFie" +
+      "ldEntry\022\024\n\014nested_field\030\001 \001(\001B4\n\"io.conf" +
+      "luent.connect.protobuf.testB\016NestedKeyVa" +
+      "lueb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -1189,13 +1192,13 @@ public final class NestedKeyValue {
     internal_static_NestedKeyValueMessage_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_NestedKeyValueMessage_descriptor,
-        new java.lang.String[] { "Field1", });
+        new java.lang.String[] { "WrapperField", "InnerField", });
     internal_static_AttributeFieldEntry_descriptor =
       getDescriptor().getMessageTypes().get(1);
     internal_static_AttributeFieldEntry_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_AttributeFieldEntry_descriptor,
-        new java.lang.String[] { "I32", "D", });
+        new java.lang.String[] { "NestedField", });
     com.google.protobuf.DescriptorProtos.getDescriptor();
   }
 
