@@ -24,7 +24,7 @@ import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.ref.Val;
 
-final class AvroObjectT extends ObjectT {
+public final class AvroObjectT extends ObjectT {
 
   private AvroObjectT(AvroRegistry registry, Object value, AvroTypeDescription typeDesc) {
     super(registry, value, typeDesc, typeDesc.type());

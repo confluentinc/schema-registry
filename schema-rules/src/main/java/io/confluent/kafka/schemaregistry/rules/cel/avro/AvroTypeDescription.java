@@ -31,7 +31,9 @@ import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeDescription;
 
-final class AvroTypeDescription implements TypeDescription {
+public final class AvroTypeDescription implements TypeDescription {
+
+  public static final Schema NULL_AVRO_SCHEMA = Schema.create(Schema.Type.NULL);
 
   private final Schema schema;
   private final String fullName;
@@ -75,6 +77,7 @@ final class AvroTypeDescription implements TypeDescription {
       case LONG:
         return Checked.checkedInt;
       case BYTES:
+      case FIXED:
         return Checked.checkedBytes;
       case FLOAT:
       case DOUBLE:
@@ -90,8 +93,19 @@ final class AvroTypeDescription implements TypeDescription {
         return typeQuery.getType(schema);
       case NULL:
         return Checked.checkedNull;
-      default:
+      case RECORD:
         return typeQuery.getType(schema);
+      case UNION:
+        if (schema.getTypes().size() == 2 && schema.getTypes().contains(NULL_AVRO_SCHEMA)) {
+          for (Schema memberSchema : schema.getTypes()) {
+            if (!memberSchema.equals(NULL_AVRO_SCHEMA)) {
+              return findTypeForAvroType(memberSchema, typeQuery);
+            }
+          }
+        }
+        throw new IllegalArgumentException("Unsupported union type");
+      default:
+        throw new IllegalArgumentException("Unsupported type " + type);
     }
   }
 

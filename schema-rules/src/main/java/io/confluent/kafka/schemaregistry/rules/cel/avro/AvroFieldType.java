@@ -22,7 +22,7 @@ import org.projectnessie.cel.common.types.ref.FieldGetter;
 import org.projectnessie.cel.common.types.ref.FieldTester;
 import org.projectnessie.cel.common.types.ref.FieldType;
 
-final class AvroFieldType extends FieldType {
+public final class AvroFieldType extends FieldType {
 
   private final Schema schema;
 

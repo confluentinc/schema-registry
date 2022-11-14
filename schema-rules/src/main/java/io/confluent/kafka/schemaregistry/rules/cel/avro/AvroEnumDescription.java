@@ -21,7 +21,7 @@ import java.util.stream.Stream;
 import org.apache.avro.Schema;
 import org.projectnessie.cel.common.types.pb.Checked;
 
-final class AvroEnumDescription {
+public final class AvroEnumDescription {
 
   private final String fullName;
   private final com.google.api.expr.v1alpha1.Type pbType;

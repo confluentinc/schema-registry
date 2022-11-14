@@ -59,10 +59,15 @@ public final class AvroRegistry implements TypeRegistry {
 
   @Override
   public void register(Object t) {
-    if (!(t instanceof GenericContainer)) {
-      throw new IllegalArgumentException("argument is not of type GenericContainer");
+    Schema s;
+    if (t instanceof Schema) {
+      s = (Schema) t;
+    } else if (t instanceof GenericContainer) {
+      s = ((GenericContainer)t).getSchema();
+    } else {
+      throw new IllegalArgumentException("argument is not of type Schema or GenericContainer");
     }
-    typeDescription(((GenericContainer)t).getSchema());
+    typeDescription(s);
   }
 
   @Override
