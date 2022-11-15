@@ -207,7 +207,7 @@ public abstract class DeriveSchema {
     return mapper.createObjectNode().set("schemas", schemaInfoList);
   }
 
-  private void updateSchemaInformation(JsonNode mergedSchema,
+  protected void updateSchemaInformation(JsonNode mergedSchema,
                                        ArrayNode messagesMatched,
                                        List<JsonNode> mergedSchemas,
                                        ArrayNode schemaInformationList) {

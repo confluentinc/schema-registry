@@ -158,7 +158,7 @@ public class DeriveJsonSchemaTest extends DeriveSchemaTest {
     // Merging Records with different field names
     JsonNode stringMessage = mapper.readTree("{\"string\": \"1\"}");
     JsonNode integerMessage = mapper.readTree("{\"number\": 12}");
-    String expectedSchema = "{\"schema\":{\"type\":\"object\",\"properties\":{\"number\":{\"type\":\"number\"},\"string\":{\"type\":\"string\"}}}}";
+    String expectedSchema = "{\"schemas\":[{\"schema\":{\"type\":\"object\",\"properties\":{\"number\":{\"type\":\"number\"},\"string\":{\"type\":\"string\"}}},\"messagesMatched\":[0,1,2,3]}]}";
     ObjectNode schema = derive.getSchemaForMultipleMessages(Arrays.asList(stringMessage, integerMessage, stringMessage, integerMessage));
     assertEquals(expectedSchema, schema.toString());
   }

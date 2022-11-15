@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -97,8 +98,13 @@ public class DeriveJsonSchema extends DeriveSchema {
   public ObjectNode getSchemaForMultipleMessages(List<JsonNode> messages)
       throws JsonProcessingException {
     JsonNode schema = getSchemaForArray(messages, "").get("items");
-    convertToFormat(schema, "");
-    return mapper.createObjectNode().set("schema", schema);
+    ArrayNode messagesMatched = mapper.createArrayNode();
+    for (int i = 0; i < messages.size(); i++) {
+      messagesMatched.add(i);
+    }
+    ArrayNode schemaInfoList = mapper.createArrayNode();
+    updateSchemaInformation(schema, messagesMatched, new ArrayList<>(), schemaInfoList);
+    return mapper.createObjectNode().set("schemas", schemaInfoList);
   }
 
   /**
