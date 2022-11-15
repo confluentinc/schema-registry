@@ -181,19 +181,33 @@ public abstract class DeriveSchema {
     ArrayNode schemaInfoList = mapper.createArrayNode();
     List<JsonNode> mergedSchemas = new ArrayList<>();
 
+    // Use only unique schemas for merging step
+    // Keep track of which unique schema matches to which message originally
+    List<JsonNode> uniqueSchemas = DeriveSchemaUtils.getUnique(schemas);
+    List<ArrayNode> uniqueToOriginalIndex = new ArrayList<>();
+    for (JsonNode uniqueSchema : uniqueSchemas) {
+      ArrayNode matches = mapper.createArrayNode();
+      for (int i = 0; i < schemas.size(); i++) {
+        if (schemas.get(i).equals(uniqueSchema)) {
+          matches.add(i);
+        }
+      }
+      uniqueToOriginalIndex.add(matches);
+    }
+
     // Let's say we have n different messages, getSchemaOfAllElements gives n different schemas
     // Out of the n schemas, some schemas could be identical
     // schemas might differ due to a record having an extra field or record is of type union
     // schemas might differ due to same field having int and double type in different messages
     // In the above cases schemas can be merged together. So, we pick one and try to merge with rest
-    for (int i = 0; i < schemas.size(); i++) {
+    for (int i = 0; i < uniqueSchemas.size(); i++) {
       ArrayNode messagesMatched = mapper.createArrayNode();
-      JsonNode mergedSchema = schemas.get(i);
-      for (int j = 0; j < schemas.size(); j++) {
+      JsonNode mergedSchema = uniqueSchemas.get(i);
+      for (int j = 0; j < uniqueSchemas.size(); j++) {
         try {
-          mergedSchema = mergeArrays(Arrays.asList(mergedSchema, schemas.get(j)),
+          mergedSchema = mergeArrays(Arrays.asList(mergedSchema, uniqueSchemas.get(j)),
               false, false).get("items");
-          messagesMatched.add(j);
+          messagesMatched.addAll(uniqueToOriginalIndex.get(j));
         } catch (IllegalArgumentException ignored) {
           // If there are conflicting types, schemas cannot be merged. Result is ignored
         }
@@ -208,12 +222,17 @@ public abstract class DeriveSchema {
   }
 
   protected void updateSchemaInformation(JsonNode mergedSchema,
-                                       ArrayNode messagesMatched,
-                                       List<JsonNode> mergedSchemas,
-                                       ArrayNode schemaInformationList) {
+                                         ArrayNode messagesMatched,
+                                         List<JsonNode> mergedSchemas,
+                                         ArrayNode schemaInformationList) {
     mergedSchemas.add(mergedSchema);
     ObjectNode schemaElement = mapper.createObjectNode();
-    schemaElement.set("schema", convertToFormat(mergedSchema, "Schema"));
+    try {
+      schemaElement.set("schema", convertToFormat(mergedSchema, "Schema"));
+    } catch (Exception e) {
+      throw new IllegalArgumentException(
+          String.format("Unable generate schema for %s", mergedSchema), e);
+    }
     schemaElement.set("messagesMatched", messagesMatched);
     schemaInformationList.add(schemaElement);
   }

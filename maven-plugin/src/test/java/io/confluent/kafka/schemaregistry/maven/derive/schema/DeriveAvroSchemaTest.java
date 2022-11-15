@@ -237,19 +237,19 @@ public class DeriveAvroSchemaTest extends DeriveSchemaTest {
     JsonNode message1 = mapper.readTree("{\"F1\": 1.5, \"F2\": true}");
     JsonNode message2 = mapper.readTree("{\"F1\": 1, \"F2\": 1}");
     JsonNode message3 = mapper.readTree("{\"F3\": [1, 1.5, 3]}");
-    JsonNode schema = derive.getSchemaForMultipleMessages(Arrays.asList(message1, message2, message3)).get("schemas");
+    JsonNode schema = derive.getSchemaForMultipleMessages(Arrays.asList(message1, message1, message2, message2, message3, message1, message1)).get("schemas");
 
     assertEquals(schema.size(), 3);
     String expectedSchema1 = "{\"type\":\"record\",\"name\":\"Schema\",\"fields\":[{\"name\":\"F1\",\"type\":\"double\"},{\"name\":\"F2\",\"type\":\"boolean\"}]}";
     assertEquals(schema.get(0).get("schema").toString(), expectedSchema1);
-    assertEquals(schema.get(0).get("messagesMatched").toString(), "[0]");
+    assertEquals(schema.get(0).get("messagesMatched").toString(), "[0,1,5,6]");
 
     String expectedSchema2 = "{\"type\":\"record\",\"name\":\"Schema\",\"fields\":[{\"name\":\"F1\",\"type\":\"double\"},{\"name\":\"F2\",\"type\":\"int\"}]}";
     assertEquals(schema.get(1).get("schema").toString(), expectedSchema2);
-    assertEquals(schema.get(1).get("messagesMatched").toString(), "[1]");
+    assertEquals(schema.get(1).get("messagesMatched").toString(), "[2,3]");
 
     String expectedSchema3 = "{\"type\":\"record\",\"name\":\"Schema\",\"fields\":[{\"name\":\"F3\",\"type\":{\"type\":\"array\",\"items\":\"double\"}}]}";
     assertEquals(schema.get(2).get("schema").toString(), expectedSchema3);
-    assertEquals(schema.get(2).get("messagesMatched").toString(), "[2]");
+    assertEquals(schema.get(2).get("messagesMatched").toString(), "[4]");
   }
 }
