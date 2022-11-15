@@ -21,7 +21,7 @@ import static org.projectnessie.cel.common.types.StringT.stringOf;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.projectnessie.cel.common.types.ref.Val;
 
-final class AvroEnumValue {
+public final class AvroEnumValue {
 
   private final AvroEnumDescription enumType;
   private final Val stringValue;
