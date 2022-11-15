@@ -79,16 +79,27 @@ public class DeriveSchemaUtils {
   }
 
   public static void mergeNumberTypes(List<JsonNode> primitives) {
-    // TODO: Change constants when protobuf and avro classes are introduced
-    // Checking if anyone element is double type
-    if (primitives.stream().noneMatch(o -> o.get("type").asText().equals("double"))) {
+    // Checking if anyone element is double or long type
+    String type = null;
+    List<String> integerTypes = Arrays.asList(DeriveAvroSchema.INT,
+        DeriveAvroSchema.LONG, DeriveProtobufSchema.INT_32, DeriveProtobufSchema.INT_64);
+
+    for (String types : Arrays.asList(DeriveAvroSchema.LONG, DeriveProtobufSchema.INT_64,
+        DeriveAvroSchema.DOUBLE)) {
+      if (primitives.stream().anyMatch(o -> o.get("type").asText().equals(types))) {
+        type = types;
+      }
+    }
+
+    if (type == null) {
       return;
     }
-    // If any other element is of type integer/long, it is marked as double
-    List<String> integerTypes = Arrays.asList("int", "int32", "int64", "long");
+
+    // if double is present, int and long types are marked as double
+    // if double is absent and long is present, int is marked as long
     for (JsonNode node : primitives) {
       if (integerTypes.contains(node.get("type").asText())) {
-        ((ObjectNode) node).put("type", "double");
+        ((ObjectNode) node).put("type", type);
       }
     }
   }

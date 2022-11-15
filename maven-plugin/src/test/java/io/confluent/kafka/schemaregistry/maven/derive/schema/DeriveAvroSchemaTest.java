@@ -164,6 +164,15 @@ public class DeriveAvroSchemaTest extends DeriveSchemaTest {
   }
 
   @Test
+  public void testDeriveMergeArraysForRecordInsideArray() throws Exception {
+    // Check merging of int and long type inside field of a record inside an array
+    JsonNode recordWithInteger = mapper.readTree("{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"F1\":{\"type\":\"int\"}}}}");
+    JsonNode recordWithDouble = mapper.readTree("{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"F1\":{\"type\":\"long\"}}}}");
+    ObjectNode mergedArray = derive.mergeArrays(Arrays.asList(recordWithDouble, recordWithInteger), false, false);
+    assertEquals(mergedArray.toString(), "{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"F1\":{\"type\":\"long\"}}}}}");
+  }
+
+  @Test
   public void testDeriveMergeArraysFailure() throws Exception {
     // Two different records cannot be merged due to extra field 'F2'
     JsonNode recordWithInteger = mapper.readTree("{\"type\":\"object\",\"properties\":{\"F1\":{\"type\":\"int\"}, \"F2\":{\"type\":\"int\"}}}");

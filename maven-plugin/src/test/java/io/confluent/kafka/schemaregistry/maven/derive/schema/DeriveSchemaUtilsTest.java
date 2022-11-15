@@ -108,6 +108,17 @@ public class DeriveSchemaUtilsTest {
   }
 
   @Test
+  public void shouldMergeNumberTypesLong() throws JsonProcessingException {
+    List<JsonNode> schemas = new ArrayList<>();
+    for (String schema : Arrays.asList(TYPE_INT, TYPE_LONG)) {
+      schemas.add(mapper.readValue(schema, ObjectNode.class));
+    }
+    DeriveSchemaUtils.mergeNumberTypes(schemas);
+    for (JsonNode schema : schemas) {
+      assertEquals(schema, mapper.readValue(TYPE_LONG, ObjectNode.class));
+    }
+  }
+  @Test
   public void shouldGroupDifferentTypes() throws JsonProcessingException {
     List<ObjectNode> schemas = new ArrayList<>();
     for (String schema : Arrays.asList(TYPE_INT, String.format(RECORD_WITH_STRING, "F1"), ARRAY_OF_NUMBERS, ARRAY_OF_NUMBERS_AND_STRINGS)) {

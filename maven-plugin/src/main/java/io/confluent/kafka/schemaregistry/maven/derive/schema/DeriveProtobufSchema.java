@@ -68,8 +68,13 @@ public class DeriveProtobufSchema extends DeriveSchema {
 
     DeriveSchemaUtils.mergeNumberTypes(primitives);
     items.addAll(DeriveSchemaUtils.getUnique(primitives));
+
+    // To recursively merge number types in-place for arrays, the result is ignored
+    if (arrays.size() > 0) {
+      mergeArrays(arrays, true, false);
+    }
     // No merging of arrays, add directly to items' list
-    items.addAll(arrays);
+    items.addAll(DeriveSchemaUtils.getUnique(arrays));
 
     if (records.size() > 0) {
       items.add(mergeRecords(records));

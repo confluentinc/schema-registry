@@ -193,6 +193,23 @@ public class DeriveProtoBufSchemaTest extends DeriveSchemaTest {
   }
 
   @Test
+  public void testRecursiveMergingOfNumberTypesInsideArray() throws IOException {
+    // Field FF1 should be interpreted as type long
+    JsonNode messageWithArrayOfRecordInt = mapper.readTree("{\"F1\": [{\"FF1\":1}]}");
+    JsonNode messageWithArrayOfRecordLong = mapper.readTree("{\"F1\": [{\"FF1\":112211221122121}]}");
+    JsonNode schema = derive.getSchemaForMultipleMessages(Arrays.asList(messageWithArrayOfRecordInt, messageWithArrayOfRecordLong)).get("schemas");
+    String expectedSchema1 = "syntax = \"proto3\";\n" + "\n" +
+        "message Schema {\n" +
+        "  repeated F1Message F1 = 1;\n" + "\n" +
+        "  message F1Message {\n" +
+        "    int64 FF1 = 1;\n" +
+        "  }\n" +
+        "}\n";
+    assertEquals(schema.get(0).get("schema").asText(), expectedSchema1);
+    assertEquals(schema.get(0).get("messagesMatched").toString(), "[0,1]");
+  }
+
+  @Test
   public void testDeriveMultipleMessages() throws JsonProcessingException {
     // Message1 and Message2 cannot be merged due to conflicting types of F1
     // Message3 can merge with both, hence we have 2 different schema generated

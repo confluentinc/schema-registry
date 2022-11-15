@@ -61,8 +61,13 @@ public class DeriveAvroSchema extends DeriveSchema {
     if (records.size() > 0 && records.size() + primitives.size() > 1) {
       mergeUnions(records, primitives);
     }
-    // To recursively merge number types in-place for records, the combined fields record is ignored
-    mergeRecords(records);
+    // To recursively merge number types in-place for records and arrays, the result is ignored
+    if (records.size() > 0) {
+      mergeRecords(records);
+    }
+    if (arrays.size() > 0) {
+      mergeArrays(arrays, true, false);
+    }
     List<JsonNode> dataTypes = new ArrayList<>();
     for (List<JsonNode> types : Arrays.asList(arrays, records, primitives)) {
       dataTypes.addAll(types);
