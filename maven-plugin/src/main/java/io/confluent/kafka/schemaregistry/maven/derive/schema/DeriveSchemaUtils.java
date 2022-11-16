@@ -103,4 +103,15 @@ public class DeriveSchemaUtils {
       }
     }
   }
+
+  public static void replaceEachField(JsonNode mergedArray, List<JsonNode> uniqueRecords) {
+    // Marks type, properties and name for each record using merged array
+    for (JsonNode record : uniqueRecords) {
+      ObjectNode objectNode = (ObjectNode) record;
+      for (String field : DeriveSchemaUtils.getSortedKeys(mergedArray)) {
+        objectNode.set(field, mergedArray.get(field));
+      }
+    }
+  }
+
 }

@@ -56,11 +56,9 @@ public class DeriveAvroSchema extends DeriveSchema {
                                               List<JsonNode> records,
                                               List<JsonNode> arrays,
                                               boolean check2dArray) {
+    mergeUnions(records, primitives);
     DeriveSchemaUtils.mergeNumberTypes(primitives);
     primitives = DeriveSchemaUtils.getUnique(primitives);
-    if (records.size() > 0 && records.size() + primitives.size() > 1) {
-      mergeUnions(records, primitives);
-    }
     // To recursively merge number types in-place for records and arrays, the result is ignored
     if (records.size() > 0) {
       mergeRecords(records);
@@ -166,25 +164,13 @@ public class DeriveAvroSchema extends DeriveSchema {
     List<JsonNode> branches = new ArrayList<>();
     for (Map.Entry<String, List<JsonNode>> entry : nameToField.entrySet()) {
       List<JsonNode> uniqueRecords = DeriveSchemaUtils.getUnique(entry.getValue());
-      if (uniqueRecords.size() > 1) {
-        JsonNode mergedArray = mergeArrays(uniqueRecords, false, false).get("items");
-        replaceEachField(mergedArray, entry.getValue());
-      }
+      JsonNode mergedArray = mergeArrays(uniqueRecords, false, false).get("items");
+      DeriveSchemaUtils.replaceEachField(mergedArray, entry.getValue());
       branches.add(uniqueRecords.get(0));
     }
 
     if (typeUnion) {
       updateUnionBranches(records, primitives, branches);
-    }
-  }
-
-  private void replaceEachField(JsonNode mergedArray, List<JsonNode> uniqueRecords) {
-    // Marks type, properties and name for each record using merged array
-    for (JsonNode record : uniqueRecords) {
-      ObjectNode objectNode = (ObjectNode) record;
-      for (String field : DeriveSchemaUtils.getSortedKeys(mergedArray)) {
-        objectNode.set(field, mergedArray.get(field));
-      }
     }
   }
 
@@ -203,6 +189,7 @@ public class DeriveAvroSchema extends DeriveSchema {
       unionType = true;
     } else if ((numTypes.contains(fieldName) && numTypes.contains(fieldType))
         || (otherUnionTypes.contains(fieldType) && fieldType.equals(fieldName))) {
+      field.put("type", fieldName);
       unionType = true;
     }
 
@@ -218,11 +205,16 @@ public class DeriveAvroSchema extends DeriveSchema {
                                    List<JsonNode> branches) {
     boolean hasNull = primitives.stream().anyMatch(o -> o.get("type").asText().equals(NULL));
     if (hasNull) {
-      primitives.removeIf(o -> o.get("type").asText().equals(NULL));
       branches.add(getNullSchema());
     }
     List<JsonNode> uniqueBranches = DeriveSchemaUtils.getUnique(branches);
-    if (uniqueBranches.size() > 1) {
+    List<String> primitiveTypes = Arrays.asList(INT, LONG, DOUBLE, STRING, BOOLEAN);
+    boolean checkForSinglePrimitiveBranch = uniqueBranches.size() == 1
+        && primitiveTypes.contains(uniqueBranches.get(0).get("type").asText());
+    if (uniqueBranches.size() > 1 || checkForSinglePrimitiveBranch) {
+      if (hasNull) {
+        primitives.removeIf(o -> o.get("type").asText().equals(NULL));
+      }
       ArrayNode properties = mapper.createArrayNode().addAll(uniqueBranches);
       for (JsonNode record : records) {
         ObjectNode objectNode = (ObjectNode) record;

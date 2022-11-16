@@ -26,6 +26,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
@@ -195,6 +196,13 @@ public class DeriveAvroSchemaTest extends DeriveSchemaTest {
   }
 
   @Test
+  public void testDeriveMergeUnionsPrimitiveSingleBranch() throws IOException {
+    // Single branch is taken as type union
+    String stringMessage = "{\"UnionPrimitive\": {\"string\": \"12\"}}";
+    testUnion(Collections.singletonList(stringMessage), "{\"type\":\"record\",\"name\":\"Record\",\"fields\":[{\"name\":\"UnionPrimitive\",\"type\":[\"string\"]}]}");
+  }
+
+  @Test
   public void testDeriveArrayOfUnions() throws IOException {
     // Int, double, null and array should be merged together inside array
     String arrayOfUnions = "{\"emptyArray\":[{\"int\":12}, {\"double\":1.2}, null, {\"array\":[12,13]}]}";
@@ -206,8 +214,9 @@ public class DeriveAvroSchemaTest extends DeriveSchemaTest {
   public void testDeriveMergeUnionsRecursive() throws IOException {
     // Test recursive merging of field new and old, and merging of 2 different records R1 and R2
     String message1 = "{\"value\": {\"length\": {\"R1\": {\"new\": {\"int\": 5}, \"old\": {\"long\": 523233232333}}}}}";
-    String message2 = "{\"value\": {\"length\": {\"R1\": {\"new\": {\"long\": 12121276767225}, \"old\": null}}}}";
-    String message3 = "{\"value\": {\"length\": {\"R2\": {\"first\": \"J\", \"second\": \"S\"}}}}";
+    String message2 = "{\"value\": {\"length\": {\"R1\": {\"new\": null, \"old\": null}}}}";
+    String message3 = "{\"value\": {\"length\": {\"R1\": {\"new\": null, \"old\": null}}}}";
+//    String message3 = "{\"value\": {\"length\": {\"R2\": {\"first\": \"J\", \"second\": \"S\"}}}}";
     testUnion(Arrays.asList(message1, message2, message3), "{\"type\":\"record\",\"name\":\"Record\",\"fields\":[{\"name\":\"value\",\"type\":{\"type\":\"record\",\"name\":\"value\",\"fields\":[{\"name\":\"length\",\"type\":[{\"type\":\"record\",\"name\":\"R2\",\"fields\":[{\"name\":\"first\",\"type\":\"string\"},{\"name\":\"second\",\"type\":\"string\"}]},{\"type\":\"record\",\"name\":\"R1\",\"fields\":[{\"name\":\"new\",\"type\":[\"int\",\"long\"]},{\"name\":\"old\",\"type\":[\"long\",\"null\"]}]}]}]}}]}");
   }
 
