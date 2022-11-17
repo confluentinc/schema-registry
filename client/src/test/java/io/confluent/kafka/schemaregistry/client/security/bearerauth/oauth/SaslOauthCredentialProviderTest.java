@@ -37,9 +37,9 @@ public class SaslOauthCredentialProviderTest {
     clientConfig.put(SaslConfigs.SASL_JAAS_CONFIG,
         new Password(
             "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required "
-                + "clientId=\"0oa3tq39ol3OLrnQj4x7\" "
+                + "clientId=\"0oa3tq39ol3OLrnQj4x4\" "
                 + "scope='test' "
-                + "clientSecret='6cOHtlVhOIg3AtBFXlysH-_XJloGmu1i07llyH6a' "
+                + "clientSecret='mysecret123' "
                 + "extension_logicalCluster='LKC_OF_KAFKA_CLUSTER' "
                 + "extension_identityPoolId='SASL_IDENTITY_POOL_ID';")
     );
