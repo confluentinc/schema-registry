@@ -50,6 +50,37 @@ public class DeriveAvroSchema extends DeriveSchema {
     classToDataType.put(com.fasterxml.jackson.databind.node.MissingNode.class.getName(), NULL);
   }
 
+  /**
+   * Using mergeRecords to combine number and union types of fields
+   */
+  protected ArrayNode mergeMultipleMessages(List<JsonNode> uniqueSchemas,
+                                            Map<JsonNode, ArrayNode> schemaToIndex) {
+
+    // Using index to identify uniqueSchemas rather than map
+    // mergeRecords() can change schema such that it doesn't match any original schema
+    ArrayNode schemaInfoList = mapper.createArrayNode();
+    List<ArrayNode> originalSchemaMatches = new ArrayList<>();
+    uniqueSchemas.forEach(o -> originalSchemaMatches.add(schemaToIndex.get(o)));
+
+    // Merge schema with same name and different data types and edit schemas in-place
+    try {
+      mergeRecords(uniqueSchemas);
+    } catch (IllegalArgumentException ignored) {
+      // Ignoring if there are any conflicts in merging
+    }
+
+    // Find unique schema after merging records and collect which messages it matches
+    Map<JsonNode, ArrayNode> schemaToMatches = new HashMap<>();
+    uniqueSchemas.forEach(s -> schemaToMatches.put(s, mapper.createArrayNode()));
+    for (int i = 0; i < uniqueSchemas.size(); i++) {
+      schemaToMatches.get(uniqueSchemas.get(i)).addAll(originalSchemaMatches.get(i));
+    }
+    for (JsonNode uniqueSchema : DeriveSchemaUtils.getUnique(uniqueSchemas)) {
+      updateSchemaInformation(uniqueSchema, schemaToMatches.get(uniqueSchema), schemaInfoList);
+    }
+    return schemaInfoList;
+  }
+
   @Override
   protected ObjectNode mergeMultipleDataTypes(ObjectNode mergedArray,
                                               List<JsonNode> primitives,

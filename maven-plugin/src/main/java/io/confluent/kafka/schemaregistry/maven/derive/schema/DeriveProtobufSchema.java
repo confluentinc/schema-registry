@@ -22,7 +22,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class DeriveProtobufSchema extends DeriveSchema {
 
@@ -47,6 +51,38 @@ public class DeriveProtobufSchema extends DeriveSchema {
     classToDataType.put(com.fasterxml.jackson.databind.node.NullNode.class.getName(), ANY_FIELD);
     classToDataType.put(com.fasterxml.jackson.databind.node.MissingNode.class.getName(), ANY_FIELD);
   }
+
+  /**
+   * Merge schemas for multiple messages to combine records and number types
+   */
+  protected ArrayNode mergeMultipleMessages(List<JsonNode> uniqueSchemas,
+                                            Map<JsonNode, ArrayNode> schemaToIndex) {
+
+    // Schemas with extra field or mismatch in number types can be merged together
+    // Picking one schema and matching with rest of the schemas
+    Set<JsonNode> mergedSchemas = new HashSet<>();
+    ArrayNode schemaInfoList = mapper.createArrayNode();
+    for (int i = 0; i < uniqueSchemas.size(); i++) {
+      ArrayNode messagesMatched = mapper.createArrayNode();
+      JsonNode mergedSchema = uniqueSchemas.get(i).deepCopy();
+      for (JsonNode uniqueSchema : uniqueSchemas) {
+        try {
+          mergedSchema = mergeArrays(Arrays.asList(mergedSchema, uniqueSchema.deepCopy()),
+              false, false).get("items");
+          messagesMatched.addAll(schemaToIndex.get(uniqueSchema));
+        } catch (IllegalArgumentException ignored) {
+          // If there are conflicting types, schemas cannot be merged. Result is ignored
+        }
+      }
+      if (!mergedSchemas.contains(mergedSchema)) {
+        updateSchemaInformation(mergedSchema, messagesMatched, schemaInfoList);
+        mergedSchemas.add(mergedSchema);
+      }
+    }
+
+    return schemaInfoList;
+  }
+
 
   /**
    * Merge different records into one record and merge number types: double and int/long

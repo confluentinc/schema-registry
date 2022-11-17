@@ -214,9 +214,8 @@ public class DeriveAvroSchemaTest extends DeriveSchemaTest {
   public void testDeriveMergeUnionsRecursive() throws IOException {
     // Test recursive merging of field new and old, and merging of 2 different records R1 and R2
     String message1 = "{\"value\": {\"length\": {\"R1\": {\"new\": {\"int\": 5}, \"old\": {\"long\": 523233232333}}}}}";
-    String message2 = "{\"value\": {\"length\": {\"R1\": {\"new\": null, \"old\": null}}}}";
-    String message3 = "{\"value\": {\"length\": {\"R1\": {\"new\": null, \"old\": null}}}}";
-//    String message3 = "{\"value\": {\"length\": {\"R2\": {\"first\": \"J\", \"second\": \"S\"}}}}";
+    String message2 = "{\"value\": {\"length\": {\"R1\": {\"new\": {\"long\": 12121276767225}, \"old\": null}}}}";
+    String message3 = "{\"value\": {\"length\": {\"R2\": {\"first\": \"J\", \"second\": \"S\"}}}}";
     testUnion(Arrays.asList(message1, message2, message3), "{\"type\":\"record\",\"name\":\"Record\",\"fields\":[{\"name\":\"value\",\"type\":{\"type\":\"record\",\"name\":\"value\",\"fields\":[{\"name\":\"length\",\"type\":[{\"type\":\"record\",\"name\":\"R2\",\"fields\":[{\"name\":\"first\",\"type\":\"string\"},{\"name\":\"second\",\"type\":\"string\"}]},{\"type\":\"record\",\"name\":\"R1\",\"fields\":[{\"name\":\"new\",\"type\":[\"int\",\"long\"]},{\"name\":\"old\",\"type\":[\"long\",\"null\"]}]}]}]}}]}");
   }
 
@@ -269,5 +268,24 @@ public class DeriveAvroSchemaTest extends DeriveSchemaTest {
     String expectedSchema3 = "{\"type\":\"record\",\"name\":\"Schema\",\"fields\":[{\"name\":\"F3\",\"type\":{\"type\":\"array\",\"items\":\"double\"}}]}";
     assertEquals(schema.get(2).get("schema").toString(), expectedSchema3);
     assertEquals(schema.get(2).get("messagesMatched").toString(), "[4]");
+  }
+
+  @Test
+  public void testDeriveMultipleMessagesWithAvro() throws JsonProcessingException {
+    // Field F1 should have all branches: int, long and null, and F2 should have array and null
+    // Message3 has extra field and cannot be merged
+    JsonNode message1 = mapper.readTree("{\"F1\": {\"int\":12}, \"F2\": null}");
+    JsonNode message2 = mapper.readTree("{\"F1\": {\"long\":12}, \"F2\": {\"array\":[12]}}");
+    JsonNode message3 = mapper.readTree("{\"F3\": {\"string\":\"1\"}, \"F1\": null}");
+    JsonNode schema = derive.getSchemaForMultipleMessages(Arrays.asList(message1, message2, message3, message3)).get("schemas");
+
+    assertEquals(schema.size(), 2);
+    String expectedSchema1 = "{\"type\":\"record\",\"name\":\"Schema\",\"fields\":[{\"name\":\"F1\",\"type\":[\"int\",\"long\",\"null\"]},{\"name\":\"F2\",\"type\":[{\"type\":\"array\",\"items\":\"int\"},\"null\"]}]}";
+    assertEquals(schema.get(0).get("schema").toString(), expectedSchema1);
+    assertEquals(schema.get(0).get("messagesMatched").toString(), "[0,1]");
+
+    String expectedSchema2 = "{\"type\":\"record\",\"name\":\"Schema\",\"fields\":[{\"name\":\"F1\",\"type\":[\"int\",\"long\",\"null\"]},{\"name\":\"F3\",\"type\":[\"string\"]}]}";
+    assertEquals(schema.get(1).get("schema").toString(), expectedSchema2);
+    assertEquals(schema.get(1).get("messagesMatched").toString(), "[2,3]");
   }
 }

@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -120,7 +119,6 @@ public abstract class DeriveSchema {
    * Merge fields in all the records together into one record
    */
   public ObjectNode mergeRecords(List<JsonNode> recordList) {
-    ObjectNode mergedRecord = mapper.createObjectNode().put("type", "object");
     ObjectNode properties = mapper.createObjectNode();
     Map<String, List<JsonNode>> fieldToType = new HashMap<>();
 
@@ -135,18 +133,31 @@ public abstract class DeriveSchema {
       }
     }
 
+    IllegalArgumentException mergingError = null;
+    String mergingErrorField = null;
     // Merging type for each field using fieldToType map
     for (Map.Entry<String, List<JsonNode>> entry : fieldToType.entrySet()) {
-      List<JsonNode> fieldsType = fieldToType.get(entry.getKey());
+      String fieldName = entry.getKey();
+      List<JsonNode> fieldTypes = fieldToType.get(fieldName);
       try {
-        ObjectNode items = mergeArrays(fieldsType, false, false);
-        properties.set(entry.getKey(), items.get("items"));
+        ObjectNode items = mergeArrays(fieldTypes, false, false).deepCopy();
+        properties.set(fieldName, items.get("items"));
+        // Editing fields in-place and replacing with merged item
+        DeriveSchemaUtils.replaceEachField(items.get("items"), fieldTypes);
       } catch (IllegalArgumentException e) {
-        throw new IllegalArgumentException(
-            String.format("Unable to merge field %s with types: %s",
-                entry.getKey(), fieldsType), e);
+        // Capture error and field here, thrown later to allow loop completion
+        mergingError = e;
+        mergingErrorField = fieldName;
       }
     }
+
+    if (mergingErrorField != null) {
+      throw new IllegalArgumentException(String.format("Unable to merge field %s with types: %s",
+          mergingErrorField, fieldToType.get(mergingErrorField)), mergingError);
+    }
+
+    // Return object with all fields combined into 1 object
+    ObjectNode mergedRecord = mapper.createObjectNode().put("type", "object");
     mergedRecord.set("properties", DeriveSchemaUtils.sortObjectNode(properties));
     return mergedRecord;
   }
@@ -178,54 +189,20 @@ public abstract class DeriveSchema {
   public ObjectNode getSchemaForMultipleMessages(List<JsonNode> messages)
       throws JsonProcessingException {
     List<JsonNode> schemas = getSchemaOfAllElements(messages, "Schema");
-    ArrayNode schemaInfoList = mapper.createArrayNode();
-    List<JsonNode> mergedSchemas = new ArrayList<>();
-
-    // Use only unique schemas for merging step
-    // Keep track of which unique schema matches to which message originally
+    // Use only unique schemas and collect all indices it matches
     List<JsonNode> uniqueSchemas = DeriveSchemaUtils.getUnique(schemas);
-    List<ArrayNode> uniqueToOriginalIndex = new ArrayList<>();
-    for (JsonNode uniqueSchema : uniqueSchemas) {
-      ArrayNode matches = mapper.createArrayNode();
-      for (int i = 0; i < schemas.size(); i++) {
-        if (schemas.get(i).equals(uniqueSchema)) {
-          matches.add(i);
-        }
-      }
-      uniqueToOriginalIndex.add(matches);
+    Map<JsonNode, ArrayNode> schemaToIndex = new HashMap<>();
+    uniqueSchemas.forEach(s -> schemaToIndex.put(s, mapper.createArrayNode()));
+    for (int i = 0; i < schemas.size(); i++) {
+      schemaToIndex.get(schemas.get(i)).add(i);
     }
-
-    // Let's say we have n different messages, getSchemaOfAllElements gives n different schemas
-    // Out of the n schemas, some schemas could be identical
-    // schemas might differ due to a record having an extra field or record is of type union
-    // schemas might differ due to same field having int and double type in different messages
-    // In the above cases schemas can be merged together. So, we pick one and try to merge with rest
-    for (int i = 0; i < uniqueSchemas.size(); i++) {
-      ArrayNode messagesMatched = mapper.createArrayNode();
-      JsonNode mergedSchema = uniqueSchemas.get(i);
-      for (int j = 0; j < uniqueSchemas.size(); j++) {
-        try {
-          mergedSchema = mergeArrays(Arrays.asList(mergedSchema, uniqueSchemas.get(j)),
-              false, false).get("items");
-          messagesMatched.addAll(uniqueToOriginalIndex.get(j));
-        } catch (IllegalArgumentException ignored) {
-          // If there are conflicting types, schemas cannot be merged. Result is ignored
-        }
-      }
-      if (!mergedSchemas.contains(mergedSchema)) {
-        updateSchemaInformation(mergedSchema, messagesMatched, mergedSchemas, schemaInfoList);
-      }
-    }
-
-    // Return json object with complete schema information
+    ArrayNode schemaInfoList = mergeMultipleMessages(uniqueSchemas, schemaToIndex);
     return mapper.createObjectNode().set("schemas", schemaInfoList);
   }
 
   protected void updateSchemaInformation(JsonNode mergedSchema,
                                          ArrayNode messagesMatched,
-                                         List<JsonNode> mergedSchemas,
                                          ArrayNode schemaInformationList) {
-    mergedSchemas.add(mergedSchema);
     ObjectNode schemaElement = mapper.createObjectNode();
     try {
       schemaElement.set("schema", convertToFormat(mergedSchema, "Schema"));
@@ -255,4 +232,8 @@ public abstract class DeriveSchema {
                                                        List<JsonNode> records,
                                                        List<JsonNode> arrays,
                                                        boolean check2dArray);
+
+  protected abstract ArrayNode mergeMultipleMessages(List<JsonNode> uniqueSchemas,
+                                                     Map<JsonNode, ArrayNode> schemaToIndex);
+
 }

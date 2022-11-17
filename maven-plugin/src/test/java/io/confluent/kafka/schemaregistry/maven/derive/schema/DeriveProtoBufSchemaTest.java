@@ -211,13 +211,15 @@ public class DeriveProtoBufSchemaTest extends DeriveSchemaTest {
 
   @Test
   public void testDeriveMultipleMessages() throws JsonProcessingException {
-    // Message1 and Message2 cannot be merged due to conflicting types of F1
+    // Message1,4 and Message2 cannot be merged due to conflicting types of F1
     // Message3 can merge with both, hence we have 2 different schema generated
     JsonNode message1 = mapper.readTree("{\"F1\": 1.5, \"F2\": true}");
     JsonNode message2 = mapper.readTree("{\"F1\": 1, \"F2\": 1}");
     JsonNode message3 = mapper.readTree("{\"F3\": [1, 1.5, 3]}");
-    JsonNode schema = derive.getSchemaForMultipleMessages(Arrays.asList(message1, message2, message3)).get("schemas");
+    JsonNode message4 = mapper.readTree("{\"F1\": 1.5 , \"F2\": true}");
+    JsonNode schema = derive.getSchemaForMultipleMessages(Arrays.asList(message4, message2, message1, message3, message2)).get("schemas");
 
+    assertEquals(schema.size(), 2);
     String expectedSchema1 = "syntax = \"proto3\";\n\n" +
         "message Schema {\n" +
         "  double F1 = 1;\n" +
@@ -225,7 +227,7 @@ public class DeriveProtoBufSchemaTest extends DeriveSchemaTest {
         "  repeated double F3 = 3;\n" +
         "}\n";
     assertEquals(schema.get(0).get("schema").asText(), expectedSchema1);
-    assertEquals(schema.get(0).get("messagesMatched").toString(), "[0,2]");
+    assertEquals(schema.get(0).get("messagesMatched").toString(), "[0,2,3]");
 
     String expectedSchema2 = "syntax = \"proto3\";\n\n" +
         "message Schema {\n" +
@@ -234,6 +236,6 @@ public class DeriveProtoBufSchemaTest extends DeriveSchemaTest {
         "  repeated double F3 = 3;\n" +
         "}\n";
     assertEquals(schema.get(1).get("schema").asText(), expectedSchema2);
-    assertEquals(schema.get(1).get("messagesMatched").toString(), "[1,2]");
+    assertEquals(schema.get(1).get("messagesMatched").toString(), "[1,4,3]");
   }
 }

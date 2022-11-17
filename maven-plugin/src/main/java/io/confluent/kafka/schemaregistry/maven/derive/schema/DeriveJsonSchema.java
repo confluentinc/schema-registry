@@ -16,15 +16,14 @@
 
 package io.confluent.kafka.schemaregistry.maven.derive.schema;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class DeriveJsonSchema extends DeriveSchema {
@@ -91,20 +90,24 @@ public class DeriveJsonSchema extends DeriveSchema {
   }
 
   /**
-   * Treated same as array of records, the items derived is returned as schema
-   * Exactly one schema is returned
+   * Merge the unique schemas into one record by combining fields and merging data types
    */
   @Override
-  public ObjectNode getSchemaForMultipleMessages(List<JsonNode> messages)
-      throws JsonProcessingException {
-    JsonNode schema = getSchemaForArray(messages, "").get("items");
+  public ArrayNode mergeMultipleMessages(List<JsonNode> uniqueSchemas,
+                                         Map<JsonNode, ArrayNode> schemaToIndex) {
+    JsonNode schema = mergeRecords(uniqueSchemas);
     ArrayNode messagesMatched = mapper.createArrayNode();
-    for (int i = 0; i < messages.size(); i++) {
+    int totalSize = 0;
+    // Find total number of schemas and set that as messages matched, so [0 .. n-1]
+    for (JsonNode indices : schemaToIndex.keySet()) {
+      totalSize += indices.size();
+    }
+    for (int i = 0; i < totalSize; i++) {
       messagesMatched.add(i);
     }
     ArrayNode schemaInfoList = mapper.createArrayNode();
-    updateSchemaInformation(schema, messagesMatched, new ArrayList<>(), schemaInfoList);
-    return mapper.createObjectNode().set("schemas", schemaInfoList);
+    updateSchemaInformation(schema, messagesMatched, schemaInfoList);
+    return schemaInfoList;
   }
 
   /**
