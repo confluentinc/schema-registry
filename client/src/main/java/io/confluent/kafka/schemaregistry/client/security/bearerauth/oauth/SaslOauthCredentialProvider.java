@@ -16,8 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
-
-
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 import java.net.URL;
@@ -40,9 +38,9 @@ import org.apache.kafka.common.security.oauthbearer.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.secured.LoginAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler;
 
-public class SaslOAuthCredentialProvider implements BearerAuthCredentialProvider {
+public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider {
 
-  public final String SASL_IDENTITY_POOL_CONFIG = "extension_logicalCluster";
+  public static final String SASL_IDENTITY_POOL_CONFIG = "extension_identityPoolId";
   private CachedOauthTokenRetriever tokenRetriever;
   private String targetSchemaRegistry;
   private String targetIdentityPoolId;
@@ -89,47 +87,36 @@ public class SaslOAuthCredentialProvider implements BearerAuthCredentialProvider
     targetSchemaRegistry = cu.validateString(
         SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER);
 
-    // if the schema registry oauth configs are set it is higher preference
-    if (cu.get(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID) != null) {
-      targetIdentityPoolId = cu.validateString(
-          SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID);
-    } else {
-      targetIdentityPoolId = jou.validateString(SASL_IDENTITY_POOL_CONFIG);
-    }
+    // if the schema registry oauth configs are set it is given higher preference
+    targetIdentityPoolId = cu.get(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID) != null
+        ? cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID)
+        : jou.validateString(SASL_IDENTITY_POOL_CONFIG);
 
     tokenRetriever = new CachedOauthTokenRetriever();
-    tokenRetriever.configure(getTokenRetriever(cu, jou), getTokenValidator(),
+    tokenRetriever.configure(getTokenRetriever(cu, jou), getTokenValidator(cu, configs),
         getOauthTokenCache(configs));
   }
 
 
   private OauthTokenCache getOauthTokenCache(Map<String, ?> map) {
-    short cacheExpiryBufferSeconds = SchemaRegistryClientConfig.
-        getBearerAuthCacheExpiryBufferSeconds(map);
+    short cacheExpiryBufferSeconds = SchemaRegistryClientConfig
+        .getBearerAuthCacheExpiryBufferSeconds(map);
     return new OauthTokenCache(cacheExpiryBufferSeconds);
   }
 
   private AccessTokenRetriever getTokenRetriever(ConfigurationUtils cu, JaasOptionsUtils jou) {
-    String clientId;
-    if (cu.get(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_ID) != null) {
-       clientId = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_ID);
-    } else {
-      clientId = jou.validateString(OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG);
-    }
-    String clientSecret;
+    // if the schema registry oauth configs are set it is given higher preference
+    String clientId = cu.get(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_ID) != null
+        ? cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_ID)
+        : jou.validateString(OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG);
 
-    if(cu.get(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET) != null) {
-      clientSecret = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET);
-    } else {
-      clientSecret = jou.validateString(OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG);
-    }
+    String clientSecret = cu.get(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET) != null
+        ? cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET)
+        : jou.validateString(OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG);
 
-    String scope;
-    if(cu.get(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE) != null) {
-      scope = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE);
-    } else {
-      scope = jou.validateString(OAuthBearerLoginCallbackHandler.SCOPE_CONFIG, false);
-    }
+    String scope = cu.get(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE) != null
+        ? cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE)
+        : jou.validateString(OAuthBearerLoginCallbackHandler.SCOPE_CONFIG, false);
 
     //Keeping following configs needed by HttpAccessTokenRetriever as constants and not exposed to
     //users for modifications
@@ -140,12 +127,9 @@ public class SaslOAuthCredentialProvider implements BearerAuthCredentialProvider
 
     SSLSocketFactory sslSocketFactory = null;
 
-    URL url;
-    if(cu.get(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_URL) != null) {
-       url = cu.validateUrl(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_URL);
-    } else {
-      url = cu.validateUrl(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
-    }
+    URL url = cu.get(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_URL) != null
+        ? cu.validateUrl(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_URL)
+        : cu.validateUrl(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
     if (jou.shouldCreateSSLSocketFactory(url)) {
       sslSocketFactory = jou.createSSLSocketFactory();
@@ -156,11 +140,16 @@ public class SaslOAuthCredentialProvider implements BearerAuthCredentialProvider
     );
   }
 
-  private AccessTokenValidator getTokenValidator() {
-    //Keeping following configs needed by LoginAccessTokenValidator as constants and not exposed to
-    //users for modifications
-    String scopeClaimName = SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
-    String subClaimName = SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME;
+  private AccessTokenValidator getTokenValidator(ConfigurationUtils cu, Map<String, ?> configs) {
+    // if the schema registry oauth configs are set it is given higher preference
+    String scopeClaimName = cu.get(SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME) != null
+        ? cu.validateString(SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME)
+        : SchemaRegistryClientConfig.getBearerAuthScopeClaimName(configs);
+
+    String subClaimName = cu.get(SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME) != null
+        ? cu.validateString(SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME)
+        : SchemaRegistryClientConfig.getBearerAuthSubClaimName(configs);
+
     return new LoginAccessTokenValidator(scopeClaimName, subClaimName);
   }
 
@@ -175,3 +164,5 @@ public class SaslOAuthCredentialProvider implements BearerAuthCredentialProvider
     return updatedConfigs;
   }
 }
+
+
