@@ -21,10 +21,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class DeriveJsonSchema extends DeriveSchema {
 
@@ -45,15 +43,6 @@ public class DeriveJsonSchema extends DeriveSchema {
         BOOLEAN);
     classToDataType.put(com.fasterxml.jackson.databind.node.NullNode.class.getName(), NULL);
     classToDataType.put(com.fasterxml.jackson.databind.node.MissingNode.class.getName(), NULL);
-  }
-
-  protected ArrayNode sortJsonArrayList(ArrayNode node) {
-    List<JsonNode> dataNodes = DeriveSchemaUtils.getListFromArray(node);
-    // Sort items of arrayNode using type as the comparator
-    List<JsonNode> sortedDataNodes = dataNodes.stream().distinct()
-        .sorted(Comparator.comparing(o -> o.get("type").asText()))
-        .collect(Collectors.toList());
-    return mapper.createObjectNode().arrayNode().addAll(sortedDataNodes);
   }
 
   /**
@@ -77,7 +66,8 @@ public class DeriveJsonSchema extends DeriveSchema {
 
     if (items.size() > 1) {
       // If there are more than 1 different items, use oneOf to represent them
-      ObjectNode oneOfDataType = mapper.createObjectNode().set("oneOf", sortJsonArrayList(items));
+      ObjectNode oneOfDataType = mapper.createObjectNode().set("oneOf",
+          DeriveSchemaUtils.sortJsonArrayList(items));
       mergedArray.set("items", oneOfDataType);
     } else if (items.size() == 1) {
       mergedArray.set("items", items.get(0));
@@ -99,8 +89,8 @@ public class DeriveJsonSchema extends DeriveSchema {
     ArrayNode messagesMatched = mapper.createArrayNode();
     int totalSize = 0;
     // Find total number of schemas and set that as messages matched, so [0 .. n-1]
-    for (JsonNode indices : schemaToIndex.keySet()) {
-      totalSize += indices.size();
+    for (Map.Entry<JsonNode, ArrayNode> entry : schemaToIndex.entrySet()) {
+      totalSize += entry.getValue().size();
     }
     for (int i = 0; i < totalSize; i++) {
       messagesMatched.add(i);

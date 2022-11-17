@@ -164,17 +164,6 @@ public class DeriveJsonSchemaTest extends DeriveSchemaTest {
   }
 
   @Test
-  public void testSortJsonArrayList() throws JsonProcessingException {
-    ArrayNode oneOfList = mapper.createArrayNode();
-    for (String schema : Arrays.asList(TYPE_LONG, TYPE_DOUBLE, EMPTY_ARRAY, String.format(RECORD_WITH_STRING, "F1"))) {
-      oneOfList.add(mapper.readTree(schema));
-    }
-    DeriveJsonSchema deriveJson = (DeriveJsonSchema) derive;
-    ArrayNode sortedOneOfList = deriveJson.sortJsonArrayList(oneOfList);
-    assertEquals(sortedOneOfList.toString(), "[{\"type\":\"array\",\"items\":{}},{\"type\":\"double\"},{\"type\":\"long\"},{\"type\":\"object\",\"properties\":{\"F1\":{\"type\":\"string\"}}}]");
-  }
-
-  @Test
   public void shouldMergeEmptyItemsMergeArrays() throws JsonProcessingException {
     // Merge Empty items and number type
     generateSchemasAndMatchExpectedMergeArrays(ARRAY_OF_NUMBERS, EMPTY_ARRAY, ARRAY_OF_NUMBERS);

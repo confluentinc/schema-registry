@@ -90,15 +90,15 @@ public class DeriveAvroSchema extends DeriveSchema {
     mergeUnions(records, primitives);
     DeriveSchemaUtils.mergeNumberTypes(primitives);
     primitives = DeriveSchemaUtils.getUnique(primitives);
+    List<JsonNode> dataTypes = new ArrayList<>();
     // To recursively merge number types in-place for records and arrays, the result is ignored
     if (records.size() > 0) {
       mergeRecords(records);
     }
     if (arrays.size() > 0) {
-      mergeArrays(arrays, true, false);
+      dataTypes.add(mergeArrays(arrays, true, false));
     }
-    List<JsonNode> dataTypes = new ArrayList<>();
-    for (List<JsonNode> types : Arrays.asList(arrays, records, primitives)) {
+    for (List<JsonNode> types : Arrays.asList(records, primitives)) {
       dataTypes.addAll(types);
     }
     ArrayNode items = mapper.createArrayNode().addAll(DeriveSchemaUtils.getUnique(dataTypes));
@@ -116,7 +116,7 @@ public class DeriveAvroSchema extends DeriveSchema {
     try {
       return mapper.readTree(avroSchema.toString());
     } catch (JsonProcessingException e) {
-      return schema;
+      throw new IllegalArgumentException(e);
     }
   }
 
@@ -151,9 +151,7 @@ public class DeriveAvroSchema extends DeriveSchema {
         arraySchemaAvro.set(fieldType, convertToFormatArray(items, name));
         break;
       case "union":
-        ArrayNode unionBranches = (ArrayNode) items.get("properties");
-        convertToFormatUnion(unionBranches);
-        arraySchemaAvro.set(fieldType, unionBranches);
+        arraySchemaAvro.set(fieldType, convertToFormatUnion(items));
         break;
       default:
         arraySchemaAvro.put(fieldType, itemsType);
@@ -161,13 +159,15 @@ public class DeriveAvroSchema extends DeriveSchema {
     }
   }
 
-  private void convertToFormatUnion(ArrayNode unionBranches) {
+  private ArrayNode convertToFormatUnion(JsonNode items) {
+    ArrayNode unionBranches = (ArrayNode) items.get("properties");
     for (int i = 0; i < unionBranches.size(); i++) {
       if (unionBranches.get(i).get("type").asText().equals("object")) {
         unionBranches.set(i, convertToFormat(unionBranches.get(i),
             unionBranches.get(i).get("__name").asText()));
       }
     }
+    return unionBranches;
   }
 
   /**
@@ -238,6 +238,14 @@ public class DeriveAvroSchema extends DeriveSchema {
     if (hasNull) {
       branches.add(getNullSchema());
     }
+    // Add union types to branches
+    for (JsonNode primitive : primitives) {
+      if (primitive.get("type").asText().equals("union")) {
+        JsonNode properties = primitive.get("properties");
+        properties.forEach(branches::add);
+      }
+    }
+
     List<JsonNode> uniqueBranches = DeriveSchemaUtils.getUnique(branches);
     List<String> primitiveTypes = Arrays.asList(INT, LONG, DOUBLE, STRING, BOOLEAN);
     boolean checkForSinglePrimitiveBranch = uniqueBranches.size() == 1
@@ -246,11 +254,14 @@ public class DeriveAvroSchema extends DeriveSchema {
       if (hasNull) {
         primitives.removeIf(o -> o.get("type").asText().equals(NULL));
       }
-      ArrayNode properties = mapper.createArrayNode().addAll(uniqueBranches);
-      for (JsonNode record : records) {
-        ObjectNode objectNode = (ObjectNode) record;
-        objectNode.put("type", "union");
-        objectNode.set("properties", properties);
+      ArrayNode properties = DeriveSchemaUtils.sortJsonArrayList(
+          mapper.createArrayNode().addAll(uniqueBranches));
+      for (List<JsonNode> types : Arrays.asList(records, primitives)) {
+        for (JsonNode field : types) {
+          ObjectNode objectNode = (ObjectNode) field;
+          objectNode.put("type", "union");
+          objectNode.set("properties", properties);
+        }
       }
     }
   }

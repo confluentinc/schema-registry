@@ -236,6 +236,6 @@ public class DeriveProtoBufSchemaTest extends DeriveSchemaTest {
         "  repeated double F3 = 3;\n" +
         "}\n";
     assertEquals(schema.get(1).get("schema").asText(), expectedSchema2);
-    assertEquals(schema.get(1).get("messagesMatched").toString(), "[1,4,3]");
+    assertEquals(schema.get(1).get("messagesMatched").toString(), "[1,3,4]");
   }
 }

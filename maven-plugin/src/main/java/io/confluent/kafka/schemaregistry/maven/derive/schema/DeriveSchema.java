@@ -210,7 +210,7 @@ public abstract class DeriveSchema {
       throw new IllegalArgumentException(
           String.format("Unable generate schema for %s", mergedSchema), e);
     }
-    schemaElement.set("messagesMatched", messagesMatched);
+    schemaElement.set("messagesMatched", DeriveSchemaUtils.sortJsonArrayList(messagesMatched));
     schemaInformationList.add(schemaElement);
   }
 

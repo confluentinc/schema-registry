@@ -205,11 +205,18 @@ public class DeriveAvroSchemaTest extends DeriveSchemaTest {
   @Test
   public void testDeriveArrayOfUnions() throws IOException {
     // Int, double, null and array should be merged together inside array
-    String arrayOfUnions = "{\"emptyArray\":[{\"int\":12}, {\"double\":1.2}, null, {\"array\":[12,13]}]}";
-    String expectedSchema = "{\"type\":\"record\",\"name\":\"Schema\",\"fields\":[{\"name\":\"emptyArray\",\"type\":{\"type\":\"array\",\"items\":[{\"type\":\"array\",\"items\":\"int\"},\"double\",\"int\",\"null\"]}}]}";
+    String arrayOfUnions = "{\"arrayOfUnions\":[{\"int\":12}, {\"double\":1.2}, null, {\"array\":[12,13]}]}";
+    String expectedSchema = "{\"type\":\"record\",\"name\":\"Schema\",\"fields\":[{\"name\":\"arrayOfUnions\",\"type\":{\"type\":\"array\",\"items\":[{\"type\":\"array\",\"items\":\"int\"},\"double\",\"int\",\"null\"]}}]}";
     generateSchemaAndCheckExpected(arrayOfUnions, expectedSchema);
   }
 
+  @Test
+  public void testDeriveArrayOfUnionsRecursive() throws IOException {
+    // Int, double, null and array should be merged together inside array
+    String arrayOfUnions = "{\"arr\":[{\"F1\":[null, {\"boolean\":true}]}, {\"F1\":[{\"int\":12}]}, {\"F1\":[null, null]}]}";
+    String expectedSchema = "{\"type\":\"record\",\"name\":\"Schema\",\"fields\":[{\"name\":\"arr\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"arr\",\"fields\":[{\"name\":\"F1\",\"type\":{\"type\":\"array\",\"items\":[\"boolean\",\"int\",\"null\"]}}]}}}]}";
+    generateSchemaAndCheckExpected(arrayOfUnions, expectedSchema);
+  }
   @Test
   public void testDeriveMergeUnionsRecursive() throws IOException {
     // Test recursive merging of field new and old, and merging of 2 different records R1 and R2
@@ -226,7 +233,7 @@ public class DeriveAvroSchemaTest extends DeriveSchemaTest {
     JsonNode recordWithString = mapper.readTree(String.format(RECORD_WITH_STRING, "string"));
     JsonNode recordWithInteger = mapper.readTree("{\"type\":\"object\",\"properties\":{\"int\":{\"type\":\"int\"}}}");
     deriveAvro.mergeUnions(Arrays.asList(recordWithString, recordWithInteger), new ArrayList<>());
-    String expectedSchema = "{\"type\":\"union\",\"properties\":[{\"type\":\"string\"},{\"type\":\"int\"}]}";
+    String expectedSchema = "{\"type\":\"union\",\"properties\":[{\"type\":\"int\"},{\"type\":\"string\"}]}";
     assertEquals(recordWithString.toString(), expectedSchema);
     assertEquals(recordWithInteger.toString(), expectedSchema);
   }
@@ -271,7 +278,7 @@ public class DeriveAvroSchemaTest extends DeriveSchemaTest {
   }
 
   @Test
-  public void testDeriveMultipleMessagesWithAvro() throws JsonProcessingException {
+  public void testDeriveMultipleMessagesWithUnion() throws JsonProcessingException {
     // Field F1 should have all branches: int, long and null, and F2 should have array and null
     // Message3 has extra field and cannot be merged
     JsonNode message1 = mapper.readTree("{\"F1\": {\"int\":12}, \"F2\": null}");
