@@ -229,7 +229,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
-    MD5 md5 = MD5.ofSchema(schemaValue.toSchemaEntity());
+    MD5 md5 = MD5.ofSchema(schemaValue);
     Map<String, Map<MD5, Integer>> ctxHashes =
         hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<MD5, Integer> hashes = ctxHashes.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());

@@ -67,8 +67,16 @@
             <artifactId>logredactor</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.kcache</groupId>
+            <artifactId>kcache</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.google.crypto.tink</groupId>
+            <artifactId>tink</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.avro</groupId>

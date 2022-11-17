@@ -25,7 +25,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 
-import java.util.Objects;
+import java.util.Base64;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.Min;
 import java.util.Collections;
@@ -35,6 +35,8 @@ import java.util.stream.Collectors;
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SchemaValue extends SubjectValue implements Comparable<SchemaValue> {
+
+  public static final String MD5_PROPERTY = "__md5__";
 
   @Min(1)
   private Integer version;
@@ -166,7 +168,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     return this.metadata;
   }
 
-  @JsonProperty("metdata")
+  @JsonProperty("metadata")
   public void setMetadata(Metadata metadata) {
     this.metadata = metadata;
   }
@@ -199,6 +201,14 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   @JsonProperty("deleted")
   public void setDeleted(boolean deleted) {
     this.deleted = deleted;
+  }
+
+  public byte[] getMd5Bytes() {
+    if (getMetadata() == null || getMetadata().getProperties() == null) {
+      return null;
+    }
+    String md5 = getMetadata().getProperties().get(MD5_PROPERTY);
+    return md5 != null ? Base64.getDecoder().decode(md5) : null;
   }
 
   @Override
