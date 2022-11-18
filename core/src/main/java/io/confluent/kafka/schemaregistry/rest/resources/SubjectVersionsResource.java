@@ -376,6 +376,8 @@ public class SubjectVersionsResource {
       @PathParam("subject") String subjectName,
       @Parameter(description = "Whether to register the normalized schema")
       @QueryParam("normalize") boolean normalize,
+      @Parameter(description = "Whether to return verbose error messages")
+      @QueryParam("verbose") boolean verbose,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
@@ -396,7 +398,8 @@ public class SubjectVersionsResource {
     Schema schema = new Schema(subjectName, request);
     int id;
     try {
-      id = schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
+      id = schemaRegistry.registerOrForward(subjectName, schema, normalize, verbose,
+        headerProperties);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {

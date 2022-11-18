@@ -469,7 +469,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public int register(String subject,
                       Schema schema,
-                      boolean normalize)
+                      boolean normalize,
+                      boolean verbose)
       throws SchemaRegistryException {
     try {
       checkRegisterMode(subject, schema);
@@ -519,7 +520,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Collections.reverse(undeletedVersions);
 
       final List<String> compatibilityErrorLogs = isCompatibleWithPrevious(
-              subject, parsedSchema, undeletedVersions);
+              subject, parsedSchema, undeletedVersions, verbose);
       final boolean isCompatible = compatibilityErrorLogs.isEmpty();
 
       try {
@@ -626,6 +627,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public int registerOrForward(String subject,
                                Schema schema,
                                boolean normalize,
+                               boolean verbose,
                                Map<String, String> headerProperties)
       throws SchemaRegistryException {
     Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
@@ -641,7 +643,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        return register(subject, schema, normalize);
+        return register(subject, schema, normalize, verbose);
       } else {
         // forward registering request to the leader
         if (leaderIdentity != null) {
@@ -1620,7 +1622,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public List<String> isCompatible(String subject,
                                    Schema newSchema,
-                                   List<Schema> previousSchemas)
+                                   List<Schema> previousSchemas,
+                                   boolean verbose)
       throws SchemaRegistryException {
 
     if (previousSchemas == null) {
@@ -1635,16 +1638,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
 
     ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true, false);
-    return isCompatibleWithPrevious(subject, parsedSchema, prevParsedSchemas);
+    return isCompatibleWithPrevious(subject, parsedSchema, prevParsedSchemas, verbose);
   }
 
   private List<String> isCompatibleWithPrevious(String subject,
                                                 ParsedSchema parsedSchema,
-                                                List<ParsedSchema> previousSchemas)
+                                                List<ParsedSchema> previousSchemas,
+                                                boolean verbose)
       throws SchemaRegistryException {
 
     CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
-    return parsedSchema.isCompatible(compatibility, previousSchemas);
+    List<String> errorMessages = parsedSchema.isCompatible(compatibility, previousSchemas, verbose);
+    if (errorMessages.size() > 0) {
+      errorMessages.add(String.format("{ compatibility: %s }", compatibility));
+      log.error(errorMessages.toString());
+    }
+    return errorMessages;
   }
 
   private void deleteMode(String subject) throws StoreException {

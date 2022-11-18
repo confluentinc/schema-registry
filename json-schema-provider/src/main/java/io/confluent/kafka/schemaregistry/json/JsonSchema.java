@@ -431,7 +431,7 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
-  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+  public List<String> isBackwardCompatible(ParsedSchema previousSchema, boolean verbose) {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Collections.singletonList("Incompatible because of different schema type");
     }

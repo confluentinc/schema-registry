@@ -64,7 +64,7 @@ public class CompatibilityChecker {
       FULL_TRANSITIVE_VALIDATOR);
 
   private static final SchemaValidator NO_OP_VALIDATOR =
-      (schema, schemas) -> Collections.emptyList();
+      (schema, schemas, verbose) -> Collections.emptyList();
 
   public static final CompatibilityChecker NO_OP_CHECKER =
       new CompatibilityChecker(NO_OP_VALIDATOR);
@@ -77,12 +77,20 @@ public class CompatibilityChecker {
 
   // visible for testing
   public List<String> isCompatible(
-      ParsedSchema newSchema, List<? extends ParsedSchema> previousSchemas
+      ParsedSchema newSchema, List<? extends ParsedSchema> previousSchemas) {
+    return isCompatible(newSchema, previousSchemas, false);
+
+  }
+
+  // visible for testing
+  public List<String> isCompatible(
+      ParsedSchema newSchema, List<? extends ParsedSchema> previousSchemas,
+      boolean verbose
   ) {
     List<? extends ParsedSchema> previousSchemasCopy = new ArrayList<>(previousSchemas);
     // Validator checks in list order, but checks should occur in reverse chronological order
     Collections.reverse(previousSchemasCopy);
-    return validator.validate(newSchema, previousSchemasCopy);
+    return validator.validate(newSchema, previousSchemasCopy, verbose);
   }
 
   public static CompatibilityChecker checker(CompatibilityLevel level) {
