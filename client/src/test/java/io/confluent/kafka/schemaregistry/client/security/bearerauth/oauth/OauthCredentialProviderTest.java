@@ -66,7 +66,7 @@ public class OauthCredentialProviderTest {
   }
 
   @Test
-  public void TestConfigureInsufficentConfigs() {
+  public void TestConfigureInsufficientConfigs() {
     List<String> optionalConfigs = Arrays.asList(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE,
         SchemaRegistryClientConfig.BEARER_AUTH_SCOPE_CLAIM_NAME,
         SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME);
