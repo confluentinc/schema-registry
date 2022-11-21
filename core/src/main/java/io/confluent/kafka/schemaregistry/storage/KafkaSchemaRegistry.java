@@ -469,6 +469,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public int register(String subject,
                       Schema schema,
+                      boolean normalize) throws SchemaRegistryException {
+    return register(subject, schema, normalize, false);
+  }
+
+  @Override
+  public int register(String subject,
+                      Schema schema,
                       boolean normalize,
                       boolean verbose)
       throws SchemaRegistryException {

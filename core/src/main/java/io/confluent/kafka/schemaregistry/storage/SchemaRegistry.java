@@ -39,6 +39,9 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return register(subject, schema, false, false);
   }
 
+  int register(String subject, Schema schema, boolean normalize)
+      throws SchemaRegistryException;
+
   int register(String subject, Schema schema, boolean normalize, boolean verbose)
       throws SchemaRegistryException;
 
