@@ -82,7 +82,7 @@
         <swagger.version>1.6.2</swagger.version>
         <spotbugs.plugin.version>4.0.0</spotbugs.plugin.version>
         <commons.compress.version>1.21</commons.compress.version>
-        <snake.yaml.version>1.27</snake.yaml.version>
+        <snake.yaml.version>1.32</snake.yaml.version>
     </properties>
 
     <repositories>
