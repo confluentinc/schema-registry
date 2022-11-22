@@ -127,7 +127,12 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
           ? getContextName(topic) : subjectName(topic, isKey, null);
       JsonSchema schema = ((JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id));
 
-      ParsedSchema readerSchema = getLatestWithMetadata(subject);
+      ParsedSchema readerSchema = null;
+      if (metadata != null) {
+        readerSchema = getLatestWithMetadata(subject);
+      } else if (useLatestVersion) {
+        readerSchema = lookupLatestVersion(subject, schema, false);
+      }
       if (includeSchemaAndVersion || readerSchema != null) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(id, schema, subject, isKey);

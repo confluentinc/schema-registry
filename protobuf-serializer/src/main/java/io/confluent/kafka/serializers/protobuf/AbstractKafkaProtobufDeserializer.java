@@ -138,7 +138,12 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       String name = schema.toMessageName(indexes);
       schema = schemaWithName(schema, name);
 
-      ParsedSchema readerSchema = getLatestWithMetadata(subject);
+      ParsedSchema readerSchema = null;
+      if (metadata != null) {
+        readerSchema = getLatestWithMetadata(subject);
+      } else if (useLatestVersion) {
+        readerSchema = lookupLatestVersion(subject, schema, false);
+      }
       if (includeSchemaAndVersion || readerSchema != null) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(id, schema, subject, isKey);

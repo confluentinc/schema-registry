@@ -158,20 +158,9 @@ public class DeriveJsonSchemaTest extends DeriveSchemaTest {
     // Merging Records with different field names
     JsonNode stringMessage = mapper.readTree("{\"string\": \"1\"}");
     JsonNode integerMessage = mapper.readTree("{\"number\": 12}");
-    String expectedSchema = "{\"schema\":{\"type\":\"object\",\"properties\":{\"number\":{\"type\":\"number\"},\"string\":{\"type\":\"string\"}}}}";
+    String expectedSchema = "{\"schemas\":[{\"schema\":{\"type\":\"object\",\"properties\":{\"number\":{\"type\":\"number\"},\"string\":{\"type\":\"string\"}}},\"messagesMatched\":[0,1,2,3]}]}";
     ObjectNode schema = derive.getSchemaForMultipleMessages(Arrays.asList(stringMessage, integerMessage, stringMessage, integerMessage));
     assertEquals(expectedSchema, schema.toString());
-  }
-
-  @Test
-  public void testSortJsonArrayList() throws JsonProcessingException {
-    ArrayNode oneOfList = mapper.createArrayNode();
-    for (String schema : Arrays.asList(TYPE_LONG, TYPE_DOUBLE, EMPTY_ARRAY, String.format(RECORD_WITH_STRING, "F1"))) {
-      oneOfList.add(mapper.readTree(schema));
-    }
-    DeriveJsonSchema deriveJson = (DeriveJsonSchema) derive;
-    ArrayNode sortedOneOfList = deriveJson.sortJsonArrayList(oneOfList);
-    assertEquals(sortedOneOfList.toString(), "[{\"type\":\"array\",\"items\":{}},{\"type\":\"double\"},{\"type\":\"long\"},{\"type\":\"object\",\"properties\":{\"F1\":{\"type\":\"string\"}}}]");
   }
 
   @Test

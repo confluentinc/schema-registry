@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel;
 
+import static io.confluent.kafka.schemaregistry.rules.cel.avro.AvroTypeDescription.NULL_AVRO_SCHEMA;
+
 import com.google.api.expr.v1alpha1.Decl;
 import com.google.api.expr.v1alpha1.Type;
 import com.google.common.collect.ImmutableMap;
@@ -97,7 +99,7 @@ public class CelExecutor implements RuleExecutor {
       ScriptBuilder scriptBuilder = scriptHost.buildScript(rule).withDeclarations(toDecls(args));
       if (isAvro) {
         // Register our Avro type
-        scriptBuilder = scriptBuilder.withTypes(obj);
+        scriptBuilder = scriptBuilder.withTypes(((GenericContainer) obj).getSchema());
       } else if (!isProto) {
         // Register our Jackson object message type
         scriptBuilder = scriptBuilder.withTypes(obj.getClass());
@@ -133,6 +135,7 @@ public class CelExecutor implements RuleExecutor {
       case LONG:
         return Checked.checkedInt;
       case BYTES:
+      case FIXED:
         return Checked.checkedBytes;
       case FLOAT:
       case DOUBLE:
@@ -144,10 +147,23 @@ public class CelExecutor implements RuleExecutor {
         return Checked.checkedListDyn;
       case MAP:
         return Checked.checkedMapStringDyn;
+      case ENUM:
+        return Decls.newObjectType(schema.getFullName());
       case NULL:
         return Checked.checkedNull;
-      default:
+      case RECORD:
         return Decls.newObjectType(schema.getFullName());
+      case UNION:
+        if (schema.getTypes().size() == 2 && schema.getTypes().contains(NULL_AVRO_SCHEMA)) {
+          for (Schema memberSchema : schema.getTypes()) {
+            if (!memberSchema.equals(NULL_AVRO_SCHEMA)) {
+              return findTypeForAvroType(memberSchema);
+            }
+          }
+        }
+        throw new IllegalArgumentException("Unsupported union type");
+      default:
+        throw new IllegalArgumentException("Unsupported type " + type);
     }
   }
 
