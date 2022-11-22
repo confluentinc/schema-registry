@@ -84,7 +84,7 @@
         <spotbugs.plugin.version>4.0.0</spotbugs.plugin.version>
         <io.confluent.schema-registry.version>6.1.9-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
-        <snake.yaml.version>1.27</snake.yaml.version>
+        <snake.yaml.version>1.32</snake.yaml.version>
     </properties>
 
     <repositories>
