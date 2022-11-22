@@ -108,6 +108,18 @@ public class DeriveSchemaUtilsTest {
   }
 
   @Test
+  public void shouldMergeNumberTypesLong() throws JsonProcessingException {
+    List<JsonNode> schemas = new ArrayList<>();
+    for (String schema : Arrays.asList(TYPE_INT, TYPE_LONG)) {
+      schemas.add(mapper.readValue(schema, ObjectNode.class));
+    }
+    DeriveSchemaUtils.mergeNumberTypes(schemas);
+    for (JsonNode schema : schemas) {
+      assertEquals(schema, mapper.readValue(TYPE_LONG, ObjectNode.class));
+    }
+  }
+
+  @Test
   public void shouldGroupDifferentTypes() throws JsonProcessingException {
     List<ObjectNode> schemas = new ArrayList<>();
     for (String schema : Arrays.asList(TYPE_INT, String.format(RECORD_WITH_STRING, "F1"), ARRAY_OF_NUMBERS, ARRAY_OF_NUMBERS_AND_STRINGS)) {
@@ -125,5 +137,25 @@ public class DeriveSchemaUtilsTest {
     assertEquals(arrays.size(), 1);
     DeriveSchemaUtils.groupItems(schemas.get(3), primitives, records, arrays);
     assertEquals(arrays.size(), 2);
+  }
+
+  @Test
+  public void testSortJsonArrayList() throws JsonProcessingException {
+    ArrayNode oneOfList = mapper.createArrayNode();
+    for (String schema : Arrays.asList(TYPE_LONG, TYPE_DOUBLE, EMPTY_ARRAY, String.format(RECORD_WITH_STRING, "F1"))) {
+      oneOfList.add(mapper.readTree(schema));
+    }
+    ArrayNode sortedOneOfList = DeriveSchemaUtils.sortJsonArrayList(oneOfList);
+    assertEquals(sortedOneOfList.toString(), "[{\"type\":\"array\",\"items\":{}},{\"type\":\"double\"},{\"type\":\"long\"},{\"type\":\"object\",\"properties\":{\"F1\":{\"type\":\"string\"}}}]");
+  }
+
+  @Test
+  public void testSortJsonArrayListInteger() {
+    ArrayNode array = mapper.createArrayNode();
+    for (int i = 0; i < 5; i++) {
+      array.add(i * (i - 2));
+    }
+    ArrayNode sortedArray = DeriveSchemaUtils.sortJsonArrayList(array);
+    assertEquals(sortedArray.toString(), "[-1,0,3,8]");
   }
 }

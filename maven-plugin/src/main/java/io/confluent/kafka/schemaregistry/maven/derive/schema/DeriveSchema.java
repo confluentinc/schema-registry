@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -120,7 +119,6 @@ public abstract class DeriveSchema {
    * Merge fields in all the records together into one record
    */
   public ObjectNode mergeRecords(List<JsonNode> recordList) {
-    ObjectNode mergedRecord = mapper.createObjectNode().put("type", "object");
     ObjectNode properties = mapper.createObjectNode();
     Map<String, List<JsonNode>> fieldToType = new HashMap<>();
 
@@ -135,18 +133,31 @@ public abstract class DeriveSchema {
       }
     }
 
+    IllegalArgumentException mergingError = null;
+    String mergingErrorField = null;
     // Merging type for each field using fieldToType map
     for (Map.Entry<String, List<JsonNode>> entry : fieldToType.entrySet()) {
-      List<JsonNode> fieldsType = fieldToType.get(entry.getKey());
+      String fieldName = entry.getKey();
+      List<JsonNode> fieldTypes = fieldToType.get(fieldName);
       try {
-        ObjectNode items = mergeArrays(fieldsType, false, false);
-        properties.set(entry.getKey(), items.get("items"));
+        ObjectNode items = mergeArrays(fieldTypes, false, false).deepCopy();
+        properties.set(fieldName, items.get("items"));
+        // Editing fields in-place and replacing with merged item
+        DeriveSchemaUtils.replaceEachField(items.get("items"), fieldTypes);
       } catch (IllegalArgumentException e) {
-        throw new IllegalArgumentException(
-            String.format("Unable to merge field %s with types: %s",
-                entry.getKey(), fieldsType), e);
+        // Capture error and field here, thrown later to allow loop completion
+        mergingError = e;
+        mergingErrorField = fieldName;
       }
     }
+
+    if (mergingErrorField != null) {
+      throw new IllegalArgumentException(String.format("Unable to merge field %s with types: %s",
+          mergingErrorField, fieldToType.get(mergingErrorField)), mergingError);
+    }
+
+    // Return object with all fields combined into 1 object
+    ObjectNode mergedRecord = mapper.createObjectNode().put("type", "object");
     mergedRecord.set("properties", DeriveSchemaUtils.sortObjectNode(properties));
     return mergedRecord;
   }
@@ -178,44 +189,40 @@ public abstract class DeriveSchema {
   public ObjectNode getSchemaForMultipleMessages(List<JsonNode> messages)
       throws JsonProcessingException {
     List<JsonNode> schemas = getSchemaOfAllElements(messages, "Schema");
-    ArrayNode schemaInfoList = mapper.createArrayNode();
-    List<JsonNode> mergedSchemas = new ArrayList<>();
-
-    // Let's say we have n different messages, getSchemaOfAllElements gives n different schemas
-    // Out of the n schemas, some schemas could be identical
-    // schemas might differ due to a record having an extra field or record is of type union
-    // schemas might differ due to same field having int and double type in different messages
-    // In the above cases schemas can be merged together. So, we pick one and try to merge with rest
+    // Use only unique schemas and collect all indices it matches
+    List<JsonNode> uniqueSchemas = DeriveSchemaUtils.getUnique(schemas);
+    Map<JsonNode, ArrayNode> schemaToIndex = new HashMap<>();
+    uniqueSchemas.forEach(s -> schemaToIndex.put(s, mapper.createArrayNode()));
     for (int i = 0; i < schemas.size(); i++) {
-      ArrayNode messagesMatched = mapper.createArrayNode();
-      JsonNode mergedSchema = schemas.get(i);
-      for (int j = 0; j < schemas.size(); j++) {
-        try {
-          mergedSchema = mergeArrays(Arrays.asList(mergedSchema, schemas.get(j)),
-              false, false).get("items");
-          messagesMatched.add(j);
-        } catch (IllegalArgumentException ignored) {
-          // If there are conflicting types, schemas cannot be merged. Result is ignored
-        }
-      }
-      if (!mergedSchemas.contains(mergedSchema)) {
-        updateSchemaInformation(mergedSchema, messagesMatched, mergedSchemas, schemaInfoList);
-      }
+      schemaToIndex.get(schemas.get(i)).add(i);
     }
-
-    // Return json object with complete schema information
+    ArrayNode schemaInfoList = mergeMultipleMessages(uniqueSchemas, schemaToIndex);
     return mapper.createObjectNode().set("schemas", schemaInfoList);
   }
 
-  private void updateSchemaInformation(JsonNode mergedSchema,
-                                       ArrayNode messagesMatched,
-                                       List<JsonNode> mergedSchemas,
-                                       ArrayNode schemaInformationList) {
-    mergedSchemas.add(mergedSchema);
+  protected void updateSchemaInformation(JsonNode mergedSchema,
+                                         ArrayNode messagesMatched,
+                                         ArrayNode schemaInformationList) {
     ObjectNode schemaElement = mapper.createObjectNode();
-    schemaElement.set("schema", convertToFormat(mergedSchema, "Schema"));
-    schemaElement.set("messagesMatched", messagesMatched);
+    try {
+      schemaElement.set("schema", convertToFormat(mergedSchema, "Schema"));
+    } catch (Exception e) {
+      throw new IllegalArgumentException(
+          String.format("Unable generate schema for %s", mergedSchema), e);
+    }
+    schemaElement.set("messagesMatched", DeriveSchemaUtils.sortJsonArrayList(messagesMatched));
     schemaInformationList.add(schemaElement);
+  }
+
+  protected void getSingleDataType(ObjectNode mergedArray, ArrayNode items) {
+    if (items.size() > 1) {
+      throw new IllegalArgumentException(String.format("Found multiple data types: %s", items));
+    } else if (items.size() == 1) {
+      mergedArray.set("items", items.get(0));
+    } else {
+      // No items found, setting items as null
+      mergedArray.set("items", getNullSchema());
+    }
   }
 
   protected abstract JsonNode convertToFormat(JsonNode schema, String name);
@@ -225,4 +232,8 @@ public abstract class DeriveSchema {
                                                        List<JsonNode> records,
                                                        List<JsonNode> arrays,
                                                        boolean check2dArray);
+
+  protected abstract ArrayNode mergeMultipleMessages(List<JsonNode> uniqueSchemas,
+                                                     Map<JsonNode, ArrayNode> schemaToIndex);
+
 }
