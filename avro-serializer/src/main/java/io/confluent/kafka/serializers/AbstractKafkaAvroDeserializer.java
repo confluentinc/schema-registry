@@ -446,7 +446,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       try {
         List<Migration> migrations = Collections.emptyList();
         if (readerAvroSchema == null) {
-          readerAvroSchema = (AvroSchema) getLatestWithMetadata(getSubject());
+          if (metadata != null) {
+            readerAvroSchema = (AvroSchema) getLatestWithMetadata(getSubject());
+          } else if (useLatestVersion) {
+            readerAvroSchema =
+                (AvroSchema) lookupLatestVersion(getSubject(), writerAvroSchema, false);
+          }
           if (readerAvroSchema != null) {
             // set version on the writer schema
             writerAvroSchema = schemaForDeserialize();

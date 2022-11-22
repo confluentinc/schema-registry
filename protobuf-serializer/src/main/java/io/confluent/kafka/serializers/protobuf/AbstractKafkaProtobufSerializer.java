@@ -50,7 +50,6 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   protected boolean onlyLookupReferencesBySchema;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
-  protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
   protected String schemaFormat;
   protected boolean skipKnownTypes;
@@ -63,7 +62,6 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     this.onlyLookupReferencesBySchema = config.onlyLookupReferencesBySchema();
     this.useSchemaId = config.useSchemaId();
     this.idCompatStrict = config.getIdCompatibilityStrict();
-    this.useLatestVersion = config.useLatestVersion();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
     this.schemaFormat = config.getSchemaFormat();
     this.skipKnownTypes = config.skipKnownTypes();
