@@ -84,7 +84,7 @@
         <swagger.version>1.6.2</swagger.version>
         <io.confluent.schema-registry.version>6.2.8-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
-        <snake.yaml.version>1.27</snake.yaml.version>
+        <snake.yaml.version>1.32</snake.yaml.version>
     </properties>
 
     <repositories>
