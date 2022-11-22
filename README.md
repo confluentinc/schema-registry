@@ -8,7 +8,6 @@ evolution of schemas according to the configured compatibility setting. It
 provides serializers that plug into Kafka clients that handle schema storage and
 retrieval for Kafka messages that are sent in the Avro format.
 
-
 Documentation
 -------------
 
