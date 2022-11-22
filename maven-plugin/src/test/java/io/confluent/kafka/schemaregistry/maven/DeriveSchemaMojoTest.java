@@ -16,9 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.maven.plugin.MojoExecutionException;
-import org.json.JSONArray;
-import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -28,68 +29,67 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 
 public class DeriveSchemaMojoTest extends SchemaRegistryTest {
 
   DeriveSchemaMojo mojo;
+  private final ObjectMapper mapper = new ObjectMapper();
 
   @Before
   public void createMojoAndFiles() {
     this.mojo = new DeriveSchemaMojo();
-    String avroMessage = "{\"String\": \"John Smith\","
-        + "    \"LongName\": 1202021021034,"
-        + "    \"Integer\": 9999239,"
-        + "    \"Boolean\": false,"
-        + "    \"Float\": 1e16,"
-        + "    \"Double\": 62323232.78901245,"
-        + "    \"Null\": null"
-        + "  }";
-    makeFile(avroMessage, "message.json");
-    this.mojo.messagePath = new File(this.tempDirectory + "/message.json");
+    makeMessageFile();
+    this.mojo.messagePath = new File(this.tempDirectory, "/message.json");
+    this.mojo.outputPath = new File(this.tempDirectory, "/ans.json");
   }
 
-  public void makeFile(String message, String name) {
-    try (FileWriter writer = new FileWriter(this.tempDirectory + "/" + name)) {
+  private void makeMessageFile() {
+    String message = "{\"F1\": 1}";
+    try (FileWriter writer = new FileWriter(this.tempDirectory + "/message.json")) {
       writer.write(message);
     } catch (IOException e) {
       e.printStackTrace();
     }
   }
 
-  @Test
-  public void testProtobuf() throws MojoExecutionException, IOException {
-    mojo.schemaType = "protobuf";
-    mojo.outputPath = new File(this.tempDirectory + "/ans.json");
-    mojo.execute();
-    String expectedSchema = "syntax = \"proto3\";\n" + "\n" +
-        "import \"google/protobuf/any.proto\";\n" + "\n" +
-        "message Schema {\n" +
-        "  bool Boolean = 1;\n" +
-        "  double Double = 2;\n" +
-        "  double Float = 3;\n" +
-        "  int32 Integer = 4;\n" +
-        "  int64 LongName = 5;\n" +
-        "  google.protobuf.Any Null = 6;\n" +
-        "  string String = 7;\n" +
-        "}\n";
+  private void checkExpected(String expectedSchema) throws IOException {
     String schema = MojoUtils.readFile(mojo.outputPath, StandardCharsets.UTF_8);
-    JSONObject schemaInfo = new JSONObject(schema);
+    JsonNode schemaInfo = mapper.readTree(schema);
     assert (schemaInfo.has("schemas"));
-    assert (schemaInfo.get("schemas") instanceof JSONArray);
-    assertEquals(schemaInfo.getJSONArray("schemas").length(), 1);
-    String outputSchema = schemaInfo.getJSONArray("schemas").getJSONObject(0).getString("schema");
-    assertEquals(expectedSchema, outputSchema);
+    assert (schemaInfo.get("schemas") instanceof ArrayNode);
+    assertEquals(schemaInfo.get("schemas").size(), 1);
+    JsonNode outputSchema = schemaInfo.get("schemas").get(0).get("schema");
+    if (outputSchema.isTextual()) {
+      assertEquals(expectedSchema, outputSchema.asText());
+    } else {
+      assertEquals(expectedSchema, outputSchema.toString());
+    }
   }
 
   @Test
-  public void testError() throws MojoExecutionException {
-    assertThrows(NullPointerException.class, () -> mojo.execute());
-    mojo.messagePath = new File(this.tempDirectory + "/protoMessage.json");
-    assertThrows(IllegalArgumentException.class, () -> mojo.execute());
-    mojo.schemaType = "proto";
-    assertThrows(IllegalArgumentException.class, () -> mojo.execute());
+  public void testProtobuf() throws MojoExecutionException, IOException {
     mojo.schemaType = "protobuf";
     mojo.execute();
+    String expectedSchema = "syntax = \"proto3\";\n" + "\n" +
+        "message Schema {\n" +
+        "  int32 F1 = 1;\n" +
+        "}\n";
+    checkExpected(expectedSchema);
+  }
+
+  @Test
+  public void testAvro() throws MojoExecutionException, IOException {
+    mojo.schemaType = "avro";
+    mojo.execute();
+    String expectedSchema = "{\"type\":\"record\",\"name\":\"Schema\",\"fields\":[{\"name\":\"F1\",\"type\":\"int\"}]}";
+    checkExpected(expectedSchema);
+  }
+
+  @Test
+  public void testJson() throws MojoExecutionException, IOException {
+    mojo.schemaType = "json";
+    mojo.execute();
+    String expectedSchema = "{\"type\":\"object\",\"properties\":{\"F1\":{\"type\":\"number\"}}}";
+    checkExpected(expectedSchema);
   }
 }

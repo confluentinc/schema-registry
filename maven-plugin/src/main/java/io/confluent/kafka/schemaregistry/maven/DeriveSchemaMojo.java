@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveAvroSchema;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveJsonSchema;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveProtobufSchema;
 import io.confluent.kafka.schemaregistry.maven.derive.schema.DeriveSchema;
@@ -46,7 +47,7 @@ public class DeriveSchemaMojo extends AbstractMojo {
   @Parameter(required = true)
   File messagePath;
 
-  @Parameter
+  @Parameter(required = true)
   File outputPath;
 
   @Parameter(defaultValue = "AVRO")
@@ -67,6 +68,10 @@ public class DeriveSchemaMojo extends AbstractMojo {
     List<JsonNode> listOfMessages = new ArrayList<>();
     String[] lineSeparatedMessages = content.split("\n");
     for (int i = 0; i < lineSeparatedMessages.length; i++) {
+      // Ignore empty messages
+      if (lineSeparatedMessages[i].length() == 0) {
+        continue;
+      }
       try {
         listOfMessages.add(mapper.readValue(lineSeparatedMessages[i], ObjectNode.class));
       } catch (IOException e) {
@@ -86,15 +91,15 @@ public class DeriveSchemaMojo extends AbstractMojo {
       throw new MojoExecutionException("Exception thrown while reading input file", e);
     }
 
-    DeriveSchema derive = new DeriveJsonSchema();
+    DeriveSchema derive;
     if (schemaType.equalsIgnoreCase(JsonSchema.TYPE)) {
       derive = new DeriveJsonSchema();
     } else if (schemaType.equalsIgnoreCase(ProtobufSchema.TYPE)) {
       derive = new DeriveProtobufSchema();
     } else if (schemaType.equalsIgnoreCase(AvroSchema.TYPE)) {
-      // derive = new DeriveAvroSchema();
+      derive = new DeriveAvroSchema();
     } else {
-      throw new MojoExecutionException("Schema should be one of avro, json or protobuf");
+      throw new MojoExecutionException("Schema type should be one of avro, json or protobuf");
     }
 
     JsonNode schemaInformation;
@@ -104,14 +109,10 @@ public class DeriveSchemaMojo extends AbstractMojo {
       throw new MojoExecutionException("Exception thrown while deriving schema", e);
     }
 
-    if (outputPath == null) {
-      System.out.println(schemaInformation.toPrettyString());
-    } else {
-      try {
-        writeOutput(outputPath, schemaInformation);
-      } catch (IOException e) {
-        throw new MojoExecutionException("Exception thrown while writing to output file", e);
-      }
+    try {
+      writeOutput(outputPath, schemaInformation);
+    } catch (IOException e) {
+      throw new MojoExecutionException("Exception thrown while writing to output file", e);
     }
   }
 }
