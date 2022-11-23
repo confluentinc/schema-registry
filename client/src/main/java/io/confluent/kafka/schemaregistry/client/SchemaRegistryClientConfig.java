@@ -58,7 +58,7 @@ public class SchemaRegistryClientConfig {
 
   //OAuth configs required by SR
   public static final String BEARER_AUTH_LOGICAL_CLUSTER = "bearer.auth.logical.cluster";
-  public static final String BEARER_AUTH_IDENTITY_POOL_ID = "bearer.auth.identity.pool";
+  public static final String BEARER_AUTH_IDENTITY_POOL_ID = "bearer.auth.identity.pool.id";
 
   //OAuth config related to token cache
   public static final String BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS =
