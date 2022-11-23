@@ -76,7 +76,7 @@ public class DeriveSchemaMojo extends AbstractMojo {
         listOfMessages.add(mapper.readValue(lineSeparatedMessages[i], ObjectNode.class));
       } catch (IOException e) {
         throw new IllegalArgumentException(
-            String.format("Message %d is an invalid JSON message", i), e);
+            String.format("Message on line %d is an invalid JSON message", i + 1), e);
       }
     }
     return listOfMessages;
