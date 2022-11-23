@@ -71,10 +71,11 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
       BufferedReader reader,
       boolean normalizeSchema,
       boolean autoRegister,
-      boolean useLatest
+      boolean useLatest,
+      boolean showVerboseErrors
   ) {
     super(schemaRegistryClient, keySchema, valueSchema, topic,
-        parseKey, reader, normalizeSchema, autoRegister, useLatest);
+        parseKey, reader, normalizeSchema, autoRegister, useLatest, showVerboseErrors);
   }
 
   @Override
@@ -96,10 +97,12 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
       boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest,
-      Serializer keySerializer
+      Serializer keySerializer,
+      boolean showVerboseErrors
   ) {
     return new ProtobufMessageSerializer(
-        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, keySerializer);
+        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, keySerializer,
+        showVerboseErrors);
   }
 
   @Override
@@ -127,13 +130,15 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
 
     ProtobufMessageSerializer(
         SchemaRegistryClient schemaRegistryClient,
-        boolean normalizeSchema, boolean autoRegister, boolean useLatest, Serializer keySerializer
+        boolean normalizeSchema, boolean autoRegister, boolean useLatest, Serializer keySerializer,
+        boolean showVerboseErrors
     ) {
       this.schemaRegistry = schemaRegistryClient;
       this.normalizeSchema = normalizeSchema;
       this.autoRegisterSchema = autoRegister;
       this.useLatestVersion = useLatest;
       this.keySerializer = keySerializer;
+      this.showVerboseErrors = showVerboseErrors;
     }
 
     @Override

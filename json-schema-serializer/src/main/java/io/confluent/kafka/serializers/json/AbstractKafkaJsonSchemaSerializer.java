@@ -51,6 +51,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected boolean oneofForNullables;
   protected boolean failUnknownProperties;
   protected boolean validate;
+  protected boolean showVerboseErrors;
 
   protected void configure(KafkaJsonSchemaSerializerConfig config) {
     configureClientProperties(config, new JsonSchemaProvider());
@@ -60,6 +61,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.idCompatStrict = config.getIdCompatibilityStrict();
     this.useLatestVersion = config.useLatestVersion();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
+    this.showVerboseErrors = config.showVerboseErrors();
     boolean prettyPrint = config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_INDENT_OUTPUT);
     this.objectMapper.configure(SerializationFeature.INDENT_OUTPUT, prettyPrint);
     boolean writeDatesAsIso8601 = config.getBoolean(
@@ -120,7 +122,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering JSON schema: ";
-        id = schemaRegistry.register(subject, schema, normalizeSchema);
+        id = schemaRegistry.register(subject, schema, normalizeSchema, showVerboseErrors);
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (JsonSchema)

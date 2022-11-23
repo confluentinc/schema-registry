@@ -27,36 +27,42 @@ public class Difference {
 
   public Difference(final SchemaCompatibility.Incompatibility incompatibility) {
     this.incompatibility = incompatibility;
+    String path = incompatibility.getLocation();
+
     errorDescription = new HashMap<>();
     errorDescription.put(SchemaIncompatibilityType.FIXED_SIZE_MISMATCH,
-        String.format("The size of a FIXED type field has changed"));
+        String.format("The size of FIXED type field at path: '%s' in the reader schema has "
+                        + "changed", path));
     errorDescription.put(SchemaIncompatibilityType.TYPE_MISMATCH,
-        String.format("The type of a field has changed"));
+        String.format("The type of field at path: '%s' in the reader schema has changed. ",
+          path));
     errorDescription.put(SchemaIncompatibilityType.NAME_MISMATCH,
-        String.format("The name of the schema does not match a previous version of the schema"));
+        String.format("The name of the schema (path: '%s') has changed", path));
     errorDescription.put(SchemaIncompatibilityType.MISSING_ENUM_SYMBOLS,
-        String.format("The reader schema has missing enum symbols"));
+        String.format("Enum symbols '%s' at path: '%s' in the writer schema are missing in the "
+                        + "reader schema", incompatibility.getMessage(), path));
     errorDescription.put(SchemaIncompatibilityType.MISSING_UNION_BRANCH,
-        String.format("A type inside a union field is missing in the reader schema"));
+        String.format("A type inside a union field at path: '%s' in the writer schema is "
+                        + "missing in the reader schema", path));
     errorDescription.put(SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE,
-        String.format("The reader schema has an additional field without a default value"));
+        String.format("The reader schema has an additional field '%s' at path: '%s' without a "
+                        + "default value", incompatibility.getMessage(), path));
   }
 
-  public String errorMessage() {
+  public String error() {
     SchemaIncompatibilityType errorType = incompatibility.getType();
-    return  "jsonPath='" + incompatibility.getLocation() + '\''
-              + ", errorType='" + errorType.toString() + '\''
-              + ", errorMsg='" + errorDescription.getOrDefault(errorType, "") + '\''
-              + ", additionalInfo='" + incompatibility.getMessage() + "'";
+    return "errorType:'" + errorType.toString() + '\''
+             + ", description:'" + errorDescription.getOrDefault(errorType, "") + '\''
+             + ", additionalInfo:'" + incompatibility.getMessage() + "'";
   }
 
   public String toString() {
-    return "{" + errorMessage() + "}";
+    return "{" + error() + "}";
   }
 
   public String toStringVerbose() {
-    return "{" + errorMessage()
-             + ", readerSchema:'" + incompatibility.getReaderFragment() + '\''
-             + "writerSchema:'" + incompatibility.getWriterFragment() + "'}";
+    return "{" + error()
+             + ", readerFragment:'" + incompatibility.getReaderFragment() + '\''
+             + ", writerFragment:'" + incompatibility.getWriterFragment() + "'}";
   }
 }

@@ -654,7 +654,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       } else {
         // forward registering request to the leader
         if (leaderIdentity != null) {
-          return forwardRegisterRequestToLeader(subject, schema, normalize, headerProperties);
+          return forwardRegisterRequestToLeader(subject, schema, normalize, verbose,
+            headerProperties);
         } else {
           throw new UnknownLeaderException("Register schema request failed since leader is "
                                            + "unknown");
@@ -921,7 +922,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private int forwardRegisterRequestToLeader(String subject, Schema schema, boolean normalize,
-                                             Map<String, String> headerProperties)
+                                             boolean verbose, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
@@ -929,7 +930,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     log.debug(String.format("Forwarding registering schema request to %s", baseUrl));
     try {
       int id = leaderRestService.registerSchema(
-          headerProperties, registerSchemaRequest, subject, normalize);
+          headerProperties, registerSchemaRequest, subject, normalize, verbose);
       return id;
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
@@ -1658,7 +1659,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     List<String> errorMessages = parsedSchema.isCompatible(compatibility, previousSchemas, verbose);
     if (errorMessages.size() > 0) {
       errorMessages.add(String.format("{ compatibility: %s }", compatibility));
-      log.error(errorMessages.toString());
     }
     return errorMessages;
   }

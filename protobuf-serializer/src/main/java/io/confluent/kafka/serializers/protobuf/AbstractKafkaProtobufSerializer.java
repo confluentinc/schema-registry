@@ -54,6 +54,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   protected boolean latestCompatStrict;
   protected String schemaFormat;
   protected boolean skipKnownTypes;
+  protected boolean showVerboseErrors;
   protected ReferenceSubjectNameStrategy referenceSubjectNameStrategy;
 
   protected void configure(KafkaProtobufSerializerConfig config) {
@@ -67,6 +68,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
     this.schemaFormat = config.getSchemaFormat();
     this.skipKnownTypes = config.skipKnownTypes();
+    this.showVerboseErrors = config.showVerboseErrors();
     this.referenceSubjectNameStrategy = config.referenceSubjectNameStrategyInstance();
   }
 
@@ -107,7 +109,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean useLatestForDeps = useLatestVersion && !onlyLookupReferencesBySchema;
       schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
           useLatestForDeps, latestCompatStrict, latestVersions,
-          skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
+          skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema, showVerboseErrors);
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Protobuf schema: ";
@@ -115,7 +117,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           String formatted = schema.formattedString(schemaFormat);
           schema = schema.copyWithSchema(formatted);
         }
-        id = schemaRegistry.register(subject, schema, normalizeSchema);
+        id = schemaRegistry.register(subject, schema, normalizeSchema, showVerboseErrors);
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         if (schemaFormat != null) {
@@ -180,7 +182,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       ReferenceSubjectNameStrategy strategy,
       String topic,
       boolean isKey,
-      ProtobufSchema schema
+      ProtobufSchema schema,
+      boolean showVerboseErrors
   ) throws IOException, RestClientException {
     return resolveDependencies(
         schemaRegistry,
@@ -192,7 +195,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         strategy,
         topic,
         isKey,
-        schema);
+        schema,
+        showVerboseErrors);
   }
 
   /**
@@ -221,7 +225,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       ReferenceSubjectNameStrategy strategy,
       String topic,
       boolean isKey,
-      ProtobufSchema schema
+      ProtobufSchema schema,
+      boolean showVerboseErrors
   ) throws IOException, RestClientException {
     return resolveDependencies(
         schemaRegistry,
@@ -234,7 +239,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         strategy,
         topic,
         isKey,
-        schema
+        schema,
+        showVerboseErrors
     );
   }
 
@@ -266,7 +272,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       ReferenceSubjectNameStrategy strategy,
       String topic,
       boolean isKey,
-      ProtobufSchema schema
+      ProtobufSchema schema,
+      boolean showVerboseErrors
   ) throws IOException, RestClientException {
     if (schema.dependencies().isEmpty() || !schema.references().isEmpty()) {
       // Dependencies already resolved
@@ -284,7 +291,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         isKey,
         null,
         schema.rawSchema(),
-        schema.dependencies()
+        schema.dependencies(),
+        showVerboseErrors
     );
     return schema.copy(s.getReferences());
   }
@@ -302,7 +310,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean isKey,
       String name,
       ProtoFileElement protoFileElement,
-      Map<String, ProtoFileElement> dependencies
+      Map<String, ProtoFileElement> dependencies,
+      boolean showVerboseErrors
   ) throws IOException, RestClientException {
     List<SchemaReference> references = new ArrayList<>();
     for (String dep : protoFileElement.getImports()) {
@@ -321,7 +330,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           isKey,
           dep,
           dependencies.get(dep),
-          dependencies
+          dependencies,
+          showVerboseErrors
       );
       references.add(new SchemaReference(dep, subschema.getSubject(), subschema.getVersion()));
     }
@@ -341,7 +351,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           isKey,
           dep,
           dependencies.get(dep),
-          dependencies
+          dependencies,
+          showVerboseErrors
       );
       references.add(new SchemaReference(dep, subschema.getSubject(), subschema.getVersion()));
     }
@@ -351,7 +362,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     String subject = name != null ? strategy.subjectName(name, topic, isKey, schema) : null;
     if (subject != null) {
       if (autoRegisterSchema) {
-        id = schemaRegistry.register(subject, schema, normalizeSchema);
+        id = schemaRegistry.register(subject, schema, normalizeSchema, showVerboseErrors);
         version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
       } else if (useLatestVersion) {
         schema = (ProtobufSchema) lookupLatestVersion(

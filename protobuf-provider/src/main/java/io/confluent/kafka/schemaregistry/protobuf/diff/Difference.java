@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 public class Difference {
@@ -32,10 +34,39 @@ public class Difference {
 
   private final String fullPath;
   private final Type type;
+  private final Map<Type, String> errorDescription;
 
   public Difference(final Type type, final String fullPath) {
     this.fullPath = fullPath;
     this.type = type;
+    errorDescription = new HashMap<>();
+    errorDescription.put(Type.MESSAGE_REMOVED,
+        String.format("A field of type message at path: '%s' in the writer schema is missing in the"
+                        + " reader schema", fullPath));
+    errorDescription.put(Type.FIELD_KIND_CHANGED,
+        String.format("The type of a field at path: '%s' in the reader schema has changed to MAP, "
+                        + "SCALAR or MESSAGE", fullPath));
+    errorDescription.put(Type.FIELD_SCALAR_KIND_CHANGED,
+        String.format("The kind of a SCALAR field at path: '%s' in the reader schema has changed",
+          fullPath));
+    errorDescription.put(Type.FIELD_NAMED_TYPE_CHANGED,
+        String.format("The type of a MESSAGE field at path: '%s' in the reader schema has changed",
+          fullPath));
+    errorDescription.put(Type.FIELD_NUMERIC_LABEL_CHANGED,
+        String.format("The label for a numeric field at path: '%s' in the reader schema has "
+                        + "changed", fullPath));
+    errorDescription.put(Type.REQUIRED_FIELD_ADDED,
+        String.format("The reader schema has an additional required field at path: '%s'",
+          fullPath));
+    errorDescription.put(Type.REQUIRED_FIELD_REMOVED,
+        String.format("A required field at path: '%s' in the writer schema is missing in the "
+                        + "reader schema", fullPath));
+    errorDescription.put(Type.ONEOF_FIELD_REMOVED,
+        String.format("A oneof field at path: '%s' in the writer schema is missing in the reader "
+                        + "schema", fullPath));
+    errorDescription.put(Type.MULTIPLE_FIELDS_MOVED_TO_ONEOF,
+        String.format("Multiple fields were moved into a oneof field at path: '%s' in the reader "
+                        + "schema", fullPath));
   }
 
   public String getFullPath() {
@@ -65,6 +96,7 @@ public class Difference {
 
   @Override
   public String toString() {
-    return "Difference{" + "fullPath='" + fullPath + '\'' + ", type=" + type + '}';
+    return "{ errorType:\"" + type + '"'
+             + ", description:\"" + errorDescription.getOrDefault(type, "") + "\"}";
   }
 }

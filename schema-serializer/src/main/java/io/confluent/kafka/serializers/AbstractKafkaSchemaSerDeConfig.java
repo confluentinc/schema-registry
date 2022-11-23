@@ -119,6 +119,11 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE_DOC =
           "Specify how to pick the credentials for Bearer Auth header. ";
 
+  public static final String SHOW_VERBOSE_ERRORS_CONFIG = "show.verbose.errors";
+  public static final boolean SHOW_VERBOSE_ERRORS_DEFAULT = false;
+  public static final String SHOW_VERBOSE_ERRORS_DOC =
+      "Show verbose error messages for schema compatibility checks.";
+
   /**
    * @deprecated use {@link #USER_INFO_CONFIG} instead
    */
@@ -298,7 +303,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .define(PROXY_HOST, Type.STRING, PROXY_HOST_DEFAULT,
                 Importance.LOW, PROXY_HOST_DOC)
         .define(PROXY_PORT, Type.INT, PROXY_PORT_DEFAULT,
-                Importance.LOW, PROXY_PORT_DOC);
+                Importance.LOW, PROXY_PORT_DOC)
+        .define(SHOW_VERBOSE_ERRORS_CONFIG, Type.BOOLEAN, SHOW_VERBOSE_ERRORS_DEFAULT,
+                Importance.MEDIUM, SHOW_VERBOSE_ERRORS_DOC);
+
     SchemaRegistryClientConfig.withClientSslSupport(
         configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
     return configDef;
@@ -366,6 +374,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean useSchemaReflection() {
     return this.getBoolean(SCHEMA_REFLECTION_CONFIG);
+  }
+
+  public boolean showVerboseErrors() {
+    return this.getBoolean(SHOW_VERBOSE_ERRORS_CONFIG);
   }
 
   public Map<String, String> requestHeaders() {

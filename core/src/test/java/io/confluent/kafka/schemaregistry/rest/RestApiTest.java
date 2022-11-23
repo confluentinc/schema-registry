@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -393,6 +394,54 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testIncompatibleSchemaWithVerbose() throws Exception {
+    String subject = "testSubject";
+
+    // Make two incompatible schemas - field 'f' has different types
+    String schema1String = "{\"type\":\"record\","
+                             + "\"name\":\"myrecord\","
+                             + "\"fields\":"
+                             + "[{\"type\":\"string\",\"name\":"
+                             + "\"f" + "\"}]}";
+    String schema1 = AvroUtils.parseSchema(schema1String).canonicalString();
+
+    String schema2String = "{\"type\":\"record\","
+                             + "\"name\":\"myrecord\","
+                             + "\"fields\":"
+                             + "[{\"type\":\"int\",\"name\":"
+                             + "\"f" + "\"}]}";
+    String schema2 = AvroUtils.parseSchema(schema2String).canonicalString();
+
+    // ensure registering incompatible schemas will raise an error
+    restApp.restClient.updateCompatibility(
+      CompatibilityLevel.FULL.name, subject);
+
+    // test that compatibility check for incompatible schema returns false and the appropriate
+    // error response from Avro
+    restApp.restClient.registerSchema(schema1, subject, true, true);
+
+    int versionOfRegisteredSchema =
+      restApp.restClient.lookUpSubjectVersion(schema1, subject).getVersion();
+
+    try {
+      restApp.restClient.registerSchema(schema2, subject, false, true);
+    } catch (RestClientException e) {
+        assertTrue(e.getMessage().length() > 0);
+        assertTrue(e.getMessage().contains("Schema being registered is incompatible"));
+        assertTrue(e.getMessage().contains("readerFragment:"));
+        assertTrue(e.getMessage().contains("writerFragment:"));
+    }
+
+    List<String> response = restApp.restClient.testCompatibility(schema2, subject,
+        String.valueOf(
+          versionOfRegisteredSchema),
+        true);
+    assertTrue(response.size() > 0);
+    assertTrue(response.get(0).contains("readerFragment:"));
+    assertTrue(response.get(0).contains("writerFragment:"));
+  }
+
+  @Test
   public void testIncompatibleSchemaBySubject() throws Exception {
     String subject = "testSubject";
 
@@ -753,7 +802,8 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchema(schemas.get(1));
     SchemaReference ref = new SchemaReference("otherns.Subrecord", "reference", 1);
     request.setReferences(Collections.singletonList(ref));
-    int registeredId = restApp.restClient.registerSchema(request, "referrer", false);
+    int registeredId = restApp.restClient.registerSchema(request, "referrer", false,
+      false);
     assertEquals("Registering a new schema should succeed", 2, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(2);
@@ -854,14 +904,14 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchema(ref1);
     SchemaReference ref = new SchemaReference("myavro.currencies.Currency", "shared", 1);
     request.setReferences(Collections.singletonList(ref));
-    int registeredId = restApp.restClient.registerSchema(request, "ref1", false);
+    int registeredId = restApp.restClient.registerSchema(request, "ref1", false, false);
     assertEquals("Registering a new schema should succeed", 2, registeredId);
 
     request = new RegisterSchemaRequest();
     request.setSchema(ref2);
     ref = new SchemaReference("myavro.currencies.Currency", "shared", 1);
     request.setReferences(Collections.singletonList(ref));
-    registeredId = restApp.restClient.registerSchema(request, "ref2", false);
+    registeredId = restApp.restClient.registerSchema(request, "ref2", false, false);
     assertEquals("Registering a new schema should succeed", 3, registeredId);
 
     request = new RegisterSchemaRequest();
@@ -869,7 +919,7 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaReference r1 = new SchemaReference("myavro.BudgetDecreased", "ref1", 1);
     SchemaReference r2 = new SchemaReference("myavro.BudgetUpdated", "ref2", 1);
     request.setReferences(Arrays.asList(r1, r2));
-    registeredId = restApp.restClient.registerSchema(request, "root", false);
+    registeredId = restApp.restClient.registerSchema(request, "root", false, false);
     assertEquals("Registering a new schema should succeed", 4, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(4);
@@ -890,7 +940,7 @@ public class RestApiTest extends ClusterTestHarness {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemas.get(1));
     request.setReferences(Collections.emptyList());
-    restApp.restClient.registerSchema(request, "referrer", false);
+    restApp.restClient.registerSchema(request, "referrer", false, false);
   }
 
   @Test
@@ -937,7 +987,7 @@ public class RestApiTest extends ClusterTestHarness {
     registerRequest.setSchema(schemaString1);
     registerRequest.setReferences(Arrays.asList(ref1, ref2));
     int idOfRegisteredSchema1Subject1 =
-        restApp.restClient.registerSchema(registerRequest, subject1, true);
+        restApp.restClient.registerSchema(registerRequest, subject1, true, false);
     RegisterSchemaRequest lookUpRequest = new RegisterSchemaRequest();
     lookUpRequest.setSchema(schemaString2);
     lookUpRequest.setReferences(Arrays.asList(ref2, ref1));
