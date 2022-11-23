@@ -349,7 +349,9 @@ public class RestApiTest extends ClusterTestHarness {
       registerRequest.setSchema(schema2String);
       registerRequest.setSchemaType(JsonSchema.TYPE);
       restApp.restClient.registerSchema(registerRequest, subject, true, true);
-    } catch (RestClientException e) {
+      fail("Registering incompatible schema should fail with "
+             + Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE);
+    } catch(RestClientException e) {
       assertTrue(e.getMessage().length() > 0);
       assertTrue(e.getMessage().contains("Schema being registered is incompatible"));
       assertTrue(e.getMessage().contains("readerSchema:"));

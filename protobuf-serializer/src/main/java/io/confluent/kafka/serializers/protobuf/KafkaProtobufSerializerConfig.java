@@ -68,10 +68,6 @@ public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfi
     return getBoolean(SKIP_KNOWN_TYPES_CONFIG);
   }
 
-  public boolean showVerboseErrors() {
-    return getBoolean(SHOW_VERBOSE_ERRORS_CONFIG);
-  }
-
   public ReferenceSubjectNameStrategy referenceSubjectNameStrategyInstance() {
     return this.getConfiguredInstance(REFERENCE_SUBJECT_NAME_STRATEGY_CONFIG,
         ReferenceSubjectNameStrategy.class);

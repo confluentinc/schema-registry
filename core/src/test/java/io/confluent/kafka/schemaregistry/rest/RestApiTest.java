@@ -425,6 +425,8 @@ public class RestApiTest extends ClusterTestHarness {
 
     try {
       restApp.restClient.registerSchema(schema2, subject, false, true);
+      fail("Registering incompatible schema should fail with "
+             + Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE);
     } catch (RestClientException e) {
         assertTrue(e.getMessage().length() > 0);
         assertTrue(e.getMessage().contains("Schema being registered is incompatible"));

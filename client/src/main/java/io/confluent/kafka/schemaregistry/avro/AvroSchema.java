@@ -292,6 +292,8 @@ public class AvroSchema implements ParsedSchema {
           .map(Difference::new)
           .map(Difference::toStringVerbose)
           .collect(Collectors.toList());
+        errorMessages.add("{ readerSchema: '" + this
+                            + "', writerSchema: '" + previousSchema + "'}");
       } else {
         errorMessages = incompatibilities.stream()
           .map(Difference::new)

@@ -34,7 +34,7 @@ public class Difference {
         String.format("The size of FIXED type field at path: '%s' in the reader schema has "
                         + "changed", path));
     errorDescription.put(SchemaIncompatibilityType.TYPE_MISMATCH,
-        String.format("The type of field at path: '%s' in the reader schema has changed. ",
+        String.format("The type (path: '%s') of a field in the reader schema has changed. ",
           path));
     errorDescription.put(SchemaIncompatibilityType.NAME_MISMATCH,
         String.format("The name of the schema (path: '%s') has changed", path));
