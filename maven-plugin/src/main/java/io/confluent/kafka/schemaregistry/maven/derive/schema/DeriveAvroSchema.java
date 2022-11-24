@@ -76,7 +76,8 @@ public class DeriveAvroSchema extends DeriveSchema {
       schemaToMatches.get(uniqueSchemas.get(i)).addAll(originalSchemaMatches.get(i));
     }
     for (JsonNode uniqueSchema : DeriveSchemaUtils.getUnique(uniqueSchemas)) {
-      updateSchemaInformation(uniqueSchema, schemaToMatches.get(uniqueSchema), schemaInfoList);
+      JsonNode uniqueSchemaCopy = uniqueSchema.deepCopy();
+      updateSchemaInformation(uniqueSchemaCopy, schemaToMatches.get(uniqueSchema), schemaInfoList);
     }
     return schemaInfoList;
   }
