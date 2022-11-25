@@ -1205,14 +1205,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private SchemaKey getSchemaKeyUsingContexts(int id, String subject)
           throws StoreException, SchemaRegistryException {
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
     SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
-    if (subjectVersionKey != null) {
+    if (schemaKeyMatchesSubject(subjectVersionKey, qs)) {
       return subjectVersionKey;
     }
     if (subject == null || subject.isEmpty()) {
       return null;
     }
-    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
     boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
     if (isQualifiedSubject) {
       return null;
@@ -1224,12 +1224,23 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         QualifiedSubject qualSub =
             new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
         SchemaKey key = lookupCache.schemaKeyById(id, qualSub.toQualifiedSubject());
-        if (key != null) {
+        if (schemaKeyMatchesSubject(key, qualSub)) {
           return key;
         }
       }
     }
     return null;
+  }
+
+  private boolean schemaKeyMatchesSubject(SchemaKey key, QualifiedSubject qs) {
+    if (key == null) {
+      return false;
+    } else if (qs == null) {
+      return true;
+    } else {
+      QualifiedSubject keyQs = QualifiedSubject.create(tenant(), key.getSubject());
+      return keyQs != null && qs.getSubject().equals(keyQs.getSubject());
+    }
   }
 
   private CloseableIterator<SchemaRegistryValue> allContexts() throws SchemaRegistryException {

@@ -280,6 +280,18 @@ public class RestApiContextTest extends ClusterTestHarness {
     assertEquals("Getting all subjects should match all registered subjects",
         Collections.singletonList(subject3),
         noCtxRestClient3.getAllSubjects("", false));
+
+    // Now ask for schema id 1 from subject3.
+    // This should return schema id 1 from the default context
+    assertEquals("Registered schema should be found",
+        allSchemasInSubject3.get(0),
+        noCtxRestClient3.getId(1, subject3).getSchemaString());
+
+    // Now ask for schema id 1 from subject2.
+    // This should NOT return schema id 1 from the default context
+    assertEquals("Registered schema should be found",
+        allSchemasInSubject2.get(0),
+        noCtxRestClient3.getId(1, subject2).getSchemaString());
   }
 
   static void registerAndVerifySchema(RestService restService, String schemaString,
