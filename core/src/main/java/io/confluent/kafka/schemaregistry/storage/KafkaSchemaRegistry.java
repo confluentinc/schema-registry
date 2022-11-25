@@ -1206,16 +1206,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private SchemaKey getSchemaKeyUsingContexts(int id, String subject)
           throws StoreException, SchemaRegistryException {
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
-    SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
-    if (schemaKeyMatchesSubject(subjectVersionKey, qs)) {
-      return subjectVersionKey;
-    }
-    if (subject == null || subject.isEmpty()) {
-      return null;
-    }
     boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
-    if (isQualifiedSubject) {
-      return null;
+    SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
+    if (subject == null
+        || subject.isEmpty()
+        || isQualifiedSubject
+        || schemaKeyMatchesSubject(subjectVersionKey, qs)) {
+      return subjectVersionKey;
     }
     // Try qualifying the subject with each known context
     try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
@@ -1229,7 +1226,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
     }
-    return null;
+    // Could not find the id in subjects in other contexts,
+    // just return the id in the default context
+    return subjectVersionKey;
   }
 
   private boolean schemaKeyMatchesSubject(SchemaKey key, QualifiedSubject qs) {
