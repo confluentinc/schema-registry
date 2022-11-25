@@ -1227,7 +1227,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
     }
     // Could not find the id in subjects in other contexts,
-    // just return the id in the default context
+    // just return the id in the default context if found
     return subjectVersionKey;
   }
 
