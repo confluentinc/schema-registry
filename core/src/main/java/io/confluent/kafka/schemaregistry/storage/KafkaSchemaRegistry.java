@@ -1236,17 +1236,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private SchemaKey getSchemaKeyUsingContexts(int id, String subject)
           throws StoreException, SchemaRegistryException {
-    SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
-    if (subjectVersionKey != null) {
-      return subjectVersionKey;
-    }
-    if (subject == null || subject.isEmpty()) {
-      return null;
-    }
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
     boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
-    if (isQualifiedSubject) {
-      return null;
+    SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
+    if (subject == null
+        || subject.isEmpty()
+        || isQualifiedSubject
+        || schemaKeyMatchesSubject(subjectVersionKey, qs)) {
+      return subjectVersionKey;
     }
     // Try qualifying the subject with each known context
     try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
@@ -1255,12 +1252,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         QualifiedSubject qualSub =
             new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
         SchemaKey key = lookupCache.schemaKeyById(id, qualSub.toQualifiedSubject());
-        if (key != null) {
+        if (schemaKeyMatchesSubject(key, qualSub)) {
           return key;
         }
       }
     }
-    return null;
+    // Could not find the id in subjects in other contexts,
+    // just return the id in the default context if found
+    return subjectVersionKey;
+  }
+
+  private boolean schemaKeyMatchesSubject(SchemaKey key, QualifiedSubject qs) {
+    if (key == null) {
+      return false;
+    } else if (qs == null) {
+      return true;
+    } else {
+      QualifiedSubject keyQs = QualifiedSubject.create(tenant(), key.getSubject());
+      return keyQs != null && qs.getSubject().equals(keyQs.getSubject());
+    }
   }
 
   private CloseableIterator<SchemaRegistryValue> allContexts() throws SchemaRegistryException {
