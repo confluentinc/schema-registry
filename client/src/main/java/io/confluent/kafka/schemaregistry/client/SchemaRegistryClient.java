@@ -73,7 +73,7 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   default int register(String subject, ParsedSchema schema, boolean normalize,
                               boolean verbose)
       throws IOException, RestClientException {
-    throw new UnsupportedOperationException();
+    return register(subject, schema, normalize, false);
   }
 
   default int register(String subject, ParsedSchema schema, boolean normalize)
