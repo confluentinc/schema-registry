@@ -72,6 +72,12 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String AUTO_REGISTER_SCHEMAS_DOC =
       "Specify if the Serializer should attempt to register the Schema with Schema Registry";
 
+  public static final String AUTO_REGISTER_SCHEMAS_VERBOSE = "auto.register.schemas.verbose";
+  public static final boolean AUTO_REGISTER_SCHEMAS_VERBOSE_DEFAULT = true;
+  public static final String AUTO_REGISTER_SCHEMAS_VERBOSE_DOC =
+      "Specify if the Serializer should attempt to register the Schema with Schema Registry and "
+      + "include verbose error messages for schema compatibility checks.";
+
   public static final String USE_SCHEMA_ID = "use.schema.id";
   public static final int USE_SCHEMA_ID_DEFAULT = -1;
   public static final String USE_SCHEMA_ID_DOC = "Schema ID to use for serialization";
@@ -118,11 +124,6 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT = "STATIC_TOKEN";
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE_DOC =
           "Specify how to pick the credentials for Bearer Auth header. ";
-
-  public static final String SHOW_VERBOSE_ERRORS_CONFIG = "show.verbose.errors";
-  public static final boolean SHOW_VERBOSE_ERRORS_DEFAULT = false;
-  public static final String SHOW_VERBOSE_ERRORS_DOC =
-      "Show verbose error messages for schema compatibility checks.";
 
   /**
    * @deprecated use {@link #USER_INFO_CONFIG} instead
@@ -248,6 +249,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, NORMALIZE_SCHEMAS_DOC)
         .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
                 Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
+        .define(AUTO_REGISTER_SCHEMAS_VERBOSE, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_VERBOSE_DEFAULT,
+                Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_VERBOSE_DOC)
         .define(USE_SCHEMA_ID, Type.INT, USE_SCHEMA_ID_DEFAULT,
                 Importance.LOW, USE_SCHEMA_ID_DOC)
         .define(ID_COMPATIBILITY_STRICT, Type.BOOLEAN, ID_COMPATIBILITY_STRICT_DEFAULT,
@@ -303,9 +306,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .define(PROXY_HOST, Type.STRING, PROXY_HOST_DEFAULT,
                 Importance.LOW, PROXY_HOST_DOC)
         .define(PROXY_PORT, Type.INT, PROXY_PORT_DEFAULT,
-                Importance.LOW, PROXY_PORT_DOC)
-        .define(SHOW_VERBOSE_ERRORS_CONFIG, Type.BOOLEAN, SHOW_VERBOSE_ERRORS_DEFAULT,
-                Importance.MEDIUM, SHOW_VERBOSE_ERRORS_DOC);
+                Importance.LOW, PROXY_PORT_DOC);
 
     SchemaRegistryClientConfig.withClientSslSupport(
         configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
@@ -334,6 +335,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean autoRegisterSchema() {
     return this.getBoolean(AUTO_REGISTER_SCHEMAS);
+  }
+
+  public boolean autoRegisterSchemaVerbose() {
+    return this.getBoolean(AUTO_REGISTER_SCHEMAS_VERBOSE);
   }
 
   public int useSchemaId() {
@@ -374,10 +379,6 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean useSchemaReflection() {
     return this.getBoolean(SCHEMA_REFLECTION_CONFIG);
-  }
-
-  public boolean showVerboseErrors() {
-    return this.getBoolean(SHOW_VERBOSE_ERRORS_CONFIG);
   }
 
   public Map<String, String> requestHeaders() {

@@ -61,6 +61,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
@@ -377,7 +378,7 @@ public class SubjectVersionsResource {
       @Parameter(description = "Whether to register the normalized schema")
       @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Whether to return verbose error messages")
-      @QueryParam("verbose") boolean verbose,
+      @QueryParam("verbose") @DefaultValue("true") boolean verbose,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",

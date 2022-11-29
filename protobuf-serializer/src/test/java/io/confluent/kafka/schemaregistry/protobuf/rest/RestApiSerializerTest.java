@@ -374,7 +374,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     ProtobufSchema resolvedSchema = ProtobufSchemaUtils.getSchema(descMessage);
     resolvedSchema = KafkaProtobufSerializer.resolveDependencies(
         schemaRegistry, false, false, true, null,
-      true, strategy, subject, false, resolvedSchema, false);
+      true, strategy, subject, false, resolvedSchema);
     assertEquals(schema, resolvedSchema);
   }
 

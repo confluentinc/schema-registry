@@ -61,7 +61,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.idCompatStrict = config.getIdCompatibilityStrict();
     this.useLatestVersion = config.useLatestVersion();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
-    this.showVerboseErrors = config.showVerboseErrors();
+    this.showVerboseErrors = config.autoRegisterSchemaVerbose();
     boolean prettyPrint = config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_INDENT_OUTPUT);
     this.objectMapper.configure(SerializationFeature.INDENT_OUTPUT, prettyPrint);
     boolean writeDatesAsIso8601 = config.getBoolean(

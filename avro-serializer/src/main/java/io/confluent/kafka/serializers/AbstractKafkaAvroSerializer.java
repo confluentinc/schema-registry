@@ -72,7 +72,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     idCompatStrict = config.getIdCompatibilityStrict();
     useLatestVersion = config.useLatestVersion();
     latestCompatStrict = config.getLatestCompatibilityStrict();
-    showVerboseErrors = config.showVerboseErrors();
+    showVerboseErrors = config.autoRegisterSchemaVerbose();
     avroReflectionAllowNull = config
         .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config

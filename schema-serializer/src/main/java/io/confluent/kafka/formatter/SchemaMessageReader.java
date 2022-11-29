@@ -35,11 +35,11 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Properties;
+import java.util.Map;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -146,10 +146,11 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       useLatest = false;
     }
     boolean showVerboseErrors;
-    if (props.containsKey("show.verbose.errors")) {
-      showVerboseErrors = Boolean.parseBoolean(props.getProperty("show.verbose.errors").trim());
+    if (props.containsKey("auto.register.schemas.verbose")) {
+      showVerboseErrors = Boolean.parseBoolean(props.getProperty("auto.register.schemas.verbose")
+        .trim());
     } else {
-      showVerboseErrors = false;
+      showVerboseErrors = true;
     }
 
     if (this.serializer == null) {
