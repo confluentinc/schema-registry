@@ -68,11 +68,11 @@ public class RuleSet {
             || r.getMode() == RuleMode.UPDOWN);
       case UPDOWN:
         return getMigrationRules().stream().anyMatch(r -> r.getMode() == mode);
-      case READ:
       case WRITE:
+      case READ:
         return getDomainRules().stream().anyMatch(r -> r.getMode() == mode
-            || r.getMode() == RuleMode.READWRITE);
-      case READWRITE:
+            || r.getMode() == RuleMode.WRITEREAD);
+      case WRITEREAD:
         return getDomainRules().stream().anyMatch(r -> r.getMode() == mode);
       default:
         return false;

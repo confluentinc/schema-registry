@@ -455,7 +455,7 @@ public abstract class AbstractKafkaSchemaSerDe {
       rules = target.ruleSet().getDomainRules();
     }
     for (Rule rule : rules) {
-      if (rule.getMode() == RuleMode.READWRITE) {
+      if (rule.getMode() == RuleMode.WRITEREAD) {
         if (ruleMode != RuleMode.READ && ruleMode != RuleMode.WRITE) {
           continue;
         }
