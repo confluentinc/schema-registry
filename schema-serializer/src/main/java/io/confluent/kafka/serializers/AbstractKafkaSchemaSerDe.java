@@ -89,6 +89,7 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected Map<String, ParsedSchema> latestWithMetadata =
       new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   protected boolean useSchemaReflection;
+  protected boolean useLatestVersion;
   protected Map<String, String> metadata;
   protected Map<String, RuleExecutor> ruleExecutors;
   protected boolean isKey;
@@ -113,6 +114,7 @@ public abstract class AbstractKafkaSchemaSerDe {
     keySubjectNameStrategy = config.keySubjectNameStrategy();
     valueSubjectNameStrategy = config.valueSubjectNameStrategy();
     useSchemaReflection = config.useSchemaReflection();
+    useLatestVersion = config.useLatestVersion();
     if (config.getLatestWithMetadataSpec() != null) {
       MapPropertyParser parser = new MapPropertyParser();
       metadata = parser.parse(config.getLatestWithMetadataSpec());
@@ -401,6 +403,7 @@ public abstract class AbstractKafkaSchemaSerDe {
           () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
               + " with refs " + schemaMetadata.getReferences()
               + " of type " + schemaMetadata.getSchemaType()));
+      latestVersion = latestVersion.copy(schemaMetadata.getVersion());
       // Sanity check by testing latest is backward compatibility with schema
       // Don't test for forward compatibility so unions can be handled properly
       if (latestCompatStrict && !latestVersion.isBackwardCompatible(schema).isEmpty()) {
@@ -457,7 +460,7 @@ public abstract class AbstractKafkaSchemaSerDe {
       rules = target.ruleSet().getDomainRules();
     }
     for (Rule rule : rules) {
-      if (rule.getMode() == RuleMode.READWRITE) {
+      if (rule.getMode() == RuleMode.WRITEREAD) {
         if (ruleMode != RuleMode.READ && ruleMode != RuleMode.WRITE) {
           continue;
         }

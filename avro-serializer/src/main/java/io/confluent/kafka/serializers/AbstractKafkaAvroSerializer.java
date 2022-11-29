@@ -46,7 +46,6 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean removeJavaProperties;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
-  protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
@@ -70,7 +69,6 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
     useSchemaId = config.useSchemaId();
     idCompatStrict = config.getIdCompatibilityStrict();
-    useLatestVersion = config.useLatestVersion();
     latestCompatStrict = config.getLatestCompatibilityStrict();
     showVerboseErrors = config.autoRegisterSchemaVerbose();
     avroReflectionAllowNull = config

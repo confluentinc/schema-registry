@@ -44,7 +44,6 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected boolean autoRegisterSchema;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
-  protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected SpecificationVersion specVersion;
@@ -59,7 +58,6 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.autoRegisterSchema = config.autoRegisterSchema();
     this.useSchemaId = config.useSchemaId();
     this.idCompatStrict = config.getIdCompatibilityStrict();
-    this.useLatestVersion = config.useLatestVersion();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
     this.showVerboseErrors = config.autoRegisterSchemaVerbose();
     boolean prettyPrint = config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_INDENT_OUTPUT);

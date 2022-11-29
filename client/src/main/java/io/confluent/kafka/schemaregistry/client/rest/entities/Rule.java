@@ -57,7 +57,7 @@ public class Rule {
               @JsonProperty("disabled") boolean disabled) {
     this.name = name;
     this.kind = kind != null ? kind : RuleKind.TRANSFORM;
-    this.mode = mode != null ? mode : RuleMode.READWRITE;
+    this.mode = mode != null ? mode : RuleMode.WRITEREAD;
     this.type = type;
     SortedSet<String> sortedAnnotations = annotations != null
         ? annotations.stream()

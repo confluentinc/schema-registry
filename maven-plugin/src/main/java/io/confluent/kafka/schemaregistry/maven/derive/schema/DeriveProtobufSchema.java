@@ -22,7 +22,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class DeriveProtobufSchema extends DeriveSchema {
 
@@ -49,6 +53,38 @@ public class DeriveProtobufSchema extends DeriveSchema {
   }
 
   /**
+   * Merge schemas for multiple messages to combine records and number types
+   */
+  protected ArrayNode mergeMultipleMessages(List<JsonNode> uniqueSchemas,
+                                            Map<JsonNode, ArrayNode> schemaToIndex) {
+
+    // Schemas with extra field or mismatch in number types can be merged together
+    // Picking one schema and matching with rest of the schemas
+    Set<JsonNode> mergedSchemas = new HashSet<>();
+    ArrayNode schemaInfoList = mapper.createArrayNode();
+    for (int i = 0; i < uniqueSchemas.size(); i++) {
+      ArrayNode messagesMatched = mapper.createArrayNode();
+      JsonNode mergedSchema = uniqueSchemas.get(i).deepCopy();
+      for (JsonNode uniqueSchema : uniqueSchemas) {
+        try {
+          mergedSchema = mergeArrays(Arrays.asList(mergedSchema, uniqueSchema.deepCopy()),
+              false, false).get("items");
+          messagesMatched.addAll(schemaToIndex.get(uniqueSchema));
+        } catch (IllegalArgumentException ignored) {
+          // If there are conflicting types, schemas cannot be merged. Result is ignored
+        }
+      }
+      if (!mergedSchemas.contains(mergedSchema)) {
+        updateSchemaInformation(mergedSchema, messagesMatched, schemaInfoList);
+        mergedSchemas.add(mergedSchema);
+      }
+    }
+
+    return schemaInfoList;
+  }
+
+
+  /**
    * Merge different records into one record and merge number types: double and int/long
    * If there are multiple data types or nested arrays error is returned
    */
@@ -68,20 +104,18 @@ public class DeriveProtobufSchema extends DeriveSchema {
 
     DeriveSchemaUtils.mergeNumberTypes(primitives);
     items.addAll(DeriveSchemaUtils.getUnique(primitives));
+
+    // To recursively merge number types in-place for arrays, the result is ignored
+    if (arrays.size() > 0) {
+      mergeArrays(arrays, true, false);
+    }
     // No merging of arrays, add directly to items' list
-    items.addAll(arrays);
+    items.addAll(DeriveSchemaUtils.getUnique(arrays));
 
     if (records.size() > 0) {
       items.add(mergeRecords(records));
     }
-
-    if (items.size() > 1) {
-      throw new IllegalArgumentException(String.format("Found multiple data types: %s", items));
-    } else if (items.size() == 1) {
-      mergedArray.set("items", items.get(0));
-    } else {
-      mergedArray.set("items", getNullSchema());
-    }
+    getSingleDataType(mergedArray, items);
     return mergedArray;
   }
 
