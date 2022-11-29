@@ -37,7 +37,7 @@ public class Difference {
         String.format("The type (path: '%s') of a field in the reader schema has changed. ",
           path));
     errorDescription.put(SchemaIncompatibilityType.NAME_MISMATCH,
-        String.format("The name of the schema (path: '%s') has changed", path));
+        String.format("The name of the schema has changed (path: '%s').", path));
     errorDescription.put(SchemaIncompatibilityType.MISSING_ENUM_SYMBOLS,
         String.format("Enum symbols '%s' at path: '%s' in the writer schema are missing in the "
                         + "reader schema", incompatibility.getMessage(), path));

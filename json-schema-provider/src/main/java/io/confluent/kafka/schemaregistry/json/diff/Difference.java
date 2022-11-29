@@ -117,15 +117,14 @@ public class Difference {
       .put(Type.MULTIPLE_OF_CHANGED,
         "The value of 'multipleOf' at path: '%s' in the reader schema was changed")
       .put(Type.REQUIRED_ATTRIBUTE_ADDED,
-        "The 'required' keyword was added to an object type at path: '%s' in the reader schema")
+        "The 'required' keyword was added at path: '%s' in the reader schema")
       .put(Type.MAX_PROPERTIES_ADDED,
-        "The 'maxProperties' keyword was added to object type path: '%s' in the reader schema")
+        "The 'maxProperties' keyword was added at path: '%s' in the reader schema")
       .put(Type.MAX_PROPERTIES_DECREASED,
         "The value of 'maxProperties' at path: '%s' was decreased in the "
           + "reader schema")
       .put(Type.MIN_PROPERTIES_ADDED,
-        "The 'minProperties' keyword was added to an object type at path: '%s' in the "
-          + "reader schema")
+        "The 'minProperties' keyword was added at path: '%s' in the reader schema")
       .put(Type.MIN_PROPERTIES_INCREASED,
         "The value of 'maxProperties' at path: '%s' was increased in the reader schema")
       .put(Type.ADDITIONAL_PROPERTIES_REMOVED,
@@ -152,8 +151,8 @@ public class Difference {
       "A property (path '%s') was removed at  from the reader schema and is not covered by "
         + "its partially open content model")
       .put(Type.PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL,
-        "A property (path '%s') that as added to the reader schema is not covered by its partially "
-          + "open content model")
+        "A property (path '%s') that was added to the reader schema is not covered by its "
+          + "partially open content model")
       .put(Type.MAX_ITEMS_ADDED,
         "The 'maxItems' keyword (path '%s') was added to the reader schema")
       .put(Type.MAX_ITEMS_DECREASED,
@@ -225,8 +224,8 @@ public class Difference {
 
   @Override
   public String toString() {
-    return "{ errorType:\"" + type + "\""
-             + ", errorMessage:\""
+    return "{errorType:\"" + type + "\""
+             + ", description:\""
              + String.format(errorDescription.getOrDefault(type, "%s"), jsonPath) + "'}";
   }
 }

@@ -41,7 +41,7 @@ public class Difference {
     this.type = type;
     errorDescription = new HashMap<>();
     errorDescription.put(Type.MESSAGE_REMOVED,
-        String.format("A field of type message at path: '%s' in the writer schema is missing in the"
+        String.format("A field of type MESSAGE at path: '%s' in the writer schema is missing in the"
                         + " reader schema", fullPath));
     errorDescription.put(Type.FIELD_KIND_CHANGED,
         String.format("The type of a field at path: '%s' in the reader schema has changed to MAP, "
@@ -53,7 +53,7 @@ public class Difference {
         String.format("The type of a MESSAGE field at path: '%s' in the reader schema has changed",
           fullPath));
     errorDescription.put(Type.FIELD_NUMERIC_LABEL_CHANGED,
-        String.format("The label for a numeric field at path: '%s' in the reader schema has "
+        String.format("The label for a NUMERIC field at path: '%s' in the reader schema has "
                         + "changed", fullPath));
     errorDescription.put(Type.REQUIRED_FIELD_ADDED,
         String.format("The reader schema has an additional required field at path: '%s'",
@@ -96,7 +96,7 @@ public class Difference {
 
   @Override
   public String toString() {
-    return "{ errorType:\"" + type + '"'
+    return "{errorType:\"" + type + '"'
              + ", description:\"" + errorDescription.getOrDefault(type, "") + "\"}";
   }
 }

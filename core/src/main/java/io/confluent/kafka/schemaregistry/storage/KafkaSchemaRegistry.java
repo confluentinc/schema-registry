@@ -1668,7 +1668,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
     List<String> errorMessages = parsedSchema.isCompatible(compatibility, previousSchemas, verbose);
     if (errorMessages.size() > 0) {
-      errorMessages.add(String.format("{ compatibility: %s }", compatibility));
+      errorMessages.add(String.format("{compatibility: '%s'}", compatibility));
     }
     return errorMessages;
   }
