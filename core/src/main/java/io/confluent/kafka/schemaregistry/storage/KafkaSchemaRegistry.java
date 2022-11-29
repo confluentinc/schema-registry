@@ -469,7 +469,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public int register(String subject,
                       Schema schema,
-                      boolean normalize)
+                      boolean normalize) throws SchemaRegistryException {
+    return register(subject, schema, normalize, false);
+  }
+
+  @Override
+  public int register(String subject,
+                      Schema schema,
+                      boolean normalize,
+                      boolean verbose)
       throws SchemaRegistryException {
     try {
       checkRegisterMode(subject, schema);
@@ -519,7 +527,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Collections.reverse(undeletedVersions);
 
       final List<String> compatibilityErrorLogs = isCompatibleWithPrevious(
-              subject, parsedSchema, undeletedVersions);
+              subject, parsedSchema, undeletedVersions, verbose);
       final boolean isCompatible = compatibilityErrorLogs.isEmpty();
 
       try {
@@ -626,6 +634,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public int registerOrForward(String subject,
                                Schema schema,
                                boolean normalize,
+                               boolean verbose,
                                Map<String, String> headerProperties)
       throws SchemaRegistryException {
     Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
@@ -641,11 +650,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        return register(subject, schema, normalize);
+        return register(subject, schema, normalize, verbose);
       } else {
         // forward registering request to the leader
         if (leaderIdentity != null) {
-          return forwardRegisterRequestToLeader(subject, schema, normalize, headerProperties);
+          return forwardRegisterRequestToLeader(subject, schema, normalize, verbose,
+            headerProperties);
         } else {
           throw new UnknownLeaderException("Register schema request failed since leader is "
                                            + "unknown");
@@ -912,7 +922,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private int forwardRegisterRequestToLeader(String subject, Schema schema, boolean normalize,
-                                             Map<String, String> headerProperties)
+                                             boolean verbose, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
@@ -920,7 +930,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     log.debug(String.format("Forwarding registering schema request to %s", baseUrl));
     try {
       int id = leaderRestService.registerSchema(
-          headerProperties, registerSchemaRequest, subject, normalize);
+          headerProperties, registerSchemaRequest, subject, normalize, verbose);
       return id;
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
@@ -1630,7 +1640,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public List<String> isCompatible(String subject,
                                    Schema newSchema,
-                                   List<Schema> previousSchemas)
+                                   List<Schema> previousSchemas,
+                                   boolean verbose)
       throws SchemaRegistryException {
 
     if (previousSchemas == null) {
@@ -1645,16 +1656,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
 
     ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true, false);
-    return isCompatibleWithPrevious(subject, parsedSchema, prevParsedSchemas);
+    return isCompatibleWithPrevious(subject, parsedSchema, prevParsedSchemas, verbose);
   }
 
   private List<String> isCompatibleWithPrevious(String subject,
                                                 ParsedSchema parsedSchema,
-                                                List<ParsedSchema> previousSchemas)
+                                                List<ParsedSchema> previousSchemas,
+                                                boolean verbose)
       throws SchemaRegistryException {
 
     CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
-    return parsedSchema.isCompatible(compatibility, previousSchemas);
+    List<String> errorMessages = parsedSchema.isCompatible(compatibility, previousSchemas, verbose);
+    if (errorMessages.size() > 0) {
+      errorMessages.add(String.format("{ compatibility: %s }", compatibility));
+    }
+    return errorMessages;
   }
 
   private void deleteMode(String subject) throws StoreException {

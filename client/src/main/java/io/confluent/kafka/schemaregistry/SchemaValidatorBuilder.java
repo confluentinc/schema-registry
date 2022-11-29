@@ -38,7 +38,8 @@ public final class SchemaValidatorBuilder {
    * schema(s) according to the JSON default schema resolution.
    */
   public SchemaValidatorBuilder canReadStrategy() {
-    this.strategy = (toValidate, existing) -> toValidate.isBackwardCompatible(existing);
+    this.strategy = (toValidate, existing, verbose) ->
+                      toValidate.isBackwardCompatible(existing, verbose);
     return this;
   }
 
@@ -47,7 +48,8 @@ public final class SchemaValidatorBuilder {
    * schema(s) according to the JSON default schema resolution.
    */
   public SchemaValidatorBuilder canBeReadStrategy() {
-    this.strategy = (toValidate, existing) -> existing.isBackwardCompatible(toValidate);
+    this.strategy = (toValidate, existing, verbose) ->
+                      existing.isBackwardCompatible(toValidate, verbose);
     return this;
   }
 
@@ -57,10 +59,10 @@ public final class SchemaValidatorBuilder {
    */
   public SchemaValidatorBuilder mutualReadStrategy() {
 
-    this.strategy = (toValidate, existing) -> {
+    this.strategy = (toValidate, existing, verbose) -> {
       List<String> result = new ArrayList<>();
-      result.addAll(existing.isBackwardCompatible(toValidate));
-      result.addAll(toValidate.isBackwardCompatible(existing));
+      result.addAll(existing.isBackwardCompatible(toValidate, verbose));
+      result.addAll(toValidate.isBackwardCompatible(existing, verbose));
       return result;
     };
     return this;
@@ -68,11 +70,11 @@ public final class SchemaValidatorBuilder {
 
   public SchemaValidator validateLatest() {
     valid();
-    return (toValidate, schemasInOrder) -> {
+    return (toValidate, schemasInOrder, verbose) -> {
       Iterator<? extends ParsedSchema> schemas = schemasInOrder.iterator();
       if (schemas.hasNext()) {
         ParsedSchema existing = schemas.next();
-        return strategy.validate(toValidate, existing);
+        return strategy.validate(toValidate, existing, verbose);
       }
       return Collections.emptyList();
     };
@@ -80,9 +82,9 @@ public final class SchemaValidatorBuilder {
 
   public SchemaValidator validateAll() {
     valid();
-    return (toValidate, schemasInOrder) -> {
+    return (toValidate, schemasInOrder, verbose) -> {
       for (ParsedSchema existing : schemasInOrder) {
-        List<String> errorMessages = strategy.validate(toValidate, existing);
+        List<String> errorMessages = strategy.validate(toValidate, existing, verbose);
         if (!errorMessages.isEmpty()) {
           return errorMessages;
         }

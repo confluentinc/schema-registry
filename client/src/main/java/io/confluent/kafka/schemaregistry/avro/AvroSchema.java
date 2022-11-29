@@ -41,7 +41,6 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.SchemaCompatibility.Incompatibility;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -276,7 +275,7 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
-  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+  public List<String> isBackwardCompatible(ParsedSchema previousSchema, boolean verbose) {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Collections.singletonList("Incompatible because of different schema type");
     }
@@ -285,9 +284,24 @@ public class AvroSchema implements ParsedSchema {
           SchemaCompatibility.checkReaderWriterCompatibility(
               this.schemaObj,
               ((AvroSchema) previousSchema).schemaObj);
-      return result.getResult().getIncompatibilities().stream()
-          .map(Incompatibility::toString)
+      List<SchemaCompatibility.Incompatibility> incompatibilities =
+          result.getResult().getIncompatibilities();
+      List<String> errorMessages;
+      if (verbose) {
+        errorMessages = incompatibilities.stream()
+          .map(Difference::new)
+          .map(Difference::toStringVerbose)
           .collect(Collectors.toList());
+        errorMessages.add("{ readerSchema: '" + this
+                            + "', writerSchema: '" + previousSchema + "'}");
+      } else {
+        errorMessages = incompatibilities.stream()
+          .map(Difference::new)
+          .map(Difference::toString)
+          .collect(Collectors.toList());
+      }
+      return errorMessages;
+
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
       return Collections.singletonList(

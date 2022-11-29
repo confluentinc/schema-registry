@@ -481,57 +481,59 @@ public class RestService implements Configurable {
   // Visible for testing
   public int registerSchema(String schemaString, String subject)
       throws IOException, RestClientException {
-    return registerSchema(schemaString, subject, false);
+    return registerSchema(schemaString, subject, false, false);
   }
 
-  public int registerSchema(String schemaString, String subject, boolean normalize)
+  public int registerSchema(String schemaString, String subject, boolean normalize, boolean verbose)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
-    return registerSchema(request, subject, normalize);
+    return registerSchema(request, subject, normalize, verbose);
   }
 
   public int registerSchema(String schemaString, String schemaType,
                             List<SchemaReference> references, String subject)
       throws IOException, RestClientException {
-    return registerSchema(schemaString, schemaType, references, subject, false);
+    return registerSchema(schemaString, schemaType, references, subject, false, false);
   }
 
   public int registerSchema(String schemaString, String schemaType,
-                            List<SchemaReference> references, String subject, boolean normalize)
+                            List<SchemaReference> references, String subject, boolean normalize,
+                            boolean verbose)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setSchemaType(schemaType);
     request.setReferences(references);
-    return registerSchema(request, subject, normalize);
+    return registerSchema(request, subject, normalize, verbose);
   }
 
   // Visible for testing
   public int registerSchema(String schemaString, String subject, int version, int id)
       throws IOException, RestClientException {
-    return registerSchema(schemaString, subject, version, id, false);
+    return registerSchema(schemaString, subject, version, id, false, false);
   }
 
   public int registerSchema(String schemaString, String subject,
-                            int version, int id, boolean normalize)
+                            int version, int id, boolean normalize, boolean verbose)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setVersion(version);
     request.setId(id);
-    return registerSchema(request, subject, normalize);
+    return registerSchema(request, subject, normalize, verbose);
   }
 
   public int registerSchema(String schemaString, String schemaType,
                             List<SchemaReference> references, String subject, int version, int id)
       throws IOException, RestClientException {
-    return registerSchema(schemaString, schemaType, references, subject, version, id, false);
+    return registerSchema(schemaString, schemaType, references, subject, version, id,
+      false, false);
   }
 
   public int registerSchema(String schemaString, String schemaType,
                             List<SchemaReference> references, String subject, int version, int id,
-                            boolean normalize)
+                            boolean normalize, boolean verbose)
                             throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
@@ -539,23 +541,34 @@ public class RestService implements Configurable {
     request.setReferences(references);
     request.setVersion(version);
     request.setId(id);
-    return registerSchema(request, subject, normalize);
+    return registerSchema(request, subject, normalize, verbose);
   }
 
   public int registerSchema(RegisterSchemaRequest registerSchemaRequest,
                             String subject,
                             boolean normalize)
       throws IOException, RestClientException {
-    return registerSchema(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject, normalize);
+    return registerSchema(registerSchemaRequest, subject, normalize, false);
+  }
+
+  public int registerSchema(RegisterSchemaRequest registerSchemaRequest,
+                            String subject,
+                            boolean normalize,
+                            boolean verbose)
+      throws IOException, RestClientException {
+    return registerSchema(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject,
+      normalize, verbose);
   }
 
   public int registerSchema(Map<String, String> requestProperties,
                             RegisterSchemaRequest registerSchemaRequest,
                             String subject,
-                            boolean normalize)
+                            boolean normalize,
+                            boolean verbose)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions")
-        .queryParam("normalize", normalize);
+        .queryParam("normalize", normalize)
+        .queryParam("verbose", verbose);
     String path = builder.build(subject).toString();
 
     RegisterSchemaResponse response = httpRequest(
@@ -580,6 +593,14 @@ public class RestService implements Configurable {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     return testCompatibility(request, subject, version, false);
+  }
+
+  public List<String> testCompatibility(String schemaString, String subject, String version,
+                                        boolean verbose)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    return testCompatibility(request, subject, version, verbose);
   }
 
   public List<String> testCompatibility(String schemaString,

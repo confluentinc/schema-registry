@@ -228,7 +228,8 @@ public class TestSchemaValidation {
       SchemaValidator validator = builder.canReadStrategy().validateAll();
       List<String> valid = validator.validate(
           new JsonSchema(reader),
-          Collections.singleton(new JsonSchema(writer))
+          Collections.singleton(new JsonSchema(writer)),
+          false
       );
       Assert.assertFalse(valid.isEmpty());
     }
@@ -239,7 +240,7 @@ public class TestSchemaValidation {
     for (int i = prev.length - 1; i >= 0; i--) {
       prior.add(new JsonSchema(prev[i]));
     }
-    validator.validate(new JsonSchema(schema), prior);
+    validator.validate(new JsonSchema(schema), prior, false);
   }
 
   private void testValidatorFails(SchemaValidator validator, Schema schemaFails, Schema... prev) {
@@ -247,7 +248,7 @@ public class TestSchemaValidation {
     for (int i = prev.length - 1; i >= 0; i--) {
       prior.add(new JsonSchema(prev[i]));
     }
-    List<String> valid = validator.validate(new JsonSchema(schemaFails), prior);
+    List<String> valid = validator.validate(new JsonSchema(schemaFails), prior, false);
     Assert.assertFalse(valid.isEmpty());
   }
 }
