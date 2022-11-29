@@ -20,9 +20,9 @@ public enum RuleMode {
   UPGRADE,
   DOWNGRADE,
   UPDOWN,
-  READ,
   WRITE,
-  READWRITE;
+  READ,
+  WRITEREAD;
 
   public static RuleMode fromEntity(
       io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode m) {
@@ -33,12 +33,12 @@ public enum RuleMode {
         return RuleMode.DOWNGRADE;
       case UPDOWN:
         return RuleMode.UPDOWN;
-      case READ:
-        return RuleMode.READ;
       case WRITE:
         return RuleMode.WRITE;
-      case READWRITE:
-        return RuleMode.READWRITE;
+      case READ:
+        return RuleMode.READ;
+      case WRITEREAD:
+        return RuleMode.WRITEREAD;
       default:
         throw new IllegalArgumentException();
     }
@@ -52,12 +52,12 @@ public enum RuleMode {
         return io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode.DOWNGRADE;
       case UPDOWN:
         return io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode.UPDOWN;
-      case READ:
-        return io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode.READ;
       case WRITE:
         return io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode.WRITE;
-      case READWRITE:
-        return io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode.READWRITE;
+      case READ:
+        return io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode.READ;
+      case WRITEREAD:
+        return io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode.WRITEREAD;
       default:
         throw new IllegalArgumentException();
     }

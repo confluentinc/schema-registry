@@ -20,7 +20,7 @@ public enum RuleMode {
   UPGRADE,
   DOWNGRADE,
   UPDOWN,
-  READ,
   WRITE,
-  READWRITE
+  READ,
+  WRITEREAD
 }
