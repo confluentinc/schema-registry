@@ -218,6 +218,21 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerConstraintIgnore() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
+        CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        null, "NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    avroDeserializer.deserialize(topic, bytes);
+  }
+
+  @Test
   public void testKafkaAvroSerializerConstraintDlq() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
