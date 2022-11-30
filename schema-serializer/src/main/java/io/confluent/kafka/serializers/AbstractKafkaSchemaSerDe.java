@@ -493,10 +493,10 @@ public abstract class AbstractKafkaSchemaSerDe {
       }
       try {
         message = ruleExecutor.transform(ctx, message);
-        if (message == null) {
-          runAction(ctx, ruleMode, rule, rule.getOnFailure(), message, null, ErrorAction.TYPE);
-        } else {
+        if (message != null) {
           runAction(ctx, ruleMode, rule, rule.getOnSuccess(), message, null, null);
+        } else {
+          runAction(ctx, ruleMode, rule, rule.getOnFailure(), null, null, ErrorAction.TYPE);
         }
       } catch (RuleException e) {
         runAction(ctx, ruleMode, rule, rule.getOnFailure(), message, e, ErrorAction.TYPE);
@@ -505,7 +505,7 @@ public abstract class AbstractKafkaSchemaSerDe {
     return message;
   }
 
-  private boolean runAction(RuleContext ctx, RuleMode ruleMode, Rule rule, String action,
+  private void runAction(RuleContext ctx, RuleMode ruleMode, Rule rule, String action,
       Object message, RuleException ex, String defaultAction) {
     String actionName = getRuleActionName(rule, ruleMode, action);
     if (actionName == null) {
@@ -515,12 +515,10 @@ public abstract class AbstractKafkaSchemaSerDe {
       RuleAction ruleAction = ruleActions.get(actionName.toUpperCase(Locale.ROOT));
       try {
         ruleAction.run(ctx, message, ex);
-        return true;
       } catch (RuleException e) {
         log.error("Could not run post-rule action " + action, e);
       }
     }
-    return false;
   }
 
   private String getRuleActionName(Rule rule, RuleMode ruleMode, String actionName) {
