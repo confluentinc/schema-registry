@@ -532,7 +532,7 @@ public abstract class AbstractKafkaSchemaSerDe {
           return parts[0];
         case READ:
         case DOWNGRADE:
-          return parts[0];
+          return parts[1];
         default:
           throw new IllegalStateException("Unsupported rule mode " + ruleMode);
       }
