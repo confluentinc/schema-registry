@@ -16,9 +16,19 @@
 
 package io.confluent.kafka.schemaregistry.rules;
 
-/**
- * A rule executor.
- */
-public interface RuleExecutor extends RuleBase {
-  Object transform(RuleContext ctx, Object message) throws RuleException;
+import org.apache.kafka.common.errors.SerializationException;
+
+public class ErrorAction implements RuleAction {
+
+  public static final String TYPE = "ERROR";
+
+  public String type() {
+    return TYPE;
+  }
+
+  public void run(RuleContext ctx, Object message, RuleException ex) throws RuleException {
+    String msg = "Rule failed: " + ctx.rule().getName();
+    // throw a RuntimeException
+    throw ex != null ? new SerializationException(msg, ex) : new SerializationException(msg);
+  }
 }

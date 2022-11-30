@@ -365,6 +365,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     private final String topic;
     private final Boolean isKey;
     private final Headers headers;
+    private final byte[] payload;
     private final ByteBuffer buffer;
     private final int schemaId;
 
@@ -373,6 +374,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       this.topic = topic;
       this.isKey = isKey;
       this.headers = headers;
+      this.payload = payload;
       this.buffer = getByteBuffer(payload);
       this.schemaId = buffer.getInt();
     }
@@ -503,7 +505,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
         // Next apply domain rules
         result = executeRules(
-          getSubject(), topic, headers, RuleMode.READ, null, readerAvroSchema, result
+          getSubject(), topic, headers, payload, RuleMode.READ, null, readerAvroSchema, result
         );
 
         return result;
