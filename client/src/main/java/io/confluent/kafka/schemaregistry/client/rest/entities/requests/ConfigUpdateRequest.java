@@ -34,8 +34,8 @@ public class ConfigUpdateRequest {
 
   private String compatibilityLevel;
   private String compatibilityGroup;
-  private Metadata defaultMetadata;
-  private RuleSet defaultRuleSet;
+  private Metadata metadataOverride;
+  private RuleSet ruleSetOverride;
 
   public static ConfigUpdateRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, ConfigUpdateRequest.class);
@@ -65,24 +65,24 @@ public class ConfigUpdateRequest {
     this.compatibilityGroup = compatibilityGroup;
   }
 
-  @JsonProperty("defaultMetadata")
-  public Metadata getDefaultMetadata() {
-    return this.defaultMetadata;
+  @JsonProperty("metadataOverride")
+  public Metadata getMetadataOverride() {
+    return this.metadataOverride;
   }
 
-  @JsonProperty("defaultMetadata")
-  public void setDefaultMetadata(Metadata defaultMetadata) {
-    this.defaultMetadata = defaultMetadata;
+  @JsonProperty("metadataOverride")
+  public void setMetadataOverride(Metadata metadataOverride) {
+    this.metadataOverride = metadataOverride;
   }
 
-  @JsonProperty("defaultRuleSet")
-  public RuleSet getDefaultRuleSet() {
-    return this.defaultRuleSet;
+  @JsonProperty("ruleSetOverride")
+  public RuleSet getRuleSetOverride() {
+    return this.ruleSetOverride;
   }
 
-  @JsonProperty("defaultRuleSet")
-  public void setDefaultRuleSet(RuleSet defaultRuleSet) {
-    this.defaultRuleSet = defaultRuleSet;
+  @JsonProperty("ruleSetOverride")
+  public void setRuleSetOverride(RuleSet ruleSetOverride) {
+    this.ruleSetOverride = ruleSetOverride;
   }
 
   public String toJson() throws IOException {
@@ -100,12 +100,12 @@ public class ConfigUpdateRequest {
     ConfigUpdateRequest that = (ConfigUpdateRequest) o;
     return Objects.equals(compatibilityLevel, that.compatibilityLevel)
         && Objects.equals(compatibilityGroup, that.compatibilityGroup)
-        && Objects.equals(defaultMetadata, that.defaultMetadata)
-        && Objects.equals(defaultRuleSet, that.defaultRuleSet);
+        && Objects.equals(metadataOverride, that.metadataOverride)
+        && Objects.equals(ruleSetOverride, that.ruleSetOverride);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(compatibilityLevel, compatibilityGroup, defaultMetadata, defaultRuleSet);
+    return Objects.hash(compatibilityLevel, compatibilityGroup, metadataOverride, ruleSetOverride);
   }
 }

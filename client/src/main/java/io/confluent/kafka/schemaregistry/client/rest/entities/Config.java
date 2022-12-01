@@ -29,8 +29,8 @@ public class Config {
 
   private String compatibilityLevel;
   private String compatibilityGroup;
-  private Metadata defaultMetadata;
-  private RuleSet defaultRuleSet;
+  private Metadata metadataOverride;
+  private RuleSet ruleSetOverride;
 
   public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
@@ -64,24 +64,24 @@ public class Config {
     this.compatibilityGroup = compatibilityGroup;
   }
 
-  @JsonProperty("defaultMetadata")
-  public Metadata getDefaultMetadata() {
-    return this.defaultMetadata;
+  @JsonProperty("metadataOverride")
+  public Metadata getMetadataOverride() {
+    return this.metadataOverride;
   }
 
-  @JsonProperty("defaultMetadata")
-  public void setDefaultMetadata(Metadata defaultMetadata) {
-    this.defaultMetadata = defaultMetadata;
+  @JsonProperty("metadataOverride")
+  public void setMetadataOverride(Metadata metadataOverride) {
+    this.metadataOverride = metadataOverride;
   }
 
-  @JsonProperty("defaultRuleSet")
-  public RuleSet getDefaultRuleSet() {
-    return this.defaultRuleSet;
+  @JsonProperty("ruleSetOverride")
+  public RuleSet getRuleSetOverride() {
+    return this.ruleSetOverride;
   }
 
-  @JsonProperty("defaultRuleSet")
-  public void setDefaultRuleSet(RuleSet defaultRuleSet) {
-    this.defaultRuleSet = defaultRuleSet;
+  @JsonProperty("ruleSetOverride")
+  public void setRuleSetOverride(RuleSet ruleSetOverride) {
+    this.ruleSetOverride = ruleSetOverride;
   }
 
   @Override
@@ -95,13 +95,13 @@ public class Config {
     Config config = (Config) o;
     return Objects.equals(compatibilityLevel, config.compatibilityLevel)
         && Objects.equals(compatibilityGroup, config.compatibilityGroup)
-        && Objects.equals(defaultMetadata, config.defaultMetadata)
-        && Objects.equals(defaultRuleSet, config.defaultRuleSet);
+        && Objects.equals(metadataOverride, config.metadataOverride)
+        && Objects.equals(ruleSetOverride, config.ruleSetOverride);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(compatibilityLevel, compatibilityGroup, defaultMetadata, defaultRuleSet);
+    return Objects.hash(compatibilityLevel, compatibilityGroup, metadataOverride, ruleSetOverride);
   }
 
   @Override
@@ -109,8 +109,8 @@ public class Config {
     return "Config{" +
         "compatibilityLevel='" + compatibilityLevel + '\'' +
         ", compatibilityGroup='" + compatibilityGroup + '\'' +
-        ", defaultMetadata=" + defaultMetadata +
-        ", defaultRuleSet=" + defaultRuleSet +
+        ", metadataOverride=" + metadataOverride +
+        ", ruleSetOverride=" + ruleSetOverride +
         '}';
   }
 }
