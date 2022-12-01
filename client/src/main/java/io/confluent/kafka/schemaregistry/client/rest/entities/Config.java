@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -27,6 +28,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public class Config {
 
   private String compatibilityLevel;
+  private String compatibilityGroup;
+  private Metadata defaultMetadata;
+  private RuleSet defaultRuleSet;
 
   public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
@@ -50,6 +54,36 @@ public class Config {
     this.compatibilityLevel = compatibilityLevel;
   }
 
+  @JsonProperty("compatibilityGroup")
+  public String getCompatibilityGroup() {
+    return this.compatibilityGroup;
+  }
+
+  @JsonProperty("compatibilityGroup")
+  public void setCompatibilityGroup(String compatibilityGroup) {
+    this.compatibilityGroup = compatibilityGroup;
+  }
+
+  @JsonProperty("defaultMetadata")
+  public Metadata getDefaultMetadata() {
+    return this.defaultMetadata;
+  }
+
+  @JsonProperty("defaultMetadata")
+  public void setDefaultMetadata(Metadata defaultMetadata) {
+    this.defaultMetadata = defaultMetadata;
+  }
+
+  @JsonProperty("defaultRuleSet")
+  public RuleSet getDefaultRuleSet() {
+    return this.defaultRuleSet;
+  }
+
+  @JsonProperty("defaultRuleSet")
+  public void setDefaultRuleSet(RuleSet defaultRuleSet) {
+    this.defaultRuleSet = defaultRuleSet;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -58,19 +92,25 @@ public class Config {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-
-    Config that = (Config) o;
-
-    return this.compatibilityLevel.equals(that.compatibilityLevel);
+    Config config = (Config) o;
+    return Objects.equals(compatibilityLevel, config.compatibilityLevel)
+        && Objects.equals(compatibilityGroup, config.compatibilityGroup)
+        && Objects.equals(defaultMetadata, config.defaultMetadata)
+        && Objects.equals(defaultRuleSet, config.defaultRuleSet);
   }
 
   @Override
   public int hashCode() {
-    return 31 * compatibilityLevel.hashCode();
+    return Objects.hash(compatibilityLevel, compatibilityGroup, defaultMetadata, defaultRuleSet);
   }
 
   @Override
   public String toString() {
-    return "{compatibilityLevel=" + this.compatibilityLevel + "}";
+    return "Config{" +
+        "compatibilityLevel='" + compatibilityLevel + '\'' +
+        ", compatibilityGroup='" + compatibilityGroup + '\'' +
+        ", defaultMetadata=" + defaultMetadata +
+        ", defaultRuleSet=" + defaultRuleSet +
+        '}';
   }
 }

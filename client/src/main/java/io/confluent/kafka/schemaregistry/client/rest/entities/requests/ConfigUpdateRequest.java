@@ -19,6 +19,8 @@ package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -31,6 +33,9 @@ import java.util.Objects;
 public class ConfigUpdateRequest {
 
   private String compatibilityLevel;
+  private String compatibilityGroup;
+  private Metadata defaultMetadata;
+  private RuleSet defaultRuleSet;
 
   public static ConfigUpdateRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, ConfigUpdateRequest.class);
@@ -50,6 +55,36 @@ public class ConfigUpdateRequest {
     this.compatibilityLevel = compatibilityLevel;
   }
 
+  @JsonProperty("compatibilityGroup")
+  public String getCompatibilityGroup() {
+    return this.compatibilityGroup;
+  }
+
+  @JsonProperty("compatibilityGroup")
+  public void setCompatibilityGroup(String compatibilityGroup) {
+    this.compatibilityGroup = compatibilityGroup;
+  }
+
+  @JsonProperty("defaultMetadata")
+  public Metadata getDefaultMetadata() {
+    return this.defaultMetadata;
+  }
+
+  @JsonProperty("defaultMetadata")
+  public void setDefaultMetadata(Metadata defaultMetadata) {
+    this.defaultMetadata = defaultMetadata;
+  }
+
+  @JsonProperty("defaultRuleSet")
+  public RuleSet getDefaultRuleSet() {
+    return this.defaultRuleSet;
+  }
+
+  @JsonProperty("defaultRuleSet")
+  public void setDefaultRuleSet(RuleSet defaultRuleSet) {
+    this.defaultRuleSet = defaultRuleSet;
+  }
+
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
@@ -63,11 +98,14 @@ public class ConfigUpdateRequest {
       return false;
     }
     ConfigUpdateRequest that = (ConfigUpdateRequest) o;
-    return Objects.equals(compatibilityLevel, that.compatibilityLevel);
+    return Objects.equals(compatibilityLevel, that.compatibilityLevel)
+        && Objects.equals(compatibilityGroup, that.compatibilityGroup)
+        && Objects.equals(defaultMetadata, that.defaultMetadata)
+        && Objects.equals(defaultRuleSet, that.defaultRuleSet);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(compatibilityLevel);
+    return Objects.hash(compatibilityLevel, compatibilityGroup, defaultMetadata, defaultRuleSet);
   }
 }
