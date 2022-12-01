@@ -137,6 +137,11 @@ public class Rule {
     this.expr = expr;
   }
 
+  /**
+   * If the mode is WRITEREAD or UPDOWN, the on-success action can be a comma separated
+   * pair of actions, such as "none,error".  The first action applies to WRITE (or UP)
+   * and the second action applies to READ (or DOWN).
+   */
   @Schema(description = "Rule action on success")
   @JsonProperty("onSuccess")
   public String getOnSuccess() {
@@ -148,6 +153,11 @@ public class Rule {
     this.onSuccess = onSuccess;
   }
 
+  /**
+   * If the mode is WRITEREAD or UPDOWN, the on-failure action can be a comma separated
+   * pair of actions, such as "none,error".  The first action applies to WRITE (or UP)
+   * and the second action applies to READ (or DOWN).
+   */
   @Schema(description = "Rule action on failure")
   @JsonProperty("onFailure")
   public String getOnFailure() {
