@@ -35,7 +35,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -225,7 +224,7 @@ public class CelExecutorTest {
         CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, "NONE", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
@@ -240,7 +239,7 @@ public class CelExecutorTest {
         CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, "DLQ", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     try {
