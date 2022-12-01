@@ -19,16 +19,15 @@ package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import io.swagger.annotations.ApiModelProperty;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.io.IOException;
-
-import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = "Config update request")
 public class ConfigUpdateRequest {
 
   private String compatibilityLevel;
@@ -37,7 +36,7 @@ public class ConfigUpdateRequest {
     return JacksonMapper.INSTANCE.readValue(json, ConfigUpdateRequest.class);
   }
 
-  @ApiModelProperty(value = "Compatability Level",
+  @Schema(description = "Compatibility Level",
       allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
           + "FULL_TRANSITIVE, NONE")
   @JsonProperty("compatibility")

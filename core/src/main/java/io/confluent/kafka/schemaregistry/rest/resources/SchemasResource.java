@@ -15,12 +15,20 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
-import java.util.ArrayList;
-import java.util.Iterator;
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.rest.annotations.PerformanceMetric;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,17 +39,8 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
-
-import io.confluent.kafka.schemaregistry.client.rest.Versions;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.rest.annotations.PerformanceMetric;
-
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -62,18 +61,31 @@ public class SchemasResource {
   }
 
   @GET
-  @ApiOperation("Get the schemas.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  @Operation(summary = "List schemas",
+      description = "Get the schemas matching the specified parameters.",
+      responses = {
+        @ApiResponse(responseCode = "200",
+          description = "The schemas matching the specified parameters", content = @Content(
+              array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = String.class)))),
+        @ApiResponse(responseCode = "500",
+            description = "Error code 50001 -- Error in the backend data store\n")
+      })
   @PerformanceMetric("schemas.get-schemas")
   public List<Schema> getSchemas(
+      @Parameter(description = "Filters results by the respective subject prefix")
       @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
+      @Parameter(description = "Whether to return soft deleted schemas")
       @DefaultValue("false") @QueryParam("deleted") boolean lookupDeletedSchema,
+      @Parameter(description =
+          "Whether to return latest schema versions only for each matching subject")
       @DefaultValue("false") @QueryParam("latestOnly") boolean latestOnly,
+      @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
-    Iterator<Schema> schemas = null;
-    List<Schema> filteredSchemas = new ArrayList<Schema>();
+    Iterator<Schema> schemas;
+    List<Schema> filteredSchemas = new ArrayList<>();
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
     try {
       schemas = schemaRegistry.getVersionsWithSubjectPrefix(
@@ -98,18 +110,27 @@ public class SchemasResource {
 
   @GET
   @Path("/ids/{id}")
-  @ApiOperation("Get the schema string identified by the input ID.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 404, message = "Error code 40403 -- Schema not found\n"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  @Operation(summary = "Get schema string by ID",
+      description = "Retrieves the schema string identified by the input ID.",
+      responses = {
+        @ApiResponse(responseCode = "200", description = "The schema string",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                implementation = SchemaString.class))),
+        @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not found\n"),
+        @ApiResponse(responseCode = "500",
+            description = "Error code 50001 -- Error in the backend data store\n")
+      })
   @PerformanceMetric("schemas.ids.get-schema")
   public SchemaString getSchema(
-      @ApiParam(value = "Globally unique identifier of the schema", required = true)
+      @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
+      @Parameter(description = "Name of the subject")
       @QueryParam("subject") String subject,
+      @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Whether to fetch the maximum schema identifier that exists")
       @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
-    SchemaString schema = null;
+    SchemaString schema;
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
                           + "registry";
     try {
@@ -128,14 +149,23 @@ public class SchemasResource {
 
   @GET
   @Path("/ids/{id}/subjects")
-  @ApiOperation("Get all the subjects associated with the input ID.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 404, message = "Error code 40403 -- Schema not found\n"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  @Operation(summary = "List subjects associated to schema ID",
+      description = "Retrieves all the subjects associated with a particular schema ID.",
+      responses = {
+        @ApiResponse(responseCode = "200",
+            description = "The subjects matching the specified parameters", content = @Content(
+                array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                    implementation = String.class)))),
+        @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not found\n"),
+        @ApiResponse(responseCode = "500",
+            description = "Error code 50001 -- Error in the backend data store\n")
+      })
   public Set<String> getSubjects(
-      @ApiParam(value = "Globally unique identifier of the schema", required = true)
+      @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
+      @Parameter(description = "Filters results by the respective subject")
       @QueryParam("subject") String subject,
+      @Parameter(description = "Whether to include subjects where the schema was deleted")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
     Set<String> subjects;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
@@ -159,14 +189,25 @@ public class SchemasResource {
 
   @GET
   @Path("/ids/{id}/versions")
-  @ApiOperation("Get all the subject-version pairs associated with the input ID.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 404, message = "Error code 40403 -- Schema not found\n"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  @Operation(summary = "List subject-versions associated to schema ID",
+      description = "Get all the subject-version pairs associated with the input ID.",
+      responses = {
+        @ApiResponse(responseCode = "200",
+            description = "The subject versions matching the specified parameters",
+            content = @Content(array = @ArraySchema(
+                schema = @io.swagger.v3.oas.annotations.media.Schema(
+                    implementation = SubjectVersion.class)))),
+        @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not "
+            + "found\n"),
+        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
+            + "backend data store\n")
+      })
   public List<SubjectVersion> getVersions(
-      @ApiParam(value = "Globally unique identifier of the schema", required = true)
+      @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
+      @Parameter(description = "Filters results by the respective subject")
       @QueryParam("subject") String subject,
+      @Parameter(description = "Whether to include subject versions where the schema was deleted")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
     List<SubjectVersion> versions;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
@@ -190,9 +231,16 @@ public class SchemasResource {
 
   @GET
   @Path("/types")
-  @ApiOperation("Get the schema types supported by this registry.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  @Operation(summary = "List supported schema types",
+      description = "Retrieve the schema types supported by this registry.",
+      responses = {
+        @ApiResponse(responseCode = "200", description = "The supported schema types",
+            content = @Content(array = @ArraySchema(
+                schema = @io.swagger.v3.oas.annotations.media.Schema(
+                    implementation = String.class)))),
+        @ApiResponse(responseCode = "500",
+            description = "Error code 50001 -- Error in the backend data store\n")
+      })
   public Set<String> getSchemaTypes() {
     return schemaRegistry.schemaTypes();
   }
