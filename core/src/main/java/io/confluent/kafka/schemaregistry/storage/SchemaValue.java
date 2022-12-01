@@ -15,9 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import static io.confluent.kafka.schemaregistry.storage.Metadata.EMPTY_METADATA;
-import static io.confluent.kafka.schemaregistry.storage.RuleSet.EMPTY_RULESET;
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -46,8 +43,8 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   private String schema;
   private String schemaType = AvroSchema.TYPE;
   private List<SchemaReference> references = Collections.emptyList();
-  private Metadata metadata = EMPTY_METADATA;
-  private RuleSet ruleSet = EMPTY_RULESET;
+  private Metadata metadata = null;
+  private RuleSet ruleSet = null;
   @NotEmpty
   private boolean deleted;
 
@@ -96,8 +93,8 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     this.id = id;
     this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
     this.references = references != null ? references : Collections.emptyList();
-    this.metadata = metadata != null ? metadata : EMPTY_METADATA;
-    this.ruleSet = ruleSet != null ? ruleSet : EMPTY_RULESET;
+    this.metadata = metadata;
+    this.ruleSet = ruleSet;
     this.schema = schema;
     this.deleted = deleted;
   }
@@ -114,18 +111,10 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
         .collect(Collectors.toList());
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata =
         schemaEntity.getMetadata();
-    this.metadata =
-        metadata == null || metadata
-            == io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EMPTY_METADATA
-            ? EMPTY_METADATA
-            : new Metadata(metadata);
+    this.metadata = metadata != null ? new Metadata(metadata) : null;
     io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet =
         schemaEntity.getRuleSet();
-    this.ruleSet =
-        ruleSet == null || ruleSet
-            == io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET
-            ? EMPTY_RULESET
-            : new RuleSet(ruleSet);
+    this.ruleSet = ruleSet != null ? new RuleSet(ruleSet) : null;
     this.schema = schemaEntity.getSchema();
     this.deleted = false;
   }

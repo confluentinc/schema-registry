@@ -34,9 +34,6 @@ import java.util.stream.Collectors;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RuleSet {
 
-  public static final RuleSet EMPTY_RULESET =
-      new RuleSet(Collections.emptyList(), Collections.emptyList());
-
   private final List<Rule> migrationRules;
   private final List<Rule> domainRules;
 

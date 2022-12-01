@@ -16,9 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
-import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EMPTY_METADATA;
-import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JavaType;
@@ -150,8 +147,8 @@ public class JsonSchema implements ParsedSchema {
     this.version = version;
     this.references = Collections.unmodifiableList(references);
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
-    this.metadata = EMPTY_METADATA;
-    this.ruleSet = EMPTY_RULESET;
+    this.metadata = null;
+    this.ruleSet = null;
   }
 
   public JsonSchema(
@@ -160,7 +157,7 @@ public class JsonSchema implements ParsedSchema {
       Map<String, String> resolvedReferences,
       Integer version
   ) {
-    this(schemaString, references, resolvedReferences, EMPTY_METADATA, EMPTY_RULESET, version);
+    this(schemaString, references, resolvedReferences, null, null, version);
   }
 
   public JsonSchema(
@@ -194,8 +191,8 @@ public class JsonSchema implements ParsedSchema {
       this.version = version;
       this.references = Collections.emptyList();
       this.resolvedReferences = Collections.emptyMap();
-      this.metadata = EMPTY_METADATA;
-      this.ruleSet = EMPTY_RULESET;
+      this.metadata = null;
+      this.ruleSet = null;
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON " + schemaObj, e);
     }
