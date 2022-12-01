@@ -236,7 +236,7 @@ public abstract class AbstractKafkaSchemaSerDe {
         previous = current;
         continue;
       }
-      if (current.ruleSet().hasRules(migrationMode)) {
+      if (current.ruleSet() != null && current.ruleSet().hasRules(migrationMode)) {
         Migration m;
         if (migrationMode == RuleMode.UPGRADE) {
           m = new Migration(migrationMode, previous, current);
@@ -464,13 +464,19 @@ public abstract class AbstractKafkaSchemaSerDe {
     if (message == null || target == null) {
       return message;
     }
-    List<Rule> rules;
+    List<Rule> rules = Collections.emptyList();
     if (ruleMode == RuleMode.UPGRADE) {
-      rules = target.ruleSet().getMigrationRules();
+      if (target.ruleSet() != null) {
+        rules = target.ruleSet().getMigrationRules();
+      }
     } else if (ruleMode == RuleMode.DOWNGRADE) {
-      rules = source.ruleSet().getMigrationRules();
+      if (source.ruleSet() != null) {
+        rules = source.ruleSet().getMigrationRules();
+      }
     } else {
-      rules = target.ruleSet().getDomainRules();
+      if (target.ruleSet() != null) {
+        rules = target.ruleSet().getDomainRules();
+      }
     }
     for (Rule rule : rules) {
       if (rule.getMode() == RuleMode.WRITEREAD) {

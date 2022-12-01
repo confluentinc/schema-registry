@@ -131,8 +131,6 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 
 import static com.google.common.base.CaseFormat.LOWER_UNDERSCORE;
 import static com.google.common.base.CaseFormat.UPPER_CAMEL;
-import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EMPTY_METADATA;
-import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET;
 
 public class ProtobufSchema implements ParsedSchema {
 
@@ -363,8 +361,7 @@ public class ProtobufSchema implements ParsedSchema {
       Integer version,
       String name
   ) {
-    this(schemaString, references, resolvedReferences,
-        EMPTY_METADATA, EMPTY_RULESET, version, name);
+    this(schemaString, references, resolvedReferences, null, null, version, name);
   }
 
   public ProtobufSchema(
@@ -406,8 +403,8 @@ public class ProtobufSchema implements ParsedSchema {
     this.name = null;
     this.references = Collections.unmodifiableList(references);
     this.dependencies = Collections.unmodifiableMap(dependencies);
-    this.metadata = EMPTY_METADATA;
-    this.ruleSet = EMPTY_RULESET;
+    this.metadata = null;
+    this.ruleSet = null;
   }
 
   public ProtobufSchema(Descriptor descriptor) {
@@ -421,8 +418,8 @@ public class ProtobufSchema implements ParsedSchema {
     this.name = descriptor.getFullName();
     this.references = Collections.unmodifiableList(references);
     this.dependencies = Collections.unmodifiableMap(dependencies);
-    this.metadata = EMPTY_METADATA;
-    this.ruleSet = EMPTY_RULESET;
+    this.metadata = null;
+    this.ruleSet = null;
     this.descriptor = descriptor;
   }
 
@@ -437,8 +434,8 @@ public class ProtobufSchema implements ParsedSchema {
     this.name = enumDescriptor.getFullName();
     this.references = Collections.unmodifiableList(references);
     this.dependencies = Collections.unmodifiableMap(dependencies);
-    this.metadata = EMPTY_METADATA;
-    this.ruleSet = EMPTY_RULESET;
+    this.metadata = null;
+    this.ruleSet = null;
     this.descriptor = null;
   }
 

@@ -185,7 +185,7 @@ public class JsonataExecutorTest {
     AvroSchema avroSchema = new AvroSchema(schema);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
-    avroSchema = avroSchema.copy(metadata, RuleSet.EMPTY_RULESET);
+    avroSchema = avroSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     schema = createNewGenericWidgetSchema();
@@ -226,7 +226,7 @@ public class JsonataExecutorTest {
     AvroSchema avroSchema = new AvroSchema(schema);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
-    avroSchema = avroSchema.copy(metadata, RuleSet.EMPTY_RULESET);
+    avroSchema = avroSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     schema = ReflectData.get().getSchema(NewWidget.class);
@@ -267,7 +267,7 @@ public class JsonataExecutorTest {
     AvroSchema avroSchema = new AvroSchema(schema);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
-    avroSchema = avroSchema.copy(metadata, RuleSet.EMPTY_RULESET);
+    avroSchema = avroSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     schema = NewSpecificWidget.getClassSchema();
@@ -314,7 +314,7 @@ public class JsonataExecutorTest {
     AvroSchema avroSchema = new AvroSchema(schema);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
-    avroSchema = avroSchema.copy(metadata, RuleSet.EMPTY_RULESET);
+    avroSchema = avroSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     schema = ReflectData.get().getSchema(NewWidget.class);
@@ -404,7 +404,7 @@ public class JsonataExecutorTest {
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
-    protobufSchema = protobufSchema.copy(metadata, RuleSet.EMPTY_RULESET);
+    protobufSchema = protobufSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", protobufSchema);
 
     protobufSchema = new ProtobufSchema(NewWidgetProto.NewWidget.getDescriptor());
@@ -444,7 +444,7 @@ public class JsonataExecutorTest {
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
-    protobufSchema = protobufSchema.copy(metadata, RuleSet.EMPTY_RULESET);
+    protobufSchema = protobufSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", protobufSchema);
 
     protobufSchema = new ProtobufSchema(NewWidgetProto.NewWidget.getDescriptor());
@@ -484,7 +484,7 @@ public class JsonataExecutorTest {
     JsonSchema jsonSchema = JsonSchemaUtils.getSchema(widget);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
-    jsonSchema = jsonSchema.copy(metadata, RuleSet.EMPTY_RULESET);
+    jsonSchema = jsonSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
     NewWidget newWidget = new NewWidget("alice");
@@ -524,7 +524,7 @@ public class JsonataExecutorTest {
     JsonSchema jsonSchema = JsonSchemaUtils.getSchema(widget);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
-    jsonSchema = jsonSchema.copy(metadata, RuleSet.EMPTY_RULESET);
+    jsonSchema = jsonSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
     NewWidget newWidget = new NewWidget("alice");

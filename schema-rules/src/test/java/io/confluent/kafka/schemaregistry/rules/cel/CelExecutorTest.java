@@ -195,7 +195,7 @@ public class CelExecutorTest {
         CelExecutor.TYPE, null, "message.name == \"testUser\" && message.kind == \"ONE\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
@@ -210,7 +210,7 @@ public class CelExecutorTest {
         CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
@@ -265,7 +265,7 @@ public class CelExecutorTest {
     Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
         CelExecutor.TYPE, null, "message.name == \"alice\"", null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
 
@@ -294,7 +294,7 @@ public class CelExecutorTest {
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     bytes = reflectionAvroSerializer.serialize(topic, widget);
@@ -334,7 +334,7 @@ public class CelExecutorTest {
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    protobufSchema = protobufSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    protobufSchema = protobufSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", protobufSchema);
 
     bytes = protobufSerializer.serialize(topic, widget);
@@ -410,7 +410,7 @@ public class CelExecutorTest {
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    jsonSchema = jsonSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    jsonSchema = jsonSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
     bytes = jsonSchemaSerializer.serialize(topic, widget);
@@ -474,7 +474,7 @@ public class CelExecutorTest {
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    jsonSchema = jsonSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    jsonSchema = jsonSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
     bytes = jsonSchemaSerializer2.serialize(topic, widget);
