@@ -45,9 +45,16 @@ public class ConfigValue extends SubjectValue {
     this.ruleSetOverride = ruleSetOverride;
   }
 
-  public ConfigValue() {
-    super(null);
-    compatibilityLevel = null;
+  public ConfigValue(String subject, Config configEntity) {
+    super(subject);
+    this.compatibilityLevel = CompatibilityLevel.forName(configEntity.getCompatibilityLevel());
+    this.compatibilityGroup = configEntity.getCompatibilityGroup();
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata =
+        configEntity.getMetadataOverride();
+    this.metadataOverride = metadata != null ? new Metadata(metadata) : null;
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet =
+        configEntity.getRuleSetOverride();
+    this.ruleSetOverride = ruleSet != null ? new RuleSet(ruleSet) : null;
   }
 
   @JsonProperty("compatibilityLevel")

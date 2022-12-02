@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -36,6 +37,16 @@ public class ConfigUpdateRequest {
   private String compatibilityGroup;
   private Metadata metadataOverride;
   private RuleSet ruleSetOverride;
+
+  public ConfigUpdateRequest() {
+  }
+
+  public ConfigUpdateRequest(Config config) {
+    this.compatibilityLevel = config.getCompatibilityLevel();
+    this.compatibilityGroup = config.getCompatibilityGroup();
+    this.metadataOverride = config.getMetadataOverride();
+    this.ruleSetOverride = config.getRuleSetOverride();
+  }
 
   public static ConfigUpdateRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, ConfigUpdateRequest.class);

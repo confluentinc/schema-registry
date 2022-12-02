@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 
@@ -49,7 +50,13 @@ public class Config {
   }
 
   public Config() {
-    compatibilityLevel = null;
+  }
+
+  public Config(ConfigUpdateRequest request) {
+    this.compatibilityLevel = request.getCompatibilityLevel();
+    this.compatibilityGroup = request.getCompatibilityGroup();
+    this.metadataOverride = request.getMetadataOverride();
+    this.ruleSetOverride = request.getRuleSetOverride();
   }
 
   @Schema(description = "Compatibility Level",
