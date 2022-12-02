@@ -18,6 +18,7 @@ package io.confluent.kafka.formatter;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import kafka.common.MessageReader;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -35,11 +36,11 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Properties;
-import java.util.Map;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -78,7 +79,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   public SchemaMessageReader(
       SchemaRegistryClient schemaRegistryClient, ParsedSchema keySchema, ParsedSchema valueSchema,
       String topic, boolean parseKey, BufferedReader reader,
-      boolean normalizeSchema, boolean autoRegister, boolean useLatest, boolean showVerboseErrors
+      boolean normalizeSchema, boolean autoRegister, boolean useLatest
   ) {
     this.keySchema = keySchema;
     this.valueSchema = valueSchema;
@@ -88,7 +89,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     this.parseKey = parseKey;
     this.reader = reader;
     this.serializer = createSerializer(
-        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, null, showVerboseErrors);
+        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, null);
   }
 
   protected abstract SchemaMessageSerializer<T> createSerializer(
@@ -96,9 +97,8 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest,
-      Serializer keySerializer,
-      boolean showVerboseErrors
-      );
+      Serializer keySerializer
+  );
 
   @Override
   public void init(java.io.InputStream inputStream, Properties props) {
@@ -145,18 +145,10 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     } else {
       useLatest = false;
     }
-    boolean showVerboseErrors;
-    if (props.containsKey("auto.register.schemas.verbose")) {
-      showVerboseErrors = Boolean.parseBoolean(props.getProperty("auto.register.schemas.verbose")
-        .trim());
-    } else {
-      showVerboseErrors = true;
-    }
 
     if (this.serializer == null) {
       this.serializer = createSerializer(
-          schemaRegistry, normalizeSchema, autoRegisterSchema, useLatest, keySerializer,
-        showVerboseErrors);
+          schemaRegistry, normalizeSchema, autoRegisterSchema, useLatest, keySerializer);
     }
 
     // This class is only used in a scenario where a single schema is used. It does not support
@@ -200,7 +192,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   }
 
   /**
-   /* @see AbstractKafkaSchemaSerDe#getSubjectName(String, boolean, Object, ParsedSchema)
+   * @see AbstractKafkaSchemaSerDe#getSubjectName(String, boolean, Object, ParsedSchema)
    */
   private String getSubjectName(Object subjectNameStrategy, String topic, boolean isKey,
                                 ParsedSchema schema) {

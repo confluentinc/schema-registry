@@ -49,7 +49,6 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
-  protected boolean showVerboseErrors = false;
   private final Cache<Schema, DatumWriter<Object>> datumWriterCache;
 
   public AbstractKafkaAvroSerializer() {
@@ -70,7 +69,6 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     useSchemaId = config.useSchemaId();
     idCompatStrict = config.getIdCompatibilityStrict();
     latestCompatStrict = config.getLatestCompatibilityStrict();
-    showVerboseErrors = config.autoRegisterSchemaVerbose();
     avroReflectionAllowNull = config
         .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
@@ -112,7 +110,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema";
-        id = schemaRegistry.register(subject, schema, normalizeSchema, showVerboseErrors);
+        id = schemaRegistry.register(subject, schema, normalizeSchema);
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (AvroSchema)

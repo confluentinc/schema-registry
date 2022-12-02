@@ -147,8 +147,7 @@ public class CompatibilityResource {
           subject, schema,
           schemaForSpecifiedVersion != null
               ? Collections.singletonList(schemaForSpecifiedVersion)
-              : Collections.emptyList(),
-          verbose
+              : Collections.emptyList()
       );
     } catch (InvalidSchemaException e) {
       if (verbose) {

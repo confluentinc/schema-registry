@@ -148,21 +148,19 @@ public interface ParsedSchema {
    * @return an empty list if this schema is backward compatible with the previous schema,
    *         otherwise the list of error messages
    */
-  default List<String> isBackwardCompatible(ParsedSchema previousSchema) {
-    return isBackwardCompatible(previousSchema, false);
-  }
+  List<String> isBackwardCompatible(ParsedSchema previousSchema);
 
   /**
-   * Checks the backward compatibility between this schema and the specified schema.
+   * Checks the forward compatibility between this schema and the specified schema.
    * <p/>
    * Custom providers may choose to modify this schema during this check,
    * to ensure that it is compatible with the specified schema.
    *
    * @param previousSchema previous schema
-   * @return an empty list if this schema is backward compatible with the previous schema,
+   * @return an empty list if this schema is forward compatible with the previous schema,
    *         otherwise the list of error messages
    */
-  List<String> isBackwardCompatible(ParsedSchema previousSchema, boolean verbose);
+  List<String> isForwardCompatible(ParsedSchema previousSchema);
 
   /**
    * Checks the compatibility between this schema and the specified schemas.
@@ -177,23 +175,6 @@ public interface ParsedSchema {
    */
   default List<String> isCompatible(
       CompatibilityLevel level, List<? extends ParsedSchema> previousSchemas) {
-    return isCompatible(level, previousSchemas, false);
-  }
-
-  /**
-   * Checks the compatibility between this schema and the specified schemas.
-   * <p/>
-   * Custom providers may choose to modify this schema during this check,
-   * to ensure that it is compatible with the specified schemas.
-   *
-   * @param level the compatibility level
-   * @param previousSchemas full schema history in chronological order
-   * @return an empty list if this schema is backward compatible with the previous schema, otherwise
-   *         the list of error messages
-   */
-  default List<String> isCompatible(
-      CompatibilityLevel level, List<? extends ParsedSchema> previousSchemas,
-      boolean verbose) {
     if (level != CompatibilityLevel.NONE) {
       for (ParsedSchema previousSchema : previousSchemas) {
         if (!schemaType().equals(previousSchema.schemaType())) {
@@ -203,8 +184,7 @@ public interface ParsedSchema {
     }
     return CompatibilityChecker.checker(level).isCompatible(
       this,
-      previousSchemas,
-      verbose);
+      previousSchemas);
   }
 
   /**

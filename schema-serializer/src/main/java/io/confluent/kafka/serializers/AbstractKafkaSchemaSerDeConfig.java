@@ -72,12 +72,6 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String AUTO_REGISTER_SCHEMAS_DOC =
       "Specify if the Serializer should attempt to register the Schema with Schema Registry";
 
-  public static final String AUTO_REGISTER_SCHEMAS_VERBOSE = "auto.register.schemas.verbose";
-  public static final boolean AUTO_REGISTER_SCHEMAS_VERBOSE_DEFAULT = true;
-  public static final String AUTO_REGISTER_SCHEMAS_VERBOSE_DOC =
-      "Specify if the Serializer should attempt to register the Schema with Schema Registry and "
-      + "include verbose error messages for schema compatibility checks.";
-
   public static final String USE_SCHEMA_ID = "use.schema.id";
   public static final int USE_SCHEMA_ID_DEFAULT = -1;
   public static final String USE_SCHEMA_ID_DOC = "Schema ID to use for serialization";
@@ -249,8 +243,6 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, NORMALIZE_SCHEMAS_DOC)
         .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
                 Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
-        .define(AUTO_REGISTER_SCHEMAS_VERBOSE, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_VERBOSE_DEFAULT,
-                Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_VERBOSE_DOC)
         .define(USE_SCHEMA_ID, Type.INT, USE_SCHEMA_ID_DEFAULT,
                 Importance.LOW, USE_SCHEMA_ID_DOC)
         .define(ID_COMPATIBILITY_STRICT, Type.BOOLEAN, ID_COMPATIBILITY_STRICT_DEFAULT,
@@ -307,7 +299,6 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, PROXY_HOST_DOC)
         .define(PROXY_PORT, Type.INT, PROXY_PORT_DEFAULT,
                 Importance.LOW, PROXY_PORT_DOC);
-
     SchemaRegistryClientConfig.withClientSslSupport(
         configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
     return configDef;
@@ -335,10 +326,6 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean autoRegisterSchema() {
     return this.getBoolean(AUTO_REGISTER_SCHEMAS);
-  }
-
-  public boolean autoRegisterSchemaVerbose() {
-    return this.getBoolean(AUTO_REGISTER_SCHEMAS_VERBOSE);
   }
 
   public int useSchemaId() {

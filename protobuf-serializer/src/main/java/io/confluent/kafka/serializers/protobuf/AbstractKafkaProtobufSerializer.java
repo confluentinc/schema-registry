@@ -53,7 +53,6 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   protected boolean latestCompatStrict;
   protected String schemaFormat;
   protected boolean skipKnownTypes;
-  protected boolean showVerboseErrors;
   protected ReferenceSubjectNameStrategy referenceSubjectNameStrategy;
 
   protected void configure(KafkaProtobufSerializerConfig config) {
@@ -66,7 +65,6 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
     this.schemaFormat = config.getSchemaFormat();
     this.skipKnownTypes = config.skipKnownTypes();
-    this.showVerboseErrors = config.autoRegisterSchemaVerbose();
     this.referenceSubjectNameStrategy = config.referenceSubjectNameStrategyInstance();
   }
 
@@ -115,7 +113,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           String formatted = schema.formattedString(schemaFormat);
           schema = schema.copyWithSchema(formatted);
         }
-        id = schemaRegistry.register(subject, schema, normalizeSchema, showVerboseErrors);
+        id = schemaRegistry.register(subject, schema, normalizeSchema);
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         if (schemaFormat != null) {

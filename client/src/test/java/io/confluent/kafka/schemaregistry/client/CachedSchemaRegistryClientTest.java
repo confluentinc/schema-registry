@@ -162,7 +162,7 @@ public class CachedSchemaRegistryClientTest {
   public void testRegisterSchemaCache() throws Exception {
     // Expect one call to register schema
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        eq(SUBJECT_0), anyBoolean()))
         .andReturn(ID_25)
         .once();
 
@@ -178,7 +178,7 @@ public class CachedSchemaRegistryClientTest {
   public void testRegisterSchemaCacheWithVersionAndId() throws Exception {
     // Expect one call to register schema
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        eq(SUBJECT_0), anyBoolean()))
         .andReturn(ID_25)
         .once();
 
@@ -193,11 +193,11 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testRegisterEquivalentSchemaDifferentid() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        eq(SUBJECT_0), anyBoolean()))
         .andReturn(ID_25)
         .once();
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        eq(SUBJECT_0), anyBoolean()))
         .andReturn(ID_50)
         .once();
 
@@ -212,7 +212,7 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testRegisterOverCapacity() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        anyString(), anyBoolean(), anyBoolean()))
+        anyString(), anyBoolean()))
         .andReturn(ID_25)
         .andReturn(26)
         .andReturn(27)
@@ -235,7 +235,7 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testIdCache() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        eq(SUBJECT_0), anyBoolean()))
         .andReturn(ID_25);
 
     // Expect only one call to getId (the rest should hit the cache)
@@ -262,7 +262,7 @@ public class CachedSchemaRegistryClientTest {
     int version = 7;
 
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        eq(SUBJECT_0), anyBoolean()))
         .andReturn(ID_25);
 
     // Expect only one call to lookup the subject (the rest should hit the cache)
@@ -291,10 +291,10 @@ public class CachedSchemaRegistryClientTest {
     String subjectTwo = "subjectTwo";
 
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        eq(subjectOne), anyBoolean(), anyBoolean()))
+        eq(subjectOne), anyBoolean()))
         .andReturn(ID_25);
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        eq(subjectTwo), anyBoolean(), anyBoolean()))
+        eq(subjectTwo), anyBoolean()))
         .andReturn(ID_25);
 
     expect(restService.getId(ID_25, subjectOne))
@@ -332,7 +332,7 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testDeleteSchemaCache() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        eq(SUBJECT_0), anyBoolean()))
         .andReturn(ID_25)
         .once();
 
@@ -358,7 +358,7 @@ public class CachedSchemaRegistryClientTest {
     int version = 7;
 
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        eq(SUBJECT_0), anyBoolean()))
         .andReturn(ID_25);
 
     // Expect only one call to lookup the subject (the rest should hit the cache)
@@ -449,7 +449,7 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testThreadSafe() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        eq(SUBJECT_0), anyBoolean()))
         .andReturn(ID_25)
         .anyTimes();
 
@@ -501,7 +501,7 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testGetSchemas() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
-        anyString(), anyBoolean(), anyBoolean()))
+        anyString(), anyBoolean()))
             .andReturn(ID_25)
             .andReturn(26)
             .andReturn(27)

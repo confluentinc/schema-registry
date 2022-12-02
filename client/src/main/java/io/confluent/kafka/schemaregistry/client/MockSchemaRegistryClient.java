@@ -218,12 +218,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public int register(String subject, ParsedSchema schema, boolean normalize, boolean verbose)
-      throws IOException, RestClientException {
-    return register(subject, schema, 0, -1, normalize);
-  }
-
-  @Override
   public int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
     return register(subject, schema, version, id, false);

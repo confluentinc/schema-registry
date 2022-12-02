@@ -36,14 +36,10 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Set<String> schemaTypes();
 
   default int register(String subject, Schema schema) throws SchemaRegistryException {
-    return register(subject, schema, false, false);
+    return register(subject, schema, false);
   }
 
-  int register(String subject, Schema schema, boolean normalize)
-      throws SchemaRegistryException;
-
-  int register(String subject, Schema schema, boolean normalize, boolean verbose)
-      throws SchemaRegistryException;
+  int register(String subject, Schema schema, boolean normalize) throws SchemaRegistryException;
 
   default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {
     try {
@@ -95,16 +91,9 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
                             Schema newSchema,
                             Schema targetSchema) throws SchemaRegistryException;
 
-  default List<String> isCompatible(String subject,
-                            Schema newSchema,
-                            List<Schema> previousSchemas) throws SchemaRegistryException {
-    return isCompatible(subject, newSchema,previousSchemas,false);
-  }
-
   List<String> isCompatible(String subject,
                             Schema newSchema,
-                            List<Schema> previousSchemas,
-                            boolean verbose) throws SchemaRegistryException;
+                            List<Schema> previousSchemas) throws SchemaRegistryException;
 
   void close();
 

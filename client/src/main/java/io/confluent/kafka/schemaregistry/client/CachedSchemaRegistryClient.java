@@ -284,20 +284,19 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return providers;
   }
 
-  private int registerAndGetId(String subject, ParsedSchema schema, boolean normalize,
-                               boolean verbose)
+  private int registerAndGetId(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
-    return restService.registerSchema(request, subject, normalize, verbose);
+    return restService.registerSchema(request, subject, normalize);
   }
 
   private int registerAndGetId(
-      String subject, ParsedSchema schema, int version, int id, boolean normalize, boolean verbose)
+      String subject, ParsedSchema schema, int version, int id, boolean normalize)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
     request.setVersion(version);
     request.setId(id);
-    return restService.registerSchema(request, subject, normalize, verbose);
+    return restService.registerSchema(request, subject, normalize);
   }
 
   protected ParsedSchema getSchemaByIdFromRegistry(int id, String subject)
@@ -368,23 +367,16 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int register(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    return register(subject, schema, 0, -1, normalize, false);
-  }
-
-  @Override
-  public int register(String subject, ParsedSchema schema, boolean normalize, boolean verbose)
-      throws IOException, RestClientException {
-    return register(subject, schema, 0, -1, normalize, verbose);
+    return register(subject, schema, 0, -1, normalize);
   }
 
   @Override
   public int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
-    return register(subject, schema, version, id, false, false);
+    return register(subject, schema, version, id, false);
   }
 
-  private int register(String subject, ParsedSchema schema, int version, int id, boolean normalize,
-                       boolean verbose)
+  private int register(String subject, ParsedSchema schema, int version, int id, boolean normalize)
       throws IOException, RestClientException {
     final Map<ParsedSchema, Integer> schemaIdMap = schemaCache.computeIfAbsent(
         subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
@@ -401,8 +393,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       }
 
       final int retrievedId = id >= 0
-          ? registerAndGetId(subject, schema, version, id, normalize, verbose)
-          : registerAndGetId(subject, schema, normalize, verbose);
+          ? registerAndGetId(subject, schema, version, id, normalize)
+          : registerAndGetId(subject, schema, normalize);
       schemaIdMap.put(schema, retrievedId);
       String context = toQualifiedContext(subject);
       final Map<Integer, ParsedSchema> idSchemaMap = idCache.computeIfAbsent(

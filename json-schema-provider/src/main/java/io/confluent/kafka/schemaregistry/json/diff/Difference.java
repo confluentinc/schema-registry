@@ -15,9 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
-import com.google.common.collect.ImmutableMap;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Arrays;
 
 public class Difference {
   public enum Type {
@@ -78,119 +79,83 @@ public class Difference {
 
   private final String jsonPath;
   private final Type type;
-  private final Map<Type, String> errorDescription = ImmutableMap.<Type, String>builder()
-      .put(Type.SCHEMA_ADDED, "A new reader schema (path: '%s') was added")
-      .put(Type.TYPE_NARROWED, "The list of types at path: '%s' in the reader schema was narrowed")
-      .put(Type.TYPE_CHANGED, "The type of a field at path '%s' in the reader schema has changed")
-      .put(Type.MAX_LENGTH_ADDED,
-        "The 'maxLength' keyword (path: '%s') was added to the reader schema")
-      .put(Type.MAX_LENGTH_DECREASED,
-        "The value of 'maxLength' at path: '%s' was decreased in the reader schema")
-      .put(Type.MIN_LENGTH_ADDED,
-        "The 'minLength' keyword (path: '%s') was added to the reader schema")
-      .put(Type.MIN_LENGTH_INCREASED,
-        "The value of 'minLength' at path: '%s' was increased in the reader schema")
-      .put(Type.PATTERN_ADDED,
-        "The 'pattern' keyword (path: '%s') was added to the reader schema")
-      .put(Type.PATTERN_CHANGED,
-        "The value of 'pattern' at path: '%s' was changed in the reader schema")
-      .put(Type.MAXIMUM_ADDED,
-        "The 'maximum' keyword (path: '%s') was added to the reader schema")
-      .put(Type.MAXIMUM_DECREASED,
-        "The value of 'maximum' at path: '%s' was decreased in the reader schema")
-      .put(Type.MINIMUM_ADDED,
-        "The 'minimum' keyword (path: '%s') was added to the reader schema")
-      .put(Type.MINIMUM_INCREASED,
-        "The value of 'minimum' at path: '%s' was increased in the reader schema")
-      .put(Type.EXCLUSIVE_MAXIMUM_ADDED,
-        "The 'exclusiveMaximum' keyword (path: '%s') was added to the reader schema")
-      .put(Type.EXCLUSIVE_MAXIMUM_DECREASED,
-        "The value of 'exclusiveMaximum' at path: '%s' was decreased in the reader schema")
-      .put(Type.EXCLUSIVE_MINIMUM_ADDED,
-        "The 'exclusiveMinimum' keyword (path: '%s') was added to the reader schema")
-      .put(Type.EXCLUSIVE_MINIMUM_INCREASED,
-        "The value of 'exclusiveMinimum' at path: '%s' was increased in the reader schema")
-      .put(Type.MULTIPLE_OF_ADDED,
-        "The 'multipleOf' keyword was added at path: '%s' in the reader schema")
-      .put(Type.MULTIPLE_OF_EXPANDED,
-        "The value of 'multipleOf' at path: '%s' in the reader schema was expanded")
-      .put(Type.MULTIPLE_OF_CHANGED,
-        "The value of 'multipleOf' at path: '%s' in the reader schema was changed")
-      .put(Type.REQUIRED_ATTRIBUTE_ADDED,
-        "The 'required' keyword was added at path: '%s' in the reader schema")
-      .put(Type.MAX_PROPERTIES_ADDED,
-        "The 'maxProperties' keyword was added at path: '%s' in the reader schema")
-      .put(Type.MAX_PROPERTIES_DECREASED,
-        "The value of 'maxProperties' at path: '%s' was decreased in the "
-          + "reader schema")
-      .put(Type.MIN_PROPERTIES_ADDED,
-        "The 'minProperties' keyword was added at path: '%s' in the reader schema")
-      .put(Type.MIN_PROPERTIES_INCREASED,
-        "The value of 'maxProperties' at path: '%s' was increased in the reader schema")
-      .put(Type.ADDITIONAL_PROPERTIES_REMOVED,
-        "The 'additionalProperties' keyword at path '%s' was removed from the reader schema")
-      .put(Type.ADDITIONAL_PROPERTIES_NARROWED,
-        "The value of 'additionalProperties' at path '%s' was narrowed in the reader schema")
-      .put(Type.DEPENDENCY_ARRAY_ADDED,
-        "The 'dependentRequired' array was added at path '%s' in the reader schema")
-      .put(Type.DEPENDENCY_ARRAY_EXTENDED,
-        "The 'dependentRequired' array at path '%s' was extended in the reader schema")
-      .put(Type.DEPENDENCY_ARRAY_CHANGED,
-        "The 'dependentRequired' array at path '%s' was changed in the reader schema")
-      .put(Type.DEPENDENCY_SCHEMA_ADDED,
-        "The 'dependentSchemas' keyword was added at path '%s' in the reader schema")
-      .put(Type.PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL,
-        "A property (path '%s') was added  to the reader schema which has an open content model ")
-      .put(Type.REQUIRED_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL,
-        "A required property (path '%s') was added to the reader schema which has an "
-          + "unopen content model ")
-      .put(Type.PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL,
-        "A property (path '%s') was removed from the reader schema which has a closed content "
-          + "model")
-      .put(Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL,
-      "A property (path '%s') was removed at  from the reader schema and is not covered by "
-        + "its partially open content model")
-      .put(Type.PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL,
-        "A property (path '%s') that was added to the reader schema is not covered by its "
-          + "partially open content model")
-      .put(Type.MAX_ITEMS_ADDED,
-        "The 'maxItems' keyword (path '%s') was added to the reader schema")
-      .put(Type.MAX_ITEMS_DECREASED,
-        "The value of 'maxItems' at path '%s' was decreased in the reader schema")
-      .put(Type.MIN_ITEMS_ADDED,
-        "The 'minItems' keyword (path '%s') was added in the reader schema")
-      .put(Type.MIN_ITEMS_INCREASED,
-        "The value of 'minItems' of an array at path '%s' was increased in the reader schema")
-      .put(Type.UNIQUE_ITEMS_ADDED,
-        "The 'uniqueItems' keyword was added to an array at path '%s' in the reader schema")
-      .put(Type.ADDITIONAL_ITEMS_REMOVED,
-        "The 'additionalItems' keyword at path '%s' was removed from the reader schema")
-      .put(Type.ADDITIONAL_ITEMS_NARROWED,
-        "The list of 'additionalItems' at path '%s' was narrowed in the reader schema")
-      .put(Type.ITEM_ADDED_TO_OPEN_CONTENT_MODEL,
-        "An item at path '%s' was added to the reader schema which has an open content model")
-      .put(Type.ITEM_REMOVED_FROM_CLOSED_CONTENT_MODEL,
-        "An item at path '%s' was removed from the reader schema which"
-          + "has a closed content model")
-      .put(Type.ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL,
-        "An item was removed at path '%s' from the reader schema and is not covered by its "
-          + "partially closed content model")
-      .put(Type.ITEM_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL,
-        "An item was added at path '%s' to the reader schema and is not covered by its partially"
-          + "open content model")
-      .put(Type.ENUM_ARRAY_NARROWED,
-        "The enum array at path '%s' in the reader schema was narrowed")
-      .put(Type.ENUM_ARRAY_CHANGED, "The enum array at path '%s' in the reader schema was changed")
-      .put(Type.COMBINED_TYPE_CHANGED,
-        "A combined type at path '%s' in the reader schema was changed")
-      .put(Type.PRODUCT_TYPE_EXTENDED,
-        "A product type (allOf) at path '%s' in the reader schema was changed")
-      .put(Type.SUM_TYPE_NARROWED,
-        "A sum type (anyOf) at path '%s' in the reader schema was changed")
-      .put(Type.COMBINED_TYPE_SUBSCHEMAS_CHANGED,
-        "Subschemas of a combined type at path '%s' in the reader schema changed")
-      .put(Type.NOT_TYPE_EXTENDED, "A 'NOT' type at path '%s' in the reader schema was extended")
-      .build();
+  Set<Type> keywordAddedOrRemoved = new HashSet<>(Arrays.asList(Type.MAXIMUM_ADDED,
+      Type.MINIMUM_ADDED,
+      Type.EXCLUSIVE_MAXIMUM_ADDED, Type.EXCLUSIVE_MINIMUM_ADDED, Type.MULTIPLE_OF_ADDED,
+      Type.MAX_LENGTH_ADDED, Type.MIN_LENGTH_ADDED, Type.PATTERN_ADDED,
+      Type.REQUIRED_ATTRIBUTE_ADDED, Type.MAX_PROPERTIES_ADDED, Type.MIN_PROPERTIES_ADDED,
+      Type.DEPENDENCY_ARRAY_ADDED, Type.DEPENDENCY_SCHEMA_ADDED, Type.MAX_ITEMS_ADDED,
+      Type.MIN_ITEMS_ADDED, Type.UNIQUE_ITEMS_ADDED, Type.ADDITIONAL_ITEMS_REMOVED,
+      Type.ADDITIONAL_PROPERTIES_REMOVED));
+  Set<Type> valueIncreased = new HashSet<>(Arrays.asList(Type.MIN_LENGTH_INCREASED,
+      Type.MINIMUM_INCREASED, Type.EXCLUSIVE_MINIMUM_INCREASED, Type.MIN_PROPERTIES_INCREASED,
+      Type.MULTIPLE_OF_EXPANDED, Type.MIN_ITEMS_INCREASED));
+  Set<Type> valueDecreased = new HashSet<>(Arrays.asList(Type.MAX_LENGTH_DECREASED,
+      Type.MAXIMUM_DECREASED, Type.MAX_ITEMS_DECREASED,
+      Type.EXCLUSIVE_MAXIMUM_DECREASED, Type.MAX_PROPERTIES_DECREASED));
+  Set<Type> typeNarrowed = new HashSet<>(Arrays.asList(
+      Type.ADDITIONAL_ITEMS_NARROWED, Type.ENUM_ARRAY_NARROWED, Type.SUM_TYPE_NARROWED,
+      Type.ADDITIONAL_PROPERTIES_NARROWED));
+  Set<Type> valueChanged = new HashSet<>(Arrays.asList(Type.PATTERN_CHANGED,
+      Type.MULTIPLE_OF_CHANGED, Type.DEPENDENCY_ARRAY_CHANGED));
+  Set<Type> typeChanged = new HashSet<>(Arrays.asList(Type.TYPE_CHANGED, Type.TYPE_NARROWED,
+      Type.COMBINED_TYPE_CHANGED, Type.COMBINED_TYPE_SUBSCHEMAS_CHANGED, Type.ENUM_ARRAY_CHANGED));
+  Set<Type> typeExtended = new HashSet<>(Arrays.asList(Type.DEPENDENCY_ARRAY_EXTENDED,
+      Type.PRODUCT_TYPE_EXTENDED, Type.SUM_TYPE_EXTENDED, Type.NOT_TYPE_EXTENDED));
+
+  private String error() {
+    String message = "";
+    if (keywordAddedOrRemoved.contains(type)) {
+      message = "The keyword at path '" + jsonPath + "' in the %s schema is not present in "
+                  + "the %s schema.";
+    } else if (valueIncreased.contains(type)) {
+      message = "The value at path '" + jsonPath + "' in the %s schema is "
+                  + "more than its value in the %s schema.";
+    } else if (valueDecreased.contains(type)) {
+      message =  "The value at path '" + jsonPath + "' in the %s schema is "
+                   + "less than its value in the %s schema.";
+    } else if (valueChanged.contains(type)) {
+      message = "The value at path '" + jsonPath + "' is different between the "
+                  + "%s and %s schema.";
+    } else if (typeNarrowed.contains(type)) {
+      message = "An array or combined type at path '" + jsonPath + "' has fewer elements in the "
+                  + "%s schema than the %s schema.";
+    } else if (typeExtended.contains(type)) {
+      message = "An array or combined type at path '" + jsonPath + "' has more elements in the "
+                  + "%s schema than the %s schema.";
+    } else if (typeChanged.contains(type)) {
+      message = "A type at path '" + jsonPath + "' is different between the "
+                  + "%s schema and the %s schema.";
+    } else {
+      message = propertyItemError();
+    }
+    return message;
+  }
+
+  private String propertyItemError() {
+    if (type == Type.PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL
+          || type == Type.ITEM_ADDED_TO_OPEN_CONTENT_MODEL) {
+      return "The %s schema has an open content model and has a property or item at "
+               + "path '" + jsonPath + "' which is missing in the %s schema";
+    } else if (type == Type.REQUIRED_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL) {
+      return "The %s schema has an unopen content model and has a required property "
+               + "at path '" + jsonPath + "' which is missing in the %s schema";
+    } else if (type == Type.PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL
+          || type == Type.ITEM_REMOVED_FROM_CLOSED_CONTENT_MODEL) {
+      return "The %s has a closed content model and is missing a property or item present at "
+               + "path '" + jsonPath + "' in the %s schema";
+    } else if (type == Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL
+          || type == Type.ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL) {
+      return "A property or item is missing in the %s schema but present at path '"
+               + jsonPath + "' in the %s schema and is not covered by partially "
+               + "open content model";
+    } else if (type == Type.PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL
+          || type == Type.ITEM_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL) {
+      return "A property item at path '" + jsonPath + "' in the %s schema is missing in "
+               + "the %s schema and is not covered by partially open content model";
+    }
+    return "";
+  }
 
   public Difference(final Type type, final String jsonPath) {
     this.jsonPath = jsonPath;
@@ -226,6 +191,6 @@ public class Difference {
   public String toString() {
     return "{errorType:\"" + type + "\""
              + ", description:\""
-             + String.format(errorDescription.getOrDefault(type, "%s"), jsonPath) + "'}";
+             + error() + "'}";
   }
 }

@@ -336,11 +336,6 @@ public abstract class AbstractKafkaSchemaSerDe {
     return schemaRegistry.register(subject, schema, normalize);
   }
 
-  public int register(String subject, ParsedSchema schema, boolean normalize, boolean verbose)
-      throws IOException, RestClientException {
-    return schemaRegistry.register(subject, schema, normalize, verbose);
-  }
-
   @Deprecated
   public Schema getById(int id) throws IOException, RestClientException {
     return schemaRegistry.getById(id);

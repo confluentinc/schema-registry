@@ -46,6 +46,5 @@ public interface SchemaValidator {
    *     applicable
    * @return List of error message, otherwise empty list
    */
-  List<String> validate(ParsedSchema toValidate, Iterable<? extends ParsedSchema> existing,
-                        boolean verbose);
+  List<String> validate(ParsedSchema toValidate, Iterable<? extends ParsedSchema> existing);
 }

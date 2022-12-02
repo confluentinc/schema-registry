@@ -38,8 +38,17 @@ public final class SchemaValidatorBuilder {
    * schema(s) according to the JSON default schema resolution.
    */
   public SchemaValidatorBuilder canReadStrategy() {
-    this.strategy = (toValidate, existing, verbose) ->
-                      toValidate.isBackwardCompatible(existing, verbose);
+    this.strategy = (toValidate, existing) -> {
+      List<String> result = new ArrayList<>();
+      result.addAll(toValidate.isBackwardCompatible(existing));
+      if (result.size() > 0) {
+        if (existing.version() != null) {
+          result.add("{previousSchemaVersion: " + existing.version() + "}");
+        }
+        result.add("previousSchema: '" + existing + "'}");
+      }
+      return result;
+    };
     return this;
   }
 
@@ -48,8 +57,17 @@ public final class SchemaValidatorBuilder {
    * schema(s) according to the JSON default schema resolution.
    */
   public SchemaValidatorBuilder canBeReadStrategy() {
-    this.strategy = (toValidate, existing, verbose) ->
-                      existing.isBackwardCompatible(toValidate, verbose);
+    this.strategy = (toValidate, existing) -> {
+      List<String> result = new ArrayList<>();
+      result.addAll(toValidate.isForwardCompatible(existing));
+      if (result.size() > 0) {
+        if (toValidate.version() != null) {
+          result.add("{previousSchemaVersion: " + toValidate.version() + "}");
+        }
+        result.add("previousSchema: '" + toValidate + "'}");
+      }
+      return result;
+    };
     return this;
   }
 
@@ -59,10 +77,22 @@ public final class SchemaValidatorBuilder {
    */
   public SchemaValidatorBuilder mutualReadStrategy() {
 
-    this.strategy = (toValidate, existing, verbose) -> {
+    this.strategy = (toValidate, existing) -> {
       List<String> result = new ArrayList<>();
-      result.addAll(existing.isBackwardCompatible(toValidate, verbose));
-      result.addAll(toValidate.isBackwardCompatible(existing, verbose));
+      result.addAll(toValidate.isForwardCompatible(existing));
+      if (result.size() > 0) {
+        if (toValidate.version() != null) {
+          result.add("{previousSchemaVersion: " + toValidate.version() + "}");
+        }
+        result.add("{previousSchema: '" + toValidate + "'}");
+      }
+      result.addAll(toValidate.isBackwardCompatible(existing));
+      if (result.size() > 0) {
+        if (existing.version() != null) {
+          result.add("{previousSchemaVersion: " + existing.version() + "}");
+        }
+        result.add("{previousSchema: '" + existing + "'}");
+      }
       return result;
     };
     return this;
@@ -70,11 +100,11 @@ public final class SchemaValidatorBuilder {
 
   public SchemaValidator validateLatest() {
     valid();
-    return (toValidate, schemasInOrder, verbose) -> {
+    return (toValidate, schemasInOrder) -> {
       Iterator<? extends ParsedSchema> schemas = schemasInOrder.iterator();
       if (schemas.hasNext()) {
         ParsedSchema existing = schemas.next();
-        return strategy.validate(toValidate, existing, verbose);
+        return strategy.validate(toValidate, existing);
       }
       return Collections.emptyList();
     };
@@ -82,9 +112,9 @@ public final class SchemaValidatorBuilder {
 
   public SchemaValidator validateAll() {
     valid();
-    return (toValidate, schemasInOrder, verbose) -> {
+    return (toValidate, schemasInOrder) -> {
       for (ParsedSchema existing : schemasInOrder) {
-        List<String> errorMessages = strategy.validate(toValidate, existing, verbose);
+        List<String> errorMessages = strategy.validate(toValidate, existing);
         if (!errorMessages.isEmpty()) {
           return errorMessages;
         }
