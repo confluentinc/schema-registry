@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -31,6 +32,17 @@ public class Config {
   private String compatibilityGroup;
   private Metadata metadataOverride;
   private RuleSet ruleSetOverride;
+
+  @JsonCreator
+  public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel,
+                @JsonProperty("compatibilityGroup") String compatibilityGroup,
+                @JsonProperty("metadataOverride") Metadata metadataOverride,
+                @JsonProperty("ruleSetOverride") RuleSet ruleSetOverride) {
+    this.compatibilityLevel = compatibilityLevel;
+    this.compatibilityGroup = compatibilityGroup;
+    this.metadataOverride = metadataOverride;
+    this.ruleSetOverride = ruleSetOverride;
+  }
 
   public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
@@ -106,11 +118,11 @@ public class Config {
 
   @Override
   public String toString() {
-    return "Config{" +
-        "compatibilityLevel='" + compatibilityLevel + '\'' +
-        ", compatibilityGroup='" + compatibilityGroup + '\'' +
-        ", metadataOverride=" + metadataOverride +
-        ", ruleSetOverride=" + ruleSetOverride +
-        '}';
+    return "Config{"
+        + "compatibilityLevel='" + compatibilityLevel + '\''
+        + ", compatibilityGroup='" + compatibilityGroup + '\''
+        + ", metadataOverride=" + metadataOverride
+        + ", ruleSetOverride=" + ruleSetOverride
+        + '}';
   }
 }

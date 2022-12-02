@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -1507,7 +1508,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     ConfigKey configKey = new ConfigKey(subject);
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-      kafkaStore.put(configKey, new ConfigValue(subject, newCompatibilityLevel));
+      ConfigValue configValue = (ConfigValue) kafkaStore.get(configKey);
+      kafkaStore.put(configKey, new ConfigValue(
+          subject,
+          newCompatibilityLevel,
+          configValue.getCompatibilityGroup(),
+          configValue.getMetadataOverride(),
+          configValue.getRuleSetOverride())
+      );
       log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
                 + " Kafka data store with key " + configKey.toString());
     } catch (StoreException e) {
@@ -1611,6 +1619,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throws SchemaRegistryStoreException {
     try {
       return lookupCache.compatibilityLevel(subject, true, defaultCompatibilityLevel);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
+    }
+  }
+
+  public Config getConfig(String subject)
+      throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.config(subject, false, new Config(defaultCompatibilityLevel.name));
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
+    }
+  }
+
+  public Config getConfigInScope(String subject)
+      throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.config(subject, true, new Config(defaultCompatibilityLevel.name));
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }

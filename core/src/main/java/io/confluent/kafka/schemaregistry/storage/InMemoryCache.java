@@ -15,8 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -238,9 +238,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   @SuppressWarnings("unchecked")
-  public CompatibilityLevel compatibilityLevel(String subject,
-                                               boolean returnTopLevelIfNotFound,
-                                               CompatibilityLevel defaultForTopLevel
+  public Config config(String subject,
+                       boolean returnTopLevelIfNotFound,
+                       Config defaultForTopLevel
   ) throws StoreException {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
     ConfigValue config = (ConfigValue) get((K) subjectConfigKey);
@@ -248,7 +248,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       return defaultForTopLevel;
     }
     if (config != null) {
-      return config.getCompatibilityLevel();
+      return config.toConfigEntity();
     } else if (returnTopLevelIfNotFound) {
       QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
       if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
@@ -256,7 +256,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       } else {
         config = (ConfigValue) get((K) new ConfigKey(null));
       }
-      return config != null ? config.getCompatibilityLevel() : defaultForTopLevel;
+      return config != null ? config.toConfigEntity() : defaultForTopLevel;
     } else {
       return null;
     }

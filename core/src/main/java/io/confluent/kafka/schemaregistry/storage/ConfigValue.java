@@ -21,17 +21,28 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import java.util.Objects;
 
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ConfigValue extends SubjectValue {
 
   private CompatibilityLevel compatibilityLevel;
+  private String compatibilityGroup;
+  private Metadata metadataOverride;
+  private RuleSet ruleSetOverride;
 
   public ConfigValue(@JsonProperty("subject") String subject,
-                     @JsonProperty("compatibilityLevel") CompatibilityLevel compatibilityLevel) {
+                     @JsonProperty("compatibilityLevel") CompatibilityLevel compatibilityLevel,
+                     @JsonProperty("compatibilityGroup") String compatibilityGroup,
+                     @JsonProperty("metadataOverride") Metadata metadataOverride,
+                     @JsonProperty("ruleSetOverride") RuleSet ruleSetOverride) {
     super(subject);
     this.compatibilityLevel = compatibilityLevel;
+    this.compatibilityGroup = compatibilityGroup;
+    this.metadataOverride = metadataOverride;
+    this.ruleSetOverride = ruleSetOverride;
   }
 
   public ConfigValue() {
@@ -49,6 +60,36 @@ public class ConfigValue extends SubjectValue {
     this.compatibilityLevel = compatibilityLevel;
   }
 
+  @JsonProperty("compatibilityGroup")
+  public String getCompatibilityGroup() {
+    return this.compatibilityGroup;
+  }
+
+  @JsonProperty("compatibilityGroup")
+  public void setCompatibilityGroup(String compatibilityGroup) {
+    this.compatibilityGroup = compatibilityGroup;
+  }
+
+  @JsonProperty("metadataOverride")
+  public Metadata getMetadataOverride() {
+    return this.metadataOverride;
+  }
+
+  @JsonProperty("metadataOverride")
+  public void setMetadataOverride(Metadata metadataOverride) {
+    this.metadataOverride = metadataOverride;
+  }
+
+  @JsonProperty("ruleSetOverride")
+  public RuleSet getRuleSetOverride() {
+    return this.ruleSetOverride;
+  }
+
+  @JsonProperty("ruleSetOverride")
+  public void setRuleSetOverride(RuleSet ruleSetOverride) {
+    this.ruleSetOverride = ruleSetOverride;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -60,31 +101,39 @@ public class ConfigValue extends SubjectValue {
     if (!super.equals(o)) {
       return false;
     }
-
     ConfigValue that = (ConfigValue) o;
-
-    if (!this.compatibilityLevel.equals(that.compatibilityLevel)) {
-      return false;
-    }
-    return true;
+    return compatibilityLevel == that.compatibilityLevel && Objects.equals(
+        compatibilityGroup, that.compatibilityGroup) && Objects.equals(metadataOverride,
+        that.metadataOverride) && Objects.equals(ruleSetOverride, that.ruleSetOverride);
   }
 
   @Override
   public int hashCode() {
-    int result = super.hashCode();
-    result = 31 * result + compatibilityLevel.hashCode();
-    return result;
+    return Objects.hash(super.hashCode(), compatibilityLevel, compatibilityGroup, metadataOverride,
+        ruleSetOverride);
   }
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{compatibilityLevel=" + this.compatibilityLevel + "}");
-    return sb.toString();
+    return "ConfigValue{"
+        + "compatibilityLevel=" + compatibilityLevel
+        + ", compatibilityGroup='" + compatibilityGroup + '\''
+        + ", metadataOverride=" + metadataOverride
+        + ", ruleSetOverride=" + ruleSetOverride
+        + '}';
   }
 
   @Override
   public ConfigKey toKey() {
     return new ConfigKey(getSubject());
+  }
+
+  public Config toConfigEntity() {
+    return new Config(
+        compatibilityLevel != null ? compatibilityLevel.name : null,
+        compatibilityGroup,
+        metadataOverride != null ? metadataOverride.toMetadataEntity() : null,
+        ruleSetOverride != null ? ruleSetOverride.toRuleSetEntity() : null
+    );
   }
 }
