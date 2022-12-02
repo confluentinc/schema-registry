@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class DeriveAvroSchema extends DeriveSchema {
 
@@ -239,12 +240,14 @@ public class DeriveAvroSchema extends DeriveSchema {
     if (hasNull) {
       branches.add(getNullSchema());
     }
+
     // Add union types to branches
-    for (JsonNode primitive : primitives) {
-      if (primitive.get("type").asText().equals("union")) {
-        JsonNode properties = primitive.get("properties");
-        properties.forEach(branches::add);
-      }
+    List<JsonNode> existingUnions = primitives.stream()
+        .filter(o -> o.get("type").asText().equals("union"))
+        .collect(Collectors.toList());
+    for (JsonNode unionType : existingUnions) {
+      JsonNode properties = unionType.get("properties");
+      properties.forEach(branches::add);
     }
 
     List<JsonNode> uniqueBranches = DeriveSchemaUtils.getUnique(branches);
@@ -257,7 +260,7 @@ public class DeriveAvroSchema extends DeriveSchema {
       }
       ArrayNode properties = DeriveSchemaUtils.sortJsonArrayList(
           mapper.createArrayNode().addAll(uniqueBranches));
-      for (List<JsonNode> types : Arrays.asList(records, primitives)) {
+      for (List<JsonNode> types : Arrays.asList(records, existingUnions)) {
         for (JsonNode field : types) {
           ObjectNode objectNode = (ObjectNode) field;
           objectNode.put("type", "union");
