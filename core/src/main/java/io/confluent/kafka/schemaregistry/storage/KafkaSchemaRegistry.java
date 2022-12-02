@@ -1090,11 +1090,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           Schema schema,
           boolean isNew) throws InvalidSchemaException {
     try {
-      ParsedSchema s = schemaCache.get(new RawSchema(schema, isNew));
-      if (schema.getVersion() != null) {
-        s = s.copy(schema.getVersion());
-      }
-      return s;
+      return schemaCache.get(new RawSchema(schema, isNew));
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
       if (cause instanceof InvalidSchemaException) {
