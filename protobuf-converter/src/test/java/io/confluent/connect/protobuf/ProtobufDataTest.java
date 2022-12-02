@@ -36,6 +36,7 @@ import com.google.protobuf.util.Timestamps;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
+import io.confluent.connect.protobuf.test.KeyValue;
 import io.confluent.connect.protobuf.test.KeyValueOptional;
 import io.confluent.connect.protobuf.test.KeyValueWrapper;
 import io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry;
@@ -93,7 +94,6 @@ import static io.confluent.connect.protobuf.ProtobufData.GENERALIZED_TYPE_UNION;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_ENUM;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_PROP;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
-import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION_PREFIX;
 import static io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue.newBuilder;
 import static org.junit.Assert.assertArrayEquals;
@@ -1894,6 +1894,44 @@ public class ProtobufDataTest {
     assertEquals("invalid_record_name", messageDescriptor.getName());
     assertEquals("invalid_field_name", messageDescriptor.getFields().get(0).getName());
     assertEquals("foo", message.getField(messageDescriptor.getFields().get(0)));
+  }
+
+  @Test
+  public void testFromConnectIgnoreDefaultForNullables() throws Exception {
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.IGNORE_DEFAULT_FOR_NULLABLES_CONFIG, true)
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    KeyValue.KeyValueMessage message =
+        KeyValue.KeyValueMessage.newBuilder()
+            .setKey(123)
+            .build();
+    Schema connectSchema = getIgnoreDefaultForNullablesSchema();
+    Struct data = getIgnoreDefaultForNullablesData();
+
+    byte[] messageBytes = getMessageBytes(protobufData, new SchemaAndValue(connectSchema, data));
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  private Schema getIgnoreDefaultForNullablesSchema() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("KeyValueMessage");
+    schemaBuilder.field("key",
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    schemaBuilder.field("value",
+        SchemaBuilder.string().optional().defaultValue("string-value")
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    return schemaBuilder.build();
+  }
+
+  private Struct getIgnoreDefaultForNullablesData() {
+    Schema schema = getIgnoreDefaultForNullablesSchema();
+    Struct result = new Struct(schema.schema());
+    result.put("key", 123);
+    result.put("value", null);
+    return result;
   }
 
   @Test

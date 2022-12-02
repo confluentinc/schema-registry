@@ -16,12 +16,20 @@
 
 package io.confluent.kafka.schemaregistry.client.security.bearerauth;
 
+import java.net.URL;
 import org.apache.kafka.common.Configurable;
 
-import java.net.URL;
-
 public interface BearerAuthCredentialProvider extends Configurable {
+
   String alias();
 
   String getBearerToken(URL url);
+
+  default String getTargetSchemaRegistry() {
+    return null;
+  }
+
+  default String getTargetIdentityPoolId() {
+    return null;
+  }
 }
