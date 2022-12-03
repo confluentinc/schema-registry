@@ -109,9 +109,10 @@ public class ConfigValue extends SubjectValue {
       return false;
     }
     ConfigValue that = (ConfigValue) o;
-    return compatibilityLevel == that.compatibilityLevel && Objects.equals(
-        compatibilityGroup, that.compatibilityGroup) && Objects.equals(metadataOverride,
-        that.metadataOverride) && Objects.equals(ruleSetOverride, that.ruleSetOverride);
+    return compatibilityLevel == that.compatibilityLevel
+        && Objects.equals(compatibilityGroup, that.compatibilityGroup)
+        && Objects.equals(metadataOverride, that.metadataOverride)
+        && Objects.equals(ruleSetOverride, that.ruleSetOverride);
   }
 
   @Override
