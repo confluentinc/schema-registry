@@ -61,6 +61,9 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Set<String> listSubjects(LookupFilter filter)
           throws SchemaRegistryException;
 
+  Set<String> listSubjectsForId(int id, String subject, boolean returnDeleted)
+      throws SchemaRegistryException;
+
   Iterator<Schema> getAllVersions(String subject, LookupFilter filter)
       throws SchemaRegistryException;
 
