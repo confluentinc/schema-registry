@@ -1505,7 +1505,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       ConfigValue oldConfig = (ConfigValue) kafkaStore.get(configKey);
       ConfigValue newConfig = new ConfigValue(subject, config);
-      kafkaStore.put(configKey, ConfigValue.merge(oldConfig, newConfig));
+      kafkaStore.put(configKey, ConfigValue.update(oldConfig, newConfig));
       log.debug("Wrote new config : " + config + " to the Kafka data store with key " + configKey);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store",

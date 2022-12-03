@@ -145,7 +145,7 @@ public class ConfigValue extends SubjectValue {
     );
   }
 
-  public static ConfigValue merge(ConfigValue oldConfig, ConfigValue newConfig) {
+  public static ConfigValue update(ConfigValue oldConfig, ConfigValue newConfig) {
     if (oldConfig == null) {
       return newConfig;
     }
