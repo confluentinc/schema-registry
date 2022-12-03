@@ -146,17 +146,25 @@ public class ConfigValue extends SubjectValue {
   }
 
   public static ConfigValue merge(ConfigValue oldConfig, ConfigValue newConfig) {
-    return new ConfigValue(
-        newConfig.getSubject() != null
-            ? newConfig.getSubject() : oldConfig.getSubject(),
-        newConfig.getCompatibilityLevel() != null
-            ? newConfig.getCompatibilityLevel() : oldConfig.getCompatibilityLevel(),
-        newConfig.getCompatibilityGroup() != null
-            ? newConfig.getCompatibilityGroup() : oldConfig.getCompatibilityGroup(),
-        newConfig.getMetadataOverride() != null
-            ? newConfig.getMetadataOverride() : oldConfig.getMetadataOverride(),
-        newConfig.getRuleSetOverride() != null
-            ? newConfig.getRuleSetOverride() : oldConfig.getRuleSetOverride()
-    );
+    if (oldConfig == null) {
+      return newConfig;
+    }
+    else if (newConfig == null) {
+      return oldConfig;
+    }
+    else {
+      return new ConfigValue(
+          newConfig.getSubject() != null
+              ? newConfig.getSubject() : oldConfig.getSubject(),
+          newConfig.getCompatibilityLevel() != null
+              ? newConfig.getCompatibilityLevel() : oldConfig.getCompatibilityLevel(),
+          newConfig.getCompatibilityGroup() != null
+              ? newConfig.getCompatibilityGroup() : oldConfig.getCompatibilityGroup(),
+          newConfig.getMetadataOverride() != null
+              ? newConfig.getMetadataOverride() : oldConfig.getMetadataOverride(),
+          newConfig.getRuleSetOverride() != null
+              ? newConfig.getRuleSetOverride() : oldConfig.getRuleSetOverride()
+      );
+    }
   }
 }
