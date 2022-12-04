@@ -311,7 +311,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testIncompatibleSchemaErrorMessage() throws Exception {
+  public void testIncompatibleSchema() throws Exception {
     String subject = "testSubject";
 
     // Make two incompatible schemas - field 'myField2' has different types
@@ -353,8 +353,9 @@ public class RestApiTest extends ClusterTestHarness {
              + Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE);
     } catch(RestClientException e) {
       assertTrue(e.getMessage().length() > 0);
-      assertTrue(e.getMessage().contains("Schema being registered is incompatible"));
-      assertTrue(e.getMessage().contains("previousSchema:"));
+      assertTrue(e.getMessage().contains("oldSchemaVersion:"));
+      assertTrue(e.getMessage().contains("oldSchema:"));
+      assertTrue(e.getMessage().contains("compatibility:"));
     }
 
     List<String> response = restApp.restClient.testCompatibility(registerRequest, subject,
@@ -362,8 +363,9 @@ public class RestApiTest extends ClusterTestHarness {
         idOfRegisteredSchema1Subject1),
       true);
     assertTrue(response.size() > 0);
-    assertTrue(response.get(1).contains("previousSchemaVersion:"));
-    assertTrue(response.get(2).contains("previousSchema:"));
+    assertTrue(response.get(2).contains("oldSchemaVersion:"));
+    assertTrue(response.get(3).contains("oldSchema:"));
+    assertTrue(response.get(4).contains("compatibility:"));
   }
 
 

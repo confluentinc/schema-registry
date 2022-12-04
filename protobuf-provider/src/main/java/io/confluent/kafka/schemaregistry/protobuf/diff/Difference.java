@@ -67,8 +67,8 @@ public class Difference {
     String errorDescription = "";
     switch (type) {
       case MESSAGE_REMOVED:
-        errorDescription = "A field of type MESSAGE at path '" + fullPath + "' in the %s schema is "
-          + "missing in the %s schema";
+        errorDescription = "The %s schema is missing a field of type MESSAGE at path '"
+                             + fullPath + "' in the %s schema";
         break;
       case FIELD_KIND_CHANGED:
         errorDescription = "The type of a field at path '" + fullPath + "' in the %s schema does  "
@@ -87,20 +87,20 @@ public class Difference {
                              + "' in the %s schema does not match its label in the %s schema";
         break;
       case REQUIRED_FIELD_ADDED:
-        errorDescription = "A field  at path '" + fullPath + "' is missing in the %s schema "
-                             + "but is a required field in the %s schema";
+        errorDescription = "A required field  at path '" + fullPath + "' in the %s schema "
+                             + "is missing in the %s schema";
         break;
       case REQUIRED_FIELD_REMOVED:
-        errorDescription = "A required field at path: '" + fullPath
-                             + "' in the %s schema is missing in the %s schema";
+        errorDescription = "The %s schema is missing a required field at path: '" + fullPath
+                             + "' in the %s schema";
         break;
       case ONEOF_FIELD_REMOVED:
-        errorDescription = "A oneof field at path '" + fullPath
-                             + "' in the %s schema is missing in the %s schema";
+        errorDescription = "The %s schema is missing a oneof field at path '" + fullPath
+                             + "' in the %s schema";
         break;
       case MULTIPLE_FIELDS_MOVED_TO_ONEOF:
-        errorDescription = "One or more fields at path '" + fullPath
-                             + "' in the %s schema were moved to a oneof field in the %s schema";
+        errorDescription = "Multiple fields in the oneof at path '" + fullPath
+                             + "' in the %s schema are outside a oneof in the %s schema";
         break;
       default:
         errorDescription = "";

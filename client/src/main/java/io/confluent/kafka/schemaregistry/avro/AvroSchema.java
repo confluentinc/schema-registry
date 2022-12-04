@@ -275,24 +275,6 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
-  public List<String> isForwardCompatible(ParsedSchema previousSchema) {
-    if (!schemaType().equals(previousSchema.schemaType())) {
-      return Collections.singletonList("Incompatible because of different schema type");
-    }
-    try {
-      SchemaCompatibility.SchemaPairCompatibility result =
-          SchemaCompatibility.checkReaderWriterCompatibility(
-          ((AvroSchema) previousSchema).schemaObj,  this.schemaObj);
-      return formatError(result, "old", "new");
-    } catch (Exception e) {
-      log.error("Unexpected exception during compatibility check", e);
-      return Collections.singletonList(
-        "Unexpected exception during compatibility check: " + e.getMessage());
-    }
-  }
-
-
-  @Override
   public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Collections.singletonList("Incompatible because of different schema type");
@@ -302,25 +284,15 @@ public class AvroSchema implements ParsedSchema {
           SchemaCompatibility.checkReaderWriterCompatibility(
               this.schemaObj,
               ((AvroSchema) previousSchema).schemaObj);
-      return formatError(result, "new", "old");
+      return result.getResult().getIncompatibilities().stream()
+          .map(Difference::new)
+          .map(Difference::toString)
+          .collect(Collectors.toList());
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
       return Collections.singletonList(
               "Unexpected exception during compatibility check: " + e.getMessage());
     }
-  }
-
-  private List<String> formatError(SchemaCompatibility.SchemaPairCompatibility result,
-                           String readerSchemaPrefix, String writerSchemaPrefix) {
-    List<SchemaCompatibility.Incompatibility> incompatibilities =
-        result.getResult().getIncompatibilities();
-    List<String> errorMessages;
-    errorMessages = incompatibilities.stream().map(Difference::new).map(Difference::toString)
-      .collect(Collectors.toList());
-    if (errorMessages.size() > 0) {
-      errorMessages.replaceAll(e -> String.format(e, writerSchemaPrefix, readerSchemaPrefix));
-    }
-    return errorMessages;
   }
 
   @Override

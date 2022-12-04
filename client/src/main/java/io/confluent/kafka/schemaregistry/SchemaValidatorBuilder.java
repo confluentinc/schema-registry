@@ -37,15 +37,16 @@ public final class SchemaValidatorBuilder {
    * Use a strategy that validates that a schema can be used to read existing
    * schema(s) according to the JSON default schema resolution.
    */
-  public SchemaValidatorBuilder canReadStrategy() {
+  public SchemaValidatorBuilder canReadStrategy() { //backward
     this.strategy = (toValidate, existing) -> {
       List<String> result = new ArrayList<>();
       result.addAll(toValidate.isBackwardCompatible(existing));
       if (result.size() > 0) {
+        result.replaceAll(e -> String.format(e, "new", "old"));
         if (existing.version() != null) {
-          result.add("{previousSchemaVersion: " + existing.version() + "}");
+          result.add("{oldSchemaVersion: " + existing.version() + "}");
         }
-        result.add("previousSchema: '" + existing + "'}");
+        result.add("oldSchema: '" + existing + "'}");
       }
       return result;
     };
@@ -56,15 +57,16 @@ public final class SchemaValidatorBuilder {
    * Use a strategy that validates that a schema can be read by existing
    * schema(s) according to the JSON default schema resolution.
    */
-  public SchemaValidatorBuilder canBeReadStrategy() {
+  public SchemaValidatorBuilder canBeReadStrategy() { //fwd
     this.strategy = (toValidate, existing) -> {
       List<String> result = new ArrayList<>();
-      result.addAll(toValidate.isForwardCompatible(existing));
+      result.addAll(existing.isBackwardCompatible(toValidate));
       if (result.size() > 0) {
-        if (toValidate.version() != null) {
-          result.add("{previousSchemaVersion: " + toValidate.version() + "}");
+        result.replaceAll(e -> String.format(e, "old", "new"));
+        if (existing.version() != null) {
+          result.add("{oldSchemaVersion: " + existing.version() + "}");
         }
-        result.add("previousSchema: '" + toValidate + "'}");
+        result.add("oldSchema: '" + existing + "'}");
       }
       return result;
     };
@@ -79,19 +81,17 @@ public final class SchemaValidatorBuilder {
 
     this.strategy = (toValidate, existing) -> {
       List<String> result = new ArrayList<>();
-      result.addAll(toValidate.isForwardCompatible(existing));
+      result.addAll(existing.isBackwardCompatible(toValidate));
       if (result.size() > 0) {
-        if (toValidate.version() != null) {
-          result.add("{previousSchemaVersion: " + toValidate.version() + "}");
-        }
-        result.add("{previousSchema: '" + toValidate + "'}");
+        result.replaceAll(e -> String.format(e, "old", "new"));
       }
       result.addAll(toValidate.isBackwardCompatible(existing));
       if (result.size() > 0) {
+        result.replaceAll(e -> String.format(e, "new", "old"));
         if (existing.version() != null) {
-          result.add("{previousSchemaVersion: " + existing.version() + "}");
+          result.add("{oldSchemaVersion: " + existing.version() + "}");
         }
-        result.add("{previousSchema: '" + existing + "'}");
+        result.add("oldSchema: '" + existing + "'}");
       }
       return result;
     };

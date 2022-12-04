@@ -1906,7 +1906,7 @@ paths:
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly
+      operationId: getSchemaOnly_2
       parameters:
       - name: subject
         in: path
@@ -2000,7 +2000,7 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly_1
+      operationId: getSchemaOnly
       parameters:
       - name: id
         in: path

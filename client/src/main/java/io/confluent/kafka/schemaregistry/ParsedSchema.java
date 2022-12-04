@@ -151,18 +151,6 @@ public interface ParsedSchema {
   List<String> isBackwardCompatible(ParsedSchema previousSchema);
 
   /**
-   * Checks the forward compatibility between this schema and the specified schema.
-   * <p/>
-   * Custom providers may choose to modify this schema during this check,
-   * to ensure that it is compatible with the specified schema.
-   *
-   * @param previousSchema previous schema
-   * @return an empty list if this schema is forward compatible with the previous schema,
-   *         otherwise the list of error messages
-   */
-  List<String> isForwardCompatible(ParsedSchema previousSchema);
-
-  /**
    * Checks the compatibility between this schema and the specified schemas.
    * <p/>
    * Custom providers may choose to modify this schema during this check,

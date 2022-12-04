@@ -107,25 +107,25 @@ public class Difference {
     String message = "";
     if (keywordAddedOrRemoved.contains(type)) {
       message = "The keyword at path '" + jsonPath + "' in the %s schema is not present in "
-                  + "the %s schema.";
+                  + "the %s schema";
     } else if (valueIncreased.contains(type)) {
       message = "The value at path '" + jsonPath + "' in the %s schema is "
-                  + "more than its value in the %s schema.";
+                  + "more than its value in the %s schema";
     } else if (valueDecreased.contains(type)) {
       message =  "The value at path '" + jsonPath + "' in the %s schema is "
-                   + "less than its value in the %s schema.";
+                   + "less than its value in the %s schema";
     } else if (valueChanged.contains(type)) {
       message = "The value at path '" + jsonPath + "' is different between the "
-                  + "%s and %s schema.";
+                  + "%s and %s schema";
     } else if (typeNarrowed.contains(type)) {
       message = "An array or combined type at path '" + jsonPath + "' has fewer elements in the "
-                  + "%s schema than the %s schema.";
+                  + "%s schema than the %s schema";
     } else if (typeExtended.contains(type)) {
       message = "An array or combined type at path '" + jsonPath + "' has more elements in the "
-                  + "%s schema than the %s schema.";
+                  + "%s schema than the %s schema";
     } else if (typeChanged.contains(type)) {
       message = "A type at path '" + jsonPath + "' is different between the "
-                  + "%s schema and the %s schema.";
+                  + "%s schema and the %s schema";
     } else {
       message = propertyItemError();
     }

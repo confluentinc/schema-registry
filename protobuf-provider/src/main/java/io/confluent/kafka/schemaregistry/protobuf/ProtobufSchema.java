@@ -1872,40 +1872,14 @@ public class ProtobufSchema implements ParsedSchema {
         .collect(Collectors.toList());
     boolean isCompatible = incompatibleDiffs.isEmpty();
     if (!isCompatible) {
-      return formatError(incompatibleDiffs, "new", "old");
+      List<String> errorMessages = new ArrayList<>();
+      for (Difference incompatibleDiff : incompatibleDiffs) {
+        errorMessages.add(incompatibleDiff.toString());
+      }
+      return errorMessages;
     } else {
       return Collections.emptyList();
     }
-  }
-
-  @Override
-  public List<String> isForwardCompatible(ParsedSchema previousSchema) {
-    if (!schemaType().equals(previousSchema.schemaType())) {
-      return Collections.singletonList("Incompatible because of different schema type");
-    }
-    final List<Difference> differences = SchemaDiff.compare(
-        this, (ProtobufSchema) previousSchema
-    );
-    final List<Difference> incompatibleDiffs = differences.stream()
-        .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
-        .collect(Collectors.toList());
-    boolean isCompatible = incompatibleDiffs.isEmpty();
-    if (!isCompatible) {
-      return formatError(incompatibleDiffs, "old", "new");
-    } else {
-      return Collections.emptyList();
-    }
-  }
-
-  private List<String> formatError(List<Difference> incompatibleDiffs,
-                                   String readerSchemaPrefix, String writerSchemaPrefix) {
-    List<String> errorMessages = new ArrayList<>();
-    for (Difference incompatibleDiff : incompatibleDiffs) {
-      errorMessages.add(
-          String.format("%s", String.format(incompatibleDiff.toString(),
-            writerSchemaPrefix, readerSchemaPrefix)));
-    }
-    return errorMessages;
   }
 
   @Override

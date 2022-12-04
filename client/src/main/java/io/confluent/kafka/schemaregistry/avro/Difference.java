@@ -47,17 +47,17 @@ public class Difference {
         break;
       case MISSING_ENUM_SYMBOLS:
         errorDescription =
-          "Enum symbols '" + incompatibility.getMessage() + "' at path " + path + " in the %s "
-            + "schema are missing in the %s schema";
+          "The %s schema is missing enum symbols '" + incompatibility.getMessage() + "' at path "
+            + path + " in the %s schema";
         break;
       case MISSING_UNION_BRANCH:
-        errorDescription = "A type inside a union field at path '" + path + "' in the "
-                             + "%s schema is missing in the %s schema";
+        errorDescription = "The %s schema is missing a type inside a union field at path '"
+                             + path + "' in the %s schema";
         break;
       case READER_FIELD_MISSING_DEFAULT_VALUE:
         errorDescription =
-          "The field '" + incompatibility.getMessage() + "' at path '" + path + "' in the %s "
-            + "schema is missing in the %s schema";
+          "The field '" + incompatibility.getMessage() + "' at path '"
+             + path + "' in the %s schema has no default value and is missing in the %s schema";
         break;
       default:
         errorDescription = "";
