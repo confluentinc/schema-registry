@@ -2071,56 +2071,6 @@ paths:
         "500":
           description: |
             Error code 50001 -- Error in the backend data store
-  /subjects/{subject}/metadata:
-    get:
-      summary: Retrieve the latest version with the given metadata.
-      description: Retrieve the latest version with the given metadata.
-      operationId: getLatestWithMetadata_1
-      parameters:
-      - name: subject
-        in: path
-        description: Subject under which the schema will be registered
-        required: true
-        schema:
-          type: string
-      - name: key
-        in: query
-        description: The metadata key
-        schema:
-          type: array
-          items:
-            type: string
-      - name: value
-        in: query
-        description: The metadata value
-        schema:
-          type: array
-          items:
-            type: string
-      - name: deleted
-        in: query
-        description: Whether to lookup deleted schemas
-        schema:
-          type: boolean
-      responses:
-        "200":
-          description: The schema
-          content:
-            application/vnd.schemaregistry.v1+json:
-              schema:
-                $ref: '#/components/schemas/Schema'
-            application/vnd.schemaregistry+json; qs=0.9:
-              schema:
-                $ref: '#/components/schemas/Schema'
-            application/json; qs=0.5:
-              schema:
-                $ref: '#/components/schemas/Schema'
-        "404":
-          description: |-
-            Error code 40401 -- Subject not found
-            Error code 40403 -- Schema not found
-        "500":
-          description: Internal server error
 components:
   schemas:
     CompatibilityCheckResponse:
@@ -2157,10 +2107,6 @@ components:
           description: References to other schemas
           items:
             $ref: '#/components/schemas/SchemaReference'
-        metadata:
-          $ref: '#/components/schemas/Metadata'
-        ruleSet:
-          $ref: '#/components/schemas/RuleSet'
         schema:
           type: string
           description: Schema definition string
@@ -2256,10 +2202,6 @@ components:
           description: References to other schemas
           items:
             $ref: '#/components/schemas/SchemaReference'
-        metadata:
-          $ref: '#/components/schemas/Metadata'
-        ruleSet:
-          $ref: '#/components/schemas/RuleSet'
         maxId:
           type: integer
           description: Maximum ID
@@ -2292,16 +2234,10 @@ components:
           description: References to other schemas
           items:
             $ref: '#/components/schemas/SchemaReference'
-        metadata:
-          $ref: '#/components/schemas/Metadata'
-        ruleset:
-          $ref: '#/components/schemas/RuleSet'
         schema:
           type: string
           description: Schema definition string
           example: "{\"schema\": \"{\"type\": \"string\"}\"}"
-        ruleSet:
-          $ref: '#/components/schemas/RuleSet'
       description: Schema
     SubjectVersion:
       type: object
@@ -2352,80 +2288,3 @@ components:
           type: string
         commitId:
           type: string
-    Metadata:
-      type: object
-      properties:
-        annotations:
-          type: object
-          additionalProperties:
-            uniqueItems: true
-            type: array
-            items:
-              type: string
-        properties:
-          type: object
-          additionalProperties:
-            type: string
-        sensitive:
-          uniqueItems: true
-          type: array
-          items:
-            type: string
-      description: User-defined metadata
-    Rule:
-      type: object
-      properties:
-        name:
-          type: string
-          description: Rule name
-        kind:
-          type: string
-          description: Rule kind
-          enum:
-          - TRANSFORM
-          - CONSTRAINT
-        mode:
-          type: string
-          description: Rule mode
-          enum:
-          - UPGRADE
-          - DOWNGRADE
-          - UPDOWN
-          - WRITE
-          - READ
-          - WRITEREAD
-        type:
-          type: string
-          description: Rule type
-        annotations:
-          uniqueItems: true
-          type: array
-          description: The annotations to which this rule applies
-          items:
-            type: string
-            description: The annotations to which this rule applies
-        expr:
-          type: string
-          description: Rule expression
-        onSuccess:
-          type: string
-          description: Rule action on success
-        onFailure:
-          type: string
-          description: Rule action on failure
-        disabled:
-          type: boolean
-          description: Whether the rule is disabled
-      description: Rule
-    RuleSet:
-      type: object
-      properties:
-        migrationRules:
-          type: array
-          items:
-            $ref: '#/components/schemas/Rule'
-        domainRules:
-          type: array
-          items:
-            $ref: '#/components/schemas/Rule'
-      description: Schema rule set
