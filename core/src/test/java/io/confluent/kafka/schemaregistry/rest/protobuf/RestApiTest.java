@@ -16,12 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.protobuf;
 
-import com.google.protobuf.ByteString;
-import com.google.protobuf.Descriptors;
-import com.google.protobuf.Message;
-import com.google.protobuf.UnknownFieldSet;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
-import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.utils.ResourceLoader;
 import org.junit.Assert;
 import org.junit.Test;
@@ -47,10 +42,10 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.serializers.protobuf.test.Ref;
 import io.confluent.kafka.serializers.protobuf.test.Root;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 import static org.junit.Assert.assertTrue;
 
 public class RestApiTest extends ClusterTestHarness {

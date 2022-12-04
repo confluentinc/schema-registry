@@ -17,7 +17,6 @@ package io.confluent.kafka.schemaregistry.rest.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
-import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import org.junit.Assert;
 import org.junit.Test;
 

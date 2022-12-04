@@ -358,6 +358,41 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testIncompatibleSchemaLookupBySubject() throws Exception {
+    String subject = "testSubject";
+
+    // Make two incompatible schemas - field 'f' has different types
+    String schema1String = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{\"type\":\"string\",\"name\":"
+                           + "\"f" + "\"}]}";
+    String schema1 = AvroUtils.parseSchema(schema1String).canonicalString();
+
+    String schema2String = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{\"type\":\"int\",\"name\":"
+                           + "\"f" + "\"}]}";
+    String schema2 = AvroUtils.parseSchema(schema2String).canonicalString();
+
+    // ensure registering incompatible schemas will raise an error
+    restApp.restClient.updateCompatibility(
+        CompatibilityLevel.FULL.name, subject);
+
+    // test that compatibility check for incompatible schema returns false and the appropriate
+    // error response from Avro
+    restApp.restClient.registerSchema(schema1, subject);
+    int versionOfRegisteredSchema =
+        restApp.restClient.lookUpSubjectVersion(schema1, subject).getVersion();
+    boolean isCompatible = restApp.restClient.testCompatibility(schema2, subject,
+                                                                String.valueOf(
+                                                                    versionOfRegisteredSchema))
+                                              .isEmpty();
+    assertFalse("Schema should be incompatible with specified version", isCompatible);
+  }
+
+  @Test
   public void testIncompatibleSchemaBySubject() throws Exception {
     String subject = "testSubject";
 
@@ -389,7 +424,6 @@ public class RestApiTest extends ClusterTestHarness {
     assertTrue("Schema is compatible with the latest version", isCompatible);
     isCompatible = restApp.restClient.testCompatibility(schema3, subject, null).isEmpty();
     assertFalse("Schema should be incompatible with FORWARD_TRANSITIVE setting", isCompatible);
-
     try {
       restApp.restClient.registerSchema(schema3String, subject);
       fail("Schema register should fail since schema is incompatible");

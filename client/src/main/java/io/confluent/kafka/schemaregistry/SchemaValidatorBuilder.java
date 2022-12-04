@@ -32,6 +32,8 @@ import java.util.ArrayList;
  */
 public final class SchemaValidatorBuilder {
   private SchemaValidationStrategy strategy;
+  private static final String newSchemaPrefix = "new";
+  private static final String oldSchemaPrefix = "old";
 
   /**
    * Use a strategy that validates that a schema can be used to read existing
@@ -41,13 +43,7 @@ public final class SchemaValidatorBuilder {
     this.strategy = (toValidate, existing) -> {
       List<String> result = new ArrayList<>();
       result.addAll(toValidate.isBackwardCompatible(existing));
-      if (result.size() > 0) {
-        result.replaceAll(e -> String.format(e, "new", "old"));
-        if (existing.version() != null) {
-          result.add("{oldSchemaVersion: " + existing.version() + "}");
-        }
-        result.add("oldSchema: '" + existing + "'}");
-      }
+      formatErrorMessages(result, existing, newSchemaPrefix, oldSchemaPrefix);
       return result;
     };
     return this;
@@ -61,13 +57,7 @@ public final class SchemaValidatorBuilder {
     this.strategy = (toValidate, existing) -> {
       List<String> result = new ArrayList<>();
       result.addAll(existing.isBackwardCompatible(toValidate));
-      if (result.size() > 0) {
-        result.replaceAll(e -> String.format(e, "old", "new"));
-        if (existing.version() != null) {
-          result.add("{oldSchemaVersion: " + existing.version() + "}");
-        }
-        result.add("oldSchema: '" + existing + "'}");
-      }
+      formatErrorMessages(result, existing, oldSchemaPrefix, newSchemaPrefix);
       return result;
     };
     return this;
@@ -82,17 +72,9 @@ public final class SchemaValidatorBuilder {
     this.strategy = (toValidate, existing) -> {
       List<String> result = new ArrayList<>();
       result.addAll(existing.isBackwardCompatible(toValidate));
-      if (result.size() > 0) {
-        result.replaceAll(e -> String.format(e, "old", "new"));
-      }
+      result.replaceAll(e -> String.format(e, oldSchemaPrefix, newSchemaPrefix));
       result.addAll(toValidate.isBackwardCompatible(existing));
-      if (result.size() > 0) {
-        result.replaceAll(e -> String.format(e, "new", "old"));
-        if (existing.version() != null) {
-          result.add("{oldSchemaVersion: " + existing.version() + "}");
-        }
-        result.add("oldSchema: '" + existing + "'}");
-      }
+      formatErrorMessages(result, existing, newSchemaPrefix, oldSchemaPrefix);
       return result;
     };
     return this;
@@ -128,4 +110,16 @@ public final class SchemaValidatorBuilder {
       throw new RuntimeException("SchemaValidationStrategy not specified in builder");
     }
   }
+
+  private void formatErrorMessages(List<String> messages, ParsedSchema existing,
+                                   String reader, String writer) {
+    if (messages.size() > 0) {
+      messages.replaceAll(e -> String.format(e, reader, writer));
+      if (existing.version() != null) {
+        messages.add("{oldSchemaVersion: " + existing.version() + "}");
+      }
+      messages.add("{oldSchema: '" + existing + "'}");
+    }
+  }
+
 }
