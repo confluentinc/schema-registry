@@ -157,7 +157,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         schema = (JsonSchema) readerSchema;
       }
       jsonNode = (JsonNode) executeRules(
-          subject, topic, headers, RuleMode.READ, null, schema, jsonNode
+          subject, topic, headers, payload, RuleMode.READ, null, schema, jsonNode
       );
 
       if (validate) {

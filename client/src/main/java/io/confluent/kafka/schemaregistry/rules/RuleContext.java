@@ -41,6 +41,7 @@ public class RuleContext {
   private final String subject;
   private final String topic;
   private final Headers headers;
+  private final Object originalMessage;
   private final boolean isKey;
   private final RuleMode ruleMode;
   private final Rule rule;
@@ -52,10 +53,11 @@ public class RuleContext {
       String subject,
       String topic,
       Headers headers,
+      Object originalMessage,
       boolean isKey,
       RuleMode ruleMode,
       Rule rule) {
-    this(null, target, subject, topic, headers, isKey, ruleMode, rule);
+    this(null, target, subject, topic, headers, originalMessage, isKey, ruleMode, rule);
   }
 
   public RuleContext(
@@ -64,6 +66,7 @@ public class RuleContext {
       String subject,
       String topic,
       Headers headers,
+      Object originalMessage,
       boolean isKey,
       RuleMode ruleMode,
       Rule rule) {
@@ -72,6 +75,7 @@ public class RuleContext {
     this.subject = subject;
     this.topic = topic;
     this.headers = headers;
+    this.originalMessage = originalMessage;
     this.isKey = isKey;
     this.ruleMode = ruleMode;
     this.rule = rule;
@@ -96,6 +100,10 @@ public class RuleContext {
 
   public Headers headers() {
     return headers;
+  }
+
+  public Object originalMessage() {
+    return originalMessage;
   }
 
   public boolean isKey() {

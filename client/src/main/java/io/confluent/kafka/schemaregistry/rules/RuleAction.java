@@ -17,8 +17,8 @@
 package io.confluent.kafka.schemaregistry.rules;
 
 /**
- * A rule executor.
+ * A post-rule action.
  */
-public interface RuleExecutor extends RuleBase {
-  Object transform(RuleContext ctx, Object message) throws RuleException;
+public interface RuleAction extends RuleBase {
+  void run(RuleContext ctx, Object message, RuleException ex) throws RuleException;
 }

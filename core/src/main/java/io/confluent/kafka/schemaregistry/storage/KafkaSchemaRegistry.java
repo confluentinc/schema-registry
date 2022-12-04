@@ -1326,6 +1326,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return listSubjectsForId(id, subject, false);
   }
 
+  @Override
   public Set<String> listSubjectsForId(int id, String subject, boolean returnDeleted)
       throws SchemaRegistryException {
     List<SubjectVersion> versions = listVersionsForId(id, subject, returnDeleted);

@@ -103,8 +103,12 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       "The schema format to use when registering or looking up schemas.";
 
   public static final String RULE_EXECUTORS = "rule.executors";
-  public static final String RULE_EXECUTOR_DOCS =
+  public static final String RULE_EXECUTORS_DOCS =
       " A comma-separated list of rule executor names.";
+
+  public static final String RULE_ACTIONS = "rule.actions";
+  public static final String RULE_ACTIONS_DOCS =
+      " A comma-separated list of rule action names.";
 
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
@@ -256,7 +260,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .define(SCHEMA_FORMAT, Type.STRING, null,
                 Importance.LOW, SCHEMA_FORMAT_DOC)
         .define(RULE_EXECUTORS, Type.LIST, "",
-                Importance.LOW, RULE_EXECUTOR_DOCS)
+                Importance.LOW, RULE_EXECUTORS_DOCS)
+        .define(RULE_ACTIONS, Type.LIST, "",
+            Importance.LOW, RULE_ACTIONS_DOCS)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
                 Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,

@@ -16,9 +16,15 @@
 
 package io.confluent.kafka.schemaregistry.rules;
 
-/**
- * A rule executor.
- */
-public interface RuleExecutor extends RuleBase {
-  Object transform(RuleContext ctx, Object message) throws RuleException;
+public class NoneAction implements RuleAction {
+
+  public static final String TYPE = "NONE";
+
+  public String type() {
+    return TYPE;
+  }
+
+  public void run(RuleContext ctx, Object message, RuleException ex) throws RuleException {
+    // noop
+  }
 }

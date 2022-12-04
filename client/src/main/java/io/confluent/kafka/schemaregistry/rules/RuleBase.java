@@ -16,9 +16,16 @@
 
 package io.confluent.kafka.schemaregistry.rules;
 
+import java.util.Map;
+import org.apache.kafka.common.Configurable;
+
 /**
- * A rule executor.
+ * Base type for rule interfaces.
  */
-public interface RuleExecutor extends RuleBase {
-  Object transform(RuleContext ctx, Object message) throws RuleException;
+public interface RuleBase extends Configurable {
+
+  default void configure(Map<String, ?> configs) {
+  }
+
+  String type();
 }

@@ -18,6 +18,11 @@ package io.confluent.kafka.schemaregistry.rules.cel;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -30,7 +35,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -39,6 +43,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.rules.DlqAction;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -55,12 +60,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.reflect.ReflectData;
+import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -77,11 +86,15 @@ public class CelExecutorTest {
   private final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
   private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   private final String topic;
+  private final KafkaProducer<byte[], byte[]> producer;
 
   public CelExecutorTest() {
     topic = "test";
     schemaRegistry = new MockSchemaRegistryClient(ImmutableList.of(
         new AvroSchemaProvider(), new ProtobufSchemaProvider(), new JsonSchemaProvider()));
+    producer = mock(KafkaProducer.class);
+    when(producer.send(any(ProducerRecord.class), any(Callback.class))).thenReturn(
+        CompletableFuture.completedFuture(null));
 
     Properties defaultConfig = new Properties();
     defaultConfig.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
@@ -92,6 +105,13 @@ public class CelExecutorTest {
         CelExecutor.class.getName());
     defaultConfig.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS + ".cel-field.class",
         CelFieldExecutor.class.getName());
+    defaultConfig.put(KafkaAvroDeserializerConfig.RULE_ACTIONS, "dlq");
+    defaultConfig.put(KafkaAvroDeserializerConfig.RULE_ACTIONS + ".dlq.class",
+        DlqAction.class.getName());
+    defaultConfig.put(KafkaAvroDeserializerConfig.RULE_ACTIONS + ".dlq.param." + DlqAction.TOPIC,
+        "dlq-topic");
+    defaultConfig.put(KafkaAvroDeserializerConfig.RULE_ACTIONS + ".dlq.param." + DlqAction.PRODUCER,
+        producer);
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(defaultConfig));
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, new HashMap(defaultConfig));
 
@@ -174,7 +194,7 @@ public class CelExecutorTest {
         CelExecutor.TYPE, null, "message.name == \"testUser\" && message.kind == \"ONE\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
@@ -189,11 +209,48 @@ public class CelExecutorTest {
         CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     avroDeserializer.deserialize(topic, bytes);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerConstraintIgnore() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
+        CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        null, "NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    avroDeserializer.deserialize(topic, bytes);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerConstraintDlq() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
+        CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        null, "DLQ", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    try {
+      byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+      avroDeserializer.deserialize(topic, bytes);
+      fail("Should send to DLQ and throw exception");
+    } catch (SerializationException e) {
+      // expected
+    }
+
+    verify(producer).send(any(ProducerRecord.class), any(Callback.class));
   }
 
   @Test
@@ -207,7 +264,7 @@ public class CelExecutorTest {
     Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
         CelExecutor.TYPE, null, "message.name == \"alice\"", null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
 
@@ -236,7 +293,7 @@ public class CelExecutorTest {
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    avroSchema = avroSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     bytes = reflectionAvroSerializer.serialize(topic, widget);
@@ -276,7 +333,7 @@ public class CelExecutorTest {
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    protobufSchema = protobufSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    protobufSchema = protobufSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", protobufSchema);
 
     bytes = protobufSerializer.serialize(topic, widget);
@@ -352,7 +409,7 @@ public class CelExecutorTest {
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    jsonSchema = jsonSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    jsonSchema = jsonSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
     bytes = jsonSchemaSerializer.serialize(topic, widget);
@@ -416,7 +473,7 @@ public class CelExecutorTest {
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    jsonSchema = jsonSchema.copy(Metadata.EMPTY_METADATA, ruleSet);
+    jsonSchema = jsonSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
     bytes = jsonSchemaSerializer2.serialize(topic, widget);

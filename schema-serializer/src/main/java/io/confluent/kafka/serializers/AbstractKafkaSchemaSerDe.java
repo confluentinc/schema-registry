@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS;
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -30,13 +31,19 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.rules.ErrorAction;
+import io.confluent.kafka.schemaregistry.rules.NoneAction;
+import io.confluent.kafka.schemaregistry.rules.RuleAction;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
+import io.confluent.kafka.schemaregistry.rules.RuleBase;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -92,8 +99,10 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected boolean useLatestVersion;
   protected Map<String, String> metadata;
   protected Map<String, RuleExecutor> ruleExecutors;
+  protected Map<String, RuleAction> ruleActions;
   protected boolean isKey;
 
+  @SuppressWarnings("unchecked")
   protected void configureClientProperties(
       AbstractKafkaSchemaSerDeConfig config,
       SchemaProvider provider) {
@@ -119,15 +128,18 @@ public abstract class AbstractKafkaSchemaSerDe {
       MapPropertyParser parser = new MapPropertyParser();
       metadata = parser.parse(config.getLatestWithMetadataSpec());
     }
-    ruleExecutors = initRuleExecutors(config);
+    ruleExecutors = (Map<String, RuleExecutor>) initRuleObjects(config, RULE_EXECUTORS);
+    ruleActions = new HashMap<>((Map<String, RuleAction>) initRuleObjects(config, RULE_ACTIONS));
+    ruleActions.put(ErrorAction.TYPE, new ErrorAction());
+    ruleActions.put(NoneAction.TYPE, new NoneAction());
   }
 
-  private Map<String, RuleExecutor> initRuleExecutors(
-      AbstractKafkaSchemaSerDeConfig config) {
-    List<String> names = config.getList(RULE_EXECUTORS);
+  private Map<String, ? extends RuleBase> initRuleObjects(
+      AbstractKafkaSchemaSerDeConfig config, String configName) {
+    List<String> names = config.getList(configName);
     return names.stream()
-        .flatMap(n -> initRuleExecutor(n, config))
-        .collect(Collectors.toMap(RuleExecutor::type, e -> {
+        .flatMap(n -> initRuleObject(n, config, configName))
+        .collect(Collectors.toMap(RuleBase::type, e -> {
           log.info("Registering rule executor for {}: {}",
               e.type(),
               e.getClass().getName()
@@ -136,20 +148,20 @@ public abstract class AbstractKafkaSchemaSerDe {
         }));
   }
 
-  private Stream<RuleExecutor> initRuleExecutor(
-      String name, AbstractKafkaSchemaSerDeConfig config) {
-    String propertyName = RULE_EXECUTORS + "." + name + ".class";
+  private Stream<? extends RuleBase> initRuleObject(
+      String name, AbstractKafkaSchemaSerDeConfig config, String configName) {
+    String propertyName = configName + "." + name + ".class";
     Object propertyValue = config.originals().get(propertyName);
     if (propertyValue == null) {
       return Stream.empty();
     }
     String className = propertyValue.toString();
-    String prefix = RULE_EXECUTORS + "." + name + ".param.";
+    String prefix = configName + "." + name + ".param.";
     Map<String, Object> params = config.originalsWithPrefix(prefix);
     try {
-      RuleExecutor ruleExecutor = Utils.newInstance(className, RuleExecutor.class);
-      ruleExecutor.configure(params);
-      return Stream.of(ruleExecutor);
+      RuleBase ruleObject = Utils.newInstance(className, RuleBase.class);
+      ruleObject.configure(params);
+      return Stream.of(ruleObject);
     } catch (ClassNotFoundException e) {
       log.error("Could not load rule executor class " + name, e);
       throw new ConfigException("Could not load rule executor class " + name);
@@ -224,7 +236,7 @@ public abstract class AbstractKafkaSchemaSerDe {
         previous = current;
         continue;
       }
-      if (current.ruleSet().hasRules(migrationMode)) {
+      if (current.ruleSet() != null && current.ruleSet().hasRules(migrationMode)) {
         Migration m;
         if (migrationMode == RuleMode.UPGRADE) {
           m = new Migration(migrationMode, previous, current);
@@ -443,16 +455,28 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected Object executeRules(
       String subject, String topic, Headers headers,
       RuleMode ruleMode, ParsedSchema source, ParsedSchema target, Object message) {
+    return executeRules(subject, topic, headers, message, ruleMode, source, target, message);
+  }
+
+  protected Object executeRules(
+      String subject, String topic, Headers headers, Object original,
+      RuleMode ruleMode, ParsedSchema source, ParsedSchema target, Object message) {
     if (message == null || target == null) {
       return message;
     }
-    List<Rule> rules;
+    List<Rule> rules = Collections.emptyList();
     if (ruleMode == RuleMode.UPGRADE) {
-      rules = target.ruleSet().getMigrationRules();
+      if (target.ruleSet() != null) {
+        rules = target.ruleSet().getMigrationRules();
+      }
     } else if (ruleMode == RuleMode.DOWNGRADE) {
-      rules = source.ruleSet().getMigrationRules();
+      if (source.ruleSet() != null) {
+        rules = source.ruleSet().getMigrationRules();
+      }
     } else {
-      rules = target.ruleSet().getDomainRules();
+      if (target.ruleSet() != null) {
+        rules = target.ruleSet().getDomainRules();
+      }
     }
     for (Rule rule : rules) {
       if (rule.getMode() == RuleMode.WRITEREAD) {
@@ -467,22 +491,60 @@ public abstract class AbstractKafkaSchemaSerDe {
         continue;
       }
       RuleContext ctx = new RuleContext(source, target,
-          subject, topic, headers, isKey, ruleMode, rule);
-      RuleExecutor ruleExecutor = ruleExecutors.get(rule.getType());
+          subject, topic, headers, original, isKey, ruleMode, rule);
+      RuleExecutor ruleExecutor = ruleExecutors.get(rule.getType().toUpperCase(Locale.ROOT));
       if (ruleExecutor == null) {
         log.warn("Could not find rule executor of type {}", rule.getType());
         return message;
       }
       try {
         message = ruleExecutor.transform(ctx, message);
-        if (message == null) {
-          throw new SerializationException("Validation failed for rule " + rule);
+        if (message != null) {
+          runAction(ctx, ruleMode, rule, rule.getOnSuccess(), message, null, null);
+        } else {
+          runAction(ctx, ruleMode, rule, rule.getOnFailure(), null, null, ErrorAction.TYPE);
         }
       } catch (RuleException e) {
-        throw new SerializationException("Could not execute rule " + rule, e);
+        runAction(ctx, ruleMode, rule, rule.getOnFailure(), message, e, ErrorAction.TYPE);
       }
     }
     return message;
+  }
+
+  private void runAction(RuleContext ctx, RuleMode ruleMode, Rule rule, String action,
+      Object message, RuleException ex, String defaultAction) {
+    String actionName = getRuleActionName(rule, ruleMode, action);
+    if (actionName == null) {
+      actionName = defaultAction;
+    }
+    if (actionName != null) {
+      RuleAction ruleAction = ruleActions.get(actionName.toUpperCase(Locale.ROOT));
+      try {
+        ruleAction.run(ctx, message, ex);
+      } catch (RuleException e) {
+        log.error("Could not run post-rule action " + action, e);
+      }
+    }
+  }
+
+  private String getRuleActionName(Rule rule, RuleMode ruleMode, String actionName) {
+    if ((rule.getMode() == RuleMode.WRITEREAD || rule.getMode() == RuleMode.UPDOWN)
+        && actionName != null
+        && actionName.contains(",")) {
+      String[] parts = actionName.split(",");
+      switch (ruleMode) {
+        case WRITE:
+        case UPGRADE:
+          return parts[0];
+        case READ:
+        case DOWNGRADE:
+          return parts[1];
+        default:
+          throw new IllegalStateException("Unsupported rule mode " + ruleMode);
+      }
+    } else {
+      return actionName;
+    }
   }
 
   protected static KafkaException toKafkaException(RestClientException e, String errorMessage) {

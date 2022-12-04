@@ -35,10 +35,6 @@ import java.util.SortedSet;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Metadata {
 
-  public static final Metadata EMPTY_METADATA =
-      new Metadata(
-          Collections.emptySortedMap(), Collections.emptySortedMap(), Collections.emptySortedSet());
-
   @JsonPropertyOrder(alphabetic = true)
   private final SortedMap<String, SortedSet<String>> annotations;
   @JsonPropertyOrder(alphabetic = true)

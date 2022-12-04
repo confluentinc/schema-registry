@@ -16,9 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
-import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EMPTY_METADATA;
-import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET;
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -82,8 +79,8 @@ public class Schema implements Comparable<Schema> {
     this.id = id;
     this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
     this.references = references != null ? references : Collections.emptyList();
-    this.metadata = metadata != null ? metadata : EMPTY_METADATA;
-    this.ruleSet = ruleSet != null ? ruleSet : EMPTY_RULESET;
+    this.metadata = metadata;
+    this.ruleSet = ruleSet;
     this.schema = schema;
   }
 
@@ -98,8 +95,8 @@ public class Schema implements Comparable<Schema> {
     this.id = id;
     this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
     this.references = references != null ? references : Collections.emptyList();
-    this.metadata = EMPTY_METADATA;
-    this.ruleSet = EMPTY_RULESET;
+    this.metadata = null;
+    this.ruleSet = null;
     this.schema = schema;
   }
 
@@ -303,10 +300,12 @@ public class Schema implements Comparable<Schema> {
     if (references != null) {
       references.forEach(r -> r.updateHash(md));
     }
-    if (metadata != null && metadata != EMPTY_METADATA) {
+    if (metadata != null) {
+      md.update((byte) 1);  // to distinguish from null
       metadata.updateHash(md);
     }
-    if (ruleSet != null && ruleSet != EMPTY_RULESET) {
+    if (ruleSet != null) {
+      md.update((byte) 1);  // to distinguish from null
       ruleSet.updateHash(md);
     }
   }

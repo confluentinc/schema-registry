@@ -16,9 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
-import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EMPTY_METADATA;
-import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -39,8 +36,8 @@ public class SchemaString {
   private String schemaType = AvroSchema.TYPE;
   private String schemaString;
   private List<SchemaReference> references = Collections.emptyList();
-  private Metadata metadata = EMPTY_METADATA;
-  private RuleSet ruleSet = EMPTY_RULESET;
+  private Metadata metadata = null;
+  private RuleSet ruleSet = null;
   private Integer maxId;
 
   public SchemaString() {

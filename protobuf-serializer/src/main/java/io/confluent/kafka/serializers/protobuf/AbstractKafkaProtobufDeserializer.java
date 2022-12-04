@@ -171,7 +171,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         schema = (ProtobufSchema) readerSchema;
       }
       message = executeRules(
-          subject, topic, headers, RuleMode.READ, null, schema, message
+          subject, topic, headers, payload, RuleMode.READ, null, schema, message
       );
 
       if (message != null) {

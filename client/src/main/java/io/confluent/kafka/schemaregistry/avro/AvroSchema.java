@@ -16,9 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
-import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.EMPTY_METADATA;
-import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.EMPTY_RULESET;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -93,8 +90,7 @@ public class AvroSchema implements ParsedSchema {
                     Map<String, String> resolvedReferences,
                     Integer version,
                     boolean isNew) {
-    this(schemaString, references, resolvedReferences,
-        EMPTY_METADATA, EMPTY_RULESET, version, isNew);
+    this(schemaString, references, resolvedReferences, null, null, version, isNew);
   }
 
   public AvroSchema(String schemaString,
@@ -126,8 +122,8 @@ public class AvroSchema implements ParsedSchema {
     this.schemaObj = schemaObj;
     this.references = Collections.emptyList();
     this.resolvedReferences = Collections.emptyMap();
-    this.metadata = EMPTY_METADATA;
-    this.ruleSet = EMPTY_RULESET;
+    this.metadata = null;
+    this.ruleSet = null;
     this.version = version;
   }
 
