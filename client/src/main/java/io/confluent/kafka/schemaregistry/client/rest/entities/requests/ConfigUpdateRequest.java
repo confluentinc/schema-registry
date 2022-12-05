@@ -35,8 +35,10 @@ public class ConfigUpdateRequest {
 
   private String compatibilityLevel;
   private String compatibilityGroup;
-  private Metadata metadataOverride;
-  private RuleSet ruleSetOverride;
+  private Metadata initialMetadata;
+  private Metadata finalMetadata;
+  private RuleSet initialRuleSet;
+  private RuleSet finalRuleSet;
 
   public ConfigUpdateRequest() {
   }
@@ -44,8 +46,10 @@ public class ConfigUpdateRequest {
   public ConfigUpdateRequest(Config config) {
     this.compatibilityLevel = config.getCompatibilityLevel();
     this.compatibilityGroup = config.getCompatibilityGroup();
-    this.metadataOverride = config.getMetadataOverride();
-    this.ruleSetOverride = config.getRuleSetOverride();
+    this.initialMetadata = config.getInitialMetadata();
+    this.finalMetadata = config.getFinalMetadata();
+    this.initialRuleSet = config.getInitialRuleSet();
+    this.finalRuleSet = config.getFinalRuleSet();
   }
 
   public static ConfigUpdateRequest fromJson(String json) throws IOException {
@@ -76,24 +80,44 @@ public class ConfigUpdateRequest {
     this.compatibilityGroup = compatibilityGroup;
   }
 
-  @JsonProperty("metadataOverride")
-  public Metadata getMetadataOverride() {
-    return this.metadataOverride;
+  @JsonProperty("initialMetadata")
+  public Metadata getInitialMetadata() {
+    return this.initialMetadata;
   }
 
-  @JsonProperty("metadataOverride")
-  public void setMetadataOverride(Metadata metadataOverride) {
-    this.metadataOverride = metadataOverride;
+  @JsonProperty("initialMetadata")
+  public void setInitialMetadata(Metadata initialMetadata) {
+    this.initialMetadata = initialMetadata;
   }
 
-  @JsonProperty("ruleSetOverride")
-  public RuleSet getRuleSetOverride() {
-    return this.ruleSetOverride;
+  @JsonProperty("finalMetadata")
+  public Metadata getFinalMetadata() {
+    return this.finalMetadata;
   }
 
-  @JsonProperty("ruleSetOverride")
-  public void setRuleSetOverride(RuleSet ruleSetOverride) {
-    this.ruleSetOverride = ruleSetOverride;
+  @JsonProperty("finalMetadata")
+  public void setFinalMetadata(Metadata finalMetadata) {
+    this.finalMetadata = finalMetadata;
+  }
+
+  @JsonProperty("initialRuleSet")
+  public RuleSet getInitialRuleSet() {
+    return this.initialRuleSet;
+  }
+
+  @JsonProperty("initialRuleSet")
+  public void setInitialRuleSet(RuleSet initialRuleSet) {
+    this.initialRuleSet = initialRuleSet;
+  }
+
+  @JsonProperty("finalRuleSet")
+  public RuleSet getFinalRuleSet() {
+    return this.finalRuleSet;
+  }
+
+  @JsonProperty("finalRuleSet")
+  public void setFinalRuleSet(RuleSet finalRuleSet) {
+    this.finalRuleSet = finalRuleSet;
   }
 
   public String toJson() throws IOException {
@@ -111,12 +135,15 @@ public class ConfigUpdateRequest {
     ConfigUpdateRequest that = (ConfigUpdateRequest) o;
     return Objects.equals(compatibilityLevel, that.compatibilityLevel)
         && Objects.equals(compatibilityGroup, that.compatibilityGroup)
-        && Objects.equals(metadataOverride, that.metadataOverride)
-        && Objects.equals(ruleSetOverride, that.ruleSetOverride);
+        && Objects.equals(initialMetadata, that.initialMetadata)
+        && Objects.equals(finalMetadata, that.finalMetadata)
+        && Objects.equals(initialRuleSet, that.initialRuleSet)
+        && Objects.equals(finalRuleSet, that.finalRuleSet);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(compatibilityLevel, compatibilityGroup, metadataOverride, ruleSetOverride);
+    return Objects.hash(compatibilityLevel, compatibilityGroup,
+        initialMetadata, finalMetadata, initialRuleSet, finalRuleSet);
   }
 }

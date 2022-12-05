@@ -31,18 +31,24 @@ public class Config {
 
   private String compatibilityLevel;
   private String compatibilityGroup;
-  private Metadata metadataOverride;
-  private RuleSet ruleSetOverride;
+  private Metadata initialMetadata;
+  private Metadata finalMetadata;
+  private RuleSet initialRuleSet;
+  private RuleSet finalRuleSet;
 
   @JsonCreator
   public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel,
                 @JsonProperty("compatibilityGroup") String compatibilityGroup,
-                @JsonProperty("metadataOverride") Metadata metadataOverride,
-                @JsonProperty("ruleSetOverride") RuleSet ruleSetOverride) {
+                @JsonProperty("initialMetadata") Metadata initialMetadata,
+                @JsonProperty("finalMetadata") Metadata finalMetadata,
+                @JsonProperty("initialRuleSet") RuleSet initialRuleSet,
+                @JsonProperty("finalRuleSet") RuleSet finalRuleSet) {
     this.compatibilityLevel = compatibilityLevel;
     this.compatibilityGroup = compatibilityGroup;
-    this.metadataOverride = metadataOverride;
-    this.ruleSetOverride = ruleSetOverride;
+    this.initialMetadata = initialMetadata;
+    this.finalMetadata = finalMetadata;
+    this.initialRuleSet = initialRuleSet;
+    this.finalRuleSet = finalRuleSet;
   }
 
   public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel) {
@@ -55,8 +61,10 @@ public class Config {
   public Config(ConfigUpdateRequest request) {
     this.compatibilityLevel = request.getCompatibilityLevel();
     this.compatibilityGroup = request.getCompatibilityGroup();
-    this.metadataOverride = request.getMetadataOverride();
-    this.ruleSetOverride = request.getRuleSetOverride();
+    this.initialMetadata = request.getInitialMetadata();
+    this.finalMetadata = request.getInitialMetadata();
+    this.initialRuleSet = request.getInitialRuleSet();
+    this.finalRuleSet = request.getFinalRuleSet();
   }
 
   @Schema(description = "Compatibility Level",
@@ -83,24 +91,44 @@ public class Config {
     this.compatibilityGroup = compatibilityGroup;
   }
 
-  @JsonProperty("metadataOverride")
-  public Metadata getMetadataOverride() {
-    return this.metadataOverride;
+  @JsonProperty("initialMetadata")
+  public Metadata getInitialMetadata() {
+    return this.initialMetadata;
   }
 
-  @JsonProperty("metadataOverride")
-  public void setMetadataOverride(Metadata metadataOverride) {
-    this.metadataOverride = metadataOverride;
+  @JsonProperty("initialMetadata")
+  public void setInitialMetadata(Metadata initialMetadata) {
+    this.initialMetadata = initialMetadata;
   }
 
-  @JsonProperty("ruleSetOverride")
-  public RuleSet getRuleSetOverride() {
-    return this.ruleSetOverride;
+  @JsonProperty("finalMetadata")
+  public Metadata getFinalMetadata() {
+    return this.finalMetadata;
   }
 
-  @JsonProperty("ruleSetOverride")
-  public void setRuleSetOverride(RuleSet ruleSetOverride) {
-    this.ruleSetOverride = ruleSetOverride;
+  @JsonProperty("finalMetadata")
+  public void setFinalMetadata(Metadata finalMetadata) {
+    this.finalMetadata = finalMetadata;
+  }
+
+  @JsonProperty("initialRuleSet")
+  public RuleSet getInitialRuleSet() {
+    return this.initialRuleSet;
+  }
+
+  @JsonProperty("initialRuleSet")
+  public void setInitialRuleSet(RuleSet initialRuleSet) {
+    this.initialRuleSet = initialRuleSet;
+  }
+
+  @JsonProperty("finalRuleSet")
+  public RuleSet getFinalRuleSet() {
+    return this.finalRuleSet;
+  }
+
+  @JsonProperty("finalRuleSet")
+  public void setFinalRuleSet(RuleSet finalRuleSet) {
+    this.finalRuleSet = finalRuleSet;
   }
 
   @Override
@@ -114,13 +142,16 @@ public class Config {
     Config config = (Config) o;
     return Objects.equals(compatibilityLevel, config.compatibilityLevel)
         && Objects.equals(compatibilityGroup, config.compatibilityGroup)
-        && Objects.equals(metadataOverride, config.metadataOverride)
-        && Objects.equals(ruleSetOverride, config.ruleSetOverride);
+        && Objects.equals(initialMetadata, config.initialMetadata)
+        && Objects.equals(finalMetadata, config.finalMetadata)
+        && Objects.equals(initialRuleSet, config.initialRuleSet)
+        && Objects.equals(finalRuleSet, config.finalRuleSet);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(compatibilityLevel, compatibilityGroup, metadataOverride, ruleSetOverride);
+    return Objects.hash(compatibilityLevel, compatibilityGroup,
+        initialMetadata, finalMetadata, initialRuleSet, finalRuleSet);
   }
 
   @Override
@@ -128,8 +159,10 @@ public class Config {
     return "Config{"
         + "compatibilityLevel='" + compatibilityLevel + '\''
         + ", compatibilityGroup='" + compatibilityGroup + '\''
-        + ", metadataOverride=" + metadataOverride
-        + ", ruleSetOverride=" + ruleSetOverride
+        + ", initialMetadata=" + initialMetadata
+        + ", finalMetadata=" + finalMetadata
+        + ", initialRuleSet=" + initialRuleSet
+        + ", finalRuleSet=" + finalRuleSet
         + '}';
   }
 }

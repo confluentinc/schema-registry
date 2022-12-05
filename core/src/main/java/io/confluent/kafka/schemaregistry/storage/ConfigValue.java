@@ -30,31 +30,43 @@ public class ConfigValue extends SubjectValue {
 
   private CompatibilityLevel compatibilityLevel;
   private String compatibilityGroup;
-  private Metadata metadataOverride;
-  private RuleSet ruleSetOverride;
+  private Metadata initialMetadata;
+  private Metadata finalMetadata;
+  private RuleSet initialRuleSet;
+  private RuleSet finalRuleSet;
 
   public ConfigValue(@JsonProperty("subject") String subject,
                      @JsonProperty("compatibilityLevel") CompatibilityLevel compatibilityLevel,
                      @JsonProperty("compatibilityGroup") String compatibilityGroup,
-                     @JsonProperty("metadataOverride") Metadata metadataOverride,
-                     @JsonProperty("ruleSetOverride") RuleSet ruleSetOverride) {
+                     @JsonProperty("initialMetadata") Metadata initialMetadata,
+                     @JsonProperty("finalMetadata") Metadata finalMetadata,
+                     @JsonProperty("initialRuleSet") RuleSet initialRuleSet,
+                     @JsonProperty("finalRuleSet") RuleSet finalRuleSet) {
     super(subject);
     this.compatibilityLevel = compatibilityLevel;
     this.compatibilityGroup = compatibilityGroup;
-    this.metadataOverride = metadataOverride;
-    this.ruleSetOverride = ruleSetOverride;
+    this.initialMetadata = initialMetadata;
+    this.finalMetadata = finalMetadata;
+    this.initialRuleSet = initialRuleSet;
+    this.finalRuleSet = finalRuleSet;
   }
 
   public ConfigValue(String subject, Config configEntity) {
     super(subject);
     this.compatibilityLevel = CompatibilityLevel.forName(configEntity.getCompatibilityLevel());
     this.compatibilityGroup = configEntity.getCompatibilityGroup();
-    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata =
-        configEntity.getMetadataOverride();
-    this.metadataOverride = metadata != null ? new Metadata(metadata) : null;
-    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet =
-        configEntity.getRuleSetOverride();
-    this.ruleSetOverride = ruleSet != null ? new RuleSet(ruleSet) : null;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata initialMetadata =
+        configEntity.getInitialMetadata();
+    this.initialMetadata = initialMetadata != null ? new Metadata(initialMetadata) : null;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata finalMetadata =
+        configEntity.getFinalMetadata();
+    this.finalMetadata = finalMetadata != null ? new Metadata(finalMetadata) : null;
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet initialRuleSet =
+        configEntity.getInitialRuleSet();
+    this.initialRuleSet = initialRuleSet != null ? new RuleSet(initialRuleSet) : null;
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet finalRuleSet =
+        configEntity.getFinalRuleSet();
+    this.finalRuleSet = finalRuleSet != null ? new RuleSet(finalRuleSet) : null;
   }
 
   @JsonProperty("compatibilityLevel")
@@ -77,24 +89,44 @@ public class ConfigValue extends SubjectValue {
     this.compatibilityGroup = compatibilityGroup;
   }
 
-  @JsonProperty("metadataOverride")
-  public Metadata getMetadataOverride() {
-    return this.metadataOverride;
+  @JsonProperty("initialMetadata")
+  public Metadata getInitialMetadata() {
+    return this.initialMetadata;
   }
 
-  @JsonProperty("metadataOverride")
-  public void setMetadataOverride(Metadata metadataOverride) {
-    this.metadataOverride = metadataOverride;
+  @JsonProperty("initialMetadata")
+  public void setInitialMetadata(Metadata initialMetadata) {
+    this.initialMetadata = initialMetadata;
   }
 
-  @JsonProperty("ruleSetOverride")
-  public RuleSet getRuleSetOverride() {
-    return this.ruleSetOverride;
+  @JsonProperty("finalMetadata")
+  public Metadata getFinalMetadata() {
+    return this.finalMetadata;
   }
 
-  @JsonProperty("ruleSetOverride")
-  public void setRuleSetOverride(RuleSet ruleSetOverride) {
-    this.ruleSetOverride = ruleSetOverride;
+  @JsonProperty("finalMetadata")
+  public void setFinalMetadata(Metadata finalMetadata) {
+    this.finalMetadata = finalMetadata;
+  }
+
+  @JsonProperty("initialRuleSet")
+  public RuleSet getInitialRuleSet() {
+    return this.initialRuleSet;
+  }
+
+  @JsonProperty("initialRuleSet")
+  public void setInitialRuleSet(RuleSet initialRuleSet) {
+    this.initialRuleSet = initialRuleSet;
+  }
+
+  @JsonProperty("finalRuleSet")
+  public RuleSet getfinalRuleSet() {
+    return this.finalRuleSet;
+  }
+
+  @JsonProperty("finalRuleSet")
+  public void setfinalRuleSet(RuleSet finalRuleSet) {
+    this.finalRuleSet = finalRuleSet;
   }
 
   @Override
@@ -111,14 +143,16 @@ public class ConfigValue extends SubjectValue {
     ConfigValue that = (ConfigValue) o;
     return compatibilityLevel == that.compatibilityLevel
         && Objects.equals(compatibilityGroup, that.compatibilityGroup)
-        && Objects.equals(metadataOverride, that.metadataOverride)
-        && Objects.equals(ruleSetOverride, that.ruleSetOverride);
+        && Objects.equals(initialMetadata, that.initialMetadata)
+        && Objects.equals(finalMetadata, that.finalMetadata)
+        && Objects.equals(initialRuleSet, that.initialRuleSet)
+        && Objects.equals(finalRuleSet, that.finalRuleSet);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), compatibilityLevel, compatibilityGroup, metadataOverride,
-        ruleSetOverride);
+    return Objects.hash(super.hashCode(), compatibilityLevel, compatibilityGroup,
+        initialMetadata, finalMetadata, initialRuleSet, finalRuleSet);
   }
 
   @Override
@@ -126,8 +160,10 @@ public class ConfigValue extends SubjectValue {
     return "ConfigValue{"
         + "compatibilityLevel=" + compatibilityLevel
         + ", compatibilityGroup='" + compatibilityGroup + '\''
-        + ", metadataOverride=" + metadataOverride
-        + ", ruleSetOverride=" + ruleSetOverride
+        + ", initialMetadata=" + initialMetadata
+        + ", finalMetadata=" + finalMetadata
+        + ", initialRuleSet=" + initialRuleSet
+        + ", finalRuleSet=" + finalRuleSet
         + '}';
   }
 
@@ -140,19 +176,19 @@ public class ConfigValue extends SubjectValue {
     return new Config(
         compatibilityLevel != null ? compatibilityLevel.name : null,
         compatibilityGroup,
-        metadataOverride != null ? metadataOverride.toMetadataEntity() : null,
-        ruleSetOverride != null ? ruleSetOverride.toRuleSetEntity() : null
+        initialMetadata != null ? initialMetadata.toMetadataEntity() : null,
+        finalMetadata != null ? finalMetadata.toMetadataEntity() : null,
+        initialRuleSet != null ? initialRuleSet.toRuleSetEntity() : null,
+        finalRuleSet != null ? finalRuleSet.toRuleSetEntity() : null
     );
   }
 
   public static ConfigValue update(ConfigValue oldConfig, ConfigValue newConfig) {
     if (oldConfig == null) {
       return newConfig;
-    }
-    else if (newConfig == null) {
+    } else if (newConfig == null) {
       return oldConfig;
-    }
-    else {
+    } else {
       return new ConfigValue(
           newConfig.getSubject() != null
               ? newConfig.getSubject() : oldConfig.getSubject(),
@@ -160,10 +196,14 @@ public class ConfigValue extends SubjectValue {
               ? newConfig.getCompatibilityLevel() : oldConfig.getCompatibilityLevel(),
           newConfig.getCompatibilityGroup() != null
               ? newConfig.getCompatibilityGroup() : oldConfig.getCompatibilityGroup(),
-          newConfig.getMetadataOverride() != null
-              ? newConfig.getMetadataOverride() : oldConfig.getMetadataOverride(),
-          newConfig.getRuleSetOverride() != null
-              ? newConfig.getRuleSetOverride() : oldConfig.getRuleSetOverride()
+          newConfig.getInitialMetadata() != null
+              ? newConfig.getInitialMetadata() : oldConfig.getInitialMetadata(),
+          newConfig.getFinalMetadata() != null
+              ? newConfig.getFinalMetadata() : oldConfig.getFinalMetadata(),
+          newConfig.getInitialRuleSet() != null
+              ? newConfig.getInitialRuleSet() : oldConfig.getInitialRuleSet(),
+          newConfig.getfinalRuleSet() != null
+              ? newConfig.getfinalRuleSet() : oldConfig.getfinalRuleSet()
       );
     }
   }
