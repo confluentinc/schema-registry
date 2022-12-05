@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.LinkedHashSet;
@@ -58,12 +59,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private static final String WILDCARD = "*";
 
-  private String defaultCompatibility = "BACKWARD";
+  private Config defaultConfig = new Config("BACKWARD");
   private final Map<String, Map<ParsedSchema, Integer>> schemaCache;
   private final Map<String, Map<ParsedSchema, Integer>> schemaIdCache;
   private final Map<String, Map<Integer, ParsedSchema>> idCache;
   private final Map<String, Map<ParsedSchema, Integer>> versionCache;
-  private final Map<String, String> compatibilityCache;
+  private final Map<String, Config> configCache;
   private final Map<String, String> modes;
   private final Map<String, AtomicInteger> ids;
   private final Map<String, SchemaProvider> providers;
@@ -79,7 +80,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     schemaIdCache = new ConcurrentHashMap<>();
     idCache = new ConcurrentHashMap<>();
     versionCache = new ConcurrentHashMap<>();
-    compatibilityCache = new ConcurrentHashMap<>();
+    configCache = new ConcurrentHashMap<>();
     modes = new ConcurrentHashMap<>();
     ids = new ConcurrentHashMap<>();
     this.providers = providers != null && !providers.isEmpty()
@@ -500,12 +501,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public boolean testCompatibility(String subject, ParsedSchema newSchema) throws IOException,
                                                                             RestClientException {
-    String compatibility = compatibilityCache.get(subject);
-    if (compatibility == null) {
-      compatibility = defaultCompatibility;
+    Config config = configCache.get(subject);
+    if (config == null) {
+      config = defaultConfig;
     }
 
-    CompatibilityLevel compatibilityLevel = CompatibilityLevel.forName(compatibility);
+    CompatibilityLevel compatibilityLevel =
+        CompatibilityLevel.forName(config.getCompatibilityLevel());
     if (compatibilityLevel == null) {
       return false;
     }
@@ -570,7 +572,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     schemaCache.remove(subject);
     idCache.remove(subject);
     Map<ParsedSchema, Integer> versions = versionCache.remove(subject);
-    compatibilityCache.remove(subject);
+    configCache.remove(subject);
     return versions != null
         ? versions.values().stream().sorted().collect(Collectors.toList())
         : Collections.emptyList();
@@ -609,12 +611,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public List<String> testCompatibilityVerbose(String subject, ParsedSchema newSchema)
       throws IOException, RestClientException {
-    String compatibility = compatibilityCache.get(subject);
-    if (compatibility == null) {
-      compatibility = defaultCompatibility;
+    Config config = configCache.get(subject);
+    if (config == null) {
+      config = defaultConfig;
     }
 
-    CompatibilityLevel compatibilityLevel = CompatibilityLevel.forName(compatibility);
+    CompatibilityLevel compatibilityLevel =
+        CompatibilityLevel.forName(config.getCompatibilityLevel());
     if (compatibilityLevel == null) {
       return Collections.singletonList("Compatibility level not specified.");
     }
@@ -630,26 +633,26 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public String updateCompatibility(String subject, String compatibility)
+  public Config updateConfig(String subject, Config config)
       throws IOException, RestClientException {
     if (subject == null) {
-      defaultCompatibility = compatibility;
-      return compatibility;
+      defaultConfig = config;
+      return config;
     }
-    compatibilityCache.put(subject, compatibility);
-    return compatibility;
+    configCache.put(subject, config);
+    return config;
   }
 
   @Override
-  public String getCompatibility(String subject) throws IOException, RestClientException {
+  public Config getConfig(String subject) throws IOException, RestClientException {
     if (subject == null) {
-      return defaultCompatibility;
+      return defaultConfig;
     }
-    String compatibility = compatibilityCache.get(subject);
-    if (compatibility == null) {
+    Config config = configCache.get(subject);
+    if (config == null) {
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
-    return compatibility;
+    return config;
   }
 
   @Override
@@ -701,7 +704,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     schemaIdCache.clear();
     idCache.clear();
     versionCache.clear();
-    compatibilityCache.clear();
+    configCache.clear();
     modes.clear();
     ids.clear();
   }
