@@ -140,4 +140,46 @@ public class Metadata {
       sensitive.forEach(s -> md.update(s.getBytes(StandardCharsets.UTF_8)));
     }
   }
+
+  public static Metadata mergeMetadata(Metadata oldMetadata, Metadata newMetadata) {
+    if (oldMetadata == null) {
+      return newMetadata;
+    } else if (newMetadata == null) {
+      return oldMetadata;
+    } else {
+      return new Metadata(
+          merge(oldMetadata.annotations, newMetadata.annotations),
+          merge(oldMetadata.properties, newMetadata.properties),
+          merge(oldMetadata.sensitive, newMetadata.sensitive)
+      );
+    }
+  }
+
+  private static <T> SortedMap<String, T> merge(
+      SortedMap<String, T> oldMap,
+      SortedMap<String, T> newMap) {
+    if (oldMap == null || oldMap.isEmpty()) {
+      return newMap;
+    } else if (newMap == null || newMap.isEmpty()) {
+      return oldMap;
+    } else {
+      SortedMap<String, T> map = new TreeMap<>(oldMap);
+      map.putAll(newMap);
+      return map;
+    }
+  }
+
+  private static SortedSet<String> merge(
+      SortedSet<String> oldSet,
+      SortedSet<String> newSet) {
+    if (oldSet == null || oldSet.isEmpty()) {
+      return newSet;
+    } else if (newSet == null || newSet.isEmpty()) {
+      return oldSet;
+    } else {
+      SortedSet<String> set = new TreeSet<>(oldSet);
+      set.addAll(newSet);
+      return set;
+    }
+  }
 }
