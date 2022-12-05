@@ -69,6 +69,11 @@ public class ConfigValue extends SubjectValue {
     this.finalRuleSet = finalRuleSet != null ? new RuleSet(finalRuleSet) : null;
   }
 
+  public ConfigValue(String subject, CompatibilityLevel compatibilityLevel) {
+    super(subject);
+    this.compatibilityLevel = compatibilityLevel;
+  }
+
   @JsonProperty("compatibilityLevel")
   public CompatibilityLevel getCompatibilityLevel() {
     return compatibilityLevel;
