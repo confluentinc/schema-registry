@@ -170,9 +170,7 @@ public interface ParsedSchema {
         }
       }
     }
-    return CompatibilityChecker.checker(level).isCompatible(
-      this,
-      previousSchemas);
+    return CompatibilityChecker.checker(level).isCompatible(this, previousSchemas);
   }
 
   /**

@@ -111,7 +111,6 @@ public class Difference {
 
   @Override
   public String toString() {
-    return "{errorType:\"" + type + '"'
-             + ", description:\"" + error() + "\"}";
+    return "{errorType:\"" + type + '"' + ", description:\"" + error() + "\"}";
   }
 }

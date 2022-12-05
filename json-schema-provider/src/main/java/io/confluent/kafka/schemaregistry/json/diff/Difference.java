@@ -127,12 +127,12 @@ public class Difference {
       message = "A type at path '" + jsonPath + "' is different between the "
                   + "%s schema and the %s schema";
     } else {
-      message = propertyItemError();
+      message = propertyOrItemError();
     }
     return message;
   }
 
-  private String propertyItemError() {
+  private String propertyOrItemError() {
     if (type == Type.PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL
           || type == Type.ITEM_ADDED_TO_OPEN_CONTENT_MODEL) {
       return "The %s schema has an open content model and has a property or item at "
@@ -189,8 +189,6 @@ public class Difference {
 
   @Override
   public String toString() {
-    return "{errorType:\"" + type + "\""
-             + ", description:\""
-             + error() + "'}";
+    return "{errorType:\"" + type + "\"" + ", description:\"" + error() + "'}";
   }
 }
