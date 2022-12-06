@@ -41,12 +41,16 @@ public class RestApiContextTest extends ClusterTestHarness {
   public void testQualifiedSubjects() throws Exception {
     String subject1 = ":.ctx1:testTopic1";
     String subject2 = ":.ctx2:testTopic2";
+    String subject3 = ":.ctx3:testTopic1";
     int schemasInSubject1 = 10;
     List<Integer> allVersionsInSubject1 = new ArrayList<Integer>();
     List<String> allSchemasInSubject1 = TestUtils.getRandomCanonicalAvroString(schemasInSubject1);
     int schemasInSubject2 = 5;
     List<Integer> allVersionsInSubject2 = new ArrayList<Integer>();
     List<String> allSchemasInSubject2 = TestUtils.getRandomCanonicalAvroString(schemasInSubject2);
+    int schemasInSubject3 = 2;
+    List<Integer> allVersionsInSubject3 = new ArrayList<Integer>();
+    List<String> allSchemasInSubject3 = TestUtils.getRandomCanonicalAvroString(schemasInSubject2);
 
     // test getAllVersions with no existing data
     try {
@@ -103,6 +107,19 @@ public class RestApiContextTest extends ClusterTestHarness {
       allVersionsInSubject2.add(expectedVersion);
     }
 
+    // reset the schema id counter due to a different context
+    schemaIdCounter = 1;
+
+    // test registering schemas in subject2
+    for (int i = 0; i < schemasInSubject3; i++) {
+      String schema = allSchemasInSubject3.get(i);
+      int expectedVersion = i + 1;
+      registerAndVerifySchema(restApp.restClient, schema, schemaIdCounter,
+          subject3);
+      schemaIdCounter++;
+      allVersionsInSubject3.add(expectedVersion);
+    }
+
     // test getAllVersions with existing data
     assertEquals("Getting all versions from subject1 should match all registered versions",
                  allVersionsInSubject1,
@@ -113,7 +130,7 @@ public class RestApiContextTest extends ClusterTestHarness {
 
     // test getAllContexts
     assertEquals("Getting all contexts should return all registered contexts",
-                 ImmutableList.of(DEFAULT_CONTEXT, ".ctx1", ".ctx2"),
+                 ImmutableList.of(DEFAULT_CONTEXT, ".ctx1", ".ctx2", ".ctx3"),
                  restApp.restClient.getAllContexts());
 
     // test getAllSubjectsWithPrefix with existing data
@@ -133,13 +150,23 @@ public class RestApiContextTest extends ClusterTestHarness {
 
     // test getAllSubjectsWithPrefix with context wildcard
     assertEquals("Getting all subjects should match all registered subjects",
-        ImmutableList.of(subject1, subject2),
+        ImmutableList.of(subject1, subject2, subject3),
         restApp.restClient.getAllSubjects(":*:", false));
 
     // test getSchemas with context wildcard
     assertEquals("Getting all schemas should match all registered subjects",
-        schemasInSubject1 + schemasInSubject2,
+        schemasInSubject1 + schemasInSubject2 + schemasInSubject3,
         restApp.restClient.getSchemas(":*:", false, false).size());
+
+    // test getSchemas with context wildcard and subject
+    assertEquals("Getting all schemas should match registered subjects",
+        schemasInSubject1 + schemasInSubject3,
+        restApp.restClient.getSchemas(":*:testTopic1", false, false).size());
+
+    // test getSchemas with context wildcard and subject
+    assertEquals("Getting all schemas should match registered subjects",
+        schemasInSubject2,
+        restApp.restClient.getSchemas(":*:testTopic2", false, false).size());
 
     Schema schema = restApp.restClient.getVersion("testTopic1", 1);
     assertEquals("Getting schema by version w/o context should succeed",

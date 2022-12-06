@@ -1461,14 +1461,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private CloseableIterator<SchemaRegistryValue> allVersions(
-          String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
+      String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
     try {
       String start;
       String end;
       int idx = subjectOrPrefix.indexOf(CONTEXT_WILDCARD);
       if (idx >= 0) {
-        // Context wildcard match
+        // Context wildcard match (prefix may contain tenant)
         String prefix = subjectOrPrefix.substring(0, idx);
+        String unqualifiedSubjectOrPrefix =
+            subjectOrPrefix.substring(idx + CONTEXT_WILDCARD.length());
+        if (!unqualifiedSubjectOrPrefix.isEmpty()) {
+          return allVersionsFromAllContexts(unqualifiedSubjectOrPrefix, isPrefix);
+        }
         start = prefix + CONTEXT_PREFIX + CONTEXT_DELIMITER;
         end = prefix + CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER;
       } else {
@@ -1482,6 +1487,28 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
     }
+  }
+
+  private CloseableIterator<SchemaRegistryValue> allVersionsFromAllContexts(
+      String unqualifiedSubjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
+    List<ContextValue> contexts = new ArrayList<>();
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        contexts.add((ContextValue) iter.next());
+      }
+    }
+    List<SchemaRegistryValue> versions = new ArrayList<>();
+    for (ContextValue v : contexts) {
+      QualifiedSubject qualSub =
+          new QualifiedSubject(v.getTenant(), v.getContext(), unqualifiedSubjectOrPrefix);
+      try (CloseableIterator<SchemaRegistryValue> subiter =
+          allVersions(qualSub.toQualifiedSubject(), isPrefix)) {
+        while (subiter.hasNext()) {
+          versions.add(subiter.next());
+        }
+      }
+    }
+    return new DelegatingIterator<>(versions.iterator());
   }
 
   @Override
