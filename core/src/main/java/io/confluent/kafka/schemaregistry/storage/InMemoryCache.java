@@ -388,32 +388,4 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       return false;
     };
   }
-
-  static class DelegatingIterator<T> implements CloseableIterator<T> {
-
-    private final Iterator<T> iterator;
-
-    public DelegatingIterator(Iterator<T> iterator) {
-      this.iterator = iterator;
-    }
-
-    @Override
-    public boolean hasNext() {
-      return iterator.hasNext();
-    }
-
-    @Override
-    public T next() {
-      return iterator.next();
-    }
-
-    @Override
-    public void remove() {
-      iterator.remove();
-    }
-
-    @Override
-    public void close() {
-    }
-  }
 }
