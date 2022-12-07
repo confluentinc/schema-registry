@@ -1333,8 +1333,8 @@ public class ProtobufData {
   }
 
   private boolean isOptional(FieldDescriptor fieldDescriptor) {
-    return fieldDescriptor.toProto().getProto3Optional() ||
-        (supportOptionalForProto2 && fieldDescriptor.hasOptionalKeyword());
+    return fieldDescriptor.toProto().getProto3Optional()
+        || (supportOptionalForProto2 && fieldDescriptor.hasOptionalKeyword());
   }
 
   private boolean isProto3Optional(FieldDescriptor fieldDescriptor) {
