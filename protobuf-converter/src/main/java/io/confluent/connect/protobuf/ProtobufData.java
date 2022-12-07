@@ -299,6 +299,7 @@ public class ProtobufData {
   private boolean scrubInvalidNames;
   private boolean useIntForEnums;
   private boolean useOptionalForNullables;
+  private boolean supportOptionalForProto2;
   private boolean useWrapperForNullables;
   private boolean useWrapperForRawPrimitives;
 
@@ -321,6 +322,7 @@ public class ProtobufData {
     this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
     this.useIntForEnums = protobufDataConfig.useIntForEnums();
     this.useOptionalForNullables = protobufDataConfig.useOptionalForNullables();
+    this.supportOptionalForProto2 = protobufDataConfig.supportOptionalForProto2();
     this.useWrapperForNullables = protobufDataConfig.useWrapperForNullables();
     this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
   }
@@ -1361,7 +1363,7 @@ public class ProtobufData {
   ) {
     final String fieldName = fieldDescriptor.getName();
     final Field field = schema.field(fieldName);
-    if ((isPrimitiveOrRepeated(fieldDescriptor) && !isProto3Optional(fieldDescriptor))
+    if ((isPrimitiveOrRepeated(fieldDescriptor) && !isOptional(fieldDescriptor))
         || message.hasField(fieldDescriptor)) {
       Object obj = message.getField(fieldDescriptor);
       result.put(fieldName, toConnectData(field.schema(), obj));
@@ -1371,6 +1373,11 @@ public class ProtobufData {
   private boolean isPrimitiveOrRepeated(FieldDescriptor fieldDescriptor) {
     return fieldDescriptor.getType() != FieldDescriptor.Type.MESSAGE
         || fieldDescriptor.isRepeated();
+  }
+
+  private boolean isOptional(FieldDescriptor fieldDescriptor) {
+    return fieldDescriptor.toProto().getProto3Optional()
+        || (supportOptionalForProto2 && fieldDescriptor.hasOptionalKeyword());
   }
 
   private boolean isProto3Optional(FieldDescriptor fieldDescriptor) {
