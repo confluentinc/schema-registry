@@ -37,6 +37,7 @@ import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
 import io.confluent.connect.protobuf.test.KeyValueOptional;
+import io.confluent.connect.protobuf.test.KeyValueProto2;
 import io.confluent.connect.protobuf.test.KeyValueWrapper;
 import io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry;
 import io.confluent.connect.protobuf.test.MapReferences.MapReferencesMessage;
@@ -96,6 +97,7 @@ import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION_PRE
 import static io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue.newBuilder;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -1991,6 +1993,37 @@ public class ProtobufDataTest {
         actual.field("tags").schema().name());
     assertEquals("Meta.tags", actual.field("meta").schema().field("tags").schema().name());
   }
+
+
+  @Test
+  public void testToConnectOptionalProto2() {
+    KeyValueProto2.KeyValueMessage message = KeyValueProto2.KeyValueMessage.newBuilder()
+        .setKey(123)
+        .build();
+
+    ProtobufSchema protobufSchema = new ProtobufSchema(message.getDescriptorForType());
+    ProtobufData protobufData = new ProtobufData();
+    SchemaAndValue result = protobufData.toConnectData(protobufSchema, message);
+    Struct value = (Struct) result.value();
+    assertNull(value.get("value"));
+  }
+
+
+  @Test
+  public void testToConnectOptionalProto2Disabled() {
+    KeyValueProto2.KeyValueMessage message = KeyValueProto2.KeyValueMessage.newBuilder()
+        .setKey(123)
+        .build();
+
+    ProtobufSchema protobufSchema = new ProtobufSchema(message.getDescriptorForType());
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(ProtobufDataConfig.OPTIONAL_FOR_PROTO2_CONFIG, false);  // for backward compat
+    ProtobufData protobufData = new ProtobufData(new ProtobufDataConfig(configs));
+    SchemaAndValue result = protobufData.toConnectData(protobufSchema, message);
+    Struct value = (Struct) result.value();
+    assertNotNull(value.get("value"));
+  }
+
 
   @Test
   public void testToConnectMultipleMapReferences() throws Exception {
