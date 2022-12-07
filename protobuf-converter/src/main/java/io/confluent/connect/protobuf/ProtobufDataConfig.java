@@ -41,6 +41,10 @@ public class ProtobufDataConfig extends AbstractConfig {
   public static final String OPTIONAL_FOR_NULLABLES_DOC = "Whether nullable fields should be "
       + "specified with an optional label";
 
+  public static final String OPTIONAL_FOR_PROTO2_CONFIG = "optional.for.proto2";
+  public static final boolean OPTIONAL_FOR_PROTO2_DEFAULT = true;
+  public static final String OPTIONAL_FOR_PROTO2_DOC = "Whether proto2 optionals are supported";
+
   public static final String WRAPPER_FOR_NULLABLES_CONFIG = "wrapper.for.nullables";
   public static final boolean WRAPPER_FOR_NULLABLES_DEFAULT = false;
   public static final String WRAPPER_FOR_NULLABLES_DOC = "Whether nullable fields should use "
@@ -69,6 +73,11 @@ public class ProtobufDataConfig extends AbstractConfig {
             OPTIONAL_FOR_NULLABLES_DEFAULT,
             ConfigDef.Importance.MEDIUM,
             OPTIONAL_FOR_NULLABLES_DOC)
+        .define(OPTIONAL_FOR_PROTO2_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            OPTIONAL_FOR_PROTO2_DEFAULT,
+            ConfigDef.Importance.MEDIUM,
+            OPTIONAL_FOR_PROTO2_DOC)
         .define(WRAPPER_FOR_NULLABLES_CONFIG,
             ConfigDef.Type.BOOLEAN,
             WRAPPER_FOR_NULLABLES_DEFAULT,
@@ -101,6 +110,10 @@ public class ProtobufDataConfig extends AbstractConfig {
 
   public boolean useOptionalForNullables() {
     return this.getBoolean(OPTIONAL_FOR_NULLABLES_CONFIG);
+  }
+
+  public boolean supportOptionalForProto2() {
+    return this.getBoolean(OPTIONAL_FOR_PROTO2_CONFIG);
   }
 
   public boolean useWrapperForNullables() {
