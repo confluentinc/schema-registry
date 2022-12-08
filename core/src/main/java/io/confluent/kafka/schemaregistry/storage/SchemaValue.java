@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 
+import java.util.Objects;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.Min;
 import java.util.Collections;
@@ -211,51 +212,23 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     if (!super.equals(o)) {
       return false;
     }
-
     SchemaValue that = (SchemaValue) o;
-
-    if (!this.version.equals(that.version)) {
-      return false;
-    }
-    if (!this.id.equals(that.getId())) {
-      return false;
-    }
-    if (schemaType != null ? !schemaType.equals(that.schemaType) : that.schemaType != null) {
-      return false;
-    }
-    if (!this.references.equals(that.getReferences())) {
-      return false;
-    }
-    if (!this.metadata.equals(that.getMetadata())) {
-      return false;
-    }
-    if (!this.ruleSet.equals(that.getRuleSet())) {
-      return false;
-    }
-    if (!this.schema.equals(that.schema)) {
-      return false;
-    }
-    if (deleted != that.deleted) {
-      return false;
-    }
-
-    return true;
+    return deleted == that.deleted
+        && Objects.equals(version, that.version)
+        && Objects.equals(id, that.id)
+        && Objects.equals(schema, that.schema)
+        && Objects.equals(schemaType, that.schemaType)
+        && Objects.equals(references, that.references)
+        && Objects.equals(metadata, that.metadata)
+        && Objects.equals(ruleSet, that.ruleSet);
   }
 
   @Override
   public int hashCode() {
-    int result = super.hashCode();
-    result = 31 * result + version;
-    result = 31 * result + id.intValue();
-    result = 31 * result + (schemaType != null ? schemaType.hashCode() : 0);
-    result = 31 * result + schema.hashCode();
-    result = 31 * result + references.hashCode();
-    result = 31 * result + metadata.hashCode();
-    result = 31 * result + ruleSet.hashCode();
-    result = 31 * result + (deleted ? 1 : 0);
-    return result;
+    return Objects.hash(super.hashCode(), version, id, schema, schemaType, references, metadata,
+        ruleSet, deleted);
   }
-
+  
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
