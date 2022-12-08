@@ -145,7 +145,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final String DOC_FIELD = "doc";
   public static final String PARAMS_FIELD = "params";
-  public static final String ANNOTATIONS_FIELD = "annotations";
+  public static final String TAGS_FIELD = "tags";
   public static final String PRECISION_KEY = "precision";
   public static final String SCALE_KEY = "scale";
 
@@ -928,9 +928,9 @@ public class ProtobufSchema implements ParsedSchema {
       }
       map.put(PARAMS_FIELD, keyValues);
     }
-    List<String> annotations = meta.getAnnotationList();
-    if (annotations != null && !annotations.isEmpty()) {
-      map.put(ANNOTATIONS_FIELD, annotations);
+    List<String> tags = meta.getTagsList();
+    if (tags != null && !tags.isEmpty()) {
+      map.put(TAGS_FIELD, tags);
     }
     return map.isEmpty() ? null : new OptionElement(name, Kind.MAP, map, true);
   }
@@ -1631,7 +1631,7 @@ public class ProtobufSchema implements ParsedSchema {
     if (!meta.isPresent()) {
       return null;
     }
-    return new ProtobufMeta(findDoc(meta), findParams(meta), findAnnotations(meta));
+    return new ProtobufMeta(findDoc(meta), findParams(meta), findTags(meta));
   }
 
   public static String findDoc(Optional<OptionElement> meta) {
@@ -1654,8 +1654,8 @@ public class ProtobufSchema implements ParsedSchema {
     return params;
   }
 
-  public static List<String> findAnnotations(Optional<OptionElement> meta) {
-    return (List<String>) findMetaField(meta, ANNOTATIONS_FIELD);
+  public static List<String> findTags(Optional<OptionElement> meta) {
+    return (List<String>) findMetaField(meta, TAGS_FIELD);
   }
 
   @SuppressWarnings("unchecked")
@@ -2052,7 +2052,7 @@ public class ProtobufSchema implements ParsedSchema {
       throws RuleException {
     try {
       Message msg = (Message) message;
-      // Pass the schema-based descriptor which has the annotations
+      // Pass the schema-based descriptor which has the tags
       Descriptor desc = toDescriptor(msg.getDescriptorForType().getFullName());
       return toTransformedMessage(ctx, desc, msg, transform);
     } catch (RuntimeException e) {
@@ -2086,12 +2086,12 @@ public class ProtobufSchema implements ParsedSchema {
         FieldDescriptor schemaFd = desc.findFieldByName(fd.getName());
         try (FieldContext fc = ctx.enterField(
             ctx, copy, fd.getFullName(), fd.getName(), getType(fd),
-            getInlineAnnotations(schemaFd)) // use schema-based fd which has the annotations
+            getInlineTags(schemaFd)) // use schema-based fd which has the tags
         ) {
           Object value = copy.getField(fd); // we can't use the schema-based fd
           Descriptor d = desc;
           if (schemaFd.getType() == Type.MESSAGE) {
-            // Pass the schema-based descriptor which has the annotations
+            // Pass the schema-based descriptor which has the tags
             d = schemaFd.getMessageType();
           }
           Object newValue = toTransformedMessage(ctx, d, value, transform);
@@ -2103,8 +2103,8 @@ public class ProtobufSchema implements ParsedSchema {
       FieldContext fc = ctx.currentField();
       if (fc != null) {
         try {
-          Set<String> intersect = new HashSet<>(fc.getAnnotations());
-          intersect.retainAll(ctx.rule().getAnnotations());
+          Set<String> intersect = new HashSet<>(fc.getTags());
+          intersect.retainAll(ctx.rule().getTags());
           if (!intersect.isEmpty()) {
             return transform.transform(ctx, fc, message);
           }
@@ -2152,13 +2152,13 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
-  private Set<String> getInlineAnnotations(FieldDescriptor fd) {
-    Set<String> annotations = new HashSet<>();
+  private Set<String> getInlineTags(FieldDescriptor fd) {
+    Set<String> tags = new HashSet<>();
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
       Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
-      annotations.addAll(meta.getAnnotationList());
+      tags.addAll(meta.getTagsList());
     }
-    return annotations;
+    return tags;
   }
 
   public enum Format {
@@ -2201,12 +2201,12 @@ public class ProtobufSchema implements ParsedSchema {
   public static class ProtobufMeta {
     private String doc;
     private Map<String, String> params;
-    private List<String> annotations;
+    private List<String> tags;
 
-    public ProtobufMeta(String doc, Map<String, String> params, List<String> annotations) {
+    public ProtobufMeta(String doc, Map<String, String> params, List<String> tags) {
       this.doc = doc;
       this.params = params;
-      this.annotations = annotations;
+      this.tags = tags;
     }
 
     public String getDoc() {
@@ -2217,14 +2217,14 @@ public class ProtobufSchema implements ParsedSchema {
       return params;
     }
 
-    public List<String> getAnnotations() {
-      return annotations;
+    public List<String> getTags() {
+      return tags;
     }
 
     public boolean isEmpty() {
       return doc == null
           && (params == null || params.isEmpty())
-          && (annotations == null || annotations.isEmpty());
+          && (tags == null || tags.isEmpty());
     }
 
     @Override
@@ -2238,12 +2238,12 @@ public class ProtobufSchema implements ParsedSchema {
       ProtobufMeta metadata = (ProtobufMeta) o;
       return Objects.equals(doc, metadata.doc)
           && Objects.equals(params, metadata.params)
-          && Objects.equals(annotations, metadata.annotations);
+          && Objects.equals(tags, metadata.tags);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(doc, params, annotations);
+      return Objects.hash(doc, params, tags);
     }
   }
 }

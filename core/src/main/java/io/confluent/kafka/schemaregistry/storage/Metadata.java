@@ -27,8 +27,8 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 
 /**
- * Metadata, which includes field annotations, arbitrary key-value properties, and a list of
- * references for included properties.
+ * Metadata, which includes path annotations, arbitrary key-value properties,
+ * and a set of sensitive properties.
  */
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -36,19 +36,19 @@ import java.util.SortedSet;
 public class Metadata {
 
   @JsonPropertyOrder(alphabetic = true)
-  private final SortedMap<String, SortedSet<String>> annotations;
+  private final SortedMap<String, SortedSet<String>> paths;
   @JsonPropertyOrder(alphabetic = true)
   private final SortedMap<String, String> properties;
   private final SortedSet<String> sensitive;
 
   @JsonCreator
   public Metadata(
-      @JsonProperty("annotations") SortedMap<String, SortedSet<String>> annotations,
+      @JsonProperty("paths") SortedMap<String, SortedSet<String>> paths,
       @JsonProperty("properties") SortedMap<String, String> properties,
       @JsonProperty("sensitive") SortedSet<String> sensitive
   ) {
-    this.annotations = annotations != null
-        ? Collections.unmodifiableSortedMap(annotations)
+    this.paths = paths != null
+        ? Collections.unmodifiableSortedMap(paths)
         : Collections.emptySortedMap();
     this.properties = properties != null
         ? Collections.unmodifiableSortedMap(properties)
@@ -59,13 +59,13 @@ public class Metadata {
   }
 
   public Metadata(io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata) {
-    this.annotations = Collections.unmodifiableSortedMap(metadata.getAnnotations());
+    this.paths = Collections.unmodifiableSortedMap(metadata.getPaths());
     this.properties = Collections.unmodifiableSortedMap(metadata.getProperties());
     this.sensitive = Collections.unmodifiableSortedSet(metadata.getSensitive());
   }
 
-  public SortedMap<String, SortedSet<String>> getAnnotations() {
-    return annotations;
+  public SortedMap<String, SortedSet<String>> getPaths() {
+    return paths;
   }
 
   public SortedMap<String, String> getProperties() {
@@ -85,20 +85,20 @@ public class Metadata {
       return false;
     }
     Metadata metadata = (Metadata) o;
-    return Objects.equals(annotations, metadata.annotations)
+    return Objects.equals(paths, metadata.paths)
         && Objects.equals(properties, metadata.properties)
         && Objects.equals(sensitive, metadata.sensitive);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(annotations, properties, sensitive);
+    return Objects.hash(paths, properties, sensitive);
   }
 
   @Override
   public String toString() {
     return "Metadata{"
-        + "annotations=" + annotations
+        + "paths=" + paths
         + ", properties=" + properties
         + ", sensitive=" + sensitive
         + '}';
@@ -106,7 +106,7 @@ public class Metadata {
 
   public io.confluent.kafka.schemaregistry.client.rest.entities.Metadata toMetadataEntity() {
     return new io.confluent.kafka.schemaregistry.client.rest.entities.Metadata(
-        getAnnotations(),
+        getPaths(),
         getProperties(),
         getSensitive()
     );

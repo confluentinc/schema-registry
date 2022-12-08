@@ -155,97 +155,6 @@ public final class NewWidgetProto {
     getUnknownFields() {
       return this.unknownFields;
     }
-    private NewWidget(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      int mutable_bitField0_ = 0;
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              name_ = s;
-              break;
-            }
-            case 18: {
-              java.lang.String s = input.readStringRequireUtf8();
-              if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                ssn_ = new com.google.protobuf.LazyStringArrayList();
-                mutable_bitField0_ |= 0x00000001;
-              }
-              ssn_.add(s);
-              break;
-            }
-            case 26: {
-              if (!((mutable_bitField0_ & 0x00000002) != 0)) {
-                piiArray_ = new java.util.ArrayList<io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii>();
-                mutable_bitField0_ |= 0x00000002;
-              }
-              piiArray_.add(
-                  input.readMessage(io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.parser(), extensionRegistry));
-              break;
-            }
-            case 34: {
-              if (!((mutable_bitField0_ & 0x00000004) != 0)) {
-                piiMap_ = com.google.protobuf.MapField.newMapField(
-                    PiiMapDefaultEntryHolder.defaultEntry);
-                mutable_bitField0_ |= 0x00000004;
-              }
-              com.google.protobuf.MapEntry<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii>
-              piiMap__ = input.readMessage(
-                  PiiMapDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
-              piiMap_.getMutableMap().put(
-                  piiMap__.getKey(), piiMap__.getValue());
-              break;
-            }
-            case 40: {
-
-              height_ = input.readInt32();
-              break;
-            }
-            case 48: {
-
-              version_ = input.readInt32();
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        if (((mutable_bitField0_ & 0x00000001) != 0)) {
-          ssn_ = ssn_.getUnmodifiableView();
-        }
-        if (((mutable_bitField0_ & 0x00000002) != 0)) {
-          piiArray_ = java.util.Collections.unmodifiableList(piiArray_);
-        }
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
-    }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
       return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_descriptor;
@@ -522,7 +431,7 @@ public final class NewWidgetProto {
       if (version_ != 0) {
         output.writeInt32(6, version_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -564,7 +473,7 @@ public final class NewWidgetProto {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(6, version_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -591,7 +500,7 @@ public final class NewWidgetProto {
           != other.getHeight()) return false;
       if (getVersion()
           != other.getVersion()) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -620,7 +529,7 @@ public final class NewWidgetProto {
       hash = (53 * hash) + getHeight();
       hash = (37 * hash) + VERSION_FIELD_NUMBER;
       hash = (53 * hash) + getVersion();
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -759,19 +668,13 @@ public final class NewWidgetProto {
 
       // Construct using io.confluent.kafka.schemaregistry.rules.NewWidgetProto.NewWidget.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-          getPiiArrayFieldBuilder();
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -782,10 +685,11 @@ public final class NewWidgetProto {
         bitField0_ = (bitField0_ & ~0x00000001);
         if (piiArrayBuilder_ == null) {
           piiArray_ = java.util.Collections.emptyList();
-          bitField0_ = (bitField0_ & ~0x00000002);
         } else {
+          piiArray_ = null;
           piiArrayBuilder_.clear();
         }
+        bitField0_ = (bitField0_ & ~0x00000002);
         internalGetMutablePiiMap().clear();
         height_ = 0;
 
@@ -933,7 +837,7 @@ public final class NewWidgetProto {
         if (other.getVersion() != 0) {
           setVersion(other.getVersion());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -948,17 +852,72 @@ public final class NewWidgetProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        io.confluent.kafka.schemaregistry.rules.NewWidgetProto.NewWidget parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                name_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 10
+              case 18: {
+                java.lang.String s = input.readStringRequireUtf8();
+                ensureSsnIsMutable();
+                ssn_.add(s);
+                break;
+              } // case 18
+              case 26: {
+                io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii m =
+                    input.readMessage(
+                        io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.parser(),
+                        extensionRegistry);
+                if (piiArrayBuilder_ == null) {
+                  ensurePiiArrayIsMutable();
+                  piiArray_.add(m);
+                } else {
+                  piiArrayBuilder_.addMessage(m);
+                }
+                break;
+              } // case 26
+              case 34: {
+                com.google.protobuf.MapEntry<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii>
+                piiMap__ = input.readMessage(
+                    PiiMapDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
+                internalGetMutablePiiMap().getMutableMap().put(
+                    piiMap__.getKey(), piiMap__.getValue());
+                break;
+              } // case 34
+              case 40: {
+                height_ = input.readInt32();
+
+                break;
+              } // case 40
+              case 48: {
+                version_ = input.readInt32();
+
+                break;
+              } // case 48
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (io.confluent.kafka.schemaregistry.rules.NewWidgetProto.NewWidget) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
       private int bitField0_;
@@ -1614,7 +1573,18 @@ public final class NewWidgetProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new NewWidget(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -1677,49 +1647,6 @@ public final class NewWidgetProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private Pii(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              pii_ = s;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -1789,7 +1716,7 @@ public final class NewWidgetProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(pii_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, pii_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -1801,7 +1728,7 @@ public final class NewWidgetProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(pii_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, pii_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -1818,7 +1745,7 @@ public final class NewWidgetProto {
 
       if (!getPii()
           .equals(other.getPii())) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -1831,7 +1758,7 @@ public final class NewWidgetProto {
       hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + PII_FIELD_NUMBER;
       hash = (53 * hash) + getPii().hashCode();
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -1948,18 +1875,13 @@ public final class NewWidgetProto {
 
       // Construct using io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -2045,7 +1967,7 @@ public final class NewWidgetProto {
           pii_ = other.pii_;
           onChanged();
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -2060,17 +1982,35 @@ public final class NewWidgetProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                pii_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 10
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -2182,7 +2122,18 @@ public final class NewWidgetProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new Pii(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 

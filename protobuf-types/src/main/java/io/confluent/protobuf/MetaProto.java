@@ -1040,7 +1040,7 @@ public final class MetaProto {
        * @param values The annotation to add.
        * @return This builder for chaining.
        */
-      public Builder addAllAnnotation(
+      public Builder addAllTags(
           java.lang.Iterable<java.lang.String> values) {
         ensureAnnotationIsMutable();
         com.google.protobuf.AbstractMessageLite.Builder.addAll(

@@ -41,7 +41,7 @@ public class CelFieldExecutor extends CelExecutor implements FieldRuleExecutor {
     return (ctx, fieldCtx, fieldValue) ->
         execute(ctx, fieldValue, ImmutableMap.of(
             "value", fieldValue, "fullName", fieldCtx.getFullName(), "name", fieldCtx.getName(),
-            "annotations", new ArrayList<>(fieldCtx.getAnnotations()),
+            "annotations", new ArrayList<>(fieldCtx.getTags()),
             "message", fieldCtx.getContainingMessage()));
   }
 }
