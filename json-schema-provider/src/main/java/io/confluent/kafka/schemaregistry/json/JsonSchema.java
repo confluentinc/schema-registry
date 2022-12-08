@@ -94,7 +94,7 @@ public class JsonSchema implements ParsedSchema {
 
   public static final String TYPE = "JSON";
 
-  public static final String ANNOTATIONS = "confluent.annotations";
+  public static final String TAGS = "confluent.tags";
 
   private static final String SCHEMA_KEYWORD = "$schema";
 
@@ -557,7 +557,7 @@ public class JsonSchema implements ParsedSchema {
         Schema propertySchema = entry.getValue();
         String fullName = path + "." + propertyName;
         try (FieldContext fc = ctx.enterField(ctx, message, fullName, propertyName,
-            getType(propertySchema), getInlineAnnotations(propertySchema))) {
+            getType(propertySchema), getInlineTags(propertySchema))) {
           PropertyAccessor propertyAccessor = getPropertyAccessor(ctx, message, propertyName);
           Object value = propertyAccessor.getPropertyValue();
           Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
@@ -578,8 +578,8 @@ public class JsonSchema implements ParsedSchema {
       FieldContext fc = ctx.currentField();
       if (fc != null) {
         try {
-          Set<String> intersect = new HashSet<>(fc.getAnnotations());
-          intersect.retainAll(ctx.rule().getAnnotations());
+          Set<String> intersect = new HashSet<>(fc.getTags());
+          intersect.retainAll(ctx.rule().getTags());
           if (!intersect.isEmpty()) {
             return transform.transform(ctx, fc, message);
           }
@@ -617,13 +617,13 @@ public class JsonSchema implements ParsedSchema {
         || objectSchema.getPropertySchemas().size() == 0;
   }
 
-  private Set<String> getInlineAnnotations(Schema propertySchema) {
-    Set<String> annotations = new HashSet<>();
-    Object prop = propertySchema.getUnprocessedProperties().get(ANNOTATIONS);
+  private Set<String> getInlineTags(Schema propertySchema) {
+    Set<String> tags = new HashSet<>();
+    Object prop = propertySchema.getUnprocessedProperties().get(TAGS);
     if (prop instanceof List) {
-      ((List<?>)prop).forEach(p -> annotations.add(p.toString()));
+      ((List<?>)prop).forEach(p -> tags.add(p.toString()));
     }
-    return annotations;
+    return tags;
   }
 
   interface PropertyAccessor {

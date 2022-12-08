@@ -122,17 +122,17 @@ public class RuleContext {
     return customData;
   }
 
-  public Set<String> getAnnotations(String fullName) {
-    Set<String> annotations = new HashSet<>();
+  public Set<String> getTags(String fullName) {
+    Set<String> tags = new HashSet<>();
     Metadata metadata = target.metadata();
-    if (metadata != null && metadata.getAnnotations() != null) {
-      for (Map.Entry<String, SortedSet<String>> entry : metadata.getAnnotations().entrySet()) {
+    if (metadata != null && metadata.getPaths() != null) {
+      for (Map.Entry<String, SortedSet<String>> entry : metadata.getPaths().entrySet()) {
         if (WildcardMatcher.match(fullName, entry.getKey())) {
-          annotations.addAll(entry.getValue());
+          tags.addAll(entry.getValue());
         }
       }
     }
-    return annotations;
+    return tags;
   }
 
   public FieldContext currentField() {
@@ -140,10 +140,10 @@ public class RuleContext {
   }
 
   public FieldContext enterField(RuleContext ctx, Object containingMessage,
-      String fullName, String name, RuleContext.Type type, Set<String> annotations) {
-    Set<String> allAnnotations = new HashSet<>(annotations);
-    allAnnotations.addAll(ctx.getAnnotations(fullName));
-    return new FieldContext(containingMessage, fullName, name, type, allAnnotations);
+      String fullName, String name, RuleContext.Type type, Set<String> tags) {
+    Set<String> allTags = new HashSet<>(tags);
+    allTags.addAll(ctx.getTags(fullName));
+    return new FieldContext(containingMessage, fullName, name, type, allTags);
   }
 
   public class FieldContext implements AutoCloseable {
@@ -151,15 +151,15 @@ public class RuleContext {
     private final String fullName;
     private final String name;
     private final Type type;
-    private final Set<String> annotations;
+    private final Set<String> tags;
 
     public FieldContext(Object containingMessage, String fullName,
-        String name, Type type, Set<String> annotations) {
+        String name, Type type, Set<String> tags) {
       this.containingMessage = containingMessage;
       this.fullName = fullName;
       this.name = name;
       this.type = type;
-      this.annotations = annotations;
+      this.tags = tags;
       fieldContexts.addLast(this);
     }
 
@@ -179,8 +179,8 @@ public class RuleContext {
       return type;
     }
 
-    public Set<String> getAnnotations() {
-      return annotations;
+    public Set<String> getTags() {
+      return tags;
     }
 
     @Override
@@ -196,12 +196,12 @@ public class RuleContext {
           && Objects.equals(fullName, that.fullName)
           && Objects.equals(name, that.name)
           && Objects.equals(type, that.type)
-          && Objects.equals(annotations, that.annotations);
+          && Objects.equals(tags, that.tags);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(containingMessage, fullName, name, type, annotations);
+      return Objects.hash(containingMessage, fullName, name, type, tags);
     }
 
     @Override

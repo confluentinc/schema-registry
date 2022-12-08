@@ -39,7 +39,7 @@ public class Rule {
   private RuleKind kind;
   private RuleMode mode;
   private String type;
-  private SortedSet<String> annotations;
+  private SortedSet<String> tags;
   private String expr;
   private String onSuccess;
   private String onFailure;
@@ -50,7 +50,7 @@ public class Rule {
               @JsonProperty("kind") RuleKind kind,
               @JsonProperty("mode") RuleMode mode,
               @JsonProperty("type") String type,
-              @JsonProperty("annotations") Set<String> annotations,
+              @JsonProperty("tags") Set<String> tags,
               @JsonProperty("expr") String expr,
               @JsonProperty("onSuccess") String onSuccess,
               @JsonProperty("onFailure") String onFailure,
@@ -59,12 +59,12 @@ public class Rule {
     this.kind = kind != null ? kind : RuleKind.TRANSFORM;
     this.mode = mode != null ? mode : RuleMode.WRITEREAD;
     this.type = type;
-    SortedSet<String> sortedAnnotations = annotations != null
-        ? annotations.stream()
+    SortedSet<String> sortedTags = tags != null
+        ? tags.stream()
         .sorted()
         .collect(Collectors.toCollection(TreeSet::new))
         : Collections.emptySortedSet();
-    this.annotations = sortedAnnotations;
+    this.tags = sortedTags;
     this.expr = expr;
     this.onSuccess = onSuccess;
     this.onFailure = onFailure;
@@ -115,15 +115,15 @@ public class Rule {
     this.type = type;
   }
 
-  @Schema(description = "The annotations to which this rule applies")
-  @JsonProperty("annotations")
-  public SortedSet<String> getAnnotations() {
-    return annotations;
+  @Schema(description = "The tags to which this rule applies")
+  @JsonProperty("tags")
+  public SortedSet<String> getTags() {
+    return tags;
   }
 
-  @JsonProperty("annotations")
-  public void setAnnotations(SortedSet<String> annotations) {
-    this.annotations = annotations;
+  @JsonProperty("tags")
+  public void setTags(SortedSet<String> tags) {
+    this.tags = tags;
   }
 
   @Schema(description = "Rule expression")
@@ -193,7 +193,7 @@ public class Rule {
         && kind == rule.kind
         && mode == rule.mode
         && Objects.equals(type, rule.type)
-        && Objects.equals(annotations, rule.annotations)
+        && Objects.equals(tags, rule.tags)
         && Objects.equals(expr, rule.expr)
         && Objects.equals(onSuccess, rule.onSuccess)
         && Objects.equals(onFailure, rule.onFailure)
@@ -202,7 +202,7 @@ public class Rule {
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, kind, mode, type, annotations, expr, onSuccess, onFailure, disabled);
+    return Objects.hash(name, kind, mode, type, tags, expr, onSuccess, onFailure, disabled);
   }
 
   @Override
@@ -212,7 +212,7 @@ public class Rule {
         + ", kind=" + kind
         + ", mode=" + mode
         + ", type='" + type + '\''
-        + ", annotations='" + annotations + '\''
+        + ", tags='" + tags + '\''
         + ", expr='" + expr + '\''
         + ", onSuccess='" + onSuccess + '\''
         + ", onFailure='" + onFailure + '\''
@@ -233,8 +233,8 @@ public class Rule {
     if (type != null) {
       md.update(type.getBytes(StandardCharsets.UTF_8));
     }
-    if (annotations != null) {
-      annotations.forEach(s -> md.update(s.getBytes(StandardCharsets.UTF_8)));
+    if (tags != null) {
+      tags.forEach(s -> md.update(s.getBytes(StandardCharsets.UTF_8)));
     }
     if (expr != null) {
       md.update(expr.getBytes(StandardCharsets.UTF_8));

@@ -355,9 +355,9 @@ public class DynamicSchema {
     if (params != null && !params.isEmpty()) {
       metaBuilder.putAllParams(params);
     }
-    List<String> annotations = meta.getAnnotations();
-    if (annotations != null && !annotations.isEmpty()) {
-      metaBuilder.addAllAnnotation(annotations);
+    List<String> tags = meta.getTags();
+    if (tags != null && !tags.isEmpty()) {
+      metaBuilder.addAllTags(tags);
     }
     return metaBuilder.build();
   }

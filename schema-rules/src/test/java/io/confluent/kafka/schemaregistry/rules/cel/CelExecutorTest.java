@@ -83,7 +83,7 @@ public class CelExecutorTest {
   private final KafkaProtobufSerializer<Widget> protobufSerializer;
   private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
-  private final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
+  private final KafkaJsonSchemaSerializer<TaggedOldWidget> jsonSchemaSerializer2;
   private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   private final String topic;
   private final KafkaProducer<byte[], byte[]> producer;
@@ -175,11 +175,12 @@ public class CelExecutorTest {
 
   private Schema createWidgetSchema() {
     String userSchema = "{\"type\":\"record\",\"name\":\"OldWidget\",\"namespace\":\"io.confluent.kafka.schemaregistry.rules.cel.CelExecutorTest\",\"fields\":\n"
-        + "[{\"name\": \"name\", \"type\": \"string\",\"confluent.annotations\": [\"PII\"]},\n"
-        + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"},\"confluent.annotations\": [\"PII\"]},\n"
-        + "{\"name\": \"piiArray\", \"type\": { \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\":\"OldPii\",                                                                           \"fields\": [{\"name\": \"pii\", \"type\": \"string\",\"confluent.annotations\": [\"PII\"]}]}}},\n"
+        + "[{\"name\": \"name\", \"type\": \"string\",\"confluent.tags\": [\"PII\"]},\n"
+        + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"},\"confluent.tags\": [\"PII\"]},\n"
+        + "{\"name\": \"piiArray\", \"type\": { \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\":\"OldPii\", \"fields\":\n"
+        + "[{\"name\": \"pii\", \"type\": \"string\",\"confluent.tags\": [\"PII\"]}]}}},\n"
         + "{\"name\": \"piiMap\", \"type\": { \"type\": \"map\", \"values\": \"OldPii\"},\n"
-        + "\"confluent.annotations\": [\"PII\"]},\n"
+        + "\"confluent.tags\": [\"PII\"]},\n"
         + "{\"name\": \"size\", \"type\": \"int\"},{\"name\": \"version\", \"type\": \"int\"}]}";
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
@@ -393,9 +394,9 @@ public class CelExecutorTest {
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
         + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
-        + "\"confluent.annotations\": [ \"PII\" ]},"
+        + "\"confluent.tags\": [ \"PII\" ]},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
-        + "\"confluent.annotations\": [ \"PII\" ]},"
+        + "\"confluent.tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
         + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
         + "\"size\":{\"type\":\"integer\"},"
@@ -403,7 +404,7 @@ public class CelExecutorTest {
         + "\"required\":[\"size\",\"version\"],"
         + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
         + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
-        + "\"confluent.annotations\": [ \"PII\" ]}}}}}";
+        + "\"confluent.tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
@@ -447,19 +448,19 @@ public class CelExecutorTest {
   }
 
   @Test
-  public void testKafkaJsonSchemaSerializerAnnotatedFieldTransform() throws Exception {
+  public void testKafkaJsonSchemaSerializerTaggedFieldTransform() throws Exception {
     byte[] bytes;
     Object obj;
 
-    AnnotatedOldWidget widget = new AnnotatedOldWidget("alice");
+    TaggedOldWidget widget = new TaggedOldWidget("alice");
     widget.setSize(123);
-    widget.setAnnotatedSsn(ImmutableList.of("123", "456"));
-    widget.setPiiArray(ImmutableList.of(new AnnotatedOldPii("789"), new AnnotatedOldPii("012")));
+    widget.withTaggedSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new TaggedOldPii("789"), new TaggedOldPii("012")));
     String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
         + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
-        + "\"confluent.annotations\": [ \"PII\" ]},"
+        + "\"confluent.tags\": [ \"PII\" ]},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
-        + "\"confluent.annotations\": [ \"PII\" ]},"
+        + "\"confluent.tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
         + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
         + "\"size\":{\"type\":\"integer\"},"
@@ -467,7 +468,7 @@ public class CelExecutorTest {
         + "\"required\":[\"size\",\"version\"],"
         + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
         + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
-        + "\"confluent.annotations\": [ \"PII\" ]}}}}}";
+        + "\"confluent.tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
@@ -620,52 +621,52 @@ public class CelExecutorTest {
     }
   }
 
-  public static class AnnotatedOldWidget {
-    private String annotatedName;
-    private List<String> annotatedSsn = new ArrayList<>();
-    private List<AnnotatedOldPii> piiArray = new ArrayList<>();
-    private Map<String, AnnotatedOldPii> piiMap = new HashMap<>();
+  public static class TaggedOldWidget {
+    private String taggedName;
+    private List<String> taggedSsn = new ArrayList<>();
+    private List<TaggedOldPii> piiArray = new ArrayList<>();
+    private Map<String, TaggedOldPii> piiMap = new HashMap<>();
     private int size;
     private int version;
 
-    public AnnotatedOldWidget() {}
-    public AnnotatedOldWidget(String annotatedName) {
-      this.annotatedName = annotatedName;
+    public TaggedOldWidget() {}
+    public TaggedOldWidget(String taggedName) {
+      this.taggedName = taggedName;
     }
 
     @JsonProperty("name")
-    public String getAnnotatedName() {
-      return annotatedName;
+    public String getTaggedName() {
+      return taggedName;
     }
 
     @JsonProperty("name")
-    public void setAnnotatedName(String name) {
-      this.annotatedName = name;
+    public void setTaggedName(String name) {
+      this.taggedName = name;
     }
 
     @JsonProperty("ssn")
-    public List<String> getAnnotatedSsn() {
-      return annotatedSsn;
+    public List<String> getTaggedSsn() {
+      return taggedSsn;
     }
 
     @JsonProperty("ssn")
-    public void setAnnotatedSsn(List<String> ssn) {
-      this.annotatedSsn = ssn;
+    public void withTaggedSsn(List<String> ssn) {
+      this.taggedSsn = ssn;
     }
 
-    public List<AnnotatedOldPii> getPiiArray() {
+    public List<TaggedOldPii> getPiiArray() {
       return piiArray;
     }
 
-    public void setPiiArray(List<AnnotatedOldPii> pii) {
+    public void setPiiArray(List<TaggedOldPii> pii) {
       this.piiArray = pii;
     }
 
-    public Map<String, AnnotatedOldPii> getPiiMap() {
+    public Map<String, TaggedOldPii> getPiiMap() {
       return piiMap;
     }
 
-    public void setPiiMap(Map<String, AnnotatedOldPii> pii) {
+    public void setPiiMap(Map<String, TaggedOldPii> pii) {
       this.piiMap = pii;
     }
 
@@ -690,8 +691,8 @@ public class CelExecutorTest {
       if (this == o) return true;
       if (o == null || getClass() != o.getClass()) return false;
       OldWidget widget = (OldWidget) o;
-      return annotatedName.equals(widget.name)
-          && Objects.equals(annotatedSsn, widget.ssn)
+      return taggedName.equals(widget.name)
+          && Objects.equals(taggedSsn, widget.ssn)
           && Objects.equals(piiArray, widget.piiArray)
           && Objects.equals(piiMap, widget.piiMap)
           && size == widget.size
@@ -700,21 +701,21 @@ public class CelExecutorTest {
 
     @Override
     public int hashCode() {
-      return Objects.hash(annotatedName, annotatedSsn, piiArray, piiMap, size, version);
+      return Objects.hash(taggedName, taggedSsn, piiArray, piiMap, size, version);
     }
   }
 
-  public static class AnnotatedOldPii {
+  public static class TaggedOldPii {
     @JsonProperty("pii")
-    private String annotatedPii;
+    private String taggedPii;
 
-    public AnnotatedOldPii() {}
-    public AnnotatedOldPii(String annotatedPii) {
-      this.annotatedPii = annotatedPii;
+    public TaggedOldPii() {}
+    public TaggedOldPii(String taggedPii) {
+      this.taggedPii = taggedPii;
     }
 
-    public String getAnnotatedPii() {
-      return annotatedPii;
+    public String getTaggedPii() {
+      return taggedPii;
     }
 
     @Override
@@ -725,13 +726,13 @@ public class CelExecutorTest {
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      AnnotatedOldPii pii1 = (AnnotatedOldPii) o;
-      return Objects.equals(annotatedPii, pii1.annotatedPii);
+      TaggedOldPii pii1 = (TaggedOldPii) o;
+      return Objects.equals(taggedPii, pii1.taggedPii);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(annotatedPii);
+      return Objects.hash(taggedPii);
     }
   }
 }

@@ -60,7 +60,7 @@ public class AvroSchema implements ParsedSchema {
 
   public static final String TYPE = "AVRO";
 
-  public static final String ANNOTATIONS = "confluent.annotations";
+  public static final String TAGS = "confluent.tags";
 
   private final Schema schemaObj;
   private String canonicalString;
@@ -509,7 +509,7 @@ public class AvroSchema implements ParsedSchema {
         for (Schema.Field f : schema.getFields()) {
           String fullName = schema.getFullName() + "." + f.name();
           try (FieldContext fc = ctx.enterField(
-              ctx, message, fullName, f.name(), getType(f), getInlineAnnotations(f))) {
+              ctx, message, fullName, f.name(), getType(f), getInlineTags(f))) {
             Object value = data.getField(message, f.name(), f.pos());
             Object newValue = toTransformedMessage(ctx, f.schema(), value, transform);
             data.setField(message, f.name(), f.pos(), newValue);
@@ -520,8 +520,8 @@ public class AvroSchema implements ParsedSchema {
         FieldContext fc = ctx.currentField();
         if (fc != null) {
           try {
-            Set<String> intersect = new HashSet<>(fc.getAnnotations());
-            intersect.retainAll(ctx.rule().getAnnotations());
+            Set<String> intersect = new HashSet<>(fc.getTags());
+            intersect.retainAll(ctx.rule().getTags());
             if (!intersect.isEmpty()) {
               return transform.transform(ctx, fc, message);
             }
@@ -567,13 +567,13 @@ public class AvroSchema implements ParsedSchema {
     }
   }
 
-  private Set<String> getInlineAnnotations(Schema.Field field) {
-    Set<String> annotations = new HashSet<>();
-    Object prop = field.getObjectProp(ANNOTATIONS);
+  private Set<String> getInlineTags(Schema.Field field) {
+    Set<String> tags = new HashSet<>();
+    Object prop = field.getObjectProp(TAGS);
     if (prop instanceof List) {
-      ((List<?>)prop).forEach(p -> annotations.add(p.toString()));
+      ((List<?>)prop).forEach(p -> tags.add(p.toString()));
     }
-    return annotations;
+    return tags;
   }
 
   private static GenericData getData(Object message) {

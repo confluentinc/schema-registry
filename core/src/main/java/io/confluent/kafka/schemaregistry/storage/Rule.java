@@ -32,7 +32,7 @@ public class Rule {
   private RuleKind kind;
   private RuleMode mode;
   private String type;
-  private SortedSet<String> annotations;
+  private SortedSet<String> tags;
   private String expr;
   private String onSuccess;
   private String onFailure;
@@ -43,7 +43,7 @@ public class Rule {
               @JsonProperty("kind") RuleKind kind,
               @JsonProperty("mode") RuleMode mode,
               @JsonProperty("type") String type,
-              @JsonProperty("annotations") SortedSet<String> annotations,
+              @JsonProperty("tags") SortedSet<String> tags,
               @JsonProperty("expr") String expr,
               @JsonProperty("onSuccess") String onSuccess,
               @JsonProperty("onFailure") String onFailure,
@@ -52,7 +52,7 @@ public class Rule {
     this.kind = kind;
     this.mode = mode;
     this.type = type;
-    this.annotations = annotations;
+    this.tags = tags;
     this.expr = expr;
     this.onSuccess = onSuccess;
     this.onFailure = onFailure;
@@ -64,7 +64,7 @@ public class Rule {
     this.kind = RuleKind.fromEntity(rule.getKind());
     this.mode = RuleMode.fromEntity(rule.getMode());
     this.type = rule.getType();
-    this.annotations = rule.getAnnotations();
+    this.tags = rule.getTags();
     this.expr = rule.getExpr();
     this.onSuccess = rule.getOnSuccess();
     this.onFailure = rule.getOnFailure();
@@ -115,15 +115,15 @@ public class Rule {
     this.type = type;
   }
 
-  @Schema(description = "The annotations to which this rule applies")
-  @JsonProperty("annotations")
-  public SortedSet<String> getAnnotations() {
-    return annotations;
+  @Schema(description = "The tags to which this rule applies")
+  @JsonProperty("tags")
+  public SortedSet<String> getTags() {
+    return tags;
   }
 
-  @JsonProperty("annotations")
-  public void setAnnotations(SortedSet<String> annotations) {
-    this.annotations = annotations;
+  @JsonProperty("tags")
+  public void setTags(SortedSet<String> tags) {
+    this.tags = tags;
   }
 
   @Schema(description = "Rule expression")
@@ -183,7 +183,7 @@ public class Rule {
         && kind == rule.kind
         && mode == rule.mode
         && Objects.equals(type, rule.type)
-        && Objects.equals(annotations, rule.annotations)
+        && Objects.equals(tags, rule.tags)
         && Objects.equals(expr, rule.expr)
         && Objects.equals(onSuccess, rule.onSuccess)
         && Objects.equals(onFailure, rule.onFailure)
@@ -192,7 +192,7 @@ public class Rule {
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, kind, mode, type, annotations, expr, onSuccess, onFailure, disabled);
+    return Objects.hash(name, kind, mode, type, tags, expr, onSuccess, onFailure, disabled);
   }
 
   @Override
@@ -202,7 +202,7 @@ public class Rule {
         + ", kind=" + kind
         + ", mode=" + mode
         + ", type='" + type + '\''
-        + ", annotations='" + annotations + '\''
+        + ", tags='" + tags + '\''
         + ", expr='" + expr + '\''
         + ", onSuccess='" + onSuccess + '\''
         + ", onFailure='" + onFailure + '\''
@@ -216,7 +216,7 @@ public class Rule {
         getKind().toEntity(),
         getMode().toEntity(),
         getType(),
-        getAnnotations(),
+        getTags(),
         getExpr(),
         getOnSuccess(),
         getOnFailure(),
