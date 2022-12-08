@@ -148,7 +148,7 @@ public class Metadata {
       return oldMetadata;
     } else {
       return new Metadata(
-          merge(oldMetadata.annotations, newMetadata.annotations),
+          merge(oldMetadata.paths, newMetadata.paths),
           merge(oldMetadata.properties, newMetadata.properties),
           merge(oldMetadata.sensitive, newMetadata.sensitive)
       );
