@@ -243,23 +243,26 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
                        Config defaultForTopLevel
   ) throws StoreException {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
-    ConfigValue config = (ConfigValue) get((K) subjectConfigKey);
-    if (config == null && subject == null) {
+    ConfigValue configValue = (ConfigValue) get((K) subjectConfigKey);
+    if (configValue == null && subject == null) {
       return defaultForTopLevel;
     }
-    if (config != null) {
-      return config.toConfigEntity();
+    Config config = null;
+    if (configValue != null) {
+      config = configValue.toConfigEntity();
     } else if (returnTopLevelIfNotFound) {
       QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
       if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
-        config = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
+        configValue = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
       } else {
-        config = (ConfigValue) get((K) new ConfigKey(null));
+        configValue = (ConfigValue) get((K) new ConfigKey(null));
       }
-      return config != null ? config.toConfigEntity() : defaultForTopLevel;
-    } else {
-      return null;
+      config = configValue != null ? configValue.toConfigEntity() : defaultForTopLevel;
     }
+    if (config != null && config.getCompatibilityLevel() == null) {
+      config.setCompatibilityLevel(defaultForTopLevel.getCompatibilityLevel());
+    }
+    return config;
   }
 
   @Override
