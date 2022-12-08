@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
 import kafka.cluster.Broker;
@@ -32,12 +33,14 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Locale;
 import java.util.Properties;
+import java.util.List;
+import java.util.LinkedList;
+import java.util.HashSet;
 import java.util.Set;
+import java.util.Map;
+import java.util.Locale;
+import java.util.Optional;
 
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES;
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT;
@@ -46,6 +49,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 public class SchemaRegistryConfig extends RestConfig {
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryConfig.class);
+  public static final String LISTENER_NAME_PREFIX = "listener.name.";
 
   private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
   // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
@@ -722,6 +726,23 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public List<String> whitelistHeaders() {
     return getList(INTER_INSTANCE_HEADERS_WHITELIST_CONFIG);
+  }
+
+  public Map<String, Object> getOverriddenSslConfigs(NamedURI listener) {
+    String prefix =
+        LISTENER_NAME_PREFIX + Optional.ofNullable(listener.getName()).orElse("https") + ".";
+
+    Map<String, Object> overridden = originals();
+    for (Map.Entry<String, ?> entry:originals().entrySet()) {
+      String key = (String) entry.getKey();
+      if (key.toLowerCase().startsWith(prefix) && key.length() > prefix.length()) {
+        key = key.substring(prefix.length());
+        if (config.names().contains(key)) {
+          overridden.put(key, entry.getValue());
+        }
+      }
+    }
+    return overridden;
   }
 
   public static void main(String[] args) {

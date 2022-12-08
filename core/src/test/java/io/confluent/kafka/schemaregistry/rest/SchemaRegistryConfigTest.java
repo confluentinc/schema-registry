@@ -15,7 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.rest.NamedURI;
+import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
+import kafka.Kafka;
 import kafka.cluster.Broker;
 
 import org.apache.kafka.common.config.ConfigException;
@@ -24,10 +30,9 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Properties;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.*;
 
 import static org.junit.Assert.assertEquals;
 
@@ -187,6 +192,22 @@ public class SchemaRegistryConfigTest {
     Properties props = new Properties();
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     assertEquals(true, config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY));
+  }
+
+  @Test
+  public void testSslConfigOverride() throws RestConfigException, SchemaRegistryException {
+    String listenerOverridePrefix =
+      SchemaRegistryConfig.LISTENER_NAME_PREFIX + KafkaSchemaRegistry.INTERNAL_LISTENER_NAME + ".";
+    Properties props = new Properties();
+
+    props.setProperty(RestConfig.LISTENERS_CONFIG, "internal://localhost:123, https://localhost:456");
+    props.setProperty(RestConfig.LISTENER_PROTOCOL_MAP_CONFIG, "internal:https");
+    props.setProperty(RestConfig.SSL_KEYSTORE_LOCATION_CONFIG, "/mnt/keystore/keystore.jks");
+    props.setProperty(listenerOverridePrefix + RestConfig.SSL_KEYSTORE_LOCATION_CONFIG , "/mnt/keystore/internal/keystore.jks");
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    NamedURI listener = KafkaSchemaRegistry.getInternalListener(config.getListeners(), SchemaRegistryConfig.HTTPS);
+    Map<String, Object> overrides = config.getOverriddenSslConfigs(listener);
+    assertEquals("/mnt/keystore/internal/keystore.jks", overrides.get(SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG));
   }
 
 }

@@ -54,7 +54,6 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import io.confluent.rest.RestConfig;
 
 public class KafkaStore<K, V> implements Store<K, V> {
 
@@ -90,11 +89,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
-    int port = KafkaSchemaRegistry.getSchemeAndPortForIdentity(
-        config.getInt(SchemaRegistryConfig.PORT_CONFIG),
-        config.getList(RestConfig.LISTENERS_CONFIG),
-        config.interInstanceProtocol()
-    ).port;
+    this.config = config;
+    int port = KafkaSchemaRegistry.getInternalListener(config.getListeners(),
+        config.interInstanceProtocol()).getUri().getPort();
     this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG).isEmpty()
                    ? String.format("schema-registry-%s-%d",
                         config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG), port)
@@ -105,7 +102,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.serializer = serializer;
     this.localStore = localStore;
     this.noopKey = noopKey;
-    this.config = config;
     this.bootstrapBrokers = config.bootstrapBrokers();
     this.skipSchemaTopicValidation =
         config.getBoolean(SchemaRegistryConfig.KAFKASTORE_TOPIC_SKIP_VALIDATION_CONFIG);

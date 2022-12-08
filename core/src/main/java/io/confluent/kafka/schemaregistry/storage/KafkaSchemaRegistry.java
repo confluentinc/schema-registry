@@ -62,9 +62,9 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
-import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
+import io.confluent.rest.NamedURI;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -80,7 +80,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.HostnameVerifier;
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -110,6 +109,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public static final String GLOBAL_RESOURCE_NAME = "__GLOBAL";
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
+  public static final String INTERNAL_LISTENER_NAME = "internal";
 
   private final SchemaRegistryConfig config;
   private final Map<String, Object> props;
@@ -153,16 +153,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
     this.isEligibleForLeaderElector = leaderEligibility;
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
-    SchemeAndPort schemeAndPort = getSchemeAndPortForIdentity(
-        config.getInt(SchemaRegistryConfig.PORT_CONFIG),
-        config.getList(RestConfig.LISTENERS_CONFIG),
-        config.interInstanceProtocol()
-    );
+    NamedURI internalListener = getInternalListener(config.getListeners(),
+        config.interInstanceProtocol());
+    SchemeAndPort schemeAndPort = new SchemeAndPort(internalListener.getUri().getScheme(),
+        internalListener.getUri().getPort());
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
         isEligibleForLeaderElector, schemeAndPort.scheme);
+    Map<String, Object> sslConfig = config.getOverriddenSslConfigs(internalListener);
     this.sslFactory =
-        new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(config.values()));
+        new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(sslConfig));
     this.leaderConnectTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_CONNECT_TIMEOUT_MS);
     this.leaderReadTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_READ_TIMEOUT_MS);
     this.kafkaStoreTimeoutMs =
@@ -281,6 +281,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return metricsContainer;
   }
 
+  public static NamedURI getInternalListener(List<NamedURI> listeners, String requestedScheme)
+      throws SchemaRegistryException {
+    if (requestedScheme.isEmpty()) {
+      requestedScheme = SchemaRegistryConfig.HTTP;
+    }
+    NamedURI internalListener = null;
+    for (NamedURI listener : listeners) {
+      if (requestedScheme.equalsIgnoreCase(listener.getUri().getScheme())) {
+        internalListener = listener;
+        if (listener.getName() !=  null
+              && listener.getName().equalsIgnoreCase(INTERNAL_LISTENER_NAME)) {
+          break;
+        }
+      }
+    }
+    if (internalListener == null) {
+      throw new SchemaRegistryException(" No listener configured with requested scheme "
+                                          + requestedScheme);
+    }
+    return internalListener;
+  }
   /**
    * A Schema Registry instance's identity is in part the port it listens on. Currently the port can
    * either be configured via the deprecated `port` configuration, or via the `listeners`
@@ -293,25 +314,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    * of say the last, is arbitrary.
    */
   // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
-  static SchemeAndPort getSchemeAndPortForIdentity(int port, List<String> configuredListeners,
-                                                   String requestedScheme)
+
+  public static SchemeAndPort getSchemeAndPortForIdentity(List<NamedURI> listeners,
+                                                          String requestedScheme)
       throws SchemaRegistryException {
-    List<URI> listeners = Application.parseListeners(configuredListeners, port,
-                                                     Arrays.asList(
-                                                         SchemaRegistryConfig.HTTP,
-                                                         SchemaRegistryConfig.HTTPS
-                                                     ), SchemaRegistryConfig.HTTP
-    );
-    if (requestedScheme.isEmpty()) {
-      requestedScheme = SchemaRegistryConfig.HTTP;
-    }
-    for (URI listener: listeners) {
-      if (requestedScheme.equalsIgnoreCase(listener.getScheme())) {
-        return new SchemeAndPort(listener.getScheme(), listener.getPort());
-      }
-    }
-    throw new SchemaRegistryException(" No listener configured with requested scheme "
-                                      + requestedScheme);
+    NamedURI listener = getInternalListener(listeners, requestedScheme);
+    return new SchemeAndPort(listener.getUri().getScheme(),
+      listener.getUri().getPort());
   }
 
   @Override
