@@ -228,6 +228,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     return Objects.hash(super.hashCode(), version, id, schema, schemaType, references, metadata,
         ruleSet, deleted);
   }
+  
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
