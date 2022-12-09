@@ -20,12 +20,17 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.Test;
 
@@ -278,5 +283,176 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     assertEquals("Registering should succeed",
         expectedIdSchema2,
         restApp.restClient.registerSchema(request2, subject, false));
+  }
+
+  @Test
+  public void testConfigMetadata() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    Map<String, String> properties = new HashMap<>();
+    properties.put("configKey", "configValue");
+    Metadata metadata = new Metadata(null, properties, null);
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setInitialMetadata(metadata);
+    // add config metadata
+    assertEquals("Adding config with initial metadata should succeed",
+        config,
+        restApp.restClient.updateConfig(config, null));
+
+    properties = new HashMap<>();
+    properties.put("subjectKey", "subjectValue");
+    Metadata metadata1 = new Metadata(null, properties, null);
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    request1.setMetadata(metadata1);
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request1, subject, false));
+    // verify that default compatibility level is backward
+    assertEquals("Default compatibility level should be backward",
+        CompatibilityLevel.BACKWARD.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel());
+
+    // change it to forward
+    assertEquals("Changing compatibility level should succeed",
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient
+            .updateCompatibility(CompatibilityLevel.FORWARD.name, null)
+            .getCompatibilityLevel());
+
+    // verify that new compatibility level is forward
+    assertEquals("New compatibility level should be forward",
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel());
+
+    // register forward compatible schema
+    ParsedSchema schema2 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\"}]}");
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema2);
+    int expectedIdSchema2 = 2;
+    assertEquals("Registering should succeed",
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(request2, subject, false));
+
+    SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
+    Metadata metadata2 = schemaString.getMetadata();
+    assertEquals("configValue", metadata2.getProperties().get("configKey"));
+    assertEquals("subjectValue", metadata2.getProperties().get("subjectKey"));
+
+    // register forward compatible schema with specified metadata
+    ParsedSchema schema3 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\"},"
+        + " {\"type\":\"string\",\"name\":\"f3\"}]}");
+    properties = new HashMap<>();
+    properties.put("newSubjectKey", "newSubjectValue");
+    Metadata metadata3 = new Metadata(null, properties, null);
+    RegisterSchemaRequest request3 = new RegisterSchemaRequest(schema3);
+    request3.setMetadata(metadata3);
+    int expectedIdSchema3 = 3;
+    assertEquals("Registering should succeed",
+        expectedIdSchema3,
+        restApp.restClient.registerSchema(request3, subject, false));
+
+    schemaString = restApp.restClient.getId(expectedIdSchema3, subject);
+    metadata3 = schemaString.getMetadata();
+    assertEquals("configValue", metadata3.getProperties().get("configKey"));
+    assertEquals(null, metadata3.getProperties().get("subjectKey"));
+    assertEquals("newSubjectValue", metadata3.getProperties().get("newSubjectKey"));
+  }
+
+  @Test
+  public void testConfigRuleSet() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    Rule r1 = new Rule("foo", null, null, null, null, null, null, null, false);
+    List<Rule> rules = Collections.singletonList(r1);
+    RuleSet ruleSet = new RuleSet(rules, null);
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setInitialRuleSet(ruleSet);
+    // add config ruleSet
+    assertEquals("Adding config with initial ruleSet should succeed",
+        config,
+        restApp.restClient.updateConfig(config, null));
+
+    Rule r2 = new Rule("bar", null, null, null, null, null, null, null, false);
+    rules = Collections.singletonList(r2);
+    ruleSet = new RuleSet(rules, null);
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    request1.setRuleSet(ruleSet);
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request1, subject, false));
+    // verify that default compatibility level is backward
+    assertEquals("Default compatibility level should be backward",
+        CompatibilityLevel.BACKWARD.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel());
+
+    // change it to forward
+    assertEquals("Changing compatibility level should succeed",
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient
+            .updateCompatibility(CompatibilityLevel.FORWARD.name, null)
+            .getCompatibilityLevel());
+
+    // verify that new compatibility level is forward
+    assertEquals("New compatibility level should be forward",
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel());
+
+    // register forward compatible schema
+    ParsedSchema schema2 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\"}]}");
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema2);
+    int expectedIdSchema2 = 2;
+    assertEquals("Registering should succeed",
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(request2, subject, false));
+
+    SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
+    RuleSet ruleSet2 = schemaString.getRuleSet();
+    assertEquals("foo", ruleSet2.getMigrationRules().get(0).getName());
+    assertEquals("bar", ruleSet2.getMigrationRules().get(1).getName());
+
+    // register forward compatible schema with specified metadata
+    ParsedSchema schema3 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\"},"
+        + " {\"type\":\"string\",\"name\":\"f3\"}]}");
+    Rule r3 = new Rule("zap", null, null, null, null, null, null, null, false);
+    rules = Collections.singletonList(r3);
+    ruleSet = new RuleSet(rules, null);
+    RegisterSchemaRequest request3 = new RegisterSchemaRequest(schema3);
+    request3.setRuleSet(ruleSet);
+    int expectedIdSchema3 = 3;
+    assertEquals("Registering should succeed",
+        expectedIdSchema3,
+        restApp.restClient.registerSchema(request3, subject, false));
+
+    schemaString = restApp.restClient.getId(expectedIdSchema3, subject);
+    RuleSet ruleSet3 = schemaString.getRuleSet();
+    assertEquals("foo", ruleSet3.getMigrationRules().get(0).getName());
+    assertEquals("zap", ruleSet3.getMigrationRules().get(1).getName());
   }
 }

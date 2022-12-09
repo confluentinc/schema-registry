@@ -522,7 +522,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Collections.reverse(undeletedVersions);
 
       Config config = getConfigInScope(subject);
-      parsedSchema = maybeSetMetadataRuleSet(config, parsedSchema, undeletedVersions);
+      parsedSchema = maybeSetMetadataRuleSet(config, schema, parsedSchema, undeletedVersions);
 
       final List<String> compatibilityErrorLogs = isCompatibleWithPrevious(
               config, parsedSchema, undeletedVersions);
@@ -630,11 +630,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private ParsedSchema maybeSetMetadataRuleSet(
-      Config config, ParsedSchema schema, List<ParsedSchema> previousSchemas) {
+      Config config, Schema schema, ParsedSchema parsedSchema, List<ParsedSchema> previousSchemas) {
     ParsedSchema previousSchema = previousSchemas.size() > 0 ? previousSchemas.get(0) : null;
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata specificMetadata = null;
-    if (schema.metadata() != null) {
-      specificMetadata = schema.metadata();
+    if (parsedSchema.metadata() != null) {
+      specificMetadata = parsedSchema.metadata();
     } else if (previousSchema != null) {
       specificMetadata = previousSchema.metadata();
     }
@@ -646,8 +646,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     mergedMetadata =
         mergeMetadata(mergeMetadata(initialMetadata, specificMetadata), finalMetadata);
     io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet specificRuleSet = null;
-    if (schema.ruleSet() != null) {
-      specificRuleSet = schema.ruleSet();
+    if (parsedSchema.ruleSet() != null) {
+      specificRuleSet = parsedSchema.ruleSet();
     } else if (previousSchema != null) {
       specificRuleSet = previousSchema.ruleSet();
     }
@@ -658,9 +658,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     finalRuleSet = config.getFinalRuleSet();
     mergedRuleSet = mergeRuleSets(mergeRuleSets(initialRuleSet, specificRuleSet), finalRuleSet);
     if (mergedMetadata != null || mergedRuleSet != null) {
-      schema = schema.copy(mergedMetadata, mergedRuleSet);
+      parsedSchema = parsedSchema.copy(mergedMetadata, mergedRuleSet);
+      schema.setMetadata(parsedSchema.metadata());
+      schema.setRuleSet(parsedSchema.ruleSet());
     }
-    return schema;
+    return parsedSchema;
   }
 
   public int registerOrForward(String subject,
