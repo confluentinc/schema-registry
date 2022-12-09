@@ -734,8 +734,7 @@ public class SchemaRegistryConfig extends RestConfig {
   }
 
   /**
-   * Gets the inter.instance.protocol setting, handling the deprecated
-   * schema.registry.inter.instance.protocol setting.
+   * Gets the inter.instance.listener.name setting.
    */
   public String interInstanceListenerName() {
     return getString(INTER_INSTANCE_LISTENER_NAME_CONFIG);

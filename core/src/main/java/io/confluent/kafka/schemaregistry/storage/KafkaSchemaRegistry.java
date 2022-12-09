@@ -158,16 +158,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     NamedURI internalListener = getInternalListener(config.getListeners(),
         interInstanceListenerNameConfig,
         config.interInstanceProtocol());
+    log.info("Found internal listener: " + internalListener.toString());
     String internalListenerName = Optional.ofNullable(internalListener.getName()).orElse("");
     SchemeAndPort schemeAndPort = new SchemeAndPort(internalListener.getUri().getScheme(),
         internalListener.getUri().getPort());
-    // Use listener endpoint for internal communication and identity when a named internal listener
-    // is present. Default to existing behaviour of using host name config and port, otherwise.
+    // Use listener endpoint for identity when a matching named internal listener was found.
+    // Default to existing behavior of using host name config and port otherwise.
     String host =   internalListenerName.equals(interInstanceListenerNameConfig)
                     ? internalListener.getUri().getHost()
                     : config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
         isEligibleForLeaderElector, schemeAndPort.scheme);
+    log.info("Setting my identity to " + myIdentity.toString());
     Map<String, Object> sslConfig = config.getOverriddenSslConfigs(internalListener);
     this.sslFactory =
         new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(sslConfig));
