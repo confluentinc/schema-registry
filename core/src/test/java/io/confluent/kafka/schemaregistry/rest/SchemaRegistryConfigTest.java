@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 
@@ -196,18 +197,31 @@ public class SchemaRegistryConfigTest {
 
   @Test
   public void testSslConfigOverride() throws RestConfigException, SchemaRegistryException {
-    String listenerOverridePrefix =
-      SchemaRegistryConfig.LISTENER_NAME_PREFIX + KafkaSchemaRegistry.INTERNAL_LISTENER_NAME + ".";
     Properties props = new Properties();
 
-    props.setProperty(RestConfig.LISTENERS_CONFIG, "internal://localhost:123, https://localhost:456");
-    props.setProperty(RestConfig.LISTENER_PROTOCOL_MAP_CONFIG, "internal:https");
+    props.setProperty(RestConfig.LISTENERS_CONFIG, "alice://localhost:123, bob://localhost:456, https://localhost:789");
+    props.setProperty(SchemaRegistryConfig.INTER_INSTANCE_LISTENER_NAME_CONFIG, "alice");
+    props.setProperty(RestConfig.LISTENER_PROTOCOL_MAP_CONFIG, "alice:https, bob:https");
     props.setProperty(RestConfig.SSL_KEYSTORE_LOCATION_CONFIG, "/mnt/keystore/keystore.jks");
-    props.setProperty(listenerOverridePrefix + RestConfig.SSL_KEYSTORE_LOCATION_CONFIG , "/mnt/keystore/internal/keystore.jks");
+    props.setProperty("listener.name.alice." + RestConfig.SSL_KEYSTORE_LOCATION_CONFIG , "/mnt/keystore/internal/keystore.jks");
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
-    NamedURI listener = KafkaSchemaRegistry.getInternalListener(config.getListeners(), SchemaRegistryConfig.HTTPS);
-    Map<String, Object> overrides = config.getOverriddenSslConfigs(listener);
+
+    NamedURI internalListener = KafkaSchemaRegistry.getInternalListener(config.getListeners(),
+      config.getString(SchemaRegistryConfig.INTER_INSTANCE_LISTENER_NAME_CONFIG),
+      SchemaRegistryConfig.HTTPS);
+    Map<String, Object> overrides = config.getOverriddenSslConfigs(internalListener);
     assertEquals("/mnt/keystore/internal/keystore.jks", overrides.get(SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG));
+
+    NamedURI externalListener = config.getListeners().stream()
+        .filter(l -> Optional.ofNullable(l.getName()).orElse("").equalsIgnoreCase("bob"))
+        .collect(Collectors.toList()).get(0);
+    overrides = config.getOverriddenSslConfigs(externalListener);
+    assertEquals("/mnt/keystore/keystore.jks", overrides.get(SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG));
+
+    NamedURI unnamedListener = config.getListeners().stream().filter(l -> l.getName() == null).collect(Collectors.toList()).get(0);
+    overrides = config.getOverriddenSslConfigs(unnamedListener);
+    assertEquals("/mnt/keystore/keystore.jks", overrides.get(SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG));
+
   }
 
 }

@@ -220,6 +220,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "inter.instance.protocol";
   public static final String INTER_INSTANCE_HEADERS_WHITELIST_CONFIG =
       "inter.instance.headers.whitelist";
+  public static final String INTER_INSTANCE_LISTENER_NAME_CONFIG =
+      "inter.instance.listener.name";
 
   protected static final String SCHEMAREGISTRY_GROUP_ID_DOC =
       "Use this setting to override the group.id for the Kafka group used when Kafka is used for "
@@ -366,6 +368,10 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
       = "A list of ``http`` headers to forward from follower to leader, "
       + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
+  protected static final String INTER_INSTANCE_LISTENER_NAME_DOC
+      = "Name of listener used for communication between schema registry instances. If this "
+      + "is unset, the listener name is defined by inter.instance.protocol. If both properties "
+      + "are set at the same time, inter.instance.listener.name takes precedence.";
 
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
@@ -568,7 +574,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
     .define(INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, HTTP,
-            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC);
+            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
+    .define(INTER_INSTANCE_LISTENER_NAME_CONFIG, ConfigDef.Type.STRING, "",
+      ConfigDef.Importance.LOW, INTER_INSTANCE_LISTENER_NAME_DOC);
+
   }
 
   private final CompatibilityLevel compatibilityType;
@@ -722,6 +731,14 @@ public class SchemaRegistryConfig extends RestConfig {
       return deprecatedValue;
     }
     return getString(INTER_INSTANCE_PROTOCOL_CONFIG);
+  }
+
+  /**
+   * Gets the inter.instance.protocol setting, handling the deprecated
+   * schema.registry.inter.instance.protocol setting.
+   */
+  public String interInstanceListenerName() {
+    return getString(INTER_INSTANCE_LISTENER_NAME_CONFIG);
   }
 
   public List<String> whitelistHeaders() {
