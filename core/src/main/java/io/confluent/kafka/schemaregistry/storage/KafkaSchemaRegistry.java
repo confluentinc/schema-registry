@@ -95,6 +95,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
@@ -519,8 +521,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
       Collections.reverse(undeletedVersions);
 
+      Config config = getConfigInScope(subject);
+      parsedSchema = maybeSetMetadataRuleSet(config, schema, parsedSchema, undeletedVersions);
+
       final List<String> compatibilityErrorLogs = isCompatibleWithPrevious(
-              subject, parsedSchema, undeletedVersions);
+              config, parsedSchema, undeletedVersions);
       final boolean isCompatible = compatibilityErrorLogs.isEmpty();
 
       try {
@@ -622,6 +627,42 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
     Mode subjectMode = getModeInScope(subject);
     return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
+  }
+
+  private ParsedSchema maybeSetMetadataRuleSet(
+      Config config, Schema schema, ParsedSchema parsedSchema, List<ParsedSchema> previousSchemas) {
+    ParsedSchema previousSchema = previousSchemas.size() > 0 ? previousSchemas.get(0) : null;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata specificMetadata = null;
+    if (parsedSchema.metadata() != null) {
+      specificMetadata = parsedSchema.metadata();
+    } else if (previousSchema != null) {
+      specificMetadata = previousSchema.metadata();
+    }
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata mergedMetadata;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata initialMetadata;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata finalMetadata;
+    initialMetadata = config.getInitialMetadata();
+    finalMetadata = config.getFinalMetadata();
+    mergedMetadata =
+        mergeMetadata(mergeMetadata(initialMetadata, specificMetadata), finalMetadata);
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet specificRuleSet = null;
+    if (parsedSchema.ruleSet() != null) {
+      specificRuleSet = parsedSchema.ruleSet();
+    } else if (previousSchema != null) {
+      specificRuleSet = previousSchema.ruleSet();
+    }
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet mergedRuleSet;
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet initialRuleSet;
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet finalRuleSet;
+    initialRuleSet = config.getInitialRuleSet();
+    finalRuleSet = config.getFinalRuleSet();
+    mergedRuleSet = mergeRuleSets(mergeRuleSets(initialRuleSet, specificRuleSet), finalRuleSet);
+    if (mergedMetadata != null || mergedRuleSet != null) {
+      parsedSchema = parsedSchema.copy(mergedMetadata, mergedRuleSet);
+      schema.setMetadata(parsedSchema.metadata());
+      schema.setRuleSet(parsedSchema.ruleSet());
+    }
+    return parsedSchema;
   }
 
   public int registerOrForward(String subject,
@@ -1622,24 +1663,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return groupId;
   }
 
-  public CompatibilityLevel getCompatibilityLevel(String subject)
-      throws SchemaRegistryStoreException {
-    try {
-      return lookupCache.compatibilityLevel(subject, false, defaultCompatibilityLevel);
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
-    }
-  }
-
-  public CompatibilityLevel getCompatibilityLevelInScope(String subject)
-      throws SchemaRegistryStoreException {
-    try {
-      return lookupCache.compatibilityLevel(subject, true, defaultCompatibilityLevel);
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
-    }
-  }
-
   public Config getConfig(String subject)
       throws SchemaRegistryStoreException {
     try {
@@ -1691,16 +1714,35 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
 
     ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true, false);
-    return isCompatibleWithPrevious(subject, parsedSchema, prevParsedSchemas);
+    Config config = getConfigInScope(subject);
+    return isCompatibleWithPrevious(config, parsedSchema, prevParsedSchemas);
   }
 
-  private List<String> isCompatibleWithPrevious(String subject,
+  private List<String> isCompatibleWithPrevious(Config config,
                                                 ParsedSchema parsedSchema,
                                                 List<ParsedSchema> previousSchemas)
       throws SchemaRegistryException {
 
-    CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
+    CompatibilityLevel compatibility = CompatibilityLevel.forName(config.getCompatibilityLevel());
+    String compatibilityGroup = config.getCompatibilityGroup();
+    if (compatibilityGroup != null) {
+      String groupValue = getCompatibilityGroupValue(parsedSchema, compatibilityGroup);
+      if (groupValue != null) {
+        // Only check compatibility against schemas with the same compatibility group value
+        previousSchemas = previousSchemas.stream()
+            .filter(s -> groupValue.equals(getCompatibilityGroupValue(s, compatibilityGroup)))
+            .collect(Collectors.toList());
+      }
+    }
     return parsedSchema.isCompatible(compatibility, previousSchemas);
+  }
+
+  private static String getCompatibilityGroupValue(
+      ParsedSchema parsedSchema, String compatibilityGroup) {
+    if (parsedSchema.metadata() != null && parsedSchema.metadata().getProperties() != null) {
+      return parsedSchema.metadata().getProperties().get(compatibilityGroup);
+    }
+    return null;
   }
 
   private void deleteMode(String subject) throws StoreException {
