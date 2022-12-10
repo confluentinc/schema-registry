@@ -157,7 +157,7 @@ public class RestService implements Configurable {
 
   private static final String AUTHORIZATION_HEADER = "Authorization";
   private static final String TARGET_SR_CLUSTER = "target-sr-cluster";
-  private static final String TARGET_IDENTITY_POOL_ID = "target-identity-pool-id";
+  private static final String TARGET_IDENTITY_POOL_ID = "Confluent-Identity-Pool-Id";
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
