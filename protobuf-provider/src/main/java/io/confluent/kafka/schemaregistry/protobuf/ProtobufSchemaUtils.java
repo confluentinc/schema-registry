@@ -711,7 +711,7 @@ public class ProtobufSchemaUtils {
           sb.append(formatOptionMapOrListValue(primitive.getValue(), normalize));
       }
     } else if (value instanceof OptionElement) {
-      sb.append(toString(ctx, (OptionElement) value));
+      sb.append(toString((OptionElement) value, normalize));
     } else {
       sb.append(value);
     }
