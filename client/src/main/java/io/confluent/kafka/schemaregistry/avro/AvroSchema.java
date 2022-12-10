@@ -189,6 +189,12 @@ public class AvroSchema implements ParsedSchema {
     );
   }
 
+  @Override
+  public ParsedSchema copy(Map<String, Set<String>> tagsToAdd,
+                           Map<String, Set<String>> tagsToRemove) {
+    return null;
+  }
+
   protected Schema.Parser getParser() {
     Schema.Parser parser = new Schema.Parser();
     parser.setValidateDefaults(isNew());

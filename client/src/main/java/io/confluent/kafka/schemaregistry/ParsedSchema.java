@@ -25,7 +25,10 @@ import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 /**
@@ -120,6 +123,17 @@ public interface ParsedSchema {
    * @return a copy of this schema, but with the given metadata and rule set
    */
   ParsedSchema copy(Metadata metadata, RuleSet ruleSet);
+
+  /**
+   * Returns a copy of this schema, but with the given tags.
+   *
+   * @param tagsToAdd map of tags to add to fields, where the key is the field path and the value
+   *                  is the tag. If the tag already exist, do nothing.
+   * @param tagsToRemove map of tags to remove from the fields, where the key is the field path and
+   *                    the value is the tag. If the tag does not exist, do nothing.
+   * @return a copy of this schema, but with the given tags
+   */
+  ParsedSchema copy(Map<String, Set<String>> tagsToAdd, Map<String, Set<String>> tagsToRemove);
 
   /**
    * Returns a normalized copy of this schema.

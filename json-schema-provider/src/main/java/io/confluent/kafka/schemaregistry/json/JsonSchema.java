@@ -260,6 +260,12 @@ public class JsonSchema implements ParsedSchema {
     );
   }
 
+  @Override
+  public ParsedSchema copy(Map<String, Set<String>> tagsToAdd,
+                           Map<String, Set<String>> tagsToRemove) {
+    return null;
+  }
+
   public JsonNode toJsonNode() {
     return jsonNode;
   }

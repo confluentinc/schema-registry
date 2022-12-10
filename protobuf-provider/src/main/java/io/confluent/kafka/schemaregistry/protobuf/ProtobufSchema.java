@@ -16,7 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.AnyProto;
@@ -104,6 +110,7 @@ import io.confluent.protobuf.type.DecimalProto;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.stream.Stream;
+
 import kotlin.Pair;
 import kotlin.ranges.IntRange;
 import org.slf4j.Logger;
@@ -131,6 +138,10 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 
 import static com.google.common.base.CaseFormat.LOWER_UNDERSCORE;
 import static com.google.common.base.CaseFormat.UPPER_CAMEL;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingNode;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.jsonToFile;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.removeTagsFromArray;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.removeFieldMeta;
 
 public class ProtobufSchema implements ParsedSchema {
 
@@ -157,7 +168,7 @@ public class ProtobufSchema implements ParsedSchema {
   protected static final String CONFLUENT_PREFIX = "confluent.";
   private static final String CONFLUENT_FILE_META = "confluent.file_meta";
   private static final String CONFLUENT_MESSAGE_META = "confluent.message_meta";
-  private static final String CONFLUENT_FIELD_META = "confluent.field_meta";
+  protected static final String CONFLUENT_FIELD_META = "confluent.field_meta";
   private static final String CONFLUENT_ENUM_META = "confluent.enum_meta";
   private static final String CONFLUENT_ENUM_VALUE_META = "confluent.enum_value_meta";
 
@@ -284,7 +295,7 @@ public class ProtobufSchema implements ParsedSchema {
       toProtoFile(WrappersProto.getDescriptor().toProto()) ;
 
   private static final HashMap<String, ProtoFileElement> KNOWN_DEPENDENCIES;
-  
+
   static {
     KNOWN_DEPENDENCIES = new HashMap<>();
     KNOWN_DEPENDENCIES.put(CFLT_META_LOCATION, CFLT_META_SCHEMA);
@@ -349,6 +360,8 @@ public class ProtobufSchema implements ParsedSchema {
   private static final Base64.Encoder base64Encoder = Base64.getEncoder();
 
   private static final Base64.Decoder base64Decoder = Base64.getDecoder();
+
+  private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
 
   public ProtobufSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null, null);
@@ -540,6 +553,36 @@ public class ProtobufSchema implements ParsedSchema {
         this.dynamicSchema,
         this.descriptor
     );
+  }
+
+  @Override
+  public ParsedSchema copy(Map<String, Set<String>> tagsToAdd,
+                           Map<String, Set<String>> tagsToRemove) {
+    ProtobufSchema newSchema = new ProtobufSchema(
+        this.schemaObj,
+        this.version,
+        this.name,
+        this.references,
+        this.dependencies,
+        metadata,
+        ruleSet,
+        this.canonicalString,
+        this.dynamicSchema,
+        this.descriptor
+    );
+    JsonNode original = jsonMapper.valueToTree(newSchema.rawSchema());
+    for (Map.Entry<String, Set<String>> tagToAdd : tagsToAdd.entrySet()) {
+      addFieldLevelTags(original, tagToAdd.getKey(), tagToAdd.getValue());
+    }
+    for (Map.Entry<String, Set<String>> tagToRemove : tagsToRemove.entrySet()) {
+      removeFieldLevelTags(original, tagToRemove.getKey(), tagToRemove.getValue());
+    }
+    try {
+      ProtoFileElement newFileElement = jsonToFile(original);
+      return new ProtobufSchema(newFileElement, newSchema.references(), newSchema.dependencies());
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException("Cannot deserialize json into ProtoFileElement", e);
+    }
   }
 
   public ProtobufSchema copyWithSchema(String schema) {
@@ -2170,6 +2213,175 @@ public class ProtobufSchema implements ParsedSchema {
       tags.addAll(meta.getTagsList());
     }
     return tags;
+  }
+
+  private Set<String> getInlineTags(JsonNode optionNode) {
+    if (!optionNode.has("kind")) {
+      throw new IllegalStateException("'kind' field is missing in the given Option node.");
+    }
+    Kind kind = Kind.valueOf(optionNode.get("kind").asText());
+    switch (kind) {
+      case STRING:
+        return Collections.singleton(optionNode.get("value").asText());
+      case OPTION:
+        return getInlineTags(optionNode.get("value"));
+      case MAP:
+        JsonNode optionValueNode = optionNode.get("value");
+        if (optionValueNode.has(TAGS_FIELD)) {
+          try {
+            return jsonMapper.readValue(optionValueNode.get(TAGS_FIELD).toString(),
+                new TypeReference<Set<String>>(){});
+          } catch (JsonProcessingException e) {
+            throw new IllegalStateException(
+                String.format("Cannot deserialize array node %s into Set",
+                  optionValueNode.get(TAGS_FIELD)), e);
+          }
+        } else {
+          return null;
+        }
+      case LIST:
+        try {
+          return jsonMapper.readValue(optionNode.get("value").toString(),
+              new TypeReference<Set<String>>(){});
+        } catch (JsonProcessingException e) {
+          throw new IllegalStateException(
+              String.format("Cannot deserialize json node %s into Set", optionNode), e);
+        }
+      default:
+        return null;
+    }
+  }
+
+  public void addFieldLevelTags(JsonNode node, String path, Set<String> tags) {
+    String [] identifiers = path.split("\\.");
+    JsonNode fieldNodePtr = node;
+    // skipping the first entry because path starts with leading dot
+    for (int i = 1; i < identifiers.length; i++) {
+      if (i == 1) {
+        fieldNodePtr = findMatchingNode(fieldNodePtr, "types", "name", identifiers[i]);
+        if (fieldNodePtr == null) {
+          throw new IllegalArgumentException(String.format(
+            "No matching path '%s' found in the schema", path));
+        }
+      } else if (i < identifiers.length - 1) {
+        fieldNodePtr = findMatchingNode(fieldNodePtr, "nestedTypes", "name", identifiers[i]);
+        if (fieldNodePtr == null) {
+          throw new IllegalArgumentException(String.format(
+            "No matching path '%s' found in the schema", path));
+        }
+      } else {
+        fieldNodePtr = findMatchingNode(fieldNodePtr, "fields", "name", identifiers[i]);
+        if (fieldNodePtr == null) {
+          throw new IllegalArgumentException(String.format(
+            "No matching path '%s' found in the schema", path));
+        }
+        JsonNode fieldMetaOptionNode = findMatchingNode(fieldNodePtr, "options", "name",
+            CONFLUENT_FIELD_META);
+
+        if (fieldMetaOptionNode == null) {
+          OptionElement newOption = new OptionElement(CONFLUENT_FIELD_META, Kind.OPTION,
+              new OptionElement(TAGS_FIELD, Kind.LIST, new ArrayList<>(tags), false), true);
+          JsonNode newOptionNode = jsonMapper.valueToTree(newOption);
+          ((ArrayNode) fieldNodePtr.get("options")).add(newOptionNode);
+        } else if (Kind.MAP.name().equals(fieldMetaOptionNode.get("kind").asText())) {
+          // field has confluent.field_meta maps
+          ArrayList<String> newValueList = new ArrayList<>(tags);
+          Set<String> existingTags = getInlineTags(fieldMetaOptionNode);
+          if (existingTags != null) {
+            tags = tags.stream().filter(s -> !existingTags.contains(s)).collect(Collectors.toSet());
+            if (!tags.isEmpty()) {
+              newValueList.addAll(existingTags);
+            }
+          }
+          ((ObjectNode) fieldMetaOptionNode.get("value"))
+            .replace(TAGS_FIELD, jsonMapper.valueToTree(newValueList));
+        } else {
+          // field has confluent.field_meta option
+          Set<String> existingTags = getInlineTags(fieldMetaOptionNode);
+          tags = tags.stream().filter(s -> !existingTags.contains(s)).collect(Collectors.toSet());
+          if (!tags.isEmpty()) {
+            ArrayList<String> newValueList = new ArrayList<>(tags);
+            newValueList.addAll(existingTags);
+            OptionElement newOption = new OptionElement(TAGS_FIELD, Kind.LIST, newValueList, false);
+            ((ObjectNode) fieldMetaOptionNode).replace("value", jsonMapper.valueToTree(newOption));
+          }
+        }
+      }
+    }
+  }
+
+  public void removeFieldLevelTags(JsonNode node, String path, Set<String> tags) {
+    String [] identifiers = path.split("\\.");
+    JsonNode fieldNodePtr = node;
+    // skipping the first entry because path starts with leading dot
+    for (int i = 1; i < identifiers.length; i++) {
+      if (i == 1) {
+        fieldNodePtr = findMatchingNode(fieldNodePtr, "types", "name", identifiers[i]);
+        if (fieldNodePtr == null) {
+          throw new IllegalArgumentException(String.format(
+            "No matching path '%s' found in the schema", path));
+        }
+      } else if (i < identifiers.length - 1) {
+        fieldNodePtr = findMatchingNode(fieldNodePtr, "nestedTypes", "name", identifiers[i]);
+        if (fieldNodePtr == null) {
+          throw new IllegalArgumentException(String.format(
+            "No matching path '%s' found in the schema", path));
+        }
+      } else {
+        fieldNodePtr = findMatchingNode(fieldNodePtr, "fields", "name", identifiers[i]);
+        if (fieldNodePtr == null) {
+          throw new IllegalArgumentException(String.format(
+            "No matching path '%s' found in the schema", path));
+        }
+        JsonNode fieldMetaOptionNode = findMatchingNode(fieldNodePtr, "options", "name",
+            CONFLUENT_FIELD_META);
+
+        if (fieldMetaOptionNode != null) {
+          Kind kind = Kind.valueOf(fieldMetaOptionNode.get("kind").asText());
+          switch (kind) {
+            case STRING:
+              if (tags.contains(fieldMetaOptionNode.get("name").asText())) {
+                ((ObjectNode) fieldNodePtr)
+                  .replace("options", JsonNodeFactory.instance.arrayNode());
+              }
+              return;
+            case OPTION:
+              JsonNode tagOptionNode = fieldMetaOptionNode.get("value");
+              if (tagOptionNode != null && TAGS_FIELD.equals(tagOptionNode.get("name").asText())) {
+                JsonNode tagOptionValueNode = tagOptionNode.get("value");
+                if (tagOptionValueNode.isArray()) {
+                  ArrayNode tagsArray = (ArrayNode) tagOptionNode.get("value");
+                  removeTagsFromArray(tagsArray, tags);
+                  if (tagsArray.size() == 0) {
+                    ((ObjectNode) fieldNodePtr)
+                      .replace("options", JsonNodeFactory.instance.arrayNode());
+                  }
+                } else if (tagOptionValueNode.isTextual()
+                    && tags.contains(tagOptionValueNode.asText())) {
+                  removeFieldMeta((ArrayNode) fieldNodePtr.get("options"));
+                }
+              }
+              return;
+            case MAP:
+              JsonNode fieldMetaOptionValueNode = fieldMetaOptionNode.get("value");
+              tagOptionNode = fieldMetaOptionValueNode.get(TAGS_FIELD);
+              if (tagOptionNode != null && tagOptionNode.isArray()) {
+                ArrayNode tagsArray = (ArrayNode) tagOptionNode;
+                removeTagsFromArray(tagsArray, tags);
+                if (tagsArray.size() == 0) {
+                  ((ObjectNode) fieldMetaOptionValueNode).remove(TAGS_FIELD);
+                }
+              }
+              if (fieldMetaOptionValueNode.size() == 0) {
+                removeFieldMeta((ArrayNode) fieldNodePtr.get("options"));
+              }
+              return;
+            default:
+              return;
+          }
+        }
+      }
+    }
   }
 
   public enum Format {

@@ -17,12 +17,16 @@
 package io.confluent.kafka.schemaregistry.protobuf;
 
 import static com.squareup.wire.schema.internal.UtilKt.MAX_TAG_VALUE;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.CONFLUENT_FIELD_META;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.CONFLUENT_PREFIX;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.DEFAULT_LOCATION;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.transform;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.google.common.base.Ascii;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -61,10 +65,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import kotlin.Pair;
@@ -105,6 +111,45 @@ public class ProtobufSchemaUtils {
         .omittingInsignificantWhitespace()
         .print(message);
     return jsonString.getBytes(StandardCharsets.UTF_8);
+  }
+
+  public static ProtoFileElement jsonToFile(JsonNode node) throws JsonProcessingException {
+    ObjectMapper mapper = new ObjectMapper();
+    SimpleModule module = new SimpleModule();
+    module.addDeserializer(ProtoFileElement.class, new ProtoFileElementDeserializer());
+    mapper.registerModule(module);
+
+    String serialized = node.toString();
+    return mapper.readValue(serialized, ProtoFileElement.class);
+  }
+
+  public static JsonNode findMatchingNode(JsonNode node, String arrayField, String targetFieldName,
+                                          String targetFieldValue) {
+    Iterator<JsonNode> iter = node.get(arrayField).elements();
+    while (iter.hasNext()) {
+      JsonNode currNode = iter.next();
+      if (targetFieldValue.equals(currNode.get(targetFieldName).asText())) {
+        return currNode;
+      }
+    }
+    return null;
+  }
+
+  public static void removeTagsFromArray(ArrayNode arrayNode, Set<String> tags) {
+    for (int j = arrayNode.size() - 1; j >= 0; j--) {
+      if (tags.contains(arrayNode.get(j).asText())) {
+        arrayNode.remove(j);
+      }
+    }
+  }
+
+  public static void removeFieldMeta(ArrayNode optionsArray) {
+    for (int j = optionsArray.size() - 1; j >= 0; j--) {
+      if (optionsArray.get(j).has("name")
+          && CONFLUENT_FIELD_META.equals(optionsArray.get(j).get("name").asText())) {
+        optionsArray.remove(j);
+      }
+    }
   }
 
   protected static String toNormalizedString(ProtobufSchema schema) {
@@ -788,7 +833,7 @@ public class ProtobufSchemaUtils {
       return types;
     }
   }
-  
+
   private static void formatOptionMap(
       FormatContext ctx, StringBuilder sb, Map<String, Object> valueMap) {
     int lastIndex = valueMap.size() - 1;
