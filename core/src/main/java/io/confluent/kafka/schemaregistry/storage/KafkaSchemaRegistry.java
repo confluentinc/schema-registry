@@ -322,10 +322,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           "Error initializing kafka store while initializing schema registry", e);
     }
 
+    config.checkBootstrapServers();
+    log.info("Joining schema registry with Kafka-based coordination");
+    leaderElector = new KafkaGroupLeaderElector(config, myIdentity, this);
+  }
+
+  public void initLeaderElection() throws SchemaRegistryException {
     try {
-      config.checkBootstrapServers();
-      log.info("Joining schema registry with Kafka-based coordination");
-      leaderElector = new KafkaGroupLeaderElector(config, myIdentity, this);
       leaderElector.init();
     } catch (SchemaRegistryStoreException e) {
       throw new SchemaRegistryInitializationException(

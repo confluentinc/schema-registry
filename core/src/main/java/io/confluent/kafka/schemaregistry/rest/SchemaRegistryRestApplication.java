@@ -122,6 +122,14 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
         System.exit(1);
       }
     }
+
+    // Initiate leader election only after all resources have been set up.
+    try {
+      schemaRegistry.initLeaderElection();
+    } catch (SchemaRegistryException e) {
+      log.error("Error starting the schema registry", e);
+      System.exit(1);
+    }
   }
 
   @Override
