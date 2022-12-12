@@ -428,6 +428,26 @@ public class ProtobufSchemaTest {
         + "  string first_name = 1;\n"
         + "  string last_name = 2;\n"
         + "}";
+    String canonicalString = "syntax = \"proto3\";\n"
+        + "package com.custom.example.v0;\n"
+        + "\n"
+        + "import \"common/extensions.proto\";\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "\n"
+        + "option go_package = \"example/v0;example\";\n"
+        + "option java_multiple_files = true;\n"
+        + "option (com.custom.map).subject = \"user-value\";\n"
+        + "option (com.custom.map).compatibility_mode = FULL;\n"
+        + "option (confluent.file_meta).doc = \"file meta\";\n"
+        + "option (confluent.file_meta).params = [{\n"
+        + "  value: \"my_value\",\n"
+        + "  key: \"my_key\"\n"
+        + "}];\n"
+        + "\n"
+        + "message User {\n"
+        + "  string first_name = 1;\n"
+        + "  string last_name = 2;\n"
+        + "}\n";
     String expectedSchemaString = "syntax = \"proto3\";\n"
         + "package com.custom.example.v0;\n"
         + "\n"
@@ -450,6 +470,7 @@ public class ProtobufSchemaTest {
         + "  string last_name = 2;\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(schemaString);
+    assertEquals(canonicalString, schema.canonicalString());
     ProtobufSchema schema2 = new ProtobufSchema(schema.toDescriptor());
     assertEquals(expectedSchemaString, schema2.canonicalString());
   }
