@@ -300,8 +300,6 @@ public class MetadataEncoderService implements Closeable {
       if (isEncode) {
         schema.setMd5(Base64.getEncoder().encodeToString(
             MD5.ofSchema(schema.toSchemaEntity()).bytes()));
-      } else {
-        schema.setMd5(null);
       }
 
       schema.setMetadata(
