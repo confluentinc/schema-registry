@@ -206,7 +206,7 @@ public class SchemaRegistryConfigTest {
     props.setProperty("listener.name.alice." + RestConfig.SSL_KEYSTORE_LOCATION_CONFIG , "/mnt/keystore/internal/keystore.jks");
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
-    NamedURI internalListener = KafkaSchemaRegistry.getInternalListener(config.getListeners(),
+    NamedURI internalListener = KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(),
       config.getString(SchemaRegistryConfig.INTER_INSTANCE_LISTENER_NAME_CONFIG),
       SchemaRegistryConfig.HTTPS);
     Map<String, Object> overrides = config.getOverriddenSslConfigs(internalListener);

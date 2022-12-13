@@ -269,7 +269,9 @@ public class SchemaRegistryConfig extends RestConfig {
           + "<code>StoreUpdateHandler</code> allows you to handle Kafka store update events.";
   protected static final String HOST_DOC =
       "The host name. Make sure to set this if running SchemaRegistry "
-      + "with multiple nodes.";
+      + "with multiple nodes. This name is also used in the endpoint for inter instance "
+      + "communication if inter.instance.listener.name is not specified or does not match "
+      + "any listener ";
   protected static final String SCHEMA_PROVIDERS_DOC =
       "  A list of classes to use as SchemaProvider. Implementing the interface "
           + "<code>SchemaProvider</code> allows you to add custom schema types to Schema Registry.";
@@ -362,17 +364,17 @@ public class SchemaRegistryConfig extends RestConfig {
       "The protocol used while making calls between the instances of schema registry. The follower "
       + "to leader node calls for writes and deletes will use the specified protocol. The default "
       + "value would be `http`. When `https` is set, `ssl.keystore.` and "
-      + "`ssl.truststore.` configs are used while making the call. The "
+      + "`ssl.truststore.` configs are used while making the call. If this config and "
+      + " inter.instance.listener.name are both set, inter.instance.listener.name takes precedence."
       + "schema.registry.inter.instance.protocol name is deprecated; prefer using "
       + "inter.instance.protocol instead.";
   protected static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
       = "A list of ``http`` headers to forward from follower to leader, "
       + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
   protected static final String INTER_INSTANCE_LISTENER_NAME_DOC
-      = "Name of listener used for communication between schema registry instances. If this "
-      + "is unset, the listener name is defined by inter.instance.protocol. If both properties "
+      = "Name of listener used for communication between schema registry instances. If this value "
+      + "is unset, the listener used is defined by inter.instance.protocol. If both properties "
       + "are set at the same time, inter.instance.listener.name takes precedence.";
-
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 

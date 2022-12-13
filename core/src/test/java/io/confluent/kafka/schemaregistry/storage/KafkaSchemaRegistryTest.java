@@ -14,23 +14,15 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
-import kafka.Kafka;
-import org.checkerframework.checker.units.qual.K;
 import org.junit.Test;
 
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Properties;
-import java.util.LinkedList;
-import java.util.List;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import scala.sys.Prop;
 
 import static org.junit.Assert.assertEquals;
 
@@ -45,7 +37,7 @@ public class KafkaSchemaRegistryTest {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInternalListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
+        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
     assertEquals("Expected listeners to take precedence over port.", 456, listener.getUri().getPort());
     assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
@@ -59,7 +51,7 @@ public class KafkaSchemaRegistryTest {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInternalListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
+        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
     assertEquals("Expected port to take the configured port value", 123, listener.getUri().getPort());
     assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
@@ -73,7 +65,7 @@ public class KafkaSchemaRegistryTest {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInternalListener(config.getListeners(), "", SchemaRegistryConfig.HTTPS);
+        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTPS);
     assertEquals("Expected HTTPS listener's port to be returned", 456, listener.getUri().getPort());
     assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTPS, listener.getUri().getScheme());
   }
@@ -88,14 +80,14 @@ public class KafkaSchemaRegistryTest {
 
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInternalListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
+        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
     assertEquals("Expected last listener's port to be returned", 456, listener.getUri().getPort());
     assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
   public void testGetNamedInternalListener() throws SchemaRegistryException, RestConfigException {
-    String listeners = "http://localhost:456, bob://localhost:123";
+    String listeners = "bob://localhost:123, http://localhost:456";
     String listenerProtocolMap = "bob:http";
     Properties props = new Properties();
     props.setProperty(RestConfig.PORT_CONFIG, "-1");
@@ -105,7 +97,7 @@ public class KafkaSchemaRegistryTest {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-      KafkaSchemaRegistry.getInternalListener(config.getListeners(), config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
+      KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
     assertEquals("Expected internal listener's port to be returned", 123, listener.getUri().getPort());
     assertEquals("Expected internal listener's name to be returned", "bob", listener.getName());
     assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());

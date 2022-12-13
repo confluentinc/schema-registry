@@ -68,7 +68,6 @@ import io.confluent.rest.NamedURI;
 
 import java.util.Map;
 import java.util.List;
-import java.util.Optional;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Set;
@@ -154,22 +153,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
     this.isEligibleForLeaderElector = leaderEligibility;
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
+
     String interInstanceListenerNameConfig = config.interInstanceListenerName();
-    NamedURI internalListener = getInternalListener(config.getListeners(),
+    NamedURI internalListener = getInterInstanceListener(config.getListeners(),
         interInstanceListenerNameConfig,
         config.interInstanceProtocol());
     log.info("Found internal listener: " + internalListener.toString());
-    String internalListenerName = Optional.ofNullable(internalListener.getName()).orElse("");
     SchemeAndPort schemeAndPort = new SchemeAndPort(internalListener.getUri().getScheme(),
         internalListener.getUri().getPort());
-    // Use listener endpoint for identity when a matching named internal listener was found.
-    // Default to existing behavior of using host name config and port otherwise.
-    String host =   internalListenerName.equals(interInstanceListenerNameConfig)
+    // Use listener endpoint for identity when a matching named inter instance listener was found.
+    // Default to existing behavior of using host name config and listener port otherwise.
+    String internalListenerName = internalListener.getName();
+    String host =   (internalListenerName != null
+                      && internalListenerName.equals(interInstanceListenerNameConfig))
                     ? internalListener.getUri().getHost()
                     : config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
         isEligibleForLeaderElector, schemeAndPort.scheme);
     log.info("Setting my identity to " + myIdentity.toString());
+
     Map<String, Object> sslConfig = config.getOverriddenSslConfigs(internalListener);
     this.sslFactory =
         new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(sslConfig));
@@ -304,7 +306,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    * </p>
    */
   // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
-  public static NamedURI getInternalListener(List<NamedURI> listeners,
+  public static NamedURI getInterInstanceListener(List<NamedURI> listeners,
                                              String interInstanceListenerName,
                                              String requestedScheme)
       throws SchemaRegistryException {
