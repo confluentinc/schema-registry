@@ -62,10 +62,20 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
-import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
+import io.confluent.rest.NamedURI;
+
+import java.util.Map;
+import java.util.List;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.Collections;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.Iterator;
+import java.util.Properties;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -80,16 +90,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.HostnameVerifier;
 import java.io.IOException;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -154,17 +154,29 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       leaderEligibility = config.getBoolean(SchemaRegistryConfig.LEADER_ELIGIBILITY);
     }
     this.isEligibleForLeaderElector = leaderEligibility;
-    String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
-    SchemeAndPort schemeAndPort = getSchemeAndPortForIdentity(
-        config.getInt(SchemaRegistryConfig.PORT_CONFIG),
-        config.getList(RestConfig.LISTENERS_CONFIG),
-        config.interInstanceProtocol()
-    );
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
+
+    String interInstanceListenerNameConfig = config.interInstanceListenerName();
+    NamedURI internalListener = getInterInstanceListener(config.getListeners(),
+        interInstanceListenerNameConfig,
+        config.interInstanceProtocol());
+    log.info("Found internal listener: " + internalListener.toString());
+    SchemeAndPort schemeAndPort = new SchemeAndPort(internalListener.getUri().getScheme(),
+        internalListener.getUri().getPort());
+    // Use listener endpoint for identity when a matching named inter instance listener was found.
+    // Default to existing behavior of using host name config and listener port otherwise.
+    String internalListenerName = internalListener.getName();
+    String host =   (internalListenerName != null
+                      && internalListenerName.equals(interInstanceListenerNameConfig))
+                    ? internalListener.getUri().getHost()
+                    : config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
         isEligibleForLeaderElector, schemeAndPort.scheme);
+    log.info("Setting my identity to " + myIdentity.toString());
+
+    Map<String, Object> sslConfig = config.getOverriddenSslConfigs(internalListener);
     this.sslFactory =
-        new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(config.values()));
+        new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(sslConfig));
     this.leaderConnectTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_CONNECT_TIMEOUT_MS);
     this.leaderReadTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_READ_TIMEOUT_MS);
     this.kafkaStoreTimeoutMs =
@@ -284,36 +296,41 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   /**
-   * A Schema Registry instance's identity is in part the port it listens on. Currently the port can
-   * either be configured via the deprecated `port` configuration, or via the `listeners`
-   * configuration.
-   *
-   * <p>This method uses `Application.parseListeners()` from `rest-utils` to get a list of
-   * listeners, and returns the port of the first listener to be used for the instance's identity.
-   *
-   * <p></p>In theory, any port from any listener would be sufficient. Choosing the first, instead
-   * of say the last, is arbitrary.
+   * <p>This method returns a listener to be used for inter-instance communication.
+   * It iterates through the list of listeners until it finds one whose name
+   * matches the inter.instance.listener.name config. If no such listener is found,
+   * it returns the last listener matching the requested scheme.
+   * </p>
+   * <p>When there is no matching named listener, in theory, any port from any listener
+   * would be sufficient. Choosing the last, instead of say the first, is arbitrary.
+   * The port used by this listener also forms the identity of the schema registry instance
+   * along with the host name.
+   * </p>
    */
   // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
-  static SchemeAndPort getSchemeAndPortForIdentity(int port, List<String> configuredListeners,
-                                                   String requestedScheme)
+  public static NamedURI getInterInstanceListener(List<NamedURI> listeners,
+                                             String interInstanceListenerName,
+                                             String requestedScheme)
       throws SchemaRegistryException {
-    List<URI> listeners = Application.parseListeners(configuredListeners, port,
-                                                     Arrays.asList(
-                                                         SchemaRegistryConfig.HTTP,
-                                                         SchemaRegistryConfig.HTTPS
-                                                     ), SchemaRegistryConfig.HTTP
-    );
     if (requestedScheme.isEmpty()) {
       requestedScheme = SchemaRegistryConfig.HTTP;
     }
-    for (URI listener: listeners) {
-      if (requestedScheme.equalsIgnoreCase(listener.getScheme())) {
-        return new SchemeAndPort(listener.getScheme(), listener.getPort());
+
+    NamedURI internalListener = null;
+    for (NamedURI listener : listeners) {
+      if (listener.getName() !=  null
+              && listener.getName().equalsIgnoreCase(interInstanceListenerName)) {
+        internalListener = listener;
+        break;
+      } else if (listener.getUri().getScheme().equalsIgnoreCase(requestedScheme)) {
+        internalListener = listener;
       }
     }
-    throw new SchemaRegistryException(" No listener configured with requested scheme "
-                                      + requestedScheme);
+    if (internalListener == null) {
+      throw new SchemaRegistryException(" No listener configured with requested scheme "
+                                          + requestedScheme);
+    }
+    return internalListener;
   }
 
   @Override
