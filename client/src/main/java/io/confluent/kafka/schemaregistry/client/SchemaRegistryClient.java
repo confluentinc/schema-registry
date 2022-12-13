@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import java.io.IOException;
@@ -202,12 +203,29 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
-  public String updateCompatibility(String subject, String compatibility)
-      throws IOException, RestClientException;
+  default String updateCompatibility(String subject, String compatibility)
+      throws IOException, RestClientException {
+    return updateConfig(subject, new Config(compatibility)).getCompatibilityLevel();
+  }
 
-  public String getCompatibility(String subject) throws IOException, RestClientException;
+  default String getCompatibility(String subject) throws IOException, RestClientException {
+    return getConfig(subject).getCompatibilityLevel();
+  }
 
   default void deleteCompatibility(String subject) throws IOException, RestClientException {
+    deleteConfig(subject);
+  }
+
+  default Config updateConfig(String subject, Config config)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default Config getConfig(String subject) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default void deleteConfig(String subject) throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 

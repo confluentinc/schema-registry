@@ -153,7 +153,7 @@ public class RestServiceTest {
     // Make sure that the Authorization header is set with the correct token
     verify(httpURLConnection).setRequestProperty("Authorization", "Bearer auth-token");
     verify(httpURLConnection).setRequestProperty("target-sr-cluster", "lsrc-dummy");
-    verify(httpURLConnection).setRequestProperty("target-identity-pool-id", "my-pool-id");
+    verify(httpURLConnection).setRequestProperty("Confluent-Identity-Pool-Id", "my-pool-id");
   }
 
   /*

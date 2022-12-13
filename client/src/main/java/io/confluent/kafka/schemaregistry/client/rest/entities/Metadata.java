@@ -35,8 +35,8 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
- * Metadata, which includes field annotations, arbitrary key-value properties,
- * and a list of reference names for included properties.
+ * Metadata, which includes path annotations, arbitrary key-value properties,
+ * and a set of sensitive properties.
  */
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -44,19 +44,19 @@ import java.util.stream.Collectors;
 public class Metadata {
 
   @JsonPropertyOrder(alphabetic = true)
-  private final SortedMap<String, SortedSet<String>> annotations;
+  private final SortedMap<String, SortedSet<String>> paths;
   @JsonPropertyOrder(alphabetic = true)
   private final SortedMap<String, String> properties;
   private final SortedSet<String> sensitive;
 
   @JsonCreator
   public Metadata(
-      @JsonProperty("annotations") Map<String, ? extends Set<String>> annotations,
+      @JsonProperty("paths") Map<String, ? extends Set<String>> paths,
       @JsonProperty("properties") Map<String, String> properties,
       @JsonProperty("sensitive") Set<String> sensitive
   ) {
-    SortedMap<String, SortedSet<String>> sortedAnnotations = annotations != null
-        ? annotations.entrySet().stream()
+    SortedMap<String, SortedSet<String>> sortedPaths = paths != null
+        ? paths.entrySet().stream()
         .sorted(Map.Entry.comparingByKey())
         .collect(Collectors.toMap(
             Entry::getKey,
@@ -78,13 +78,13 @@ public class Metadata {
         .sorted()
         .collect(Collectors.toCollection(TreeSet::new))
         : Collections.emptySortedSet();
-    this.annotations = Collections.unmodifiableSortedMap(sortedAnnotations);
+    this.paths = Collections.unmodifiableSortedMap(sortedPaths);
     this.properties = Collections.unmodifiableSortedMap(sortedProperties);
     this.sensitive = Collections.unmodifiableSortedSet(sortedSensitive);
   }
 
-  public SortedMap<String, SortedSet<String>> getAnnotations() {
-    return annotations;
+  public SortedMap<String, SortedSet<String>> getPaths() {
+    return paths;
   }
 
   public SortedMap<String, String> getProperties() {
@@ -104,28 +104,28 @@ public class Metadata {
       return false;
     }
     Metadata metadata = (Metadata) o;
-    return Objects.equals(annotations, metadata.annotations)
+    return Objects.equals(paths, metadata.paths)
         && Objects.equals(properties, metadata.properties)
         && Objects.equals(sensitive, metadata.sensitive);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(annotations, properties, sensitive);
+    return Objects.hash(paths, properties, sensitive);
   }
 
   @Override
   public String toString() {
     return "Metadata{"
-        + "annotations=" + annotations
+        + "paths=" + paths
         + ", properties=" + properties
         + ", sensitive=" + sensitive
         + '}';
   }
 
   public void updateHash(MessageDigest md) {
-    if (annotations != null) {
-      annotations.forEach((key, value) -> {
+    if (paths != null) {
+      paths.forEach((key, value) -> {
         md.update(key.getBytes(StandardCharsets.UTF_8));
         value.forEach(v -> md.update(v.getBytes(StandardCharsets.UTF_8)));
       });
@@ -138,6 +138,48 @@ public class Metadata {
     }
     if (sensitive != null) {
       sensitive.forEach(s -> md.update(s.getBytes(StandardCharsets.UTF_8)));
+    }
+  }
+
+  public static Metadata mergeMetadata(Metadata oldMetadata, Metadata newMetadata) {
+    if (oldMetadata == null) {
+      return newMetadata;
+    } else if (newMetadata == null) {
+      return oldMetadata;
+    } else {
+      return new Metadata(
+          merge(oldMetadata.paths, newMetadata.paths),
+          merge(oldMetadata.properties, newMetadata.properties),
+          merge(oldMetadata.sensitive, newMetadata.sensitive)
+      );
+    }
+  }
+
+  private static <T> SortedMap<String, T> merge(
+      SortedMap<String, T> oldMap,
+      SortedMap<String, T> newMap) {
+    if (oldMap == null || oldMap.isEmpty()) {
+      return newMap;
+    } else if (newMap == null || newMap.isEmpty()) {
+      return oldMap;
+    } else {
+      SortedMap<String, T> map = new TreeMap<>(oldMap);
+      map.putAll(newMap);
+      return map;
+    }
+  }
+
+  private static SortedSet<String> merge(
+      SortedSet<String> oldSet,
+      SortedSet<String> newSet) {
+    if (oldSet == null || oldSet.isEmpty()) {
+      return newSet;
+    } else if (newSet == null || newSet.isEmpty()) {
+      return oldSet;
+    } else {
+      SortedSet<String> set = new TreeSet<>(oldSet);
+      set.addAll(newSet);
+      return set;
     }
   }
 }

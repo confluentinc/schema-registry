@@ -763,7 +763,7 @@ public class ProtobufSchemaUtils {
         break;
       case LIST:
         sb.append(" = ");
-        appendOptions(ctx, sb, (List<OptionElement>) value);
+        appendOptions(ctx, sb, (List<Object>) value);
         break;
       default:
         break;
@@ -802,7 +802,7 @@ public class ProtobufSchemaUtils {
       String kv = new StringBuilder()
           .append(key)
           .append(": ")
-          .append(formatOptionMapValue(ctx, valueMap.get(key)))
+          .append(formatOptionMapOrListValue(ctx, valueMap.get(key)))
           .append(endl)
           .toString();
       appendIndented(sb, kv);
@@ -811,9 +811,9 @@ public class ProtobufSchemaUtils {
   }
 
   @SuppressWarnings("unchecked")
-  private static String formatOptionMapValue(FormatContext ctx, Object value) {
+  private static String formatOptionMapOrListValue(FormatContext ctx, Object value) {
     StringBuilder sb = new StringBuilder();
-    if (value instanceof  String) {
+    if (value instanceof String) {
       sb.append("\"");
       sb.append(escapeChars(value.toString()));
       sb.append("\"");
@@ -828,14 +828,14 @@ public class ProtobufSchemaUtils {
       for (int i = 0; i < list.size(); i++) {
         String endl = i != lastIndex ? "," : "";
         String v = new StringBuilder()
-            .append(formatOptionMapValue(ctx, list.get(i)))
+            .append(formatOptionMapOrListValue(ctx, list.get(i)))
             .append(endl)
             .toString();
         appendIndented(sb, v);
       }
       sb.append("]");
     } else if (value instanceof OptionElement.OptionPrimitive) {
-      OptionElement.OptionPrimitive primitive = (OptionElement.OptionPrimitive)value;
+      OptionElement.OptionPrimitive primitive = (OptionElement.OptionPrimitive) value;
       switch (primitive.getKind()) {
         case BOOLEAN:
         case ENUM:
@@ -845,8 +845,10 @@ public class ProtobufSchemaUtils {
           sb.append(formatNumber(ctx, primitive.getValue()));
           break;
         default:
-          sb.append(formatOptionMapValue(ctx, primitive.getValue()));
+          sb.append(formatOptionMapOrListValue(ctx, primitive.getValue()));
       }
+    } else if (value instanceof OptionElement) {
+      sb.append(toString(ctx, (OptionElement) value));
     } else {
       sb.append(value);
     }
@@ -862,18 +864,18 @@ public class ProtobufSchemaUtils {
   }
 
   private static void appendOptions(
-      FormatContext ctx, StringBuilder sb, List<OptionElement> options) {
+      FormatContext ctx, StringBuilder sb, List<?> options) {
     int count = options.size();
     if (count == 1) {
       sb.append('[')
-          .append(toString(ctx, options.get(0)))
+          .append(formatOptionMapOrListValue(ctx, options.get(0)))
           .append(']');
       return;
     }
     sb.append("[\n");
     for (int i = 0; i < count; i++) {
       String endl = i < count - 1 ? "," : "";
-      appendIndented(sb, toString(ctx, options.get(i)) + endl);
+      appendIndented(sb, formatOptionMapOrListValue(ctx, options.get(i)) + endl);
     }
     sb.append(']');
   }

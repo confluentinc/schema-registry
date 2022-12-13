@@ -632,20 +632,20 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public String updateCompatibility(String subject, String compatibility)
+  public Config updateConfig(String subject, Config config)
       throws IOException, RestClientException {
-    ConfigUpdateRequest response = restService.updateCompatibility(compatibility, subject);
-    return response.getCompatibilityLevel();
+    ConfigUpdateRequest response = restService.updateConfig(
+        new ConfigUpdateRequest(config), subject);
+    return new Config(response);
   }
 
   @Override
-  public String getCompatibility(String subject) throws IOException, RestClientException {
-    Config response = restService.getConfig(subject);
-    return response.getCompatibilityLevel();
+  public Config getConfig(String subject) throws IOException, RestClientException {
+    return restService.getConfig(subject);
   }
 
   @Override
-  public void deleteCompatibility(String subject) throws IOException, RestClientException {
+  public void deleteConfig(String subject) throws IOException, RestClientException {
     restService.deleteConfig(subject);
   }
 

@@ -21,9 +21,12 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Rule set, which includes rules and a list of reference names for included rule sets.
@@ -107,6 +110,37 @@ public class RuleSet {
     }
     if (domainRules != null) {
       domainRules.forEach(r -> r.updateHash(md));
+    }
+  }
+
+  public static RuleSet mergeRuleSets(RuleSet oldRuleSet, RuleSet newRuleSet) {
+    if (oldRuleSet == null) {
+      return newRuleSet;
+    } else if (newRuleSet == null) {
+      return oldRuleSet;
+    } else {
+      return new RuleSet(
+          merge(oldRuleSet.migrationRules, newRuleSet.migrationRules),
+          merge(oldRuleSet.domainRules, newRuleSet.domainRules)
+      );
+    }
+  }
+
+  private static List<Rule> merge(List<Rule> oldRules, List<Rule> newRules) {
+    if (oldRules == null || oldRules.isEmpty()) {
+      return newRules;
+    } else if (newRules == null || newRules.isEmpty()) {
+      return oldRules;
+    } else {
+      Set<String> newRuleNames = newRules.stream()
+          .map(Rule::getName)
+          .collect(Collectors.toSet());
+      // Remove any old rules with the same name as one in new rules
+      List<Rule> filteredOldRules = oldRules.stream()
+          .filter(r -> !newRuleNames.contains(r.getName()))
+          .collect(Collectors.toCollection(ArrayList::new));
+      filteredOldRules.addAll(newRules);
+      return filteredOldRules;
     }
   }
 }
