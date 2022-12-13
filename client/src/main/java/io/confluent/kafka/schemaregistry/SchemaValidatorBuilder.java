@@ -38,7 +38,7 @@ public final class SchemaValidatorBuilder {
    * Use a strategy that validates that a schema can be used to read existing
    * schema(s) according to the JSON default schema resolution.
    */
-  public SchemaValidatorBuilder canReadStrategy() { //backward
+  public SchemaValidatorBuilder canReadStrategy() {
     this.strategy = (toValidate, existing) -> formatErrorMessages(
       toValidate.isBackwardCompatible(existing),
       existing, NEW_PREFIX, OLD_PREFIX, true);
@@ -49,7 +49,7 @@ public final class SchemaValidatorBuilder {
    * Use a strategy that validates that a schema can be read by existing
    * schema(s) according to the JSON default schema resolution.
    */
-  public SchemaValidatorBuilder canBeReadStrategy() { //fwd
+  public SchemaValidatorBuilder canBeReadStrategy() {
     this.strategy = (toValidate, existing) -> formatErrorMessages(
       existing.isBackwardCompatible(toValidate),
       existing, OLD_PREFIX, NEW_PREFIX, true);
