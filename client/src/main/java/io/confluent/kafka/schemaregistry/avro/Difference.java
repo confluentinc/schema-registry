@@ -24,8 +24,6 @@ public class Difference {
 
   public Difference(final SchemaCompatibility.Incompatibility incompatibility) {
     this.incompatibility = incompatibility;
-
-
   }
 
   public String error() {
@@ -35,7 +33,7 @@ public class Difference {
     String errorDescription = "";
     switch (errorType) {
       case FIXED_SIZE_MISMATCH:
-        errorDescription = "The size of FIXED type field at path " + path + " in the %s "
+        errorDescription = "The size of FIXED type field at path '" + path + "' in the %s "
                                            + "schema does not match with the %s schema";
         break;
       case TYPE_MISMATCH:
@@ -47,8 +45,8 @@ public class Difference {
         break;
       case MISSING_ENUM_SYMBOLS:
         errorDescription =
-          "The %s schema is missing enum symbols '" + incompatibility.getMessage() + "' at path "
-            + path + " in the %s schema";
+          "The %s schema is missing enum symbols '" + incompatibility.getMessage() + "' at path '"
+            + path + "' in the %s schema";
         break;
       case MISSING_UNION_BRANCH:
         errorDescription = "The %s schema is missing a type inside a union field at path '"
@@ -63,7 +61,7 @@ public class Difference {
         errorDescription = "";
     }
 
-    return "{errorType:'" + errorType.toString() + '\''
+    return "{errorType:'" + errorType + '\''
              + ", description:'" + errorDescription + '\''
              + ", additionalInfo:'" + incompatibility.getMessage() + "'}";
   }

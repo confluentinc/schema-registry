@@ -283,7 +283,7 @@ public class AvroSchema implements ParsedSchema {
       return result.getResult().getIncompatibilities().stream()
           .map(Difference::new)
           .map(Difference::toString)
-          .collect(Collectors.toList());
+          .collect(Collectors.toCollection(ArrayList::new));
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
       return Collections.singletonList(
