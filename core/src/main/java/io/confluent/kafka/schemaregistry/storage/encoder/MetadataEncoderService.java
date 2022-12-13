@@ -298,14 +298,14 @@ public class MetadataEncoderService implements Closeable {
               TreeMap::new)
           );
       if (isEncode) {
-        newProperties.put(SchemaValue.MD5_PROPERTY,
-            Base64.getEncoder().encodeToString(MD5.ofSchema(schema.toSchemaEntity()).bytes()));
+        schema.setMd5(Base64.getEncoder().encodeToString(
+            MD5.ofSchema(schema.toSchemaEntity()).bytes()));
       } else {
-        newProperties.remove(SchemaValue.MD5_PROPERTY);
+        schema.setMd5(null);
       }
 
       schema.setMetadata(
-          new Metadata(metadata.getAnnotations(), newProperties, metadata.getSensitive()));
+          new Metadata(metadata.getPaths(), newProperties, metadata.getSensitive()));
     } catch (GeneralSecurityException e) {
       throw new IllegalStateException("Could not encrypt sensitive metadata", e);
     }

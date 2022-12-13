@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 
 import java.util.Base64;
+import java.util.Objects;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.Min;
 import java.util.Collections;
@@ -36,12 +37,11 @@ import java.util.stream.Collectors;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SchemaValue extends SubjectValue implements Comparable<SchemaValue> {
 
-  public static final String MD5_PROPERTY = "__md5__";
-
   @Min(1)
   private Integer version;
   @Min(0)
   private Integer id;
+  private String md5;
   @NotEmpty
   private String schema;
   private String schemaType = AvroSchema.TYPE;
@@ -85,6 +85,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   public SchemaValue(@JsonProperty("subject") String subject,
                      @JsonProperty("version") Integer version,
                      @JsonProperty("id") Integer id,
+                     @JsonProperty("md5") String md5,
                      @JsonProperty("schemaType") String schemaType,
                      @JsonProperty("references") List<SchemaReference> references,
                      @JsonProperty("metadata") Metadata metadata,
@@ -94,6 +95,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     super(subject);
     this.version = version;
     this.id = id;
+    this.md5 = md5;
     this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
     this.references = references != null ? references : Collections.emptyList();
     this.metadata = metadata;
@@ -140,6 +142,20 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   @JsonProperty("id")
   public void setId(Integer id) {
     this.id = id;
+  }
+
+  @JsonProperty("md5")
+  public String getMd5() {
+    return this.md5;
+  }
+
+  @JsonProperty("md5")
+  public void setMd5(String md5) {
+    this.md5 = md5;
+  }
+
+  public byte[] getMd5Bytes() {
+    return md5 != null ? Base64.getDecoder().decode(md5) : null;
   }
 
   @JsonProperty("schemaType")
@@ -203,14 +219,6 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     this.deleted = deleted;
   }
 
-  public byte[] getMd5Bytes() {
-    if (getMetadata() == null || getMetadata().getProperties() == null) {
-      return null;
-    }
-    String md5 = getMetadata().getProperties().get(MD5_PROPERTY);
-    return md5 != null ? Base64.getDecoder().decode(md5) : null;
-  }
-
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -226,6 +234,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     return deleted == that.deleted
         && Objects.equals(version, that.version)
         && Objects.equals(id, that.id)
+        && Objects.equals(md5, that.md5)
         && Objects.equals(schema, that.schema)
         && Objects.equals(schemaType, that.schemaType)
         && Objects.equals(references, that.references)
@@ -235,8 +244,8 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), version, id, schema, schemaType, references, metadata,
-        ruleSet, deleted);
+    return Objects.hash(super.hashCode(), version, id, md5, schema, schemaType, references,
+        metadata, ruleSet, deleted);
   }
   
   @Override
@@ -245,6 +254,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     sb.append("{subject=" + this.getSubject() + ",");
     sb.append("version=" + this.version + ",");
     sb.append("id=" + this.id + ",");
+    sb.append("md5=" + this.md5 + ",");
     sb.append("schemaType=" + this.schemaType + ",");
     sb.append("references=" + this.references + ",");
     sb.append("metadata=" + this.metadata + ",");
