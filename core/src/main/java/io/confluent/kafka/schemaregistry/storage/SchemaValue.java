@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -154,10 +155,12 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     this.md5 = md5;
   }
 
+  @JsonIgnore
   public byte[] getMd5Bytes() {
     return md5 != null ? Base64.getDecoder().decode(md5) : null;
   }
 
+  @JsonIgnore
   public void setMd5Bytes(byte[] bytes) {
     md5 = bytes != null ? Base64.getEncoder().encodeToString(bytes) : null;
   }
