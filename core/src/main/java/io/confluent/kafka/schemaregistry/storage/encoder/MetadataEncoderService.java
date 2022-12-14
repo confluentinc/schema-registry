@@ -298,8 +298,7 @@ public class MetadataEncoderService implements Closeable {
               TreeMap::new)
           );
       if (isEncode) {
-        schema.setMd5(Base64.getEncoder().encodeToString(
-            MD5.ofSchema(schema.toSchemaEntity()).bytes()));
+        schema.setMd5Bytes(MD5.ofSchema(schema.toSchemaEntity()).bytes());
       }
 
       schema.setMetadata(

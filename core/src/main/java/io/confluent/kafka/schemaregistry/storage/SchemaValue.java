@@ -158,6 +158,10 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     return md5 != null ? Base64.getDecoder().decode(md5) : null;
   }
 
+  public void setMd5Bytes(byte[] bytes) {
+    md5 = bytes != null ? Base64.getEncoder().encodeToString(bytes) : null;
+  }
+
   @JsonProperty("schemaType")
   @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
