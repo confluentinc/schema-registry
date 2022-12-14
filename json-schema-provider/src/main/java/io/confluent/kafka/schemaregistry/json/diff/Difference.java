@@ -147,12 +147,12 @@ public class Difference {
     } else if (type == Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL
           || type == Type.ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL) {
       return "A property or item is missing in the %s schema but present at path '"
-               + jsonPath + "' in the %s schema and is not covered by partially "
+               + jsonPath + "' in the %s schema and is not covered by its partially "
                + "open content model";
     } else if (type == Type.PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL
           || type == Type.ITEM_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL) {
-      return "A property item at path '" + jsonPath + "' in the %s schema is missing in "
-               + "the %s schema and is not covered by partially open content model";
+      return "The %s schema has a property or item at path '" + jsonPath + "' which is "
+               + "missing in the %s schema and is not covered by its partially open content model";
     }
     return "";
   }
