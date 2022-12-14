@@ -1148,7 +1148,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           Schema schema,
           boolean isNew) throws InvalidSchemaException {
     try {
-      return schemaCache.get(new RawSchema(schema, isNew));
+      ParsedSchema parsedSchema = schemaCache.get(new RawSchema(schema, isNew));
+      if (schema.getVersion() != null) {
+        parsedSchema = parsedSchema.copy(schema.getVersion());
+      }
+      return parsedSchema;
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
       if (cause instanceof InvalidSchemaException) {
@@ -1751,7 +1755,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             .collect(Collectors.toList());
       }
     }
-    return parsedSchema.isCompatible(compatibility, previousSchemas);
+    List<String> errorMessages = parsedSchema.isCompatible(compatibility, previousSchemas);
+    if (errorMessages.size() > 0) {
+      errorMessages.add(String.format("{compatibility: '%s'}", compatibility));
+    }
+    return errorMessages;
   }
 
   private static String getCompatibilityGroupValue(

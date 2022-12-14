@@ -38,7 +38,6 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.SchemaCompatibility.Incompatibility;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -282,8 +281,9 @@ public class AvroSchema implements ParsedSchema {
               this.schemaObj,
               ((AvroSchema) previousSchema).schemaObj);
       return result.getResult().getIncompatibilities().stream()
-          .map(Incompatibility::toString)
-          .collect(Collectors.toList());
+          .map(Difference::new)
+          .map(Difference::toString)
+          .collect(Collectors.toCollection(ArrayList::new));
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
       return Collections.singletonList(

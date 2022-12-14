@@ -430,6 +430,10 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       assertEquals("Schema register should fail since schema is incompatible",
           Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE, e.getErrorCode());
+      assertTrue(e.getMessage().length() > 0);
+      assertTrue(e.getMessage().contains("oldSchemaVersion:"));
+      assertTrue(e.getMessage().contains("oldSchema:"));
+      assertTrue(e.getMessage().contains("compatibility:"));
     }
   }
 

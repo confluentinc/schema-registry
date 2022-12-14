@@ -23,7 +23,6 @@ package io.confluent.kafka.schemaregistry;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.ArrayList;
 
 /**
  * <p>
@@ -32,13 +31,17 @@ import java.util.ArrayList;
  */
 public final class SchemaValidatorBuilder {
   private SchemaValidationStrategy strategy;
+  private static final String NEW_PREFIX = "new";
+  private static final String OLD_PREFIX = "old";
 
   /**
    * Use a strategy that validates that a schema can be used to read existing
    * schema(s) according to the JSON default schema resolution.
    */
   public SchemaValidatorBuilder canReadStrategy() {
-    this.strategy = (toValidate, existing) -> toValidate.isBackwardCompatible(existing);
+    this.strategy = (toValidate, existing) -> formatErrorMessages(
+      toValidate.isBackwardCompatible(existing),
+      existing, NEW_PREFIX, OLD_PREFIX, true);
     return this;
   }
 
@@ -47,7 +50,9 @@ public final class SchemaValidatorBuilder {
    * schema(s) according to the JSON default schema resolution.
    */
   public SchemaValidatorBuilder canBeReadStrategy() {
-    this.strategy = (toValidate, existing) -> existing.isBackwardCompatible(toValidate);
+    this.strategy = (toValidate, existing) -> formatErrorMessages(
+      existing.isBackwardCompatible(toValidate),
+      existing, OLD_PREFIX, NEW_PREFIX, true);
     return this;
   }
 
@@ -58,9 +63,10 @@ public final class SchemaValidatorBuilder {
   public SchemaValidatorBuilder mutualReadStrategy() {
 
     this.strategy = (toValidate, existing) -> {
-      List<String> result = new ArrayList<>();
-      result.addAll(existing.isBackwardCompatible(toValidate));
-      result.addAll(toValidate.isBackwardCompatible(existing));
+      List<String> result = formatErrorMessages(existing.isBackwardCompatible(toValidate),
+          existing, OLD_PREFIX, NEW_PREFIX, false);
+      result.addAll(formatErrorMessages(toValidate.isBackwardCompatible(existing),
+          existing, NEW_PREFIX, OLD_PREFIX, true));
       return result;
     };
     return this;
@@ -95,5 +101,19 @@ public final class SchemaValidatorBuilder {
     if (null == strategy) {
       throw new RuntimeException("SchemaValidationStrategy not specified in builder");
     }
+  }
+
+  private List<String> formatErrorMessages(List<String> messages, ParsedSchema existing,
+                                           String reader, String writer, boolean appendSchema) {
+    if (messages.size() > 0) {
+      messages.replaceAll(e -> String.format(e, reader, writer));
+      if (appendSchema) {
+        if (existing.version() != null) {
+          messages.add("{oldSchemaVersion: " + existing.version() + "}");
+        }
+        messages.add("{oldSchema: '" + existing + "'}");
+      }
+    }
+    return messages;
   }
 }

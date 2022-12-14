@@ -1869,18 +1869,9 @@ public class ProtobufSchema implements ParsedSchema {
         .collect(Collectors.toList());
     boolean isCompatible = incompatibleDiffs.isEmpty();
     if (!isCompatible) {
-      boolean first = true;
       List<String> errorMessages = new ArrayList<>();
       for (Difference incompatibleDiff : incompatibleDiffs) {
-        if (first) {
-          // Log first incompatible change as warning
-          log.warn("Found incompatible change: {}", incompatibleDiff);
-          errorMessages.add(String.format("Found incompatible change: %s", incompatibleDiff));
-          first = false;
-        } else {
-          log.debug("Found incompatible change: {}", incompatibleDiff);
-          errorMessages.add(String.format("Found incompatible change: %s", incompatibleDiff));
-        }
+        errorMessages.add(incompatibleDiff.toString());
       }
       return errorMessages;
     } else {
