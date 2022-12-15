@@ -597,55 +597,8 @@ public class ProtobufSchemaTest {
         + "    ]\n"
         + "  }];\n"
         + "}\n";
-    String normalized = "syntax = \"proto3\";\n"
-        + "package com.example.mynamespace;\n"
-        + "\n"
-        + "import \"confluent/meta.proto\";\n"
-        + "import \"confluent/type/decimal.proto\";\n"
-        + "\n"
-        + "option java_outer_classname = \"ComplexProto\";\n"
-        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
-        + "\n"
-        + "message SampleRecord {\n"
-        + "  int32 my_field1 = 1 [(confluent.field_meta) = {\n"
-        + "    tags: \"foo\"\n"
-        + "  }];\n"
-        + "  double my_field2 = 2 [(confluent.field_meta) = {\n"
-        + "    tags: \"bar\"\n"
-        + "  }];\n"
-        + "  int32 my_field3 = 3 [(confluent.field_meta) = {\n"
-        + "    tags: [\n"
-        + "      \"foo\",\n"
-        + "      \"bar\"\n"
-        + "    ]\n"
-        + "  }];\n"
-        + "  double my_field4 = 4 [(confluent.field_meta) = {\n"
-        + "    tags: [\n"
-        + "      \"foo\",\n"
-        + "      \"bar\"\n"
-        + "    ]\n"
-        + "  }];\n"
-        + "  string my_field5 = 5 [(confluent.field_meta) = {\n"
-        + "    tags: [\n"
-        + "      \"foo\",\n"
-        + "      \"bar\"\n"
-        + "    ]\n"
-        + "  }];\n"
-        + "  string my_field6 = 6 [(confluent.field_meta) = {\n"
-        + "    tags: [\n"
-        + "      \"foo\",\n"
-        + "      \"bar\"\n"
-        + "    ]\n"
-        + "  }];\n"
-        + "}\n";
     ProtobufSchema schema = new ProtobufSchema(schemaString);
     assertEquals(canonicalString, schema.canonicalString());
-    ProtobufSchema schema2 = new ProtobufSchema(schema.toDescriptor());
-    assertEquals(expectedSchemaString, schema2.canonicalString());
-    ProtobufSchema normalizedSchema = schema.normalize();
-    assertEquals(normalized, normalizedSchema.canonicalString());
-    normalizedSchema = schema2.normalize();
-    assertEquals(normalized, normalizedSchema.canonicalString());
   }
 
   @Test
