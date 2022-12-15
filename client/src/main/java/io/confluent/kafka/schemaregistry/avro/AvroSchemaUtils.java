@@ -412,7 +412,14 @@ public class AvroSchemaUtils {
         if (lt != null) {
           return writeLogicalType(s, lt, o);
         } else {
-          return o.append('"').append(st.getName()).append('"');
+          if (s.hasProps()) {
+            o.append("{\"type\":\"").append(st.getName()).append('"');
+            setSimpleProps(o, s.getObjectProps());
+            o.append("}");
+          } else {
+            o.append('"').append(st.getName()).append('"');
+          }
+          return o;
         }
     }
   }
