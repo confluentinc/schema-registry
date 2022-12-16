@@ -1384,7 +1384,6 @@ public class ProtobufSchema implements ParsedSchema {
   private static Map<String, OptionElement> mergeOptions(List<OptionElement> options) {
     // This method is mainly used to merge Confluent meta options
     // which may not be using the alternative aggregate syntax.
-    // This assumes none of the merged options are declared as repeated.
     return options.stream()
         .collect(Collectors.toMap(
             OptionElement::getName,
@@ -1399,12 +1398,28 @@ public class ProtobufSchema implements ParsedSchema {
       Map<String, ?> existingMap = (Map<String, ?>) existing.getValue();
       Map<String, ?> replacementMap = (Map<String, ?>) replacement.getValue();
       Map<String, Object> mergedMap = new LinkedHashMap<>(existingMap);
-      mergedMap.putAll(replacementMap);
+      for (Map.Entry<String, ?> entry : replacementMap.entrySet()) {
+        // Merging should only be needed for repeated fields
+        mergedMap.merge(entry.getKey(), entry.getValue(), (v1, v2) -> {
+          List<Object> list = new ArrayList<>();
+          if (v1 instanceof List) {
+            list.addAll((List<Object>) v1);
+          } else {
+            list.add(v1);
+          }
+          if (v2 instanceof List) {
+            list.addAll((List<Object>) v2);
+          } else {
+            list.add(v2);
+          }
+          return list;
+        });
+      }
       return new OptionElement(
           replacement.getName(), Kind.MAP, mergedMap, replacement.isParenthesized());
     } else {
       // Discard existing option
-      // This should only happen with custom options which are ignored
+      // This should only happen with custom options that are ignored
       return replacement;
     }
   }
@@ -1655,7 +1670,12 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public static List<String> findTags(Optional<OptionElement> meta) {
-    return (List<String>) findMetaField(meta, TAGS_FIELD);
+    Object result = findMetaField(meta, TAGS_FIELD);
+    if (result instanceof List) {
+      return (List<String>) result;
+    } else {
+      return result != null ? Collections.singletonList(result.toString()) : null;
+    }
   }
 
   @SuppressWarnings("unchecked")
