@@ -688,17 +688,21 @@ public class ProtobufSchemaUtils {
       sb.append('}');
     } else if (value instanceof List) {
       List<Object> list = (List<Object>) value;
-      sb.append("[\n");
-      int lastIndex = list.size() - 1;
-      for (int i = 0; i < list.size(); i++) {
-        String endl = i != lastIndex ? "," : "";
-        String v = new StringBuilder()
-            .append(formatOptionMapOrListValue(list.get(i), normalize))
-            .append(endl)
-            .toString();
-        appendIndented(sb, v);
+      if (normalize && list.size() == 1) {
+        sb.append(formatOptionMapOrListValue(list.get(0), normalize));
+      } else {
+        sb.append("[\n");
+        int lastIndex = list.size() - 1;
+        for (int i = 0; i < list.size(); i++) {
+          String endl = i != lastIndex ? "," : "";
+          String v = new StringBuilder()
+              .append(formatOptionMapOrListValue(list.get(i), normalize))
+              .append(endl)
+              .toString();
+          appendIndented(sb, v);
+        }
+        sb.append("]");
       }
-      sb.append("]");
     } else if (value instanceof OptionElement.OptionPrimitive) {
       OptionElement.OptionPrimitive primitive = (OptionElement.OptionPrimitive) value;
       switch (primitive.getKind()) {
