@@ -16,7 +16,11 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
@@ -32,6 +36,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -61,6 +66,10 @@ public class AvroSchema implements ParsedSchema {
 
   public static final String TAGS = "confluent.tags";
 
+  public static final String NAME_FIELD = "name";
+  public static final String FIELDS_FIELD = "fields";
+
+
   private final Schema schemaObj;
   private String canonicalString;
   private final Integer version;
@@ -73,6 +82,8 @@ public class AvroSchema implements ParsedSchema {
   private transient int hashCode = NO_HASHCODE;
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
+
+  private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
 
   public AvroSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null);
@@ -192,7 +203,30 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public ParsedSchema copy(Map<String, Set<String>> tagsToAdd,
                            Map<String, Set<String>> tagsToRemove) {
-    return null;
+    AvroSchema newSchema = new AvroSchema(
+        this.schemaObj,
+        this.canonicalString,
+        this.references,
+        this.resolvedReferences,
+        this.metadata,
+        this.ruleSet,
+        this.version,
+        this.isNew);
+    JsonNode original;
+    try {
+      original = jsonMapper.readTree(newSchema.canonicalString());
+    } catch (JsonProcessingException e) {
+      throw new RuntimeException(e);
+    }
+
+    for (Map.Entry<String, Set<String>> tagToAdd : tagsToAdd.entrySet()) {
+      addFieldLevelTags(original, tagToAdd.getKey(), tagToAdd.getValue());
+    }
+    for (Map.Entry<String, Set<String>> tagToRemove : tagsToRemove.entrySet()) {
+      removeFieldLevelTags(original, tagToRemove.getKey(), tagToRemove.getValue());
+    }
+    return new AvroSchema(original.toString(), newSchema.references(),
+      newSchema.resolvedReferences(), -1);
   }
 
   protected Schema.Parser getParser() {
@@ -581,6 +615,52 @@ public class AvroSchema implements ParsedSchema {
     }
     return tags;
   }
+
+  private Set<String> getInlineTags(JsonNode tagNode) {
+    Set<String> tags = new LinkedHashSet<>();
+    ArrayNode tagArray = (ArrayNode) tagNode.get(TAGS);
+    tagArray.elements().forEachRemaining(tag -> tags.add(tag.asText()));
+    return tags;
+  }
+
+
+  private void addFieldLevelTags(JsonNode node, String path, Set<String> tags) {
+    JsonNode fieldNodePtr = AvroSchemaUtils.findMatchingField(node, path);
+    if (fieldNodePtr == null) {
+      throw new IllegalArgumentException(String.format(
+        "No matching path '%s' found in the schema", path));
+    }
+
+    Set<String> allTags = new LinkedHashSet<>();
+    if (fieldNodePtr.has(TAGS)) {
+      allTags = getInlineTags(fieldNodePtr);
+    }
+    allTags.addAll(tags);
+    ((ObjectNode) fieldNodePtr).replace(TAGS, jsonMapper.valueToTree(allTags));
+  }
+
+
+
+  private void removeFieldLevelTags(JsonNode node, String path, Set<String> tags) {
+    JsonNode fieldNodePtr = AvroSchemaUtils.findMatchingField(node, path);
+    if (fieldNodePtr == null) {
+      throw new IllegalArgumentException(String.format(
+        "No matching path '%s' found in the schema", path));
+    }
+
+    if (fieldNodePtr.has(TAGS)) {
+      Set<String> existingTags = getInlineTags(fieldNodePtr);
+      int before = existingTags.size();
+      tags.forEach(existingTags::remove);
+      if (existingTags.size() == 0) {
+        ((ObjectNode) fieldNodePtr).remove(TAGS);
+      } else if (existingTags.size() < before) {
+        ((ObjectNode) fieldNodePtr).replace(TAGS, jsonMapper.valueToTree(existingTags));
+      }
+    }
+  }
+
+
 
   private static GenericData getData(Object message) {
     if (message instanceof SpecificRecord) {

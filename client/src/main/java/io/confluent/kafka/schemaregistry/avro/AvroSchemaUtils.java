@@ -30,6 +30,7 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -66,6 +67,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+
+import static io.confluent.kafka.schemaregistry.avro.AvroSchema.FIELDS_FIELD;
+import static io.confluent.kafka.schemaregistry.avro.AvroSchema.NAME_FIELD;
 
 public class AvroSchemaUtils {
 
@@ -312,6 +316,57 @@ public class AvroSchemaUtils {
     } else {
       return new ReflectDatumWriter<>(schema);
     }
+  }
+
+  public static JsonNode findMatchingField(JsonNode node, String path) {
+    String [] identifiers = path.split("\\.");
+    if (identifiers.length < 2) {
+      throw new IllegalArgumentException(
+        String.format("Given field path '%s' has less than two components.", path));
+    }
+
+    // ignore namespace since recordName and fieldName combination is unique in a schema
+    String fieldName = identifiers[identifiers.length - 1];
+    String recordName = identifiers[identifiers.length - 2];
+
+    LinkedList<JsonNode> toVisit = new LinkedList<>();
+    toVisit.add(node);
+
+    // BFS to search field
+    while (toVisit.size() > 0) {
+      JsonNode curr = toVisit.removeFirst();
+      if (!curr.has("type")) {
+        // union
+        curr.elements().forEachRemaining(toVisit::add);
+      } else {
+        String type = curr.get("type").asText();
+        switch (type) {
+          case "record":
+            if (recordName.equals(curr.get(NAME_FIELD).asText())) {
+              Iterator<JsonNode> fieldsIter = curr.get(FIELDS_FIELD).elements();
+              while (fieldsIter.hasNext()) {
+                JsonNode currField = fieldsIter.next();
+                if (fieldName.equals(currField.get(NAME_FIELD).asText())) {
+                  return currField;
+                }
+              }
+            } else {
+              curr.get(FIELDS_FIELD).elements().forEachRemaining(toVisit::add);
+            }
+            break;
+          case "array":
+            toVisit.add(curr.get("items"));
+            break;
+          case "map":
+            toVisit.add(curr.get("values"));
+            break;
+          default:
+            // nested type
+            toVisit.add(curr.get("type"));
+        }
+      }
+    }
+    return null;
   }
 
   protected static String toNormalizedString(AvroSchema schema) {
