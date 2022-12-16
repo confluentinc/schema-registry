@@ -17,11 +17,8 @@
 package io.confluent.kafka.schemaregistry.protobuf;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.ImmutableList;
@@ -109,6 +106,8 @@ import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.stream.Stream;
 
 import kotlin.Pair;
@@ -138,10 +137,9 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 
 import static com.google.common.base.CaseFormat.LOWER_UNDERSCORE;
 import static com.google.common.base.CaseFormat.UPPER_CAMEL;
-import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingNode;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingFieldElement;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingFieldNode;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.jsonToFile;
-import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.removeTagsFromArray;
-import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.removeFieldMeta;
 
 public class ProtobufSchema implements ParsedSchema {
 
@@ -571,12 +569,7 @@ public class ProtobufSchema implements ParsedSchema {
         this.descriptor
     );
     JsonNode original = jsonMapper.valueToTree(newSchema.rawSchema());
-    for (Map.Entry<String, Set<String>> tagToAdd : tagsToAdd.entrySet()) {
-      addFieldLevelTags(original, tagToAdd.getKey(), tagToAdd.getValue());
-    }
-    for (Map.Entry<String, Set<String>> tagToRemove : tagsToRemove.entrySet()) {
-      removeFieldLevelTags(original, tagToRemove.getKey(), tagToRemove.getValue());
-    }
+    modifyFieldLevelTags(newSchema.rawSchema(), original, tagsToAdd, tagsToRemove);
     try {
       ProtoFileElement newFileElement = jsonToFile(original);
       return new ProtobufSchema(newFileElement, newSchema.references(), newSchema.dependencies());
@@ -1444,18 +1437,18 @@ public class ProtobufSchema implements ParsedSchema {
       for (Map.Entry<String, ?> entry : replacementMap.entrySet()) {
         // Merging should only be needed for repeated fields
         mergedMap.merge(entry.getKey(), entry.getValue(), (v1, v2) -> {
-          List<Object> list = new ArrayList<>();
+          Set<Object> set = new LinkedHashSet<>();
           if (v1 instanceof List) {
-            list.addAll((List<Object>) v1);
+            set.addAll((List<Object>) v1);
           } else {
-            list.add(v1);
+            set.add(v1);
           }
           if (v2 instanceof List) {
-            list.addAll((List<Object>) v2);
+            set.addAll((List<Object>) v2);
           } else {
-            list.add(v2);
+            set.add(v2);
           }
-          return list;
+          return new ArrayList<>(set);
         });
       }
       return new OptionElement(
@@ -2215,172 +2208,64 @@ public class ProtobufSchema implements ParsedSchema {
     return tags;
   }
 
-  private Set<String> getInlineTags(JsonNode optionNode) {
-    if (!optionNode.has("kind")) {
-      throw new IllegalStateException("'kind' field is missing in the given Option node.");
-    }
-    Kind kind = Kind.valueOf(optionNode.get("kind").asText());
-    switch (kind) {
-      case STRING:
-        return Collections.singleton(optionNode.get("value").asText());
-      case OPTION:
-        return getInlineTags(optionNode.get("value"));
-      case MAP:
-        JsonNode optionValueNode = optionNode.get("value");
-        if (optionValueNode.has(TAGS_FIELD)) {
-          try {
-            return jsonMapper.readValue(optionValueNode.get(TAGS_FIELD).toString(),
-                new TypeReference<Set<String>>(){});
-          } catch (JsonProcessingException e) {
-            throw new IllegalStateException(
-                String.format("Cannot deserialize array node %s into Set",
-                  optionValueNode.get(TAGS_FIELD)), e);
-          }
-        } else {
-          return null;
-        }
-      case LIST:
-        try {
-          return jsonMapper.readValue(optionNode.get("value").toString(),
-              new TypeReference<Set<String>>(){});
-        } catch (JsonProcessingException e) {
-          throw new IllegalStateException(
-              String.format("Cannot deserialize json node %s into Set", optionNode), e);
-        }
-      default:
-        return null;
-    }
-  }
+  private void modifyFieldLevelTags(ProtoFileElement original, JsonNode originalNode,
+                                    Map<String, Set<String>> tagsToAddMap,
+                                    Map<String, Set<String>> tagsToRemoveMap) {
+    Set<String> pathToModify = new HashSet<>(tagsToAddMap.keySet());
+    pathToModify.addAll(tagsToRemoveMap.keySet());
 
-  public void addFieldLevelTags(JsonNode node, String path, Set<String> tags) {
-    String [] identifiers = path.split("\\.");
-    JsonNode fieldNodePtr = node;
-    // skipping the first entry because path starts with leading dot
-    for (int i = 1; i < identifiers.length; i++) {
-      if (i == 1) {
-        fieldNodePtr = findMatchingNode(fieldNodePtr, "types", "name", identifiers[i]);
-        if (fieldNodePtr == null) {
-          throw new IllegalArgumentException(String.format(
-            "No matching path '%s' found in the schema", path));
-        }
-      } else if (i < identifiers.length - 1) {
-        fieldNodePtr = findMatchingNode(fieldNodePtr, "nestedTypes", "name", identifiers[i]);
-        if (fieldNodePtr == null) {
-          throw new IllegalArgumentException(String.format(
-            "No matching path '%s' found in the schema", path));
-        }
+    for (String path : pathToModify) {
+      String [] identifiers = path.split("\\.");
+      FieldElement fieldElement = findMatchingFieldElement(original, identifiers);
+      Map<String, OptionElement> mergedOptions;
+
+      if (tagsToAddMap.containsKey(path)) {
+        Set<String> tagsToAdd = tagsToAddMap.get(path);
+        List<OptionElement> allOptions = new LinkedList<>(fieldElement.getOptions());
+        OptionElement newOption = new OptionElement(CONFLUENT_FIELD_META, Kind.OPTION,
+            new OptionElement(TAGS_FIELD, Kind.LIST, new ArrayList<>(tagsToAdd), false), true);
+        allOptions.add(newOption);
+        mergedOptions = mergeOptions(allOptions);
       } else {
-        fieldNodePtr = findMatchingNode(fieldNodePtr, "fields", "name", identifiers[i]);
-        if (fieldNodePtr == null) {
-          throw new IllegalArgumentException(String.format(
-            "No matching path '%s' found in the schema", path));
-        }
-        JsonNode fieldMetaOptionNode = findMatchingNode(fieldNodePtr, "options", "name",
-            CONFLUENT_FIELD_META);
+        mergedOptions = mergeOptions(fieldElement.getOptions());
+      }
 
-        if (fieldMetaOptionNode == null) {
-          OptionElement newOption = new OptionElement(CONFLUENT_FIELD_META, Kind.OPTION,
-              new OptionElement(TAGS_FIELD, Kind.LIST, new ArrayList<>(tags), false), true);
-          JsonNode newOptionNode = jsonMapper.valueToTree(newOption);
-          ((ArrayNode) fieldNodePtr.get("options")).add(newOptionNode);
-        } else if (Kind.MAP.name().equals(fieldMetaOptionNode.get("kind").asText())) {
-          // field has confluent.field_meta maps
-          ArrayList<String> newValueList = new ArrayList<>(tags);
-          Set<String> existingTags = getInlineTags(fieldMetaOptionNode);
-          if (existingTags != null) {
-            tags = tags.stream().filter(s -> !existingTags.contains(s)).collect(Collectors.toSet());
-            if (!tags.isEmpty()) {
-              newValueList.addAll(existingTags);
+      if (tagsToRemoveMap.containsKey(path)) {
+        Set<String> tagsToRemove = tagsToRemoveMap.get(path);
+        if (mergedOptions.containsKey(CONFLUENT_FIELD_META)) {
+          LinkedHashMap<String, Object> fieldMetas =
+              new LinkedHashMap<>(
+                (Map<String, Object>) mergedOptions.get(CONFLUENT_FIELD_META).getValue());
+          if (fieldMetas.containsKey(TAGS_FIELD)) {
+            Object tagsObj = fieldMetas.get(TAGS_FIELD);
+            List<Object> allTags;
+            if (tagsObj instanceof List) {
+              allTags = (List<Object>) tagsObj;
+            } else {
+              allTags = Collections.singletonList(fieldMetas.get(TAGS_FIELD));
+            }
+            List<Object> remainingTags = allTags.stream()
+                .filter(tag -> !tagsToRemove.contains(tag))
+                .collect(Collectors.toCollection(ArrayList::new));
+
+            if (remainingTags.isEmpty()) {
+              fieldMetas.remove(TAGS_FIELD);
+            } else {
+              fieldMetas.put(TAGS_FIELD, remainingTags);
+            }
+
+            if (fieldMetas.isEmpty()) {
+              mergedOptions.remove(CONFLUENT_FIELD_META);
+            } else {
+              mergedOptions.put(CONFLUENT_FIELD_META,
+                new OptionElement(CONFLUENT_FIELD_META, Kind.MAP, fieldMetas, true));
             }
           }
-          ((ObjectNode) fieldMetaOptionNode.get("value"))
-            .replace(TAGS_FIELD, jsonMapper.valueToTree(newValueList));
-        } else {
-          // field has confluent.field_meta option
-          Set<String> existingTags = getInlineTags(fieldMetaOptionNode);
-          tags = tags.stream().filter(s -> !existingTags.contains(s)).collect(Collectors.toSet());
-          if (!tags.isEmpty()) {
-            ArrayList<String> newValueList = new ArrayList<>(tags);
-            newValueList.addAll(existingTags);
-            OptionElement newOption = new OptionElement(TAGS_FIELD, Kind.LIST, newValueList, false);
-            ((ObjectNode) fieldMetaOptionNode).replace("value", jsonMapper.valueToTree(newOption));
-          }
         }
       }
-    }
-  }
 
-  public void removeFieldLevelTags(JsonNode node, String path, Set<String> tags) {
-    String [] identifiers = path.split("\\.");
-    JsonNode fieldNodePtr = node;
-    // skipping the first entry because path starts with leading dot
-    for (int i = 1; i < identifiers.length; i++) {
-      if (i == 1) {
-        fieldNodePtr = findMatchingNode(fieldNodePtr, "types", "name", identifiers[i]);
-        if (fieldNodePtr == null) {
-          throw new IllegalArgumentException(String.format(
-            "No matching path '%s' found in the schema", path));
-        }
-      } else if (i < identifiers.length - 1) {
-        fieldNodePtr = findMatchingNode(fieldNodePtr, "nestedTypes", "name", identifiers[i]);
-        if (fieldNodePtr == null) {
-          throw new IllegalArgumentException(String.format(
-            "No matching path '%s' found in the schema", path));
-        }
-      } else {
-        fieldNodePtr = findMatchingNode(fieldNodePtr, "fields", "name", identifiers[i]);
-        if (fieldNodePtr == null) {
-          throw new IllegalArgumentException(String.format(
-            "No matching path '%s' found in the schema", path));
-        }
-        JsonNode fieldMetaOptionNode = findMatchingNode(fieldNodePtr, "options", "name",
-            CONFLUENT_FIELD_META);
-
-        if (fieldMetaOptionNode != null) {
-          Kind kind = Kind.valueOf(fieldMetaOptionNode.get("kind").asText());
-          switch (kind) {
-            case STRING:
-              if (tags.contains(fieldMetaOptionNode.get("name").asText())) {
-                ((ObjectNode) fieldNodePtr)
-                  .replace("options", JsonNodeFactory.instance.arrayNode());
-              }
-              return;
-            case OPTION:
-              JsonNode tagOptionNode = fieldMetaOptionNode.get("value");
-              if (tagOptionNode != null && TAGS_FIELD.equals(tagOptionNode.get("name").asText())) {
-                JsonNode tagOptionValueNode = tagOptionNode.get("value");
-                if (tagOptionValueNode.isArray()) {
-                  ArrayNode tagsArray = (ArrayNode) tagOptionNode.get("value");
-                  removeTagsFromArray(tagsArray, tags);
-                  if (tagsArray.size() == 0) {
-                    ((ObjectNode) fieldNodePtr)
-                      .replace("options", JsonNodeFactory.instance.arrayNode());
-                  }
-                } else if (tagOptionValueNode.isTextual()
-                    && tags.contains(tagOptionValueNode.asText())) {
-                  removeFieldMeta((ArrayNode) fieldNodePtr.get("options"));
-                }
-              }
-              return;
-            case MAP:
-              JsonNode fieldMetaOptionValueNode = fieldMetaOptionNode.get("value");
-              tagOptionNode = fieldMetaOptionValueNode.get(TAGS_FIELD);
-              if (tagOptionNode != null && tagOptionNode.isArray()) {
-                ArrayNode tagsArray = (ArrayNode) tagOptionNode;
-                removeTagsFromArray(tagsArray, tags);
-                if (tagsArray.size() == 0) {
-                  ((ObjectNode) fieldMetaOptionValueNode).remove(TAGS_FIELD);
-                }
-              }
-              if (fieldMetaOptionValueNode.size() == 0) {
-                removeFieldMeta((ArrayNode) fieldNodePtr.get("options"));
-              }
-              return;
-            default:
-              return;
-          }
-        }
-      }
+      JsonNode fieldNode = findMatchingFieldNode(originalNode, identifiers);
+      ((ObjectNode) fieldNode).replace("options", jsonMapper.valueToTree(mergedOptions.values()));
     }
   }
 

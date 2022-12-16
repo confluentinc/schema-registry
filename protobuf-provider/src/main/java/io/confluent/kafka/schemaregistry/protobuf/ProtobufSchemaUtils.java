@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.protobuf;
 
 import static com.squareup.wire.schema.internal.UtilKt.MAX_TAG_VALUE;
-import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.CONFLUENT_FIELD_META;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.CONFLUENT_PREFIX;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.DEFAULT_LOCATION;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.transform;
@@ -26,7 +25,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.google.common.base.Ascii;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -70,7 +68,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import kotlin.Pair;
@@ -132,24 +129,59 @@ public class ProtobufSchemaUtils {
         return currNode;
       }
     }
-    return null;
+    throw new IllegalArgumentException(
+      String.format("No matching field '%s' with value '%s' found in the schema",
+        targetFieldName, targetFieldValue));
   }
 
-  public static void removeTagsFromArray(ArrayNode arrayNode, Set<String> tags) {
-    for (int j = arrayNode.size() - 1; j >= 0; j--) {
-      if (tags.contains(arrayNode.get(j).asText())) {
-        arrayNode.remove(j);
+  public static JsonNode findMatchingFieldNode(JsonNode node, String [] identifiers) {
+    JsonNode fieldNodePtr = node;
+    // skipping the first entry because path starts with leading dot
+    for (int i = 1; i < identifiers.length; i++) {
+      if (i == 1) {
+        fieldNodePtr = findMatchingNode(fieldNodePtr, "types", "name", identifiers[i]);
+      } else if (i < identifiers.length - 1) {
+        fieldNodePtr = findMatchingNode(fieldNodePtr, "nestedTypes", "name", identifiers[i]);
+      } else {
+        fieldNodePtr = findMatchingNode(fieldNodePtr, "fields", "name", identifiers[i]);
       }
     }
+    return fieldNodePtr;
   }
 
-  public static void removeFieldMeta(ArrayNode optionsArray) {
-    for (int j = optionsArray.size() - 1; j >= 0; j--) {
-      if (optionsArray.get(j).has("name")
-          && CONFLUENT_FIELD_META.equals(optionsArray.get(j).get("name").asText())) {
-        optionsArray.remove(j);
+  public static MessageElement findMatchingMessage(List<TypeElement> typeElementList, String name) {
+    for (TypeElement typeElement : typeElementList) {
+      if (typeElement instanceof MessageElement && name.equals(typeElement.getName())) {
+        return (MessageElement) typeElement;
       }
     }
+    throw new IllegalArgumentException(
+      String.format("No matching Message with name '%s' found in the schema", name));
+  }
+
+  public static FieldElement findMatchingFieldElement(ProtoFileElement original,
+                                                      String [] identifiers) {
+    MessageElement messageElement = null;
+    FieldElement fieldElementPtr = null;
+
+    for (int i = 1; i < identifiers.length; i++) {
+      if (i == 1) {
+        messageElement = findMatchingMessage(original.getTypes(), identifiers[i]);
+      } else if (i < identifiers.length - 1) {
+        messageElement = findMatchingMessage(messageElement.getNestedTypes(), identifiers[i]);
+      } else {
+        for (FieldElement fieldElement : messageElement.getFields()) {
+          if (identifiers[i].equals(fieldElement.getName())) {
+            fieldElementPtr =  fieldElement;
+          }
+        }
+        if (fieldElementPtr == null) {
+          throw new IllegalArgumentException(String.format(
+            "No matching Field with name '%s' found in the schema", identifiers[i]));
+        }
+      }
+    }
+    return fieldElementPtr;
   }
 
   protected static String toNormalizedString(ProtobufSchema schema) {

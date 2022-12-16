@@ -366,7 +366,8 @@ public class AvroSchemaUtils {
         }
       }
     }
-    return null;
+    throw new IllegalArgumentException(String.format(
+      "No matching path '%s' found in the schema", path));
   }
 
   protected static String toNormalizedString(AvroSchema schema) {

@@ -218,13 +218,7 @@ public class AvroSchema implements ParsedSchema {
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
     }
-
-    for (Map.Entry<String, Set<String>> tagToAdd : tagsToAdd.entrySet()) {
-      addFieldLevelTags(original, tagToAdd.getKey(), tagToAdd.getValue());
-    }
-    for (Map.Entry<String, Set<String>> tagToRemove : tagsToRemove.entrySet()) {
-      removeFieldLevelTags(original, tagToRemove.getKey(), tagToRemove.getValue());
-    }
+    modifyFieldLevelTags(original, tagsToAdd, tagsToRemove);
     return new AvroSchema(original.toString(), newSchema.references(),
       newSchema.resolvedReferences(), -1);
   }
@@ -618,49 +612,40 @@ public class AvroSchema implements ParsedSchema {
 
   private Set<String> getInlineTags(JsonNode tagNode) {
     Set<String> tags = new LinkedHashSet<>();
-    ArrayNode tagArray = (ArrayNode) tagNode.get(TAGS);
-    tagArray.elements().forEachRemaining(tag -> tags.add(tag.asText()));
+    if (tagNode.has(TAGS)) {
+      ArrayNode tagArray = (ArrayNode) tagNode.get(TAGS);
+      tagArray.elements().forEachRemaining(tag -> tags.add(tag.asText()));
+    }
     return tags;
   }
 
+  private void modifyFieldLevelTags(JsonNode node,
+                                    Map<String, Set<String>> tagsToAddMap,
+                                    Map<String, Set<String>> tagsToRemoveMap) {
+    Set<String> pathToModify = new HashSet<>(tagsToAddMap.keySet());
+    pathToModify.addAll(tagsToRemoveMap.keySet());
 
-  private void addFieldLevelTags(JsonNode node, String path, Set<String> tags) {
-    JsonNode fieldNodePtr = AvroSchemaUtils.findMatchingField(node, path);
-    if (fieldNodePtr == null) {
-      throw new IllegalArgumentException(String.format(
-        "No matching path '%s' found in the schema", path));
-    }
+    for (String path : pathToModify) {
+      JsonNode fieldNodePtr = AvroSchemaUtils.findMatchingField(node, path);
+      Set<String> allTags = getInlineTags(fieldNodePtr);
 
-    Set<String> allTags = new LinkedHashSet<>();
-    if (fieldNodePtr.has(TAGS)) {
-      allTags = getInlineTags(fieldNodePtr);
-    }
-    allTags.addAll(tags);
-    ((ObjectNode) fieldNodePtr).replace(TAGS, jsonMapper.valueToTree(allTags));
-  }
+      if (tagsToAddMap.containsKey(path)) {
+        Set<String> tagsToAdd = tagsToAddMap.get(path);
+        allTags.addAll(tagsToAdd);
+      }
 
+      if (tagsToRemoveMap.containsKey(path)) {
+        Set<String> tagsToRemove = tagsToRemoveMap.get(path);
+        tagsToRemove.forEach(allTags::remove);
+      }
 
-
-  private void removeFieldLevelTags(JsonNode node, String path, Set<String> tags) {
-    JsonNode fieldNodePtr = AvroSchemaUtils.findMatchingField(node, path);
-    if (fieldNodePtr == null) {
-      throw new IllegalArgumentException(String.format(
-        "No matching path '%s' found in the schema", path));
-    }
-
-    if (fieldNodePtr.has(TAGS)) {
-      Set<String> existingTags = getInlineTags(fieldNodePtr);
-      int before = existingTags.size();
-      tags.forEach(existingTags::remove);
-      if (existingTags.size() == 0) {
+      if (allTags.size() == 0) {
         ((ObjectNode) fieldNodePtr).remove(TAGS);
-      } else if (existingTags.size() < before) {
-        ((ObjectNode) fieldNodePtr).replace(TAGS, jsonMapper.valueToTree(existingTags));
+      } else {
+        ((ObjectNode) fieldNodePtr).replace(TAGS, jsonMapper.valueToTree(allTags));
       }
     }
   }
-
-
 
   private static GenericData getData(Object message) {
     if (message instanceof SpecificRecord) {

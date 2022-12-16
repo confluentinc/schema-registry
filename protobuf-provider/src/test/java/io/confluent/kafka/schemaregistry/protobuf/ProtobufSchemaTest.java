@@ -2023,100 +2023,125 @@ public class ProtobufSchemaTest {
   @Test
   public void testBasicAddAndRemoveSchemaTags() {
     String schemaString = "syntax = \"proto3\";\n" +
-        "package com.example.mynamespace;\n" +
-        "\n" +
-        "import \"confluent/meta.proto\";\n" +
-        "import \"confluent/type/decimal.proto\";\n" +
-        "\n" +
-        "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
-        "option java_outer_classname = \"ComplexProto\";\n" +
-        "\n" +
-        "message SampleRecord {\n" +
-        "  int32 my_field1 = 1 [(confluent.field_meta).tags = \"PRIVATE\"];\n" +
-        "  double my_field2 = 2 [(confluent.field_meta) = {\n" +
-        "    tags: [ \"PRIVATE\" ]\n" +
-        "  }];\n" +
-        "  NestedRecord my_field3 = 3 [(confluent.field_meta) = {\n" +
-        "    doc: \"field_meta\"\n" +
-        "  }];\n" +
-        "\n" +
-        "  message NestedRecord {\n" +
-        "    int64 nested_filed1 = 4;\n" +
-        "  }\n" +
-        "}\n";
+      "package com.example.mynamespace;\n" +
+      "\n" +
+      "import \"confluent/meta.proto\";\n" +
+      "import \"confluent/type/decimal.proto\";\n" +
+      "\n" +
+      "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
+      "option java_outer_classname = \"ComplexProto\";\n" +
+      "\n" +
+      "message SampleRecord {\n" +
+      "  int32 my_field1 = 1 [\n" +
+      "    (confluent.field_meta).tags = \"OTHER\",\n" +
+      "    (confluent.field_meta).tags = \"PRIVATE\"\n" +
+      "  ];\n" +
+      "  double my_field2 = 2 [(confluent.field_meta) = {\n" +
+      "    tags: [ \"PRIVATE\" ]\n" +
+      "  }];\n" +
+      "  NestedRecord my_field3 = 3 [(confluent.field_meta) = {\n" +
+      "    doc: \"field_meta\"\n" +
+      "  }];\n" +
+      "\n" +
+      "  message NestedRecord {\n" +
+      "    int64 nested_filed1 = 4;\n" +
+      "  }\n" +
+      "}\n";
 
     String expectedString = "syntax = \"proto3\";\n" +
-        "package com.example.mynamespace;\n" +
-        "\n" +
-        "import \"confluent/meta.proto\";\n" +
-        "import \"confluent/type/decimal.proto\";\n" +
-        "\n" +
-        "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
-        "option java_outer_classname = \"ComplexProto\";\n" +
-        "\n" +
-        "message SampleRecord {\n" +
-        "  int32 my_field1 = 1 [(confluent.field_meta).tags = [\n" +
-        "    \"PII\",\n" +
-        "    \"PRIVATE\"\n" +
-        "  ]];\n" +
-        "  double my_field2 = 2 [(confluent.field_meta) = {\n" +
-        "    tags: [\n" +
-        "      \"PII\",\n" +
-        "      \"PRIVATE\"\n" +
-        "    ]\n" +
-        "  }];\n" +
-        "  NestedRecord my_field3 = 3 [(confluent.field_meta) = {\n" +
-        "    doc: \"field_meta\",\n" +
-        "    tags: [\n" +
-        "      \"PII\"\n" +
-        "    ]\n" +
-        "  }];\n" +
-        "\n" +
-        "  message NestedRecord {\n" +
-        "    int64 nested_filed1 = 4 [(confluent.field_meta).tags = [\"PII\"]];\n" +
-        "  }\n" +
-        "}\n";
+      "package com.example.mynamespace;\n" +
+      "\n" +
+      "import \"confluent/meta.proto\";\n" +
+      "import \"confluent/type/decimal.proto\";\n" +
+      "\n" +
+      "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
+      "option java_outer_classname = \"ComplexProto\";\n" +
+      "\n" +
+      "message SampleRecord {\n" +
+      "  int32 my_field1 = 1 [(confluent.field_meta) = {\n" +
+      "    tags: [\n" +
+      "      \"OTHER\",\n" +
+      "      \"PRIVATE\",\n" +
+      "      \"PII\"\n" +
+      "    ]\n" +
+      "  }];\n" +
+      "  double my_field2 = 2 [(confluent.field_meta) = {\n" +
+      "    tags: [\n" +
+      "      \"PRIVATE\",\n" +
+      "      \"PII\"\n" +
+      "    ]\n" +
+      "  }];\n" +
+      "  NestedRecord my_field3 = 3 [(confluent.field_meta) = {\n" +
+      "    doc: \"field_meta\",\n" +
+      "    tags: [\n" +
+      "      \"PII\"\n" +
+      "    ]\n" +
+      "  }];\n" +
+      "\n" +
+      "  message NestedRecord {\n" +
+      "    int64 nested_filed1 = 4 [(confluent.field_meta) = {\n" +
+      "      tags: [\n" +
+      "        \"PII\"\n" +
+      "      ]\n" +
+      "    }];\n" +
+      "  }\n" +
+      "}\n";
 
     String removedTagSchema = "syntax = \"proto3\";\n" +
-        "package com.example.mynamespace;\n" +
-        "\n" +
-        "import \"confluent/meta.proto\";\n" +
-        "import \"confluent/type/decimal.proto\";\n" +
-        "\n" +
-        "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
-        "option java_outer_classname = \"ComplexProto\";\n" +
-        "\n" +
-        "message SampleRecord {\n" +
-        "  int32 my_field1 = 1 [(confluent.field_meta).tags = [\"PRIVATE\"]];\n" +
-        "  double my_field2 = 2 [(confluent.field_meta) = {\n" +
-        "    tags: [\n" +
-        "      \"PRIVATE\"\n" +
-        "    ]\n" +
-        "  }];\n" +
-        "  NestedRecord my_field3 = 3 [(confluent.field_meta) = {\n" +
-        "    doc: \"field_meta\"\n" +
-        "  }];\n" +
-        "\n" +
-        "  message NestedRecord {\n" +
-        "    int64 nested_filed1 = 4;\n" +
-        "  }\n" +
-        "}\n";
+      "package com.example.mynamespace;\n" +
+      "\n" +
+      "import \"confluent/meta.proto\";\n" +
+      "import \"confluent/type/decimal.proto\";\n" +
+      "\n" +
+      "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
+      "option java_outer_classname = \"ComplexProto\";\n" +
+      "\n" +
+      "message SampleRecord {\n" +
+      "  int32 my_field1 = 1 [(confluent.field_meta) = {\n" +
+      "    tags: [\n" +
+      "      \"PRIVATE\",\n" +
+      "      \"PII\"\n" +
+      "    ]\n" +
+      "  }];\n" +
+      "  double my_field2 = 2 [(confluent.field_meta) = {\n" +
+      "    tags: [\n" +
+      "      \"PII\"\n" +
+      "    ]\n" +
+      "  }];\n" +
+      "  NestedRecord my_field3 = 3 [(confluent.field_meta) = {\n" +
+      "    doc: \"field_meta\"\n" +
+      "  }];\n" +
+      "\n" +
+      "  message NestedRecord {\n" +
+      "    int64 nested_filed1 = 4 [(confluent.field_meta) = {\n" +
+      "      tags: [\n" +
+      "        \"PII\"\n" +
+      "      ]\n" +
+      "    }];\n" +
+      "  }\n" +
+      "}\n";
 
-    Map<String, Set<String>> tags = new HashMap<>();
-    tags.put(".SampleRecord.my_field1", Collections.singleton("PII"));
-    tags.put(".SampleRecord.my_field2", Collections.singleton("PII"));
-    tags.put(".SampleRecord.my_field3", Collections.singleton("PII"));
-    tags.put(".SampleRecord.NestedRecord.nested_filed1", Collections.singleton("PII"));
-    ParsedSchema schema = new ProtobufSchema(schemaString).copy(tags, Collections.emptyMap());
+    Map<String, Set<String>> tagsToAdd = new HashMap<>();
+    tagsToAdd.put(".SampleRecord.my_field1", Collections.singleton("PII"));
+    tagsToAdd.put(".SampleRecord.my_field2", Collections.singleton("PII"));
+    tagsToAdd.put(".SampleRecord.my_field3", Collections.singleton("PII"));
+    tagsToAdd.put(".SampleRecord.NestedRecord.nested_filed1", Collections.singleton("PII"));
+    ParsedSchema schema = new ProtobufSchema(schemaString).copy(tagsToAdd, Collections.emptyMap());
     assertEquals(expectedString, schema.canonicalString());
 
-    schema = new ProtobufSchema(schema.canonicalString()).copy(Collections.emptyMap(), tags);
+    Map<String, Set<String>> tagsToRemove = new HashMap<>();
+    tagsToRemove.put(".SampleRecord.my_field1", Collections.singleton("OTHER"));
+    tagsToRemove.put(".SampleRecord.my_field2", Collections.singleton("PRIVATE"));
+    tagsToRemove.put(".SampleRecord.my_field3", Collections.singleton("PII"));
+    tagsToRemove.put(".SampleRecord.NestedRecord.nested_filed1", Collections.singleton("DOES_NOT_EXIST"));
+
+    schema = new ProtobufSchema(schema.canonicalString()).copy(Collections.emptyMap(), tagsToRemove);
     assertEquals(removedTagSchema, schema.canonicalString());
   }
 
   @Test
   public void testAddDuplicateTags() {
-    String originalSchemaString = "syntax = \"proto3\";\n" +
+    String schemaString = "syntax = \"proto3\";\n" +
         "package com.example.mynamespace;\n" +
         "\n" +
         "import \"confluent/meta.proto\";\n" +
@@ -2141,10 +2166,39 @@ public class ProtobufSchemaTest {
         "  }\n" +
         "}\n";
 
+    String expectedSchemaString = "syntax = \"proto3\";\n" +
+      "package com.example.mynamespace;\n" +
+      "\n" +
+      "import \"confluent/meta.proto\";\n" +
+      "import \"confluent/type/decimal.proto\";\n" +
+      "\n" +
+      "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
+      "option java_outer_classname = \"ComplexProto\";\n" +
+      "\n" +
+      "message SampleRecord {\n" +
+      "  int32 my_field1 = 1 [(confluent.field_meta) = {\n" +
+      "    tags: [\n" +
+      "      \"PRIVATE\"\n" +
+      "    ]\n" +
+      "  }];\n" +
+      "  double my_field2 = 2 [(confluent.field_meta) = {\n" +
+      "    tags: [\n" +
+      "      \"PRIVATE\"\n" +
+      "    ]\n" +
+      "  }];\n" +
+      "  NestedRecord my_field3 = 3 [(confluent.field_meta) = {\n" +
+      "    doc: \"field_meta\"\n" +
+      "  }];\n" +
+      "\n" +
+      "  message NestedRecord {\n" +
+      "    int64 nested_filed1 = 4;\n" +
+      "  }\n" +
+      "}\n";
+
     Map<String, Set<String>> tags = new HashMap<>();
     tags.put(".SampleRecord.my_field1", Collections.singleton("PRIVATE"));
-    ParsedSchema schema = new ProtobufSchema(originalSchemaString).copy(tags, Collections.emptyMap());
-    assertEquals(originalSchemaString, schema.canonicalString());
+    ParsedSchema schema = new ProtobufSchema(schemaString).copy(tags, Collections.emptyMap());
+    assertEquals(expectedSchemaString, schema.canonicalString());
   }
 
   @Test
@@ -2181,31 +2235,35 @@ public class ProtobufSchemaTest {
         "}\n";
 
     String afterRemovedTag = "syntax = \"proto3\";\n" +
-        "package com.example.mynamespace;\n" +
-        "\n" +
-        "import \"confluent/meta.proto\";\n" +
-        "import \"confluent/type/decimal.proto\";\n" +
-        "\n" +
-        "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
-        "option java_outer_classname = \"ComplexProto\";\n" +
-        "\n" +
-        "message SampleRecord {\n" +
-        "  int32 my_field1 = 1;\n" +
-        "  double my_field2 = 2 [(confluent.field_meta) = {\n" +
-        "    doc: \"no tag\"\n" +
-        "  }];\n" +
-        "  NestedRecord my_field3 = 3 [(confluent.field_meta) = {\n" +
-        "    doc: \"field_meta\",\n" +
-        "    tags: [\n" +
-        "      \"PII\"\n" +
-        "    ]\n" +
-        "  }];\n" +
-        "  int32 my_field4 = 5 [otherOption = \"foo\"];\n" +
-        "\n" +
-        "  message NestedRecord {\n" +
-        "    int64 nested_filed1 = 4 [(confluent.field_meta).tags = [\"PII\"]];\n" +
-        "  }\n" +
-        "}\n";
+      "package com.example.mynamespace;\n" +
+      "\n" +
+      "import \"confluent/meta.proto\";\n" +
+      "import \"confluent/type/decimal.proto\";\n" +
+      "\n" +
+      "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
+      "option java_outer_classname = \"ComplexProto\";\n" +
+      "\n" +
+      "message SampleRecord {\n" +
+      "  int32 my_field1 = 1;\n" +
+      "  double my_field2 = 2 [(confluent.field_meta) = {\n" +
+      "    doc: \"no tag\"\n" +
+      "  }];\n" +
+      "  NestedRecord my_field3 = 3 [(confluent.field_meta) = {\n" +
+      "    doc: \"field_meta\",\n" +
+      "    tags: [\n" +
+      "      \"PII\"\n" +
+      "    ]\n" +
+      "  }];\n" +
+      "  int32 my_field4 = 5 [otherOption = \"foo\"];\n" +
+      "\n" +
+      "  message NestedRecord {\n" +
+      "    int64 nested_filed1 = 4 [(confluent.field_meta) = {\n" +
+      "      tags: [\n" +
+      "        \"PII\"\n" +
+      "      ]\n" +
+      "    }];\n" +
+      "  }\n" +
+      "}\n";
 
     Map<String, Set<String>> tags = new HashMap<>();
     tags.put(".SampleRecord.my_field1", Collections.singleton("PRIVATE"));
