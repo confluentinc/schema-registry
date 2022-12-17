@@ -690,6 +690,7 @@ public class ProtobufSchemaTest {
         + "message SampleRecord {\n"
         + "  int32 my_field1 = 2 [(confluent.field_meta) = {\n"
         + "    value1: -2.0,\n"
+        // The square wire parser does not yet handle the following cases
         /*
         + "    value2: - 2.0,\n"
         + "    value3: - "
@@ -713,6 +714,7 @@ public class ProtobufSchemaTest {
         + "    value17: { foo: \"bar\" },\n"
         + "    [com.foo.value18]: 10,\n"
         + "    [com.foo.value19]: { foo: \"bar\" },\n"
+        // The square wire parser does not yet handle the following cases
         /*
         + "    value20 {"
         + "      [type.googleapis.com/com.foo.any] { foo: \"bar\" }\n"
@@ -720,6 +722,7 @@ public class ProtobufSchemaTest {
         */
         + "    value21 { foo: \"bar\" },\n"
         + "    value22: [{ foo: \"bar\" }],\n"
+        // The square wire parser does not yet handle the following cases
         /*
         + "    value23 [{ foo: \"bar\" }],\n"
         + "    value24 < foo: \"bar\" >,\n"
