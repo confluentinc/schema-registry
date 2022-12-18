@@ -72,7 +72,7 @@ public class RestApp {
     restApp = new SchemaRegistryRestApplication(prop);
     restServer = restApp.createServer();
     restServer.start();
-    restConnect = restServer.getURI().toString();
+    restConnect = myIdentity().getUrl();
     if (restConnect.endsWith("/"))
       restConnect = restConnect.substring(0, restConnect.length()-1);
     restClient = new RestService(restConnect);
