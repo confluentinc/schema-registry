@@ -327,7 +327,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     leaderElector = new KafkaGroupLeaderElector(config, myIdentity, this);
   }
 
-  public void initLeaderElection() throws SchemaRegistryException {
+  public void postInit() throws SchemaRegistryException {
     try {
       leaderElector.init();
     } catch (SchemaRegistryStoreException e) {
