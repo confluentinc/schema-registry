@@ -42,7 +42,7 @@ public class SchemaRegistryMain {
       SchemaRegistryRestApplication app = new SchemaRegistryRestApplication(config);
       Server server = app.createServer();
       server.start();
-      // Do any work required after server is started, such as leader election.
+      // Do any work required after server is started.
       app.postServerStart();
       log.info("Schema Registry version: {} commitId: {}",
           AppInfoParser.getVersion(), AppInfoParser.getCommitId());

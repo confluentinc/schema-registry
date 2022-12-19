@@ -323,11 +323,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
 
     config.checkBootstrapServers();
-    log.info("Joining schema registry with Kafka-based coordination");
     leaderElector = new KafkaGroupLeaderElector(config, myIdentity, this);
   }
 
   public void postInit() throws SchemaRegistryException {
+    log.info("Joining schema registry with Kafka-based coordination");
     try {
       leaderElector.init();
     } catch (SchemaRegistryStoreException e) {
