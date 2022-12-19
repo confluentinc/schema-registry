@@ -42,6 +42,7 @@ public class SchemaRegistryMain {
       SchemaRegistryRestApplication app = new SchemaRegistryRestApplication(config);
       Server server = app.createServer();
       server.start();
+      // Initiate leader election only after all resources and listeners have been set up.
       app.initLeaderElection();
       log.info("Schema Registry version: {} commitId: {}",
           AppInfoParser.getVersion(), AppInfoParser.getCommitId());

@@ -82,7 +82,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   }
 
   public void initLeaderElection() {
-    // Initiate leader election only after all resources and listeners have been set up.
     try {
       schemaRegistry.initLeaderElection();
     } catch (SchemaRegistryException e) {
