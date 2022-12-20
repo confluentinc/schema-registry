@@ -81,6 +81,15 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     return kafkaSchemaRegistry;
   }
 
+  public void postServerStart() {
+    try {
+      schemaRegistry.postInit();
+    } catch (SchemaRegistryException e) {
+      log.error("Error starting the schema registry", e);
+      System.exit(1);
+    }
+  }
+
   @Override
   public void configureBaseApplication(
       final Configurable<?> config,
