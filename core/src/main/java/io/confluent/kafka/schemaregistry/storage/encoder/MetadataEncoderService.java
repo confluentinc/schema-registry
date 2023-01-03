@@ -258,7 +258,6 @@ public class MetadataEncoderService implements Closeable {
 
   public void encodeMetadata(SchemaValue schema) {
     if (!initialized.get() || schema == null || isEncoded(schema)) {
-      // MD5 bytes are set if sensitive properties were encoded
       return;
     }
     transformMetadata(schema, true, (aead, value) -> {
@@ -282,7 +281,6 @@ public class MetadataEncoderService implements Closeable {
 
   public void decodeMetadata(SchemaValue schema) {
     if (!initialized.get() || schema == null || !isEncoded(schema)) {
-      // MD5 bytes are set if sensitive properties were encoded
       return;
     }
     transformMetadata(schema, false, (aead, value) -> {
