@@ -164,6 +164,12 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG =
       "schema.canonicalize.on.consume";
 
+  public static final String METADATA_ENCODER_SECRET_CONFIG = "metadata.encoder.secret";
+  public static final String METADATA_ENCODER_OLD_SECRET_CONFIG = "metadata.encoder.old.secret";
+
+  public static final String METADATA_ENCODER_TOPIC_CONFIG = "metadata.encoder.topic";
+  public static final String METADATA_ENCODER_TOPIC_DEFAULT = "_schema_encoders";
+
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
   public static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG =
@@ -291,6 +297,15 @@ public class SchemaRegistryConfig extends RestConfig {
       "The expiration in seconds for entries accessed in the cache.";
   protected static final String SCHEMA_CANONICALIZE_ON_CONSUME_DOC =
       "A list of schema types to canonicalize on consume, to be used if canonicalization changes.";
+  protected static final String METADATA_ENCODER_SECRET_DOC =
+      "The secret used to encrypt and decrypt encoder keysets. "
+      + "Use a random string with high entropy.";
+  protected static final String METADATA_ENCODER_OLD_SECRET_DOC =
+      "The old secret that was used to encrypt and decrypt encoder keysets.  This is only "
+      + "required when the secret is updated. If specified, all keysets are decrypted using this "
+      + "old secret and re-encrypted using the new secret.";
+  protected static final String METADATA_ENCODER_TOPIC_DOC =
+      "The durable single partition topic that acts as the durable log for the encoder keysets.";
   protected static final String LEADER_ELIGIBILITY_DOC =
       "If true, this node can participate in leader election. In a multi-colo setup, turn this off "
       + "for clusters in the follower data center.";
@@ -461,6 +476,15 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, SCHEMA_CANONICALIZE_ON_CONSUME_DOC
+    )
+    .define(METADATA_ENCODER_SECRET_CONFIG, ConfigDef.Type.PASSWORD, null,
+        ConfigDef.Importance.HIGH, METADATA_ENCODER_SECRET_DOC
+    )
+    .define(METADATA_ENCODER_OLD_SECRET_CONFIG, ConfigDef.Type.PASSWORD, null,
+        ConfigDef.Importance.HIGH, METADATA_ENCODER_OLD_SECRET_DOC
+    )
+    .define(METADATA_ENCODER_TOPIC_CONFIG, ConfigDef.Type.STRING, METADATA_ENCODER_TOPIC_DEFAULT,
+        ConfigDef.Importance.HIGH, METADATA_ENCODER_TOPIC_DOC
     )
     .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, null,
         ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC

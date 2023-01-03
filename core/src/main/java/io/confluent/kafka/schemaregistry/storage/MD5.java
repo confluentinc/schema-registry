@@ -54,6 +54,11 @@ public class MD5 {
     }
   }
 
+  public static MD5 ofSchema(SchemaValue schema) {
+    byte[] bytes = schema.getMd5Bytes();
+    return bytes != null ? new MD5(bytes) : ofSchema(schema.toSchemaEntity());
+  }
+
   @Override
   public int hashCode() {
     return Arrays.hashCode(this.md5);

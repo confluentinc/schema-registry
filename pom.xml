@@ -84,10 +84,12 @@
         <cel-version>0.3.10</cel-version>
         <jsonata-version>1.7.9</jsonata-version>
         <json-schema.version>1.14.1</json-schema.version>
+        <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.5.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <okio.version>3.0.0</okio.version>
         <snakeyaml.version>1.32</snakeyaml.version>
+        <tink.version>1.7.0</tink.version>
         <wire.version>4.4.3</wire.version>
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.4.0-0</io.confluent.schema-registry.version>
@@ -109,6 +111,11 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>io.kcache</groupId>
+                <artifactId>kcache</artifactId>
+                <version>${kcache.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro</artifactId>
@@ -145,9 +152,14 @@
                 <version>${protobuf.version}</version>
             </dependency>
             <dependency>
-            <groupId>org.yaml</groupId>
+                <groupId>org.yaml</groupId>
                 <artifactId>snakeyaml</artifactId>
                 <version>${snakeyaml.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.crypto.tink</groupId>
+                <artifactId>tink</artifactId>
+                <version>${tink.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.api.grpc</groupId>
