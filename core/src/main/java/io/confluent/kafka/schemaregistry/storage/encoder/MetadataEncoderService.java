@@ -106,6 +106,9 @@ public class MetadataEncoderService implements Closeable {
   }
 
   protected static Aead getPrimitive(String secret) throws GeneralSecurityException {
+    if (secret == null) {
+      throw new IllegalArgumentException("Secret is null");
+    }
     KeyManager<Aead> keyManager = Registry.getKeyManager(
         "type.googleapis.com/google.crypto.tink.AesGcmKey", Aead.class);
     byte[] keyBytes = Hkdf.computeHkdf(

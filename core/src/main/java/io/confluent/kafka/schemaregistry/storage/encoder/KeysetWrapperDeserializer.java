@@ -39,7 +39,7 @@ public class KeysetWrapperDeserializer implements Deserializer<KeysetWrapper> {
         oldAead = MetadataEncoderService.getPrimitive(oldSecret);
       }
     } catch (GeneralSecurityException e) {
-      throw new ConfigException("Error while configuring KeysetWrapperSerializer", e);
+      throw new ConfigException("Error while configuring KeysetWrapperDeserializer", e);
     }
   }
 
