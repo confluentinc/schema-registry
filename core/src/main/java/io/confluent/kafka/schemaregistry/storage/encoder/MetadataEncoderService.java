@@ -257,7 +257,7 @@ public class MetadataEncoderService implements Closeable {
   }
 
   public void encodeMetadata(SchemaValue schema) {
-    if (!initialized.get() || schema == null || schema.getMd5Bytes() != null) {
+    if (!initialized.get() || schema == null || isEncoded(schema)) {
       // MD5 bytes are set if sensitive properties were encoded
       return;
     }
@@ -271,8 +271,17 @@ public class MetadataEncoderService implements Closeable {
     });
   }
 
+  private boolean isEncoded(SchemaValue schema) {
+    if (schema == null
+        || schema.getMetadata() == null
+        || schema.getMetadata().getProperties() == null) {
+      return false;
+    }
+    return schema.getMetadata().getProperties().containsKey(SchemaValue.ENCODED_PROPERTY);
+  }
+
   public void decodeMetadata(SchemaValue schema) {
-    if (!initialized.get() || schema == null || schema.getMd5Bytes() == null) {
+    if (!initialized.get() || schema == null || !isEncoded(schema)) {
       // MD5 bytes are set if sensitive properties were encoded
       return;
     }
@@ -322,6 +331,9 @@ public class MetadataEncoderService implements Closeable {
           );
       if (isEncode) {
         schema.setMd5Bytes(MD5.ofSchema(schema.toSchemaEntity()).bytes());
+        newProperties.put(SchemaValue.ENCODED_PROPERTY, "true");
+      } else {
+        newProperties.remove(SchemaValue.ENCODED_PROPERTY);
       }
 
       schema.setMetadata(

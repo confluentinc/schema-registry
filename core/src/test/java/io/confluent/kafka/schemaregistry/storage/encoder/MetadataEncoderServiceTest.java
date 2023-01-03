@@ -17,6 +17,8 @@ package io.confluent.kafka.schemaregistry.storage.encoder;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -57,10 +59,12 @@ public class MetadataEncoderServiceTest {
     assertEquals(schema.getMetadata().getProperties().get("nonsensitive"), "foo");
     // the value of "sensitive" is encrypted
     assertNotEquals(schema.getMetadata().getProperties().get("sensitive"), "foo");
+    assertNotNull(schema.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
 
     encoderService.decodeMetadata(schema);
     assertEquals(schema.getMetadata().getProperties().get("nonsensitive"), "foo");
     // the value of "sensitive" is decrypted
     assertEquals(schema.getMetadata().getProperties().get("sensitive"), "foo");
+    assertNull(schema.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
   }
 }

@@ -38,6 +38,8 @@ import java.util.stream.Collectors;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SchemaValue extends SubjectValue implements Comparable<SchemaValue> {
 
+  public static final String ENCODED_PROPERTY = "__enc__";
+
   @Min(1)
   private Integer version;
   @Min(0)
