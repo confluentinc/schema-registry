@@ -515,7 +515,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
 
       int schemaId = schema.getId();
-      ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
+      ParsedSchema parsedSchema = null;
+      try {
+        parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
+      } catch (InvalidSchemaException e) {
+        if (schema.getMetadata() == null || schema.getRuleSet() == null) {
+          throw e;
+        }
+      }
 
       // see if the schema to be registered already exists
       SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
@@ -544,7 +551,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           deletedVersions.add(schemaValue);
         } else {
           ParsedSchema undeletedSchema = parseSchema(getSchemaEntityFromSchemaValue(schemaValue));
-          if (parsedSchema.references().isEmpty()
+          if (parsedSchema != null
+              && parsedSchema.references().isEmpty()
               && !undeletedSchema.references().isEmpty()
               && parsedSchema.deepEquals(undeletedSchema)) {
             // This handles the case where a schema is sent with all references resolved
@@ -556,6 +564,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Collections.reverse(undeletedVersions);
 
       Config config = getConfigInScope(subject);
+      if (parsedSchema == null) {
+        parsedSchema = setSchema(schema, undeletedVersions);
+      }
       parsedSchema = maybeSetMetadataRuleSet(config, schema, parsedSchema, undeletedVersions);
 
       final List<String> compatibilityErrorLogs = isCompatibleWithPrevious(
@@ -665,6 +676,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
     Mode subjectMode = getModeInScope(subject);
     return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
+  }
+
+  private ParsedSchema setSchema(Schema schema, List<ParsedSchema> previousSchemas)
+      throws InvalidSchemaException{
+    ParsedSchema previousSchema = previousSchemas.size() > 0 ? previousSchemas.get(0) : null;
+    if (previousSchema == null) {
+      throw new InvalidSchemaException("Empty schema");
+    }
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata specificMetadata = null;
+    if (schema.getMetadata() != null) {
+      specificMetadata = schema.getMetadata();
+    } else {
+      specificMetadata = previousSchema.metadata();
+    }
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet specificRuleSet = null;
+    if (schema.getRuleSet() != null) {
+      specificRuleSet = schema.getRuleSet();
+    } else {
+      specificRuleSet = previousSchema.ruleSet();
+    }
+    return previousSchema.copy(specificMetadata, specificRuleSet);
   }
 
   private ParsedSchema maybeSetMetadataRuleSet(
