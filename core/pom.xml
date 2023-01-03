@@ -140,6 +140,11 @@
             <artifactId>easymock</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- To prevent a UniqueResourceException due the same resource existing in both
              org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data, api-ldap-schema-data
              needs to be excluded from all directory-related maven dependencies. -->

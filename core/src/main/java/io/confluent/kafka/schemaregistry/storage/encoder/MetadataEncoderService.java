@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage.encoder;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeyManager;
 import com.google.crypto.tink.KeyTemplate;
@@ -96,6 +97,25 @@ public class MetadataEncoderService implements Closeable {
       String topic = config.getString(SchemaRegistryConfig.METADATA_ENCODER_TOPIC_CONFIG);
       this.keyTemplate = KeyTemplates.get(KEY_TEMPLATE_NAME);
       this.encoders = createCache(new StringSerde(), new KeysetWrapperSerde(config), topic, null);
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Could not instantiate MetadataEncoderService", e);
+    }
+  }
+
+  @VisibleForTesting
+  protected MetadataEncoderService(
+      SchemaRegistry schemaRegistry, Cache<String, KeysetWrapper> encoders) {
+    try {
+      this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      SchemaRegistryConfig config = schemaRegistry.config();
+      String secret = encoderSecret(config);
+      if (secret == null) {
+        log.warn("No value specified for {}, sensitive metadata will not be encoded",
+            SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG);
+        return;
+      }
+      this.keyTemplate = KeyTemplates.get(KEY_TEMPLATE_NAME);
+      this.encoders = encoders;
     } catch (Exception e) {
       throw new IllegalArgumentException("Could not instantiate MetadataEncoderService", e);
     }
