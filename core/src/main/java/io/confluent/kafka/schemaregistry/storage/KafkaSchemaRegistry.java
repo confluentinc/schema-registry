@@ -586,6 +586,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         throw new InvalidSchemaException(errMsg, e);
       }
       // Allow schema providers to modify the schema during compatibility checks
+      schema.setSchemaType(parsedSchema.schemaType());
       schema.setSchema(parsedSchema.canonicalString());
       schema.setReferences(parsedSchema.references());
 
@@ -1174,6 +1175,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       log.error(errMsg, e);
       throw new InvalidSchemaException(errMsg, e);
     }
+    schema.setSchemaType(parsedSchema.schemaType());
     schema.setSchema(parsedSchema.canonicalString());
     schema.setReferences(parsedSchema.references());
     return parsedSchema;
