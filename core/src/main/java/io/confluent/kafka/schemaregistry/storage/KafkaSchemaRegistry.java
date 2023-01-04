@@ -560,16 +560,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       Config config = getConfigInScope(subject);
       if (schemaId < 0) {
-        ParsedSchema previousSchema =
-            undeletedVersions.size() > 0 ? undeletedVersions.get(0) : null;
-        if (parsedSchema == null) {
-          if (previousSchema != null) {
-            parsedSchema = previousSchema.copy(schema.getMetadata(), schema.getRuleSet());
-          } else {
-            throw new InvalidSchemaException("Empty schema");
-          }
-        }
-        parsedSchema = maybeSetMetadataRuleSet(config, schema, parsedSchema, previousSchema);
+        parsedSchema = maybePopulateFromPrevious(config, schema, parsedSchema, undeletedVersions);
       }
 
       final List<String> compatibilityErrorLogs = isCompatibleWithPrevious(
@@ -683,6 +674,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
     Mode subjectMode = getModeInScope(subject);
     return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
+  }
+
+  private ParsedSchema maybePopulateFromPrevious(
+      Config config, Schema schema, ParsedSchema parsedSchema, List<ParsedSchema> undeletedVersions)
+      throws InvalidSchemaException {
+    ParsedSchema previousSchema =
+        undeletedVersions.size() > 0 ? undeletedVersions.get(0) : null;
+    if (parsedSchema == null) {
+      if (previousSchema != null) {
+        parsedSchema = previousSchema.copy(schema.getMetadata(), schema.getRuleSet());
+      } else {
+        throw new InvalidSchemaException("Empty schema");
+      }
+    }
+    return maybeSetMetadataRuleSet(config, schema, parsedSchema, previousSchema);
   }
 
   private ParsedSchema maybeSetMetadataRuleSet(
