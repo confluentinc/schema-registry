@@ -559,10 +559,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Collections.reverse(undeletedVersions);
 
       Config config = getConfigInScope(subject);
-      if (parsedSchema == null) {
-        parsedSchema = setSchema(schema, undeletedVersions);
+      if (schemaId < 0) {
+        if (parsedSchema == null) {
+          parsedSchema = setSchema(schema, undeletedVersions);
+        }
+        parsedSchema = maybeSetMetadataRuleSet(config, schema, parsedSchema, undeletedVersions);
       }
-      parsedSchema = maybeSetMetadataRuleSet(config, schema, parsedSchema, undeletedVersions);
 
       final List<String> compatibilityErrorLogs = isCompatibleWithPrevious(
               config, parsedSchema, undeletedVersions);
@@ -581,7 +583,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       schema.setSchema(parsedSchema.canonicalString());
       schema.setReferences(parsedSchema.references());
 
-      if (isCompatible || getModeInScope(subject) == Mode.IMPORT) {
+      Mode mode = getModeInScope(subject);
+      if (isCompatible || mode == Mode.IMPORT) {
         // save the context key
         QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
         if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
@@ -595,6 +598,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         // assign a guid and put the schema in the kafka store
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
+        } else if (newVersion != schema.getVersion() && mode != Mode.IMPORT) {
+          throw new InvalidSchemaException("Version is not one more than previous version");
         }
 
         SchemaKey schemaKey = new SchemaKey(subject, schema.getVersion());
@@ -655,7 +660,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
 
-    if (schema.getId() >= 0 || schema.getVersion() > 0) {
+    if (schema.getId() >= 0) {
       if (getModeInScope(subject) != Mode.IMPORT) {
         throw new OperationNotPermittedException("Subject " + subject + " is not in import mode");
       }

@@ -517,4 +517,44 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     assertEquals(schema1.canonicalString(), schemaString.getSchemaString());
     assertEquals(ruleSet, schemaString.getRuleSet());
   }
+
+  @Test
+  public void testCompareAndSetVersion() throws Exception {
+    String subject = "testSubject";
+
+    // register a valid avro
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(schemaString1, subject));
+
+    // register a backward compatible avro with wrong version number
+    ParsedSchema schema2 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}");
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema2);
+    request2.setVersion(3);
+    try {
+      restApp.restClient.registerSchema(request2, subject, false);
+      fail("Registering a wrong version should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals("Should get a bad request status",
+          RestInvalidSchemaException.ERROR_CODE,
+          e.getErrorCode());
+    }
+
+    // register a backward compatible avro with right version number
+    request2.setVersion(2);
+    int expectedIdSchema2 = 2;
+    assertEquals("Registering should succeed",
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(request2, subject, false));
+  }
 }
