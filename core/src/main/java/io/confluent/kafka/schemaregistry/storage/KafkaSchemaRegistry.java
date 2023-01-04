@@ -348,13 +348,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throw new SchemaRegistryInitializationException(
           "Error initializing kafka store while initializing schema registry", e);
     }
-
-    config.checkBootstrapServers();
-  }
-
-  public void postInit() throws SchemaRegistryException {
-    log.info("Joining schema registry with Kafka-based coordination");
-    leaderElector = new KafkaGroupLeaderElector(config, myIdentity, this);
     try {
       metadataEncoder.init();
     } catch (Exception e) {
@@ -362,6 +355,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           "Error initializing metadata encoder while initializing schema registry", e);
     }
 
+    config.checkBootstrapServers();
+  }
+
+  public void postInit() throws SchemaRegistryException {
+    log.info("Joining schema registry with Kafka-based coordination");
+    leaderElector = new KafkaGroupLeaderElector(config, myIdentity, this);
     try {
       leaderElector.init();
     } catch (SchemaRegistryStoreException e) {
