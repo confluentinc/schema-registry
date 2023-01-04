@@ -186,7 +186,9 @@ public interface ParsedSchema {
    * @return whether the underlying raw representations are equal
    */
   default boolean deepEquals(ParsedSchema schema) {
-    return Objects.equals(rawSchema(), schema.rawSchema());
+    return Objects.equals(rawSchema(), schema.rawSchema())
+        && Objects.equals(metadata(), schema.metadata())
+        && Objects.equals(ruleSet(), schema.ruleSet());
   }
 
   default Object fromJson(JsonNode json) throws IOException {

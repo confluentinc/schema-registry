@@ -455,4 +455,106 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     assertEquals("foo", ruleSet3.getMigrationRules().get(0).getName());
     assertEquals("zap", ruleSet3.getMigrationRules().get(1).getName());
   }
+
+  @Test
+  public void testSchemaMetadata() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request1, subject, false));
+
+    // register just metadata, schema should be inherited from version 1
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest();
+    Map<String, String> properties = new HashMap<>();
+    properties.put("subjectKey", "subjectValue");
+    Metadata metadata = new Metadata(null, properties, null);
+    request2.setMetadata(metadata);
+    int expectedIdSchema2 = 2;
+    assertEquals("Registering should succeed",
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(request2, subject, false));
+
+    SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
+    assertEquals(schema1.canonicalString(), schemaString.getSchemaString());
+    assertEquals(metadata, schemaString.getMetadata());
+  }
+
+  @Test
+  public void testSchemaRuleSet() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request1, subject, false));
+
+    // register just ruleSet, schema should be inherited from version 1
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest();
+    Rule r1 = new Rule("foo", null, null, null, null, null, null, null, false);
+    List<Rule> rules = Collections.singletonList(r1);
+    RuleSet ruleSet = new RuleSet(rules, null);
+    request2.setRuleSet(ruleSet);
+    int expectedIdSchema2 = 2;
+    assertEquals("Registering should succeed",
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(request2, subject, false));
+
+    SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
+    assertEquals(schema1.canonicalString(), schemaString.getSchemaString());
+    assertEquals(ruleSet, schemaString.getRuleSet());
+  }
+
+  @Test
+  public void testCompareAndSetVersion() throws Exception {
+    String subject = "testSubject";
+
+    // register a valid avro
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(schemaString1, subject));
+
+    // register a backward compatible avro with wrong version number
+    ParsedSchema schema2 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}");
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema2);
+    request2.setVersion(3);
+    try {
+      restApp.restClient.registerSchema(request2, subject, false);
+      fail("Registering a wrong version should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals("Should get a bad request status",
+          RestInvalidSchemaException.ERROR_CODE,
+          e.getErrorCode());
+    }
+
+    // register a backward compatible avro with right version number
+    request2.setVersion(2);
+    int expectedIdSchema2 = 2;
+    assertEquals("Registering should succeed",
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(request2, subject, false));
+  }
 }
