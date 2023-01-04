@@ -515,26 +515,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
 
       int schemaId = schema.getId();
-      ParsedSchema parsedSchema = null;
-      try {
-        parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
-      } catch (InvalidSchemaException e) {
-        if (schema.getMetadata() == null || schema.getRuleSet() == null) {
-          throw e;
-        }
-      }
+      ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
 
-      // see if the schema to be registered already exists
-      SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
-      if (schemaIdAndSubjects != null
-          && (schemaId < 0 || schemaId == schemaIdAndSubjects.getSchemaId())) {
-        if (schemaIdAndSubjects.hasSubject(subject)
-            && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
-          // return only if the schema was previously registered under the input subject
-          return schemaIdAndSubjects.getSchemaId();
-        } else {
-          // need to register schema under the input subject
-          schemaId = schemaIdAndSubjects.getSchemaId();
+      if (parsedSchema != null) {
+        // see if the schema to be registered already exists
+        SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
+        if (schemaIdAndSubjects != null
+            && (schemaId < 0 || schemaId == schemaIdAndSubjects.getSchemaId())) {
+          if (schemaIdAndSubjects.hasSubject(subject)
+              && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
+            // return only if the schema was previously registered under the input subject
+            return schemaIdAndSubjects.getSchemaId();
+          } else {
+            // need to register schema under the input subject
+            schemaId = schemaIdAndSubjects.getSchemaId();
+          }
         }
       }
 
@@ -679,7 +674,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private ParsedSchema setSchema(Schema schema, List<ParsedSchema> previousSchemas)
-      throws InvalidSchemaException{
+      throws InvalidSchemaException {
     ParsedSchema previousSchema = previousSchemas.size() > 0 ? previousSchemas.get(0) : null;
     if (previousSchema == null) {
       throw new InvalidSchemaException("Empty schema");
@@ -951,16 +946,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throws SchemaRegistryException {
     try {
       ParsedSchema parsedSchema = canonicalizeSchema(schema, false, normalize);
-      SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
-      if (schemaIdAndSubjects != null) {
-        if (schemaIdAndSubjects.hasSubject(subject)
-            && (lookupDeletedSchema || !isSubjectVersionDeleted(subject, schemaIdAndSubjects
-            .getVersion(subject)))) {
-          Schema matchingSchema = schema.copy();
-          matchingSchema.setSubject(subject);
-          matchingSchema.setVersion(schemaIdAndSubjects.getVersion(subject));
-          matchingSchema.setId(schemaIdAndSubjects.getSchemaId());
-          return matchingSchema;
+      if (parsedSchema != null) {
+        SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
+        if (schemaIdAndSubjects != null) {
+          if (schemaIdAndSubjects.hasSubject(subject)
+              && (lookupDeletedSchema || !isSubjectVersionDeleted(subject, schemaIdAndSubjects
+              .getVersion(subject)))) {
+            Schema matchingSchema = schema.copy();
+            matchingSchema.setSubject(subject);
+            matchingSchema.setVersion(schemaIdAndSubjects.getVersion(subject));
+            matchingSchema.setId(schemaIdAndSubjects.getSchemaId());
+            return matchingSchema;
+          }
         }
       }
 
@@ -969,6 +966,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       for (SchemaValue schemaValue : allVersions) {
         if ((lookupDeletedSchema || !schemaValue.isDeleted())
+            && parsedSchema != null
             && parsedSchema.references().isEmpty()
             && !schemaValue.getReferences().isEmpty()) {
           Schema prev = getSchemaEntityFromSchemaValue(schemaValue);
@@ -1174,8 +1172,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     if (schema == null
         || schema.getSchema() == null
         || schema.getSchema().trim().isEmpty()) {
-      log.error("Empty schema");
-      throw new InvalidSchemaException("Empty schema");
+      return null;
     }
     ParsedSchema parsedSchema = parseSchema(schema, isNew);
     try {
@@ -1795,6 +1792,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
 
     ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true, false);
+    if (parsedSchema == null) {
+      log.error("Empty schema");
+      throw new InvalidSchemaException("Empty schema");
+    }
     Config config = getConfigInScope(subject);
     return isCompatibleWithPrevious(config, parsedSchema, prevParsedSchemas);
   }
