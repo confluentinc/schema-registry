@@ -560,10 +560,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       Config config = getConfigInScope(subject);
       if (schemaId < 0) {
+        ParsedSchema previousSchema =
+            undeletedVersions.size() > 0 ? undeletedVersions.get(0) : null;
         if (parsedSchema == null) {
-          parsedSchema = setSchema(schema, undeletedVersions);
+          if (previousSchema != null) {
+            parsedSchema = previousSchema.copy(schema.getMetadata(), schema.getRuleSet());
+          } else {
+            throw new InvalidSchemaException("Empty schema");
+          }
         }
-        parsedSchema = maybeSetMetadataRuleSet(config, schema, parsedSchema, undeletedVersions);
+        parsedSchema = maybeSetMetadataRuleSet(config, schema, parsedSchema, previousSchema);
       }
 
       final List<String> compatibilityErrorLogs = isCompatibleWithPrevious(
@@ -678,30 +684,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
   }
 
-  private ParsedSchema setSchema(Schema schema, List<ParsedSchema> previousSchemas)
-      throws InvalidSchemaException {
-    ParsedSchema previousSchema = previousSchemas.size() > 0 ? previousSchemas.get(0) : null;
-    if (previousSchema == null) {
-      throw new InvalidSchemaException("Empty schema");
-    }
-    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata specificMetadata = null;
-    if (schema.getMetadata() != null) {
-      specificMetadata = schema.getMetadata();
-    } else {
-      specificMetadata = previousSchema.metadata();
-    }
-    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet specificRuleSet = null;
-    if (schema.getRuleSet() != null) {
-      specificRuleSet = schema.getRuleSet();
-    } else {
-      specificRuleSet = previousSchema.ruleSet();
-    }
-    return previousSchema.copy(specificMetadata, specificRuleSet);
-  }
-
   private ParsedSchema maybeSetMetadataRuleSet(
-      Config config, Schema schema, ParsedSchema parsedSchema, List<ParsedSchema> previousSchemas) {
-    ParsedSchema previousSchema = previousSchemas.size() > 0 ? previousSchemas.get(0) : null;
+      Config config, Schema schema, ParsedSchema parsedSchema, ParsedSchema previousSchema) {
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata specificMetadata = null;
     if (parsedSchema.metadata() != null) {
       specificMetadata = parsedSchema.metadata();
