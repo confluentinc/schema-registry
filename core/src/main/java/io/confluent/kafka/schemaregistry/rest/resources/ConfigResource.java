@@ -110,7 +110,8 @@ public class ConfigResource {
     if (request.getCompatibilityLevel() != null && compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
     }
-    if (!request.getInitialRuleSet().isValid() || !request.getFinalRuleSet().isValid()) {
+    if ((request.getInitialRuleSet() != null && !request.getInitialRuleSet().isValid())
+        || (request.getFinalRuleSet() != null && !request.getFinalRuleSet().isValid())) {
       throw new RestInvalidRuleSetException();
     }
     if (subject != null && (CharMatcher.javaIsoControl().matchesAnyOf(subject)
@@ -208,7 +209,8 @@ public class ConfigResource {
     if (request.getCompatibilityLevel() != null && compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
     }
-    if (!request.getInitialRuleSet().isValid() || !request.getFinalRuleSet().isValid()) {
+    if ((request.getInitialRuleSet() != null && !request.getInitialRuleSet().isValid())
+        || (request.getFinalRuleSet() != null && !request.getFinalRuleSet().isValid())) {
       throw new RestInvalidRuleSetException();
     }
     try {

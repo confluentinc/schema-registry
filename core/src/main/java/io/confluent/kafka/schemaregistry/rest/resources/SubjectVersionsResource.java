@@ -383,7 +383,7 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
-    if (!request.getRuleSet().isValid()) {
+    if (request.getRuleSet() != null && !request.getRuleSet().isValid()) {
       throw new RestInvalidRuleSetException();
     }
     if (subjectName != null && (CharMatcher.javaIsoControl().matchesAnyOf(subjectName)
