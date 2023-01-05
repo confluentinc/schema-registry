@@ -21,12 +21,14 @@ import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -234,7 +236,6 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
-
 
     ConfigUpdateRequest config = new ConfigUpdateRequest();
     config.setCompatibilityGroup("application.version");
@@ -556,5 +557,24 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     assertEquals("Registering should succeed",
         expectedIdSchema2,
         restApp.restClient.registerSchema(request2, subject, false));
+  }
+
+  @Test
+  public void testConfigInvalidRuleSet() throws Exception {
+    Rule r1 = new Rule("foo", null, RuleMode.READ, null, null, null, null, null, false);
+    List<Rule> rules = Collections.singletonList(r1);
+    RuleSet ruleSet = new RuleSet(rules, null);
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setInitialRuleSet(ruleSet);
+    // add config ruleSet
+    try {
+      restApp.restClient.updateConfig(config, null);
+      fail("Registering an invalid ruleSet should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals("Should get a bad request status",
+          RestInvalidRuleSetException.DEFAULT_ERROR_CODE,
+          e.getStatus());
+    }
   }
 }
