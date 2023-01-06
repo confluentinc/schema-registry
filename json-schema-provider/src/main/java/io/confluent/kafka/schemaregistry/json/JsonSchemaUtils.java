@@ -29,6 +29,7 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -39,6 +40,7 @@ import io.confluent.kafka.schemaregistry.annotations.Schema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import org.apache.commons.compress.utils.Lists;
 
 public class JsonSchemaUtils {
 
@@ -277,5 +279,81 @@ public class JsonSchemaUtils {
     jsonMapper.writeValue(out, value);
     String jsonString = out.toString();
     return jsonString.getBytes(StandardCharsets.UTF_8);
+  }
+
+  public static JsonNode findMatchingField(JsonNode node, String path) {
+    String [] identifiers = path.split("\\.");
+    if (identifiers.length < 2) {
+      throw new IllegalArgumentException(
+        String.format("Given field path '%s' has less than two components.", path));
+    }
+    LinkedList<String> identifiersList = new LinkedList<>();
+    Collections.addAll(identifiersList, identifiers);
+    JsonNode fieldNode = findNodeHelper(node, identifiersList);
+    if (fieldNode == null) {
+      throw new IllegalArgumentException(String.format(
+        "No matching path '%s' found in the schema", path));
+    }
+    return fieldNode;
+  }
+
+  private static JsonNode findNodeHelper(JsonNode node, LinkedList<String> identifiersList) {
+    if (identifiersList.isEmpty()) {
+      return null;
+    }
+    String type = identifiersList.poll();
+    switch (type) {
+      case "object":
+        JsonNode fields = node.get("properties");
+        StringBuffer fieldNameBuf = new StringBuffer(identifiersList.poll());
+        while (!fields.has(fieldNameBuf.toString()) && !identifiersList.isEmpty()) {
+          fieldNameBuf.append(".");
+          fieldNameBuf.append(identifiersList.poll());
+        }
+        JsonNode fieldNode = fields.get(fieldNameBuf.toString());
+        if (fieldNode == null || identifiersList.isEmpty()) {
+          return fieldNode;
+        } else {
+          return findNodeHelper(fieldNode, identifiersList);
+        }
+      case "array":
+        return findNodeHelper(node.get("items"), identifiersList);
+      case "anyof":
+        if (node.has("anyOf")) {
+          return findSubSchemasFromIndex(node, "anyOf", identifiersList);
+        }
+
+        // handle "type": ["null", "object"] etc
+        identifiersList.poll();
+        return findNodeHelper(node, identifiersList);
+      case "allof":
+        if (node.has("allOf")) {
+          return findSubSchemasFromIndex(node, "allOf", identifiersList);
+        }
+
+        // handle if-then-else
+        identifiersList.poll();
+        if (identifiersList.peek().equals("conditional")) {
+          identifiersList.poll();
+          return findNodeHelper(node.get(identifiersList.poll()), identifiersList);
+        } else {
+          return findNodeHelper(node, identifiersList);
+        }
+      case "oneof":
+        return findSubSchemasFromIndex(node, "oneOf", identifiersList);
+      case "not":
+        return findNodeHelper(node.get(type), identifiersList);
+      default:
+        return null;
+    }
+  }
+
+  private static JsonNode findSubSchemasFromIndex(JsonNode node, String type,
+                                                  LinkedList<String> identifiersList) {
+    String index = identifiersList.poll();
+    List<JsonNode> jsonNodeList = Lists.newArrayList(node.get(type).elements());
+    jsonNodeList.sort(new JsonNodeComparator());
+    return index == null
+      ? null : findNodeHelper(jsonNodeList.get(Integer.parseInt(index)), identifiersList);
   }
 }

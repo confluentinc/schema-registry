@@ -556,23 +556,12 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public ParsedSchema copy(Map<String, Set<String>> tagsToAdd,
                            Map<String, Set<String>> tagsToRemove) {
-    ProtobufSchema newSchema = new ProtobufSchema(
-        this.schemaObj,
-        this.version,
-        this.name,
-        this.references,
-        this.dependencies,
-        metadata,
-        ruleSet,
-        this.canonicalString,
-        this.dynamicSchema,
-        this.descriptor
-    );
-    JsonNode original = jsonMapper.valueToTree(newSchema.rawSchema());
-    modifyFieldLevelTags(newSchema.rawSchema(), original, tagsToAdd, tagsToRemove);
+    ProtobufSchema schemaCopy = this.copy();
+    JsonNode original = jsonMapper.valueToTree(schemaCopy.rawSchema());
+    modifyFieldLevelTags(schemaCopy.rawSchema(), original, tagsToAdd, tagsToRemove);
     try {
       ProtoFileElement newFileElement = jsonToFile(original);
-      return new ProtobufSchema(newFileElement, newSchema.references(), newSchema.dependencies());
+      return new ProtobufSchema(newFileElement, schemaCopy.references(), schemaCopy.dependencies());
     } catch (JsonProcessingException e) {
       throw new IllegalStateException("Cannot deserialize json into ProtoFileElement", e);
     }

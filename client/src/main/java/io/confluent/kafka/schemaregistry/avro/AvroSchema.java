@@ -203,24 +203,16 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public ParsedSchema copy(Map<String, Set<String>> tagsToAdd,
                            Map<String, Set<String>> tagsToRemove) {
-    AvroSchema newSchema = new AvroSchema(
-        this.schemaObj,
-        this.canonicalString,
-        this.references,
-        this.resolvedReferences,
-        this.metadata,
-        this.ruleSet,
-        this.version,
-        this.isNew);
+    AvroSchema schemaCopy = this.copy();
     JsonNode original;
     try {
-      original = jsonMapper.readTree(newSchema.canonicalString());
+      original = jsonMapper.readTree(schemaCopy.canonicalString());
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
     }
     modifyFieldLevelTags(original, tagsToAdd, tagsToRemove);
-    return new AvroSchema(original.toString(), newSchema.references(),
-      newSchema.resolvedReferences(), -1);
+    return new AvroSchema(original.toString(), schemaCopy.references(),
+      schemaCopy.resolvedReferences(), -1);
   }
 
   protected Schema.Parser getParser() {
@@ -636,7 +628,7 @@ public class AvroSchema implements ParsedSchema {
 
       if (tagsToRemoveMap.containsKey(path)) {
         Set<String> tagsToRemove = tagsToRemoveMap.get(path);
-        tagsToRemove.forEach(allTags::remove);
+        allTags.removeAll(tagsToRemove);
       }
 
       if (allTags.size() == 0) {

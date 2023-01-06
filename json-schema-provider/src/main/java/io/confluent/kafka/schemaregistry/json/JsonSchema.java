@@ -49,6 +49,7 @@ import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
@@ -87,6 +88,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+
+import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingField;
 
 public class JsonSchema implements ParsedSchema {
 
@@ -263,7 +266,10 @@ public class JsonSchema implements ParsedSchema {
   @Override
   public ParsedSchema copy(Map<String, Set<String>> tagsToAdd,
                            Map<String, Set<String>> tagsToRemove) {
-    return null;
+    JsonSchema schemaCopy = this.copy();
+    JsonNode original = schemaCopy.toJsonNode();
+    modifyFieldLevelTags(original, tagsToAdd, tagsToRemove);
+    return new JsonSchema(original, schemaCopy.references(), schemaCopy.resolvedReferences(), -1);
   }
 
   public JsonNode toJsonNode() {
@@ -623,6 +629,15 @@ public class JsonSchema implements ParsedSchema {
     return tags;
   }
 
+  private Set<String> getInlineTags(JsonNode tagNode) {
+    Set<String> tags = new LinkedHashSet<>();
+    if (tagNode.has(TAGS)) {
+      ArrayNode tagArray = (ArrayNode) tagNode.get(TAGS);
+      tagArray.elements().forEachRemaining(tag -> tags.add(tag.asText()));
+    }
+    return tags;
+  }
+
   interface PropertyAccessor {
     Object getPropertyValue();
 
@@ -743,5 +758,33 @@ public class JsonSchema implements ParsedSchema {
           }
         });
     return props.get(propertyName);
+  }
+
+  private void modifyFieldLevelTags(JsonNode node,
+                                    Map<String, Set<String>> tagsToAddMap,
+                                    Map<String, Set<String>> tagsToRemoveMap) {
+    Set<String> pathToModify = new HashSet<>(tagsToAddMap.keySet());
+    pathToModify.addAll(tagsToRemoveMap.keySet());
+
+    for (String path : pathToModify) {
+      JsonNode fieldNodePtr = findMatchingField(node, path);
+      Set<String> allTags = getInlineTags(fieldNodePtr);
+
+      if (tagsToAddMap.containsKey(path)) {
+        Set<String> tagsToAdd = tagsToAddMap.get(path);
+        allTags.addAll(tagsToAdd);
+      }
+
+      if (tagsToRemoveMap.containsKey(path)) {
+        Set<String> tagsToRemove = tagsToRemoveMap.get(path);
+        allTags.removeAll(tagsToRemove);
+      }
+
+      if (allTags.size() == 0) {
+        ((ObjectNode) fieldNodePtr).remove(TAGS);
+      } else {
+        ((ObjectNode) fieldNodePtr).replace(TAGS, objectMapper.valueToTree(allTags));
+      }
+    }
   }
 }
