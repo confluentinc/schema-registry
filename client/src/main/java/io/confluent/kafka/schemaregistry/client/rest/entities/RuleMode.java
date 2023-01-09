@@ -22,5 +22,13 @@ public enum RuleMode {
   UPDOWN,
   WRITE,
   READ,
-  WRITEREAD
+  WRITEREAD;
+
+  public boolean isMigrationRule() {
+    return this == UPGRADE || this == DOWNGRADE || this == UPDOWN;
+  }
+
+  public boolean isDomainRule() {
+    return this == WRITE || this == READ || this == WRITEREAD;
+  }
 }
