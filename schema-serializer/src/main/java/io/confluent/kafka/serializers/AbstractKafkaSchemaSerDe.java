@@ -77,6 +77,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.concurrent.impl.FutureConvertersImpl.P;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -186,6 +187,14 @@ public abstract class AbstractKafkaSchemaSerDe {
 
   public boolean isKey() {
     return isKey;
+  }
+
+  protected Map<SubjectSchema, ParsedSchema> latestVersionsCache() {
+    return latestVersions != null ? latestVersions.asMap() : new HashMap<>();
+  }
+
+  protected Map<String, ParsedSchema> latestWithMetadataCache() {
+    return latestWithMetadata != null ? latestWithMetadata.asMap() : new HashMap<>();
   }
 
   protected ParsedSchema getLatestWithMetadata(String subject)
@@ -402,7 +411,7 @@ public abstract class AbstractKafkaSchemaSerDe {
       String subject, ParsedSchema schema, boolean latestCompatStrict)
       throws IOException, RestClientException {
     return lookupLatestVersion(
-        schemaRegistry, subject, schema, latestVersions.asMap(), latestCompatStrict);
+        schemaRegistry, subject, schema, latestVersionsCache(), latestCompatStrict);
   }
 
   protected static ParsedSchema lookupLatestVersion(

@@ -104,7 +104,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterForDeps = autoRegisterSchema && !onlyLookupReferencesBySchema;
       boolean useLatestForDeps = useLatestVersion && !onlyLookupReferencesBySchema;
       schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
-          useLatestForDeps, latestCompatStrict, latestVersions.asMap(),
+          useLatestForDeps, latestCompatStrict, latestVersionsCache(),
           skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
       int id;
       if (autoRegisterSchema) {

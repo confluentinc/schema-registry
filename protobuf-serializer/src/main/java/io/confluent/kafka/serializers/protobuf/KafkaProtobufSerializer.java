@@ -91,7 +91,7 @@ public class KafkaProtobufSerializer<T extends Message>
         boolean autoRegisterForDeps = autoRegisterSchema && !onlyLookupReferencesBySchema;
         boolean useLatestForDeps = useLatestVersion && !onlyLookupReferencesBySchema;
         schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
-            useLatestForDeps, latestCompatStrict, latestVersions.asMap(),
+            useLatestForDeps, latestCompatStrict, latestVersionsCache(),
             skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
       } catch (IOException | RestClientException e) {
         throw new SerializationException("Error serializing Protobuf message", e);
