@@ -122,8 +122,8 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
         .expireAfterWrite(Duration.ofSeconds(cacheExpirySecs))
         .maximumSize(cacheSize)
         .build(new CacheLoader<EncryptKey, Dek>() {
-             @Override
-             public Dek load(EncryptKey encryptKey) throws Exception {
+          @Override
+          public Dek load(EncryptKey encryptKey) throws Exception {
             String kekId = encryptKey.getKekId();
             String dekFormat = encryptKey.getDekFormat();
             // Generate new dek
@@ -133,21 +133,21 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
             Aead aead = kmsClient.getAead(kekId);
             byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
             return new Dek(rawDek, encryptedDek);
-        }
-      });
+          }
+        });
     this.dekDecryptCache = CacheBuilder.newBuilder()
         .maximumSize(cacheSize)
         .build(new CacheLoader<DecryptKey, Dek>() {
-             @Override
-             public Dek load(DecryptKey decryptKey) throws Exception {
+          @Override
+          public Dek load(DecryptKey decryptKey) throws Exception {
             String kekId = decryptKey.getKekId();
             byte[] encryptedDek = decryptKey.getEncryptedDek();
             KmsClient kmsClient = KmsClients.get(kekId);
             Aead aead = kmsClient.getAead(kekId);
             byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
             return new Dek(rawDek, encryptedDek);
-        }
-      });
+          }
+        });
     this.cryptors = new HashMap<>();
   }
 
@@ -350,6 +350,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   static class EncryptKey {
+
     private final String kekId;
     private final String dekFormat;
 
@@ -386,6 +387,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   static class DecryptKey {
+
     private final String kekId;
     private final byte[] encryptedDek;
 
@@ -424,6 +426,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   static class Dek {
+
     private final byte[] rawDek;
     private final byte[] encryptedDek;
 
