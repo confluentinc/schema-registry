@@ -100,7 +100,7 @@ public class HcVaultKmsAead implements Aead {
 
       String ciphertext = data.get("ciphertext");
       if (ciphertext == null) {
-        String err = new String(response.getRestResponse().getBody());
+        String err = new String(response.getRestResponse().getBody(), StandardCharsets.UTF_8);
         throw new GeneralSecurityException("encryption failed: " + err);
       }
       return ciphertext.getBytes(StandardCharsets.UTF_8);
