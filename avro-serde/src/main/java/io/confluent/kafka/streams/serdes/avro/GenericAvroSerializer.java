@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.streams.serdes.avro;
 
-import com.sun.tools.javac.jvm.Gen;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
