@@ -107,12 +107,19 @@ public class SchemaRegistryConfigProvider implements ConfigProvider {
         return Collections.emptyMap();
       }
       int version;
-      try {
-        version = Integer.parseInt(parts[1]);
-      } catch (NumberFormatException e) {
-        return Collections.emptyMap();
+      String versionStr = parts[1];
+      if ("latest".equals(versionStr)) {
+        version = -1;
+      } else {
+        try {
+          version = Integer.parseInt(versionStr);
+        } catch (NumberFormatException e) {
+          return Collections.emptyMap();
+        }
       }
-      SchemaMetadata schema = schemaRegistry.getSchemaMetadata(subject, version, true);
+      SchemaMetadata schema = version >= 0
+          ? schemaRegistry.getSchemaMetadata(subject, version, true)
+          : schemaRegistry.getLatestSchemaMetadata(subject);
       Metadata metadata = schema.getMetadata();
       if (metadata == null) {
         return Collections.emptyMap();

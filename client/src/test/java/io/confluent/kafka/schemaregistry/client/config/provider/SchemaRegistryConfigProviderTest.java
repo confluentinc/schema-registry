@@ -23,14 +23,10 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
-import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
@@ -44,11 +40,6 @@ import org.junit.Test;
 public class SchemaRegistryConfigProviderTest {
 
     private SchemaRegistryConfigProvider provider;
-
-    private static File writeFile(File file) throws IOException {
-        Files.write(file.toPath(), file.getName().toUpperCase(Locale.ENGLISH).getBytes(StandardCharsets.UTF_8));
-        return file;
-    }
 
     @Before
     public void setup() throws Exception {
@@ -105,6 +96,18 @@ public class SchemaRegistryConfigProviderTest {
     }
 
     @Test
+    public void testGetAllKeysAtLatest() {
+        ConfigData configData = provider.get("subjects/config/versions/latest");
+        Set<String> keys = new HashSet<>();
+        keys.add("key1");
+        keys.add("key2");
+        keys.add("key3");
+        assertEquals(keys, configData.data().keySet());
+        assertEquals("value1", configData.data().get("key1"));
+        assertEquals("value2", configData.data().get("key2"));
+        assertEquals("value3", configData.data().get("key3"));
+    }
+    @Test
     public void testGetAllKeysAtContextPath() {
         ConfigData configData = provider.get("contexts/.mycontext/subjects/config2/versions/1");
         Set<String> keys = new HashSet<>();
@@ -124,6 +127,19 @@ public class SchemaRegistryConfigProviderTest {
         ConfigData configData = provider.get("contexts/.mycontext/subjects/config2/versions/1", keys);
         assertEquals(keys, configData.data().keySet());
         assertEquals("contextValue1", configData.data().get("contextKey1"));
+    }
+
+    @Test
+    public void testGetAllKeysAtContextLatest() {
+        ConfigData configData = provider.get("contexts/.mycontext/subjects/config2/versions/latest");
+        Set<String> keys = new HashSet<>();
+        keys.add("contextKey1");
+        keys.add("contextKey2");
+        keys.add("contextKey3");
+        assertEquals(keys, configData.data().keySet());
+        assertEquals("contextValue1", configData.data().get("contextKey1"));
+        assertEquals("contextValue2", configData.data().get("contextKey2"));
+        assertEquals("contextValue3", configData.data().get("contextKey3"));
     }
 
     @Test
