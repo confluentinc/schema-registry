@@ -18,9 +18,9 @@
         </license>
     </licenses>
 
-    <artifactId>kafka-schema-registry-client-gcp</artifactId>
+    <artifactId>kafka-schema-registry-client-encryption-gcp</artifactId>
     <packaging>jar</packaging>
-    <name>kafka-schema-registry-client-gcp</name>
+    <name>kafka-schema-registry-client-encryption-gcp</name>
 
     <dependencies>
         <dependency>
