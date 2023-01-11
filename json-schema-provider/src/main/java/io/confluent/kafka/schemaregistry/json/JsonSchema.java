@@ -94,7 +94,7 @@ public class JsonSchema implements ParsedSchema {
 
   public static final String TYPE = "JSON";
 
-  public static final String TAGS = "confluent.tags";
+  public static final String TAGS = "confluent:tags";
 
   private static final String SCHEMA_KEYWORD = "$schema";
 
