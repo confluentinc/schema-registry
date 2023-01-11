@@ -98,6 +98,16 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       "Whether to check for backward compatibility between the latest subject version and "
       + " the schema of the object to be serialized";
 
+  public static final String LATEST_CACHE_SIZE = "latest.cache.size";
+  public static final int LATEST_CACHE_SIZE_DEFAULT = 1000;
+  public static final String LATEST_CACHE_SIZE_DOC =
+      "The maximum size for caches holding latest schemas";
+
+  public static final String LATEST_CACHE_TTL = "latest.cache.ttl.sec";
+  public static final int LATEST_CACHE_TTL_DEFAULT = -1;
+  public static final String LATEST_CACHE_TTL_DOC =
+      "The TTL for caches holding latest schemas, or -1 for no TTL";
+
   public static final String SCHEMA_FORMAT = "schema.format";
   public static final String SCHEMA_FORMAT_DOC =
       "The schema format to use when registering or looking up schemas.";
@@ -255,6 +265,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, USE_LATEST_VERSION_DOC)
         .define(LATEST_COMPATIBILITY_STRICT, Type.BOOLEAN, LATEST_COMPATIBILITY_STRICT_DEFAULT,
                 Importance.LOW, LATEST_COMPATIBILITY_STRICT_DOC)
+        .define(LATEST_CACHE_SIZE, Type.INT, LATEST_CACHE_SIZE_DEFAULT,
+                Importance.LOW, LATEST_CACHE_SIZE_DOC)
+        .define(LATEST_CACHE_TTL, Type.INT, LATEST_CACHE_TTL_DEFAULT,
+                Importance.LOW, LATEST_CACHE_TTL_DOC)
         .define(USE_LATEST_WITH_METADATA, Type.STRING, null,
                 Importance.LOW, USE_LATEST_WITH_METADATA_DOC)
         .define(SCHEMA_FORMAT, Type.STRING, null,
@@ -262,7 +276,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .define(RULE_EXECUTORS, Type.LIST, "",
                 Importance.LOW, RULE_EXECUTORS_DOCS)
         .define(RULE_ACTIONS, Type.LIST, "",
-            Importance.LOW, RULE_ACTIONS_DOCS)
+                Importance.LOW, RULE_ACTIONS_DOCS)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
                 Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
@@ -348,6 +362,14 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean getLatestCompatibilityStrict() {
     return this.getBoolean(LATEST_COMPATIBILITY_STRICT);
+  }
+
+  public int getLatestCacheSize() {
+    return this.getInt(LATEST_CACHE_SIZE);
+  }
+
+  public int getLatestCacheTtl() {
+    return this.getInt(LATEST_CACHE_TTL);
   }
 
   public String getLatestWithMetadataSpec() {
