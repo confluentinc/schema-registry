@@ -59,7 +59,7 @@ public class AvroSchema implements ParsedSchema {
 
   public static final String TYPE = "AVRO";
 
-  public static final String TAGS = "confluent.tags";
+  public static final String TAGS = "confluent:tags";
 
   private final Schema schemaObj;
   private String canonicalString;
