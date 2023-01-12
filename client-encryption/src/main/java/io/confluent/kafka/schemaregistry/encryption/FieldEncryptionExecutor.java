@@ -313,7 +313,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
       try {
         return new Cryptor(dekFormat);
       } catch (GeneralSecurityException e) {
-        throw new IllegalArgumentException("Invalid format " + dekFormat);
+        throw new IllegalArgumentException("Invalid format " + dekFormat, e);
       }
     });
   }

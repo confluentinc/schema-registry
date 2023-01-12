@@ -114,7 +114,6 @@ public abstract class FieldEncryptionExecutorTest {
 
   protected abstract Map<String, Object> getClientProperties() throws Exception;
 
-
   private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
     Map<String, RuleExecutor> executors = serde.getRuleExecutors();
     FieldEncryptionExecutor executor =

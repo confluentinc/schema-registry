@@ -131,7 +131,7 @@ public class HcVaultKmsAead implements Aead {
       return Base64.getDecoder().decode(plaintext64);
 
     } catch (VaultException e) {
-      throw new GeneralSecurityException("vault error");
+      throw new GeneralSecurityException("vault error", e);
     }
   }
 }

@@ -74,7 +74,6 @@ public class AvroSchema implements ParsedSchema {
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
-
   public AvroSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null);
   }
