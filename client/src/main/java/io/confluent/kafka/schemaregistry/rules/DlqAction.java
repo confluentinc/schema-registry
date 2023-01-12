@@ -61,19 +61,10 @@ public class DlqAction implements RuleAction {
     }
 
     try {
-      byte[] payload = null;
-      if (ctx.originalMessage() instanceof byte[]) {
-        payload = (byte[]) ctx.originalMessage();
-      } else {
-        JsonNode json = ctx.target().toJson(ctx.originalMessage());
-        payload = JacksonMapper.INSTANCE.writeValueAsBytes(json);
-      }
-      ProducerRecord<byte[], byte[]> producerRecord;
-      if (ctx.isKey()) {
-        producerRecord = new ProducerRecord<>(topic, null, payload, null, ctx.headers());
-      } else {
-        producerRecord = new ProducerRecord<>(topic, null, (byte[]) null, payload, ctx.headers());
-      }
+      byte[] keyBytes = convertToBytes(ctx, ctx.originalKey());
+      byte[] valueBytes = convertToBytes(ctx, ctx.originalValue());
+      ProducerRecord<byte[], byte[]> producerRecord =
+          new ProducerRecord<>(topic, null, keyBytes, valueBytes, ctx.headers());
       producer.send(producerRecord, (metadata, exception) -> {
         if (exception != null) {
           log.error("Could not produce message to dlq topic " + topic, exception);
@@ -86,5 +77,16 @@ public class DlqAction implements RuleAction {
     String msg = "Rule failed: " + ctx.rule().getName();
     // throw a RuntimeException
     throw ex != null ? new SerializationException(msg, ex) : new SerializationException(msg);
+  }
+
+  private byte[] convertToBytes(RuleContext ctx, Object message) throws IOException {
+    if (message == null) {
+      return null;
+    } else if (message instanceof byte[]) {
+      return (byte[]) message;
+    } else {
+      JsonNode json = ctx.target().toJson(message);
+      return JacksonMapper.INSTANCE.writeValueAsBytes(json);
+    }
   }
 }

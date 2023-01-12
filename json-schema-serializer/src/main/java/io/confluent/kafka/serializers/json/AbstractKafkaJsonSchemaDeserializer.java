@@ -120,6 +120,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     }
 
     int id = -1;
+    preOp(payload);
     try {
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
@@ -219,6 +220,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       throw new SerializationException("Error deserializing JSON message for id " + id, e);
     } catch (RestClientException e) {
       throw toKafkaException(e, "Error retrieving JSON schema for id " + id);
+    } finally {
+      postOp();
     }
   }
 

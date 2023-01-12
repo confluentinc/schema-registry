@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.rules.cel;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -71,12 +72,15 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
 public class CelExecutorTest {
 
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer;
   private final KafkaAvroDeserializer avroDeserializer;
+  private final KafkaAvroSerializer avroKeySerializer;
+  private final KafkaAvroDeserializer avroKeyDeserializer;
   private final KafkaAvroSerializer reflectionAvroSerializer;
   private final KafkaAvroDeserializer reflectionAvroDeserializer;
   private final KafkaProtobufSerializer<Widget> protobufSerializer;
@@ -113,6 +117,10 @@ public class CelExecutorTest {
         producer);
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, defaultConfig);
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, defaultConfig);
+    avroKeySerializer = new KafkaAvroSerializer(schemaRegistry);
+    avroKeySerializer.configure(defaultConfig, true);
+    avroKeyDeserializer = new KafkaAvroDeserializer(schemaRegistry);
+    avroKeyDeserializer.configure(defaultConfig, true);
 
     Map<String, Object> reflectionProps = new HashMap<>(defaultConfig);
     reflectionProps.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, "true");
@@ -241,6 +249,36 @@ public class CelExecutorTest {
     }
 
     verify(producer).send(any(ProducerRecord.class), any(Callback.class));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerConstraintDlqWithKey() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    schemaRegistry.register(topic + "-key", avroSchema);
+
+    Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
+        CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        null, "DLQ", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    try {
+      byte[] keyBytes = avroKeySerializer.serialize(topic, avroRecord);
+      byte[] valueBytes = avroSerializer.serialize(topic, avroRecord);
+      avroKeyDeserializer.deserialize(topic, keyBytes);
+      avroDeserializer.deserialize(topic, valueBytes);
+      fail("Should send to DLQ and throw exception");
+    } catch (SerializationException e) {
+      // expected
+    }
+
+    ArgumentCaptor<ProducerRecord> argument = ArgumentCaptor.forClass(ProducerRecord.class);
+    verify(producer).send(argument.capture(), any(Callback.class));
+    // Verify producer record has both key and value
+    assertNotNull(argument.getValue().key());
+    assertNotNull(argument.getValue().value());
   }
 
   @Test

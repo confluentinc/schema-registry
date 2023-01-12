@@ -102,6 +102,22 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected Map<String, RuleAction> ruleActions;
   protected boolean isKey;
 
+  // Track the key for use when deserializing/serializing the value, such as for a DLQ.
+  // We take advantage of the fact the value serde is called after the key serde.
+  private static final ThreadLocal<Object> key = new ThreadLocal<>();
+
+  public static Object key() {
+    return key.get();
+  }
+
+  public static void setKey(Object obj) {
+    key.set(obj);
+  }
+
+  public static void clearKey() {
+    key.remove();
+  }
+
   @SuppressWarnings("unchecked")
   protected void configureClientProperties(
       AbstractKafkaSchemaSerDeConfig config,
@@ -148,6 +164,18 @@ public abstract class AbstractKafkaSchemaSerDe {
     ruleActions = new HashMap<>((Map<String, RuleAction>) initRuleObjects(config, RULE_ACTIONS));
     ruleActions.put(ErrorAction.TYPE, new ErrorAction());
     ruleActions.put(NoneAction.TYPE, new NoneAction());
+  }
+
+  protected void preOp(Object payload) {
+    if (isKey) {
+      setKey(payload);
+    }
+  }
+
+  protected void postOp() {
+    if (!isKey) {
+      clearKey();
+    }
   }
 
   private Map<String, ? extends RuleBase> initRuleObjects(
@@ -521,7 +549,7 @@ public abstract class AbstractKafkaSchemaSerDe {
         continue;
       }
       RuleContext ctx = new RuleContext(source, target,
-          subject, topic, headers, original, isKey, ruleMode, rule);
+          subject, topic, headers, key(), isKey ? null : original, isKey, ruleMode, rule);
       RuleExecutor ruleExecutor = ruleExecutors.get(rule.getType().toUpperCase(Locale.ROOT));
       if (ruleExecutor == null) {
         log.warn("Could not find rule executor of type {}", rule.getType());
