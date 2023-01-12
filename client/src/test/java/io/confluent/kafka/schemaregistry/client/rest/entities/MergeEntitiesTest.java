@@ -31,30 +31,30 @@ public class MergeEntitiesTest {
 
   @Test
   public void mergeMetadatas() throws Exception {
-    Map<String, Set<String>> paths = new HashMap<>();
-    paths.put("**.ssn", Collections.singleton("PII"));
+    Map<String, Set<String>> tags = new HashMap<>();
+    tags.put("**.ssn", Collections.singleton("PII"));
     Map<String, String> properties = new HashMap<>();
     properties.put("key1", "value1");
     Set<String> sensitive = new HashSet<>();
     sensitive.add("key1");
-    Metadata m1 = new Metadata(paths, properties, sensitive);
+    Metadata m1 = new Metadata(tags, properties, sensitive);
     Metadata m2 = new Metadata(Collections.emptyMap(), Collections.emptyMap(), null);
 
     Metadata m3 = Metadata.mergeMetadata(m1, m2);
-    assertEquals(m3.getPaths().get("**.ssn"), Collections.singleton("PII"));
+    assertEquals(m3.getTags().get("**.ssn"), Collections.singleton("PII"));
     assertEquals(m3.getProperties().get("key1"), "value1");
     assertTrue(m3.getSensitive().contains("key1"));
 
-    paths = new HashMap<>();
-    paths.put("**.ssn", Collections.singleton("PRIVATE"));
+    tags = new HashMap<>();
+    tags.put("**.ssn", Collections.singleton("PRIVATE"));
     properties = new HashMap<>();
     properties.put("key2", "value2");
     sensitive = new HashSet<>();
     sensitive.add("key2");
-    m2 = new Metadata(paths, properties, sensitive);
+    m2 = new Metadata(tags, properties, sensitive);
 
     Metadata m4 = Metadata.mergeMetadata(m1, m2);
-    assertEquals(m4.getPaths().get("**.ssn"), Collections.singleton("PRIVATE"));
+    assertEquals(m4.getTags().get("**.ssn"), Collections.singleton("PRIVATE"));
     assertEquals(m4.getProperties().get("key1"), "value1");
     assertEquals(m4.getProperties().get("key2"), "value2");
     assertTrue(m4.getSensitive().contains("key1"));
