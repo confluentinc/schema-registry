@@ -348,7 +348,7 @@ public class AvroSchemaUtils {
         switch (type) {
           case "record":
             if ((nameSpace.isEmpty() || nameSpace.equals(curr.namespace()))
-              && recordName.equals(currNode.get(NAME_FIELD).asText())) {
+                && recordName.equals(currNode.get(NAME_FIELD).asText())) {
               Iterator<JsonNode> fieldsIter = currNode.get(FIELDS_FIELD).elements();
               while (fieldsIter.hasNext()) {
                 JsonNode currField = fieldsIter.next();

@@ -267,7 +267,7 @@ public class JsonSchema implements ParsedSchema {
   public ParsedSchema copy(Map<String, Set<String>> tagsToAdd,
                            Map<String, Set<String>> tagsToRemove) {
     JsonSchema schemaCopy = this.copy();
-    JsonNode original = schemaCopy.toJsonNode();
+    JsonNode original = schemaCopy.toJsonNode().deepCopy();
     modifyFieldLevelTags(original, tagsToAdd, tagsToRemove);
     return new JsonSchema(original.toString(),
       schemaCopy.references(),

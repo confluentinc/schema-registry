@@ -561,12 +561,12 @@ public class ProtobufSchema implements ParsedSchema {
     modifyFieldLevelTags(schemaCopy.rawSchema(), original, tagsToAdd, tagsToRemove);
     try {
       ProtoFileElement newFileElement = jsonToFile(original);
-      return new ProtobufSchema(newFileElement.toString(),
+      return new ProtobufSchema(newFileElement.toSchema(),
         schemaCopy.references(),
         schemaCopy.dependencies().entrySet().stream().collect(
             Collectors.toMap(
               Map.Entry::getKey,
-              e -> e.getValue().toString())),
+              e -> e.getValue().toSchema())),
         schemaCopy.metadata(),
         schemaCopy.ruleSet(),
         -1,
