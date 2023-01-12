@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.v3.oas.annotations.Operation;
@@ -109,7 +110,10 @@ public class ConfigResource {
     if (request.getCompatibilityLevel() != null && compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
     }
-
+    if ((request.getInitialRuleSet() != null && !request.getInitialRuleSet().isValid())
+        || (request.getFinalRuleSet() != null && !request.getFinalRuleSet().isValid())) {
+      throw new RestInvalidRuleSetException();
+    }
     if (subject != null && (CharMatcher.javaIsoControl().matchesAnyOf(subject)
         || QualifiedSubject.create(this.schemaRegistry.tenant(), subject).getSubject()
             .equals(GLOBAL_RESOURCE_NAME))) {
@@ -204,6 +208,10 @@ public class ConfigResource {
         CompatibilityLevel.forName(request.getCompatibilityLevel());
     if (request.getCompatibilityLevel() != null && compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
+    }
+    if ((request.getInitialRuleSet() != null && !request.getInitialRuleSet().isValid())
+        || (request.getFinalRuleSet() != null && !request.getFinalRuleSet().isValid())) {
+      throw new RestInvalidRuleSetException();
     }
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(

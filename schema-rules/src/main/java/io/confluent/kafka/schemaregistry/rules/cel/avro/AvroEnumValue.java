@@ -31,7 +31,7 @@ public final class AvroEnumValue {
     this.stringValue = stringOf(enumValue);
   }
 
-  static String fullyQualifiedName(GenericEnumSymbol value) {
+  static String fullyQualifiedName(GenericEnumSymbol<?> value) {
     return value.getSchema().getFullName() + '.' + value;
   }
 

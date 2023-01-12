@@ -21,8 +21,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -46,8 +46,8 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.DlqAction;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
@@ -59,7 +59,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
@@ -83,7 +82,7 @@ public class CelExecutorTest {
   private final KafkaProtobufSerializer<Widget> protobufSerializer;
   private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
-  private final KafkaJsonSchemaSerializer<TaggedOldWidget> jsonSchemaSerializer2;
+  private final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
   private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   private final String topic;
   private final KafkaProducer<byte[], byte[]> producer;
@@ -96,46 +95,36 @@ public class CelExecutorTest {
     when(producer.send(any(ProducerRecord.class), any(Callback.class))).thenReturn(
         CompletableFuture.completedFuture(null));
 
-    Properties defaultConfig = new Properties();
-    defaultConfig.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    defaultConfig.put(KafkaAvroDeserializerConfig.AUTO_REGISTER_SCHEMAS, "false");
-    defaultConfig.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, "true");
-    defaultConfig.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS, "cel,cel-field");
-    defaultConfig.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS + ".cel.class",
+    Map<String, Object> defaultConfig = new HashMap<>();
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "cel,cel-field");
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".cel.class",
         CelExecutor.class.getName());
-    defaultConfig.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS + ".cel-field.class",
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".cel-field.class",
         CelFieldExecutor.class.getName());
-    defaultConfig.put(KafkaAvroDeserializerConfig.RULE_ACTIONS, "dlq");
-    defaultConfig.put(KafkaAvroDeserializerConfig.RULE_ACTIONS + ".dlq.class",
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS, "dlq");
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".dlq.class",
         DlqAction.class.getName());
-    defaultConfig.put(KafkaAvroDeserializerConfig.RULE_ACTIONS + ".dlq.param." + DlqAction.TOPIC,
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".dlq.param." + DlqAction.TOPIC,
         "dlq-topic");
-    defaultConfig.put(KafkaAvroDeserializerConfig.RULE_ACTIONS + ".dlq.param." + DlqAction.PRODUCER,
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".dlq.param." + DlqAction.PRODUCER,
         producer);
-    avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(defaultConfig));
-    avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, new HashMap(defaultConfig));
+    avroSerializer = new KafkaAvroSerializer(schemaRegistry, defaultConfig);
+    avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, defaultConfig);
 
-    HashMap<String, String> reflectionProps = new HashMap<String, String>();
-    // Intentionally invalid schema registry URL to satisfy the config class's requirement that
-    // it be set.
-    reflectionProps.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    reflectionProps.put(KafkaAvroDeserializerConfig.AUTO_REGISTER_SCHEMAS, "false");
-    reflectionProps.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, "true");
-    reflectionProps.put(KafkaAvroDeserializerConfig.SCHEMA_REFLECTION_CONFIG, "true");
-    reflectionProps.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS, "cel,cel-field");
-    reflectionProps.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS + ".cel.class",
-        CelExecutor.class.getName());
-    reflectionProps.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS + ".cel-field.class",
-        CelFieldExecutor.class.getName());
+    Map<String, Object> reflectionProps = new HashMap<>(defaultConfig);
+    reflectionProps.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, "true");
     reflectionAvroSerializer = new KafkaAvroSerializer(schemaRegistry, reflectionProps);
     reflectionAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, reflectionProps);
 
-    protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, new HashMap(defaultConfig));
-    protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, new HashMap(defaultConfig));
+    protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
+    protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, defaultConfig);
 
-    jsonSchemaSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(defaultConfig));
-    jsonSchemaSerializer2 = new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(defaultConfig));
-    jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, new HashMap(defaultConfig));
+    jsonSchemaSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, defaultConfig);
+    jsonSchemaSerializer2 = new KafkaJsonSchemaSerializer<>(schemaRegistry, defaultConfig);
+    jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, defaultConfig);
   }
 
   private Schema createEnumSchema() {
@@ -175,12 +164,12 @@ public class CelExecutorTest {
 
   private Schema createWidgetSchema() {
     String userSchema = "{\"type\":\"record\",\"name\":\"OldWidget\",\"namespace\":\"io.confluent.kafka.schemaregistry.rules.cel.CelExecutorTest\",\"fields\":\n"
-        + "[{\"name\": \"name\", \"type\": \"string\",\"confluent.tags\": [\"PII\"]},\n"
-        + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"},\"confluent.tags\": [\"PII\"]},\n"
+        + "[{\"name\": \"name\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]},\n"
+        + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"},\"confluent:tags\": [\"PII\"]},\n"
         + "{\"name\": \"piiArray\", \"type\": { \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\":\"OldPii\", \"fields\":\n"
-        + "[{\"name\": \"pii\", \"type\": \"string\",\"confluent.tags\": [\"PII\"]}]}}},\n"
+        + "[{\"name\": \"pii\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]}]}}},\n"
         + "{\"name\": \"piiMap\", \"type\": { \"type\": \"map\", \"values\": \"OldPii\"},\n"
-        + "\"confluent.tags\": [\"PII\"]},\n"
+        + "\"confluent:tags\": [\"PII\"]},\n"
         + "{\"name\": \"size\", \"type\": \"int\"},{\"name\": \"version\", \"type\": \"int\"}]}";
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
@@ -394,9 +383,9 @@ public class CelExecutorTest {
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
         + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
-        + "\"confluent.tags\": [ \"PII\" ]},"
+        + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
-        + "\"confluent.tags\": [ \"PII\" ]},"
+        + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
         + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
         + "\"size\":{\"type\":\"integer\"},"
@@ -404,7 +393,7 @@ public class CelExecutorTest {
         + "\"required\":[\"size\",\"version\"],"
         + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
         + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
-        + "\"confluent.tags\": [ \"PII\" ]}}}}}";
+        + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
@@ -448,19 +437,19 @@ public class CelExecutorTest {
   }
 
   @Test
-  public void testKafkaJsonSchemaSerializerTaggedFieldTransform() throws Exception {
+  public void testKafkaJsonSchemaSerializerAnnotatedFieldTransform() throws Exception {
     byte[] bytes;
     Object obj;
 
-    TaggedOldWidget widget = new TaggedOldWidget("alice");
+    AnnotatedOldWidget widget = new AnnotatedOldWidget("alice");
     widget.setSize(123);
-    widget.withTaggedSsn(ImmutableList.of("123", "456"));
-    widget.setPiiArray(ImmutableList.of(new TaggedOldPii("789"), new TaggedOldPii("012")));
+    widget.setAnnotatedSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new AnnotatedOldPii("789"), new AnnotatedOldPii("012")));
     String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
         + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
-        + "\"confluent.tags\": [ \"PII\" ]},"
+        + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
-        + "\"confluent.tags\": [ \"PII\" ]},"
+        + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
         + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
         + "\"size\":{\"type\":\"integer\"},"
@@ -468,7 +457,7 @@ public class CelExecutorTest {
         + "\"required\":[\"size\",\"version\"],"
         + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
         + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
-        + "\"confluent.tags\": [ \"PII\" ]}}}}}";
+        + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
@@ -621,52 +610,52 @@ public class CelExecutorTest {
     }
   }
 
-  public static class TaggedOldWidget {
-    private String taggedName;
-    private List<String> taggedSsn = new ArrayList<>();
-    private List<TaggedOldPii> piiArray = new ArrayList<>();
-    private Map<String, TaggedOldPii> piiMap = new HashMap<>();
+  public static class AnnotatedOldWidget {
+    private String annotatedName;
+    private List<String> annotatedSsn = new ArrayList<>();
+    private List<AnnotatedOldPii> piiArray = new ArrayList<>();
+    private Map<String, AnnotatedOldPii> piiMap = new HashMap<>();
     private int size;
     private int version;
 
-    public TaggedOldWidget() {}
-    public TaggedOldWidget(String taggedName) {
-      this.taggedName = taggedName;
+    public AnnotatedOldWidget() {}
+    public AnnotatedOldWidget(String annotatedName) {
+      this.annotatedName = annotatedName;
     }
 
     @JsonProperty("name")
-    public String getTaggedName() {
-      return taggedName;
+    public String getAnnotatedName() {
+      return annotatedName;
     }
 
     @JsonProperty("name")
-    public void setTaggedName(String name) {
-      this.taggedName = name;
+    public void setAnnotatedName(String name) {
+      this.annotatedName = name;
     }
 
     @JsonProperty("ssn")
-    public List<String> getTaggedSsn() {
-      return taggedSsn;
+    public List<String> getAnnotatedSsn() {
+      return annotatedSsn;
     }
 
     @JsonProperty("ssn")
-    public void withTaggedSsn(List<String> ssn) {
-      this.taggedSsn = ssn;
+    public void setAnnotatedSsn(List<String> ssn) {
+      this.annotatedSsn = ssn;
     }
 
-    public List<TaggedOldPii> getPiiArray() {
+    public List<AnnotatedOldPii> getPiiArray() {
       return piiArray;
     }
 
-    public void setPiiArray(List<TaggedOldPii> pii) {
+    public void setPiiArray(List<AnnotatedOldPii> pii) {
       this.piiArray = pii;
     }
 
-    public Map<String, TaggedOldPii> getPiiMap() {
+    public Map<String, AnnotatedOldPii> getPiiMap() {
       return piiMap;
     }
 
-    public void setPiiMap(Map<String, TaggedOldPii> pii) {
+    public void setPiiMap(Map<String, AnnotatedOldPii> pii) {
       this.piiMap = pii;
     }
 
@@ -691,8 +680,8 @@ public class CelExecutorTest {
       if (this == o) return true;
       if (o == null || getClass() != o.getClass()) return false;
       OldWidget widget = (OldWidget) o;
-      return taggedName.equals(widget.name)
-          && Objects.equals(taggedSsn, widget.ssn)
+      return annotatedName.equals(widget.name)
+          && Objects.equals(annotatedSsn, widget.ssn)
           && Objects.equals(piiArray, widget.piiArray)
           && Objects.equals(piiMap, widget.piiMap)
           && size == widget.size
@@ -701,21 +690,21 @@ public class CelExecutorTest {
 
     @Override
     public int hashCode() {
-      return Objects.hash(taggedName, taggedSsn, piiArray, piiMap, size, version);
+      return Objects.hash(annotatedName, annotatedSsn, piiArray, piiMap, size, version);
     }
   }
 
-  public static class TaggedOldPii {
+  public static class AnnotatedOldPii {
     @JsonProperty("pii")
-    private String taggedPii;
+    private String annotatedPii;
 
-    public TaggedOldPii() {}
-    public TaggedOldPii(String taggedPii) {
-      this.taggedPii = taggedPii;
+    public AnnotatedOldPii() {}
+    public AnnotatedOldPii(String annotatedPii) {
+      this.annotatedPii = annotatedPii;
     }
 
-    public String getTaggedPii() {
-      return taggedPii;
+    public String getAnnotatedPii() {
+      return annotatedPii;
     }
 
     @Override
@@ -726,13 +715,13 @@ public class CelExecutorTest {
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      TaggedOldPii pii1 = (TaggedOldPii) o;
-      return Objects.equals(taggedPii, pii1.taggedPii);
+      AnnotatedOldPii pii1 = (AnnotatedOldPii) o;
+      return Objects.equals(annotatedPii, pii1.annotatedPii);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(taggedPii);
+      return Objects.hash(annotatedPii);
     }
   }
 }

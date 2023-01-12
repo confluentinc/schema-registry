@@ -112,6 +112,10 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
     return deserialize(topic, isKey, bytes, readerSchema);
   }
 
+  public Object deserialize(String topic, Headers headers, byte[] bytes, Schema readerSchema) {
+    return deserialize(topic, isKey, headers, bytes, readerSchema);
+  }
+
   @Override
   public void close() {
 

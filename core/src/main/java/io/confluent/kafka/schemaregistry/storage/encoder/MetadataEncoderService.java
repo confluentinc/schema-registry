@@ -265,7 +265,7 @@ public class MetadataEncoderService implements Closeable {
         byte[] ciphertext = aead.encrypt(value.getBytes(StandardCharsets.UTF_8), EMPTY_AAD);
         return Base64.getEncoder().encodeToString(ciphertext);
       } catch (GeneralSecurityException e) {
-        throw new IllegalStateException("Could not encrypt sensitive metadata");
+        throw new IllegalStateException("Could not encrypt sensitive metadata", e);
       }
     });
   }
@@ -288,7 +288,7 @@ public class MetadataEncoderService implements Closeable {
         byte[] plaintext = aead.decrypt(Base64.getDecoder().decode(value), EMPTY_AAD);
         return new String(plaintext, StandardCharsets.UTF_8);
       } catch (GeneralSecurityException e) {
-        throw new IllegalStateException("Could not encrypt sensitive metadata");
+        throw new IllegalStateException("Could not encrypt sensitive metadata", e);
       }
     });
   }

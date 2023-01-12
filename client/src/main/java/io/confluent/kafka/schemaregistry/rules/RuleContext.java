@@ -45,7 +45,7 @@ public class RuleContext {
   private final boolean isKey;
   private final RuleMode ruleMode;
   private final Rule rule;
-  private final Map<String, Object> customData = new ConcurrentHashMap<>();
+  private final Map<Object, Object> customData = new ConcurrentHashMap<>();
   private final Deque<FieldContext> fieldContexts;
 
   public RuleContext(
@@ -118,7 +118,7 @@ public class RuleContext {
     return rule;
   }
 
-  public Map<String, Object> customData() {
+  public Map<Object, Object> customData() {
     return customData;
   }
 
@@ -150,7 +150,7 @@ public class RuleContext {
     private final Object containingMessage;
     private final String fullName;
     private final String name;
-    private final Type type;
+    private Type type;
     private final Set<String> tags;
 
     public FieldContext(Object containingMessage, String fullName,
@@ -177,6 +177,10 @@ public class RuleContext {
 
     public Type getType() {
       return type;
+    }
+
+    public void setType(Type type) {
+      this.type = type;
     }
 
     public Set<String> getTags() {

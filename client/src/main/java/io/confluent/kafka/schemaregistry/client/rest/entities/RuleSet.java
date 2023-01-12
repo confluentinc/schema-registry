@@ -113,6 +113,22 @@ public class RuleSet {
     }
   }
 
+  public boolean isValid() {
+    if (migrationRules != null) {
+      boolean invalid = migrationRules.stream().anyMatch(r -> !r.getMode().isMigrationRule());
+      if (invalid) {
+        return false;
+      }
+    }
+    if (domainRules != null) {
+      boolean invalid = domainRules.stream().anyMatch(r -> !r.getMode().isDomainRule());
+      if (invalid) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   public static RuleSet mergeRuleSets(RuleSet oldRuleSet, RuleSet newRuleSet) {
     if (oldRuleSet == null) {
       return newRuleSet;

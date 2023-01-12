@@ -26,6 +26,8 @@ import com.fasterxml.jackson.dataformat.csv.CsvGenerator;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvParser;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
@@ -38,7 +40,6 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleBase;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -50,6 +51,7 @@ import java.util.Optional;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.serializers.context.NullContextNameStrategy;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.avro.Schema;
@@ -91,10 +93,8 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
-  protected Map<SubjectSchema, ParsedSchema> latestVersions =
-      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
-  protected Map<String, ParsedSchema> latestWithMetadata =
-      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+  protected Cache<SubjectSchema, ParsedSchema> latestVersions;
+  protected Cache<String, ParsedSchema> latestWithMetadata;
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
   protected Map<String, String> metadata;
@@ -124,6 +124,22 @@ public abstract class AbstractKafkaSchemaSerDe {
     valueSubjectNameStrategy = config.valueSubjectNameStrategy();
     useSchemaReflection = config.useSchemaReflection();
     useLatestVersion = config.useLatestVersion();
+    int latestCacheSize = config.getLatestCacheSize();
+    int latestCacheTtl = config.getLatestCacheTtl();
+    CacheBuilder<Object, Object> latestVersionsBuilder = CacheBuilder.newBuilder()
+        .maximumSize(latestCacheSize);
+    if (latestCacheTtl >= 0) {
+      latestVersionsBuilder = latestVersionsBuilder.expireAfterWrite(
+          latestCacheTtl, TimeUnit.SECONDS);
+    }
+    latestVersions = latestVersionsBuilder.build();
+    CacheBuilder<Object, Object> latestWithMetadataBuilder = CacheBuilder.newBuilder()
+        .maximumSize(latestCacheSize);
+    if (latestCacheTtl >= 0) {
+      latestWithMetadataBuilder = latestWithMetadataBuilder.expireAfterWrite(
+          latestCacheTtl, TimeUnit.SECONDS);
+    }
+    latestWithMetadata = latestWithMetadataBuilder.build();
     if (config.getLatestWithMetadataSpec() != null) {
       MapPropertyParser parser = new MapPropertyParser();
       metadata = parser.parse(config.getLatestWithMetadataSpec());
@@ -168,8 +184,21 @@ public abstract class AbstractKafkaSchemaSerDe {
     }
   }
 
+  // Visible for testing
+  public Map<String, RuleExecutor> getRuleExecutors() {
+    return ruleExecutors;
+  }
+
   public boolean isKey() {
     return isKey;
+  }
+
+  protected Map<SubjectSchema, ParsedSchema> latestVersionsCache() {
+    return latestVersions != null ? latestVersions.asMap() : new HashMap<>();
+  }
+
+  protected Map<String, ParsedSchema> latestWithMetadataCache() {
+    return latestWithMetadata != null ? latestWithMetadata.asMap() : new HashMap<>();
   }
 
   protected ParsedSchema getLatestWithMetadata(String subject)
@@ -177,7 +206,7 @@ public abstract class AbstractKafkaSchemaSerDe {
     if (metadata == null || metadata.isEmpty()) {
       return null;
     }
-    ParsedSchema schema = latestWithMetadata.get(subject);
+    ParsedSchema schema = latestWithMetadata.getIfPresent(subject);
     if (schema == null) {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestWithMetadata(subject, metadata, true);
       Optional<ParsedSchema> optSchema =
@@ -385,7 +414,8 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected ParsedSchema lookupLatestVersion(
       String subject, ParsedSchema schema, boolean latestCompatStrict)
       throws IOException, RestClientException {
-    return lookupLatestVersion(schemaRegistry, subject, schema, latestVersions, latestCompatStrict);
+    return lookupLatestVersion(
+        schemaRegistry, subject, schema, latestVersionsCache(), latestCompatStrict);
   }
 
   protected static ParsedSchema lookupLatestVersion(

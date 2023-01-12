@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "confluent/meta.proto";
+
+package io.confluent.kafka.schemaregistry.rules;
+
+option java_package = "io.confluent.kafka.schemaregistry.rules";
+option java_outer_classname = "WidgetProto";
+option java_multiple_files = false;
+
+message Widget {
+    string name = 1 [(.confluent.field_meta).tags = "PII", (.confluent.field_meta).tags = "PUBLIC"];
+    repeated string ssn = 2 [(.confluent.field_meta).tags = "PII", (.confluent.field_meta).tags = "PRIVATE"];
+    repeated Pii pii_array = 3;
+    map<string, Pii> pii_map = 4;
+    int32 size = 5;
+    int32 version = 6;
+}
+
+message Pii {
+    string pii = 1 [(.confluent.field_meta).tags = "PII"];
+}

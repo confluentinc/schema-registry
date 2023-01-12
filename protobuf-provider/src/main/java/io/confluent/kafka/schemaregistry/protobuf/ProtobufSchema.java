@@ -2105,6 +2105,7 @@ public class ProtobufSchema implements ParsedSchema {
     if (desc == null || message == null) {
       return message;
     }
+    FieldContext fieldCtx = ctx.currentField();
     if (message instanceof List) {
       return ((List<?>) message).stream()
           .map(it -> toTransformedMessage(ctx, desc, it, transform))
@@ -2136,13 +2137,12 @@ public class ProtobufSchema implements ParsedSchema {
       }
       return copy.build();
     } else {
-      FieldContext fc = ctx.currentField();
-      if (fc != null) {
+      if (fieldCtx != null) {
         try {
-          Set<String> intersect = new HashSet<>(fc.getTags());
+          Set<String> intersect = new HashSet<>(fieldCtx.getTags());
           intersect.retainAll(ctx.rule().getTags());
           if (!intersect.isEmpty()) {
-            return transform.transform(ctx, fc, message);
+            return transform.transform(ctx, fieldCtx, message);
           }
         } catch (RuleException e) {
           throw new RuntimeException(e);
@@ -2155,8 +2155,6 @@ public class ProtobufSchema implements ParsedSchema {
   private RuleContext.Type getType(FieldDescriptor field) {
     if (field.isMapField()) {
       return RuleContext.Type.MAP;
-    } else if (field.isRepeated()) {
-      return RuleContext.Type.ARRAY;
     }
     switch (field.getType()) {
       case MESSAGE:
