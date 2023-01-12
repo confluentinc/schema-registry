@@ -327,7 +327,6 @@ public class AvroSchemaUtils {
         String.format("Given field path '%s' has less than two components.", path));
     }
 
-    // ignore namespace since recordName and fieldName combination is unique in a schema
     String nameSpace = String.join(".", Arrays.copyOfRange(identifiers, 0, identifiers.length - 2));
     String fieldName = identifiers[identifiers.length - 1];
     String recordName = identifiers[identifiers.length - 2];
