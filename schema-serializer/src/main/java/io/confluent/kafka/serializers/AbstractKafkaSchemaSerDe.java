@@ -184,6 +184,11 @@ public abstract class AbstractKafkaSchemaSerDe {
     }
   }
 
+  // Visible for testing
+  public Map<String, RuleExecutor> getRuleExecutors() {
+    return ruleExecutors;
+  }
+
   public boolean isKey() {
     return isKey;
   }

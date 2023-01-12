@@ -53,8 +53,8 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.SortedMap;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -86,7 +86,7 @@ public class JsonataExecutorTest {
     schemaRegistry = new MockSchemaRegistryClient(ImmutableList.of(
         new AvroSchemaProvider(), new ProtobufSchemaProvider(), new JsonSchemaProvider()));
 
-    Properties defaultConfig = new Properties();
+    Map<String, Object> defaultConfig = new HashMap<>();
     defaultConfig.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     defaultConfig.put(KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS, "false");
     defaultConfig.put(KafkaAvroSerializerConfig.USE_LATEST_VERSION, "false");
@@ -96,68 +96,42 @@ public class JsonataExecutorTest {
     defaultConfig.put(KafkaAvroSerializerConfig.RULE_EXECUTORS, "jsonata");
     defaultConfig.put(KafkaAvroSerializerConfig.RULE_EXECUTORS + ".jsonata.class",
         JsonataExecutor.class.getName());
-    avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(defaultConfig));
-    defaultConfig.put(KafkaAvroSerializerConfig.USE_LATEST_WITH_METADATA,
+    avroSerializer = new KafkaAvroSerializer(schemaRegistry, defaultConfig);
+    Map<String, Object> defaultConfig2 = new HashMap<>(defaultConfig);
+    defaultConfig2.put(KafkaAvroSerializerConfig.USE_LATEST_WITH_METADATA,
         "application.version=v2");
-    avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, new HashMap(defaultConfig));
+    avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, defaultConfig2);
 
-    HashMap<String, String> reflectionProps = new HashMap<String, String>();
-    // Intentionally invalid schema registry URL to satisfy the config class's requirement that
-    // it be set.
-    reflectionProps.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    reflectionProps.put(KafkaAvroDeserializerConfig.AUTO_REGISTER_SCHEMAS, "false");
-    reflectionProps.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, "false");
-    reflectionProps.put(KafkaAvroDeserializerConfig.USE_LATEST_WITH_METADATA,
-        "application.version=v1");
-    reflectionProps.put(KafkaAvroDeserializerConfig.LATEST_COMPATIBILITY_STRICT, "false");
+    Map<String, Object> reflectionProps = new HashMap<>(defaultConfig);
     reflectionProps.put(KafkaAvroDeserializerConfig.SCHEMA_REFLECTION_CONFIG, "true");
-    reflectionProps.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS, "jsonata");
-    reflectionProps.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS + ".jsonata.class",
-        JsonataExecutor.class.getName());
     reflectionAvroSerializer = new KafkaAvroSerializer(schemaRegistry, reflectionProps);
     reflectionAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, reflectionProps);
-    reflectionProps.put(KafkaAvroDeserializerConfig.USE_LATEST_WITH_METADATA,
+    Map<String, Object> reflectionProps2 = new HashMap<>(reflectionProps);
+    reflectionProps2.put(KafkaAvroDeserializerConfig.USE_LATEST_WITH_METADATA,
         "application.version=v2");
-    reflectionAvroSerializer2 = new KafkaAvroSerializer(schemaRegistry, reflectionProps);
-    reflectionAvroDeserializer2 = new KafkaAvroDeserializer(schemaRegistry, reflectionProps);
-    reflectionProps.put(KafkaAvroDeserializerConfig.USE_LATEST_WITH_METADATA,
+    reflectionAvroSerializer2 = new KafkaAvroSerializer(schemaRegistry, reflectionProps2);
+    reflectionAvroDeserializer2 = new KafkaAvroDeserializer(schemaRegistry, reflectionProps2);
+    Map<String, Object> reflectionProps3 = new HashMap<>(reflectionProps);
+    reflectionProps3.put(KafkaAvroDeserializerConfig.USE_LATEST_WITH_METADATA,
         "application.version=v3");
-    reflectionAvroSerializer3 = new KafkaAvroSerializer(schemaRegistry, reflectionProps);
-    reflectionAvroDeserializer3 = new KafkaAvroDeserializer(schemaRegistry, reflectionProps);
+    reflectionAvroSerializer3 = new KafkaAvroSerializer(schemaRegistry, reflectionProps3);
+    reflectionAvroDeserializer3 = new KafkaAvroDeserializer(schemaRegistry, reflectionProps3);
 
-    HashMap<String, String> specificProps = new HashMap<String, String>();
-    // Intentionally invalid schema registry URL to satisfy the config class's requirement that
-    // it be set.
-    specificProps.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    specificProps.put(KafkaAvroDeserializerConfig.AUTO_REGISTER_SCHEMAS, "false");
-    specificProps.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, "false");
-    specificProps.put(KafkaAvroDeserializerConfig.USE_LATEST_WITH_METADATA,
-        "application.version=v2");
-    specificProps.put(KafkaAvroDeserializerConfig.LATEST_COMPATIBILITY_STRICT, "false");
-    specificProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
-    specificProps.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS, "jsonata");
-    specificProps.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS + ".jsonata.class",
-        JsonataExecutor.class.getName());
-    specificAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, specificProps);
+    Map<String, Object> specificProps2 = new HashMap<>(defaultConfig2);
+    specificProps2.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    specificAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, specificProps2);
 
-    defaultConfig.put(KafkaAvroSerializerConfig.USE_LATEST_WITH_METADATA,
-        "application.version=v1");
-    protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, new HashMap(defaultConfig));
-    defaultConfig.put(KafkaAvroSerializerConfig.USE_LATEST_WITH_METADATA,
-        "application.version=v2");
-    protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, new HashMap(defaultConfig));
+    protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
+    protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, defaultConfig2);
 
-    specificProps.put(KafkaProtobufDeserializerConfig.DERIVE_TYPE_CONFIG, "true");
-    specificProtobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, specificProps);
+    specificProps2.put(KafkaProtobufDeserializerConfig.DERIVE_TYPE_CONFIG, "true");
+    specificProtobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, specificProps2);
 
-    defaultConfig.put(KafkaAvroSerializerConfig.USE_LATEST_WITH_METADATA,
-        "application.version=v1");
-    jsonSchemaSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(defaultConfig));
-    defaultConfig.put(KafkaAvroSerializerConfig.USE_LATEST_WITH_METADATA,
-        "application.version=v2");
-    jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, new HashMap(defaultConfig));
+    jsonSchemaSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, defaultConfig);
+    jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, defaultConfig2);
 
-    specificJsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, specificProps, NewWidget.class);
+    specificJsonSchemaDeserializer =
+        new KafkaJsonSchemaDeserializer<>(schemaRegistry, specificProps2, NewWidget.class);
   }
 
   private Schema createNewGenericWidgetSchema() {

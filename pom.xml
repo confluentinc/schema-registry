@@ -69,6 +69,11 @@
         <module>json-schema-provider</module>
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
+        <module>client-encryption</module>
+        <module>client-encryption-aws</module>
+        <module>client-encryption-azure</module>
+        <module>client-encryption-gcp</module>
+        <module>client-encryption-hcvault</module>
         <module>benchmark</module>
     </modules>
 
@@ -238,6 +243,41 @@
                 <groupId>org.antlr</groupId>
                 <artifactId>antlr4-runtime</artifactId>
                 <version>${antlr.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-core</artifactId>
+                <version>1.33.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-identity</artifactId>
+                <version>1.6.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-security-keyvault-keys</artifactId>
+                <version>4.5.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bettercloud</groupId>
+                <artifactId>vault-java-driver</artifactId>
+                <version>5.1.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.crypto.tink</groupId>
+                <artifactId>tink</artifactId>
+                <version>${tink.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.crypto.tink</groupId>
+                <artifactId>tink-awskms</artifactId>
+                <version>${tink.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.crypto.tink</groupId>
+                <artifactId>tink-gcpkms</artifactId>
+                <version>${tink.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.projectnessie.cel</groupId>
