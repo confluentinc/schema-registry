@@ -269,7 +269,12 @@ public class JsonSchema implements ParsedSchema {
     JsonSchema schemaCopy = this.copy();
     JsonNode original = schemaCopy.toJsonNode();
     modifyFieldLevelTags(original, tagsToAdd, tagsToRemove);
-    return new JsonSchema(original, schemaCopy.references(), schemaCopy.resolvedReferences(), -1);
+    return new JsonSchema(original.toString(),
+      schemaCopy.references(),
+      schemaCopy.resolvedReferences(),
+      schemaCopy.metadata(),
+      schemaCopy.ruleSet(),
+      -1);
   }
 
   public JsonNode toJsonNode() {
@@ -820,17 +825,17 @@ public class JsonSchema implements ParsedSchema {
       JsonNode fieldNodePtr = findMatchingField(node, path);
       Set<String> allTags = getInlineTags(fieldNodePtr);
 
-      if (tagsToAddMap.containsKey(path)) {
-        Set<String> tagsToAdd = tagsToAddMap.get(path);
+      Set<String> tagsToAdd = tagsToAddMap.get(path);
+      if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
         allTags.addAll(tagsToAdd);
       }
 
-      if (tagsToRemoveMap.containsKey(path)) {
-        Set<String> tagsToRemove = tagsToRemoveMap.get(path);
+      Set<String> tagsToRemove = tagsToRemoveMap.get(path);
+      if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
         allTags.removeAll(tagsToRemove);
       }
 
-      if (allTags.size() == 0) {
+      if (allTags.isEmpty()) {
         ((ObjectNode) fieldNodePtr).remove(TAGS);
       } else {
         ((ObjectNode) fieldNodePtr).replace(TAGS, objectMapper.valueToTree(allTags));

@@ -78,6 +78,14 @@ public class ProtobufSchemaUtils {
 
   private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
 
+  private static final ObjectMapper mapperWithProtoFileDeserializer = new ObjectMapper();
+  private static final SimpleModule module = new SimpleModule();
+
+  static {
+    module.addDeserializer(ProtoFileElement.class, new ProtoFileElementDeserializer());
+    mapperWithProtoFileDeserializer.registerModule(module);
+  }
+
   public static ProtobufSchema copyOf(ProtobufSchema schema) {
     return schema.copy();
   }
@@ -111,13 +119,7 @@ public class ProtobufSchemaUtils {
   }
 
   public static ProtoFileElement jsonToFile(JsonNode node) throws JsonProcessingException {
-    ObjectMapper mapper = new ObjectMapper();
-    SimpleModule module = new SimpleModule();
-    module.addDeserializer(ProtoFileElement.class, new ProtoFileElementDeserializer());
-    mapper.registerModule(module);
-
-    String serialized = node.toString();
-    return mapper.readValue(serialized, ProtoFileElement.class);
+    return mapperWithProtoFileDeserializer.convertValue(node, ProtoFileElement.class);
   }
 
   public static JsonNode findMatchingNode(JsonNode node, String arrayField, String targetFieldName,
@@ -134,7 +136,7 @@ public class ProtobufSchemaUtils {
         targetFieldName, targetFieldValue));
   }
 
-  public static JsonNode findMatchingFieldNode(JsonNode node, String [] identifiers) {
+  public static JsonNode findMatchingFieldNode(JsonNode node, String[] identifiers) {
     JsonNode fieldNodePtr = node;
     // skipping the first entry because path starts with leading dot
     for (int i = 1; i < identifiers.length; i++) {
@@ -160,7 +162,7 @@ public class ProtobufSchemaUtils {
   }
 
   public static FieldElement findMatchingFieldElement(ProtoFileElement original,
-                                                      String [] identifiers) {
+                                                      String[] identifiers) {
     MessageElement messageElement = null;
     FieldElement fieldElementPtr = null;
 

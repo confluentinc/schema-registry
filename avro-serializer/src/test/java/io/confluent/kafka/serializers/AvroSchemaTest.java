@@ -621,7 +621,7 @@ public class AvroSchemaTest {
         + "}";
 
     String normalized = "{"
-        + "\"type\":\"record\","    
+        + "\"type\":\"record\","
         + "\"name\":\"Envelope\","
         + "\"namespace\":\"some.scope\","
         + "\"fields\":["
@@ -710,7 +710,7 @@ public class AvroSchemaTest {
       "            \"default\": 0,\n" +
       "            \"name\": \"nested_field2\",\n" +
       "            \"type\": \"double\",\n" +
-      "            \"confluent.tags\": [ \"PRIVATE\" ]\n" +
+      "            \"confluent:tags\": [ \"PRIVATE\" ]\n" +
       "          }\n" +
       "        ]\n" +
       "      }\n" +
@@ -730,7 +730,7 @@ public class AvroSchemaTest {
       "            \"default\": 0,\n" +
       "            \"name\": \"nested_field2\",\n" +
       "            \"type\": \"double\",\n" +
-      "            \"confluent.tags\": [ \"PRIVATE\" ]\n" +
+      "            \"confluent:tags\": [ \"PRIVATE\" ]\n" +
       "          }\n" +
       "        ]\n" +
       "      }\n" +
@@ -756,12 +756,12 @@ public class AvroSchemaTest {
       "      \"fields\" : [ {\n" +
       "        \"name\" : \"nested_field1\",\n" +
       "        \"type\" : \"string\",\n" +
-      "        \"confluent.tags\" : [ \"PII\" ]\n" +
+      "        \"confluent:tags\" : [ \"PII\" ]\n" +
       "      }, {\n" +
       "        \"name\" : \"nested_field2\",\n" +
       "        \"type\" : \"double\",\n" +
       "        \"default\" : 0,\n" +
-      "        \"confluent.tags\" : [ \"PRIVATE\" ]\n" +
+      "        \"confluent:tags\" : [ \"PRIVATE\" ]\n" +
       "      } ]\n" +
       "    }\n" +
       "  }, {\n" +
@@ -776,7 +776,7 @@ public class AvroSchemaTest {
       "        \"name\" : \"nested_field2\",\n" +
       "        \"type\" : \"double\",\n" +
       "        \"default\" : 0,\n" +
-      "        \"confluent.tags\" : [ \"PRIVATE\",\"PII\" ]\n" +
+      "        \"confluent:tags\" : [ \"PRIVATE\",\"PII\" ]\n" +
       "      } ]\n" +
       "    },\n" +
       "    \"namespace\" : \"com.example.mynamespace.nested\"\n" +
@@ -784,7 +784,7 @@ public class AvroSchemaTest {
       "    \"name\" : \"my_field3\",\n" +
       "    \"type\" : \"double\",\n" +
       "    \"doc\" : \"The double type is a double precision (64-bit) IEEE 754 floating-point number.\",\n" +
-      "    \"confluent.tags\" : [ \"PII\" ]\n" +
+      "    \"confluent:tags\" : [ \"PII\" ]\n" +
       "  } ]\n" +
       "}\n";
 
@@ -825,7 +825,7 @@ public class AvroSchemaTest {
       "              \"default\": 0,\n" +
       "              \"name\": \"nested_field2\",\n" +
       "              \"type\": \"double\",\n" +
-      "              \"confluent.tags\": [ \"PRIVATE\" ]\n" +
+      "              \"confluent:tags\": [ \"PRIVATE\" ]\n" +
       "            }\n" +
       "          ]\n" +
       "        }\n" +
@@ -858,7 +858,7 @@ public class AvroSchemaTest {
       "                \"default\": 0,\n" +
       "                \"name\": \"nested_field2\",\n" +
       "                \"type\": \"double\",\n" +
-      "                \"confluent.tags\": [ \"PRIVATE\" ]\n" +
+      "                \"confluent:tags\": [ \"PRIVATE\" ]\n" +
       "              }\n" +
       "            ]\n" +
       "          }\n" +
@@ -888,7 +888,7 @@ public class AvroSchemaTest {
       "                \"default\": 0,\n" +
       "                \"name\": \"nested_field2\",\n" +
       "                \"type\": \"double\",\n" +
-      "                \"confluent.tags\": [ \"PRIVATE\" ]\n" +
+      "                \"confluent:tags\": [ \"PRIVATE\" ]\n" +
       "              }\n" +
       "            ]\n" +
       "          }\n" +
@@ -916,10 +916,10 @@ public class AvroSchemaTest {
       "        \"name\" : \"nested_field2\",\n" +
       "        \"type\" : \"double\",\n" +
       "        \"default\" : 0,\n" +
-      "        \"confluent.tags\" : [ \"PRIVATE\" ]\n" +
+      "        \"confluent:tags\" : [ \"PRIVATE\" ]\n" +
       "      } ]\n" +
       "    },\n" +
-      "    \"confluent.tags\" : [ \"PII\" ]\n" +
+      "    \"confluent:tags\" : [ \"PII\" ]\n" +
       "  }, {\n" +
       "    \"name\" : \"my_field2\",\n" +
       "    \"type\" : \"int\"\n" +
@@ -943,7 +943,7 @@ public class AvroSchemaTest {
       "          \"name\" : \"nested_field2\",\n" +
       "          \"type\" : \"double\",\n" +
       "          \"default\" : 0,\n" +
-      "          \"confluent.tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
+      "          \"confluent:tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
       "        } ]\n" +
       "      }\n" +
       "    } ]\n" +
@@ -967,10 +967,10 @@ public class AvroSchemaTest {
       "          \"name\" : \"nested_field2\",\n" +
       "          \"type\" : \"double\",\n" +
       "          \"default\" : 0,\n" +
-      "          \"confluent.tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
+      "          \"confluent:tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
       "        } ]\n" +
       "      },\n" +
-      "      \"confluent.tags\" : [ \"PII\" ]\n" +
+      "      \"confluent:tags\" : [ \"PII\" ]\n" +
       "    } ]\n" +
       "  },\n" +
       "  \"default\" : { }\n" +
@@ -992,10 +992,10 @@ public class AvroSchemaTest {
       "        \"name\" : \"nested_field2\",\n" +
       "        \"type\" : \"double\",\n" +
       "        \"default\" : 0,\n" +
-      "        \"confluent.tags\" : [ \"PRIVATE\" ]\n" +
+      "        \"confluent:tags\" : [ \"PRIVATE\" ]\n" +
       "      } ]\n" +
       "    },\n" +
-      "    \"confluent.tags\" : [ \"PII\" ]\n" +
+      "    \"confluent:tags\" : [ \"PII\" ]\n" +
       "  }, {\n" +
       "    \"name\" : \"my_field2\",\n" +
       "    \"type\" : \"int\"\n" +
@@ -1019,7 +1019,7 @@ public class AvroSchemaTest {
       "          \"name\" : \"nested_field2\",\n" +
       "          \"type\" : \"double\",\n" +
       "          \"default\" : 0,\n" +
-      "          \"confluent.tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
+      "          \"confluent:tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
       "        } ]\n" +
       "      }\n" +
       "    } ]\n" +
@@ -1043,10 +1043,10 @@ public class AvroSchemaTest {
       "          \"name\" : \"nested_field2\",\n" +
       "          \"type\" : \"double\",\n" +
       "          \"default\" : 0,\n" +
-      "          \"confluent.tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
+      "          \"confluent:tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
       "        } ]\n" +
       "      },\n" +
-      "      \"confluent.tags\" : [ \"PII\" ]\n" +
+      "      \"confluent:tags\" : [ \"PII\" ]\n" +
       "    } ]\n" +
       "  },\n" +
       "  \"default\" : { }\n" +
@@ -1064,6 +1064,85 @@ public class AvroSchemaTest {
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
+  }
+
+  @Test
+  public void testNamespace() {
+    String schemaString = "[\n" +
+      "  {\n" +
+      "    \"name\": \"sampleRecord\",\n" +
+      "    \"namespace\": \"com.example.mynamespace1\",\n" +
+      "    \"type\": \"record\",\n" +
+      "    \"fields\": [\n" +
+      "      {\n" +
+      "        \"name\": \"my_field1\",\n" +
+      "        \"type\": \"string\"\n" +
+      "      }, \n" +
+      "      {\n" +
+      "        \"type\": \"int\",\n" +
+      "        \"name\": \"my_field2\"\n" +
+      "      }\n" +
+      "    ]\n" +
+      "  },\n" +
+      "  {\n" +
+      "    \"name\": \"sampleRecord\",\n" +
+      "    \"namespace\": \"com.example.mynamespace2\",\n" +
+      "    \"type\": \"record\",\n" +
+      "    \"fields\": [\n" +
+      "      {\n" +
+      "        \"name\": \"my_field1\",\n" +
+      "        \"type\": \"double\"\n" +
+      "      }, \n" +
+      "      {\n" +
+      "        \"type\": \"int\",\n" +
+      "        \"name\": \"my_field2\"\n" +
+      "      }\n" +
+      "    ]\n" +
+      "  }\n" +
+      "]\n";
+    String addedTagSchema = "[\n" +
+      "  {\n" +
+      "    \"name\": \"sampleRecord\",\n" +
+      "    \"namespace\": \"com.example.mynamespace1\",\n" +
+      "    \"type\": \"record\",\n" +
+      "    \"fields\": [\n" +
+      "      {\n" +
+      "        \"name\": \"my_field1\",\n" +
+      "        \"type\": \"string\",\n" +
+      "        \"confluent:tags\": [ \"tag1\" ]\n" +
+      "      }, \n" +
+      "      {\n" +
+      "        \"type\": \"int\",\n" +
+      "        \"name\": \"my_field2\"\n" +
+      "      }\n" +
+      "    ]\n" +
+      "  },\n" +
+      "  {\n" +
+      "    \"name\": \"sampleRecord\",\n" +
+      "    \"namespace\": \"com.example.mynamespace2\",\n" +
+      "    \"type\": \"record\",\n" +
+      "    \"fields\": [\n" +
+      "      {\n" +
+      "        \"name\": \"my_field1\",\n" +
+      "        \"type\": \"double\",\n" +
+      "        \"confluent:tags\": [ \"tag2\" ]\n" +
+      "      }, \n" +
+      "      {\n" +
+      "        \"type\": \"int\",\n" +
+      "        \"name\": \"my_field2\"\n" +
+      "      }\n" +
+      "    ]\n" +
+      "  }\n" +
+      "]\n";
+    AvroSchema schema = new AvroSchema(schemaString);
+    AvroSchema expectSchema = new AvroSchema(addedTagSchema);
+
+    Map<String, Set<String>> tags = new HashMap<>();
+    tags.put("com.example.mynamespace1.sampleRecord.my_field1", Collections.singleton("tag1"));
+    tags.put("com.example.mynamespace2.sampleRecord.my_field1", Collections.singleton("tag2"));
+
+    ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
+    assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {

@@ -128,7 +128,7 @@ public interface ParsedSchema {
    * Returns a copy of this schema, but with the given tags.
    *
    * @param tagsToAdd map of tags to add to fields, where the key is the field path and the value
-   *                  is the tag. If the tag already exist, do nothing.
+   *                  is the tag. If the tag already exists, do nothing.
    * @param tagsToRemove map of tags to remove from the fields, where the key is the field path and
    *                    the value is the tag. If the tag does not exist, do nothing.
    * @return a copy of this schema, but with the given tags

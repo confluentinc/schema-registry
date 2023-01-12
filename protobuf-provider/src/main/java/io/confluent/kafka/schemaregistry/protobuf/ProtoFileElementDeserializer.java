@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.google.common.collect.ImmutableList;
 import com.squareup.wire.Syntax;
 import com.squareup.wire.schema.Field;
@@ -40,6 +41,7 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import kotlin.ranges.IntRange;
 
 import java.io.IOException;
@@ -52,7 +54,7 @@ import java.util.List;
 import java.util.Map;
 
 public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileElement> {
-  private final ObjectMapper mapper;
+  private static final ObjectMapper mapper = JacksonMapper.INSTANCE;
 
   public ProtoFileElementDeserializer() {
     this(null);
@@ -60,7 +62,6 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
 
   public ProtoFileElementDeserializer(Class<?> vc) {
     super(vc);
-    mapper = new ObjectMapper();
   }
 
   @Override

@@ -164,11 +164,11 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String VALUE_FIELD = "value";
 
   protected static final String CONFLUENT_PREFIX = "confluent.";
-  private static final String CONFLUENT_FILE_META = "confluent.file_meta";
-  private static final String CONFLUENT_MESSAGE_META = "confluent.message_meta";
+  protected static final String CONFLUENT_FILE_META = "confluent.file_meta";
+  protected static final String CONFLUENT_MESSAGE_META = "confluent.message_meta";
   protected static final String CONFLUENT_FIELD_META = "confluent.field_meta";
-  private static final String CONFLUENT_ENUM_META = "confluent.enum_meta";
-  private static final String CONFLUENT_ENUM_VALUE_META = "confluent.enum_value_meta";
+  protected static final String CONFLUENT_ENUM_META = "confluent.enum_meta";
+  protected static final String CONFLUENT_ENUM_VALUE_META = "confluent.enum_value_meta";
 
   private static final String JAVA_PACKAGE = "java_package";
   private static final String JAVA_OUTER_CLASSNAME = "java_outer_classname";
@@ -561,7 +561,17 @@ public class ProtobufSchema implements ParsedSchema {
     modifyFieldLevelTags(schemaCopy.rawSchema(), original, tagsToAdd, tagsToRemove);
     try {
       ProtoFileElement newFileElement = jsonToFile(original);
-      return new ProtobufSchema(newFileElement, schemaCopy.references(), schemaCopy.dependencies());
+      return new ProtobufSchema(newFileElement.toString(),
+        schemaCopy.references(),
+        schemaCopy.dependencies().entrySet().stream().collect(
+            Collectors.toMap(
+              Map.Entry::getKey,
+              e -> e.getValue().toString())),
+        schemaCopy.metadata(),
+        schemaCopy.ruleSet(),
+        -1,
+        schemaCopy.name()
+      );
     } catch (JsonProcessingException e) {
       throw new IllegalStateException("Cannot deserialize json into ProtoFileElement", e);
     }
@@ -2202,12 +2212,12 @@ public class ProtobufSchema implements ParsedSchema {
     pathToModify.addAll(tagsToRemoveMap.keySet());
 
     for (String path : pathToModify) {
-      String [] identifiers = path.split("\\.");
+      String[] identifiers = path.split("\\.");
       FieldElement fieldElement = findMatchingFieldElement(original, identifiers);
       Map<String, OptionElement> mergedOptions;
 
-      if (tagsToAddMap.containsKey(path)) {
-        Set<String> tagsToAdd = tagsToAddMap.get(path);
+      Set<String> tagsToAdd = tagsToAddMap.get(path);
+      if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
         List<OptionElement> allOptions = new LinkedList<>(fieldElement.getOptions());
         OptionElement newOption = new OptionElement(CONFLUENT_FIELD_META, Kind.OPTION,
             new OptionElement(TAGS_FIELD, Kind.LIST, new ArrayList<>(tagsToAdd), false), true);
@@ -2217,19 +2227,19 @@ public class ProtobufSchema implements ParsedSchema {
         mergedOptions = mergeOptions(fieldElement.getOptions());
       }
 
-      if (tagsToRemoveMap.containsKey(path)) {
-        Set<String> tagsToRemove = tagsToRemoveMap.get(path);
-        if (mergedOptions.containsKey(CONFLUENT_FIELD_META)) {
+      Set<String> tagsToRemove = tagsToRemoveMap.get(path);
+      if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
+        OptionElement fieldMetaOptionElement = mergedOptions.get(CONFLUENT_FIELD_META);
+        if (fieldMetaOptionElement != null) {
           LinkedHashMap<String, Object> fieldMetas =
-              new LinkedHashMap<>(
-                (Map<String, Object>) mergedOptions.get(CONFLUENT_FIELD_META).getValue());
-          if (fieldMetas.containsKey(TAGS_FIELD)) {
-            Object tagsObj = fieldMetas.get(TAGS_FIELD);
+              new LinkedHashMap<>((Map<String, Object>) fieldMetaOptionElement.getValue());
+          Object tagsObj = fieldMetas.get(TAGS_FIELD);
+          if (tagsObj != null) {
             List<Object> allTags;
             if (tagsObj instanceof List) {
               allTags = (List<Object>) tagsObj;
             } else {
-              allTags = Collections.singletonList(fieldMetas.get(TAGS_FIELD));
+              allTags = Collections.singletonList(tagsObj);
             }
             List<Object> remainingTags = allTags.stream()
                 .filter(tag -> !tagsToRemove.contains(tag))

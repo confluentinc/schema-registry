@@ -282,7 +282,7 @@ public class JsonSchemaUtils {
   }
 
   public static JsonNode findMatchingField(JsonNode node, String path) {
-    String [] identifiers = path.split("\\.");
+    String[] identifiers = path.split("\\.");
     if (identifiers.length < 2) {
       throw new IllegalArgumentException(
         String.format("Given field path '%s' has less than two components.", path));
@@ -305,12 +305,12 @@ public class JsonSchemaUtils {
     switch (type) {
       case "object":
         JsonNode fields = node.get("properties");
-        StringBuffer fieldNameBuf = new StringBuffer(identifiersList.poll());
-        while (!fields.has(fieldNameBuf.toString()) && !identifiersList.isEmpty()) {
-          fieldNameBuf.append(".");
-          fieldNameBuf.append(identifiersList.poll());
+        StringBuilder fieldNameBuilder = new StringBuilder(identifiersList.poll());
+        while (!fields.has(fieldNameBuilder.toString()) && !identifiersList.isEmpty()) {
+          fieldNameBuilder.append(".");
+          fieldNameBuilder.append(identifiersList.poll());
         }
-        JsonNode fieldNode = fields.get(fieldNameBuf.toString());
+        JsonNode fieldNode = fields.get(fieldNameBuilder.toString());
         if (fieldNode == null || identifiersList.isEmpty()) {
           return fieldNode;
         } else {

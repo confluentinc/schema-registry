@@ -63,12 +63,9 @@ public class AvroSchema implements ParsedSchema {
   private static final Logger log = LoggerFactory.getLogger(AvroSchema.class);
 
   public static final String TYPE = "AVRO";
-
   public static final String TAGS = "confluent:tags";
-
   public static final String NAME_FIELD = "name";
   public static final String FIELDS_FIELD = "fields";
-
 
   private final Schema schemaObj;
   private String canonicalString;
@@ -211,8 +208,13 @@ public class AvroSchema implements ParsedSchema {
       throw new RuntimeException(e);
     }
     modifyFieldLevelTags(original, tagsToAdd, tagsToRemove);
-    return new AvroSchema(original.toString(), schemaCopy.references(),
-      schemaCopy.resolvedReferences(), -1);
+    return new AvroSchema(original.toString(),
+      schemaCopy.references(),
+      schemaCopy.resolvedReferences(),
+      schemaCopy.metadata(),
+      schemaCopy.ruleSet(),
+      -1,
+      schemaCopy.isNew());
   }
 
   protected Schema.Parser getParser() {
@@ -624,17 +626,17 @@ public class AvroSchema implements ParsedSchema {
       JsonNode fieldNodePtr = AvroSchemaUtils.findMatchingField(node, path);
       Set<String> allTags = getInlineTags(fieldNodePtr);
 
-      if (tagsToAddMap.containsKey(path)) {
-        Set<String> tagsToAdd = tagsToAddMap.get(path);
+      Set<String> tagsToAdd = tagsToAddMap.get(path);
+      if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
         allTags.addAll(tagsToAdd);
       }
 
-      if (tagsToRemoveMap.containsKey(path)) {
-        Set<String> tagsToRemove = tagsToRemoveMap.get(path);
+      Set<String> tagsToRemove = tagsToRemoveMap.get(path);
+      if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
         allTags.removeAll(tagsToRemove);
       }
 
-      if (allTags.size() == 0) {
+      if (allTags.isEmpty()) {
         ((ObjectNode) fieldNodePtr).remove(TAGS);
       } else {
         ((ObjectNode) fieldNodePtr).replace(TAGS, jsonMapper.valueToTree(allTags));

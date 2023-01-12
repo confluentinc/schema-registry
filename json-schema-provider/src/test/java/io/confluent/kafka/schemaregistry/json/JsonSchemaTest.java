@@ -464,7 +464,7 @@ public class JsonSchemaTest {
       "        \"properties\": {\n" +
       "          \"field1\" : {\n" +
       "            \"type\": \"string\",\n" +
-      "            \"confluent.tags\": [ \"PII\" ]\n" +
+      "            \"confluent:tags\": [ \"PII\" ]\n" +
       "          },\n" +
       "          \"field2\": {\n" +
       "            \"type\": \"number\"\n" +
@@ -481,7 +481,7 @@ public class JsonSchemaTest {
       "            \"nestedUnionField1\": { \"type\": \"boolean\"},\n" +
       "            \"nestedUnionField2\": { \n" +
       "              \"type\": \"number\", \n" +
-      "              \"confluent.tags\": [ \"PII\" ]\n" +
+      "              \"confluent:tags\": [ \"PII\" ]\n" +
       "            }\n" +
       "          }\n" +
       "        }\n" +
@@ -495,14 +495,14 @@ public class JsonSchemaTest {
       "          \"nestedNotField1\": { \"type\": \"boolean\" },\n" +
       "          \"nestedNotField2\": {\n" +
       "            \"type\": \"string\",\n" +
-      "            \"confluent.tags\": [ \"PII\" ]\n" +
+      "            \"confluent:tags\": [ \"PII\" ]\n" +
       "          }\n" +
       "        }\n" +
       "      }\n" +
       "    },\n" +
       "    \"myfield4\": { \n" +
       "      \"enum\": [\"red\", \"amber\", \"green\"],\n" +
-      "      \"confluent.tags\": [ \"PII\" ]\n" +
+      "      \"confluent:tags\": [ \"PII\" ]\n" +
       "    }\n" +
       "  }\n" +
       "}\n";
@@ -566,7 +566,7 @@ public class JsonSchemaTest {
       "    \"properties\": {\n" +
       "      \"postal_code\": {\n" +
       "        \"pattern\": \"[A-Z][0-9][A-Z] [0-9][A-Z][0-9]\",\n" +
-      "        \"confluent.tags\": [ \"testConditional\" ]\n" +
+      "        \"confluent:tags\": [ \"testConditional\" ]\n" +
       "      }\n" +
       "    }\n" +
       "  },\n" +
@@ -584,7 +584,7 @@ public class JsonSchemaTest {
       "        \"United States of America\",\n" +
       "        \"Canada\"\n" +
       "      ],\n" +
-      "      \"confluent.tags\": [ \"testConditional\" ]\n" +
+      "      \"confluent:tags\": [ \"testConditional\" ]\n" +
       "    },\n" +
       "    \"street_address\": {\n" +
       "      \"type\": \"string\"\n" +
@@ -619,7 +619,7 @@ public class JsonSchemaTest {
       "  \"properties\": {\n" +
       "    \"parent\": {\n" +
       "      \"$ref\": \"task.schema.json\",\n" +
-      "      \"confluent.tags\": [ \"testRecursive\" ]\n" +
+      "      \"confluent:tags\": [ \"testRecursive\" ]\n" +
       "    },\n" +
       "    \"title\": {\n" +
       "      \"description\": \"Task title\",\n" +
@@ -640,7 +640,7 @@ public class JsonSchemaTest {
       "  \"properties\": {\n" +
       "    \"parent\": {\n" +
       "      \"$ref\": \"task.schema.json\",\n" +
-      "      \"confluent.tags\": [ \"testRecursive\", \"PII\" ]\n" +
+      "      \"confluent:tags\": [ \"testRecursive\", \"PII\" ]\n" +
       "    },\n" +
       "    \"title\": {\n" +
       "      \"description\": \"Task title\",\n" +
