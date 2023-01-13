@@ -18,15 +18,15 @@ package io.confluent.kafka.schemaregistry.storage;
 
 public enum RuleKind {
   TRANSFORM,
-  CONSTRAINT;
+  CONDITION;
 
   public static RuleKind fromEntity(
       io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind r) {
     switch (r) {
       case TRANSFORM:
         return RuleKind.TRANSFORM;
-      case CONSTRAINT:
-        return RuleKind.CONSTRAINT;
+      case CONDITION:
+        return RuleKind.CONDITION;
       default:
         throw new IllegalArgumentException();
     }
@@ -36,8 +36,8 @@ public enum RuleKind {
     switch (this) {
       case TRANSFORM:
         return io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind.TRANSFORM;
-      case CONSTRAINT:
-        return io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind.CONSTRAINT;
+      case CONDITION:
+        return io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind.CONDITION;
       default:
         throw new IllegalArgumentException();
     }

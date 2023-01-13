@@ -188,7 +188,7 @@ public class CelExecutorTest {
   public void testKafkaAvroSerializer() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
-    Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
+    Rule rule = new Rule("myRule", RuleKind.CONDITION, RuleMode.READ,
         CelExecutor.TYPE, null, "message.name == \"testUser\" && message.kind == \"ONE\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
@@ -203,7 +203,7 @@ public class CelExecutorTest {
   public void testKafkaAvroSerializerConstraintException() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
-    Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
+    Rule rule = new Rule("myRule", RuleKind.CONDITION, RuleMode.READ,
         CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
@@ -218,7 +218,7 @@ public class CelExecutorTest {
   public void testKafkaAvroSerializerConstraintIgnore() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
-    Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
+    Rule rule = new Rule("myRule", RuleKind.CONDITION, RuleMode.READ,
         CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, "NONE", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
@@ -233,7 +233,7 @@ public class CelExecutorTest {
   public void testKafkaAvroSerializerConstraintDlq() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
-    Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
+    Rule rule = new Rule("myRule", RuleKind.CONDITION, RuleMode.READ,
         CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, "DLQ", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
@@ -257,7 +257,7 @@ public class CelExecutorTest {
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     schemaRegistry.register(topic + "-key", avroSchema);
 
-    Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
+    Rule rule = new Rule("myRule", RuleKind.CONDITION, RuleMode.READ,
         CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, "DLQ", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
@@ -289,7 +289,7 @@ public class CelExecutorTest {
     OldWidget widget = new OldWidget("alice");
     Schema schema = ReflectData.get().getSchema(widget.getClass());
     AvroSchema avroSchema = new AvroSchema(schema);
-    Rule rule = new Rule("myRule", RuleKind.CONSTRAINT, RuleMode.READ,
+    Rule rule = new Rule("myRule", RuleKind.CONDITION, RuleMode.READ,
         CelExecutor.TYPE, null, "message.name == \"alice\"", null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);

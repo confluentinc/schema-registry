@@ -57,7 +57,7 @@ public class CelExecutor implements RuleExecutor {
   public Object transform(RuleContext ctx, Object message)
       throws RuleException {
     Object result = execute(ctx, message, ImmutableMap.of("message", message));
-    if (ctx.rule().getKind() == RuleKind.CONSTRAINT) {
+    if (ctx.rule().getKind() == RuleKind.CONDITION) {
       return Boolean.TRUE.equals(result) ? message : null;
     } else {
       return message;

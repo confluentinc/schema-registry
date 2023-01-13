@@ -18,5 +18,5 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 public enum RuleKind {
   TRANSFORM,
-  CONSTRAINT
+  CONDITION
 }
