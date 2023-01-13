@@ -41,7 +41,8 @@ public class RuleContext {
   private final String subject;
   private final String topic;
   private final Headers headers;
-  private final Object originalMessage;
+  private final Object originalKey;
+  private final Object originalValue;
   private final boolean isKey;
   private final RuleMode ruleMode;
   private final Rule rule;
@@ -49,24 +50,13 @@ public class RuleContext {
   private final Deque<FieldContext> fieldContexts;
 
   public RuleContext(
-      ParsedSchema target,
-      String subject,
-      String topic,
-      Headers headers,
-      Object originalMessage,
-      boolean isKey,
-      RuleMode ruleMode,
-      Rule rule) {
-    this(null, target, subject, topic, headers, originalMessage, isKey, ruleMode, rule);
-  }
-
-  public RuleContext(
       ParsedSchema source,
       ParsedSchema target,
       String subject,
       String topic,
       Headers headers,
-      Object originalMessage,
+      Object originalKey,
+      Object originalValue,
       boolean isKey,
       RuleMode ruleMode,
       Rule rule) {
@@ -75,7 +65,8 @@ public class RuleContext {
     this.subject = subject;
     this.topic = topic;
     this.headers = headers;
-    this.originalMessage = originalMessage;
+    this.originalKey = originalKey;
+    this.originalValue = originalValue;
     this.isKey = isKey;
     this.ruleMode = ruleMode;
     this.rule = rule;
@@ -102,8 +93,12 @@ public class RuleContext {
     return headers;
   }
 
-  public Object originalMessage() {
-    return originalMessage;
+  public Object originalKey() {
+    return originalKey;
+  }
+
+  public Object originalValue() {
+    return originalValue;
   }
 
   public boolean isKey() {
