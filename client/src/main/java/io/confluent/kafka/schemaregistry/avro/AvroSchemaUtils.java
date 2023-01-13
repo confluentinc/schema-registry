@@ -341,7 +341,8 @@ public class AvroSchemaUtils {
       JsonNode currNode = curr.jsonNode();
       if (!currNode.has("type")) {
         // union
-        currNode.elements().forEachRemaining(e -> toVisit.add(new JsonNodeWithNS(e, null)));
+        currNode.elements().forEachRemaining(
+          e -> toVisit.add(new JsonNodeWithNS(e, curr.namespace())));
       } else {
         String type = currNode.get("type").asText();
         switch (type) {
