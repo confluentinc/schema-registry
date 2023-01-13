@@ -44,19 +44,19 @@ import java.util.stream.Collectors;
 public class Metadata {
 
   @JsonPropertyOrder(alphabetic = true)
-  private final SortedMap<String, SortedSet<String>> paths;
+  private final SortedMap<String, SortedSet<String>> tags;
   @JsonPropertyOrder(alphabetic = true)
   private final SortedMap<String, String> properties;
   private final SortedSet<String> sensitive;
 
   @JsonCreator
   public Metadata(
-      @JsonProperty("paths") Map<String, ? extends Set<String>> paths,
+      @JsonProperty("tags") Map<String, ? extends Set<String>> tags,
       @JsonProperty("properties") Map<String, String> properties,
       @JsonProperty("sensitive") Set<String> sensitive
   ) {
-    SortedMap<String, SortedSet<String>> sortedPaths = paths != null
-        ? paths.entrySet().stream()
+    SortedMap<String, SortedSet<String>> sortedTags = tags != null
+        ? tags.entrySet().stream()
         .sorted(Map.Entry.comparingByKey())
         .collect(Collectors.toMap(
             Entry::getKey,
@@ -78,13 +78,13 @@ public class Metadata {
         .sorted()
         .collect(Collectors.toCollection(TreeSet::new))
         : Collections.emptySortedSet();
-    this.paths = Collections.unmodifiableSortedMap(sortedPaths);
+    this.tags = Collections.unmodifiableSortedMap(sortedTags);
     this.properties = Collections.unmodifiableSortedMap(sortedProperties);
     this.sensitive = Collections.unmodifiableSortedSet(sortedSensitive);
   }
 
-  public SortedMap<String, SortedSet<String>> getPaths() {
-    return paths;
+  public SortedMap<String, SortedSet<String>> getTags() {
+    return tags;
   }
 
   public SortedMap<String, String> getProperties() {
@@ -104,28 +104,28 @@ public class Metadata {
       return false;
     }
     Metadata metadata = (Metadata) o;
-    return Objects.equals(paths, metadata.paths)
+    return Objects.equals(tags, metadata.tags)
         && Objects.equals(properties, metadata.properties)
         && Objects.equals(sensitive, metadata.sensitive);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(paths, properties, sensitive);
+    return Objects.hash(tags, properties, sensitive);
   }
 
   @Override
   public String toString() {
     return "Metadata{"
-        + "paths=" + paths
+        + "tags=" + tags
         + ", properties=" + properties
         + ", sensitive=" + sensitive
         + '}';
   }
 
   public void updateHash(MessageDigest md) {
-    if (paths != null) {
-      paths.forEach((key, value) -> {
+    if (tags != null) {
+      tags.forEach((key, value) -> {
         md.update(key.getBytes(StandardCharsets.UTF_8));
         value.forEach(v -> md.update(v.getBytes(StandardCharsets.UTF_8)));
       });
@@ -148,7 +148,7 @@ public class Metadata {
       return oldMetadata;
     } else {
       return new Metadata(
-          merge(oldMetadata.paths, newMetadata.paths),
+          merge(oldMetadata.tags, newMetadata.tags),
           merge(oldMetadata.properties, newMetadata.properties),
           merge(oldMetadata.sensitive, newMetadata.sensitive)
       );

@@ -335,7 +335,7 @@ public class MetadataEncoderService implements Closeable {
       }
 
       schema.setMetadata(
-          new Metadata(metadata.getPaths(), newProperties, metadata.getSensitive()));
+          new Metadata(metadata.getTags(), newProperties, metadata.getSensitive()));
     } catch (GeneralSecurityException e) {
       throw new IllegalStateException("Could not encrypt sensitive metadata", e);
     }

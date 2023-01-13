@@ -125,8 +125,8 @@ public class RuleContext {
   public Set<String> getTags(String fullName) {
     Set<String> tags = new HashSet<>();
     Metadata metadata = target.metadata();
-    if (metadata != null && metadata.getPaths() != null) {
-      for (Map.Entry<String, SortedSet<String>> entry : metadata.getPaths().entrySet()) {
+    if (metadata != null && metadata.getTags() != null) {
+      for (Map.Entry<String, SortedSet<String>> entry : metadata.getTags().entrySet()) {
         if (WildcardMatcher.match(fullName, entry.getKey())) {
           tags.addAll(entry.getValue());
         }

@@ -36,19 +36,19 @@ import java.util.SortedSet;
 public class Metadata {
 
   @JsonPropertyOrder(alphabetic = true)
-  private final SortedMap<String, SortedSet<String>> paths;
+  private final SortedMap<String, SortedSet<String>> tags;
   @JsonPropertyOrder(alphabetic = true)
   private final SortedMap<String, String> properties;
   private final SortedSet<String> sensitive;
 
   @JsonCreator
   public Metadata(
-      @JsonProperty("paths") SortedMap<String, SortedSet<String>> paths,
+      @JsonProperty("tags") SortedMap<String, SortedSet<String>> tags,
       @JsonProperty("properties") SortedMap<String, String> properties,
       @JsonProperty("sensitive") SortedSet<String> sensitive
   ) {
-    this.paths = paths != null
-        ? Collections.unmodifiableSortedMap(paths)
+    this.tags = tags != null
+        ? Collections.unmodifiableSortedMap(tags)
         : Collections.emptySortedMap();
     this.properties = properties != null
         ? Collections.unmodifiableSortedMap(properties)
@@ -59,13 +59,13 @@ public class Metadata {
   }
 
   public Metadata(io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata) {
-    this.paths = Collections.unmodifiableSortedMap(metadata.getPaths());
+    this.tags = Collections.unmodifiableSortedMap(metadata.getTags());
     this.properties = Collections.unmodifiableSortedMap(metadata.getProperties());
     this.sensitive = Collections.unmodifiableSortedSet(metadata.getSensitive());
   }
 
-  public SortedMap<String, SortedSet<String>> getPaths() {
-    return paths;
+  public SortedMap<String, SortedSet<String>> getTags() {
+    return tags;
   }
 
   public SortedMap<String, String> getProperties() {
@@ -85,20 +85,20 @@ public class Metadata {
       return false;
     }
     Metadata metadata = (Metadata) o;
-    return Objects.equals(paths, metadata.paths)
+    return Objects.equals(tags, metadata.tags)
         && Objects.equals(properties, metadata.properties)
         && Objects.equals(sensitive, metadata.sensitive);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(paths, properties, sensitive);
+    return Objects.hash(tags, properties, sensitive);
   }
 
   @Override
   public String toString() {
     return "Metadata{"
-        + "paths=" + paths
+        + "tags=" + tags
         + ", properties=" + properties
         + ", sensitive=" + sensitive
         + '}';
@@ -106,7 +106,7 @@ public class Metadata {
 
   public io.confluent.kafka.schemaregistry.client.rest.entities.Metadata toMetadataEntity() {
     return new io.confluent.kafka.schemaregistry.client.rest.entities.Metadata(
-        getPaths(),
+        getTags(),
         getProperties(),
         getSensitive()
     );
