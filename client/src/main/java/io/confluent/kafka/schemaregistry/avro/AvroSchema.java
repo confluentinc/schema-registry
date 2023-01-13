@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
@@ -198,8 +199,8 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
-  public ParsedSchema copy(Map<String, Set<String>> tagsToAdd,
-                           Map<String, Set<String>> tagsToRemove) {
+  public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                           Map<SchemaEntity, Set<String>> tagsToRemove) {
     AvroSchema schemaCopy = this.copy();
     JsonNode original;
     try {
@@ -617,29 +618,29 @@ public class AvroSchema implements ParsedSchema {
   }
 
   private void modifyFieldLevelTags(JsonNode node,
-                                    Map<String, Set<String>> tagsToAddMap,
-                                    Map<String, Set<String>> tagsToRemoveMap) {
-    Set<String> pathToModify = new HashSet<>(tagsToAddMap.keySet());
-    pathToModify.addAll(tagsToRemoveMap.keySet());
+                                    Map<SchemaEntity, Set<String>> tagsToAddMap,
+                                    Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+    Set<SchemaEntity> entityToModify = new HashSet<>(tagsToAddMap.keySet());
+    entityToModify.addAll(tagsToRemoveMap.keySet());
 
-    for (String path : pathToModify) {
-      JsonNode fieldNodePtr = AvroSchemaUtils.findMatchingField(node, path);
-      Set<String> allTags = getInlineTags(fieldNodePtr);
+    for (SchemaEntity entity : entityToModify) {
+      JsonNode nodePtr = AvroSchemaUtils.findMatchingEntity(node, entity);
+      Set<String> allTags = getInlineTags(nodePtr);
 
-      Set<String> tagsToAdd = tagsToAddMap.get(path);
+      Set<String> tagsToAdd = tagsToAddMap.get(entity);
       if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
         allTags.addAll(tagsToAdd);
       }
 
-      Set<String> tagsToRemove = tagsToRemoveMap.get(path);
+      Set<String> tagsToRemove = tagsToRemoveMap.get(entity);
       if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
         allTags.removeAll(tagsToRemove);
       }
 
       if (allTags.isEmpty()) {
-        ((ObjectNode) fieldNodePtr).remove(TAGS);
+        ((ObjectNode) nodePtr).remove(TAGS);
       } else {
-        ((ObjectNode) fieldNodePtr).replace(TAGS, jsonMapper.valueToTree(allTags));
+        ((ObjectNode) nodePtr).replace(TAGS, jsonMapper.valueToTree(allTags));
       }
     }
   }
