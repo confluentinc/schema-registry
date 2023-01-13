@@ -569,7 +569,7 @@ public class ProtobufSchema implements ParsedSchema {
               e -> e.getValue().toSchema())),
         schemaCopy.metadata(),
         schemaCopy.ruleSet(),
-        -1,
+        schemaCopy.version(),
         schemaCopy.name()
       );
     } catch (JsonProcessingException e) {

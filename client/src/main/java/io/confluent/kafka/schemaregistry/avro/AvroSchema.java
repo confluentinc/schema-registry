@@ -213,7 +213,7 @@ public class AvroSchema implements ParsedSchema {
       schemaCopy.resolvedReferences(),
       schemaCopy.metadata(),
       schemaCopy.ruleSet(),
-      -1,
+      schemaCopy.version(),
       schemaCopy.isNew());
   }
 

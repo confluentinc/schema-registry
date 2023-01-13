@@ -274,7 +274,7 @@ public class JsonSchema implements ParsedSchema {
       schemaCopy.resolvedReferences(),
       schemaCopy.metadata(),
       schemaCopy.ruleSet(),
-      -1);
+      schemaCopy.version());
   }
 
   public JsonNode toJsonNode() {
