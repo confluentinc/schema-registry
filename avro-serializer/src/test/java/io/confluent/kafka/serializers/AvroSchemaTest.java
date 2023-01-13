@@ -37,6 +37,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
@@ -620,7 +621,7 @@ public class AvroSchemaTest {
         + "}";
 
     String normalized = "{"
-        + "\"type\":\"record\","    
+        + "\"type\":\"record\","
         + "\"name\":\"Envelope\","
         + "\"namespace\":\"some.scope\","
         + "\"fields\":["
@@ -685,6 +686,463 @@ public class AvroSchemaTest {
   @Test
   public void testEnumWithDefault() throws Exception {
     assertNotEquals(new AvroSchema(enumSchema), new AvroSchema(enumSchemaWithDefault));
+  }
+
+  @Test
+  public void testBasicAddAndRemoveTags() {
+    String schemaString = "{\n" +
+      "  \"name\": \"sampleRecord\",\n" +
+      "  \"namespace\": \"com.example.mynamespace\",\n" +
+      "  \"type\": \"record\",\n" +
+      "  \"doc\": \"Sample schema to help you get started.\",\n" +
+      "  \"fields\": [\n" +
+      "    {\n" +
+      "      \"name\": \"my_field1\",\n" +
+      "      \"type\": {\n" +
+      "        \"name\": \"nestedRecordWithoutNamespace\",\n" +
+      "        \"type\": \"record\",\n" +
+      "        \"fields\": [\n" +
+      "          {\n" +
+      "            \"name\": \"nested_field1\",\n" +
+      "            \"type\": \"string\"\n" +
+      "          },\n" +
+      "          {\n" +
+      "            \"default\": 0,\n" +
+      "            \"name\": \"nested_field2\",\n" +
+      "            \"type\": \"double\",\n" +
+      "            \"confluent:tags\": [ \"PRIVATE\" ]\n" +
+      "          }\n" +
+      "        ]\n" +
+      "      }\n" +
+      "    },\n" +
+      "    {\n" +
+      "      \"name\": \"my_field2\",\n" +
+      "      \"namespace\": \"com.example.mynamespace.nested\",\n" +
+      "      \"type\": {\n" +
+      "        \"name\": \"nestedRecordWithNamespace\",\n" +
+      "        \"type\": \"record\",\n" +
+      "        \"fields\": [\n" +
+      "          {\n" +
+      "            \"name\": \"nested_field1\",\n" +
+      "            \"type\": \"string\"\n" +
+      "          },\n" +
+      "          {\n" +
+      "            \"default\": 0,\n" +
+      "            \"name\": \"nested_field2\",\n" +
+      "            \"type\": \"double\",\n" +
+      "            \"confluent:tags\": [ \"PRIVATE\" ]\n" +
+      "          }\n" +
+      "        ]\n" +
+      "      }\n" +
+      "    },\n" +
+      "    {\n" +
+      "      \"doc\": \"The double type is a double precision (64-bit) IEEE 754 floating-point number.\",\n" +
+      "      \"name\": \"my_field3\",\n" +
+      "      \"type\": \"double\"\n" +
+      "    }\n" +
+      "  ]\n" +
+      "}\n";
+
+    String addedTagSchema = "{\n" +
+      "  \"type\" : \"record\",\n" +
+      "  \"name\" : \"sampleRecord\",\n" +
+      "  \"namespace\" : \"com.example.mynamespace\",\n" +
+      "  \"doc\" : \"Sample schema to help you get started.\",\n" +
+      "  \"fields\" : [ {\n" +
+      "    \"name\" : \"my_field1\",\n" +
+      "    \"type\" : {\n" +
+      "      \"type\" : \"record\",\n" +
+      "      \"name\" : \"nestedRecordWithoutNamespace\",\n" +
+      "      \"fields\" : [ {\n" +
+      "        \"name\" : \"nested_field1\",\n" +
+      "        \"type\" : \"string\",\n" +
+      "        \"confluent:tags\" : [ \"PII\" ]\n" +
+      "      }, {\n" +
+      "        \"name\" : \"nested_field2\",\n" +
+      "        \"type\" : \"double\",\n" +
+      "        \"default\" : 0,\n" +
+      "        \"confluent:tags\" : [ \"PRIVATE\" ]\n" +
+      "      } ]\n" +
+      "    }\n" +
+      "  }, {\n" +
+      "    \"name\" : \"my_field2\",\n" +
+      "    \"type\" : {\n" +
+      "      \"type\" : \"record\",\n" +
+      "      \"name\" : \"nestedRecordWithNamespace\",\n" +
+      "      \"fields\" : [ {\n" +
+      "        \"name\" : \"nested_field1\",\n" +
+      "        \"type\" : \"string\"\n" +
+      "      }, {\n" +
+      "        \"name\" : \"nested_field2\",\n" +
+      "        \"type\" : \"double\",\n" +
+      "        \"default\" : 0,\n" +
+      "        \"confluent:tags\" : [ \"PRIVATE\",\"PII\" ]\n" +
+      "      } ]\n" +
+      "    },\n" +
+      "    \"namespace\" : \"com.example.mynamespace.nested\"\n" +
+      "  }, {\n" +
+      "    \"name\" : \"my_field3\",\n" +
+      "    \"type\" : \"double\",\n" +
+      "    \"doc\" : \"The double type is a double precision (64-bit) IEEE 754 floating-point number.\",\n" +
+      "    \"confluent:tags\" : [ \"PII\" ]\n" +
+      "  } ]\n" +
+      "}\n";
+
+    AvroSchema schema = new AvroSchema(schemaString);
+    AvroSchema expectSchema = new AvroSchema(addedTagSchema);
+    Map<String, Set<String>> tags = new HashMap<>();
+    tags.put("com.example.mynamespace.nestedRecordWithoutNamespace.nested_field1", Collections.singleton("PII"));
+    tags.put("com.example.mynamespace.nested.nestedRecordWithNamespace.nested_field2", Collections.singleton("PII"));
+    tags.put("com.example.mynamespace.sampleRecord.my_field3", Collections.singleton("PII"));
+    ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
+    assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+
+    resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
+    assertEquals(schema.canonicalString(), resultSchema.canonicalString());
+  }
+
+  @Test
+  public void testComplexAddAndRemoveTags() {
+    String schemaString = "[\n" +
+      "  \"null\",\n" +
+      "  {\n" +
+      "    \"name\": \"sampleRecord\",\n" +
+      "    \"namespace\": \"com.example.mynamespace\",\n" +
+      "    \"type\": \"record\",\n" +
+      "    \"doc\": \"Sample schema to help you get started.\",\n" +
+      "    \"fields\": [\n" +
+      "      {\n" +
+      "        \"name\": \"my_field1\",\n" +
+      "        \"type\": {\n" +
+      "          \"name\": \"nestedRecord\",\n" +
+      "          \"type\": \"record\",\n" +
+      "          \"fields\": [\n" +
+      "            {\n" +
+      "              \"name\": \"nested_field1\",\n" +
+      "              \"type\": \"string\"\n" +
+      "            },\n" +
+      "            {\n" +
+      "              \"default\": 0,\n" +
+      "              \"name\": \"nested_field2\",\n" +
+      "              \"type\": \"double\",\n" +
+      "              \"confluent:tags\": [ \"PRIVATE\" ]\n" +
+      "            }\n" +
+      "          ]\n" +
+      "        }\n" +
+      "      }, \n" +
+      "      {\n" +
+      "        \"type\": \"int\",\n" +
+      "        \"name\": \"my_field2\"\n" +
+      "      }\n" +
+      "    ]\n" +
+      "  },\n" +
+      "  {\n" +
+      "    \"type\": \"array\",\n" +
+      "    \"items\" : {\n" +
+      "      \"name\": \"recordItem\",\n" +
+      "      \"namespace\": \"com.example.mynamespace.nested\",\n" +
+      "      \"type\": \"record\",\n" +
+      "      \"doc\": \"Sample schema to help you get started.\",\n" +
+      "      \"fields\": [\n" +
+      "        {\n" +
+      "          \"name\": \"my_field1\",\n" +
+      "          \"type\": {\n" +
+      "            \"name\": \"nestedRecord2\",\n" +
+      "            \"type\": \"record\",\n" +
+      "            \"fields\": [\n" +
+      "              {\n" +
+      "                \"name\": \"nested_field1\",\n" +
+      "                \"type\": \"string\"\n" +
+      "              },\n" +
+      "              {\n" +
+      "                \"default\": 0,\n" +
+      "                \"name\": \"nested_field2\",\n" +
+      "                \"type\": \"double\",\n" +
+      "                \"confluent:tags\": [ \"PRIVATE\" ]\n" +
+      "              }\n" +
+      "            ]\n" +
+      "          }\n" +
+      "        }\n" +
+      "      ]\n" +
+      "    },\n" +
+      "    \"default\": []\n" +
+      "  },\n" +
+      "  {\n" +
+      "    \"type\": \"map\",\n" +
+      "    \"values\" : {\n" +
+      "      \"name\": \"recordMapValue\",\n" +
+      "      \"type\": \"record\",\n" +
+      "      \"doc\": \"Sample schema to help you get started.\",\n" +
+      "      \"fields\": [\n" +
+      "        {\n" +
+      "          \"name\": \"my_field1\",\n" +
+      "          \"type\": {\n" +
+      "            \"name\": \"nestedRecord3\",\n" +
+      "            \"type\": \"record\",\n" +
+      "            \"fields\": [\n" +
+      "              {\n" +
+      "                \"name\": \"nested_field1\",\n" +
+      "                \"type\": \"string\"\n" +
+      "              },\n" +
+      "              {\n" +
+      "                \"default\": 0,\n" +
+      "                \"name\": \"nested_field2\",\n" +
+      "                \"type\": \"double\",\n" +
+      "                \"confluent:tags\": [ \"PRIVATE\" ]\n" +
+      "              }\n" +
+      "            ]\n" +
+      "          }\n" +
+      "        }\n" +
+      "      ]\n" +
+      "    },\n" +
+      "    \"default\": {}\n" +
+      "  }\n" +
+      "]\n";
+
+      String addedTagSchema = "[ \"null\", {\n" +
+      "  \"type\" : \"record\",\n" +
+      "  \"name\" : \"sampleRecord\",\n" +
+      "  \"namespace\" : \"com.example.mynamespace\",\n" +
+      "  \"doc\" : \"Sample schema to help you get started.\",\n" +
+      "  \"fields\" : [ {\n" +
+      "    \"name\" : \"my_field1\",\n" +
+      "    \"type\" : {\n" +
+      "      \"type\" : \"record\",\n" +
+      "      \"name\" : \"nestedRecord\",\n" +
+      "      \"fields\" : [ {\n" +
+      "        \"name\" : \"nested_field1\",\n" +
+      "        \"type\" : \"string\"\n" +
+      "      }, {\n" +
+      "        \"name\" : \"nested_field2\",\n" +
+      "        \"type\" : \"double\",\n" +
+      "        \"default\" : 0,\n" +
+      "        \"confluent:tags\" : [ \"PRIVATE\" ]\n" +
+      "      } ]\n" +
+      "    },\n" +
+      "    \"confluent:tags\" : [ \"PII\" ]\n" +
+      "  }, {\n" +
+      "    \"name\" : \"my_field2\",\n" +
+      "    \"type\" : \"int\"\n" +
+      "  } ]\n" +
+      "}, {\n" +
+      "  \"type\" : \"array\",\n" +
+      "  \"items\" : {\n" +
+      "    \"type\" : \"record\",\n" +
+      "    \"name\" : \"recordItem\",\n" +
+      "    \"namespace\" : \"com.example.mynamespace.nested\",\n" +
+      "    \"doc\" : \"Sample schema to help you get started.\",\n" +
+      "    \"fields\" : [ {\n" +
+      "      \"name\" : \"my_field1\",\n" +
+      "      \"type\" : {\n" +
+      "        \"type\" : \"record\",\n" +
+      "        \"name\" : \"nestedRecord2\",\n" +
+      "        \"fields\" : [ {\n" +
+      "          \"name\" : \"nested_field1\",\n" +
+      "          \"type\" : \"string\"\n" +
+      "        }, {\n" +
+      "          \"name\" : \"nested_field2\",\n" +
+      "          \"type\" : \"double\",\n" +
+      "          \"default\" : 0,\n" +
+      "          \"confluent:tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
+      "        } ]\n" +
+      "      }\n" +
+      "    } ]\n" +
+      "  },\n" +
+      "  \"default\" : [ ]\n" +
+      "}, {\n" +
+      "  \"type\" : \"map\",\n" +
+      "  \"values\" : {\n" +
+      "    \"type\" : \"record\",\n" +
+      "    \"name\" : \"recordMapValue\",\n" +
+      "    \"doc\" : \"Sample schema to help you get started.\",\n" +
+      "    \"fields\" : [ {\n" +
+      "      \"name\" : \"my_field1\",\n" +
+      "      \"type\" : {\n" +
+      "        \"type\" : \"record\",\n" +
+      "        \"name\" : \"nestedRecord3\",\n" +
+      "        \"fields\" : [ {\n" +
+      "          \"name\" : \"nested_field1\",\n" +
+      "          \"type\" : \"string\"\n" +
+      "        }, {\n" +
+      "          \"name\" : \"nested_field2\",\n" +
+      "          \"type\" : \"double\",\n" +
+      "          \"default\" : 0,\n" +
+      "          \"confluent:tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
+      "        } ]\n" +
+      "      },\n" +
+      "      \"confluent:tags\" : [ \"PII\" ]\n" +
+      "    } ]\n" +
+      "  },\n" +
+      "  \"default\" : { }\n" +
+      "} ]\n" +
+      "[ \"null\", {\n" +
+      "  \"type\" : \"record\",\n" +
+      "  \"name\" : \"sampleRecord\",\n" +
+      "  \"namespace\" : \"com.example.mynamespace\",\n" +
+      "  \"doc\" : \"Sample schema to help you get started.\",\n" +
+      "  \"fields\" : [ {\n" +
+      "    \"name\" : \"my_field1\",\n" +
+      "    \"type\" : {\n" +
+      "      \"type\" : \"record\",\n" +
+      "      \"name\" : \"nestedRecord\",\n" +
+      "      \"fields\" : [ {\n" +
+      "        \"name\" : \"nested_field1\",\n" +
+      "        \"type\" : \"string\"\n" +
+      "      }, {\n" +
+      "        \"name\" : \"nested_field2\",\n" +
+      "        \"type\" : \"double\",\n" +
+      "        \"default\" : 0,\n" +
+      "        \"confluent:tags\" : [ \"PRIVATE\" ]\n" +
+      "      } ]\n" +
+      "    },\n" +
+      "    \"confluent:tags\" : [ \"PII\" ]\n" +
+      "  }, {\n" +
+      "    \"name\" : \"my_field2\",\n" +
+      "    \"type\" : \"int\"\n" +
+      "  } ]\n" +
+      "}, {\n" +
+      "  \"type\" : \"array\",\n" +
+      "  \"items\" : {\n" +
+      "    \"type\" : \"record\",\n" +
+      "    \"name\" : \"recordItem\",\n" +
+      "    \"namespace\" : \"com.example.mynamespace.nested\",\n" +
+      "    \"doc\" : \"Sample schema to help you get started.\",\n" +
+      "    \"fields\" : [ {\n" +
+      "      \"name\" : \"my_field1\",\n" +
+      "      \"type\" : {\n" +
+      "        \"type\" : \"record\",\n" +
+      "        \"name\" : \"nestedRecord2\",\n" +
+      "        \"fields\" : [ {\n" +
+      "          \"name\" : \"nested_field1\",\n" +
+      "          \"type\" : \"string\"\n" +
+      "        }, {\n" +
+      "          \"name\" : \"nested_field2\",\n" +
+      "          \"type\" : \"double\",\n" +
+      "          \"default\" : 0,\n" +
+      "          \"confluent:tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
+      "        } ]\n" +
+      "      }\n" +
+      "    } ]\n" +
+      "  },\n" +
+      "  \"default\" : [ ]\n" +
+      "}, {\n" +
+      "  \"type\" : \"map\",\n" +
+      "  \"values\" : {\n" +
+      "    \"type\" : \"record\",\n" +
+      "    \"name\" : \"recordMapValue\",\n" +
+      "    \"doc\" : \"Sample schema to help you get started.\",\n" +
+      "    \"fields\" : [ {\n" +
+      "      \"name\" : \"my_field1\",\n" +
+      "      \"type\" : {\n" +
+      "        \"type\" : \"record\",\n" +
+      "        \"name\" : \"nestedRecord3\",\n" +
+      "        \"fields\" : [ {\n" +
+      "          \"name\" : \"nested_field1\",\n" +
+      "          \"type\" : \"string\"\n" +
+      "        }, {\n" +
+      "          \"name\" : \"nested_field2\",\n" +
+      "          \"type\" : \"double\",\n" +
+      "          \"default\" : 0,\n" +
+      "          \"confluent:tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
+      "        } ]\n" +
+      "      },\n" +
+      "      \"confluent:tags\" : [ \"PII\" ]\n" +
+      "    } ]\n" +
+      "  },\n" +
+      "  \"default\" : { }\n" +
+      "} ]\n";
+
+    AvroSchema schema = new AvroSchema(schemaString);
+    AvroSchema expectSchema = new AvroSchema(addedTagSchema);
+    Map<String, Set<String>> tags = new HashMap<>();
+    tags.put("com.example.mynamespace.sampleRecord.my_field1", Collections.singleton("PII"));
+    tags.put("com.example.mynamespace.nested.nestedRecord2.nested_field2", Collections.singleton("PII"));
+    tags.put("recordMapValue.my_field1", Collections.singleton("PII"));
+    tags.put("nestedRecord3.nested_field2", Collections.singleton("PII"));
+    ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
+    assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+
+    resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
+    assertEquals(schema.canonicalString(), resultSchema.canonicalString());
+  }
+
+  @Test
+  public void testNamespace() {
+    String schemaString = "[\n" +
+      "  {\n" +
+      "    \"name\": \"sampleRecord\",\n" +
+      "    \"namespace\": \"com.example.mynamespace1\",\n" +
+      "    \"type\": \"record\",\n" +
+      "    \"fields\": [\n" +
+      "      {\n" +
+      "        \"name\": \"my_field1\",\n" +
+      "        \"type\": \"string\"\n" +
+      "      }, \n" +
+      "      {\n" +
+      "        \"type\": \"int\",\n" +
+      "        \"name\": \"my_field2\"\n" +
+      "      }\n" +
+      "    ]\n" +
+      "  },\n" +
+      "  {\n" +
+      "    \"name\": \"sampleRecord\",\n" +
+      "    \"namespace\": \"com.example.mynamespace2\",\n" +
+      "    \"type\": \"record\",\n" +
+      "    \"fields\": [\n" +
+      "      {\n" +
+      "        \"name\": \"my_field1\",\n" +
+      "        \"type\": \"double\"\n" +
+      "      }, \n" +
+      "      {\n" +
+      "        \"type\": \"int\",\n" +
+      "        \"name\": \"my_field2\"\n" +
+      "      }\n" +
+      "    ]\n" +
+      "  }\n" +
+      "]\n";
+    String addedTagSchema = "[\n" +
+      "  {\n" +
+      "    \"name\": \"sampleRecord\",\n" +
+      "    \"namespace\": \"com.example.mynamespace1\",\n" +
+      "    \"type\": \"record\",\n" +
+      "    \"fields\": [\n" +
+      "      {\n" +
+      "        \"name\": \"my_field1\",\n" +
+      "        \"type\": \"string\",\n" +
+      "        \"confluent:tags\": [ \"tag1\" ]\n" +
+      "      }, \n" +
+      "      {\n" +
+      "        \"type\": \"int\",\n" +
+      "        \"name\": \"my_field2\"\n" +
+      "      }\n" +
+      "    ]\n" +
+      "  },\n" +
+      "  {\n" +
+      "    \"name\": \"sampleRecord\",\n" +
+      "    \"namespace\": \"com.example.mynamespace2\",\n" +
+      "    \"type\": \"record\",\n" +
+      "    \"fields\": [\n" +
+      "      {\n" +
+      "        \"name\": \"my_field1\",\n" +
+      "        \"type\": \"double\",\n" +
+      "        \"confluent:tags\": [ \"tag2\" ]\n" +
+      "      }, \n" +
+      "      {\n" +
+      "        \"type\": \"int\",\n" +
+      "        \"name\": \"my_field2\"\n" +
+      "      }\n" +
+      "    ]\n" +
+      "  }\n" +
+      "]\n";
+    AvroSchema schema = new AvroSchema(schemaString);
+    AvroSchema expectSchema = new AvroSchema(addedTagSchema);
+
+    Map<String, Set<String>> tags = new HashMap<>();
+    tags.put("com.example.mynamespace1.sampleRecord.my_field1", Collections.singleton("tag1"));
+    tags.put("com.example.mynamespace2.sampleRecord.my_field1", Collections.singleton("tag2"));
+
+    ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
+    assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {

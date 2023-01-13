@@ -28,8 +28,11 @@ import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -66,6 +69,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+
+import static io.confluent.kafka.schemaregistry.avro.AvroSchema.FIELDS_FIELD;
+import static io.confluent.kafka.schemaregistry.avro.AvroSchema.NAME_FIELD;
 
 public class AvroSchemaUtils {
 
@@ -314,6 +320,63 @@ public class AvroSchemaUtils {
     }
   }
 
+  public static JsonNode findMatchingField(JsonNode node, String path) {
+    String[] identifiers = path.split("\\.");
+    if (identifiers.length < 2) {
+      throw new IllegalArgumentException(
+        String.format("Given field path '%s' has less than two components.", path));
+    }
+
+    String nameSpace = String.join(".", Arrays.copyOfRange(identifiers, 0, identifiers.length - 2));
+    String fieldName = identifiers[identifiers.length - 1];
+    String recordName = identifiers[identifiers.length - 2];
+
+    LinkedList<JsonNodeWithNS> toVisit = new LinkedList<>();
+    JsonNode currNameSpace = node.get("namespace");
+    toVisit.add(new JsonNodeWithNS(node, currNameSpace == null ? null : currNameSpace.asText()));
+
+    // BFS to search field
+    while (toVisit.size() > 0) {
+      JsonNodeWithNS curr = toVisit.removeFirst();
+      JsonNode currNode = curr.jsonNode();
+      if (!currNode.has("type")) {
+        // union
+        currNode.elements().forEachRemaining(
+            e -> toVisit.add(new JsonNodeWithNS(e, curr.namespace())));
+      } else {
+        String type = currNode.get("type").asText();
+        switch (type) {
+          case "record":
+            if ((nameSpace.isEmpty() || nameSpace.equals(curr.namespace()))
+                && recordName.equals(currNode.get(NAME_FIELD).asText())) {
+              Iterator<JsonNode> fieldsIter = currNode.get(FIELDS_FIELD).elements();
+              while (fieldsIter.hasNext()) {
+                JsonNode currField = fieldsIter.next();
+                if (fieldName.equals(currField.get(NAME_FIELD).asText())) {
+                  return currField;
+                }
+              }
+            } else {
+              currNode.get(FIELDS_FIELD).elements()
+                .forEachRemaining(e -> toVisit.add(new JsonNodeWithNS(e, curr.namespace())));
+            }
+            break;
+          case "array":
+            toVisit.add(new JsonNodeWithNS(currNode.get("items"), curr.namespace()));
+            break;
+          case "map":
+            toVisit.add(new JsonNodeWithNS(currNode.get("values"), curr.namespace()));
+            break;
+          default:
+            // nested type
+            toVisit.add(new JsonNodeWithNS(currNode.get("type"), curr.namespace()));
+        }
+      }
+    }
+    throw new IllegalArgumentException(String.format(
+      "No matching path '%s' found in the schema", path));
+  }
+
   protected static String toNormalizedString(AvroSchema schema) {
     try {
       Map<String, String> env = new HashMap<>();
@@ -536,6 +599,45 @@ public class AvroSchemaUtils {
       generator.writeNumber((BigDecimal) datum);
     } else {
       throw new AvroRuntimeException("Unknown datum class: " + datum.getClass());
+    }
+  }
+
+  static class JsonNodeWithNS {
+    private final JsonNode node;
+    private final String namespace;
+
+    public JsonNodeWithNS(JsonNode node, String parentNamespace) {
+      this.node = node;
+
+      JsonNode namespaceNode = node.get("namespace");
+      this.namespace = namespaceNode == null ? parentNamespace : namespaceNode.asText();
+    }
+
+    public JsonNode jsonNode() {
+      return node;
+    }
+
+    public String namespace() {
+      return namespace;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      JsonNodeWithNS other = (JsonNodeWithNS) o;
+      return Objects.equals(namespace, other.namespace()) && Objects.equals(node, other.jsonNode());
+    }
+
+    @Override
+    public int hashCode() {
+      int result = Objects.hashCode(node);
+      result = 31 * result + Objects.hashCode(namespace);
+      return result;
     }
   }
 }
