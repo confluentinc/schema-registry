@@ -53,7 +53,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
   private boolean printValueId = false;
   private byte[] keySeparator = "\t".getBytes(StandardCharsets.UTF_8);
   private byte[] lineSeparator = "\n".getBytes(StandardCharsets.UTF_8);
-  private byte[] headersSeparator = "\n".getBytes(StandardCharsets.UTF_8);
+  private byte[] headersSeparator = ",".getBytes(StandardCharsets.UTF_8);
   private byte[] idSeparator = "\t".getBytes(StandardCharsets.UTF_8);
   private Deserializer<?> headersDeserializer;
   protected SchemaMessageDeserializer<T> deserializer;
