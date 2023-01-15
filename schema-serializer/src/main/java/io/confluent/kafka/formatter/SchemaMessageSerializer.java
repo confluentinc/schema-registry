@@ -16,12 +16,16 @@
 
 package io.confluent.kafka.formatter;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import java.util.Map;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 
 public interface SchemaMessageSerializer<T> {
+
+  void configure(Map<String, ?> configs, boolean isKey);
 
   Serializer getKeySerializer();
 
@@ -35,4 +39,6 @@ public interface SchemaMessageSerializer<T> {
       T object,
       ParsedSchema schema
   );
+
+  SchemaRegistryClient getSchemaRegistryClient();
 }

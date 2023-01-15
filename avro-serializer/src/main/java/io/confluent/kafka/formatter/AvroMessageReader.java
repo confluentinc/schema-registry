@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.formatter;
 
+import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
+import java.util.Map;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.io.DecoderFactory;
@@ -87,7 +89,7 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
    * For testing only.
    */
   AvroMessageReader(
-      SchemaRegistryClient schemaRegistryClient,
+      String url,
       Schema keySchema,
       Schema valueSchema,
       String topic,
@@ -97,20 +99,13 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
       boolean autoRegister,
       boolean useLatest
   ) {
-    super(schemaRegistryClient, new AvroSchema(keySchema), new AvroSchema(valueSchema), topic,
+    super(url, new AvroSchema(keySchema), new AvroSchema(valueSchema), topic,
         parseKey, reader, normalizeSchema, autoRegister, useLatest);
   }
 
   @Override
-  protected SchemaMessageSerializer<Object> createSerializer(
-      SchemaRegistryClient schemaRegistryClient,
-      boolean normalizeSchema,
-      boolean autoRegister,
-      boolean useLatest,
-      Serializer keySerializer
-  ) {
-    return new AvroMessageSerializer(
-        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, keySerializer);
+  protected SchemaMessageSerializer<Object> createSerializer(Serializer keySerializer) {
+    return new AvroMessageSerializer(keySerializer);
   }
 
   @Override
@@ -141,15 +136,13 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
 
     protected final Serializer keySerializer;
 
-    AvroMessageSerializer(
-        SchemaRegistryClient schemaRegistryClient,
-        boolean normalizeSchema, boolean autoRegister, boolean useLatest, Serializer keySerializer
-    ) {
-      this.schemaRegistry = schemaRegistryClient;
-      this.normalizeSchema = normalizeSchema;
-      this.autoRegisterSchema = autoRegister;
-      this.useLatestVersion = useLatest;
+    AvroMessageSerializer(Serializer keySerializer) {
       this.keySerializer = keySerializer;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+      configure(new KafkaAvroSerializerConfig(configs));
     }
 
     @Override
@@ -172,6 +165,11 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
         ParsedSchema schema
     ) {
       return super.serializeImpl(subject, topic, headers, object, (AvroSchema) schema);
+    }
+
+    @Override
+    public SchemaRegistryClient getSchemaRegistryClient() {
+      return schemaRegistry;
     }
   }
 }

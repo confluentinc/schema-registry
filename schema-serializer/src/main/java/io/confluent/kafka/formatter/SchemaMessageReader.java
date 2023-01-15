@@ -17,7 +17,6 @@
 package io.confluent.kafka.formatter;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.util.AbstractMap;
@@ -50,7 +49,6 @@ import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -88,7 +86,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
    * For testing only.
    */
   public SchemaMessageReader(
-      SchemaRegistryClient schemaRegistryClient, ParsedSchema keySchema, ParsedSchema valueSchema,
+      String url, ParsedSchema keySchema, ParsedSchema valueSchema,
       String topic, boolean parseKey, BufferedReader reader,
       boolean normalizeSchema, boolean autoRegister, boolean useLatest
   ) {
@@ -99,17 +97,16 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     this.valueSubject = topic != null ? topic + "-value" : null;
     this.parseKey = parseKey;
     this.reader = reader;
-    this.serializer = createSerializer(
-        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, null);
+    this.serializer = createSerializer(null);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, url);
+    configs.put(AbstractKafkaSchemaSerDeConfig.NORMALIZE_SCHEMAS, normalizeSchema);
+    configs.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, autoRegister);
+    configs.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, useLatest);
+    this.serializer.configure(configs, false);
   }
 
-  protected abstract SchemaMessageSerializer<T> createSerializer(
-      SchemaRegistryClient schemaRegistryClient,
-      boolean normalizeSchema,
-      boolean autoRegister,
-      boolean useLatest,
-      Serializer keySerializer
-  );
+  protected abstract SchemaMessageSerializer<T> createSerializer(Serializer keySerializer);
 
   @Override
   public void init(java.io.InputStream inputStream, Properties props) {
@@ -154,34 +151,13 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       throw new ConfigException("Missing schema registry url!");
     }
 
-    SchemaRegistryClient schemaRegistry = getSchemaRegistryClient(props, url);
 
     Serializer keySerializer = getKeySerializer(props);
 
-    boolean normalizeSchema;
-    if (props.containsKey("normalize.schemas")) {
-      normalizeSchema = Boolean.parseBoolean(props.getProperty("normalize.schemas").trim());
-    } else {
-      normalizeSchema = false;
-    }
-    boolean autoRegisterSchema;
-    if (props.containsKey("auto.register")) {
-      autoRegisterSchema = Boolean.parseBoolean(props.getProperty("auto.register").trim());
-    } else if (props.containsKey("auto.register.schemas")) {
-      autoRegisterSchema = Boolean.parseBoolean(props.getProperty("auto.register.schemas").trim());
-    } else {
-      autoRegisterSchema = true;
-    }
-    boolean useLatest;
-    if (props.containsKey("use.latest.version")) {
-      useLatest = Boolean.parseBoolean(props.getProperty("use.latest.version").trim());
-    } else {
-      useLatest = false;
-    }
-
     if (this.serializer == null) {
-      this.serializer = createSerializer(
-          schemaRegistry, normalizeSchema, autoRegisterSchema, useLatest, keySerializer);
+      Map<String, Object> originals = getPropertiesMap(props);
+      this.serializer = createSerializer(keySerializer);
+      this.serializer.configure(originals, false);
     }
 
     // This class is only used in a scenario where a single schema is used. It does not support
@@ -192,36 +168,15 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
             new AbstractKafkaSchemaSerDeConfig(AbstractKafkaSchemaSerDeConfig.baseConfigDef(),
                     props, false);
 
-    valueSchema = getSchema(schemaRegistry, props, false);
+    valueSchema = getSchema(serializer.getSchemaRegistryClient(), props, false);
     final Object valueSubjectNameStrategy = config.valueSubjectNameStrategy();
     valueSubject = getSubjectName(valueSubjectNameStrategy, topic, false, valueSchema);
 
     if (needsKeySchema()) {
-      keySchema = getSchema(schemaRegistry, props, true);
+      keySchema = getSchema(serializer.getSchemaRegistryClient(), props, true);
       final Object keySubjectNameStrategy = config.keySubjectNameStrategy();
       keySubject = getSubjectName(keySubjectNameStrategy, topic, true, keySchema);
     }
-  }
-
-  private SchemaRegistryClient getSchemaRegistryClient(Properties props, String url) {
-    Map<String, Object> originals = getPropertiesMap(props);
-
-    final List<String> schemaRegistryUrls = Collections.singletonList(url);
-    final List<SchemaProvider> schemaProviders = Collections.singletonList(getProvider());
-    final String maybeMockScope =
-            MockSchemaRegistry.validateAndMaybeGetMockScope(schemaRegistryUrls);
-    SchemaRegistryClient schemaRegistry;
-    if (maybeMockScope == null) {
-      schemaRegistry = new CachedSchemaRegistryClient(
-              url,
-              AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
-              schemaProviders,
-              originals
-      );
-    } else {
-      schemaRegistry = MockSchemaRegistry.getClientForScope(maybeMockScope, schemaProviders);
-    }
-    return schemaRegistry;
   }
 
   /**

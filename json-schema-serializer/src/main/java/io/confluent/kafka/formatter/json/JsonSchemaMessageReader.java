@@ -18,6 +18,8 @@ package io.confluent.kafka.formatter.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerConfig;
+import java.util.Map;
 import kafka.common.MessageReader;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
@@ -92,7 +94,7 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
    * For testing only.
    */
   JsonSchemaMessageReader(
-      SchemaRegistryClient schemaRegistryClient,
+      String url,
       JsonSchema keySchema,
       JsonSchema valueSchema,
       String topic,
@@ -102,20 +104,13 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
       boolean autoRegister,
       boolean useLatest
   ) {
-    super(schemaRegistryClient, keySchema, valueSchema, topic,
+    super(url, keySchema, valueSchema, topic,
         parseKey, reader, normalizeSchema, autoRegister, useLatest);
   }
 
   @Override
-  protected SchemaMessageSerializer<JsonNode> createSerializer(
-      SchemaRegistryClient schemaRegistryClient,
-      boolean normalizeSchema,
-      boolean autoRegister,
-      boolean useLatest,
-      Serializer keySerializer
-  ) {
-    return new JsonSchemaMessageSerializer(
-        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, keySerializer);
+  protected SchemaMessageSerializer<JsonNode> createSerializer(Serializer keySerializer) {
+    return new JsonSchemaMessageSerializer(keySerializer);
   }
 
   @Override
@@ -137,16 +132,17 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
 
     protected final Serializer keySerializer;
 
-    JsonSchemaMessageSerializer(
-        SchemaRegistryClient schemaRegistryClient,
-        boolean normalizeSchema, boolean autoRegister, boolean useLatest, Serializer keySerializer
-    ) {
-      this.schemaRegistry = schemaRegistryClient;
-      this.normalizeSchema = normalizeSchema;
-      this.autoRegisterSchema = autoRegister;
-      this.useLatestVersion = useLatest;
+    JsonSchemaMessageSerializer(Serializer keySerializer) {
       this.keySerializer = keySerializer;
-      this.validate = true;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+      if (!configs.containsKey(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA)) {
+        ((Map<String, Object>) configs).put(
+            KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA, "true");
+      }
+      configure(new KafkaJsonSchemaSerializerConfig(configs));
     }
 
     @Override
@@ -169,6 +165,11 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
         ParsedSchema schema
     ) {
       return super.serializeImpl(subject, topic, headers, object, (JsonSchema) schema);
+    }
+
+    @Override
+    public SchemaRegistryClient getSchemaRegistryClient() {
+      return schemaRegistry;
     }
   }
 }

@@ -17,6 +17,8 @@ package io.confluent.kafka.formatter.protobuf;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerConfig;
+import java.util.Map;
 import java.util.Properties;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
@@ -64,7 +66,7 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
    * For testing only.
    */
   ProtobufMessageReader(
-      SchemaRegistryClient schemaRegistryClient,
+      String url,
       ProtobufSchema keySchema,
       ProtobufSchema valueSchema,
       String topic,
@@ -74,7 +76,7 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
       boolean autoRegister,
       boolean useLatest
   ) {
-    super(schemaRegistryClient, keySchema, valueSchema, topic,
+    super(url, keySchema, valueSchema, topic,
         parseKey, reader, normalizeSchema, autoRegister, useLatest);
   }
 
@@ -92,15 +94,8 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
   }
 
   @Override
-  protected SchemaMessageSerializer<Message> createSerializer(
-      SchemaRegistryClient schemaRegistryClient,
-      boolean normalizeSchema,
-      boolean autoRegister,
-      boolean useLatest,
-      Serializer keySerializer
-  ) {
-    return new ProtobufMessageSerializer(
-        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, keySerializer);
+  protected SchemaMessageSerializer<Message> createSerializer(Serializer keySerializer) {
+    return new ProtobufMessageSerializer(keySerializer);
   }
 
   @Override
@@ -126,15 +121,13 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
 
     protected final Serializer keySerializer;
 
-    ProtobufMessageSerializer(
-        SchemaRegistryClient schemaRegistryClient,
-        boolean normalizeSchema, boolean autoRegister, boolean useLatest, Serializer keySerializer
-    ) {
-      this.schemaRegistry = schemaRegistryClient;
-      this.normalizeSchema = normalizeSchema;
-      this.autoRegisterSchema = autoRegister;
-      this.useLatestVersion = useLatest;
+    ProtobufMessageSerializer(Serializer keySerializer) {
       this.keySerializer = keySerializer;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+      configure(new KafkaProtobufSerializerConfig(configs));
     }
 
     @Override
@@ -157,6 +150,11 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
         ParsedSchema schema
     ) {
       return super.serializeImpl(subject, topic, isKey, headers, object, (ProtobufSchema) schema);
+    }
+
+    @Override
+    public SchemaRegistryClient getSchemaRegistryClient() {
+      return schemaRegistry;
     }
   }
 }

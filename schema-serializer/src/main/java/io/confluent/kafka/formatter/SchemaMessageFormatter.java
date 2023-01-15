@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.formatter;
 
-import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
@@ -33,15 +32,11 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.SchemaProvider;
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 
@@ -72,17 +67,14 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
   /**
    * For testing only.
    */
-  public SchemaMessageFormatter(
-      SchemaRegistryClient schemaRegistryClient,
-      Deserializer keyDeserializer
-  ) {
-    this.deserializer = createDeserializer(schemaRegistryClient, keyDeserializer);
+  public SchemaMessageFormatter(String url, Deserializer keyDeserializer) {
+    this.deserializer = createDeserializer(keyDeserializer);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, url);
+    this.deserializer.configure(configs, false);
   }
 
-  protected abstract SchemaMessageDeserializer<T> createDeserializer(
-      SchemaRegistryClient schemaRegistryClient,
-      Deserializer keyDeserializer
-  );
+  protected abstract SchemaMessageDeserializer<T> createDeserializer(Deserializer keyDeserializer);
 
   @Override
   public void configure(Map<String, ?> configs) {
@@ -93,10 +85,6 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
 
   public void init(Properties props) {
     if (props == null) {
-      throw new ConfigException("Missing schema registry url!");
-    }
-    String url = props.getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
-    if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
 
@@ -154,8 +142,8 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
 
     if (this.deserializer == null) {
       Map<String, Object> originals = getPropertiesMap(props);
-      SchemaRegistryClient schemaRegistry = createSchemaRegistry(url, originals);
-      this.deserializer = createDeserializer(schemaRegistry, keyDeserializer);
+      this.deserializer = createDeserializer(keyDeserializer);
+      this.deserializer.configure(originals, false);
     }
   }
 
@@ -306,25 +294,6 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       throw new SerializationException("Unknown magic byte!");
     }
     return buffer.getInt();
-  }
-
-  private SchemaRegistryClient createSchemaRegistry(
-      String schemaRegistryUrl,
-      Map<String, Object> originals
-  ) {
-    final String maybeMockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(
-            Collections.singletonList(schemaRegistryUrl));
-    final List<SchemaProvider> providers = Collections.singletonList(getProvider());
-    if (maybeMockScope == null) {
-      return new CachedSchemaRegistryClient(
-              schemaRegistryUrl,
-              AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
-              providers,
-              originals
-      );
-    } else {
-      return MockSchemaRegistry.getClientForScope(maybeMockScope, providers);
-    }
   }
 
   protected abstract SchemaProvider getProvider();

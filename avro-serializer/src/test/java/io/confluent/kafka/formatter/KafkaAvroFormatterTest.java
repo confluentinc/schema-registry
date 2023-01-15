@@ -16,9 +16,12 @@
 package io.confluent.kafka.formatter;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
+import java.util.Collections;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -26,6 +29,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -66,18 +70,24 @@ public class KafkaAvroFormatterTest {
   private AvroMessageFormatter formatter;
   private Schema recordSchema = null;
   private Schema intSchema = null;
+  private String url = "mock://test";
   private SchemaRegistryClient schemaRegistry = null;
 
   @Before
   public void setUp() {
     props = new Properties();
-    props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, url);
 
     Schema.Parser parser = new Schema.Parser();
     recordSchema = parser.parse(RECORD_SCHEMA_STRING);
     intSchema = parser.parse("{\"type\" : \"int\"}");
-    schemaRegistry = new MockSchemaRegistryClient();
-    formatter = new AvroMessageFormatter(schemaRegistry, null);
+    schemaRegistry = MockSchemaRegistry.getClientForScope("test");
+    formatter = new AvroMessageFormatter(url, null);
+  }
+
+  @After
+  public void tearDown() {
+    MockSchemaRegistry.dropScope("test");
   }
 
   @Test
@@ -88,7 +98,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
             false, true, false);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
@@ -113,7 +123,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, intSchema, recordSchema, "topic1", true, reader,
+        new AvroMessageReader(url, intSchema, recordSchema, "topic1", true, reader,
             false, true, false);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
@@ -144,7 +154,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
             false, true, false);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
@@ -166,7 +176,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
             false, true, false);
     try {
       avroReader.readMessage();
@@ -180,7 +190,7 @@ public class KafkaAvroFormatterTest {
   @Test
   public void testStringKey() {
     props.put("print.key", "true");
-    formatter = new AvroMessageFormatter(schemaRegistry, new StringDeserializer());
+    formatter = new AvroMessageFormatter(url, new StringDeserializer());
     formatter.init(props);
 
     String inputJson = "{\"name\":\"myname\"}\n";
@@ -188,7 +198,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
             false, true, false);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
@@ -209,7 +219,7 @@ public class KafkaAvroFormatterTest {
   public void testStringKeyWithTimestamp() {
     props.put("print.key", "true");
     props.put("print.timestamp", "true");
-    formatter = new AvroMessageFormatter(schemaRegistry, new StringDeserializer());
+    formatter = new AvroMessageFormatter(url, new StringDeserializer());
     formatter.init(props);
 
     long timestamp = 1000;
@@ -221,7 +231,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
             false, true, false);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
@@ -248,7 +258,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
             false, false, true);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
