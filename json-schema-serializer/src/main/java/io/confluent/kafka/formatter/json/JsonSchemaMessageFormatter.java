@@ -18,6 +18,7 @@ package io.confluent.kafka.formatter.json;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
@@ -90,8 +91,9 @@ public class JsonSchemaMessageFormatter extends SchemaMessageFormatter<JsonNode>
 
 
   @Override
-  protected void writeTo(String topic, byte[] data, PrintStream output) throws IOException {
-    JsonNode object = deserializer.deserialize(topic, data);
+  protected void writeTo(String topic, Headers headers, byte[] data, PrintStream output)
+      throws IOException {
+    JsonNode object = deserializer.deserialize(topic, headers, data);
     output.print(objectMapper.writeValueAsString(object));
   }
 
@@ -121,13 +123,14 @@ public class JsonSchemaMessageFormatter extends SchemaMessageFormatter<JsonNode>
     }
 
     @Override
-    public Object deserializeKey(String topic, byte[] payload) {
-      return keyDeserializer.deserialize(topic, payload);
+    public Object deserializeKey(String topic, Headers headers, byte[] payload) {
+      return keyDeserializer.deserialize(topic, headers, payload);
     }
 
     @Override
-    public JsonNode deserialize(String topic, byte[] payload) throws SerializationException {
-      return (JsonNode) super.deserialize(false, topic, isKey, payload);
+    public JsonNode deserialize(String topic, Headers headers, byte[] payload)
+        throws SerializationException {
+      return (JsonNode) super.deserialize(false, topic, isKey, headers, payload);
     }
   }
 }

@@ -17,10 +17,15 @@
 package io.confluent.kafka.formatter;
 
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
+import java.util.Iterator;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 
@@ -43,14 +48,19 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
 
   private static final byte[] NULL_BYTES = "null".getBytes(StandardCharsets.UTF_8);
-  private boolean printKey = false;
   private boolean printTimestamp = false;
+  private boolean printKey = false;
+  private boolean printPartition = false;
+  private boolean printOffset = false;
+  private boolean printHeaders = false;
   private boolean printIds = false;
   private boolean printKeyId = false;
   private boolean printValueId = false;
   private byte[] keySeparator = "\t".getBytes(StandardCharsets.UTF_8);
   private byte[] lineSeparator = "\n".getBytes(StandardCharsets.UTF_8);
+  private byte[] headersSeparator = "\n".getBytes(StandardCharsets.UTF_8);
   private byte[] idSeparator = "\t".getBytes(StandardCharsets.UTF_8);
+  private Deserializer<?> headersDeserializer;
   protected SchemaMessageDeserializer<T> deserializer;
 
   /**
@@ -96,19 +106,37 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     if (props.containsKey("print.key")) {
       printKey = props.getProperty("print.key").trim().toLowerCase().equals("true");
     }
+    if (props.containsKey("print.partition")) {
+      printPartition = props.getProperty("print.partition").trim().toLowerCase().equals("true");
+    }
+    if (props.containsKey("print.offset")) {
+      printOffset = props.getProperty("print.offset").trim().toLowerCase().equals("true");
+    }
+    if (props.containsKey("print.headers")) {
+      printHeaders = props.getProperty("print.headers").trim().toLowerCase().equals("true");
+    }
     if (props.containsKey("key.separator")) {
       keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8);
     }
     if (props.containsKey("line.separator")) {
       lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8);
     }
-    Deserializer keyDeserializer = null;
+    if (props.containsKey("headers.separator")) {
+      headersSeparator = props.getProperty("headers.separator").getBytes(StandardCharsets.UTF_8);
+    }
+    Deserializer<?> keyDeserializer = null;
     if (props.containsKey("key.deserializer")) {
       try {
-        keyDeserializer =
-            (Deserializer)Class.forName((String) props.get("key.deserializer")).newInstance();
+        keyDeserializer = getDeserializerProperty(true, props, "key.deserializer");
       } catch (Exception e) {
-        throw new ConfigException("Error initializing Key deserializer: " + e.getMessage());
+        throw new ConfigException("Error initializing key deserializer: " + e.getMessage());
+      }
+    }
+    if (props.containsKey("headers.deserializer")) {
+      try {
+        headersDeserializer = getDeserializerProperty(false, props, "headers.deserializer");
+      } catch (Exception e) {
+        throw new ConfigException("Error initializing headers deserializer: " + e.getMessage());
       }
     }
     if (props.containsKey("print.schema.ids")) {
@@ -129,6 +157,24 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       SchemaRegistryClient schemaRegistry = createSchemaRegistry(url, originals);
       this.deserializer = createDeserializer(schemaRegistry, keyDeserializer);
     }
+  }
+
+  private Deserializer<?> getDeserializerProperty(
+      boolean isKey, Properties props, String propertyName) throws Exception {
+    String serializerName = (String) props.get(propertyName);
+    Deserializer<?> deserializer = (Deserializer<?>)
+        Class.forName(serializerName).getDeclaredConstructor().newInstance();
+    Map<String, ?> deserializerConfig =
+        propertiesWithKeyPrefixStripped(propertyName + ".", props);
+    deserializer.configure(deserializerConfig, isKey);
+    return deserializer;
+  }
+
+  private Map<String, ?> propertiesWithKeyPrefixStripped(String prefix, Properties props) {
+    return props.entrySet().stream()
+        .filter(e -> ((String) e.getKey()).startsWith(prefix))
+        .collect(Collectors.toMap(
+            e -> ((String) e.getKey()).substring(prefix.length()), Entry::getValue));
   }
 
   private Map<String, Object> getPropertiesMap(Properties props) {
@@ -155,17 +201,59 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
         throw new SerializationException("Error while formatting the timestamp", ioe);
       }
     }
+    if (printPartition) {
+      try {
+        output.write("Partition:".getBytes(StandardCharsets.UTF_8));
+        output.write(String.valueOf(consumerRecord.partition()).getBytes(StandardCharsets.UTF_8));
+        output.write(keySeparator);
+      } catch (IOException ioe) {
+        throw new SerializationException("Error while formatting the partition", ioe);
+      }
+    }
+    if (printOffset) {
+      try {
+        output.write("Offset:".getBytes(StandardCharsets.UTF_8));
+        output.write(String.valueOf(consumerRecord.offset()).getBytes(StandardCharsets.UTF_8));
+        output.write(keySeparator);
+      } catch (IOException ioe) {
+        throw new SerializationException("Error while formatting the offset", ioe);
+      }
+    }
+    if (printHeaders) {
+      try {
+        Iterator<Header> headersIt = consumerRecord.headers().iterator();
+        if (headersIt.hasNext()) {
+          headersIt.forEachRemaining(header -> {
+            try {
+              output.write((header.key() + ":").getBytes(StandardCharsets.UTF_8));
+              output.write(deserialize(headersDeserializer, consumerRecord, header.value()));
+              if (headersIt.hasNext()) {
+                output.write(headersSeparator);
+              }
+            } catch (IOException ioe) {
+              throw new SerializationException("Error while formatting the headers", ioe);
+            }
+          });
+        } else {
+          output.write("NO_HEADERS".getBytes(StandardCharsets.UTF_8));
+        }
+        output.write(keySeparator);
+      } catch (IOException ioe) {
+        throw new SerializationException("Error while formatting the headers", ioe);
+      }
+    }
     if (printKey) {
       try {
         if (deserializer.getKeyDeserializer() != null) {
           Object deserializedKey = consumerRecord.key() == null
               ? null
-              : deserializer.deserializeKey(consumerRecord.topic(), consumerRecord.key());
+              : deserializer.deserializeKey(
+                  consumerRecord.topic(), consumerRecord.headers(), consumerRecord.key());
           output.write(
               deserializedKey != null ? deserializedKey.toString().getBytes(StandardCharsets.UTF_8)
                                       : NULL_BYTES);
         } else {
-          writeTo(consumerRecord.topic(), consumerRecord.key(), output);
+          writeTo(consumerRecord.topic(), consumerRecord.headers(), consumerRecord.key(), output);
         }
         if (printKeyId) {
           output.write(idSeparator);
@@ -178,7 +266,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       }
     }
     try {
-      writeTo(consumerRecord.topic(), consumerRecord.value(), output);
+      writeTo(consumerRecord.topic(), consumerRecord.headers(), consumerRecord.value(), output);
       if (printValueId) {
         output.write(idSeparator);
         int schemaId = schemaIdFor(consumerRecord.value());
@@ -190,7 +278,8 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     }
   }
 
-  protected abstract void writeTo(String topic, byte[] data, PrintStream output) throws IOException;
+  protected abstract void writeTo(String topic, Headers headers, byte[] data, PrintStream output)
+      throws IOException;
 
   @Override
   public void close() {
@@ -198,6 +287,18 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
   }
 
   private static final int MAGIC_BYTE = 0x0;
+
+  private byte[] deserialize(Deserializer<?> deserializer,
+      ConsumerRecord<byte[], byte[]> consumerRecord, byte[] sourceBytes) {
+    if (deserializer == null || sourceBytes == null) {
+      return NULL_BYTES;
+    }
+    Object deserializedHeader =
+        deserializer.deserialize(consumerRecord.topic(), consumerRecord.headers(), sourceBytes);
+    return deserializedHeader != null
+        ? deserializedHeader.toString().getBytes(StandardCharsets.UTF_8)
+        : NULL_BYTES;
+  }
 
   private int schemaIdFor(byte[] payload) {
     ByteBuffer buffer = ByteBuffer.wrap(payload);

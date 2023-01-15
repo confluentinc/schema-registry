@@ -19,6 +19,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import java.util.Properties;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.BufferedReader;
@@ -142,8 +143,8 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
     }
 
     @Override
-    public byte[] serializeKey(String topic, Object payload) {
-      return keySerializer.serialize(topic, payload);
+    public byte[] serializeKey(String topic, Headers headers, Object payload) {
+      return keySerializer.serialize(topic, headers, payload);
     }
 
     @Override
@@ -151,10 +152,11 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
         String subject,
         String topic,
         boolean isKey,
+        Headers headers,
         Message object,
         ParsedSchema schema
     ) {
-      return super.serializeImpl(subject, topic, isKey, null, object, (ProtobufSchema) schema);
+      return super.serializeImpl(subject, topic, isKey, headers, object, (ProtobufSchema) schema);
     }
   }
 }

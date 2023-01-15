@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kafka.common.MessageReader;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.everit.json.schema.ValidationException;
 
@@ -154,8 +155,8 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
     }
 
     @Override
-    public byte[] serializeKey(String topic, Object payload) {
-      return keySerializer.serialize(topic, payload);
+    public byte[] serializeKey(String topic, Headers headers, Object payload) {
+      return keySerializer.serialize(topic, headers, payload);
     }
 
     @Override
@@ -163,10 +164,11 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
         String subject,
         String topic,
         boolean isKey,
+        Headers headers,
         JsonNode object,
         ParsedSchema schema
     ) {
-      return super.serializeImpl(subject, topic, null, object, (JsonSchema) schema);
+      return super.serializeImpl(subject, topic, headers, object, (JsonSchema) schema);
     }
   }
 }

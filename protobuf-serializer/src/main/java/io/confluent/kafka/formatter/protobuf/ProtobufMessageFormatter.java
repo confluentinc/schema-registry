@@ -19,6 +19,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
@@ -100,8 +101,9 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
   }
 
   @Override
-  protected void writeTo(String topic, byte[] data, PrintStream output) throws IOException {
-    Message object = deserializer.deserialize(topic, data);
+  protected void writeTo(String topic, Headers headers, byte[] data, PrintStream output)
+      throws IOException {
+    Message object = deserializer.deserialize(topic, headers, data);
     try {
       JsonFormat.Printer printer = JsonFormat.printer()
               .includingDefaultValueFields()
@@ -139,13 +141,14 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
     }
 
     @Override
-    public Object deserializeKey(String topic, byte[] payload) {
-      return keyDeserializer.deserialize(topic, payload);
+    public Object deserializeKey(String topic, Headers headers, byte[] payload) {
+      return keyDeserializer.deserialize(topic, headers, payload);
     }
 
     @Override
-    public Message deserialize(String topic, byte[] payload) throws SerializationException {
-      return (Message) super.deserialize(false, topic, isKey, payload);
+    public Message deserialize(String topic, Headers headers, byte[] payload)
+        throws SerializationException {
+      return (Message) super.deserialize(false, topic, isKey, headers, payload);
     }
   }
 }

@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.formatter;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -24,12 +25,13 @@ public interface SchemaMessageSerializer<T> {
 
   Serializer getKeySerializer();
 
-  byte[] serializeKey(String topic, Object payload);
+  byte[] serializeKey(String topic, Headers headers, Object payload);
 
   byte[] serialize(
       String subject,
       String topic,
       boolean isKey,
+      Headers headers,
       T object,
       ParsedSchema schema
   );

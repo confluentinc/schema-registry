@@ -17,13 +17,14 @@
 package io.confluent.kafka.formatter;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 public interface SchemaMessageDeserializer<T> {
 
   Deserializer getKeyDeserializer();
 
-  Object deserializeKey(String topic, byte[] payload);
+  Object deserializeKey(String topic, Headers headers, byte[] payload);
 
-  T deserialize(String topic, byte[] payload) throws SerializationException;
+  T deserialize(String topic, Headers headers, byte[] payload) throws SerializationException;
 }

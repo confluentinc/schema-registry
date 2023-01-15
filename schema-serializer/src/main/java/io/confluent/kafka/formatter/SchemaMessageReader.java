@@ -20,11 +20,17 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
+import java.util.AbstractMap;
+import java.util.Arrays;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import kafka.common.MessageReader;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -60,6 +66,11 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   private BufferedReader reader = null;
   private Boolean parseKey = false;
   private String keySeparator = "\t";
+  private boolean parseHeaders = false;
+  private String headersDelimiter = "\t";
+  private String headersSeparator = ",";
+  private Pattern headersSeparatorPattern;
+  private String headersKeySeparator = ":";
   private boolean ignoreError = false;
   protected ParsedSchema keySchema = null;
   protected ParsedSchema valueSchema = null;
@@ -111,6 +122,28 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     }
     if (props.containsKey("key.separator")) {
       keySeparator = props.getProperty("key.separator");
+    }
+    if (props.containsKey("parse.headers")) {
+      parseHeaders = Boolean.parseBoolean(props.getProperty("parse.headers").trim());
+    }
+    if (props.containsKey("headers.delimiter")) {
+      headersDelimiter = props.getProperty("headers.delimiter");
+    }
+    if (props.containsKey("headers.separator")) {
+      headersSeparator = props.getProperty("headers.separator");
+    }
+    headersSeparatorPattern = Pattern.compile(headersSeparator);
+    if (props.containsKey("headers.key.separator")) {
+      headersKeySeparator = props.getProperty("headers.key.separator");
+    }
+    if (headersDelimiter.equals(headersSeparator)) {
+      throw new KafkaException("headers.delimiter and headers.separator may not be equal");
+    }
+    if (headersDelimiter.equals(headersKeySeparator)) {
+      throw new KafkaException("headers.delimiter and headers.key.separator may not be equal");
+    }
+    if (headersSeparator.equals(headersKeySeparator)) {
+      throw new KafkaException("headers.separator and headers.key.separator may not be equal");
     }
     if (props.containsKey("ignore.error")) {
       ignoreError = props.getProperty("ignore.error").trim().toLowerCase().equals("true");
@@ -293,7 +326,8 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   private Serializer getKeySerializer(Properties props) throws ConfigException {
     if (props.containsKey("key.serializer")) {
       try {
-        return (Serializer) Class.forName((String) props.get("key.serializer")).newInstance();
+        return (Serializer) Class.forName((String) props.get("key.serializer"))
+            .getDeclaredConstructor().newInstance();
       } catch (Exception e) {
         throw new ConfigException("Error initializing Key serializer: " + e.getMessage());
       }
@@ -321,61 +355,97 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       if (line == null) {
         return null;
       }
-      if (!parseKey) {
-        T value = readFrom(line, valueSchema);
-        byte[] serializedValue = serializer.serialize(valueSubject, topic, false, value,
-            valueSchema);
-        return new ProducerRecord<>(topic, serializedValue);
-      } else {
-        int keyIndex = line.indexOf(keySeparator);
-        if (keyIndex < 0) {
-          if (ignoreError) {
-            T value = readFrom(line, valueSchema);
-            byte[] serializedValue = serializer.serialize(valueSubject, topic, false, value,
-                valueSchema);
-            return new ProducerRecord<>(topic, serializedValue);
-          } else {
-            throw new KafkaException("No key found in line " + line);
-          }
-        } else {
-          String keyString = line.substring(0, keyIndex);
-          String valueString = (keyIndex + keySeparator.length() > line.length())
-                               ? ""
-                               : line.substring(keyIndex + keySeparator.length());
 
-          byte[] serializedKey;
-          if (serializer.getKeySerializer() != null) {
-            serializedKey = serializeNonSchemaKey(keyString);
-          } else {
-            T key = readFrom(keyString, keySchema);
-            serializedKey = serializer.serialize(keySubject, topic, true, key, keySchema);
-          }
-          T value = readFrom(valueString, valueSchema);
-          byte[] serializedValue = serializer.serialize(
-              valueSubject, topic, false, value, valueSchema);
-          return new ProducerRecord<>(topic, serializedKey, serializedValue);
+      String headersString = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter");
+      int headersOffset = headersString == null
+          ? 0
+          : headersString.length() + headersDelimiter.length();
+      Headers headers = new RecordHeaders();
+      if (headersString != null) {
+        splitHeaders(headersString, line).forEach(
+            header -> headers.add(header.getKey(), header.getValue()));
+      }
+
+      String keyString = parse(parseKey, line, headersOffset, keySeparator, "key separator");
+      int keyOffset = keyString == null ? 0 : keyString.length() + keySeparator.length();
+      byte[] serializedKey = null;
+      if (keyString != null) {
+        if (serializer.getKeySerializer() != null) {
+          serializedKey = serializeNonSchemaKey(headers, keyString);
+        } else {
+          T key = readFrom(keyString, keySchema);
+          serializedKey = serializer.serialize(keySubject, topic, true, headers, key, keySchema);
         }
       }
+
+      T value = readFrom(line.substring(headersOffset + keyOffset), valueSchema);
+      byte[] serializedValue = serializer.serialize(valueSubject, topic, false, headers,
+          value, valueSchema);
+
+      ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+          topic,
+          null,
+          serializedKey,
+          serializedValue,
+          headers);
+
+      return record;
     } catch (IOException e) {
       throw new KafkaException("Error reading from input", e);
     }
   }
 
-  private byte[] serializeNonSchemaKey(String keyString) {
+  private String parse(
+      boolean enabled, String line, int startIndex, String demarcation, String demarcationName) {
+    if (!enabled) {
+      return null;
+    }
+    int index = line.indexOf(demarcation, startIndex);
+    if (index < 0) {
+      if (ignoreError) {
+        return null;
+      } else {
+        throw new KafkaException("No " + demarcationName + " found in line " + line);
+      }
+    }
+    return line.substring(startIndex, index);
+  }
+
+  private List<Map.Entry<String, byte[]>> splitHeaders(String headers, String line) {
+    return Arrays.stream(headersSeparatorPattern.split(headers))
+        .map(pair -> {
+          int index = pair.indexOf(headersKeySeparator);
+          if (index < 0) {
+            if (ignoreError) {
+              return new AbstractMap.SimpleEntry<>(pair, (byte[]) null);
+            } else {
+              throw new KafkaException(
+                  "No header key separator found in pair '" + pair + "' in line " + line);
+            }
+          }
+          String headerKey = pair.substring(0, index);
+          String headerValue = pair.substring(index + headersKeySeparator.length());
+          return new AbstractMap.SimpleEntry<>(headerKey,
+              headerValue.getBytes(StandardCharsets.UTF_8));
+        })
+        .collect(Collectors.toList());
+  }
+
+  private byte[] serializeNonSchemaKey(Headers headers, String keyString) {
     Class serializerClass = serializer.getKeySerializer().getClass();
     if (serializerClass == LongSerializer.class) {
       Long longKey = Long.parseLong(keyString);
-      return serializer.serializeKey(topic, longKey);
+      return serializer.serializeKey(topic, headers, longKey);
     }
     if (serializerClass == IntegerSerializer.class) {
       Integer intKey = Integer.parseInt(keyString);
-      return serializer.serializeKey(topic, intKey);
+      return serializer.serializeKey(topic, headers, intKey);
     }
     if (serializerClass == ShortSerializer.class) {
       Short shortKey = Short.parseShort(keyString);
-      return serializer.serializeKey(topic, shortKey);
+      return serializer.serializeKey(topic, headers, shortKey);
     }
-    return serializer.serializeKey(topic, keyString);
+    return serializer.serializeKey(topic, headers, keyString);
   }
 
   protected abstract T readFrom(String jsonString, ParsedSchema schema);

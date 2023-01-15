@@ -29,6 +29,7 @@ import java.io.PrintStream;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 /**
@@ -88,8 +89,9 @@ public class AvroMessageFormatter extends SchemaMessageFormatter<Object> {
   }
 
   @Override
-  protected void writeTo(String topic, byte[] data, PrintStream output) throws IOException {
-    Object object = deserializer.deserialize(topic, data);
+  protected void writeTo(String topic, Headers headers, byte[] data, PrintStream output)
+      throws IOException {
+    Object object = deserializer.deserialize(topic, headers, data);
     try {
       AvroSchemaUtils.toJson(object, output);
     } catch (AvroRuntimeException e) {
@@ -124,13 +126,14 @@ public class AvroMessageFormatter extends SchemaMessageFormatter<Object> {
     }
 
     @Override
-    public Object deserializeKey(String topic, byte[] payload) {
-      return keyDeserializer.deserialize(topic, payload);
+    public Object deserializeKey(String topic, Headers headers, byte[] payload) {
+      return keyDeserializer.deserialize(topic, headers, payload);
     }
 
     @Override
-    public Object deserialize(String topic, byte[] payload) throws SerializationException {
-      return super.deserialize(topic, isKey, payload, null);
+    public Object deserialize(String topic, Headers headers, byte[] payload)
+        throws SerializationException {
+      return super.deserialize(topic, isKey, headers, payload, null);
     }
   }
 }

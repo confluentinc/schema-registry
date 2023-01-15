@@ -21,6 +21,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.BufferedReader;
@@ -157,8 +158,8 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
     }
 
     @Override
-    public byte[] serializeKey(String topic, Object payload) {
-      return keySerializer.serialize(topic, payload);
+    public byte[] serializeKey(String topic, Headers headers, Object payload) {
+      return keySerializer.serialize(topic, headers, payload);
     }
 
     @Override
@@ -166,10 +167,11 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
         String subject,
         String topic,
         boolean isKey,
+        Headers headers,
         Object object,
         ParsedSchema schema
     ) {
-      return super.serializeImpl(subject, topic, null, object, (AvroSchema) schema);
+      return super.serializeImpl(subject, topic, headers, object, (AvroSchema) schema);
     }
   }
 }
