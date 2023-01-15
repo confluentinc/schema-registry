@@ -151,11 +151,15 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       throw new ConfigException("Missing schema registry url!");
     }
 
-
     Serializer keySerializer = getKeySerializer(props);
 
     if (this.serializer == null) {
       Map<String, Object> originals = getPropertiesMap(props);
+      Object autoRegister = props.get("auto.register");
+      if (autoRegister != null) {
+        // for backward compatibility
+        originals.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, autoRegister);
+      }
       this.serializer = createSerializer(keySerializer);
       this.serializer.configure(originals, false);
     }
