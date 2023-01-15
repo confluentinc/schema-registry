@@ -151,7 +151,10 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       throw new ConfigException("Missing schema registry url!");
     }
 
-    Serializer<?> keySerializer = getSerializerProperty(true, props, "key.serializer");
+    Serializer<?> keySerializer = null;
+    if (props.containsKey("key.serializer")) {
+      keySerializer = getSerializerProperty(true, props, "key.serializer");
+    }
 
     if (this.serializer == null) {
       Map<String, Object> originals = getPropertiesMap(props);
