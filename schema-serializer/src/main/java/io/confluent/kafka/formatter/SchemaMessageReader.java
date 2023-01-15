@@ -151,7 +151,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       throw new ConfigException("Missing schema registry url!");
     }
 
-    Serializer keySerializer = getKeySerializer(props);
+    Serializer<?> keySerializer = getSerializerProperty(true, props, "key.serializer");
 
     if (this.serializer == null) {
       Map<String, Object> originals = getPropertiesMap(props);
@@ -183,6 +183,36 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     }
   }
 
+  private Serializer<?> getSerializerProperty(
+      boolean isKey, Properties props, String propertyName) {
+    try {
+      String serializerName = (String) props.get(propertyName);
+      Serializer<?> serializer = (Serializer<?>)
+          Class.forName(serializerName).getDeclaredConstructor().newInstance();
+      Map<String, ?> serializerConfig =
+          propertiesWithKeyPrefixStripped(propertyName + ".", props);
+      serializer.configure(serializerConfig, isKey);
+      return serializer;
+    } catch (Exception e) {
+      throw new ConfigException("Error initializing " + propertyName + ": " + e.getMessage());
+    }
+  }
+
+  private Map<String, ?> propertiesWithKeyPrefixStripped(String prefix, Properties props) {
+    return props.entrySet().stream()
+        .filter(e -> ((String) e.getKey()).startsWith(prefix))
+        .collect(Collectors.toMap(
+            e -> ((String) e.getKey()).substring(prefix.length()), Map.Entry::getValue));
+  }
+
+  private Map<String, Object> getPropertiesMap(Properties props) {
+    Map<String, Object> originals = new HashMap<>();
+    for (final String name: props.stringPropertyNames()) {
+      originals.put(name, props.getProperty(name));
+    }
+    return originals;
+  }
+
   /**
    * @see AbstractKafkaSchemaSerDe#getSubjectName(String, boolean, Object, ParsedSchema)
    */
@@ -199,8 +229,6 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
               + SubjectNameStrategy.class.getCanonicalName() + " instead.");
     }
   }
-
-  protected abstract SchemaProvider getProvider();
 
   protected ParsedSchema parseSchema(
       SchemaRegistryClient schemaRegistry,
@@ -282,29 +310,8 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     return Collections.emptyList();
   }
 
-  private Serializer getKeySerializer(Properties props) throws ConfigException {
-    if (props.containsKey("key.serializer")) {
-      try {
-        return (Serializer) Class.forName((String) props.get("key.serializer"))
-            .getDeclaredConstructor().newInstance();
-      } catch (Exception e) {
-        throw new ConfigException("Error initializing Key serializer: " + e.getMessage());
-      }
-    } else {
-      return null;
-    }
-  }
-
   private boolean needsKeySchema() {
     return parseKey && serializer.getKeySerializer() == null;
-  }
-
-  private Map<String, Object> getPropertiesMap(Properties props) {
-    Map<String, Object> originals = new HashMap<>();
-    for (final String name: props.stringPropertyNames()) {
-      originals.put(name, props.getProperty(name));
-    }
-    return originals;
   }
 
   @Override
@@ -391,7 +398,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   }
 
   private byte[] serializeNonSchemaKey(Headers headers, String keyString) {
-    Class serializerClass = serializer.getKeySerializer().getClass();
+    Class<?> serializerClass = serializer.getKeySerializer().getClass();
     if (serializerClass == LongSerializer.class) {
       Long longKey = Long.parseLong(keyString);
       return serializer.serializeKey(topic, headers, longKey);
@@ -413,4 +420,6 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   public void close() {
     // nothing to do
   }
+
+  protected abstract SchemaProvider getProvider();
 }

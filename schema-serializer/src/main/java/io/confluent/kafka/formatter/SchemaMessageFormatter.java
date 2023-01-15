@@ -114,18 +114,10 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     }
     Deserializer<?> keyDeserializer = null;
     if (props.containsKey("key.deserializer")) {
-      try {
-        keyDeserializer = getDeserializerProperty(true, props, "key.deserializer");
-      } catch (Exception e) {
-        throw new ConfigException("Error initializing key deserializer: " + e.getMessage());
-      }
+      keyDeserializer = getDeserializerProperty(true, props, "key.deserializer");
     }
     if (props.containsKey("headers.deserializer")) {
-      try {
-        headersDeserializer = getDeserializerProperty(false, props, "headers.deserializer");
-      } catch (Exception e) {
-        throw new ConfigException("Error initializing headers deserializer: " + e.getMessage());
-      }
+      headersDeserializer = getDeserializerProperty(false, props, "headers.deserializer");
     }
     if (props.containsKey("print.schema.ids")) {
       printIds = props.getProperty("print.schema.ids").trim().toLowerCase().equals("true");
@@ -148,14 +140,18 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
   }
 
   private Deserializer<?> getDeserializerProperty(
-      boolean isKey, Properties props, String propertyName) throws Exception {
-    String serializerName = (String) props.get(propertyName);
-    Deserializer<?> deserializer = (Deserializer<?>)
-        Class.forName(serializerName).getDeclaredConstructor().newInstance();
-    Map<String, ?> deserializerConfig =
-        propertiesWithKeyPrefixStripped(propertyName + ".", props);
-    deserializer.configure(deserializerConfig, isKey);
-    return deserializer;
+      boolean isKey, Properties props, String propertyName) {
+    try {
+      String serializerName = (String) props.get(propertyName);
+      Deserializer<?> deserializer = (Deserializer<?>)
+          Class.forName(serializerName).getDeclaredConstructor().newInstance();
+      Map<String, ?> deserializerConfig =
+          propertiesWithKeyPrefixStripped(propertyName + ".", props);
+      deserializer.configure(deserializerConfig, isKey);
+      return deserializer;
+    } catch (Exception e) {
+      throw new ConfigException("Error initializing " + propertyName + ": " + e.getMessage());
+    }
   }
 
   private Map<String, ?> propertiesWithKeyPrefixStripped(String prefix, Properties props) {
