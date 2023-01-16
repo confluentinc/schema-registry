@@ -55,6 +55,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
   private byte[] lineSeparator = "\n".getBytes(StandardCharsets.UTF_8);
   private byte[] headersSeparator = ",".getBytes(StandardCharsets.UTF_8);
   private byte[] idSeparator = "\t".getBytes(StandardCharsets.UTF_8);
+  private byte[] nullLiteral = NULL_BYTES;
   private Deserializer<?> headersDeserializer;
   protected SchemaMessageDeserializer<T> deserializer;
 
@@ -111,6 +112,9 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     }
     if (props.containsKey("headers.separator")) {
       headersSeparator = props.getProperty("headers.separator").getBytes(StandardCharsets.UTF_8);
+    }
+    if (props.containsKey("null.literal")) {
+      nullLiteral = props.getProperty("null.literal").getBytes(StandardCharsets.UTF_8);
     }
     Deserializer<?> keyDeserializer = null;
     if (props.containsKey("key.deserializer")) {
@@ -235,9 +239,13 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
                   consumerRecord.topic(), consumerRecord.headers(), consumerRecord.key());
           output.write(
               deserializedKey != null ? deserializedKey.toString().getBytes(StandardCharsets.UTF_8)
-                                      : NULL_BYTES);
+                                      : nullLiteral);
         } else {
-          writeTo(consumerRecord.topic(), consumerRecord.headers(), consumerRecord.key(), output);
+          if (consumerRecord.key() != null) {
+            writeTo(consumerRecord.topic(), consumerRecord.headers(), consumerRecord.key(), output);
+          } else {
+            output.write(nullLiteral);
+          }
         }
         if (printKeyId) {
           output.write(idSeparator);
@@ -250,7 +258,11 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       }
     }
     try {
-      writeTo(consumerRecord.topic(), consumerRecord.headers(), consumerRecord.value(), output);
+      if (consumerRecord.value() != null) {
+        writeTo(consumerRecord.topic(), consumerRecord.headers(), consumerRecord.value(), output);
+      } else {
+        output.write(nullLiteral);
+      }
       if (printValueId) {
         output.write(idSeparator);
         int schemaId = schemaIdFor(consumerRecord.value());
@@ -275,13 +287,13 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
   private byte[] deserialize(Deserializer<?> deserializer,
       ConsumerRecord<byte[], byte[]> consumerRecord, byte[] sourceBytes) {
     if (deserializer == null || sourceBytes == null) {
-      return NULL_BYTES;
+      return nullLiteral;
     }
     Object deserializedHeader =
         deserializer.deserialize(consumerRecord.topic(), consumerRecord.headers(), sourceBytes);
     return deserializedHeader != null
         ? deserializedHeader.toString().getBytes(StandardCharsets.UTF_8)
-        : NULL_BYTES;
+        : nullLiteral;
   }
 
   private int schemaIdFor(byte[] payload) {

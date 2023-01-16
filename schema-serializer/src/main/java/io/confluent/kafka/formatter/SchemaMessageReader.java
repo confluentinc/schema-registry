@@ -21,6 +21,7 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import kafka.common.MessageReader;
@@ -70,6 +71,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   private Pattern headersSeparatorPattern;
   private String headersKeySeparator = ":";
   private boolean ignoreError = false;
+  private String nullMarker = null;
   protected ParsedSchema keySchema = null;
   protected ParsedSchema valueSchema = null;
   private String keySubject = null;
@@ -133,18 +135,34 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     if (props.containsKey("headers.key.separator")) {
       headersKeySeparator = props.getProperty("headers.key.separator");
     }
-    if (headersDelimiter.equals(headersSeparator)) {
+    if (Objects.equals(headersDelimiter, headersSeparator)) {
       throw new KafkaException("headers.delimiter and headers.separator may not be equal");
     }
-    if (headersDelimiter.equals(headersKeySeparator)) {
+    if (Objects.equals(headersDelimiter, headersKeySeparator)) {
       throw new KafkaException("headers.delimiter and headers.key.separator may not be equal");
     }
-    if (headersSeparator.equals(headersKeySeparator)) {
+    if (Objects.equals(headersSeparator, headersKeySeparator)) {
       throw new KafkaException("headers.separator and headers.key.separator may not be equal");
     }
     if (props.containsKey("ignore.error")) {
       ignoreError = props.getProperty("ignore.error").trim().toLowerCase().equals("true");
     }
+    if (props.containsKey("null.marker")) {
+      nullMarker = props.getProperty("null.marker");
+    }
+    if (Objects.equals(nullMarker, keySeparator)) {
+      throw new KafkaException("null.marker and key.separator may not be equal");
+    }
+    if (Objects.equals(nullMarker, headersSeparator)) {
+      throw new KafkaException("null.marker and headers.separator may not be equal");
+    }
+    if (Objects.equals(nullMarker, headersDelimiter)) {
+      throw new KafkaException("null.marker and headers.delimiter may not be equal");
+    }
+    if (Objects.equals(nullMarker, headersKeySeparator)) {
+      throw new KafkaException("null.marker and headers.key.separator may not be equal");
+    }
+
     reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
     String url = props.getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
@@ -330,7 +348,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
           ? 0
           : headersString.length() + headersDelimiter.length();
       Headers headers = new RecordHeaders();
-      if (headersString != null) {
+      if (headersString != null && !headersString.equals(nullMarker)) {
         splitHeaders(headersString, line).forEach(
             header -> headers.add(header.getKey(), header.getValue()));
       }
@@ -338,7 +356,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       String keyString = parse(parseKey, line, headersOffset, keySeparator, "key separator");
       int keyOffset = keyString == null ? 0 : keyString.length() + keySeparator.length();
       byte[] serializedKey = null;
-      if (keyString != null) {
+      if (keyString != null && !keyString.equals(nullMarker)) {
         if (serializer.getKeySerializer() != null) {
           serializedKey = serializeNonSchemaKey(headers, keyString);
         } else {
@@ -347,9 +365,13 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
         }
       }
 
-      T value = readFrom(line.substring(headersOffset + keyOffset), valueSchema);
-      byte[] serializedValue = serializer.serialize(valueSubject, topic, false, headers,
-          value, valueSchema);
+      String valueString = line.substring(headersOffset + keyOffset);
+      byte[] serializedValue = null;
+      if (valueString != null && !valueString.equals(nullMarker)) {
+        T value = readFrom(line.substring(headersOffset + keyOffset), valueSchema);
+        serializedValue = serializer.serialize(valueSubject, topic, false, headers,
+            value, valueSchema);
+      }
 
       ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
           topic,
@@ -393,9 +415,16 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
             }
           }
           String headerKey = pair.substring(0, index);
-          String headerValue = pair.substring(index + headersKeySeparator.length());
-          return new AbstractMap.SimpleEntry<>(headerKey,
-              headerValue.getBytes(StandardCharsets.UTF_8));
+          if (Objects.equals(headerKey, nullMarker)) {
+            throw new KafkaException("Header keys should not be equal to the null marker '"
+                + nullMarker + "' as they can't be null");
+          }
+          String headerValueString = pair.substring(index + headersKeySeparator.length());
+          byte[] headerValue = null;
+          if (!Objects.equals(headerValue, nullMarker)) {
+            headerValue = headerValueString.getBytes(StandardCharsets.UTF_8);
+          }
+          return new AbstractMap.SimpleEntry<>(headerKey, headerValue);
         })
         .collect(Collectors.toList());
   }
