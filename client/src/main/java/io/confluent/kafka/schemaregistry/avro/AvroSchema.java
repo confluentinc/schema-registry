@@ -208,7 +208,7 @@ public class AvroSchema implements ParsedSchema {
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
     }
-    modifyFieldLevelTags(original, tagsToAdd, tagsToRemove);
+    modifySchemaTags(original, tagsToAdd, tagsToRemove);
     return new AvroSchema(original.toString(),
       schemaCopy.references(),
       schemaCopy.resolvedReferences(),
@@ -617,9 +617,9 @@ public class AvroSchema implements ParsedSchema {
     return tags;
   }
 
-  private void modifyFieldLevelTags(JsonNode node,
-                                    Map<SchemaEntity, Set<String>> tagsToAddMap,
-                                    Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+  private void modifySchemaTags(JsonNode node,
+                                Map<SchemaEntity, Set<String>> tagsToAddMap,
+                                Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
     Set<SchemaEntity> entityToModify = new HashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
 

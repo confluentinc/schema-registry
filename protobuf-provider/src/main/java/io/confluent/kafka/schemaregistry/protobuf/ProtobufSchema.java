@@ -560,7 +560,7 @@ public class ProtobufSchema implements ParsedSchema {
                            Map<SchemaEntity, Set<String>> tagsToRemove) {
     ProtobufSchema schemaCopy = this.copy();
     JsonNode original = jsonMapper.valueToTree(schemaCopy.rawSchema());
-    modifyFieldLevelTags(schemaCopy.rawSchema(), original, tagsToAdd, tagsToRemove);
+    modifySchemaTags(schemaCopy.rawSchema(), original, tagsToAdd, tagsToRemove);
     try {
       ProtoFileElement newFileElement = jsonToFile(original);
       return new ProtobufSchema(newFileElement.toSchema(),
@@ -2207,9 +2207,9 @@ public class ProtobufSchema implements ParsedSchema {
     return tags;
   }
 
-  private void modifyFieldLevelTags(ProtoFileElement original, JsonNode node,
-                                    Map<SchemaEntity, Set<String>> tagsToAddMap,
-                                    Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+  private void modifySchemaTags(ProtoFileElement original, JsonNode node,
+                                Map<SchemaEntity, Set<String>> tagsToAddMap,
+                                Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
     Set<SchemaEntity> entityToModify = new HashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
 

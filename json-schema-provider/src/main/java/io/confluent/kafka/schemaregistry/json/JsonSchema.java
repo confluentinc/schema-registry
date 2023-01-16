@@ -269,7 +269,7 @@ public class JsonSchema implements ParsedSchema {
                            Map<SchemaEntity, Set<String>> tagsToRemove) {
     JsonSchema schemaCopy = this.copy();
     JsonNode original = schemaCopy.toJsonNode().deepCopy();
-    modifyFieldLevelTags(original, tagsToAdd, tagsToRemove);
+    modifySchemaTags(original, tagsToAdd, tagsToRemove);
     return new JsonSchema(original.toString(),
       schemaCopy.references(),
       schemaCopy.resolvedReferences(),
@@ -816,9 +816,9 @@ public class JsonSchema implements ParsedSchema {
     return props.get(propertyName);
   }
 
-  private void modifyFieldLevelTags(JsonNode node,
-                                    Map<SchemaEntity, Set<String>> tagsToAddMap,
-                                    Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+  private void modifySchemaTags(JsonNode node,
+                                Map<SchemaEntity, Set<String>> tagsToAddMap,
+                                Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
     Set<SchemaEntity> entityToModify = new HashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
