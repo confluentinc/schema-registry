@@ -421,7 +421,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
           }
           String headerValueString = pair.substring(index + headersKeySeparator.length());
           byte[] headerValue = null;
-          if (!Objects.equals(headerValue, nullMarker)) {
+          if (!Objects.equals(headerValueString, nullMarker)) {
             headerValue = headerValueString.getBytes(StandardCharsets.UTF_8);
           }
           return new AbstractMap.SimpleEntry<>(headerKey, headerValue);
