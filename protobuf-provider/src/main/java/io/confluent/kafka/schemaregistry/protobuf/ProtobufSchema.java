@@ -92,6 +92,7 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -138,7 +139,8 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import static com.google.common.base.CaseFormat.LOWER_UNDERSCORE;
 import static com.google.common.base.CaseFormat.UPPER_CAMEL;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingFieldElement;
-import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingFieldNode;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingMessageElement;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingNode;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.jsonToFile;
 
 public class ProtobufSchema implements ParsedSchema {
@@ -554,8 +556,8 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   @Override
-  public ParsedSchema copy(Map<String, Set<String>> tagsToAdd,
-                           Map<String, Set<String>> tagsToRemove) {
+  public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                           Map<SchemaEntity, Set<String>> tagsToRemove) {
     ProtobufSchema schemaCopy = this.copy();
     JsonNode original = jsonMapper.valueToTree(schemaCopy.rawSchema());
     modifyFieldLevelTags(schemaCopy.rawSchema(), original, tagsToAdd, tagsToRemove);
@@ -2205,35 +2207,49 @@ public class ProtobufSchema implements ParsedSchema {
     return tags;
   }
 
-  private void modifyFieldLevelTags(ProtoFileElement original, JsonNode originalNode,
-                                    Map<String, Set<String>> tagsToAddMap,
-                                    Map<String, Set<String>> tagsToRemoveMap) {
-    Set<String> pathToModify = new HashSet<>(tagsToAddMap.keySet());
-    pathToModify.addAll(tagsToRemoveMap.keySet());
+  private void modifyFieldLevelTags(ProtoFileElement original, JsonNode node,
+                                    Map<SchemaEntity, Set<String>> tagsToAddMap,
+                                    Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+    Set<SchemaEntity> entityToModify = new HashSet<>(tagsToAddMap.keySet());
+    entityToModify.addAll(tagsToRemoveMap.keySet());
 
-    for (String path : pathToModify) {
-      String[] identifiers = path.split("\\.");
-      FieldElement fieldElement = findMatchingFieldElement(original, identifiers);
+    for (SchemaEntity entity : entityToModify) {
+      String[] identifiers = entity.getEntityPath().split("\\.");
+      MessageElement messageElement;
+      List<OptionElement> allOptions;
       Map<String, OptionElement> mergedOptions;
+      String metaName;
+      JsonNode entityNode;
 
-      Set<String> tagsToAdd = tagsToAddMap.get(path);
-      if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
-        List<OptionElement> allOptions = new LinkedList<>(fieldElement.getOptions());
-        OptionElement newOption = new OptionElement(CONFLUENT_FIELD_META, Kind.OPTION,
-            new OptionElement(TAGS_FIELD, Kind.LIST, new ArrayList<>(tagsToAdd), false), true);
-        allOptions.add(newOption);
-        mergedOptions = mergeOptions(allOptions);
+      if (SchemaEntity.EntityType.SR_RECORD.equals(entity.getEntityType())) {
+        messageElement = findMatchingMessageElement(original, identifiers, identifiers.length);
+        entityNode = findMatchingNode(node, identifiers, identifiers.length);
+        allOptions = new LinkedList<>(messageElement.getOptions());
+        metaName = CONFLUENT_MESSAGE_META;
       } else {
-        mergedOptions = mergeOptions(fieldElement.getOptions());
+        messageElement = findMatchingMessageElement(original, identifiers, identifiers.length - 1);
+        FieldElement fieldElement =
+            findMatchingFieldElement(messageElement, identifiers[identifiers.length - 1]);
+        entityNode = findMatchingNode(node, identifiers, identifiers.length - 1);
+        allOptions = new LinkedList<>(fieldElement.getOptions());
+        metaName = CONFLUENT_FIELD_META;
       }
 
-      Set<String> tagsToRemove = tagsToRemoveMap.get(path);
+      Set<String> tagsToAdd = tagsToAddMap.get(entity);
+      if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+        OptionElement newOption = new OptionElement(metaName, Kind.OPTION,
+            new OptionElement(TAGS_FIELD, Kind.LIST, new ArrayList<>(tagsToAdd), false), true);
+        allOptions.add(newOption);
+      }
+      mergedOptions = mergeOptions(allOptions);
+
+      Set<String> tagsToRemove = tagsToRemoveMap.get(entity);
       if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
-        OptionElement fieldMetaOptionElement = mergedOptions.get(CONFLUENT_FIELD_META);
-        if (fieldMetaOptionElement != null) {
-          LinkedHashMap<String, Object> fieldMetas =
-              new LinkedHashMap<>((Map<String, Object>) fieldMetaOptionElement.getValue());
-          Object tagsObj = fieldMetas.get(TAGS_FIELD);
+        OptionElement metaOptionElement = mergedOptions.get(metaName);
+        if (metaOptionElement != null) {
+          LinkedHashMap<String, Object> metaMap =
+              new LinkedHashMap<>((Map<String, Object>) metaOptionElement.getValue());
+          Object tagsObj = metaMap.get(TAGS_FIELD);
           if (tagsObj != null) {
             List<Object> allTags;
             if (tagsObj instanceof List) {
@@ -2246,23 +2262,20 @@ public class ProtobufSchema implements ParsedSchema {
                 .collect(Collectors.toCollection(ArrayList::new));
 
             if (remainingTags.isEmpty()) {
-              fieldMetas.remove(TAGS_FIELD);
+              metaMap.remove(TAGS_FIELD);
             } else {
-              fieldMetas.put(TAGS_FIELD, remainingTags);
+              metaMap.put(TAGS_FIELD, remainingTags);
             }
 
-            if (fieldMetas.isEmpty()) {
-              mergedOptions.remove(CONFLUENT_FIELD_META);
+            if (metaMap.isEmpty()) {
+              mergedOptions.remove(metaName);
             } else {
-              mergedOptions.put(CONFLUENT_FIELD_META,
-                new OptionElement(CONFLUENT_FIELD_META, Kind.MAP, fieldMetas, true));
+              mergedOptions.put(metaName, new OptionElement(metaName, Kind.MAP, metaMap, true));
             }
           }
         }
       }
-
-      JsonNode fieldNode = findMatchingFieldNode(originalNode, identifiers);
-      ((ObjectNode) fieldNode).replace("options", jsonMapper.valueToTree(mergedOptions.values()));
+      ((ObjectNode) entityNode).replace("options", jsonMapper.valueToTree(mergedOptions.values()));
     }
   }
 
