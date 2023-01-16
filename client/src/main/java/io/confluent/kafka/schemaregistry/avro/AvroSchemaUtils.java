@@ -324,12 +324,13 @@ public class AvroSchemaUtils {
   public static JsonNode findMatchingEntity(JsonNode node, SchemaEntity entity) {
     String[] identifiers = entity.getEntityPath().split("\\.");
     SchemaEntity.EntityType type = entity.getEntityType();
-    String nameSpace, recordName, fieldName;
+    String nameSpace;
+    String recordName;
+    String fieldName = null;
 
     if (SchemaEntity.EntityType.SR_RECORD.equals(type)) {
       nameSpace = String.join(".", Arrays.copyOfRange(identifiers, 0, identifiers.length - 1));
       recordName = identifiers[identifiers.length - 1];
-      fieldName = null;
     } else {
       nameSpace = String.join(".", Arrays.copyOfRange(identifiers, 0, identifiers.length - 2));
       recordName = identifiers[identifiers.length - 2];

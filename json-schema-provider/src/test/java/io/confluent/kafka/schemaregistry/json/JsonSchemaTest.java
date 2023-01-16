@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -469,7 +470,8 @@ public class JsonSchemaTest {
       "          \"field2\": {\n" +
       "            \"type\": \"number\"\n" +
       "          }\n" +
-      "        }\n" +
+      "        },\n" +
+      "        \"confluent:tags\": [ \"record\" ]\n" +
       "      }\n" +
       "    },\n" +
       "    \"myfield2\": {\n" +
@@ -483,7 +485,8 @@ public class JsonSchemaTest {
       "              \"type\": \"number\", \n" +
       "              \"confluent:tags\": [ \"PII\" ]\n" +
       "            }\n" +
-      "          }\n" +
+      "          },\n" +
+      "          \"confluent:tags\": [ \"record\" ]\n" +
       "        }\n" +
       "      ]\n" +
       "    },\n" +
@@ -497,7 +500,8 @@ public class JsonSchemaTest {
       "            \"type\": \"string\",\n" +
       "            \"confluent:tags\": [ \"PII\" ]\n" +
       "          }\n" +
-      "        }\n" +
+      "        },\n" +
+      "        \"confluent:tags\": [ \"record\" ]\n" +
       "      }\n" +
       "    },\n" +
       "    \"myfield4\": { \n" +
@@ -509,11 +513,28 @@ public class JsonSchemaTest {
 
     JsonSchema schema = new JsonSchema(schemaString);
     JsonSchema expectSchema = new JsonSchema(addedTagSchema);
-    Map<String, Set<String>> tags = new HashMap<>();
-    tags.put("object.myfield1.array.object.field1", Collections.singleton("PII"));
-    tags.put("object.myfield2.allof.0.object.nestedUnionField2", Collections.singleton("PII"));
-    tags.put("object.myfield3.not.object.nestedNotField2", Collections.singleton("PII"));
-    tags.put("object.myfield4", Collections.singleton("PII"));
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("object.myfield1.array.object.field1",
+      SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity("object.myfield2.allof.0.object.nestedUnionField2",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity("object.myfield3.not.object.nestedNotField2",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity("object.myfield4",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity("object.myfield1.array.object",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("record"));
+    tags.put(new SchemaEntity("object.myfield2.allof.0.object",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("record"));
+    tags.put(new SchemaEntity("object.myfield3.not.object",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("record"));
 
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
@@ -575,7 +596,8 @@ public class JsonSchemaTest {
       "      \"country\": {\n" +
       "        \"const\": \"United States of America\"\n" +
       "      }\n" +
-      "    }\n" +
+      "    },\n" +
+      "    \"confluent:tags\": [ \"record\" ]\n" +
       "  },\n" +
       "  \"properties\": {\n" +
       "    \"country\": {\n" +
@@ -597,14 +619,25 @@ public class JsonSchemaTest {
       "      }\n" +
       "    }\n" +
       "  },\n" +
-      "  \"type\": \"object\"\n" +
+      "  \"type\": \"object\",\n" +
+      "  \"confluent:tags\": [ \"record\" ]\n" +
       "}\n";
 
     JsonSchema schema = new JsonSchema(schemaString);
     JsonSchema expectSchema = new JsonSchema(addedTagSchema);
-    Map<String, Set<String>> tags = new HashMap<>();
-    tags.put("allof.0.conditional.else.object.postal_code", Collections.singleton("testConditional"));
-    tags.put("allof.1.object.country", Collections.singleton("testConditional"));
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("allof.0.conditional.else.object.postal_code",
+      SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("testConditional"));
+    tags.put(new SchemaEntity("allof.1.object.country",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("testConditional"));
+    tags.put(new SchemaEntity("allof.1.object",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("record"));
+    tags.put(new SchemaEntity("allof.0.conditional.if.object",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("record"));
 
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
@@ -656,8 +689,10 @@ public class JsonSchemaTest {
 
     JsonSchema jsonSchema = new JsonSchema(schema);
     JsonSchema expectSchema = new JsonSchema(addedTagSchema);
-    Map<String, Set<String>> tags = new HashMap<>();
-    tags.put("anyof.1.object.parent", Collections.singleton("PII"));
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("anyof.1.object.parent",
+      SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
 
     ParsedSchema resultSchema = jsonSchema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());

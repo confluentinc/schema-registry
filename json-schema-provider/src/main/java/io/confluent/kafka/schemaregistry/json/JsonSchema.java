@@ -35,6 +35,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.fasterxml.jackson.databind.ser.PropertyWriter;
+import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
@@ -89,7 +90,7 @@ import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 
-import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingField;
+import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingEntity;
 
 public class JsonSchema implements ParsedSchema {
 
@@ -264,8 +265,8 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
-  public ParsedSchema copy(Map<String, Set<String>> tagsToAdd,
-                           Map<String, Set<String>> tagsToRemove) {
+  public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                           Map<SchemaEntity, Set<String>> tagsToRemove) {
     JsonSchema schemaCopy = this.copy();
     JsonNode original = schemaCopy.toJsonNode().deepCopy();
     modifyFieldLevelTags(original, tagsToAdd, tagsToRemove);
@@ -816,21 +817,21 @@ public class JsonSchema implements ParsedSchema {
   }
 
   private void modifyFieldLevelTags(JsonNode node,
-                                    Map<String, Set<String>> tagsToAddMap,
-                                    Map<String, Set<String>> tagsToRemoveMap) {
-    Set<String> pathToModify = new HashSet<>(tagsToAddMap.keySet());
-    pathToModify.addAll(tagsToRemoveMap.keySet());
+                                    Map<SchemaEntity, Set<String>> tagsToAddMap,
+                                    Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+    Set<SchemaEntity> entityToModify = new HashSet<>(tagsToAddMap.keySet());
+    entityToModify.addAll(tagsToRemoveMap.keySet());
 
-    for (String path : pathToModify) {
-      JsonNode fieldNodePtr = findMatchingField(node, path);
+    for (SchemaEntity entity : entityToModify) {
+      JsonNode fieldNodePtr = findMatchingEntity(node, entity);
       Set<String> allTags = getInlineTags(fieldNodePtr);
 
-      Set<String> tagsToAdd = tagsToAddMap.get(path);
+      Set<String> tagsToAdd = tagsToAddMap.get(entity);
       if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
         allTags.addAll(tagsToAdd);
       }
 
-      Set<String> tagsToRemove = tagsToRemoveMap.get(path);
+      Set<String> tagsToRemove = tagsToRemoveMap.get(entity);
       if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
         allTags.removeAll(tagsToRemove);
       }
