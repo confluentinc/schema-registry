@@ -368,7 +368,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       String valueString = line.substring(headersOffset + keyOffset);
       byte[] serializedValue = null;
       if (valueString != null && !valueString.equals(nullMarker)) {
-        T value = readFrom(line.substring(headersOffset + keyOffset), valueSchema);
+        T value = readFrom(valueString, valueSchema);
         serializedValue = serializer.serialize(valueSubject, topic, false, headers,
             value, valueSchema);
       }
