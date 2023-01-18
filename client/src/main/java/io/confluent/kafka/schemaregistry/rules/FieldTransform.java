@@ -21,8 +21,14 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 /**
  * A field transform.
  */
-public interface FieldTransform {
+public interface FieldTransform extends AutoCloseable {
+
+  default void init(RuleContext ctx) throws RuleException {
+  }
 
   Object transform(RuleContext ctx, FieldContext fieldCtx, Object fieldValue)
       throws RuleException;
+
+  default void close() {
+  }
 }

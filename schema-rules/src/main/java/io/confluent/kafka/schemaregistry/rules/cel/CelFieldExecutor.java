@@ -33,7 +33,9 @@ public class CelFieldExecutor extends CelExecutor implements FieldRuleExecutor {
 
   @Override
   public Object transform(RuleContext ctx, Object message) throws RuleException {
-    return ctx.target().transformMessage(ctx, newTransform(ctx), message);
+    try (FieldTransform transform = newTransform(ctx)) {
+      return ctx.target().transformMessage(ctx, transform, message);
+    }
   }
 
   @Override

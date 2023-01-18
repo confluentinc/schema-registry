@@ -16,12 +16,18 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -42,6 +48,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
@@ -55,6 +62,7 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -65,6 +73,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.Test;
 
@@ -88,6 +97,8 @@ public abstract class FieldEncryptionExecutorTest {
   private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   private final KafkaProtobufSerializer<Widget> protobufSerializer;
   private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
+  private final KafkaAvroSerializer badSerializer;
+  private final KafkaAvroDeserializer badDeserializer;
   private final String topic;
 
   public FieldEncryptionExecutorTest() throws Exception {
@@ -110,6 +121,11 @@ public abstract class FieldEncryptionExecutorTest {
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
     protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, clientProps);
+
+    Map<String, Object> badClientProps = new HashMap<>(clientProps);
+    badClientProps.remove(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS);
+    badSerializer = new KafkaAvroSerializer(schemaRegistry, badClientProps);
+    badDeserializer = new KafkaAvroDeserializer(schemaRegistry, badClientProps);
   }
 
   protected abstract Map<String, Object> getClientProperties() throws Exception;
@@ -119,7 +135,22 @@ public abstract class FieldEncryptionExecutorTest {
     FieldEncryptionExecutor executor =
         (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE);
     Cryptor spy = spy(new Cryptor(Cryptor.RANDOM_KEY_FORMAT));
-    executor.setCryptor(Cryptor.RANDOM_KEY_FORMAT, spy);
+    if (executor != null) {
+      executor.setCryptor(Cryptor.RANDOM_KEY_FORMAT, spy);
+    }
+    return spy;
+  }
+
+  private Cryptor addBadSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
+    Map<String, RuleExecutor> executors = serde.getRuleExecutors();
+    FieldEncryptionExecutor executor =
+        (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE);
+    Cryptor spy = spy(new Cryptor(Cryptor.RANDOM_KEY_FORMAT));
+    doThrow(new GeneralSecurityException()).when(spy).encrypt(any(), any());
+    doThrow(new GeneralSecurityException()).when(spy).decrypt(any(), any());
+    if (executor != null) {
+      executor.setCryptor(Cryptor.RANDOM_KEY_FORMAT, spy);
+    }
     return spy;
   }
 
@@ -422,6 +453,208 @@ public abstract class FieldEncryptionExecutorTest {
         ImmutableList.of("345", "678"),
         ssnMapValues
     );
+  }
+
+  @Test
+  public void testNoEncryptionsDueToData() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    // Tag in rule differs from data
+    Rule rule = new Rule("myRule", null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("NOT_PII"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = new Metadata(
+        Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 0;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    assertEquals("testUser", record.get("name").toString());
+  }
+
+  @Test
+  public void testNoEncryptionsDueToHeaders() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("myRule", null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = new Metadata(
+        Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] oldBytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+
+    // Try to serialize with same headers, no encryption should happen
+    expectedEncryptions = 0;
+    cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    assertArrayEquals(oldBytes, bytes);
+
+    expectedEncryptions = 1;
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    assertEquals("testUser", record.get("name"));
+
+    // Try to deserialize with no headers, no decryption should happen
+    expectedEncryptions = 0;
+    headers = new RecordHeaders();
+    cryptor = addSpyToCryptor(avroDeserializer);
+    record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    assertNotEquals("testUser", record.get("name")); // still encrypted
+  }
+
+  @Test
+  public void testBadCryptor() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("myRule", null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = new Metadata(
+        Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    addBadSpyToCryptor(avroSerializer);
+    try {
+      avroSerializer.serialize(topic, headers, avroRecord);
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof SerializationException);
+    }
+
+    // Run good serializer to get bytes
+    int expectedEncryptions = 1;
+    headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+
+    addBadSpyToCryptor(avroDeserializer);
+    try {
+      avroDeserializer.deserialize(topic, headers, bytes);
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof SerializationException);
+    }
+  }
+
+  @Test
+  public void testBadCryptorIgnoreFailure() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    // NONE,NONE ignores errors during WRITE,READ
+    Rule rule = new Rule("myRule", null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, "NONE,NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = new Metadata(
+        Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addBadSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+
+    // Run good serializer to get bytes
+    headers = new RecordHeaders();
+    cryptor = addSpyToCryptor(avroSerializer);
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+
+    cryptor = addBadSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    assertNotEquals("testUser", record.get("name").toString()); // still encrypted
+  }
+
+  @Test
+  public void testBadSerializerWithMissingRuleExecutors() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("myRule", null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = new Metadata(
+        Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    try {
+      badSerializer.serialize(topic, headers, avroRecord);
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof SerializationException);
+    }
+
+    // Run good serializer to get bytes
+    int expectedEncryptions = 1;
+    headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+
+    try {
+      badDeserializer.deserialize(topic, headers, bytes);
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof SerializationException);
+    }
+  }
+
+  @Test
+  public void testBadSerializerWithMissingRuleExecutorsButIgnoreFailure() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    // NONE,NONE ignores errors during WRITE,READ
+    Rule rule = new Rule("myRule", null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, "NONE,NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = new Metadata(
+        Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 0;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(badSerializer);
+    byte[] oldBytes = badSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+
+    // Run good serializer to get bytes
+    expectedEncryptions = 1;
+    headers = new RecordHeaders();
+    cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    assertFalse(Arrays.equals(oldBytes, bytes));
+
+    expectedEncryptions = 0;
+    cryptor = addSpyToCryptor(badDeserializer);
+    GenericRecord record = (GenericRecord) badDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    assertNotEquals("testUser", record.get("name").toString()); // still encrypted
   }
 
   public static class OldWidget {

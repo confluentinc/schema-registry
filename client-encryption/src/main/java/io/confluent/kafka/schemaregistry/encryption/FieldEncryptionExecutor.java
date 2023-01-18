@@ -61,9 +61,6 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   public static final String VALUE_DETERMINISTIC = "value.deterministic";
   public static final String TEST_CLIENT = "test.client";
 
-  private static final String ENCRYPT_MAP = "encryptMap";
-  private static final String DECRYPT_MAP = "decryptMap";
-
   private static final byte VERSION = (byte) 0;
   private static final int LENGTH_VERSION = 1;
   private static final int LENGTH_ENCRYPTED_DEK = 4;
@@ -173,135 +170,10 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   @Override
-  public FieldTransform newTransform(RuleContext ruleContext) {
-    return this::execute;
-  }
-
-  private Object execute(
-      RuleContext ctx, FieldContext fieldCtx, Object obj)
-      throws RuleException {
-    try {
-      byte[] plaintext;
-      byte[] ciphertext;
-      byte[] metadata;
-      switch (ctx.ruleMode()) {
-        case WRITE:
-          plaintext = toBytes(fieldCtx, obj);
-          if (plaintext == null) {
-            return obj;
-          }
-          Cryptor cryptor = getCryptor(ctx.isKey());
-          Dek dek = getDekForEncrypt(ctx, cryptor.getDekFormat());
-          ciphertext = cryptor.encrypt(dek.getRawDek(), plaintext);
-          metadata = buildMetadata(cryptor.getDekFormat(), dek.getEncryptedDek());
-          String headerName = getHeaderName(ctx);
-          if (ctx.headers().lastHeader(headerName) == null) {
-            ctx.headers().add(headerName, metadata);
-          }
-          return Base64.getEncoder().encodeToString(ciphertext);
-        case READ:
-          Header header = ctx.headers().lastHeader(getHeaderName(ctx));
-          if (header == null) {
-            return obj;
-          }
-          metadata = header.value();
-          ciphertext = Base64.getDecoder().decode(obj.toString());
-          plaintext = decrypt(ctx, metadata, ciphertext);
-          Object result = toObject(fieldCtx, plaintext);
-          return result != null ? result : obj;
-        default:
-          throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
-      }
-    } catch (GeneralSecurityException e) {
-      throw new RuleException(e);
-    }
-  }
-
-  private byte[] buildMetadata(String dekFormat, byte[] encryptedDek) {
-    byte[] kekBytes = getKekId().getBytes(StandardCharsets.UTF_8);
-    byte[] dekBytes = dekFormat.getBytes(StandardCharsets.UTF_8);
-    return ByteBuffer.allocate(LENGTH_VERSION
-            + LENGTH_KEK_ID + kekBytes.length
-            + LENGTH_DEK_FORMAT + dekBytes.length
-            + LENGTH_ENCRYPTED_DEK + encryptedDek.length)
-        .put(VERSION)
-        .putInt(kekBytes.length)
-        .put(kekBytes)
-        .putInt(dekBytes.length)
-        .put(dekBytes)
-        .putInt(encryptedDek.length)
-        .put(encryptedDek)
-        .array();
-  }
-
-  private byte[] decrypt(RuleContext ctx, byte[] metadata, byte[] ciphertext)
-      throws GeneralSecurityException {
-    int remainingSize = metadata.length;
-    ByteBuffer buffer = ByteBuffer.wrap(metadata);
-    buffer.get();  // version
-    remainingSize--;
-    int kekIdSize = buffer.getInt();
-    remainingSize -= LENGTH_KEK_ID;
-    if (kekIdSize <= 0 || kekIdSize > remainingSize) {
-      throw new GeneralSecurityException("invalid ciphertext");
-    }
-    byte[] kekId = new byte[kekIdSize];
-    buffer.get(kekId, 0, kekIdSize);
-    remainingSize -= kekIdSize;
-    int dekFormatSize = buffer.getInt();
-    remainingSize -= LENGTH_DEK_FORMAT;
-    if (dekFormatSize <= 0 || dekFormatSize > remainingSize) {
-      throw new GeneralSecurityException("invalid ciphertext");
-    }
-    byte[] dekFormat = new byte[dekFormatSize];
-    buffer.get(dekFormat, 0, dekFormatSize);
-    remainingSize -= dekFormatSize;
-    int encryptedDekSize = buffer.getInt();
-    remainingSize -= LENGTH_ENCRYPTED_DEK;
-    if (encryptedDekSize <= 0 || encryptedDekSize > remainingSize) {
-      throw new GeneralSecurityException("invalid ciphertext");
-    }
-    byte[] encryptedDek = new byte[encryptedDekSize];
-    buffer.get(encryptedDek, 0, encryptedDekSize);
-    remainingSize -= encryptedDekSize;
-    if (remainingSize != 0) {
-      throw new GeneralSecurityException("invalid ciphertext");
-    }
-
-    Cryptor cryptor = getCryptor(new String(dekFormat, StandardCharsets.UTF_8));
-    Dek dek = getDekForDecrypt(
-        ctx, new String(kekId, StandardCharsets.UTF_8), encryptedDek);
-    return cryptor.decrypt(dek.getRawDek(), ciphertext);
-  }
-
-  @SuppressWarnings("unchecked")
-  protected Dek getDekForEncrypt(RuleContext ctx, String dekFormat) {
-    EncryptKey key = new EncryptKey(kekId, dekFormat);
-    // Cache on rule context to ensure dek lives during life of entire transformation
-    Map<EncryptKey, Dek> map = (Map<EncryptKey, Dek>)
-        ctx.customData().computeIfAbsent(ENCRYPT_MAP, k -> new HashMap<>());
-    return map.computeIfAbsent(key, k -> {
-      try {
-        return dekEncryptCache.get(key);
-      } catch (ExecutionException e) {
-        throw new RuntimeException(e);
-      }
-    });
-  }
-
-  @SuppressWarnings("unchecked")
-  protected Dek getDekForDecrypt(RuleContext ctx, String kekId, byte[] encryptedDek) {
-    DecryptKey key = new DecryptKey(kekId, encryptedDek);
-    // Cache on rule context to ensure dek lives during life of entire transformation
-    Map<DecryptKey, Dek> map = (Map<DecryptKey, Dek>)
-        ctx.customData().computeIfAbsent(DECRYPT_MAP, k -> new HashMap<>());
-    return map.computeIfAbsent(key, k -> {
-      try {
-        return dekDecryptCache.get(new DecryptKey(kekId, encryptedDek));
-      } catch (ExecutionException e) {
-        throw new RuntimeException(e);
-      }
-    });
+  public FieldTransform newTransform(RuleContext ruleContext) throws RuleException {
+    FieldTransform transform = new FieldEncryptionExecutorTransform();
+    transform.init(ruleContext);
+    return transform;
   }
 
   private Cryptor getCryptor(boolean isKey) {
@@ -347,6 +219,171 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
 
   private static String getHeaderName(RuleContext ctx) {
     return HEADER_NAME_PREFIX + (ctx.isKey() ? "-key" : "-value");
+  }
+
+  class FieldEncryptionExecutorTransform implements FieldTransform {
+    private RuleContext ctx;
+    private Cryptor cryptor;
+    private Dek dek;
+    private boolean skip = false;
+    private int count = 0;
+
+    public void init(RuleContext ctx) throws RuleException {
+      try {
+        this.ctx = ctx;
+        String headerName = getHeaderName(ctx);
+        Header header = ctx.headers().lastHeader(headerName);
+        switch (ctx.ruleMode()) {
+          case WRITE:
+            if (header != null) {
+              // Already encrypted
+              skip = true;
+              return;
+            }
+            cryptor = getCryptor(ctx.isKey());
+            dek = getDekForEncrypt(cryptor.getDekFormat());
+            break;
+          case READ:
+            if (header == null) {
+              // Not encrypted
+              skip = true;
+              return;
+            }
+            setCryptorAndDekFromHeader(header.value());
+            break;
+          default:
+            throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
+        }
+      } catch (GeneralSecurityException e) {
+        throw new RuleException(e);
+      }
+    }
+
+    protected Dek getDekForEncrypt(String dekFormat) {
+      EncryptKey key = new EncryptKey(kekId, dekFormat);
+      try {
+        return dekEncryptCache.get(key);
+      } catch (ExecutionException e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    protected Dek getDekForDecrypt(String kekId, byte[] encryptedDek) {
+      DecryptKey key = new DecryptKey(kekId, encryptedDek);
+      try {
+        return dekDecryptCache.get(key);
+      } catch (ExecutionException e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    private void setCryptorAndDekFromHeader(byte[] metadata)
+        throws GeneralSecurityException {
+      int remainingSize = metadata.length;
+      ByteBuffer buffer = ByteBuffer.wrap(metadata);
+      buffer.get();  // version
+      remainingSize--;
+      int kekIdSize = buffer.getInt();
+      remainingSize -= LENGTH_KEK_ID;
+      if (kekIdSize <= 0 || kekIdSize > remainingSize) {
+        throw new GeneralSecurityException("invalid ciphertext");
+      }
+      byte[] kekId = new byte[kekIdSize];
+      buffer.get(kekId, 0, kekIdSize);
+      remainingSize -= kekIdSize;
+      int dekFormatSize = buffer.getInt();
+      remainingSize -= LENGTH_DEK_FORMAT;
+      if (dekFormatSize <= 0 || dekFormatSize > remainingSize) {
+        throw new GeneralSecurityException("invalid ciphertext");
+      }
+      byte[] dekFormat = new byte[dekFormatSize];
+      buffer.get(dekFormat, 0, dekFormatSize);
+      remainingSize -= dekFormatSize;
+      int encryptedDekSize = buffer.getInt();
+      remainingSize -= LENGTH_ENCRYPTED_DEK;
+      if (encryptedDekSize <= 0 || encryptedDekSize > remainingSize) {
+        throw new GeneralSecurityException("invalid ciphertext");
+      }
+      byte[] encryptedDek = new byte[encryptedDekSize];
+      buffer.get(encryptedDek, 0, encryptedDekSize);
+      remainingSize -= encryptedDekSize;
+      if (remainingSize != 0) {
+        throw new GeneralSecurityException("invalid ciphertext");
+      }
+
+      this.cryptor = getCryptor(new String(dekFormat, StandardCharsets.UTF_8));
+      this.dek = getDekForDecrypt(new String(kekId, StandardCharsets.UTF_8), encryptedDek);
+    }
+
+    public Object transform(RuleContext ctx, FieldContext fieldCtx, Object fieldValue)
+        throws RuleException {
+      try {
+        if (skip) {
+          return fieldValue;
+        }
+        byte[] plaintext;
+        byte[] ciphertext;
+        switch (ctx.ruleMode()) {
+          case WRITE:
+            plaintext = toBytes(fieldCtx, fieldValue);
+            if (plaintext == null) {
+              return fieldValue;
+            }
+            ciphertext = cryptor.encrypt(dek.getRawDek(), plaintext);
+            count++;
+            return Base64.getEncoder().encodeToString(ciphertext);
+          case READ:
+            ciphertext = Base64.getDecoder().decode(fieldValue.toString());
+            plaintext = cryptor.decrypt(dek.getRawDek(), ciphertext);
+            count++;
+            Object result = toObject(fieldCtx, plaintext);
+            return result != null ? result : fieldValue;
+          default:
+            throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
+        }
+      } catch (GeneralSecurityException e) {
+        throw new RuleException(e);
+      }
+    }
+
+    public void close() {
+      if (skip) {
+        return;
+      }
+      String headerName = getHeaderName(ctx);
+      switch (ctx.ruleMode()) {
+        case WRITE:
+          if (count > 0) {
+            byte[] metadata = buildMetadata(cryptor.getDekFormat(), dek.getEncryptedDek());
+            // Add header
+            ctx.headers().add(headerName, metadata);
+          }
+          break;
+        case READ:
+          // Remove header
+          ctx.headers().remove(headerName);
+          break;
+        default:
+          throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
+      }
+    }
+
+    private byte[] buildMetadata(String dekFormat, byte[] encryptedDek) {
+      byte[] kekBytes = getKekId().getBytes(StandardCharsets.UTF_8);
+      byte[] dekBytes = dekFormat.getBytes(StandardCharsets.UTF_8);
+      return ByteBuffer.allocate(LENGTH_VERSION
+              + LENGTH_KEK_ID + kekBytes.length
+              + LENGTH_DEK_FORMAT + dekBytes.length
+              + LENGTH_ENCRYPTED_DEK + encryptedDek.length)
+          .put(VERSION)
+          .putInt(kekBytes.length)
+          .put(kekBytes)
+          .putInt(dekBytes.length)
+          .put(dekBytes)
+          .putInt(encryptedDek.length)
+          .put(encryptedDek)
+          .array();
+    }
   }
 
   static class EncryptKey {
