@@ -557,7 +557,7 @@ public abstract class AbstractKafkaSchemaSerDe {
           runAction(ctx, ruleMode, rule,
               message != null ? rule.getOnSuccess() : rule.getOnFailure(),
               message, null, message != null ? null : ErrorAction.TYPE
-            );
+          );
         } catch (RuleException e) {
           runAction(ctx, ruleMode, rule, rule.getOnFailure(), message, e, ErrorAction.TYPE);
         }
