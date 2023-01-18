@@ -174,7 +174,7 @@ public class AvroSchema implements ParsedSchema {
         return schemaObj.toString();
       default:
         // Don't throw an exception for forward compatibility of formats
-        log.error("Unsupported format {}", format);
+        log.warn("Unsupported format {}", format);
         return canonicalString();
     }
   }

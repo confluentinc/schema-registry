@@ -1745,7 +1745,7 @@ public class ProtobufSchema implements ParsedSchema {
         return base64Encoder.encodeToString(file.toByteArray());
       default:
         // Don't throw an exception for forward compatibility of formats
-        log.error("Unsupported format {}", format);
+        log.warn("Unsupported format {}", format);
         return canonicalString();
     }
   }
