@@ -249,4 +249,9 @@ public class Rule {
       md.update((byte) 1);
     }
   }
+
+  public boolean isValid() {
+    return name != null && type != null;
+  }
+
 }

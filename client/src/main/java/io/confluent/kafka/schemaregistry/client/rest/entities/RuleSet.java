@@ -115,13 +115,15 @@ public class RuleSet {
 
   public boolean isValid() {
     if (migrationRules != null) {
-      boolean invalid = migrationRules.stream().anyMatch(r -> !r.getMode().isMigrationRule());
+      boolean invalid = migrationRules.stream().anyMatch(
+          r -> !r.isValid() || !r.getMode().isMigrationRule());
       if (invalid) {
         return false;
       }
     }
     if (domainRules != null) {
-      boolean invalid = domainRules.stream().anyMatch(r -> !r.getMode().isDomainRule());
+      boolean invalid = domainRules.stream().anyMatch(
+          r -> !r.isValid() || !r.getMode().isDomainRule());
       if (invalid) {
         return false;
       }
