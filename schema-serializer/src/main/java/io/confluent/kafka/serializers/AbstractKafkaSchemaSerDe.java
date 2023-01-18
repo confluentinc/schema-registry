@@ -591,7 +591,7 @@ public abstract class AbstractKafkaSchemaSerDe {
         && actionName != null
         && actionName.contains(",")) {
       String[] parts = actionName.split(",");
-      String action1 = parts.length > 0 ? parts[0] : NoneAction.TYPE;
+      String action1 = parts.length > 0 ? parts[0] : null;
       String action2 = parts.length > 1 ? parts[1] : action1;
       switch (ruleMode) {
         case WRITE:
