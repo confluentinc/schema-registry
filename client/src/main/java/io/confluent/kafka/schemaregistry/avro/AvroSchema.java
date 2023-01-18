@@ -173,7 +173,9 @@ public class AvroSchema implements ParsedSchema {
       case RESOLVED:
         return schemaObj.toString();
       default:
-        throw new IllegalArgumentException("Unsupported format " + format);
+        // Don't throw an exception for forward compatibility of formats
+        log.error("Unsupported format " + format);
+        return canonicalString();
     }
   }
 
