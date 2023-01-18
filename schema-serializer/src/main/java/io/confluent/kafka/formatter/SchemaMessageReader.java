@@ -17,6 +17,8 @@
 package io.confluent.kafka.formatter;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.util.AbstractMap;
@@ -271,7 +273,9 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     }
     String schemaString = getSchemaString(props, isKey);
     List<SchemaReference> refs = getSchemaReferences(props, isKey);
-    return parseSchema(schemaRegistry, schemaString, refs);
+    Metadata metadata = getMetadata(props, isKey);
+    RuleSet ruleSet = getRuleSet(props, isKey);
+    return parseSchema(schemaRegistry, schemaString, refs).copy(metadata, ruleSet);
   }
 
   /**
@@ -329,6 +333,36 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       }
     }
     return Collections.emptyList();
+  }
+
+  private Metadata getMetadata(Properties props, boolean isKey) {
+    String propKey = isKey ? "key.metadata" : "value.metadata";
+    if (props.containsKey(propKey)) {
+      try {
+        return JacksonMapper.INSTANCE.readValue(
+            props.getProperty(propKey),
+            Metadata.class
+        );
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    return null;
+  }
+
+  private RuleSet getRuleSet(Properties props, boolean isKey) {
+    String propKey = isKey ? "key.rule.set" : "value.rule.set";
+    if (props.containsKey(propKey)) {
+      try {
+        return JacksonMapper.INSTANCE.readValue(
+            props.getProperty(propKey),
+            RuleSet.class
+        );
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    return null;
   }
 
   private boolean needsKeySchema() {
