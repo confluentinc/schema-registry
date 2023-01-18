@@ -225,25 +225,31 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     private RuleContext ctx;
     private Cryptor cryptor;
     private Dek dek;
+    private boolean skip = false;
     private int count = 0;
 
     public void init(RuleContext ctx) throws RuleException {
       try {
         this.ctx = ctx;
+        String headerName = getHeaderName(ctx);
+        Header header = ctx.headers().lastHeader(headerName);
         switch (ctx.ruleMode()) {
           case WRITE:
+            if (header != null) {
+              // Already encrypted
+              skip = true;
+              return;
+            }
             cryptor = getCryptor(ctx.isKey());
             dek = getDekForEncrypt(cryptor.getDekFormat());
             break;
           case READ:
-            String headerName = getHeaderName(ctx);
-            Header header = ctx.headers().lastHeader(headerName);
             if (header == null) {
               // Not encrypted
+              skip = true;
               return;
             }
-            byte[] metadata = header.value();
-            setCryptorAndDekFromHeader(metadata);
+            setCryptorAndDekFromHeader(header.value());
             break;
           default:
             throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
@@ -312,28 +318,21 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     public Object transform(RuleContext ctx, FieldContext fieldCtx, Object fieldValue)
         throws RuleException {
       try {
+        if (skip) {
+          return fieldValue;
+        }
         byte[] plaintext;
         byte[] ciphertext;
-        String headerName = getHeaderName(ctx);
         switch (ctx.ruleMode()) {
           case WRITE:
             plaintext = toBytes(fieldCtx, fieldValue);
             if (plaintext == null) {
               return fieldValue;
             }
-            if (ctx.headers().lastHeader(headerName) != null) {
-              // Already encrypted
-              return fieldValue;
-            }
             ciphertext = cryptor.encrypt(dek.getRawDek(), plaintext);
             count++;
             return Base64.getEncoder().encodeToString(ciphertext);
           case READ:
-            Header header = ctx.headers().lastHeader(headerName);
-            if (header == null) {
-              // Not encrypted
-              return fieldValue;
-            }
             ciphertext = Base64.getDecoder().decode(fieldValue.toString());
             plaintext = cryptor.decrypt(dek.getRawDek(), ciphertext);
             count++;
@@ -348,12 +347,14 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     }
 
     public void close() {
-      byte[] metadata;
+      if (skip) {
+        return;
+      }
       String headerName = getHeaderName(ctx);
       switch (ctx.ruleMode()) {
         case WRITE:
           if (count > 0) {
-            metadata = buildMetadata(cryptor.getDekFormat(), dek.getEncryptedDek());
+            byte[] metadata = buildMetadata(cryptor.getDekFormat(), dek.getEncryptedDek());
             // Add header
             ctx.headers().add(headerName, metadata);
           }
