@@ -21,11 +21,6 @@ public class RestInvalidRuleSetException extends RestConstraintViolationExceptio
 
   public static final int ERROR_CODE = Errors.INVALID_RULESET_ERROR_CODE;
 
-  public RestInvalidRuleSetException() {
-    this("Migration rules can only be UPGRADE, DOWNGRADE, UPDOWN and "
-        + "domain rules can only be WRITE, READ, WRITEREAD.");
-  }
-
   public RestInvalidRuleSetException(String message) {
     super(message, ERROR_CODE);
   }

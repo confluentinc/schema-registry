@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -113,22 +114,23 @@ public class RuleSet {
     }
   }
 
-  public boolean isValid() {
+  public void validate() throws RuleException {
     if (migrationRules != null) {
-      boolean invalid = migrationRules.stream().anyMatch(
-          r -> !r.isValid() || !r.getMode().isMigrationRule());
-      if (invalid) {
-        return false;
+      for (Rule rule : migrationRules) {
+        rule.validate();
+        if (!rule.getMode().isMigrationRule()) {
+          throw new RuleException("Migration rules can only be UPGRADE, DOWNGRADE, UPDOWN");
+        }
       }
     }
     if (domainRules != null) {
-      boolean invalid = domainRules.stream().anyMatch(
-          r -> !r.isValid() || !r.getMode().isDomainRule());
-      if (invalid) {
-        return false;
+      for (Rule rule : domainRules) {
+        rule.validate();
+        if (!rule.getMode().isDomainRule()) {
+          throw new RuleException("Domain rules can only be WRITE, READ, WRITEREAD");
+        }
       }
     }
-    return true;
   }
 
   public static RuleSet mergeRuleSets(RuleSet oldRuleSet, RuleSet newRuleSet) {

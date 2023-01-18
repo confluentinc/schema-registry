@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -250,8 +251,13 @@ public class Rule {
     }
   }
 
-  public boolean isValid() {
-    return name != null && type != null;
+  public void validate() throws RuleException {
+    if (name == null) {
+      throw new RuleException("Missing rule name");
+    }
+    if (type == null) {
+      throw new RuleException("Missing rule type");
+    }
   }
 
 }
