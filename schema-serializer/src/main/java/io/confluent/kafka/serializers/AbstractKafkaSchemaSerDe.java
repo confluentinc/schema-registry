@@ -591,15 +591,13 @@ public abstract class AbstractKafkaSchemaSerDe {
         && actionName != null
         && actionName.contains(",")) {
       String[] parts = actionName.split(",");
-      String action1 = parts.length > 0 ? parts[0] : null;
-      String action2 = parts.length > 1 ? parts[1] : action1;
       switch (ruleMode) {
         case WRITE:
         case UPGRADE:
-          return action1;
+          return parts[0];
         case READ:
         case DOWNGRADE:
-          return action2;
+          return parts[1];
         default:
           throw new IllegalStateException("Unsupported rule mode " + ruleMode);
       }
