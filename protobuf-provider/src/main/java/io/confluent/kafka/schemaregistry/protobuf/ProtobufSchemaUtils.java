@@ -122,8 +122,8 @@ public class ProtobufSchemaUtils {
     return mapperWithProtoFileDeserializer.convertValue(node, ProtoFileElement.class);
   }
 
-  public static JsonNode findMatchingNode(JsonNode node, String arrayField, String targetFieldName,
-                                          String targetFieldValue) {
+  public static JsonNode findMatchingNodeHelper(JsonNode node, String arrayField,
+                                                String targetFieldName, String targetFieldValue) {
     Iterator<JsonNode> iter = node.get(arrayField).elements();
     while (iter.hasNext()) {
       JsonNode currNode = iter.next();
@@ -136,19 +136,23 @@ public class ProtobufSchemaUtils {
         targetFieldName, targetFieldValue));
   }
 
-  public static JsonNode findMatchingFieldNode(JsonNode node, String[] identifiers) {
-    JsonNode fieldNodePtr = node;
+  public static JsonNode findMatchingNode(JsonNode node, String[] identifiers, int lastIndex) {
+    JsonNode nodePtr = node;
     // skipping the first entry because path starts with leading dot
-    for (int i = 1; i < identifiers.length; i++) {
+    for (int i = 1; i < lastIndex; i++) {
       if (i == 1) {
-        fieldNodePtr = findMatchingNode(fieldNodePtr, "types", "name", identifiers[i]);
-      } else if (i < identifiers.length - 1) {
-        fieldNodePtr = findMatchingNode(fieldNodePtr, "nestedTypes", "name", identifiers[i]);
+        nodePtr = findMatchingNodeHelper(nodePtr, "types", "name", identifiers[i]);
       } else {
-        fieldNodePtr = findMatchingNode(fieldNodePtr, "fields", "name", identifiers[i]);
+        nodePtr = findMatchingNodeHelper(nodePtr, "nestedTypes", "name", identifiers[i]);
       }
     }
-    return fieldNodePtr;
+
+    // find the fieldNode
+    if (lastIndex < identifiers.length) {
+      nodePtr = findMatchingNodeHelper(nodePtr, "fields", "name",
+        identifiers[identifiers.length - 1]);
+    }
+    return nodePtr;
   }
 
   public static MessageElement findMatchingMessage(List<TypeElement> typeElementList, String name) {
@@ -161,29 +165,30 @@ public class ProtobufSchemaUtils {
       String.format("No matching Message with name '%s' found in the schema", name));
   }
 
-  public static FieldElement findMatchingFieldElement(ProtoFileElement original,
-                                                      String[] identifiers) {
-    MessageElement messageElement = null;
-    FieldElement fieldElementPtr = null;
-
-    for (int i = 1; i < identifiers.length; i++) {
-      if (i == 1) {
-        messageElement = findMatchingMessage(original.getTypes(), identifiers[i]);
-      } else if (i < identifiers.length - 1) {
-        messageElement = findMatchingMessage(messageElement.getNestedTypes(), identifiers[i]);
-      } else {
-        for (FieldElement fieldElement : messageElement.getFields()) {
-          if (identifiers[i].equals(fieldElement.getName())) {
-            fieldElementPtr =  fieldElement;
-          }
-        }
-        if (fieldElementPtr == null) {
-          throw new IllegalArgumentException(String.format(
-            "No matching Field with name '%s' found in the schema", identifiers[i]));
-        }
+  public static FieldElement findMatchingFieldElement(MessageElement messageElement,
+                                                      String fieldName) {
+    for (FieldElement fieldElement : messageElement.getFields()) {
+      if (fieldName.equals(fieldElement.getName())) {
+        return fieldElement;
       }
     }
-    return fieldElementPtr;
+    throw new IllegalArgumentException(String.format(
+      "No matching Field with name '%s' found in the schema", fieldName));
+  }
+
+  public static MessageElement findMatchingMessageElement(ProtoFileElement original,
+                                                          String[] identifiers,
+                                                          int lastIndex) {
+    MessageElement messageElement = null;
+
+    for (int i = 1; i < lastIndex; i++) {
+      if (i == 1) {
+        messageElement = findMatchingMessage(original.getTypes(), identifiers[i]);
+      } else {
+        messageElement = findMatchingMessage(messageElement.getNestedTypes(), identifiers[i]);
+      }
+    }
+    return messageElement;
   }
 
   protected static String toNormalizedString(ProtobufSchema schema) {

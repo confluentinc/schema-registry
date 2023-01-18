@@ -127,13 +127,15 @@ public interface ParsedSchema {
   /**
    * Returns a copy of this schema, but with the given tags.
    *
-   * @param tagsToAdd map of tags to add to fields, where the key is the field path and the value
-   *                  is the tag. If the tag already exists, do nothing.
-   * @param tagsToRemove map of tags to remove from the fields, where the key is the field path and
-   *                    the value is the tag. If the tag does not exist, do nothing.
+   * @param tagsToAdd map of tags to add to the schema record or field, where the key is the entity
+   *                  and the value is the set of tags. If the tag already exists, do nothing.
+   * @param tagsToRemove map of tags to remove from the schema record or field, where the key is
+   *                     the entity and the value is the set of tags. If the tag does not exist,
+   *                     do nothing.
    * @return a copy of this schema, but with the given tags
    */
-  ParsedSchema copy(Map<String, Set<String>> tagsToAdd, Map<String, Set<String>> tagsToRemove);
+  ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                    Map<SchemaEntity, Set<String>> tagsToRemove);
 
   /**
    * Returns a normalized copy of this schema.

@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
@@ -28,6 +27,7 @@ import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -37,8 +37,6 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 
 import java.io.IOException;
-import java.text.DecimalFormat;
-import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -2032,6 +2030,8 @@ public class ProtobufSchemaTest {
       "option java_outer_classname = \"ComplexProto\";\n" +
       "\n" +
       "message SampleRecord {\n" +
+      "  option (confluent.message_meta).tags = \"OTHER\";\n" +
+      "\n" +
       "  int32 my_field1 = 1 [\n" +
       "    (confluent.field_meta).tags = \"OTHER\",\n" +
       "    (confluent.field_meta).tags = \"PRIVATE\"\n" +
@@ -2058,6 +2058,13 @@ public class ProtobufSchemaTest {
       "option java_outer_classname = \"ComplexProto\";\n" +
       "\n" +
       "message SampleRecord {\n" +
+      "  option (confluent.message_meta) = {\n" +
+      "    tags: [\n" +
+      "      \"OTHER\",\n" +
+      "      \"PII\"\n" +
+      "    ]\n" +
+      "  };\n" +
+      "\n" +
       "  int32 my_field1 = 1 [(confluent.field_meta) = {\n" +
       "    tags: [\n" +
       "      \"OTHER\",\n" +
@@ -2079,6 +2086,12 @@ public class ProtobufSchemaTest {
       "  }];\n" +
       "\n" +
       "  message NestedRecord {\n" +
+      "    option (confluent.message_meta) = {\n" +
+      "      tags: [\n" +
+      "        \"PII\"\n" +
+      "      ]\n" +
+      "    };\n" +
+      "  \n" +
       "    int64 nested_filed1 = 4 [(confluent.field_meta) = {\n" +
       "      tags: [\n" +
       "        \"PII\"\n" +
@@ -2097,6 +2110,12 @@ public class ProtobufSchemaTest {
       "option java_outer_classname = \"ComplexProto\";\n" +
       "\n" +
       "message SampleRecord {\n" +
+      "  option (confluent.message_meta) = {\n" +
+      "    tags: [\n" +
+      "      \"PII\"\n" +
+      "    ]\n" +
+      "  };\n" +
+      "\n" +
       "  int32 my_field1 = 1 [(confluent.field_meta) = {\n" +
       "    tags: [\n" +
       "      \"PRIVATE\",\n" +
@@ -2121,20 +2140,47 @@ public class ProtobufSchemaTest {
       "  }\n" +
       "}\n";
 
-    Map<String, Set<String>> tagsToAdd = new HashMap<>();
-    tagsToAdd.put(".SampleRecord.my_field1", Collections.singleton("PII"));
-    tagsToAdd.put(".SampleRecord.my_field2", Collections.singleton("PII"));
-    tagsToAdd.put(".SampleRecord.my_field3", Collections.singleton("PII"));
-    tagsToAdd.put(".SampleRecord.NestedRecord.nested_filed1", Collections.singleton("PII"));
+    Map<SchemaEntity, Set<String>> tagsToAdd = new HashMap<>();
+    tagsToAdd.put(new SchemaEntity(".SampleRecord.my_field1",
+      SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tagsToAdd.put(new SchemaEntity(".SampleRecord.my_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tagsToAdd.put(new SchemaEntity(".SampleRecord.my_field3",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tagsToAdd.put(new SchemaEntity(".SampleRecord.NestedRecord.nested_filed1",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tagsToAdd.put(new SchemaEntity(".SampleRecord",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("PII"));
+    tagsToAdd.put(new SchemaEntity(".SampleRecord.NestedRecord",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("PII"));
     ParsedSchema schema = new ProtobufSchema(schemaString).copy(tagsToAdd, Collections.emptyMap());
     assertEquals(expectedString, schema.canonicalString());
 
-    Map<String, Set<String>> tagsToRemove = new HashMap<>();
-    tagsToRemove.put(".SampleRecord.my_field1", Collections.singleton("OTHER"));
-    tagsToRemove.put(".SampleRecord.my_field2", Collections.singleton("PRIVATE"));
-    tagsToRemove.put(".SampleRecord.my_field3", Collections.singleton("PII"));
-    tagsToRemove.put(".SampleRecord.NestedRecord.nested_filed1", Collections.singleton("DOES_NOT_EXIST"));
-
+    Map<SchemaEntity, Set<String>> tagsToRemove = new HashMap<>();
+    tagsToRemove.put(new SchemaEntity(".SampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("OTHER"));
+    tagsToRemove.put(new SchemaEntity(".SampleRecord.my_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PRIVATE"));
+    tagsToRemove.put(new SchemaEntity(".SampleRecord.my_field3",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tagsToRemove.put(new SchemaEntity(".SampleRecord.NestedRecord.nested_filed1",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("DOES_NOT_EXIST"));
+    tagsToRemove.put(new SchemaEntity(".SampleRecord",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("OTHER"));
+    tagsToRemove.put(new SchemaEntity(".SampleRecord.NestedRecord",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("PII"));
     schema = new ProtobufSchema(schema.canonicalString()).copy(Collections.emptyMap(), tagsToRemove);
     assertEquals(removedTagSchema, schema.canonicalString());
   }
@@ -2195,8 +2241,10 @@ public class ProtobufSchemaTest {
       "  }\n" +
       "}\n";
 
-    Map<String, Set<String>> tags = new HashMap<>();
-    tags.put(".SampleRecord.my_field1", Collections.singleton("PRIVATE"));
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity(".SampleRecord.my_field1",
+      SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PRIVATE"));
     ParsedSchema schema = new ProtobufSchema(schemaString).copy(tags, Collections.emptyMap());
     assertEquals(expectedSchemaString, schema.canonicalString());
   }
@@ -2265,12 +2313,17 @@ public class ProtobufSchemaTest {
       "  }\n" +
       "}\n";
 
-    Map<String, Set<String>> tags = new HashMap<>();
-    tags.put(".SampleRecord.my_field1", Collections.singleton("PRIVATE"));
-    tags.put(".SampleRecord.my_field2", Collections.singleton("PRIVATE"));
-    tags.put(".SampleRecord.my_field3", Collections.singleton("PRIVATE"));
-    tags.put(".SampleRecord.my_field4", Collections.singleton("PRIVATE"));
-    tags.put(".SampleRecord.NestedRecord.nested_filed1", Collections.singleton("PRIVATE"));
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity(".SampleRecord.my_field1",
+      SchemaEntity.EntityType.SR_FIELD), Collections.singleton("PRIVATE"));
+    tags.put(new SchemaEntity(".SampleRecord.my_field2",
+      SchemaEntity.EntityType.SR_FIELD), Collections.singleton("PRIVATE"));
+    tags.put(new SchemaEntity(".SampleRecord.my_field3",
+      SchemaEntity.EntityType.SR_FIELD), Collections.singleton("PRIVATE"));
+    tags.put(new SchemaEntity(".SampleRecord.my_field4",
+      SchemaEntity.EntityType.SR_FIELD), Collections.singleton("PRIVATE"));
+    tags.put(new SchemaEntity(".SampleRecord.NestedRecord.nested_filed1",
+      SchemaEntity.EntityType.SR_FIELD), Collections.singleton("PRIVATE"));
     ParsedSchema schema = new ProtobufSchema(schemaString).copy(Collections.emptyMap(), tags);
     assertEquals(afterRemovedTag, schema.canonicalString());
   }

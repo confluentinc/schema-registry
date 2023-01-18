@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import java.util.Collections;
 import java.util.Optional;
@@ -777,7 +778,8 @@ public class AvroSchemaTest {
       "        \"type\" : \"double\",\n" +
       "        \"default\" : 0,\n" +
       "        \"confluent:tags\" : [ \"PRIVATE\",\"PII\" ]\n" +
-      "      } ]\n" +
+      "      } ],\n" +
+      "      \"confluent:tags\": [ \"PII\" ]\n" +
       "    },\n" +
       "    \"namespace\" : \"com.example.mynamespace.nested\"\n" +
       "  }, {\n" +
@@ -785,15 +787,33 @@ public class AvroSchemaTest {
       "    \"type\" : \"double\",\n" +
       "    \"doc\" : \"The double type is a double precision (64-bit) IEEE 754 floating-point number.\",\n" +
       "    \"confluent:tags\" : [ \"PII\" ]\n" +
-      "  } ]\n" +
+      "  } ],\n" +
+      "  \"confluent:tags\": [ \"PII\" ]\n" +
       "}\n";
 
     AvroSchema schema = new AvroSchema(schemaString);
     AvroSchema expectSchema = new AvroSchema(addedTagSchema);
-    Map<String, Set<String>> tags = new HashMap<>();
-    tags.put("com.example.mynamespace.nestedRecordWithoutNamespace.nested_field1", Collections.singleton("PII"));
-    tags.put("com.example.mynamespace.nested.nestedRecordWithNamespace.nested_field2", Collections.singleton("PII"));
-    tags.put("com.example.mynamespace.sampleRecord.my_field3", Collections.singleton("PII"));
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity(
+      "com.example.mynamespace.nestedRecordWithoutNamespace.nested_field1",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity(
+      "com.example.mynamespace.nested.nestedRecordWithNamespace.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity(
+      "com.example.mynamespace.sampleRecord.my_field3",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity(
+      "com.example.mynamespace.sampleRecord",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity(
+      "com.example.mynamespace.nested.nestedRecordWithNamespace",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("PII"));
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
 
@@ -946,83 +966,8 @@ public class AvroSchemaTest {
       "          \"confluent:tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
       "        } ]\n" +
       "      }\n" +
-      "    } ]\n" +
-      "  },\n" +
-      "  \"default\" : [ ]\n" +
-      "}, {\n" +
-      "  \"type\" : \"map\",\n" +
-      "  \"values\" : {\n" +
-      "    \"type\" : \"record\",\n" +
-      "    \"name\" : \"recordMapValue\",\n" +
-      "    \"doc\" : \"Sample schema to help you get started.\",\n" +
-      "    \"fields\" : [ {\n" +
-      "      \"name\" : \"my_field1\",\n" +
-      "      \"type\" : {\n" +
-      "        \"type\" : \"record\",\n" +
-      "        \"name\" : \"nestedRecord3\",\n" +
-      "        \"fields\" : [ {\n" +
-      "          \"name\" : \"nested_field1\",\n" +
-      "          \"type\" : \"string\"\n" +
-      "        }, {\n" +
-      "          \"name\" : \"nested_field2\",\n" +
-      "          \"type\" : \"double\",\n" +
-      "          \"default\" : 0,\n" +
-      "          \"confluent:tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
-      "        } ]\n" +
-      "      },\n" +
-      "      \"confluent:tags\" : [ \"PII\" ]\n" +
-      "    } ]\n" +
-      "  },\n" +
-      "  \"default\" : { }\n" +
-      "} ]\n" +
-      "[ \"null\", {\n" +
-      "  \"type\" : \"record\",\n" +
-      "  \"name\" : \"sampleRecord\",\n" +
-      "  \"namespace\" : \"com.example.mynamespace\",\n" +
-      "  \"doc\" : \"Sample schema to help you get started.\",\n" +
-      "  \"fields\" : [ {\n" +
-      "    \"name\" : \"my_field1\",\n" +
-      "    \"type\" : {\n" +
-      "      \"type\" : \"record\",\n" +
-      "      \"name\" : \"nestedRecord\",\n" +
-      "      \"fields\" : [ {\n" +
-      "        \"name\" : \"nested_field1\",\n" +
-      "        \"type\" : \"string\"\n" +
-      "      }, {\n" +
-      "        \"name\" : \"nested_field2\",\n" +
-      "        \"type\" : \"double\",\n" +
-      "        \"default\" : 0,\n" +
-      "        \"confluent:tags\" : [ \"PRIVATE\" ]\n" +
-      "      } ]\n" +
-      "    },\n" +
+      "    } ],\n" +
       "    \"confluent:tags\" : [ \"PII\" ]\n" +
-      "  }, {\n" +
-      "    \"name\" : \"my_field2\",\n" +
-      "    \"type\" : \"int\"\n" +
-      "  } ]\n" +
-      "}, {\n" +
-      "  \"type\" : \"array\",\n" +
-      "  \"items\" : {\n" +
-      "    \"type\" : \"record\",\n" +
-      "    \"name\" : \"recordItem\",\n" +
-      "    \"namespace\" : \"com.example.mynamespace.nested\",\n" +
-      "    \"doc\" : \"Sample schema to help you get started.\",\n" +
-      "    \"fields\" : [ {\n" +
-      "      \"name\" : \"my_field1\",\n" +
-      "      \"type\" : {\n" +
-      "        \"type\" : \"record\",\n" +
-      "        \"name\" : \"nestedRecord2\",\n" +
-      "        \"fields\" : [ {\n" +
-      "          \"name\" : \"nested_field1\",\n" +
-      "          \"type\" : \"string\"\n" +
-      "        }, {\n" +
-      "          \"name\" : \"nested_field2\",\n" +
-      "          \"type\" : \"double\",\n" +
-      "          \"default\" : 0,\n" +
-      "          \"confluent:tags\" : [ \"PRIVATE\", \"PII\" ]\n" +
-      "        } ]\n" +
-      "      }\n" +
-      "    } ]\n" +
       "  },\n" +
       "  \"default\" : [ ]\n" +
       "}, {\n" +
@@ -1047,18 +992,39 @@ public class AvroSchemaTest {
       "        } ]\n" +
       "      },\n" +
       "      \"confluent:tags\" : [ \"PII\" ]\n" +
-      "    } ]\n" +
+      "    } ],\n" +
+      "    \"confluent:tags\" : [ \"PII\" ]\n" +
       "  },\n" +
       "  \"default\" : { }\n" +
       "} ]\n";
 
     AvroSchema schema = new AvroSchema(schemaString);
     AvroSchema expectSchema = new AvroSchema(addedTagSchema);
-    Map<String, Set<String>> tags = new HashMap<>();
-    tags.put("com.example.mynamespace.sampleRecord.my_field1", Collections.singleton("PII"));
-    tags.put("com.example.mynamespace.nested.nestedRecord2.nested_field2", Collections.singleton("PII"));
-    tags.put("recordMapValue.my_field1", Collections.singleton("PII"));
-    tags.put("nestedRecord3.nested_field2", Collections.singleton("PII"));
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity(
+      "com.example.mynamespace.sampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity(
+      "com.example.mynamespace.nested.nestedRecord2.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity(
+      "recordMapValue.my_field1",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity(
+      "nestedRecord3.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity(
+        "com.example.mynamespace.nested.recordItem",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity(
+        "recordMapValue",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("PII"));
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
 
@@ -1131,15 +1097,26 @@ public class AvroSchemaTest {
       "        \"type\": \"int\",\n" +
       "        \"name\": \"my_field2\"\n" +
       "      }\n" +
-      "    ]\n" +
+      "    ],\n" +
+      "    \"confluent:tags\" : [ \"PII\" ]\n" +
       "  }\n" +
       "]\n";
     AvroSchema schema = new AvroSchema(schemaString);
     AvroSchema expectSchema = new AvroSchema(addedTagSchema);
 
-    Map<String, Set<String>> tags = new HashMap<>();
-    tags.put("com.example.mynamespace1.sampleRecord.my_field1", Collections.singleton("tag1"));
-    tags.put("com.example.mynamespace2.sampleRecord.my_field1", Collections.singleton("tag2"));
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity(
+      "com.example.mynamespace1.sampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("tag1"));
+    tags.put(new SchemaEntity(
+      "com.example.mynamespace2.sampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("tag2"));
+    tags.put(new SchemaEntity(
+        "com.example.mynamespace2.sampleRecord",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("PII"));
 
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());

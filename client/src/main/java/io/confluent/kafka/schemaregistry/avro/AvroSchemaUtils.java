@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
+import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -320,22 +321,27 @@ public class AvroSchemaUtils {
     }
   }
 
-  public static JsonNode findMatchingField(JsonNode node, String path) {
-    String[] identifiers = path.split("\\.");
-    if (identifiers.length < 2) {
-      throw new IllegalArgumentException(
-        String.format("Given field path '%s' has less than two components.", path));
-    }
+  public static JsonNode findMatchingEntity(JsonNode node, SchemaEntity entity) {
+    String[] identifiers = entity.getEntityPath().split("\\.");
+    SchemaEntity.EntityType type = entity.getEntityType();
+    String nameSpace;
+    String recordName;
+    String fieldName = null;
 
-    String nameSpace = String.join(".", Arrays.copyOfRange(identifiers, 0, identifiers.length - 2));
-    String fieldName = identifiers[identifiers.length - 1];
-    String recordName = identifiers[identifiers.length - 2];
+    if (SchemaEntity.EntityType.SR_RECORD == type) {
+      nameSpace = String.join(".", Arrays.copyOfRange(identifiers, 0, identifiers.length - 1));
+      recordName = identifiers[identifiers.length - 1];
+    } else {
+      nameSpace = String.join(".", Arrays.copyOfRange(identifiers, 0, identifiers.length - 2));
+      recordName = identifiers[identifiers.length - 2];
+      fieldName = identifiers[identifiers.length - 1];
+    }
 
     LinkedList<JsonNodeWithNS> toVisit = new LinkedList<>();
     JsonNode currNameSpace = node.get("namespace");
     toVisit.add(new JsonNodeWithNS(node, currNameSpace == null ? null : currNameSpace.asText()));
 
-    // BFS to search field
+    // BFS to search
     while (toVisit.size() > 0) {
       JsonNodeWithNS curr = toVisit.removeFirst();
       JsonNode currNode = curr.jsonNode();
@@ -344,16 +350,20 @@ public class AvroSchemaUtils {
         currNode.elements().forEachRemaining(
             e -> toVisit.add(new JsonNodeWithNS(e, curr.namespace())));
       } else {
-        String type = currNode.get("type").asText();
-        switch (type) {
+        String schemaType = currNode.get("type").asText();
+        switch (schemaType) {
           case "record":
             if ((nameSpace.isEmpty() || nameSpace.equals(curr.namespace()))
                 && recordName.equals(currNode.get(NAME_FIELD).asText())) {
-              Iterator<JsonNode> fieldsIter = currNode.get(FIELDS_FIELD).elements();
-              while (fieldsIter.hasNext()) {
-                JsonNode currField = fieldsIter.next();
-                if (fieldName.equals(currField.get(NAME_FIELD).asText())) {
-                  return currField;
+              if (SchemaEntity.EntityType.SR_RECORD == type) {
+                return currNode;
+              } else {
+                Iterator<JsonNode> fieldsIter = currNode.get(FIELDS_FIELD).elements();
+                while (fieldsIter.hasNext()) {
+                  JsonNode currField = fieldsIter.next();
+                  if (fieldName.equals(currField.get(NAME_FIELD).asText())) {
+                    return currField;
+                  }
                 }
               }
             } else {
@@ -374,7 +384,7 @@ public class AvroSchemaUtils {
       }
     }
     throw new IllegalArgumentException(String.format(
-      "No matching path '%s' found in the schema", path));
+      "No matching path '%s' found in the schema", entity.getEntityPath()));
   }
 
   protected static String toNormalizedString(AvroSchema schema) {
