@@ -16,7 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.rules;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class NoneAction implements RuleAction {
+
+  private static final Logger log = LoggerFactory.getLogger(NoneAction.class);
 
   public static final String TYPE = "NONE";
 
@@ -25,6 +30,8 @@ public class NoneAction implements RuleAction {
   }
 
   public void run(RuleContext ctx, Object message, RuleException ex) throws RuleException {
-    // noop
+    if (ex != null) {
+      log.warn("NONE action: ignoring exception", ex);
+    }
   }
 }

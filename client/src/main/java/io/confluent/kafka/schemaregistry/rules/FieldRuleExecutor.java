@@ -21,9 +21,11 @@ package io.confluent.kafka.schemaregistry.rules;
  */
 public interface FieldRuleExecutor extends RuleExecutor {
 
-  FieldTransform newTransform(RuleContext ctx);
+  FieldTransform newTransform(RuleContext ctx) throws RuleException;
 
   default Object transform(RuleContext ctx, Object message) throws RuleException {
-    return ctx.target().transformMessage(ctx, newTransform(ctx), message);
+    try (FieldTransform transform = newTransform(ctx)) {
+      return ctx.target().transformMessage(ctx, transform, message);
+    }
   }
 }

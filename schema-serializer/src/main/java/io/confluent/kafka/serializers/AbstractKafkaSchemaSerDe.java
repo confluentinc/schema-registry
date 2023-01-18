@@ -551,19 +551,20 @@ public abstract class AbstractKafkaSchemaSerDe {
       RuleContext ctx = new RuleContext(source, target,
           subject, topic, headers, key(), isKey ? null : original, isKey, ruleMode, rule);
       RuleExecutor ruleExecutor = ruleExecutors.get(rule.getType().toUpperCase(Locale.ROOT));
-      if (ruleExecutor == null) {
-        log.warn("Could not find rule executor of type {}", rule.getType());
-        return message;
-      }
-      try {
-        message = ruleExecutor.transform(ctx, message);
-        if (message != null) {
-          runAction(ctx, ruleMode, rule, rule.getOnSuccess(), message, null, null);
-        } else {
-          runAction(ctx, ruleMode, rule, rule.getOnFailure(), null, null, ErrorAction.TYPE);
+      if (ruleExecutor != null) {
+        try {
+          message = ruleExecutor.transform(ctx, message);
+          runAction(ctx, ruleMode, rule,
+              message != null ? rule.getOnSuccess() : rule.getOnFailure(),
+              message, null, message != null ? null : ErrorAction.TYPE
+            );
+        } catch (RuleException e) {
+          runAction(ctx, ruleMode, rule, rule.getOnFailure(), message, e, ErrorAction.TYPE);
         }
-      } catch (RuleException e) {
-        runAction(ctx, ruleMode, rule, rule.getOnFailure(), message, e, ErrorAction.TYPE);
+      } else {
+        runAction(ctx, ruleMode, rule, rule.getOnFailure(), message,
+            new RuleException("Could not find rule executor of type " + rule.getType()),
+            ErrorAction.TYPE);
       }
     }
     return message;
