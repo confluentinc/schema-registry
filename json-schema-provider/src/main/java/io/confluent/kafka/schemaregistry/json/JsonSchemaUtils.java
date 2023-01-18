@@ -303,7 +303,7 @@ public class JsonSchemaUtils {
     }
     switch (type) {
       case "object":
-        if (SchemaEntity.EntityType.SR_RECORD.equals(entityType) && identifiersList.isEmpty()) {
+        if (SchemaEntity.EntityType.SR_RECORD == entityType && identifiersList.isEmpty()) {
           return node;
         }
         JsonNode fields = node.get("properties");
@@ -363,9 +363,11 @@ public class JsonSchemaUtils {
                                                   String compositionType,
                                                   LinkedList<String> identifiersList) {
     String index = identifiersList.poll();
+    if (index == null) {
+      return null;
+    }
     List<JsonNode> jsonNodeList = Lists.newArrayList(node.get(compositionType).elements());
     jsonNodeList.sort(new JsonNodeComparator());
-    return index == null ? null
-      : findNodeHelper(jsonNodeList.get(Integer.parseInt(index)), entityType, identifiersList);
+    return findNodeHelper(jsonNodeList.get(Integer.parseInt(index)), entityType, identifiersList);
   }
 }

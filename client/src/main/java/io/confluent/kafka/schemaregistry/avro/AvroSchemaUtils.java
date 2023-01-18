@@ -328,7 +328,7 @@ public class AvroSchemaUtils {
     String recordName;
     String fieldName = null;
 
-    if (SchemaEntity.EntityType.SR_RECORD.equals(type)) {
+    if (SchemaEntity.EntityType.SR_RECORD == type) {
       nameSpace = String.join(".", Arrays.copyOfRange(identifiers, 0, identifiers.length - 1));
       recordName = identifiers[identifiers.length - 1];
     } else {
@@ -355,7 +355,7 @@ public class AvroSchemaUtils {
           case "record":
             if ((nameSpace.isEmpty() || nameSpace.equals(curr.namespace()))
                 && recordName.equals(currNode.get(NAME_FIELD).asText())) {
-              if (SchemaEntity.EntityType.SR_RECORD.equals(type)) {
+              if (SchemaEntity.EntityType.SR_RECORD == type) {
                 return currNode;
               } else {
                 Iterator<JsonNode> fieldsIter = currNode.get(FIELDS_FIELD).elements();

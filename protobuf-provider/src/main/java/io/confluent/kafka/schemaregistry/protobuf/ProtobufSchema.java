@@ -2221,7 +2221,7 @@ public class ProtobufSchema implements ParsedSchema {
       String metaName;
       JsonNode entityNode;
 
-      if (SchemaEntity.EntityType.SR_RECORD.equals(entity.getEntityType())) {
+      if (SchemaEntity.EntityType.SR_RECORD == entity.getEntityType()) {
         messageElement = findMatchingMessageElement(original, identifiers, identifiers.length);
         entityNode = findMatchingNode(node, identifiers, identifiers.length);
         allOptions = new LinkedList<>(messageElement.getOptions());
