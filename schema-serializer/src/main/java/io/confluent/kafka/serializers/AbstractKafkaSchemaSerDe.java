@@ -537,6 +537,9 @@ public abstract class AbstractKafkaSchemaSerDe {
       }
     }
     for (Rule rule : rules) {
+      if (rule.isDisabled()) {
+        continue;
+      }
       if (rule.getMode() == RuleMode.WRITEREAD) {
         if (ruleMode != RuleMode.READ && ruleMode != RuleMode.WRITE) {
           continue;
