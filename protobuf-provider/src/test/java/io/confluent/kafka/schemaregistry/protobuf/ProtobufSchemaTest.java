@@ -1075,11 +1075,11 @@ public class ProtobufSchemaTest {
 
     ProtoFileElement original = resourceLoader.readObj("TestProto.proto");
     ProtobufSchema schema = new ProtobufSchema(original.toSchema());
-    String fileProto = schema.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
+    String fileProto = schema.formattedString(Format.SERIALIZED.symbol());
     ProtobufSchema schema2 = new ProtobufSchema(fileProto);
     assertTrue(schema.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
-    fileProto = schema2.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
+    fileProto = schema2.formattedString(Format.SERIALIZED.symbol());
     ProtobufSchema schema3 = new ProtobufSchema(fileProto);
     assertTrue(schema2.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)).isEmpty());
@@ -1087,11 +1087,11 @@ public class ProtobufSchemaTest {
 
     original = resourceLoader.readObj("NestedTestProto.proto");
     schema = new ProtobufSchema(original.toSchema());
-    fileProto = schema.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
+    fileProto = schema.formattedString(Format.SERIALIZED.symbol());
     schema2 = new ProtobufSchema(fileProto);
     assertTrue(schema.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
-    fileProto = schema2.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
+    fileProto = schema2.formattedString(Format.SERIALIZED.symbol());
     schema3 = new ProtobufSchema(fileProto);
     assertTrue(schema2.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)).isEmpty());
