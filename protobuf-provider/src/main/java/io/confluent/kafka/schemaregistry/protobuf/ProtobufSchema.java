@@ -128,8 +128,6 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final String TYPE = "PROTOBUF";
 
-  public static final String SERIALIZED_FORMAT = "serialized";
-
   public static final String PROTO2 = "proto2";
   public static final String PROTO3 = "proto3";
 
@@ -1737,6 +1735,8 @@ public class ProtobufSchema implements ParsedSchema {
     }
     Format formatEnum = Format.get(format);
     switch (formatEnum) {
+      case DEFAULT:
+        return canonicalString();
       case IGNORE_EXTENSIONS:
         FormatContext ctx = new FormatContext(true, false);
         return ProtobufSchemaUtils.toFormattedString(ctx, this);
@@ -1744,7 +1744,9 @@ public class ProtobufSchema implements ParsedSchema {
         FileDescriptorProto file = toDynamicSchema().getFileDescriptorProto();
         return base64Encoder.encodeToString(file.toByteArray());
       default:
-        throw new IllegalArgumentException("Unsupported format " + format);
+        // Don't throw an exception for forward compatibility of formats
+        log.warn("Unsupported format {}", format);
+        return canonicalString();
     }
   }
 
@@ -1975,6 +1977,7 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public enum Format {
+    DEFAULT("default"),
     IGNORE_EXTENSIONS("ignore_extensions"),
     SERIALIZED("serialized");
 
