@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -116,7 +117,13 @@ public class RuleSet {
 
   public void validate() throws RuleException {
     if (migrationRules != null) {
+      Set<String> names = new HashSet<>();
       for (Rule rule : migrationRules) {
+        String name = rule.getName();
+        if (names.contains(name)) {
+          throw new RuleException("Found rule with duplicate name '" + name + "'");
+        }
+        names.add(name);
         rule.validate();
         if (!rule.getMode().isMigrationRule()) {
           throw new RuleException("Migration rules can only be UPGRADE, DOWNGRADE, UPDOWN");
@@ -124,7 +131,13 @@ public class RuleSet {
       }
     }
     if (domainRules != null) {
+      Set<String> names = new HashSet<>();
       for (Rule rule : domainRules) {
+        String name = rule.getName();
+        if (names.contains(name)) {
+          throw new RuleException("Found rule with duplicate name '" + name + "'");
+        }
+        names.add(name);
         rule.validate();
         if (!rule.getMode().isDomainRule()) {
           throw new RuleException("Domain rules can only be WRITE, READ, WRITEREAD");

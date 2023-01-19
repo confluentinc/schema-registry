@@ -14,6 +14,7 @@
  */
 package io.confluent.kafka.schemaregistry.rest;
 
+import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -562,8 +563,26 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
   public void testConfigInvalidRuleSet() throws Exception {
     Rule r1 = new Rule("foo", null, RuleMode.READ, "IGNORE", null, null, null, null, false);
     List<Rule> rules = Collections.singletonList(r1);
+    // Add READ rule to migrationRules
     RuleSet ruleSet = new RuleSet(rules, null);
     ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setInitialRuleSet(ruleSet);
+    // add config ruleSet
+    try {
+      restApp.restClient.updateConfig(config, null);
+      fail("Registering an invalid ruleSet should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals("Should get a bad request status",
+          RestInvalidRuleSetException.DEFAULT_ERROR_CODE,
+          e.getStatus());
+    }
+
+    // Add rule with duplicate name
+    Rule r2 = new Rule("foo", null, RuleMode.READ, "IGNORE", null, null, null, null, false);
+    rules = ImmutableList.of(r1, r2);
+    ruleSet = new RuleSet(null, rules);
+    config = new ConfigUpdateRequest();
     config.setInitialRuleSet(ruleSet);
     // add config ruleSet
     try {
