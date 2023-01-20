@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.rules.cel;
 
 import static io.confluent.kafka.schemaregistry.rules.cel.avro.AvroTypeDescription.NULL_AVRO_SCHEMA;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.api.expr.v1alpha1.Decl;
 import com.google.api.expr.v1alpha1.Type;
 import com.google.common.collect.ImmutableMap;
@@ -30,6 +32,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroRegistry;
+import java.io.IOException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -48,19 +51,32 @@ public class CelExecutor implements RuleExecutor {
 
   public static final String TYPE = "CEL";
 
+  private static final ObjectMapper mapper = new ObjectMapper();
+
   @Override
   public String type() {
     return TYPE;
   }
 
   @Override
-  public Object transform(RuleContext ctx, Object message)
-      throws RuleException {
+  public Object transform(RuleContext ctx, Object message) throws RuleException {
     Object result = execute(ctx, message, ImmutableMap.of("message", message));
     if (ctx.rule().getKind() == RuleKind.CONDITION) {
-      return Boolean.TRUE.equals(result) ? message : null;
+      if (Boolean.TRUE.equals(result)) {
+        return message;
+      } else {
+        throw new RuleException("Expr '" + ctx.rule().getExpr() + "' failed");
+      }
     } else {
-      return message;
+      if (result instanceof Map) {
+        try {
+          JsonNode jsonNode = mapper.valueToTree(result);
+          result = ctx.target().fromJson(jsonNode);
+        } catch (IOException e) {
+          throw new RuleException(e);
+        }
+      }
+      return result;
     }
   }
 
@@ -103,6 +119,8 @@ public class CelExecutor implements RuleExecutor {
       } else if (!isProto) {
         // Register our Jackson object message type
         scriptBuilder = scriptBuilder.withTypes(obj.getClass());
+      } else {
+        scriptBuilder = scriptBuilder.withTypes(obj);
       }
       Script script = scriptBuilder.build();
 
