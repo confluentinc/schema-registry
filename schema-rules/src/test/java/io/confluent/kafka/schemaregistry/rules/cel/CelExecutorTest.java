@@ -358,6 +358,22 @@ public class CelExecutorTest {
     assertEquals("TWO", obj.get("kind").toString());
   }
 
+  @Test
+  public void testKafkaAvroSerializerIdentityTransform() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelExecutor.TYPE, null, "message",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    GenericRecord obj = (GenericRecord) avroDeserializer.deserialize(topic, bytes);
+    assertEquals(avroRecord, obj);
+  }
+
   @Test(expected = SerializationException.class)
   public void testKafkaAvroSerializerBadTransform() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
