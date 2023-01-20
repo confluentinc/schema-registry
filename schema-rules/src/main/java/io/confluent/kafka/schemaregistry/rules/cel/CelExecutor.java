@@ -69,6 +69,7 @@ public class CelExecutor implements RuleExecutor {
       }
     } else {
       if (result instanceof Map) {
+        // Convert maps to the target object type
         try {
           JsonNode jsonNode = mapper.valueToTree(result);
           result = ctx.target().fromJson(jsonNode);
