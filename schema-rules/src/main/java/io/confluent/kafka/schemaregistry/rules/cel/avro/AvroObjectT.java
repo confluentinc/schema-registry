@@ -77,6 +77,12 @@ public final class AvroObjectT extends ObjectT {
 
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
+    if (typeDesc.isAssignableFrom(value.getClass())) {
+      return (T) value;
+    }
+    if (typeDesc.isAssignableFrom(getClass())) {
+      return (T) this;
+    }
     throw new UnsupportedOperationException();
   }
 }
