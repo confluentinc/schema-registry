@@ -184,12 +184,12 @@ public class Context {
   }
 
   public TypeElementInfo getType(final String name, final boolean isOriginal) {
-    String fullName = resolve(name, isOriginal);
+    String fullName = resolve(this::getTypeForFullName, name, isOriginal);
     return fullName != null ? getTypeForFullName(fullName, isOriginal) : null;
   }
 
   public ExtendFieldElementInfo getExtendField(final String name, final boolean isOriginal) {
-    String fullName = resolve(name, isOriginal);
+    String fullName = resolve(this::getExtendFieldForFullName, name, isOriginal);
     return fullName != null ? getExtendFieldForFullName(fullName, isOriginal) : null;
   }
 

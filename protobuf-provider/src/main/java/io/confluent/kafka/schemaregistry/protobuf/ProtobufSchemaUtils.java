@@ -50,6 +50,7 @@ import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context.ExtendFieldElementInfo;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import java.io.IOException;
 import java.io.StringWriter;
@@ -617,13 +618,17 @@ public class ProtobufSchemaUtils {
         sb.append(value);
       } else if (value instanceof IntRange) {
         IntRange range = (IntRange) value;
-        sb.append(range.getStart());
-        sb.append(" to ");
-        int last = range.getEndInclusive();
-        if (last < MAX_TAG_VALUE) {
-          sb.append(last);
+        if (ctx.normalize() && range.getStart().equals(range.getEndInclusive())) {
+          sb.append(range.getStart());
         } else {
-          sb.append("max");
+          sb.append(range.getStart());
+          sb.append(" to ");
+          int last = range.getEndInclusive();
+          if (last < MAX_TAG_VALUE) {
+            sb.append(last);
+          } else {
+            sb.append("max");
+          }
         }
       } else {
         throw new IllegalArgumentException();
@@ -648,13 +653,17 @@ public class ProtobufSchemaUtils {
         sb.append(value);
       } else if (value instanceof IntRange) {
         IntRange range = (IntRange) value;
-        sb.append(range.getStart());
-        sb.append(" to ");
-        int last = range.getEndInclusive();
-        if (last < MAX_TAG_VALUE) {
-          sb.append(last);
+        if (ctx.normalize() && range.getStart().equals(range.getEndInclusive())) {
+          sb.append(range.getStart());
         } else {
-          sb.append("max");
+          sb.append(range.getStart());
+          sb.append(" to ");
+          int last = range.getEndInclusive();
+          if (last < MAX_TAG_VALUE) {
+            sb.append(last);
+          } else {
+            sb.append("max");
+          }
         }
       } else {
         throw new IllegalArgumentException();
@@ -882,11 +891,18 @@ public class ProtobufSchemaUtils {
       keys = keys.stream().sorted().collect(Collectors.toList());
     }
     for (String key : keys) {
+      Object value = valueMap.get(key);
+      if (ctx.normalize() && key.startsWith("[") && key.endsWith("]")) {
+        // Found an extension field
+        String fieldName = key.substring(1, key.length() - 1);
+        String resolved = ctx.resolve(ctx::getExtendFieldForFullName, fieldName, true);
+        key = "[" + resolved + "]";
+      }
       String endl = index != lastIndex ? "," : "";
       String kv = new StringBuilder()
           .append(key)
           .append(": ")
-          .append(formatOptionMapOrListValue(ctx, valueMap.get(key)))
+          .append(formatOptionMapOrListValue(ctx, value))
           .append(endl)
           .toString();
       appendIndented(sb, kv);

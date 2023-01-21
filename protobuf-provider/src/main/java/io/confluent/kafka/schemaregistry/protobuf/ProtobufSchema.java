@@ -1068,6 +1068,7 @@ public class ProtobufSchema implements ParsedSchema {
     List<Object> values = new ArrayList<>();
     int start = range.getStart();
     int end = range.getEnd();
+    // inclusive, exclusive
     values.add(start == end - 1 ? start : new IntRange(start, end - 1));
     return new ExtensionsElement(DEFAULT_LOCATION, "", values);
   }

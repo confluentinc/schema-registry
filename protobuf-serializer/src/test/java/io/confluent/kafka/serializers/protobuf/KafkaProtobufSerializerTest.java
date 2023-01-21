@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.serializers.protobuf.test.CustomOptions.CustomMessageOptions;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass.DecimalValue;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValuePb2OuterClass.DecimalValuePb2;
+import io.confluent.kafka.serializers.protobuf.test.Ranges;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -665,5 +666,43 @@ public class KafkaProtobufSerializerTest {
     assertEquals(expected, schema.canonicalString());
     schema = new ProtobufSchema(schema.canonicalString());
     assertEquals(expected, schema.canonicalString());
+  }
+
+  @Test
+  public void testRanges() {
+    String expected = "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message FooBar {\n"
+        + "  reserved 5000 to 6000;\n"
+        + "  reserved 10000 to 10001;\n"
+        + "  reserved 20000;\n"
+        + "\n"
+        + "  optional int32 foo = 1;\n"
+        + "  optional string bar = 2;\n"
+        + "\n"
+        + "  extensions 100 to 200;\n"
+        + "  extensions 1000 to 1001;\n"
+        + "  extensions 2000;\n"
+        + "\n"
+        + "  enum FooBarBazEnum {\n"
+        + "    reserved 100 to 200;\n"
+        + "    reserved 1000 to 1001;\n"
+        + "    reserved 2000;\n"
+        + "    NONE = 0;\n"
+        + "    FOO = 1;\n"
+        + "    BAR = 2;\n"
+        + "    BAZ = 3;\n"
+        + "  }\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(Ranges.FooBar.getDescriptor());
+    schema = schema.normalize();
+    assertEquals(expected, schema.canonicalString());
+    schema = new ProtobufSchema(schema.canonicalString());
+    assertEquals(expected, schema.canonicalString());
+
   }
 }
