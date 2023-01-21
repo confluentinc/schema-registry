@@ -34,15 +34,18 @@ public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
   }
 
   @Override
+  public String getKeyUrlPrefix() {
+    return HcVaultKmsClient.PREFIX;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
-      String keyUri = keyId != null ? HcVaultKmsClient.PREFIX + keyId : null;
-      setDefaultKekId(keyUri);
       this.tokenId = (String) configs.get(TOKEN_ID);
-      if (keyUri != null) {
-        registerKmsClient(Optional.of(keyUri));
+      if (getDefaultKekId() != null) {
+        // HCVault client requires a keyUri
+        registerKmsClient(Optional.of(getDefaultKekId()));
       }
     } catch (GeneralSecurityException e) {
       throw new IllegalArgumentException(e);

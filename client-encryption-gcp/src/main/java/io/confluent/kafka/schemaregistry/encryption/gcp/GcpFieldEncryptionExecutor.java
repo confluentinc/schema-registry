@@ -43,13 +43,14 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
   }
 
   @Override
+  public String getKeyUrlPrefix() {
+    return GcpKmsClient.PREFIX;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
-      // Key id is not mandatory for decryption
-      String keyUri = keyId != null ? GcpKmsClient.PREFIX + keyId : null;
-      setDefaultKekId(keyUri);
       String accountType = (String) configs.get(ACCOUNT_TYPE);
       if (accountType == null) {
         accountType = "service_account";

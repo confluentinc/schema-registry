@@ -94,7 +94,12 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   public FieldEncryptionExecutor() {
   }
 
+  public abstract String getKeyUrlPrefix();
+
   public void configure(Map<String, ?> configs) {
+    String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
+    // Key id is not mandatory for decryption
+    this.defaultKekId = keyId != null ? getKeyUrlPrefix() + keyId : null;
     Object cacheExpirySecsConfig = configs.get(CACHE_EXPIRY_SECS);
     if (cacheExpirySecsConfig != null) {
       try {
@@ -172,7 +177,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
     return defaultKekId;
   }
 
-  public void setDefaultKekId(String defaultKekId) {
+  protected void setDefaultKekId(String defaultKekId) {
     this.defaultKekId = defaultKekId;
   }
 
@@ -278,17 +283,24 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
     }
 
     protected String getKekId(RuleContext ctx) {
+      String kekId = null;
       Metadata metadata = ctx.target().metadata();
       if (metadata != null) {
         Map<String, String> properties = metadata.getProperties();
         if (properties != null) {
-          String kekId = properties.get(ENCRYPT_KMS_KEY_ID);
-          if (kekId != null) {
-            return kekId;
+          String keyId = properties.get(ENCRYPT_KMS_KEY_ID);
+          if (keyId != null) {
+            kekId = getKeyUrlPrefix() + keyId;
           }
         }
       }
-      return getDefaultKekId();
+      if (kekId == null) {
+        kekId = defaultKekId;
+      }
+      if (kekId == null) {
+        throw new IllegalArgumentException("No key id found");
+      }
+      return kekId;
     }
 
     protected Dek getDekForEncrypt(String kekId, String dekFormat) {

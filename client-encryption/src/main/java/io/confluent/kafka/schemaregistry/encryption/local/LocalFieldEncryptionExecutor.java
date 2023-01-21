@@ -39,10 +39,15 @@ public class LocalFieldEncryptionExecutor extends FieldEncryptionExecutor {
   }
 
   @Override
+  public String getKeyUrlPrefix() {
+    return LocalKmsClient.PREFIX;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      setDefaultKekId(LocalKmsClient.PREFIX);
+      setDefaultKekId(getKeyUrlPrefix());
       secret = (String) configs.get(LOCAL_SECRET);
       if (secret == null) {
         throw new IllegalArgumentException("Missing property "

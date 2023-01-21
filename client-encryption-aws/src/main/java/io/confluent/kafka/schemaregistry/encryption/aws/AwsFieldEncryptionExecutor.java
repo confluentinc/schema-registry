@@ -43,13 +43,14 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
   }
 
   @Override
+  public String getKeyUrlPrefix() {
+    return AwsKmsClient.PREFIX;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
-      // Key id is not mandatory for decryption
-      String keyUri = keyId != null ? AwsKmsClient.PREFIX + keyId : null;
-      setDefaultKekId(keyUri);
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
       if (accessKey != null && secretKey != null) {

@@ -39,13 +39,14 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
   }
 
   @Override
+  public String getKeyUrlPrefix() {
+    return AzureKmsClient.PREFIX;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
-      // Key id is not mandatory for decryption
-      String keyUri = keyId != null ? AzureKmsClient.PREFIX + keyId : null;
-      setDefaultKekId(keyUri);
       String tenantId = (String) configs.get(TENANT_ID);
       String clientId = (String) configs.get(CLIENT_ID);
       String clientSecret = (String) configs.get(CLIENT_SECRET);
