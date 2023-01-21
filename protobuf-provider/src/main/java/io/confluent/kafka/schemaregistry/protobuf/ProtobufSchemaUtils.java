@@ -811,8 +811,8 @@ public class ProtobufSchemaUtils {
       if (ctx.normalize() && key.startsWith("[") && key.endsWith("]")) {
         // Found an extension field
         String fieldName = key.substring(1, key.length() - 1);
-        ExtendFieldElementInfo fieldInfo = ctx.getExtendField(fieldName, true);
-        key = "[" + fieldInfo.packageName() + "." + fieldInfo.field().getName() + "]";
+        String resolved = ctx.resolve(ctx::getExtendFieldForFullName, fieldName, true);
+        key = "[" + resolved + "]";
       }
       String endl = index != lastIndex ? "," : "";
       String kv = new StringBuilder()
