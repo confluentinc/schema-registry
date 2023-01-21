@@ -812,7 +812,9 @@ public class ProtobufSchemaUtils {
         // Found an extension field
         String fieldName = key.substring(1, key.length() - 1);
         String resolved = ctx.resolve(ctx::getExtendFieldForFullName, fieldName, true);
-        key = "[" + resolved + "]";
+        if (resolved != null) {
+          key = "[" + resolved + "]";
+        }
       }
       String endl = index != lastIndex ? "," : "";
       String kv = new StringBuilder()
