@@ -30,7 +30,6 @@ import java.util.Optional;
 
 public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
-  public static final String KMS_KEY_ID = "kms.key.id";
   public static final String ACCOUNT_TYPE = "account.type";
   public static final String CLIENT_ID = "client.id";
   public static final String CLIENT_EMAIL = "client.email";
@@ -43,7 +42,7 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(KMS_KEY_ID);
+      String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
       // Key id is not mandatory for decryption
       String keyUri = keyId != null ? GcpKmsClient.PREFIX + keyId : null;
       String accountType = (String) configs.get(ACCOUNT_TYPE);
@@ -66,10 +65,10 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
       } else {
         credentials = GoogleCredentials.getApplicationDefault();
       }
-      registerWithCloudKms(Optional.ofNullable(keyUri), Optional.of(credentials),
+      registerWithCloudKms(Optional.empty(), Optional.of(credentials),
           (CloudKMS) getTestClient());
 
-      setKekId(keyUri);
+      setDefaultKekId(keyUri);
     } catch (GeneralSecurityException | IOException e) {
       throw new IllegalArgumentException(e);
     }

@@ -17,7 +17,7 @@
 package io.confluent.kafka.schemaregistry.encryption.aws;
 
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TEST_CLIENT;
-import static io.confluent.kafka.schemaregistry.encryption.aws.AwsFieldEncryptionExecutor.KMS_KEY_ID;
+import static io.confluent.kafka.schemaregistry.encryption.aws.AwsFieldEncryptionExecutor.DEFAULT_KMS_KEY_ID;
 
 import com.amazonaws.services.kms.AWSKMS;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
@@ -42,7 +42,7 @@ public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "aws");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".aws.class",
         AwsFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".aws.param." + KMS_KEY_ID,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".aws.param." + DEFAULT_KMS_KEY_ID,
         keyId);
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".aws.param." + TEST_CLIENT,
         testClient);

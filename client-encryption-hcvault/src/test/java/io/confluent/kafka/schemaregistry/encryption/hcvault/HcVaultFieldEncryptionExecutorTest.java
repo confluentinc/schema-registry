@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.EMPTY_AAD;
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TEST_CLIENT;
-import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultFieldEncryptionExecutor.KMS_KEY_ID;
+import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultFieldEncryptionExecutor.DEFAULT_KMS_KEY_ID;
 import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultFieldEncryptionExecutor.TOKEN_ID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -52,7 +52,7 @@ public class HcVaultFieldEncryptionExecutorTest extends FieldEncryptionExecutorT
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "hcvault");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.class",
         HcVaultFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.param." + KMS_KEY_ID,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.param." + DEFAULT_KMS_KEY_ID,
         keyId);
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.param." + TOKEN_ID,
         "dev-only-token");

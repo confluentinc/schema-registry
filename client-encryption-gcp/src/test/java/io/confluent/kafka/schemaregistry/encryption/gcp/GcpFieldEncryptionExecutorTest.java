@@ -19,7 +19,7 @@ package io.confluent.kafka.schemaregistry.encryption.gcp;
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpFieldEncryptionExecutor.CLIENT_EMAIL;
 import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpFieldEncryptionExecutor.CLIENT_ID;
-import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpFieldEncryptionExecutor.KMS_KEY_ID;
+import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpFieldEncryptionExecutor.DEFAULT_KMS_KEY_ID;
 import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpFieldEncryptionExecutor.PRIVATE_KEY;
 import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpFieldEncryptionExecutor.PRIVATE_KEY_ID;
 
@@ -51,7 +51,7 @@ public class GcpFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "gcp");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".gcp.class",
         GcpFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".gcp.param." + KMS_KEY_ID,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".gcp.param." + DEFAULT_KMS_KEY_ID,
         keyId);
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".gcp.param." + CLIENT_ID,
         clientId);

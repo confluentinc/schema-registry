@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.encryption.azure;
 
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.EMPTY_AAD;
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TEST_CLIENT;
-import static io.confluent.kafka.schemaregistry.encryption.azure.AzureFieldEncryptionExecutor.KMS_KEY_ID;
+import static io.confluent.kafka.schemaregistry.encryption.azure.AzureFieldEncryptionExecutor.DEFAULT_KMS_KEY_ID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -51,7 +51,7 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "azure");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".azure.class",
         AzureFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".azure.param." + KMS_KEY_ID,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".azure.param." + DEFAULT_KMS_KEY_ID,
         keyId);
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".azure.param." + TEST_CLIENT,
         testClient);

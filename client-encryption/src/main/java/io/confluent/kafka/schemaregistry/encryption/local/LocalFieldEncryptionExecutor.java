@@ -51,7 +51,7 @@ public class LocalFieldEncryptionExecutor extends FieldEncryptionExecutor {
       }
       LocalKmsClient.register(Optional.of(LocalKmsClient.PREFIX), secret, oldSecrets);
 
-      setKekId(LocalKmsClient.PREFIX);
+      setDefaultKekId(LocalKmsClient.PREFIX);
     } catch (GeneralSecurityException e) {
       throw new IllegalArgumentException(e);
     }

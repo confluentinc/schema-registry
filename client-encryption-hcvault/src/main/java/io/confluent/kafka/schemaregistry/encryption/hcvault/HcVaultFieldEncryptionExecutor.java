@@ -25,7 +25,6 @@ import java.util.Optional;
 
 public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
-  public static final String KMS_KEY_ID = "kms.key.id";
   public static final String TOKEN_ID = "token.id";
 
   public HcVaultFieldEncryptionExecutor() {
@@ -34,14 +33,14 @@ public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(KMS_KEY_ID);
+      String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
       // Key id is not mandatory for decryption
       String keyUri = keyId != null ? HcVaultKmsClient.PREFIX + keyId : null;
       String tokenId = (String) configs.get(TOKEN_ID);
-      registerWithHcVaultKms(Optional.ofNullable(keyUri), Optional.ofNullable(tokenId),
+      registerWithHcVaultKms(Optional.empty(), Optional.ofNullable(tokenId),
           (Vault) getTestClient());
 
-      setKekId(keyUri);
+      setDefaultKekId(keyUri);
     } catch (GeneralSecurityException e) {
       throw new IllegalArgumentException(e);
     }

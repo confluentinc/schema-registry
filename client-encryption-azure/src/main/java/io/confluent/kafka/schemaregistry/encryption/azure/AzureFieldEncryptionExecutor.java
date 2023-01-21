@@ -28,7 +28,6 @@ import java.util.Optional;
 
 public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
-  public static final String KMS_KEY_ID = "kms.key.id";
   public static final String TENANT_ID = "tenant.id";
   public static final String CLIENT_ID = "client.id";
   public static final String CLIENT_SECRET = "client.secret";
@@ -39,7 +38,7 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(KMS_KEY_ID);
+      String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
       // Key id is not mandatory for decryption
       String keyUri = keyId != null ? AzureKmsClient.PREFIX + keyId : null;
       String tenantId = (String) configs.get(TENANT_ID);
@@ -55,10 +54,10 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
       } else {
         credentials = new DefaultAzureCredentialBuilder().build();
       }
-      registerWithAzureKms(Optional.ofNullable(keyUri), Optional.of(credentials),
+      registerWithAzureKms(Optional.empty(), Optional.of(credentials),
           (CryptographyClient) getTestClient());
 
-      setKekId(keyUri);
+      setDefaultKekId(keyUri);
     } catch (GeneralSecurityException e) {
       throw new IllegalArgumentException(e);
     }

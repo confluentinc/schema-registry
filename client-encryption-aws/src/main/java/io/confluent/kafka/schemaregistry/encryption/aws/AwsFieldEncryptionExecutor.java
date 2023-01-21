@@ -33,7 +33,6 @@ import java.util.Optional;
 
 public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
-  public static final String KMS_KEY_ID = "kms.key.id";
   public static final String ACCESS_KEY_ID = "access.key.id";
   public static final String SECRET_ACCESS_KEY = "secret.access.key";
 
@@ -43,7 +42,7 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(KMS_KEY_ID);
+      String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
       // Key id is not mandatory for decryption
       String keyUri = keyId != null ? AwsKmsClient.PREFIX + keyId : null;
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
@@ -56,10 +55,10 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
       } else {
         credentials = new DefaultAWSCredentialsProviderChain();
       }
-      registerWithAwsKms(Optional.ofNullable(keyUri), Optional.of(credentials),
+      registerWithAwsKms(Optional.empty(), Optional.of(credentials),
           (AWSKMS) getTestClient());
 
-      setKekId(keyUri);
+      setDefaultKekId(keyUri);
     } catch (GeneralSecurityException | IOException e) {
       throw new IllegalArgumentException(e);
     }
