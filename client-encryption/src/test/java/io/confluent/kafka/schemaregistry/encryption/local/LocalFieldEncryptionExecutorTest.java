@@ -30,7 +30,18 @@ public class LocalFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     super();
   }
 
+  @Override
+  protected String getKeyId() {
+    return "";
+  }
+
+  @Override
   protected Map<String, Object> getClientProperties() throws Exception {
+    return getClientPropertiesWithoutKey();
+  }
+
+  @Override
+  protected Map<String, Object> getClientPropertiesWithoutKey() throws Exception {
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");

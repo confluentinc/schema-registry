@@ -42,9 +42,22 @@ public class HcVaultFieldEncryptionExecutorTest extends FieldEncryptionExecutorT
     super();
   }
 
+  @Override
+  protected String getKeyId() {
+    return "http://127.0.0.1:8200/transit/keys/my-key";
+  }
+
+  @Override
   protected Map<String, Object> getClientProperties() throws Exception {
-    String keyId = "http://127.0.0.1:8200/transit/keys/my-key";
-    Vault testClient = mockClient(keyId);
+    Map<String, Object> props = getClientPropertiesWithoutKey();
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.param." + DEFAULT_KMS_KEY_ID,
+        getKeyId());
+    return props;
+  }
+
+  @Override
+  protected Map<String, Object> getClientPropertiesWithoutKey() throws Exception {
+    Vault testClient = mockClient(getKeyId());
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
@@ -52,8 +65,6 @@ public class HcVaultFieldEncryptionExecutorTest extends FieldEncryptionExecutorT
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "hcvault");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.class",
         HcVaultFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.param." + DEFAULT_KMS_KEY_ID,
-        keyId);
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.param." + TOKEN_ID,
         "dev-only-token");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.param." + TEST_CLIENT,
