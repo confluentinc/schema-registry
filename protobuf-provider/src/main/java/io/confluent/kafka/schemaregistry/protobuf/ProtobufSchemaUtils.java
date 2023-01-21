@@ -809,6 +809,7 @@ public class ProtobufSchemaUtils {
     for (String key : keys) {
       Object value = valueMap.get(key);
       if (ctx.normalize() && key.startsWith("[") && key.endsWith("]")) {
+        // Found an extension field
         String fieldName = key.substring(1, key.length() - 1);
         ExtendFieldElementInfo fieldInfo = ctx.getExtendField(fieldName, true);
         key = "[" + fieldInfo.packageName() + "." + fieldInfo.field().getName() + "]";
