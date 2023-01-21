@@ -245,7 +245,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
               skip = true;
               return;
             }
-            kekId = getKekId();
+            kekId = getKekId(ctx);
             cryptor = getCryptor(ctx.isKey());
             dek = getDekForEncrypt(kekId, cryptor.getDekFormat());
             break;
@@ -265,7 +265,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
       }
     }
 
-    protected String getKekId() {
+    protected String getKekId(RuleContext ctx) {
       Metadata metadata = ctx.target().metadata();
       if (metadata != null) {
         Map<String, String> properties = metadata.getProperties();
