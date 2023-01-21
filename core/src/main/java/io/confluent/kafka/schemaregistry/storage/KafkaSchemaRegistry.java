@@ -183,7 +183,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         .build(new CacheLoader<RawSchema, ParsedSchema>() {
           @Override
           public ParsedSchema load(RawSchema s) throws Exception {
-            return loadSchema(s.getSchemaType(), s.getSchema(), s.getReferences(), s.isNew(), s.isNormalize());
+            return loadSchema(
+                s.getSchemaType(), s.getSchema(), s.getReferences(), s.isNew(), s.isNormalize());
           }
         });
     this.lookupCache = lookupCache();
