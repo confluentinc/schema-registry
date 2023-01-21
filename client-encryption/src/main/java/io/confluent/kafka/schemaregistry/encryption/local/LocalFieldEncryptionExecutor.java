@@ -44,10 +44,12 @@ public class LocalFieldEncryptionExecutor extends FieldEncryptionExecutor {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public void configure(Map<String, ?> configs) {
     try {
+      // set the default kms id as empty
+      ((Map<String, Object>) configs).put(FieldEncryptionExecutor.DEFAULT_KMS_KEY_ID, "");
       super.configure(configs);
-      setDefaultKekId(getKeyUrlPrefix());
       secret = (String) configs.get(LOCAL_SECRET);
       if (secret == null) {
         throw new IllegalArgumentException("Missing property "

@@ -177,10 +177,6 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
     return defaultKekId;
   }
 
-  protected void setDefaultKekId(String defaultKekId) {
-    this.defaultKekId = defaultKekId;
-  }
-
   public Object getTestClient() {
     return testClient;
   }
