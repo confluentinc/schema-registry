@@ -340,9 +340,9 @@ public class JsonSchemaTest {
   public void testParseSchema() {
     SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
     ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
-        new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), recordSchemaString), false);
+        new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), recordSchemaString), false, false);
     Optional<ParsedSchema> parsedSchemaOptional = jsonSchemaProvider.parseSchema(recordSchemaString,
-            new ArrayList<>(), false);
+            new ArrayList<>(), false, false);
 
     assertNotNull(parsedSchema);
     assertTrue(parsedSchemaOptional.isPresent());
@@ -352,14 +352,14 @@ public class JsonSchemaTest {
   public void testParseSchemaThrowException() {
     SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
     jsonSchemaProvider.parseSchemaOrElseThrow(
-        new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), invalidSchemaString), false);
+        new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), invalidSchemaString), false, false);
   }
 
   @Test
   public void testParseSchemaSuppressException() {
     SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
     Optional<ParsedSchema> parsedSchema = jsonSchemaProvider.parseSchema(invalidSchemaString,
-            new ArrayList<>(), false);
+            new ArrayList<>(), false, false);
     assertFalse(parsedSchema.isPresent());
   }
 

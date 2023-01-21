@@ -63,12 +63,13 @@ public class CustomSchemaProviderMetricTest extends ClusterTestHarness {
     @Override
     public Optional<ParsedSchema> parseSchema(String schemaString,
                                               List<SchemaReference> references,
-                                              boolean isNew) {
+                                              boolean isNew,
+                                              boolean normalize) {
       return Optional.empty();
     }
 
     @Override
-    public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew) {
+    public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize) {
       return null;
     }
   }

@@ -1908,9 +1908,9 @@ public class ProtobufSchemaTest {
   public void testParseSchema() {
     SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
     ParsedSchema parsedSchema = protobufSchemaProvider.parseSchemaOrElseThrow(
-        new Schema(null, null, null, ProtobufSchema.TYPE, new ArrayList<>(), recordSchemaString), false);
+        new Schema(null, null, null, ProtobufSchema.TYPE, new ArrayList<>(), recordSchemaString), false, false);
     Optional<ParsedSchema> parsedSchemaOptional = protobufSchemaProvider.parseSchema(recordSchemaString,
-            new ArrayList<>(), false);
+            new ArrayList<>(), false, false);
 
     assertNotNull(parsedSchema);
     assertTrue(parsedSchemaOptional.isPresent());
@@ -1920,14 +1920,14 @@ public class ProtobufSchemaTest {
   public void testParseSchemaThrowException() {
     SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
     protobufSchemaProvider.parseSchemaOrElseThrow(
-        new Schema(null, null, null, ProtobufSchema.TYPE, new ArrayList<>(), invalidSchemaString), false);
+        new Schema(null, null, null, ProtobufSchema.TYPE, new ArrayList<>(), invalidSchemaString), false, false);
   }
 
   @Test
   public void testParseSchemaSuppressException() {
     SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
     Optional<ParsedSchema> parsedSchema = protobufSchemaProvider.parseSchema(invalidSchemaString,
-            new ArrayList<>(), false);
+            new ArrayList<>(), false, false);
     assertFalse(parsedSchema.isPresent());
   }
 

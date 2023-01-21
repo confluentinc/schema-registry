@@ -183,7 +183,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         .build(new CacheLoader<RawSchema, ParsedSchema>() {
           @Override
           public ParsedSchema load(RawSchema s) throws Exception {
-            return loadSchema(s.getSchemaType(), s.getSchema(), s.getReferences(), s.isNew());
+            return loadSchema(s.getSchemaType(), s.getSchema(), s.getReferences(), s.isNew(), s.isNormalize());
           }
         });
     this.lookupCache = lookupCache();
@@ -1048,7 +1048,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       log.error("Empty schema");
       throw new InvalidSchemaException("Empty schema");
     }
-    ParsedSchema parsedSchema = parseSchema(schema, isNew);
+    ParsedSchema parsedSchema = parseSchema(schema, isNew, normalize);
     try {
       parsedSchema.validate();
       if (normalize) {
@@ -1065,11 +1065,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   public ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
-    return parseSchema(schema, false);
+    return parseSchema(schema, false, false);
   }
 
-  public ParsedSchema parseSchema(Schema schema, boolean isNew) throws InvalidSchemaException {
-    return parseSchema(schema.getSchemaType(), schema.getSchema(), schema.getReferences(), isNew);
+  public ParsedSchema parseSchema(Schema schema, boolean isNew, boolean normalize)
+      throws InvalidSchemaException {
+    return parseSchema(
+        schema.getSchemaType(), schema.getSchema(), schema.getReferences(), isNew, normalize);
   }
 
   public ParsedSchema parseSchema(
@@ -1077,16 +1079,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           String schema,
           List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references)
        throws InvalidSchemaException {
-    return parseSchema(schemaType, schema, references, false);
+    return parseSchema(schemaType, schema, references, false, false);
   }
 
   public ParsedSchema parseSchema(
           String schemaType,
           String schema,
           List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references,
-          boolean isNew) throws InvalidSchemaException {
+          boolean isNew,
+          boolean normalize) throws InvalidSchemaException {
     try {
-      return schemaCache.get(new RawSchema(schemaType, references, schema, isNew));
+      return schemaCache.get(new RawSchema(schemaType, references, schema, isNew, normalize));
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
       if (cause instanceof InvalidSchemaException) {
@@ -1103,7 +1106,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       String schemaType,
       String schema,
       List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references,
-      boolean isNew)
+      boolean isNew,
+      boolean normalize)
       throws InvalidSchemaException {
     if (schemaType == null) {
       schemaType = AvroSchema.TYPE;
@@ -1118,7 +1122,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
     try {
       return provider.parseSchemaOrElseThrow(
-          new Schema(null, null, null, schemaType, references, schema), isNew);
+          new Schema(null, null, null, schemaType, references, schema), isNew, normalize);
     } catch (Exception e) {
       throw new InvalidSchemaException("Invalid schema " + schema
               + " with refs " + references + " of type " + type + ", details: " + e.getMessage());
@@ -1212,7 +1216,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     Schema schemaEntity = schema.toSchemaEntity();
     SchemaString schemaString = new SchemaString(schemaEntity);
     if (format != null && !format.trim().isEmpty()) {
-      ParsedSchema parsedSchema = parseSchema(schemaEntity, false);
+      ParsedSchema parsedSchema = parseSchema(schemaEntity, false, false);
       schemaString.setSchemaString(parsedSchema.formattedString(format));
     } else {
       schemaString.setSchemaString(schema.getSchema());
@@ -1918,16 +1922,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     private List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references;
     private String schema;
     private boolean isNew;
+    private boolean normalize;
 
     public RawSchema(
         String schemaType,
         List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references,
         String schema,
-        boolean isNew) {
+        boolean isNew,
+        boolean normalize) {
       this.schemaType = schemaType;
       this.references = references;
       this.schema = schema;
       this.isNew = isNew;
+      this.normalize = normalize;
     }
 
     public String getSchemaType() {
@@ -1947,6 +1954,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       return isNew;
     }
 
+    public boolean isNormalize() {
+      return normalize;
+    }
+
     @Override
     public boolean equals(Object o) {
       if (this == o) {
@@ -1957,6 +1968,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
       RawSchema that = (RawSchema) o;
       return isNew == that.isNew
+          && normalize == that.normalize
           && Objects.equals(schemaType, that.schemaType)
           && Objects.equals(references, that.references)
           && Objects.equals(schema, that.schema);
@@ -1964,7 +1976,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
     @Override
     public int hashCode() {
-      return Objects.hash(schemaType, references, schema, isNew);
+      return Objects.hash(schemaType, references, schema, isNew, normalize);
     }
   }
 
