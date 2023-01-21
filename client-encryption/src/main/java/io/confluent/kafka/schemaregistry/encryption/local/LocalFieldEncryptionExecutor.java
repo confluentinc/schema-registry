@@ -37,6 +37,7 @@ public class LocalFieldEncryptionExecutor extends FieldEncryptionExecutor {
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
+      setDefaultKekId(LocalKmsClient.PREFIX);
       String secret = (String) configs.get(LOCAL_SECRET);
       if (secret == null) {
         throw new IllegalArgumentException("Missing property "
@@ -50,8 +51,6 @@ public class LocalFieldEncryptionExecutor extends FieldEncryptionExecutor {
         oldSecrets = Collections.emptyList();
       }
       LocalKmsClient.register(Optional.of(LocalKmsClient.PREFIX), secret, oldSecrets);
-
-      setDefaultKekId(LocalKmsClient.PREFIX);
     } catch (GeneralSecurityException e) {
       throw new IllegalArgumentException(e);
     }

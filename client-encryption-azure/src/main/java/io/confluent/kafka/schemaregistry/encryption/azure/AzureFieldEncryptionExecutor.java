@@ -20,6 +20,7 @@ import com.azure.core.credential.TokenCredential;
 import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
+import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.security.GeneralSecurityException;
@@ -41,6 +42,7 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
       String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
       // Key id is not mandatory for decryption
       String keyUri = keyId != null ? AzureKmsClient.PREFIX + keyId : null;
+      setDefaultKekId(keyUri);
       String tenantId = (String) configs.get(TENANT_ID);
       String clientId = (String) configs.get(CLIENT_ID);
       String clientSecret = (String) configs.get(CLIENT_SECRET);
@@ -56,14 +58,12 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
       }
       registerWithAzureKms(Optional.empty(), Optional.of(credentials),
           (CryptographyClient) getTestClient());
-
-      setDefaultKekId(keyUri);
     } catch (GeneralSecurityException e) {
       throw new IllegalArgumentException(e);
     }
   }
 
-  public static void registerWithAzureKms(
+  public static KmsClient registerWithAzureKms(
       Optional<String> keyUri, Optional<TokenCredential> credentials,
       CryptographyClient cryptographyClient)
       throws GeneralSecurityException {
@@ -82,6 +82,7 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
       client.withCryptographyClient(cryptographyClient);
     }
     KmsClients.add(client);
+    return client;
   }
 }
 

@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
 import com.bettercloud.vault.Vault;
+import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.security.GeneralSecurityException;
@@ -27,6 +28,8 @@ public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
   public static final String TOKEN_ID = "token.id";
 
+  private String tokenId;
+
   public HcVaultFieldEncryptionExecutor() {
   }
 
@@ -34,20 +37,30 @@ public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
     try {
       super.configure(configs);
       String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
-      // Key id is not mandatory for decryption
       String keyUri = keyId != null ? HcVaultKmsClient.PREFIX + keyId : null;
-      String tokenId = (String) configs.get(TOKEN_ID);
-      registerWithHcVaultKms(Optional.empty(), Optional.ofNullable(tokenId),
-          (Vault) getTestClient());
-
       setDefaultKekId(keyUri);
+      this.tokenId = (String) configs.get(TOKEN_ID);
+      if (keyUri != null) {
+        registerWithHcVaultKms(Optional.of(keyUri), Optional.ofNullable(tokenId),
+            (Vault) getTestClient());
+      }
     } catch (GeneralSecurityException e) {
       throw new IllegalArgumentException(e);
     }
   }
 
-  public static void registerWithHcVaultKms(Optional<String> keyUri, Optional<String> credentials,
-      Vault vault)
+  @Override
+  public KmsClient getKmsClient(String kekId) throws GeneralSecurityException {
+    try {
+      return KmsClients.get(kekId);
+    } catch (GeneralSecurityException e) {
+      return registerWithHcVaultKms(Optional.of(kekId), Optional.ofNullable(tokenId),
+          (Vault) getTestClient());
+    }
+  }
+
+  public static KmsClient registerWithHcVaultKms(
+      Optional<String> keyUri, Optional<String> credentials, Vault vault)
       throws GeneralSecurityException {
     HcVaultKmsClient client;
     if (keyUri.isPresent()) {
@@ -64,6 +77,7 @@ public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
       client.withVault(vault);
     }
     KmsClients.add(client);
+    return client;
   }
 }
 

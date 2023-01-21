@@ -21,6 +21,7 @@ import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.kms.AWSKMS;
+import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.io.ByteArrayInputStream;
@@ -45,6 +46,7 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
       String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
       // Key id is not mandatory for decryption
       String keyUri = keyId != null ? AwsKmsClient.PREFIX + keyId : null;
+      setDefaultKekId(keyUri);
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
       AWSCredentialsProvider credentials;
@@ -57,14 +59,12 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
       }
       registerWithAwsKms(Optional.empty(), Optional.of(credentials),
           (AWSKMS) getTestClient());
-
-      setDefaultKekId(keyUri);
     } catch (GeneralSecurityException | IOException e) {
       throw new IllegalArgumentException(e);
     }
   }
 
-  public static void registerWithAwsKms(
+  public static KmsClient registerWithAwsKms(
       Optional<String> keyUri, Optional<AWSCredentialsProvider> credentials, AWSKMS awsKms)
       throws GeneralSecurityException {
     AwsKmsClient client;
@@ -82,6 +82,7 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
       setAwsKms(client, awsKms);
     }
     KmsClients.add(client);
+    return client;
   }
 
   private static void setAwsKms(AwsKmsClient client, AWSKMS awsKms) {

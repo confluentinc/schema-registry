@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.encryption.gcp;
 
 import com.google.api.services.cloudkms.v1.CloudKMS;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.io.ByteArrayInputStream;
@@ -45,6 +46,7 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
       String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
       // Key id is not mandatory for decryption
       String keyUri = keyId != null ? GcpKmsClient.PREFIX + keyId : null;
+      setDefaultKekId(keyUri);
       String accountType = (String) configs.get(ACCOUNT_TYPE);
       if (accountType == null) {
         accountType = "service_account";
@@ -67,14 +69,12 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
       }
       registerWithCloudKms(Optional.empty(), Optional.of(credentials),
           (CloudKMS) getTestClient());
-
-      setDefaultKekId(keyUri);
     } catch (GeneralSecurityException | IOException e) {
       throw new IllegalArgumentException(e);
     }
   }
 
-  public static void registerWithCloudKms(
+  public static KmsClient registerWithCloudKms(
       Optional<String> keyUri, Optional<GoogleCredentials> credentials, CloudKMS cloudKms)
       throws GeneralSecurityException {
     GcpKmsClient client;
@@ -92,6 +92,7 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
       setCloudKms(client, cloudKms);
     }
     KmsClients.add(client);
+    return client;
   }
 
   private static void setCloudKms(GcpKmsClient client, CloudKMS cloudKms) {

@@ -50,7 +50,7 @@ import org.apache.kafka.common.header.Header;
  * and the encrypted DEK, use the KMS to decrypt the DEK, and use the decrypted DEK to decrypt the
  * data.
  */
-public class FieldEncryptionExecutor implements FieldRuleExecutor {
+public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
 
   public static final String TYPE = "ENCRYPT";
 
@@ -130,7 +130,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
             // Generate new dek
             byte[] rawDek = getCryptor(dekFormat).generateKey();
             // Encrypt dek with kek
-            KmsClient kmsClient = KmsClients.get(kekId);
+            KmsClient kmsClient = getKmsClient(kekId);
             Aead aead = kmsClient.getAead(kekId);
             byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
             return new Dek(rawDek, encryptedDek);
@@ -143,13 +143,17 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
           public Dek load(DecryptKey decryptKey) throws Exception {
             String kekId = decryptKey.getKekId();
             byte[] encryptedDek = decryptKey.getEncryptedDek();
-            KmsClient kmsClient = KmsClients.get(kekId);
+            KmsClient kmsClient = getKmsClient(kekId);
             Aead aead = kmsClient.getAead(kekId);
             byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
             return new Dek(rawDek, encryptedDek);
           }
         });
     this.cryptors = new HashMap<>();
+  }
+
+  public KmsClient getKmsClient(String kekId) throws GeneralSecurityException {
+    return KmsClients.get(kekId);
   }
 
   private static String getKeyFormat(boolean isDeterministic) {
