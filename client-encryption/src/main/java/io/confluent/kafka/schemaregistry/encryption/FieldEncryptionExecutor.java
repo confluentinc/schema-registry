@@ -39,6 +39,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
@@ -152,9 +153,16 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
     this.cryptors = new HashMap<>();
   }
 
-  public KmsClient getKmsClient(String kekId) throws GeneralSecurityException {
-    return KmsClients.get(kekId);
+  private KmsClient getKmsClient(String kekId) throws GeneralSecurityException {
+    try {
+      return KmsClients.get(kekId);
+    } catch (GeneralSecurityException e) {
+      return registerKmsClient(Optional.of(kekId));
+    }
   }
+
+  public abstract KmsClient registerKmsClient(Optional<String> kekId)
+      throws GeneralSecurityException;
 
   private static String getKeyFormat(boolean isDeterministic) {
     return isDeterministic ? Cryptor.DETERMINISTIC_KEY_FORMAT : Cryptor.RANDOM_KEY_FORMAT;

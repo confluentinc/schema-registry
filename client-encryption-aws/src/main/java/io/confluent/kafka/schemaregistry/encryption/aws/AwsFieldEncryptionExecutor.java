@@ -37,9 +37,12 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
   public static final String ACCESS_KEY_ID = "access.key.id";
   public static final String SECRET_ACCESS_KEY = "secret.access.key";
 
+  private AWSCredentialsProvider credentials;
+
   public AwsFieldEncryptionExecutor() {
   }
 
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
@@ -49,7 +52,6 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
       setDefaultKekId(keyUri);
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
-      AWSCredentialsProvider credentials;
       if (accessKey != null && secretKey != null) {
         String keys = "accessKey=" + accessKey + "\n" + "secretKey=" + secretKey + "\n";
         credentials = new AWSStaticCredentialsProvider(new PropertiesCredentials(
@@ -57,11 +59,16 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
       } else {
         credentials = new DefaultAWSCredentialsProviderChain();
       }
-      registerWithAwsKms(Optional.empty(), Optional.of(credentials),
-          (AWSKMS) getTestClient());
+      // register client w/o keyUri so it can be overridden
+      registerKmsClient(Optional.empty());
     } catch (GeneralSecurityException | IOException e) {
       throw new IllegalArgumentException(e);
     }
+  }
+
+  @Override
+  public KmsClient registerKmsClient(Optional<String> kekId) throws GeneralSecurityException {
+    return registerWithAwsKms(kekId, Optional.of(credentials), (AWSKMS) getTestClient());
   }
 
   public static KmsClient registerWithAwsKms(

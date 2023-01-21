@@ -37,9 +37,12 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
   public static final String PRIVATE_KEY_ID = "private.key.id";
   public static final String PRIVATE_KEY = "private.key";
 
+  private GoogleCredentials credentials;
+
   public GcpFieldEncryptionExecutor() {
   }
 
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
@@ -55,7 +58,6 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
       String clientEmail = (String) configs.get(CLIENT_EMAIL);
       String privateKeyId = (String) configs.get(PRIVATE_KEY_ID);
       String privateKey = (String) configs.get(PRIVATE_KEY);
-      GoogleCredentials credentials;
       if (clientId != null && clientEmail != null && privateKeyId != null && privateKey != null) {
         String keys = "{ \"type\": \"" + accountType
             + "\", \"client_id\": \"" + clientId
@@ -67,11 +69,17 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
       } else {
         credentials = GoogleCredentials.getApplicationDefault();
       }
-      registerWithCloudKms(Optional.empty(), Optional.of(credentials),
-          (CloudKMS) getTestClient());
+      // register client w/o keyUri so it can be overridden
+      registerKmsClient(Optional.empty());
     } catch (GeneralSecurityException | IOException e) {
       throw new IllegalArgumentException(e);
     }
+  }
+
+  @Override
+  public KmsClient registerKmsClient(Optional<String> kekId) throws GeneralSecurityException {
+    return registerWithCloudKms(kekId, Optional.ofNullable(credentials),
+        (CloudKMS) getTestClient());
   }
 
   public static KmsClient registerWithCloudKms(

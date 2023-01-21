@@ -33,6 +33,7 @@ public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
   public HcVaultFieldEncryptionExecutor() {
   }
 
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
@@ -41,8 +42,7 @@ public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
       setDefaultKekId(keyUri);
       this.tokenId = (String) configs.get(TOKEN_ID);
       if (keyUri != null) {
-        registerWithHcVaultKms(Optional.of(keyUri), Optional.ofNullable(tokenId),
-            (Vault) getTestClient());
+        registerKmsClient(Optional.of(keyUri));
       }
     } catch (GeneralSecurityException e) {
       throw new IllegalArgumentException(e);
@@ -50,13 +50,8 @@ public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
   }
 
   @Override
-  public KmsClient getKmsClient(String kekId) throws GeneralSecurityException {
-    try {
-      return KmsClients.get(kekId);
-    } catch (GeneralSecurityException e) {
-      return registerWithHcVaultKms(Optional.of(kekId), Optional.ofNullable(tokenId),
-          (Vault) getTestClient());
-    }
+  public KmsClient registerKmsClient(Optional<String> kekId) throws GeneralSecurityException {
+    return registerWithHcVaultKms(kekId, Optional.ofNullable(tokenId), (Vault) getTestClient());
   }
 
   public static KmsClient registerWithHcVaultKms(

@@ -33,9 +33,12 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
   public static final String CLIENT_ID = "client.id";
   public static final String CLIENT_SECRET = "client.secret";
 
+  private TokenCredential credentials;
+
   public AzureFieldEncryptionExecutor() {
   }
 
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
@@ -46,7 +49,6 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
       String tenantId = (String) configs.get(TENANT_ID);
       String clientId = (String) configs.get(CLIENT_ID);
       String clientSecret = (String) configs.get(CLIENT_SECRET);
-      TokenCredential credentials;
       if (tenantId != null && clientId != null && clientSecret != null) {
         credentials = new ClientSecretCredentialBuilder()
             .tenantId(tenantId)
@@ -56,11 +58,17 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
       } else {
         credentials = new DefaultAzureCredentialBuilder().build();
       }
-      registerWithAzureKms(Optional.empty(), Optional.of(credentials),
-          (CryptographyClient) getTestClient());
+      // register client w/o keyUri so it can be overridden
+      registerKmsClient(Optional.empty());
     } catch (GeneralSecurityException e) {
       throw new IllegalArgumentException(e);
     }
+  }
+
+  @Override
+  public KmsClient registerKmsClient(Optional<String> kekId) throws GeneralSecurityException {
+    return registerWithAzureKms(kekId, Optional.of(credentials),
+        (CryptographyClient) getTestClient());
   }
 
   public static KmsClient registerWithAzureKms(
