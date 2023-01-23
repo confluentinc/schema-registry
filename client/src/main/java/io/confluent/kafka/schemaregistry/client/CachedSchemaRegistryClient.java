@@ -277,7 +277,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       log.error("Invalid schema type " + schemaType);
       return Optional.empty();
     }
-    return schemaProvider.parseSchema(schema, false);
+    return schemaProvider.parseSchema(schema, false, false);
   }
 
   public Map<String, SchemaProvider> getSchemaProviders() {

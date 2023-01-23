@@ -200,7 +200,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         .build(new CacheLoader<RawSchema, ParsedSchema>() {
           @Override
           public ParsedSchema load(RawSchema s) throws Exception {
-            return loadSchema(s.getSchema(), s.isNew());
+            return loadSchema(s.getSchema(), s.isNew(), s.isNormalize());
           }
         });
     this.lookupCache = lookupCache();
@@ -1169,7 +1169,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         || schema.getSchema().trim().isEmpty()) {
       return null;
     }
-    ParsedSchema parsedSchema = parseSchema(schema, isNew);
+    ParsedSchema parsedSchema = parseSchema(schema, isNew, normalize);
     try {
       parsedSchema.validate();
       if (normalize) {
@@ -1187,14 +1187,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   public ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
-    return parseSchema(schema, false);
+    return parseSchema(schema, false, false);
   }
 
   public ParsedSchema parseSchema(
           Schema schema,
-          boolean isNew) throws InvalidSchemaException {
+          boolean isNew,
+          boolean normalize) throws InvalidSchemaException {
     try {
-      ParsedSchema parsedSchema = schemaCache.get(new RawSchema(schema, isNew));
+      ParsedSchema parsedSchema = schemaCache.get(new RawSchema(schema, isNew, normalize));
       if (schema.getVersion() != null) {
         parsedSchema = parsedSchema.copy(schema.getVersion());
       }
@@ -1213,7 +1214,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private ParsedSchema loadSchema(
       Schema schema,
-      boolean isNew)
+      boolean isNew,
+      boolean normalize)
       throws InvalidSchemaException {
     String schemaType = schema.getSchemaType();
     if (schemaType == null) {
@@ -1228,7 +1230,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     final String type = schemaType;
 
     try {
-      return provider.parseSchemaOrElseThrow(schema, isNew);
+      return provider.parseSchemaOrElseThrow(schema, isNew, normalize);
     } catch (Exception e) {
       throw new InvalidSchemaException("Invalid schema " + schema
               + " with refs " + schema.getReferences()
@@ -1325,7 +1327,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     Schema schemaEntity = schema.toSchemaEntity();
     SchemaString schemaString = new SchemaString(schemaEntity);
     if (format != null && !format.trim().isEmpty()) {
-      ParsedSchema parsedSchema = parseSchema(schemaEntity, false);
+      ParsedSchema parsedSchema = parseSchema(schemaEntity, false, false);
       schemaString.setSchemaString(parsedSchema.formattedString(format));
     } else {
       schemaString.setSchemaString(schema.getSchema());
@@ -2062,10 +2064,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private static class RawSchema {
     private Schema schema;
     private boolean isNew;
+    private boolean normalize;
 
-    public RawSchema(Schema schema, boolean isNew) {
+    public RawSchema(Schema schema, boolean isNew, boolean normalize) {
       this.schema = schema;
       this.isNew = isNew;
+      this.normalize = normalize;
     }
 
     public Schema getSchema() {
@@ -2074,6 +2078,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
     public boolean isNew() {
       return isNew;
+    }
+
+    public boolean isNormalize() {
+      return normalize;
     }
 
     @Override
@@ -2086,12 +2094,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
       RawSchema that = (RawSchema) o;
       return isNew == that.isNew
+          && normalize == that.normalize
           && Objects.equals(schema, that.schema);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(schema, isNew);
+      return Objects.hash(schema, isNew, normalize);
     }
   }
 
