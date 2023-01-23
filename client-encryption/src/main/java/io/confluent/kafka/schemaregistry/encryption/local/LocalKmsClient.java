@@ -158,9 +158,10 @@ public final class LocalKmsClient implements KmsClient {
    * <p>If {@code credentialPath} is present, load the credentials from that. Otherwise use the
    * default credentials.
    */
-  public static void register(Optional<String> keyUri, String secret, List<String> oldSecrets)
+  public static KmsClient register(Optional<String> keyUri, String secret, List<String> oldSecrets)
       throws GeneralSecurityException {
     KmsClient client = new LocalKmsClient(keyUri.orElse(PREFIX), secret, oldSecrets);
     KmsClients.add(client);
+    return client;
   }
 }

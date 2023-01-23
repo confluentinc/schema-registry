@@ -17,7 +17,7 @@
 package io.confluent.kafka.schemaregistry.encryption.aws;
 
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TEST_CLIENT;
-import static io.confluent.kafka.schemaregistry.encryption.aws.AwsFieldEncryptionExecutor.KMS_KEY_ID;
+import static io.confluent.kafka.schemaregistry.encryption.aws.AwsFieldEncryptionExecutor.DEFAULT_KMS_KEY_ID;
 
 import com.amazonaws.services.kms.AWSKMS;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
@@ -32,9 +32,22 @@ public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
     super();
   }
 
+  @Override
+  protected String getKeyId() {
+    return "arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab";
+  }
+
+  @Override
   protected Map<String, Object> getClientProperties() throws Exception {
-    String keyId = "arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab";
-    AWSKMS testClient = new FakeAwsKms(Collections.singletonList(keyId));
+    Map<String, Object> props = getClientPropertiesWithoutKey();
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".aws.param." + DEFAULT_KMS_KEY_ID,
+        getKeyId());
+    return props;
+  }
+
+  @Override
+  protected Map<String, Object> getClientPropertiesWithoutKey() throws Exception {
+    AWSKMS testClient = new FakeAwsKms(Collections.singletonList(getKeyId()));
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
@@ -42,8 +55,6 @@ public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "aws");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".aws.class",
         AwsFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".aws.param." + KMS_KEY_ID,
-        keyId);
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".aws.param." + TEST_CLIENT,
         testClient);
     return props;

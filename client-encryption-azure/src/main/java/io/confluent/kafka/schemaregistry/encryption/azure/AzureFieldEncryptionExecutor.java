@@ -20,6 +20,7 @@ import com.azure.core.credential.TokenCredential;
 import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
+import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.security.GeneralSecurityException;
@@ -28,24 +29,27 @@ import java.util.Optional;
 
 public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
-  public static final String KMS_KEY_ID = "kms.key.id";
   public static final String TENANT_ID = "tenant.id";
   public static final String CLIENT_ID = "client.id";
   public static final String CLIENT_SECRET = "client.secret";
 
+  private TokenCredential credentials;
+
   public AzureFieldEncryptionExecutor() {
   }
 
+  @Override
+  public String getKeyUrlPrefix() {
+    return AzureKmsClient.PREFIX;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(KMS_KEY_ID);
-      // Key id is not mandatory for decryption
-      String keyUri = keyId != null ? AzureKmsClient.PREFIX + keyId : null;
       String tenantId = (String) configs.get(TENANT_ID);
       String clientId = (String) configs.get(CLIENT_ID);
       String clientSecret = (String) configs.get(CLIENT_SECRET);
-      TokenCredential credentials;
       if (tenantId != null && clientId != null && clientSecret != null) {
         credentials = new ClientSecretCredentialBuilder()
             .tenantId(tenantId)
@@ -55,16 +59,20 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
       } else {
         credentials = new DefaultAzureCredentialBuilder().build();
       }
-      registerWithAzureKms(Optional.ofNullable(keyUri), Optional.of(credentials),
-          (CryptographyClient) getTestClient());
-
-      setKekId(keyUri);
+      // register client w/o keyUri so it can be overridden
+      registerKmsClient(Optional.empty());
     } catch (GeneralSecurityException e) {
       throw new IllegalArgumentException(e);
     }
   }
 
-  public static void registerWithAzureKms(
+  @Override
+  public KmsClient registerKmsClient(Optional<String> kekId) throws GeneralSecurityException {
+    return registerWithAzureKms(kekId, Optional.of(credentials),
+        (CryptographyClient) getTestClient());
+  }
+
+  public static KmsClient registerWithAzureKms(
       Optional<String> keyUri, Optional<TokenCredential> credentials,
       CryptographyClient cryptographyClient)
       throws GeneralSecurityException {
@@ -83,6 +91,7 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
       client.withCryptographyClient(cryptographyClient);
     }
     KmsClients.add(client);
+    return client;
   }
 }
 

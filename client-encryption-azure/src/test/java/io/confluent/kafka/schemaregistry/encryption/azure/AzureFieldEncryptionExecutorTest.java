@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.encryption.azure;
 
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.EMPTY_AAD;
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TEST_CLIENT;
-import static io.confluent.kafka.schemaregistry.encryption.azure.AzureFieldEncryptionExecutor.KMS_KEY_ID;
+import static io.confluent.kafka.schemaregistry.encryption.azure.AzureFieldEncryptionExecutor.DEFAULT_KMS_KEY_ID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -41,9 +41,22 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     super();
   }
 
+  @Override
+  protected String getKeyId() {
+    return "https://yokota1.vault.azure.net/keys/key1/1234567890";
+  }
+
+  @Override
   protected Map<String, Object> getClientProperties() throws Exception {
-    String keyId = "https://yokota1.vault.azure.net/keys/key1/1234567890";
-    CryptographyClient testClient = mockClient(keyId);
+    Map<String, Object> props = getClientPropertiesWithoutKey();
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".azure.param." + DEFAULT_KMS_KEY_ID,
+        getKeyId());
+    return props;
+  }
+
+  @Override
+  protected Map<String, Object> getClientPropertiesWithoutKey() throws Exception {
+    CryptographyClient testClient = mockClient(getKeyId());
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
@@ -51,8 +64,6 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "azure");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".azure.class",
         AzureFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".azure.param." + KMS_KEY_ID,
-        keyId);
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".azure.param." + TEST_CLIENT,
         testClient);
     return props;

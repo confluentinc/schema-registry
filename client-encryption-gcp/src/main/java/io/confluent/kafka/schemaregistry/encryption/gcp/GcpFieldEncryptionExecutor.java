@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.encryption.gcp;
 
 import com.google.api.services.cloudkms.v1.CloudKMS;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.io.ByteArrayInputStream;
@@ -30,22 +31,26 @@ import java.util.Optional;
 
 public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
-  public static final String KMS_KEY_ID = "kms.key.id";
   public static final String ACCOUNT_TYPE = "account.type";
   public static final String CLIENT_ID = "client.id";
   public static final String CLIENT_EMAIL = "client.email";
   public static final String PRIVATE_KEY_ID = "private.key.id";
   public static final String PRIVATE_KEY = "private.key";
 
+  private GoogleCredentials credentials;
+
   public GcpFieldEncryptionExecutor() {
   }
 
+  @Override
+  public String getKeyUrlPrefix() {
+    return GcpKmsClient.PREFIX;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(KMS_KEY_ID);
-      // Key id is not mandatory for decryption
-      String keyUri = keyId != null ? GcpKmsClient.PREFIX + keyId : null;
       String accountType = (String) configs.get(ACCOUNT_TYPE);
       if (accountType == null) {
         accountType = "service_account";
@@ -54,7 +59,6 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
       String clientEmail = (String) configs.get(CLIENT_EMAIL);
       String privateKeyId = (String) configs.get(PRIVATE_KEY_ID);
       String privateKey = (String) configs.get(PRIVATE_KEY);
-      GoogleCredentials credentials;
       if (clientId != null && clientEmail != null && privateKeyId != null && privateKey != null) {
         String keys = "{ \"type\": \"" + accountType
             + "\", \"client_id\": \"" + clientId
@@ -66,16 +70,20 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
       } else {
         credentials = GoogleCredentials.getApplicationDefault();
       }
-      registerWithCloudKms(Optional.ofNullable(keyUri), Optional.of(credentials),
-          (CloudKMS) getTestClient());
-
-      setKekId(keyUri);
+      // register client w/o keyUri so it can be overridden
+      registerKmsClient(Optional.empty());
     } catch (GeneralSecurityException | IOException e) {
       throw new IllegalArgumentException(e);
     }
   }
 
-  public static void registerWithCloudKms(
+  @Override
+  public KmsClient registerKmsClient(Optional<String> kekId) throws GeneralSecurityException {
+    return registerWithCloudKms(kekId, Optional.ofNullable(credentials),
+        (CloudKMS) getTestClient());
+  }
+
+  public static KmsClient registerWithCloudKms(
       Optional<String> keyUri, Optional<GoogleCredentials> credentials, CloudKMS cloudKms)
       throws GeneralSecurityException {
     GcpKmsClient client;
@@ -93,6 +101,7 @@ public class GcpFieldEncryptionExecutor extends FieldEncryptionExecutor {
       setCloudKms(client, cloudKms);
     }
     KmsClients.add(client);
+    return client;
   }
 
   private static void setCloudKms(GcpKmsClient client, CloudKMS cloudKms) {

@@ -24,6 +24,7 @@ import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.daead.DeterministicAeadConfig;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -38,6 +39,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
@@ -49,9 +51,12 @@ import org.apache.kafka.common.header.Header;
  * and the encrypted DEK, use the KMS to decrypt the DEK, and use the decrypted DEK to decrypt the
  * data.
  */
-public class FieldEncryptionExecutor implements FieldRuleExecutor {
+public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
 
   public static final String TYPE = "ENCRYPT";
+
+  public static final String DEFAULT_KMS_KEY_ID = "default.kms.key.id";
+  public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
 
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String HEADER_NAME_PREFIX = "encrypt";
@@ -67,7 +72,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   private static final int LENGTH_KEK_ID = 4;
   private static final int LENGTH_DEK_FORMAT = 4;
 
-  private String kekId;
+  private String defaultKekId;
   private Map<String, Cryptor> cryptors;
   private int cacheExpirySecs = 300;
   private int cacheSize = 1000;
@@ -89,7 +94,12 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   public FieldEncryptionExecutor() {
   }
 
+  public abstract String getKeyUrlPrefix();
+
   public void configure(Map<String, ?> configs) {
+    String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
+    // Key id is not mandatory for decryption
+    this.defaultKekId = keyId != null ? getKeyUrlPrefix() + keyId : null;
     Object cacheExpirySecsConfig = configs.get(CACHE_EXPIRY_SECS);
     if (cacheExpirySecsConfig != null) {
       try {
@@ -126,7 +136,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
             // Generate new dek
             byte[] rawDek = getCryptor(dekFormat).generateKey();
             // Encrypt dek with kek
-            KmsClient kmsClient = KmsClients.get(kekId);
+            KmsClient kmsClient = getKmsClient(kekId);
             Aead aead = kmsClient.getAead(kekId);
             byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
             return new Dek(rawDek, encryptedDek);
@@ -139,7 +149,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
           public Dek load(DecryptKey decryptKey) throws Exception {
             String kekId = decryptKey.getKekId();
             byte[] encryptedDek = decryptKey.getEncryptedDek();
-            KmsClient kmsClient = KmsClients.get(kekId);
+            KmsClient kmsClient = getKmsClient(kekId);
             Aead aead = kmsClient.getAead(kekId);
             byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
             return new Dek(rawDek, encryptedDek);
@@ -148,16 +158,23 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     this.cryptors = new HashMap<>();
   }
 
+  private KmsClient getKmsClient(String kekId) throws GeneralSecurityException {
+    try {
+      return KmsClients.get(kekId);
+    } catch (GeneralSecurityException e) {
+      return registerKmsClient(Optional.of(kekId));
+    }
+  }
+
+  public abstract KmsClient registerKmsClient(Optional<String> kekId)
+      throws GeneralSecurityException;
+
   private static String getKeyFormat(boolean isDeterministic) {
     return isDeterministic ? Cryptor.DETERMINISTIC_KEY_FORMAT : Cryptor.RANDOM_KEY_FORMAT;
   }
 
-  public String getKekId() {
-    return kekId;
-  }
-
-  public void setKekId(String kekId) {
-    this.kekId = kekId;
+  public String getDefaultKekId() {
+    return defaultKekId;
   }
 
   public Object getTestClient() {
@@ -223,6 +240,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
 
   class FieldEncryptionExecutorTransform implements FieldTransform {
     private RuleContext ctx;
+    private String kekId;
     private Cryptor cryptor;
     private Dek dek;
     private boolean skip = false;
@@ -240,8 +258,9 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
               skip = true;
               return;
             }
+            kekId = getKekId(ctx);
             cryptor = getCryptor(ctx.isKey());
-            dek = getDekForEncrypt(cryptor.getDekFormat());
+            dek = getDekForEncrypt(kekId, cryptor.getDekFormat());
             break;
           case READ:
             if (header == null) {
@@ -249,7 +268,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
               skip = true;
               return;
             }
-            setCryptorAndDekFromHeader(header.value());
+            setStateFromHeader(header.value());
             break;
           default:
             throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
@@ -259,7 +278,28 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
       }
     }
 
-    protected Dek getDekForEncrypt(String dekFormat) {
+    protected String getKekId(RuleContext ctx) {
+      String kekId = null;
+      Metadata metadata = ctx.target().metadata();
+      if (metadata != null) {
+        Map<String, String> properties = metadata.getProperties();
+        if (properties != null) {
+          String keyId = properties.get(ENCRYPT_KMS_KEY_ID);
+          if (keyId != null) {
+            kekId = getKeyUrlPrefix() + keyId;
+          }
+        }
+      }
+      if (kekId == null) {
+        kekId = defaultKekId;
+      }
+      if (kekId == null) {
+        throw new IllegalArgumentException("No key id found");
+      }
+      return kekId;
+    }
+
+    protected Dek getDekForEncrypt(String kekId, String dekFormat) {
       EncryptKey key = new EncryptKey(kekId, dekFormat);
       try {
         return dekEncryptCache.get(key);
@@ -277,7 +317,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
       }
     }
 
-    private void setCryptorAndDekFromHeader(byte[] metadata)
+    private void setStateFromHeader(byte[] metadata)
         throws GeneralSecurityException {
       int remainingSize = metadata.length;
       ByteBuffer buffer = ByteBuffer.wrap(metadata);
@@ -311,8 +351,9 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
         throw new GeneralSecurityException("invalid ciphertext");
       }
 
+      this.kekId = new String(kekId, StandardCharsets.UTF_8);
       this.cryptor = getCryptor(new String(dekFormat, StandardCharsets.UTF_8));
-      this.dek = getDekForDecrypt(new String(kekId, StandardCharsets.UTF_8), encryptedDek);
+      this.dek = getDekForDecrypt(this.kekId, encryptedDek);
     }
 
     public Object transform(RuleContext ctx, FieldContext fieldCtx, Object fieldValue)
@@ -369,7 +410,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     }
 
     private byte[] buildMetadata(String dekFormat, byte[] encryptedDek) {
-      byte[] kekBytes = getKekId().getBytes(StandardCharsets.UTF_8);
+      byte[] kekBytes = kekId.getBytes(StandardCharsets.UTF_8);
       byte[] dekBytes = dekFormat.getBytes(StandardCharsets.UTF_8);
       return ByteBuffer.allocate(LENGTH_VERSION
               + LENGTH_KEK_ID + kekBytes.length

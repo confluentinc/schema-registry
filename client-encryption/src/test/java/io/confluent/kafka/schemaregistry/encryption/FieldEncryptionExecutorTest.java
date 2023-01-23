@@ -90,6 +90,8 @@ public abstract class FieldEncryptionExecutorTest {
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer;
   private final KafkaAvroDeserializer avroDeserializer;
+  private final KafkaAvroSerializer avroSerializerWithoutKey;
+  private final KafkaAvroDeserializer avroDeserializerWithoutKey;
   private final KafkaAvroSerializer reflectionAvroSerializer;
   private final KafkaAvroDeserializer reflectionAvroDeserializer;
   private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
@@ -110,6 +112,10 @@ public abstract class FieldEncryptionExecutorTest {
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, clientProps);
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, clientProps);
 
+    Map<String, Object> clientPropsWithoutKey = getClientPropertiesWithoutKey();
+    avroSerializerWithoutKey = new KafkaAvroSerializer(schemaRegistry, clientPropsWithoutKey);
+    avroDeserializerWithoutKey = new KafkaAvroDeserializer(schemaRegistry, clientPropsWithoutKey);
+
     Map<String, Object> reflectionClientProps = new HashMap<>(clientProps);
     reflectionClientProps.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, "true");
     reflectionAvroSerializer = new KafkaAvroSerializer(schemaRegistry, reflectionClientProps);
@@ -128,7 +134,11 @@ public abstract class FieldEncryptionExecutorTest {
     badDeserializer = new KafkaAvroDeserializer(schemaRegistry, badClientProps);
   }
 
+  protected abstract String getKeyId();
+
   protected abstract Map<String, Object> getClientProperties() throws Exception;
+
+  protected abstract Map<String, Object> getClientPropertiesWithoutKey() throws Exception;
 
   private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
     Map<String, RuleExecutor> executors = serde.getRuleExecutors();
@@ -244,6 +254,31 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("012", ((OldWidget)obj).getPiiArray().get(1).getPii());
     assertEquals("345", ((OldWidget)obj).getPiiMap().get("key1").getPii());
     assertEquals("678", ((OldWidget)obj).getPiiMap().get("key2").getPii());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithoutKey() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("myRule", null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Map<String, String> properties = new HashMap<>();
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KMS_KEY_ID, getKeyId());
+    Metadata metadata = new Metadata(
+        Collections.emptyMap(), properties, Collections.emptySet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializerWithoutKey);
+    byte[] bytes = avroSerializerWithoutKey.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    cryptor = addSpyToCryptor(avroDeserializerWithoutKey);
+    GenericRecord record = (GenericRecord) avroDeserializerWithoutKey.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    assertEquals("testUser", record.get("name"));
   }
 
   @Test

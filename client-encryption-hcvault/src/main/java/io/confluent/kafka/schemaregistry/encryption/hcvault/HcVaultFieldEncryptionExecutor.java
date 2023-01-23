@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
 import com.bettercloud.vault.Vault;
+import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.security.GeneralSecurityException;
@@ -25,30 +26,39 @@ import java.util.Optional;
 
 public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
-  public static final String KMS_KEY_ID = "kms.key.id";
   public static final String TOKEN_ID = "token.id";
+
+  private String tokenId;
 
   public HcVaultFieldEncryptionExecutor() {
   }
 
+  @Override
+  public String getKeyUrlPrefix() {
+    return HcVaultKmsClient.PREFIX;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(KMS_KEY_ID);
-      // Key id is not mandatory for decryption
-      String keyUri = keyId != null ? HcVaultKmsClient.PREFIX + keyId : null;
-      String tokenId = (String) configs.get(TOKEN_ID);
-      registerWithHcVaultKms(Optional.ofNullable(keyUri), Optional.ofNullable(tokenId),
-          (Vault) getTestClient());
-
-      setKekId(keyUri);
+      this.tokenId = (String) configs.get(TOKEN_ID);
+      if (getDefaultKekId() != null) {
+        // HCVault client requires a keyUri
+        registerKmsClient(Optional.of(getDefaultKekId()));
+      }
     } catch (GeneralSecurityException e) {
       throw new IllegalArgumentException(e);
     }
   }
 
-  public static void registerWithHcVaultKms(Optional<String> keyUri, Optional<String> credentials,
-      Vault vault)
+  @Override
+  public KmsClient registerKmsClient(Optional<String> kekId) throws GeneralSecurityException {
+    return registerWithHcVaultKms(kekId, Optional.ofNullable(tokenId), (Vault) getTestClient());
+  }
+
+  public static KmsClient registerWithHcVaultKms(
+      Optional<String> keyUri, Optional<String> credentials, Vault vault)
       throws GeneralSecurityException {
     HcVaultKmsClient client;
     if (keyUri.isPresent()) {
@@ -65,6 +75,7 @@ public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
       client.withVault(vault);
     }
     KmsClients.add(client);
+    return client;
   }
 }
 

@@ -21,6 +21,7 @@ import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.kms.AWSKMS;
+import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.io.ByteArrayInputStream;
@@ -33,22 +34,25 @@ import java.util.Optional;
 
 public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
-  public static final String KMS_KEY_ID = "kms.key.id";
   public static final String ACCESS_KEY_ID = "access.key.id";
   public static final String SECRET_ACCESS_KEY = "secret.access.key";
+
+  private AWSCredentialsProvider credentials;
 
   public AwsFieldEncryptionExecutor() {
   }
 
+  @Override
+  public String getKeyUrlPrefix() {
+    return AwsKmsClient.PREFIX;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     try {
       super.configure(configs);
-      String keyId = (String) configs.get(KMS_KEY_ID);
-      // Key id is not mandatory for decryption
-      String keyUri = keyId != null ? AwsKmsClient.PREFIX + keyId : null;
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
-      AWSCredentialsProvider credentials;
       if (accessKey != null && secretKey != null) {
         String keys = "accessKey=" + accessKey + "\n" + "secretKey=" + secretKey + "\n";
         credentials = new AWSStaticCredentialsProvider(new PropertiesCredentials(
@@ -56,16 +60,19 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
       } else {
         credentials = new DefaultAWSCredentialsProviderChain();
       }
-      registerWithAwsKms(Optional.ofNullable(keyUri), Optional.of(credentials),
-          (AWSKMS) getTestClient());
-
-      setKekId(keyUri);
+      // register client w/o keyUri so it can be overridden
+      registerKmsClient(Optional.empty());
     } catch (GeneralSecurityException | IOException e) {
       throw new IllegalArgumentException(e);
     }
   }
 
-  public static void registerWithAwsKms(
+  @Override
+  public KmsClient registerKmsClient(Optional<String> kekId) throws GeneralSecurityException {
+    return registerWithAwsKms(kekId, Optional.of(credentials), (AWSKMS) getTestClient());
+  }
+
+  public static KmsClient registerWithAwsKms(
       Optional<String> keyUri, Optional<AWSCredentialsProvider> credentials, AWSKMS awsKms)
       throws GeneralSecurityException {
     AwsKmsClient client;
@@ -83,6 +90,7 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
       setAwsKms(client, awsKms);
     }
     KmsClients.add(client);
+    return client;
   }
 
   private static void setAwsKms(AwsKmsClient client, AWSKMS awsKms) {
