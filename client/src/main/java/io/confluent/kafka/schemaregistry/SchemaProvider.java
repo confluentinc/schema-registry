@@ -54,9 +54,9 @@ public interface SchemaProvider extends Configurable {
    * @param isNew whether the schema is new
    * @return an optional parsed schema
    */
-  default Optional<ParsedSchema> parseSchema(Schema schema, boolean isNew) {
+  default Optional<ParsedSchema> parseSchema(Schema schema, boolean isNew, boolean normalize) {
     try {
-      return Optional.of(parseSchemaOrElseThrow(schema, isNew));
+      return Optional.of(parseSchemaOrElseThrow(schema, isNew, normalize));
     } catch (Exception e) {
       return Optional.empty();
     }
@@ -72,10 +72,11 @@ public interface SchemaProvider extends Configurable {
    */
   default Optional<ParsedSchema> parseSchema(String schemaString,
                                              List<SchemaReference> references,
-                                             boolean isNew) {
+                                             boolean isNew,
+                                             boolean normalize) {
     try {
       return Optional.of(parseSchemaOrElseThrow(
-          new Schema(null, null, null, schemaType(), references, schemaString), isNew));
+          new Schema(null, null, null, schemaType(), references, schemaString), isNew, normalize));
     } catch (Exception e) {
       return Optional.empty();
     }
@@ -83,7 +84,7 @@ public interface SchemaProvider extends Configurable {
 
   default Optional<ParsedSchema> parseSchema(String schemaString,
                                              List<SchemaReference> references) {
-    return parseSchema(schemaString, references, false);
+    return parseSchema(schemaString, references, false, false);
   }
 
   /**
@@ -93,5 +94,5 @@ public interface SchemaProvider extends Configurable {
    * @param isNew whether the schema is new
    * @return a parsed schema or throw an error
    */
-  ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew);
+  ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize);
 }

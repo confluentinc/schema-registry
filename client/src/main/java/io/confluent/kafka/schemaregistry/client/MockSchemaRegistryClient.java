@@ -116,7 +116,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       log.error("Invalid schema type " + schemaType);
       return Optional.empty();
     }
-    return schemaProvider.parseSchema(schema, false);
+    return schemaProvider.parseSchema(schema, false, false);
   }
 
   private int getIdFromRegistry(
