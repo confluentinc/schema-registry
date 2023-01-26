@@ -1719,40 +1719,6 @@ public class ProtobufDataTest {
   }
 
   @Test
-  public void testToConnectMap() {
-    AttributeFieldEntry entry1 = AttributeFieldEntry.newBuilder()
-        .setKey("key1").setValue("value1").build();
-    AttributeFieldEntry entry2 = AttributeFieldEntry.newBuilder()
-        .setKey("key2").setValue("value2").build();
-    AttributeFieldEntry entry3 = AttributeFieldEntry.newBuilder()
-        .setKey("key3").setValue("value3").build();
-    AttributeFieldEntry entry4 = AttributeFieldEntry.newBuilder()
-        .setKey("key4").setValue("value4").build();
-    MapReferencesMessage message = MapReferencesMessage.newBuilder()
-        .addMap1(entry1)
-        .addMap2(entry2)
-        .setNotAMap1(entry3)
-        .setNotAMap2(entry4)
-        .build();
-
-    ProtobufData protobufData = new ProtobufData();
-    ProtobufSchema protobufSchema = new ProtobufSchema(message.getDescriptorForType());
-
-   // System.out.println(protobufSchema.canonicalString());
-    SchemaAndValue result = protobufData.toConnectData(protobufSchema, message);
-
-    Schema connectSchema = result.schema();
-
-
-    AvroData avroData = new AvroData(2);
-    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(result.schema());
-   // System.out.println(result.value().toString());
-   // System.out.println(avroSchema.toString(true));
-    GenericData.Record avroRecord = (GenericData.Record) avroData.fromConnectData(result.schema(), result.value());
-   // System.out.println(avroRecord.toString());
-  }
-
-  @Test
   public void testToConnectRecursiveSchema() {
     ProtobufSchema protobufSchema = new ProtobufSchema(
         RecursiveKeyValue.RecursiveKeyValueMessage.getDescriptor());
@@ -1855,7 +1821,9 @@ public class ProtobufDataTest {
         .setNotAMap2(entry4)
         .build();
 
-    ProtobufData protobufData = new ProtobufData();
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(ProtobufDataConfig.PRESERVE_PROTOBUF_MAP_TO_AVRO_CONFIG, true);
+    ProtobufData protobufData = new ProtobufData(new ProtobufDataConfig(configs));
     ProtobufSchema protobufSchema = new ProtobufSchema(message.getDescriptorForType());
     SchemaAndValue result = protobufData.toConnectData(protobufSchema, message);
 
