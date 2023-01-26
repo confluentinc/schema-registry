@@ -529,7 +529,8 @@ public class AvroData {
           String internalType = schema != null && schema.parameters() != null
               ? schema.parameters().get(CONNECT_TYPE_PROP) : null;
           if (schema != null && schema.keySchema().type() == Schema.Type.STRING
-              && !schema.keySchema().isOptional() || Schema.Type.MAP.getName().equals(internalType)) {
+              && !schema.keySchema().isOptional()
+              || Schema.Type.MAP.getName().equals(internalType)) {
 
             // TODO most types don't need a new converted object since types pass through
             underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
@@ -1278,8 +1279,8 @@ public class AvroData {
     ObjectNode result = JsonNodeFactory.instance.objectNode();
     for (Map.Entry<String, String> entry : params.entrySet()) {
       String entryKey = entry.getKey();
-      if (!entryKey.equals(CONNECT_TYPE_PROP) &&
-          (discardTypeDocDefault || !entry.getKey().equals(AVRO_FIELD_DEFAULT_FLAG_PROP))) {
+      if (!entryKey.equals(CONNECT_TYPE_PROP)
+          && (discardTypeDocDefault || !entry.getKey().equals(AVRO_FIELD_DEFAULT_FLAG_PROP))) {
         result.put(entry.getKey(), entry.getValue());
       }
     }

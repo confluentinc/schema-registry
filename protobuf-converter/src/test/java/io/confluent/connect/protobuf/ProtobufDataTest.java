@@ -383,8 +383,7 @@ public class ProtobufDataTest {
                 .optional()
                 .parameter(PROTOBUF_TYPE_TAG, String.valueOf(2))
                 .build()
-        ).name("map_type").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(7))
-        .parameter(CONNECT_TYPE_PROP, Schema.Type.MAP.getName()).build()
+        ).name("map_type").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(7)).build()
     );
     builder.field(
         "inner",

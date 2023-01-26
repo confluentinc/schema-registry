@@ -52,8 +52,8 @@ public class ProtobufDataConfig extends AbstractConfig {
 
   public static final String PRESERVE_PROTOBUF_MAP_TO_AVRO_CONFIG = "preserve.protobuf.map.to.avro";
   public static final boolean PRESERVE_PROTOBUF_MAP_TO_AVRO_DEFAULT = false;
-  public static final String PRESERVE_PROTOBUF_MAP_TO_AVRO_DOC = "Whether to preserve " +
-      "protobuf map when transform to avro";
+  public static final String PRESERVE_PROTOBUF_MAP_TO_AVRO_DOC = "Whether to preserve "
+      + "protobuf map when transform to avro";
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
