@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import com.google.common.base.Ticker;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -35,11 +36,13 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
   }
 
   public KafkaAvroSerializer(SchemaRegistryClient client) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
+    this.ticker = client.ticker();
   }
 
   public KafkaAvroSerializer(SchemaRegistryClient client, Map<String, ?> props) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
+    this.ticker = client.ticker();
     configure(serializerConfig(props));
   }
 

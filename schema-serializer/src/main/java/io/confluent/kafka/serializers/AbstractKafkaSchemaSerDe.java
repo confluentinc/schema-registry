@@ -26,6 +26,7 @@ import com.fasterxml.jackson.dataformat.csv.CsvGenerator;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvParser;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
+import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
@@ -90,6 +91,7 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   protected SchemaRegistryClient schemaRegistry;
+  protected Ticker ticker;
   protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
@@ -143,14 +145,16 @@ public abstract class AbstractKafkaSchemaSerDe {
     int latestCacheSize = config.getLatestCacheSize();
     int latestCacheTtl = config.getLatestCacheTtl();
     CacheBuilder<Object, Object> latestVersionsBuilder = CacheBuilder.newBuilder()
-        .maximumSize(latestCacheSize);
+        .maximumSize(latestCacheSize)
+        .ticker(ticker);
     if (latestCacheTtl >= 0) {
       latestVersionsBuilder = latestVersionsBuilder.expireAfterWrite(
           latestCacheTtl, TimeUnit.SECONDS);
     }
     latestVersions = latestVersionsBuilder.build();
     CacheBuilder<Object, Object> latestWithMetadataBuilder = CacheBuilder.newBuilder()
-        .maximumSize(latestCacheSize);
+        .maximumSize(latestCacheSize)
+        .ticker(ticker);
     if (latestCacheTtl >= 0) {
       latestWithMetadataBuilder = latestWithMetadataBuilder.expireAfterWrite(
           latestCacheTtl, TimeUnit.SECONDS);

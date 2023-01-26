@@ -39,12 +39,13 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
    * Constructor used by Kafka producer.
    */
   public KafkaJsonSchemaSerializer() {
-    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client) {
-    schemaRegistry = client;
-    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.schemaRegistry = client;
+    this.ticker = client.ticker();
+    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -53,9 +54,10 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props,
                                    int cacheCapacity) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
+    this.ticker = client.ticker();
     configure(serializerConfig(props));
-    schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
   }
 
   @Override

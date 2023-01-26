@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.encryption.azure;
+package io.confluent.kafka.schemaregistry.encryption.local;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.RestApiFieldEncryptionTest;
 
-public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
+public class RestApiLocalFieldEncryptionTest extends RestApiFieldEncryptionTest {
 
-  public AzureFieldEncryptionExecutorTest() throws Exception {
+  public RestApiLocalFieldEncryptionTest() throws Exception {
     super();
   }
 
   @Override
   protected FieldEncryptionProperties getFieldEncryptionProperties() {
-    return new AzureFieldEncryptionProperties();
+    return new LocalFieldEncryptionProperties();
   }
 }
 

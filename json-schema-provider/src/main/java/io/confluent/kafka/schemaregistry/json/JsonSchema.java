@@ -173,7 +173,7 @@ public class JsonSchema implements ParsedSchema {
       Integer version
   ) {
     try {
-      this.jsonNode = objectMapper.readTree(schemaString);
+      this.jsonNode = schemaString != null ? objectMapper.readTree(schemaString) : null;
       this.version = version;
       this.references = Collections.unmodifiableList(references);
       this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
