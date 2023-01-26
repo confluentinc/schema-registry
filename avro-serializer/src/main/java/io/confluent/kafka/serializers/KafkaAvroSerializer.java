@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.serializers;
 
-import com.google.common.base.Ticker;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
