@@ -294,6 +294,7 @@ public class ProtobufData {
   private boolean scrubInvalidNames;
   private boolean useWrapperForNullables;
   private boolean useWrapperForRawPrimitives;
+  private boolean preserveProtobufMap;
 
   public ProtobufData() {
     this(new ProtobufDataConfig.Builder().with(
@@ -315,6 +316,7 @@ public class ProtobufData {
     this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
     this.useWrapperForNullables = protobufDataConfig.useWrapperForNullables();
     this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
+    this.preserveProtobufMap = protobufDataConfig.isPreserveProtobufMapToAvroDefault();
   }
 
   /**
@@ -1551,9 +1553,13 @@ public class ProtobufData {
     List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
     String name = ProtobufSchema.toMapField(
         enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName());
-    return SchemaBuilder.map(toConnectSchema(ctx, fieldDescriptors.get(0)),
-        toConnectSchema(ctx, fieldDescriptors.get(1))
-    ).name(name);
+    SchemaBuilder builder = SchemaBuilder.map(toConnectSchema(ctx, fieldDescriptors.get(0)),
+        toConnectSchema(ctx, fieldDescriptors.get(1)))
+        .name(name);
+    if (preserveProtobufMap) {
+      builder.parameter(CONNECT_TYPE_PROP, Type.MAP.getName());
+    }
+    return builder;
   }
 
   /**

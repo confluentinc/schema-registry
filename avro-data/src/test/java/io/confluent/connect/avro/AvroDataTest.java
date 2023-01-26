@@ -73,6 +73,7 @@ import static io.confluent.connect.avro.AvroData.CONNECT_INTERNAL_TYPE_NAME;
 import static io.confluent.connect.avro.AvroData.AVRO_FIELD_DEFAULT_FLAG_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_NAME_PROP;
 import static io.confluent.connect.avro.AvroData.AVRO_FIELD_DOC_PREFIX_PROP;
+import static io.confluent.connect.avro.AvroData.CONNECT_TYPE_PROP;
 import static io.confluent.connect.avro.AvroData.KEY_FIELD;
 import static io.confluent.connect.avro.AvroData.MAP_ENTRY_TYPE_NAME;
 import static io.confluent.connect.avro.AvroData.NAMESPACE;
@@ -262,6 +263,18 @@ public class AvroDataTest {
   @Test
   public void testFromNamedConnectMapWithNonStringKey() {
     assertThat(avroData.fromConnectSchema(NAMED_MAP_SCHEMA), equalTo(NAMED_AVRO_MAP_SCHEMA));
+  }
+
+  @Test
+  public void testFromProtobufConnectMapWithOptionalKey() {
+    final Schema schema = SchemaBuilder
+        .map(Schema.OPTIONAL_STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA)
+        .parameter(CONNECT_TYPE_PROP, Schema.Type.MAP.getName());
+    final org.apache.avro.Schema expected = org.apache.avro.SchemaBuilder.map()
+        .values(org.apache.avro.SchemaBuilder.unionOf().nullType().and().stringType().endUnion());
+    expected.addProp(CONNECT_TYPE_PROP, Schema.Type.MAP.getName());
+
+    assertEquals(expected, avroData.fromConnectSchema(schema));
   }
 
   @Test
@@ -865,39 +878,39 @@ public class AvroDataTest {
   public void testFromConnectOptionalComplex() {
     Schema optionalStructSchema = SchemaBuilder.struct().optional()
         .name("optionalStruct")
-        .field("int32", Schema.INT32_SCHEMA)  
+        .field("int32", Schema.INT32_SCHEMA)
         .build();
-   
+
     Schema schema = SchemaBuilder.struct()
         .field("int32", Schema.INT32_SCHEMA)
         .field("optionalStruct", optionalStructSchema)
         .field("optionalArray",  SchemaBuilder.array(Schema.INT32_SCHEMA).optional().build())
         .field("optionalMap", SchemaBuilder.map(Schema.STRING_SCHEMA,Schema.INT32_SCHEMA).optional().build())
         .field("optionalMapNonStringKeys", SchemaBuilder.map(Schema.INT32_SCHEMA,Schema.INT32_SCHEMA).optional().build())
-        
+
         .build();
-    
+
     Struct struct = new Struct(schema)
         .put("int32", 12)
         .put("optionalStruct", new Struct(optionalStructSchema).put("int32", 12))
         .put("optionalArray", Arrays.asList( 12,  13))
         .put("optionalMap", Collections.singletonMap("field", 12))
-        .put("optionalMapNonStringKeys", Collections.singletonMap(123, 12)); 
-    
+        .put("optionalMapNonStringKeys", Collections.singletonMap(123, 12));
+
     Object convertedRecord = avroData.fromConnectData(schema, struct);
-    
+
     org.apache.avro.Schema structAvroSchema = org.apache.avro.SchemaBuilder.builder().record("optionalStruct").fields().requiredInt("int32").endRecord();
-    
-    // Maps with non-string keys get converted into an array of records with key & values fields 
+
+    // Maps with non-string keys get converted into an array of records with key & values fields
     org.apache.avro.Schema mapNonStringKeysAvroSchema = org.apache.avro.SchemaBuilder.builder()
         .record(AvroData.MAP_ENTRY_TYPE_NAME).namespace(AvroData.NAMESPACE).fields()
         .requiredInt((AvroData.KEY_FIELD))
         .requiredInt((AvroData.VALUE_FIELD))
         .endRecord();
-    
+
     org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
 
-    
+
     org.apache.avro.generic.GenericRecord  avroStruct = new GenericRecordBuilder(structAvroSchema)
                                                           .set("int32", 12)
                                                           .build();
@@ -905,10 +918,10 @@ public class AvroDataTest {
         .set(AvroData.KEY_FIELD, 123)
         .set(AvroData.VALUE_FIELD, 12)
         .build();
-    
+
     List<GenericRecord> mapNonStringKeys  = new ArrayList<GenericRecord>();
     mapNonStringKeys.add(mapNonStringKeysAvroStruct);
-    
+
     org.apache.avro.generic.GenericRecord avroRecord = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
         .set("int32", 12)
         .set("optionalStruct", avroStruct)
@@ -918,7 +931,7 @@ public class AvroDataTest {
         .build();
 
     assertEquals(avroRecord, convertedRecord);
-    
+
     // Now check for null values
     struct = new Struct(schema)
         .put("int32", 12)
@@ -926,9 +939,9 @@ public class AvroDataTest {
         .put("optionalArray", null)
         .put("optionalMap",null)
         .put("optionalMapNonStringKeys", null);
-    
+
     convertedRecord = avroData.fromConnectData(schema, struct);
-    
+
     avroRecord = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
         .set("int32", 12)
         .set("optionalStruct", null)
@@ -936,7 +949,7 @@ public class AvroDataTest {
         .set("optionalMap", null)
         .set("optionalMapNonStringKeys", null)
         .build();
-    
+
     assertEquals(avroRecord, convertedRecord);
   }
 
@@ -1177,7 +1190,7 @@ public class AvroDataTest {
 
     avroData.fromConnectData(firstSchema, new Struct(secondSchema).put("foo", null));
   }
-  
+
   @Test(expected = DataException.class)
   public void testToConnectRecordWithIllegalNullValue() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
@@ -1185,7 +1198,7 @@ public class AvroDataTest {
         .requiredString("string")
         .endRecord();
     GenericRecord avroRecord = new GenericRecordBuilder(avroSchema).set("string", "some value").build();
-    avroRecord.put("string", null);    
+    avroRecord.put("string", null);
     avroData.toConnectData(avroSchema, avroRecord);
   }
 
@@ -1467,19 +1480,19 @@ public class AvroDataTest {
   public void testToConnectNullableStringNullvalue() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.nullable().stringType();
     assertEquals(null, avroData.toConnectData(avroSchema, null));
-  }  
-  
+  }
+
   @Test
   public void testToConnectNullableString() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.nullable().stringType();
-    assertEquals(new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, "teststring"), 
+    assertEquals(new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, "teststring"),
             avroData.toConnectData(avroSchema, "teststring"));
 
     // Avro deserializer allows CharSequence, not just String, and returns Utf8 objects
     assertEquals(new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, "teststring"),
                  avroData.toConnectData(avroSchema, new Utf8("teststring")));
-  }  
-  
+  }
+
   @Test
   public void testToConnectString() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().stringType();
@@ -1512,7 +1525,7 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(schema, Arrays.asList((byte) 12, (byte) 13)),
                  avroData.toConnectData(avroSchema, Arrays.asList(12, 13)));
   }
-  
+
   @Test
   public void testToConnectMapStringKeys() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().map()
@@ -1548,7 +1561,7 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(schema, struct),
                  avroData.toConnectData(avroSchema, avroRecord));
   }
-  
+
   @Test
   public void testToConnectRecordWithOptionalValue() {
       testToConnectRecordWithOptional("sample string");
@@ -1558,7 +1571,7 @@ public class AvroDataTest {
   public void testToConnectRecordWithOptionalNullValue() {
       testToConnectRecordWithOptional(null);
   }
-  
+
   private void testToConnectRecordWithOptional(String value) {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .record("Record").fields()
@@ -1580,19 +1593,19 @@ public class AvroDataTest {
     Struct struct = new Struct(schema).put("int8", (byte) 12).put("string", value);
     assertEquals(new SchemaAndValue(schema, struct),
                  avroData.toConnectData(avroSchema, avroRecord));
-  }  
+  }
 
   @Test
-  public void testToConnectRecordWithOptionalArrayValue() {    
+  public void testToConnectRecordWithOptionalArrayValue() {
       testToConnectRecordWithOptionalArray(Arrays.asList("test"));
   }
 
   @Test
-  public void testToConnectRecordWithOptionalArrayNullValue() {    
+  public void testToConnectRecordWithOptionalArrayNullValue() {
       testToConnectRecordWithOptionalArray(null);
   }
-  
-  private void testToConnectRecordWithOptionalArray(java.util.List<String> value) {    
+
+  private void testToConnectRecordWithOptionalArray(java.util.List<String> value) {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .record("Record").fields()
         .optionalString("string")
@@ -1611,9 +1624,9 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(schema, struct),
                  avroData.toConnectData(avroSchema, avroRecord));
   }
-  
+
   @Test
-  public void testToConnectNestedRecordWithOptionalRecordValue() {  
+  public void testToConnectNestedRecordWithOptionalRecordValue() {
     org.apache.avro.Schema avroSchema  = nestedRecordAvroSchema();
     Schema schema = nestedRecordSchema();
     GenericRecord avroRecord = new GenericRecordBuilder(avroSchema)
@@ -1625,7 +1638,7 @@ public class AvroDataTest {
   }
 
   @Test
-  public void testToConnectNestedRecordWithOptionalRecordNullValue() {     
+  public void testToConnectNestedRecordWithOptionalRecordNullValue() {
     org.apache.avro.Schema avroSchema  = nestedRecordAvroSchema();
     Schema schema = nestedRecordSchema();;
     GenericRecord avroRecord = new GenericRecordBuilder(avroSchema)
@@ -1658,7 +1671,7 @@ public class AvroDataTest {
         .field("nestedRecord", recordWithStringSchema())
         .build();
   }
-  
+
   // Avro -> Connect: Connect logical types
 
   @Test
@@ -1813,14 +1826,14 @@ public class AvroDataTest {
 
   @Test
   public void testToConnectMapOptionalValue() {
-      testToConnectMapOptional("some value");      
+      testToConnectMapOptional("some value");
   }
 
   @Test
   public void testToConnectMapOptionalNullValue() {
-      testToConnectMapOptional(null);      
+      testToConnectMapOptional(null);
   }
-      
+
   private void testToConnectMapOptional(String value) {
      // Encoded as array of 2-tuple records. Use key and value types that require conversion to
     // make sure conversion of each element actually occurs. The more verbose construction of the
@@ -1841,13 +1854,13 @@ public class AvroDataTest {
     Schema schema = SchemaBuilder.map(Schema.INT8_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA).build();
     assertEquals(new SchemaAndValue(schema, Collections.singletonMap((byte) 12, value)),
                  avroData.toConnectData(avroSchema, Arrays.asList(record)));
-  }  
+  }
 
   @Test
   public void testToConnectMapWithNamedSchema() {
     assertThat(avroData.toConnectSchema(NAMED_AVRO_MAP_SCHEMA), equalTo(NAMED_MAP_SCHEMA));
   }
-  
+
   // Avro -> Connect: Avro types with no corresponding Connect type
 
   @Test(expected = DataException.class)
@@ -1975,10 +1988,10 @@ public class AvroDataTest {
     GenericRecord recordTest = new GenericRecordBuilder(avroRecordSchema1).set("test", 12).build();
     avroData.toConnectData(avroSchema, recordTest);
   }
-  
+
   @Test
   public void testToConnectUnionRecordConflictWithEnhanced() {
-    // If the records have the same name but are in different namespaces, 
+    // If the records have the same name but are in different namespaces,
     // ensure these are handled without throwing exception
     avroData = new AvroData(new AvroDataConfig.Builder()
                                         .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 2)

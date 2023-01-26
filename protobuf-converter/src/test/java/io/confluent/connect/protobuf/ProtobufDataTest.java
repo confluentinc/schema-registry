@@ -35,6 +35,7 @@ import com.google.protobuf.UInt32Value;
 import com.google.protobuf.util.Timestamps;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
+import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
 import io.confluent.connect.protobuf.test.KeyValueWrapper;
 import io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry;
@@ -55,6 +56,8 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.LocalTime;
 import java.util.TimeZone;
+
+import org.apache.avro.generic.GenericData;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -87,6 +90,7 @@ import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue;
 import io.confluent.kafka.serializers.protobuf.test.UInt32ValueOuterClass;
 
+import static io.confluent.connect.protobuf.ProtobufData.CONNECT_TYPE_PROP;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_ENUM;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION_PREFIX;
@@ -379,7 +383,8 @@ public class ProtobufDataTest {
                 .optional()
                 .parameter(PROTOBUF_TYPE_TAG, String.valueOf(2))
                 .build()
-        ).name("map_type").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(7)).build()
+        ).name("map_type").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(7))
+        .parameter(CONNECT_TYPE_PROP, Schema.Type.MAP.getName()).build()
     );
     builder.field(
         "inner",
@@ -1714,6 +1719,40 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testToConnectMap() {
+    AttributeFieldEntry entry1 = AttributeFieldEntry.newBuilder()
+        .setKey("key1").setValue("value1").build();
+    AttributeFieldEntry entry2 = AttributeFieldEntry.newBuilder()
+        .setKey("key2").setValue("value2").build();
+    AttributeFieldEntry entry3 = AttributeFieldEntry.newBuilder()
+        .setKey("key3").setValue("value3").build();
+    AttributeFieldEntry entry4 = AttributeFieldEntry.newBuilder()
+        .setKey("key4").setValue("value4").build();
+    MapReferencesMessage message = MapReferencesMessage.newBuilder()
+        .addMap1(entry1)
+        .addMap2(entry2)
+        .setNotAMap1(entry3)
+        .setNotAMap2(entry4)
+        .build();
+
+    ProtobufData protobufData = new ProtobufData();
+    ProtobufSchema protobufSchema = new ProtobufSchema(message.getDescriptorForType());
+
+   // System.out.println(protobufSchema.canonicalString());
+    SchemaAndValue result = protobufData.toConnectData(protobufSchema, message);
+
+    Schema connectSchema = result.schema();
+
+
+    AvroData avroData = new AvroData(2);
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(result.schema());
+   // System.out.println(result.value().toString());
+   // System.out.println(avroSchema.toString(true));
+    GenericData.Record avroRecord = (GenericData.Record) avroData.fromConnectData(result.schema(), result.value());
+   // System.out.println(avroRecord.toString());
+  }
+
+  @Test
   public void testToConnectRecursiveSchema() {
     ProtobufSchema protobufSchema = new ProtobufSchema(
         RecursiveKeyValue.RecursiveKeyValueMessage.getDescriptor());
@@ -1838,7 +1877,8 @@ public class ProtobufDataTest {
             .optional()
             .parameter(PROTOBUF_TYPE_TAG, String.valueOf(2))
             .build()
-        ).name("attribute_field").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+        ).name("attribute_field").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .parameter(CONNECT_TYPE_PROP, Schema.Type.MAP.getName()).build()
     );
     builder.field("map2", SchemaBuilder.map(
         OPTIONAL_STRING_SCHEMA,
@@ -1846,7 +1886,8 @@ public class ProtobufDataTest {
             .optional()
             .parameter(PROTOBUF_TYPE_TAG, String.valueOf(2))
             .build()
-        ).name("attribute_field").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+        ).name("attribute_field").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2))
+        .parameter(CONNECT_TYPE_PROP, Schema.Type.MAP.getName()).build()
     );
     builder.field("notAMap1", structBuilder
         .optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3)).build()

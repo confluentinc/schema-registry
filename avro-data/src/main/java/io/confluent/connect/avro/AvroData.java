@@ -526,8 +526,10 @@ public class AvroData {
         case MAP: {
           Map<Object, Object> map = (Map<Object, Object>) value;
           org.apache.avro.Schema underlyingAvroSchema;
+          String internalType = schema != null && schema.parameters() != null
+              ? schema.parameters().get(CONNECT_TYPE_PROP) : null;
           if (schema != null && schema.keySchema().type() == Schema.Type.STRING
-              && !schema.keySchema().isOptional()) {
+              && !schema.keySchema().isOptional() || Schema.Type.MAP.getName().equals(internalType)) {
 
             // TODO most types don't need a new converted object since types pass through
             underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
@@ -672,6 +674,8 @@ public class AvroData {
             return typeSchema;
           }
         }
+      } else if (avroSchema.getType() == org.apache.avro.Schema.Type.MAP) {
+        // do nothing, this is from Protobuf Map
       } else {
         throw new DataException(
             "An optinal schema should have an Avro Union type, not "
@@ -851,7 +855,11 @@ public class AvroData {
       case MAP:
         // Avro only supports string keys, so we match the representation when possible, but
         // otherwise fall back on a record representation
-        if (schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
+        connectType = schema.parameters() != null
+            ? schema.parameters().get(CONNECT_TYPE_PROP) : null;
+        if (schema.keySchema().type() == Schema.Type.STRING
+            && (!schema.keySchema().isOptional()
+            || Schema.Type.MAP.getName().equals(connectType))) {
           baseSchema = org.apache.avro.SchemaBuilder.builder().map().values(
               fromConnectSchemaWithCycle(schema.valueSchema(), fromConnectContext, false));
         } else {
@@ -977,7 +985,7 @@ public class AvroData {
           int scale = scaleString == null ? 0 : Integer.parseInt(scaleString);
           if (scale < 0 || scale > precision) {
             log.trace(
-                "Scale and precision of {} and {} cannot be serialized as native Avro logical " 
+                "Scale and precision of {} and {} cannot be serialized as native Avro logical "
                     + "decimal type; reverting to legacy serialization method",
                 scale,
                 precision
@@ -1269,7 +1277,9 @@ public class AvroData {
   private JsonNode parametersFromConnect(Map<String, String> params) {
     ObjectNode result = JsonNodeFactory.instance.objectNode();
     for (Map.Entry<String, String> entry : params.entrySet()) {
-      if (discardTypeDocDefault || !entry.getKey().equals(AVRO_FIELD_DEFAULT_FLAG_PROP)) {
+      String entryKey = entry.getKey();
+      if (!entryKey.equals(CONNECT_TYPE_PROP) &&
+          (discardTypeDocDefault || !entry.getKey().equals(AVRO_FIELD_DEFAULT_FLAG_PROP))) {
         result.put(entry.getKey(), entry.getValue());
       }
     }

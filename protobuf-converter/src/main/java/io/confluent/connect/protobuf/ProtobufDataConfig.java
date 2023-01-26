@@ -50,6 +50,11 @@ public class ProtobufDataConfig extends AbstractConfig {
   public static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
   public static final String SCHEMAS_CACHE_SIZE_DOC = "Size of the converted schemas cache";
 
+  public static final String PRESERVE_PROTOBUF_MAP_TO_AVRO_CONFIG = "preserve.protobuf.map.to.avro";
+  public static final boolean PRESERVE_PROTOBUF_MAP_TO_AVRO_DEFAULT = false;
+  public static final String PRESERVE_PROTOBUF_MAP_TO_AVRO_DOC = "Whether to preserve " +
+      "protobuf map when transform to avro";
+
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
         .define(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG,
@@ -74,6 +79,12 @@ public class ProtobufDataConfig extends AbstractConfig {
             SCHEMAS_CACHE_SIZE_DEFAULT,
             ConfigDef.Importance.LOW,
             SCHEMAS_CACHE_SIZE_DOC
+        )
+        .define(PRESERVE_PROTOBUF_MAP_TO_AVRO_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            PRESERVE_PROTOBUF_MAP_TO_AVRO_DEFAULT,
+            ConfigDef.Importance.LOW,
+            PRESERVE_PROTOBUF_MAP_TO_AVRO_DOC
         );
   }
 
@@ -99,6 +110,10 @@ public class ProtobufDataConfig extends AbstractConfig {
 
   public int schemaCacheSize() {
     return this.getInt(SCHEMAS_CACHE_SIZE_CONFIG);
+  }
+
+  public boolean isPreserveProtobufMapToAvroDefault() {
+    return this.getBoolean(PRESERVE_PROTOBUF_MAP_TO_AVRO_CONFIG);
   }
 
   public static class Builder {
