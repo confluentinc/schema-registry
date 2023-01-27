@@ -336,6 +336,7 @@ public class AvroData {
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
   private boolean discardTypeDocDefault;
+  private boolean allowOptionalMapKey;
 
   public AvroData(int cacheSize) {
     this(new AvroDataConfig.Builder()
@@ -351,6 +352,7 @@ public class AvroData {
     this.enhancedSchemaSupport = avroDataConfig.isEnhancedAvroSchemaSupport();
     this.scrubInvalidNames = avroDataConfig.isScrubInvalidNames();
     this.discardTypeDocDefault = avroDataConfig.isDiscardTypeDocDefault();
+    this.allowOptionalMapKey = avroDataConfig.isAllowOptionalMapKeys();
   }
 
   /**
@@ -548,7 +550,7 @@ public class AvroData {
           Map<Object, Object> map = (Map<Object, Object>) value;
           org.apache.avro.Schema underlyingAvroSchema;
           if (schema != null && schema.keySchema().type() == Schema.Type.STRING
-              && !schema.keySchema().isOptional()) {
+              && (!schema.keySchema().isOptional() || allowOptionalMapKey)) {
 
             // TODO most types don't need a new converted object since types pass through
             underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
@@ -891,7 +893,8 @@ public class AvroData {
       case MAP:
         // Avro only supports string keys, so we match the representation when possible, but
         // otherwise fall back on a record representation
-        if (schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
+        if (schema.keySchema().type() == Schema.Type.STRING
+            && (!schema.keySchema().isOptional() || allowOptionalMapKey)) {
           baseSchema = org.apache.avro.SchemaBuilder.builder().map().values(
               fromConnectSchemaWithCycle(schema.valueSchema(), fromConnectContext, false));
         } else {
@@ -1261,7 +1264,8 @@ public class AvroData {
           return array;
         }
         case MAP:
-          if (schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
+          if (schema.keySchema().type() == Schema.Type.STRING
+              && (!schema.keySchema().isOptional() || allowOptionalMapKey)) {
             ObjectNode node = JsonNodeFactory.instance.objectNode();
             for (Map.Entry<String, Object> entry : ((Map<String, Object>) defaultVal).entrySet()) {
               JsonNode entryDef = defaultValueFromConnect(schema.valueSchema(), entry.getValue());
