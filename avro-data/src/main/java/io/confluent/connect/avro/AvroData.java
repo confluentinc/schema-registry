@@ -679,8 +679,6 @@ public class AvroData {
             return typeSchema;
           }
         }
-      } else if (avroSchema.getType() == org.apache.avro.Schema.Type.MAP) {
-        // do nothing, this is from Protobuf Map
       } else {
         throw new DataException(
             "An optinal schema should have an Avro Union type, not "
