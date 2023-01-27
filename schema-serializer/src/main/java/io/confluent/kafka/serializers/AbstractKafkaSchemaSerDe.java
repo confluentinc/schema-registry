@@ -91,7 +91,7 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   protected SchemaRegistryClient schemaRegistry;
-  protected Ticker ticker;
+  protected Ticker ticker = Ticker.systemTicker();
   protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
