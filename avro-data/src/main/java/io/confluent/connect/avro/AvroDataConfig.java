@@ -42,6 +42,11 @@ public class AvroDataConfig extends AbstractDataConfig {
       "Toggle for enabling/disabling connect converter to add its meta data to the output schema "
       + "or not";
 
+  public static final String ALLOW_OPTIONAL_MAP_KEYS_CONFIG = "allow.optional.map.keys";
+  public static final boolean ALLOW_OPTIONAL_MAP_KEYS_DEFAULT = false;
+  public static final String ALLOW_OPTIONAL_MAP_KEYS_DOC =
+      "Allow optional string map key when converting from Connect Schema to Avro Schema.";
+
   @Deprecated
   public static final String DISCARD_TYPE_DOC_DEFAULT_CONFIG = "discard.type.doc.default";
   public static final boolean DISCARD_TYPE_DOC_DEFAULT_DEFAULT = false;
@@ -64,7 +69,12 @@ public class AvroDataConfig extends AbstractDataConfig {
                 ConfigDef.Type.BOOLEAN,
                 DISCARD_TYPE_DOC_DEFAULT_DEFAULT,
                 ConfigDef.Importance.LOW,
-                DISCARD_TYPE_DOC_DEFAULT_DOC);
+                DISCARD_TYPE_DOC_DEFAULT_DOC)
+        .define(ALLOW_OPTIONAL_MAP_KEYS_CONFIG,
+                ConfigDef.Type.BOOLEAN,
+                ALLOW_OPTIONAL_MAP_KEYS_DEFAULT,
+                ConfigDef.Importance.LOW,
+                ALLOW_OPTIONAL_MAP_KEYS_DOC);
   }
 
   public AvroDataConfig(Map<?, ?> props) {
@@ -87,6 +97,9 @@ public class AvroDataConfig extends AbstractDataConfig {
     return this.getBoolean(DISCARD_TYPE_DOC_DEFAULT_CONFIG);
   }
 
+  public boolean isAllowOptionalMapKeys() {
+    return this.getBoolean(ALLOW_OPTIONAL_MAP_KEYS_CONFIG);
+  }
 
   public static class Builder {
 
