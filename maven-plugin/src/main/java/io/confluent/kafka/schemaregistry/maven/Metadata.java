@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Confluent Inc.
+ * Copyright 2023 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,33 +16,35 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import java.util.Map;
+import java.util.Set;
 import org.apache.maven.plugins.annotations.Parameter;
 
-public class Reference {
+public class Metadata {
 
   // For mojo, cannot have any constructors besides default constructor
 
-  @Parameter(required = true)
-  protected String name;
-
-  @Parameter(required = true)
-  protected String subject;
+  @Parameter(required = false)
+  protected Map<String, Set<String>> tags;
 
   @Parameter(required = false)
-  protected Integer version;
+  protected Map<String, String> properties;
+
+  @Parameter(required = false)
+  protected Set<String> sensitive;
 
   @Override
   public String toString() {
-    return "Reference{"
-        + "name='"
-        + name
-        + '\''
-        + ", subject='"
-        + subject
-        + '\''
-        + ", version="
-        + version
+    return "Metadata{"
+        + "tags=" + tags
+        + ", properties=" + properties
+        + ", sensitive=" + sensitive
         + '}';
+  }
+
+  public io.confluent.kafka.schemaregistry.client.rest.entities.Metadata toMetadataEntity() {
+    return new io.confluent.kafka.schemaregistry.client.rest.entities.Metadata(
+        tags, properties, sensitive
+    );
   }
 }
