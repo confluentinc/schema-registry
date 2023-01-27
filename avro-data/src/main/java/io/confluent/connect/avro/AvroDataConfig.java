@@ -50,7 +50,7 @@ public class AvroDataConfig extends AbstractConfig {
   public static final String ALLOW_OPTIONAL_MAP_KEYS_CONFIG = "allow.optional.map.keys";
   public static final boolean ALLOW_OPTIONAL_MAP_KEYS_DEFAULT = false;
   public static final String ALLOW_OPTIONAL_MAP_KEYS_DOC =
-      "Allow optional string key when convert from Connect Schema to Avro Schema.";
+      "Allow optional string map key when converting from Connect Schema to Avro Schema.";
 
   @Deprecated
   public static final String DISCARD_TYPE_DOC_DEFAULT_CONFIG = "discard.type.doc.default";

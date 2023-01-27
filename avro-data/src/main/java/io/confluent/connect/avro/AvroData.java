@@ -1231,7 +1231,8 @@ public class AvroData {
           return array;
         }
         case MAP:
-          if (schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
+          if (schema.keySchema().type() == Schema.Type.STRING
+              && (!schema.keySchema().isOptional() || allowOptionalMapKey)) {
             ObjectNode node = JsonNodeFactory.instance.objectNode();
             for (Map.Entry<String, Object> entry : ((Map<String, Object>) defaultVal).entrySet()) {
               JsonNode entryDef = defaultValueFromConnect(schema.valueSchema(), entry.getValue());
