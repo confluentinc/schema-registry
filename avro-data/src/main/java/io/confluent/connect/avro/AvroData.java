@@ -325,6 +325,7 @@ public class AvroData {
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
   private boolean discardTypeDocDefault;
+  private boolean allowOptionalMapKey;
 
   public AvroData(int cacheSize) {
     this(new AvroDataConfig.Builder()
@@ -343,6 +344,7 @@ public class AvroData {
     this.enhancedSchemaSupport = avroDataConfig.isEnhancedAvroSchemaSupport();
     this.scrubInvalidNames = avroDataConfig.isScrubInvalidNames();
     this.discardTypeDocDefault = avroDataConfig.isDiscardTypeDocDefault();
+    this.allowOptionalMapKey = avroDataConfig.isAllowOptionalMapKeys();
   }
 
   /**
@@ -355,7 +357,7 @@ public class AvroData {
 
   protected Object fromConnectData(Schema schema, org.apache.avro.Schema avroSchema, Object value) {
     return fromConnectData(schema, avroSchema, value, true, false,
-        enhancedSchemaSupport, scrubInvalidNames);
+        enhancedSchemaSupport, scrubInvalidNames, allowOptionalMapKey);
   }
 
   /**
@@ -382,7 +384,8 @@ public class AvroData {
       boolean requireContainer,
       boolean requireSchemalessContainerNull,
       boolean enhancedSchemaSupport,
-      boolean scrubInvalidNames
+      boolean scrubInvalidNames,
+      boolean allowOptionalMapKey
   ) {
     Schema.Type schemaType = schema != null
                              ? schema.type()
@@ -513,7 +516,8 @@ public class AvroData {
                     false,
                     true,
                     enhancedSchemaSupport,
-                    scrubInvalidNames
+                    scrubInvalidNames,
+                    allowOptionalMapKey
                 )
             );
           }
@@ -527,7 +531,7 @@ public class AvroData {
           Map<Object, Object> map = (Map<Object, Object>) value;
           org.apache.avro.Schema underlyingAvroSchema;
           if (schema != null && schema.keySchema().type() == Schema.Type.STRING
-              && !schema.keySchema().isOptional()) {
+              && (!schema.keySchema().isOptional() || allowOptionalMapKey)) {
 
             // TODO most types don't need a new converted object since types pass through
             underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
@@ -537,7 +541,8 @@ public class AvroData {
               // Key is a String, no conversion needed
               Object convertedValue = fromConnectData(schema.valueSchema(),
                   underlyingAvroSchema.getValueType(),
-                  entry.getValue(), false, true, enhancedSchemaSupport, scrubInvalidNames
+                  entry.getValue(), false, true, enhancedSchemaSupport, scrubInvalidNames,
+                  allowOptionalMapKey
               );
               converted.put((String) entry.getKey(), convertedValue);
             }
@@ -554,11 +559,12 @@ public class AvroData {
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               Object keyConverted = fromConnectData(schema != null ? schema.keySchema() : null,
                                                     avroKeySchema, entry.getKey(), false, true,
-                                                    enhancedSchemaSupport, scrubInvalidNames);
+                                                    enhancedSchemaSupport, scrubInvalidNames,
+                                                    allowOptionalMapKey);
               Object valueConverted = fromConnectData(schema != null ? schema.valueSchema() : null,
                                                       avroValueSchema, entry.getValue(), false,
                                                       true, enhancedSchemaSupport,
-                                                      scrubInvalidNames);
+                                                      scrubInvalidNames, allowOptionalMapKey);
               converted.add(
                   new GenericRecordBuilder(elementSchema)
                       .set(KEY_FIELD, keyConverted)
@@ -590,12 +596,13 @@ public class AvroData {
                     false,
                     true,
                     enhancedSchemaSupport,
-                    scrubInvalidNames
+                    scrubInvalidNames,
+                    allowOptionalMapKey
                 );
               }
             }
             return fromConnectData(schema, avroSchema, null, false, true,
-                enhancedSchemaSupport, scrubInvalidNames);
+                enhancedSchemaSupport, scrubInvalidNames, allowOptionalMapKey);
           } else {
             org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
                 schema, avroSchema, scrubInvalidNames);
@@ -607,7 +614,7 @@ public class AvroData {
               convertedBuilder.set(
                   fieldName,
                   fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false,
-                      true, enhancedSchemaSupport, scrubInvalidNames)
+                      true, enhancedSchemaSupport, scrubInvalidNames, allowOptionalMapKey)
               );
             }
             return convertedBuilder.build();
@@ -672,6 +679,8 @@ public class AvroData {
             return typeSchema;
           }
         }
+      } else if (avroSchema.getType() == org.apache.avro.Schema.Type.MAP) {
+        // do nothing, this is from Protobuf Map
       } else {
         throw new DataException(
             "An optinal schema should have an Avro Union type, not "
@@ -851,7 +860,8 @@ public class AvroData {
       case MAP:
         // Avro only supports string keys, so we match the representation when possible, but
         // otherwise fall back on a record representation
-        if (schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
+        if (schema.keySchema().type() == Schema.Type.STRING
+            && (!schema.keySchema().isOptional() || allowOptionalMapKey)) {
           baseSchema = org.apache.avro.SchemaBuilder.builder().map().values(
               fromConnectSchemaWithCycle(schema.valueSchema(), fromConnectContext, false));
         } else {
@@ -977,7 +987,7 @@ public class AvroData {
           int scale = scaleString == null ? 0 : Integer.parseInt(scaleString);
           if (scale < 0 || scale > precision) {
             log.trace(
-                "Scale and precision of {} and {} cannot be serialized as native Avro logical " 
+                "Scale and precision of {} and {} cannot be serialized as native Avro logical "
                     + "decimal type; reverting to legacy serialization method",
                 scale,
                 precision
