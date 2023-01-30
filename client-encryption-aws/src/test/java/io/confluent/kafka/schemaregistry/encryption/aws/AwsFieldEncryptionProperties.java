@@ -41,8 +41,6 @@ public class AwsFieldEncryptionProperties implements FieldEncryptionProperties {
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "exec");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.class",
         AwsFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + DEFAULT_KMS_KEY_ID,
-        getKeyId());
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + TEST_CLIENT,
         testClient);
     return props;

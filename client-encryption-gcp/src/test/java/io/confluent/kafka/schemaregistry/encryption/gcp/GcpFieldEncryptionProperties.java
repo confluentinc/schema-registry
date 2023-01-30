@@ -48,20 +48,18 @@ public class GcpFieldEncryptionProperties implements FieldEncryptionProperties {
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL, "60");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "gcp");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".gcp.class",
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "exec");
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.class",
         GcpFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".gcp.param." + DEFAULT_KMS_KEY_ID,
-        getKeyId());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".gcp.param." + CLIENT_ID,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + CLIENT_ID,
         clientId);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".gcp.param." + CLIENT_EMAIL,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + CLIENT_EMAIL,
         clientEmail);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".gcp.param." + PRIVATE_KEY_ID,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + PRIVATE_KEY_ID,
         privateKeyId);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".gcp.param." + PRIVATE_KEY,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + PRIVATE_KEY,
         privateKey);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".gcp.param." + TEST_CLIENT,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + TEST_CLIENT,
         testClient);
     return props;
   }

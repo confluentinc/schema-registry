@@ -36,12 +36,12 @@ public class LocalFieldEncryptionProperties implements FieldEncryptionProperties
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL, "60");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "local");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".local.class",
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "exec");
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.class",
         LocalFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".local.param."
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param."
         + LOCAL_SECRET, "mysecret");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".local.param."
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param."
         + LOCAL_OLD_SECRETS, "old1, old2");
     return props;
   }

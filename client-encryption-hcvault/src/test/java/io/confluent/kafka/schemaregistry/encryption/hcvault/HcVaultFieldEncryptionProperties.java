@@ -49,14 +49,12 @@ public class HcVaultFieldEncryptionProperties implements FieldEncryptionProperti
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL, "60");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "hcvault");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.class",
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "exec");
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.class",
         HcVaultFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.param." + DEFAULT_KMS_KEY_ID,
-        getKeyId());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.param." + TOKEN_ID,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + TOKEN_ID,
         "dev-only-token");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".hcvault.param." + TEST_CLIENT,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + TEST_CLIENT,
         testClient);
     return props;
   }
