@@ -120,6 +120,10 @@ public abstract class AbstractKafkaSchemaSerDe {
     key.remove();
   }
 
+  protected Ticker ticker(SchemaRegistryClient client) {
+    return client != null ? client.ticker() : Ticker.systemTicker();
+  }
+
   @SuppressWarnings("unchecked")
   protected void configureClientProperties(
       AbstractKafkaSchemaSerDeConfig config,

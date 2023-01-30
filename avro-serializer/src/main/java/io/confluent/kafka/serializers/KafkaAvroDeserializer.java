@@ -45,7 +45,7 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   public KafkaAvroDeserializer(SchemaRegistryClient client) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
   }
 
   public KafkaAvroDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -60,7 +60,7 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   public KafkaAvroDeserializer(SchemaRegistryClient client, Map<String, ?> props, boolean isKey) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
     this.isKey = isKey;
 
     final String specificAvroClassLookupKey = isKey

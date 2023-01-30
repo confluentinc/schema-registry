@@ -38,7 +38,7 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
 
   public KafkaJsonSchemaDeserializer(SchemaRegistryClient client) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
   }
 
   public KafkaJsonSchemaDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -52,7 +52,7 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
       Class<T> type
   ) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
     configure(deserializerConfig(props), type);
   }
 

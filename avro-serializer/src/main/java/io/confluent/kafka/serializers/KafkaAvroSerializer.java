@@ -36,12 +36,12 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   public KafkaAvroSerializer(SchemaRegistryClient client) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
   }
 
   public KafkaAvroSerializer(SchemaRegistryClient client, Map<String, ?> props) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
     configure(serializerConfig(props));
   }
 

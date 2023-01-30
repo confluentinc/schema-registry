@@ -48,7 +48,7 @@ public class KafkaProtobufSerializer<T extends Message>
 
   public KafkaProtobufSerializer(SchemaRegistryClient client) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
     this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
@@ -59,7 +59,7 @@ public class KafkaProtobufSerializer<T extends Message>
   public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props,
                                  int cacheCapacity) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
     configure(serializerConfig(props));
     this.schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
   }

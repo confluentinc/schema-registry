@@ -37,7 +37,7 @@ public class KafkaProtobufDeserializer<T extends Message>
 
   public KafkaProtobufDeserializer(SchemaRegistryClient client) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
   }
 
   public KafkaProtobufDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -49,7 +49,7 @@ public class KafkaProtobufDeserializer<T extends Message>
                                    Map<String, ?> props,
                                    Class<T> type) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
     configure(deserializerConfig(props), type);
   }
 

@@ -44,7 +44,7 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
     this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
@@ -55,7 +55,7 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props,
                                    int cacheCapacity) {
     this.schemaRegistry = client;
-    this.ticker = client.ticker();
+    this.ticker = ticker(client);
     configure(serializerConfig(props));
     this.schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
   }
