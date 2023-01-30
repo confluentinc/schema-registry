@@ -32,10 +32,10 @@ public class RuleSet {
 
   @Override
   public String toString() {
-    return "RuleSet{" +
-        "migrationRules=" + migrationRules +
-        ", domainRules=" + domainRules +
-        '}';
+    return "RuleSet{"
+        + "migrationRules=" + migrationRules
+        + ", domainRules=" + domainRules
+        + '}';
   }
 
   public io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet toRuleSetEntity() {
