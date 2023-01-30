@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import org.apache.maven.plugins.annotations.Parameter;
 
 public class Reference {
