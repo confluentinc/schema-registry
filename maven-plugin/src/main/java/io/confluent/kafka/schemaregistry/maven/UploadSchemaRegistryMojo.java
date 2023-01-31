@@ -56,6 +56,12 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
   Map<String, List<Reference>> references = new HashMap<>();
 
   @Parameter(required = false)
+  Map<String, Metadata> metadata = new HashMap<>();
+
+  @Parameter(required = false)
+  Map<String, RuleSet> ruleSet = new HashMap<>();
+
+  @Parameter(required = false)
   boolean decodeSubject = true;
 
   Map<String, ParsedSchema> schemas = new HashMap<>();
@@ -107,9 +113,11 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
         }
         return;
       }
+      io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata = getMetadata(key);
+      io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet = getRuleSet(key);
       String schemaString = MojoUtils.readFile(file, StandardCharsets.UTF_8);
       Optional<ParsedSchema> schema = client().parseSchema(
-          schemaType, schemaString, schemaReferences);
+          schemaType, schemaString, schemaReferences, metadata, ruleSet);
       if (schema.isPresent()) {
         schemas.put(key, schema.get());
       } else {
@@ -177,5 +185,15 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     return result;
   }
 
+  private io.confluent.kafka.schemaregistry.client.rest.entities.Metadata getMetadata(
+      String subject) {
+    Metadata m = metadata.get(subject);
+    return m != null ? m.toMetadataEntity() : null;
+  }
 
+  private io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet getRuleSet(
+      String subject) {
+    RuleSet rs = ruleSet.get(subject);
+    return rs != null ? rs.toRuleSetEntity() : null;
+  }
 }
