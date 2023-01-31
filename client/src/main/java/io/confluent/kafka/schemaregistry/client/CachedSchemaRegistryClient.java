@@ -72,6 +72,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Cache<SubjectAndSchema, Long> missingSchemaCache;
   private final Cache<SubjectAndId, Long> missingIdCache;
   private final Map<String, SchemaProvider> providers;
+  private final Ticker ticker;
 
   private static final String NO_SUBJECT = "";
   private static final int HTTP_NOT_FOUND = 404;
@@ -187,6 +188,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.idCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.versionCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.restService = restService;
+    this.ticker = ticker;
 
     long missingIdTTL = SchemaRegistryClientConfig.getMissingIdTTL(configs);
     long missingSchemaTTL = SchemaRegistryClientConfig.getMissingSchemaTTL(configs);
@@ -235,6 +237,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         restService.setHostnameVerifier(getHostnameVerifier(sslConfigs));
       }
     }
+  }
+
+  @Override
+  public Ticker ticker() {
+    return ticker;
   }
 
   private HostnameVerifier getHostnameVerifier(Map<String, Object> config) {

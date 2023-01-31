@@ -385,7 +385,7 @@ public class ProtobufSchema implements ParsedSchema {
       String name
   ) {
     try {
-      this.schemaObj = toProtoFile(schemaString);
+      this.schemaObj = schemaString != null ? toProtoFile(schemaString) : null;
       this.version = version;
       this.name = name;
       this.references = Collections.unmodifiableList(references);

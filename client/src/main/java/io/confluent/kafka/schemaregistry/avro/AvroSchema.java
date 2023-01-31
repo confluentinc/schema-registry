@@ -115,7 +115,7 @@ public class AvroSchema implements ParsedSchema {
     for (String schema : resolvedReferences.values()) {
       parser.parse(schema);
     }
-    this.schemaObj = parser.parse(schemaString);
+    this.schemaObj = schemaString != null ? parser.parse(schemaString) : null;
     this.references = Collections.unmodifiableList(references);
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
     this.metadata = metadata;
@@ -270,7 +270,7 @@ public class AvroSchema implements ParsedSchema {
       case DEFAULT:
         return canonicalString();
       case RESOLVED:
-        return schemaObj.toString();
+        return schemaObj != null ? schemaObj.toString() : null;
       default:
         // Don't throw an exception for forward compatibility of formats
         log.warn("Unsupported format {}", format);
