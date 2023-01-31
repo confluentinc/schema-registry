@@ -43,12 +43,13 @@ public class KafkaProtobufSerializer<T extends Message>
    * Constructor used by Kafka producer.
    */
   public KafkaProtobufSerializer() {
-    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client) {
-    schemaRegistry = client;
-    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
+    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -57,9 +58,10 @@ public class KafkaProtobufSerializer<T extends Message>
 
   public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props,
                                  int cacheCapacity) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
     configure(serializerConfig(props));
-    schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
   }
 
   @Override

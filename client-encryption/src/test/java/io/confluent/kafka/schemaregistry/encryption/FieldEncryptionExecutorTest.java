@@ -27,7 +27,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -48,7 +47,6 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
-import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
@@ -87,6 +85,7 @@ public abstract class FieldEncryptionExecutorTest {
     }
   }
 
+  private final FieldEncryptionProperties fieldEncryptionProps;
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer;
   private final KafkaAvroDeserializer avroDeserializer;
@@ -105,14 +104,15 @@ public abstract class FieldEncryptionExecutorTest {
 
   public FieldEncryptionExecutorTest() throws Exception {
     topic = "test";
-    Map<String, Object> clientProps = getClientProperties();
+    fieldEncryptionProps = getFieldEncryptionProperties();
+    Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties();
     schemaRegistry = new MockSchemaRegistryClient(ImmutableList.of(
         new AvroSchemaProvider(), new ProtobufSchemaProvider(), new JsonSchemaProvider()));
 
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, clientProps);
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, clientProps);
 
-    Map<String, Object> clientPropsWithoutKey = getClientPropertiesWithoutKey();
+    Map<String, Object> clientPropsWithoutKey = fieldEncryptionProps.getClientPropertiesWithoutKey();
     avroSerializerWithoutKey = new KafkaAvroSerializer(schemaRegistry, clientPropsWithoutKey);
     avroDeserializerWithoutKey = new KafkaAvroDeserializer(schemaRegistry, clientPropsWithoutKey);
 
@@ -134,11 +134,7 @@ public abstract class FieldEncryptionExecutorTest {
     badDeserializer = new KafkaAvroDeserializer(schemaRegistry, badClientProps);
   }
 
-  protected abstract String getKeyId();
-
-  protected abstract Map<String, Object> getClientProperties() throws Exception;
-
-  protected abstract Map<String, Object> getClientPropertiesWithoutKey() throws Exception;
+  protected abstract FieldEncryptionProperties getFieldEncryptionProperties();
 
   private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
     Map<String, RuleExecutor> executors = serde.getRuleExecutors();
@@ -264,7 +260,7 @@ public abstract class FieldEncryptionExecutorTest {
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Map<String, String> properties = new HashMap<>();
-    properties.put(FieldEncryptionExecutor.ENCRYPT_KMS_KEY_ID, getKeyId());
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KMS_KEY_ID, fieldEncryptionProps.getKeyId());
     Metadata metadata = new Metadata(
         Collections.emptyMap(), properties, Collections.emptySet());
     avroSchema = avroSchema.copy(metadata, ruleSet);

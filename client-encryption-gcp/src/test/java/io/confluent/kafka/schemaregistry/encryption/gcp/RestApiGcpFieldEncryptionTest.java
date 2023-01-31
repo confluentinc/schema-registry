@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Confluent Inc.
+ * Copyright 2023 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.encryption.azure;
+package io.confluent.kafka.schemaregistry.encryption.gcp;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.RestApiFieldEncryptionTest;
 
-public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
+public class RestApiGcpFieldEncryptionTest extends RestApiFieldEncryptionTest {
 
-  public AzureFieldEncryptionExecutorTest() throws Exception {
+  public RestApiGcpFieldEncryptionTest() throws Exception {
     super();
   }
 
   @Override
   protected FieldEncryptionProperties getFieldEncryptionProperties() {
-    return new AzureFieldEncryptionProperties();
+    return new GcpFieldEncryptionProperties();
   }
 }
 
