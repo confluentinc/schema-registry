@@ -22,6 +22,16 @@ message FooBar {
     option (my_message_option).(More.more_string) = "foobar";
   }
 
+  message More2 {
+    repeated int32 serial = 1;
+
+    extend FooBar {
+      optional string more2_string = 151;
+    }
+
+    option (my_message_option) = {foo: 123, [FooBar.More2.more2_string]: "foobar"};
+  }
+
   extend google.protobuf.EnumOptions {
     optional string foobar_string = 71001;
   }

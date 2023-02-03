@@ -160,9 +160,9 @@ public class ProtobufSchemaUtils {
         sb.append("\";\n");
       }
     }
-    if (!protoFile.getOptions().isEmpty()) {
+    List<OptionElement> options = ctx.filterOptions(protoFile.getOptions());
+    if (!options.isEmpty()) {
       sb.append('\n');
-      List<OptionElement> options = ctx.filterOptions(protoFile.getOptions());
       for (OptionElement option : options) {
         sb.append(toOptionString(ctx, option));
       }
@@ -223,9 +223,9 @@ public class ProtobufSchemaUtils {
     sb.append("service ");
     sb.append(service.getName());
     sb.append(" {");
-    if (!service.getOptions().isEmpty()) {
+    List<OptionElement> options = ctx.filterOptions(service.getOptions());
+    if (!options.isEmpty()) {
       sb.append('\n');
-      List<OptionElement> options = ctx.filterOptions(service.getOptions());
       for (OptionElement option : options) {
         appendIndented(sb, toOptionString(ctx, option));
       }
@@ -268,9 +268,9 @@ public class ProtobufSchemaUtils {
     sb.append(responseType);
     sb.append(")");
 
-    if (!rpc.getOptions().isEmpty()) {
+    List<OptionElement> options = ctx.filterOptions(rpc.getOptions());
+    if (!options.isEmpty()) {
       sb.append(" {\n");
-      List<OptionElement> options = ctx.filterOptions(rpc.getOptions());
       for (OptionElement option : options) {
         appendIndented(sb, toOptionString(ctx, option));
       }
@@ -322,8 +322,8 @@ public class ProtobufSchemaUtils {
       sb.append('\n');
     }
 
-    if (!type.getOptions().isEmpty()) {
-      List<OptionElement> options = ctx.filterOptions(type.getOptions());
+    List<OptionElement> options = ctx.filterOptions(type.getOptions());
+    if (!options.isEmpty()) {
       for (OptionElement option : options) {
         appendIndented(sb, toOptionString(ctx, option));
       }
@@ -394,9 +394,9 @@ public class ProtobufSchemaUtils {
         appendIndented(sb, toString(ctx, reserved));
       }
     }
-    if (!type.getOptions().isEmpty()) {
+    List<OptionElement> options = ctx.filterOptions(type.getOptions());
+    if (!options.isEmpty()) {
       sb.append('\n');
-      List<OptionElement> options = ctx.filterOptions(type.getOptions());
       for (OptionElement option : options) {
         appendIndented(sb, toOptionString(ctx, option));
       }
@@ -595,9 +595,9 @@ public class ProtobufSchemaUtils {
     sb.append(type.getName());
     sb.append(" {");
 
-    if (!type.getOptions().isEmpty()) {
+    List<OptionElement> options = ctx.filterOptions(type.getOptions());
+    if (!options.isEmpty()) {
       sb.append('\n');
-      List<OptionElement> options = ctx.filterOptions(type.getOptions());
       for (OptionElement option : options) {
         appendIndented(sb, toOptionString(ctx, option));
       }

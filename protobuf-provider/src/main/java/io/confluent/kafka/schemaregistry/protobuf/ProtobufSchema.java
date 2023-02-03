@@ -733,10 +733,14 @@ public class ProtobufSchema implements ParsedSchema {
 
   private static Map<String, Object> toOptionMap(Message message) {
     return message.getAllFields().entrySet().stream()
-        .map(e -> new Pair<>(e.getKey().getName(), toOptionValue(e.getValue(), true)))
+        .map(e -> new Pair<>(toOptionMapKey(e.getKey()), toOptionValue(e.getValue(), true)))
         .filter(p -> p.getSecond() != null)
         .collect(Collectors.toMap(Pair::getFirst, Pair::getSecond,
             (e1, e2) -> e1, LinkedHashMap::new));
+  }
+
+  private static String toOptionMapKey(FieldDescriptor field) {
+    return field.isExtension() ? "[" + field.getFullName() + "]" : field.getName();
   }
 
   private static MessageElement toMessage(FileDescriptorProto file, DescriptorProto descriptor) {
