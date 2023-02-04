@@ -398,6 +398,27 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     checkNormalization(schemaRegistry, "DescriptorRef.proto");
   }
 
+  @Test(expected = RestClientException.class)
+  public void testInvalidSchema() throws Exception {
+    String schemaString = getInvalidSchema();
+    String subject = "invalid";
+    registerAndVerifySchema(
+        restApp.restClient, schemaString, Collections.emptyList(), 1, subject);
+  }
+
+  private static String getInvalidSchema() {
+    String schema = "syntax = \"proto3\";\n"
+        + "\n"
+        + "option java_outer_classname = \"InvalidSchema\";\n"
+        + "option java_package = \"io.confluent.connect.protobuf.test\";\n"
+        + "\n"
+        + "message MyMessage {\n"
+        + "  int32 key = 1;\n"
+        + "  .org.unknown.BadMessage value = 2;\n"
+        + "}";
+    return schema;
+  }
+
   public static void registerAndVerifySchema(
       RestService restService,
       String schemaString,
