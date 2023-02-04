@@ -799,10 +799,12 @@ public class ProtobufSchemaUtils {
   
   private static void formatOptionMap(
       FormatContext ctx, StringBuilder sb, Map<String, Object> valueMap) {
-    int lastIndex = valueMap.size() - 1;
-    int index = 0;
     if (ctx.normalize()) {
       valueMap = valueMap.entrySet().stream()
+          .filter(e -> {
+            Object value = e.getValue();
+            return !(value instanceof List) || !((List<?>) value).isEmpty();
+          })
           .map(e -> {
             String key = e.getKey();
             Object value = e.getValue();
@@ -819,6 +821,8 @@ public class ProtobufSchemaUtils {
           .collect(Collectors.toMap(Pair::getFirst, Pair::getSecond,
               (e1, e2) -> e1, TreeMap::new));
     }
+    int lastIndex = valueMap.size() - 1;
+    int index = 0;
     for (Map.Entry<String, Object> entry : valueMap.entrySet()) {
       String key = entry.getKey();
       Object value = entry.getValue();
@@ -847,9 +851,7 @@ public class ProtobufSchemaUtils {
       sb.append('}');
     } else if (value instanceof List) {
       List<Object> list = (List<Object>) value;
-      if (ctx.normalize() && list.isEmpty()) {
-        // noop
-      } else if (ctx.normalize() && list.size() == 1) {
+      if (ctx.normalize() && list.size() == 1) {
         sb.append(formatOptionMapOrListValue(ctx, list.get(0)));
       } else {
         sb.append("[\n");

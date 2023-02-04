@@ -20,6 +20,8 @@ message FooBar {
     }
 
     option (my_message_option).(More.more_string) = "foobar";
+    option (my_message_option).(rep) = FOO;
+    option (my_message_option).(rep) = BAR;
   }
 
   message More2 {
@@ -29,7 +31,7 @@ message FooBar {
       optional string more2_string = 151;
     }
 
-    option (my_message_option) = {foo: 123, [FooBar.More2.more2_string]: "foobar"};
+    option (my_message_option) = {foo: 123, [FooBar.More2.more2_string]: "foobar", [rep]: []};
   }
 
   extend google.protobuf.EnumOptions {
