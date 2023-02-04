@@ -92,6 +92,9 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
+import java.io.File;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
 import java.util.stream.Stream;
 import kotlin.Pair;
@@ -151,6 +154,7 @@ public class ProtobufSchema implements ParsedSchema {
   private static final String JAVA_PACKAGE = "java_package";
   private static final String JAVA_OUTER_CLASSNAME = "java_outer_classname";
   private static final String JAVA_MULTIPLE_FILES = "java_multiple_files";
+  private static final String JAVA_GENERATE_EQUALS_AND_HASH = "java_generate_equals_and_hash";
   private static final String JAVA_STRING_CHECK_UTF8 = "java_string_check_utf8";
   private static final String OPTIMIZE_FOR = "optimize_for";
   private static final String GO_PACKAGE = "go_package";
@@ -567,6 +571,11 @@ public class ProtobufSchema implements ParsedSchema {
     if (file.getOptions().hasJavaMultipleFiles()) {
       options.add(new OptionElement(
           JAVA_MULTIPLE_FILES, Kind.BOOLEAN, file.getOptions().getJavaMultipleFiles(), false));
+    }
+    if (file.getOptions().hasJavaGenerateEqualsAndHash()) {
+      options.add(new OptionElement(
+          JAVA_GENERATE_EQUALS_AND_HASH, Kind.BOOLEAN,
+          file.getOptions().getJavaGenerateEqualsAndHash(), false));
     }
     if (file.getOptions().hasJavaStringCheckUtf8()) {
       options.add(new OptionElement(
@@ -1240,6 +1249,11 @@ public class ProtobufSchema implements ParsedSchema {
       if (javaMultipleFiles != null) {
         schema.setJavaMultipleFiles(Boolean.parseBoolean(javaMultipleFiles.getValue().toString()));
       }
+      OptionElement javaGenerateEqualsAndHash = options.get(JAVA_GENERATE_EQUALS_AND_HASH);
+      if (javaGenerateEqualsAndHash != null) {
+        schema.setJavaGenerateEqualsAndHash(
+            Boolean.parseBoolean(javaGenerateEqualsAndHash.getValue().toString()));
+      }
       OptionElement javaStringCheckUtf8 = options.get(JAVA_STRING_CHECK_UTF8);
       if (javaStringCheckUtf8 != null) {
         schema.setJavaStringCheckUtf8(
@@ -1802,6 +1816,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public void validate() {
+    // Create a dynamic schema to resolve references
     toDynamicSchema();
   }
 
@@ -1866,7 +1881,30 @@ public class ProtobufSchema implements ParsedSchema {
     return canonicalString();
   }
 
+  public Descriptor toSpecificDescriptor(String originalPath) {
+    String clsName = fullName(originalPath);
+    if (clsName == null) {
+      return null;
+    }
+    try {
+      Class<?> cls = Class.forName(clsName);
+      Method parseMethod = cls.getDeclaredMethod("getDescriptor");
+      return (Descriptor) parseMethod.invoke(null);
+    } catch (ClassNotFoundException e) {
+      throw new IllegalArgumentException("Class " + clsName + " could not be found.");
+    } catch (NoSuchMethodException e) {
+      throw new IllegalArgumentException("Class " + clsName
+          + " is not a valid protobuf message class", e);
+    } catch (IllegalAccessException | InvocationTargetException e) {
+      throw new IllegalArgumentException("Not a valid protobuf builder");
+    }
+  }
+
   public String fullName() {
+    return fullName(null);
+  }
+
+  public String fullName(String originalPath) {
     Descriptor descriptor = toDescriptor();
     FileDescriptor fd = descriptor.getFile();
     DescriptorProtos.FileOptions o = fd.getOptions();
@@ -1875,6 +1913,23 @@ public class ProtobufSchema implements ParsedSchema {
     if (!o.getJavaMultipleFiles()) {
       if (o.hasJavaOuterClassname()) {
         outer = o.getJavaOuterClassname();
+      } else if (originalPath != null) {
+        String path = originalPath.replace(File.separatorChar, '.');
+        if (path.endsWith(".proto")) {
+          path = path.substring(0, path.length() - ".proto".length());
+        }
+        String[] parts = path.split("\\.");
+        if (parts.length > 0) {
+          outer = parts[parts.length - 1];
+          if (outer.length() > 0 && !Character.isUpperCase(outer.charAt(0))) {
+            if (outer.contains("_")) {
+              // Convert last part to upper camel case
+              outer = LOWER_UNDERSCORE.to(UPPER_CAMEL, outer);
+            } else {
+              outer = Character.toUpperCase(outer.charAt(0)) + outer.substring(1);
+            }
+          }
+        }
       } else {
         // Can't determine full name without either java_outer_classname or java_multiple_files
         return null;

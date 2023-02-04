@@ -48,7 +48,6 @@ import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
-import io.confluent.kafka.schemaregistry.protobuf.diff.Context.ExtendFieldElementInfo;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import java.io.IOException;
 import java.io.StringWriter;
@@ -59,13 +58,13 @@ import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import kotlin.Pair;
@@ -802,20 +801,27 @@ public class ProtobufSchemaUtils {
       FormatContext ctx, StringBuilder sb, Map<String, Object> valueMap) {
     int lastIndex = valueMap.size() - 1;
     int index = 0;
-    Collection<String> keys = valueMap.keySet();
     if (ctx.normalize()) {
-      keys = keys.stream().sorted().collect(Collectors.toList());
+      valueMap = valueMap.entrySet().stream()
+          .map(e -> {
+            String key = e.getKey();
+            Object value = e.getValue();
+            if (key.startsWith("[") && key.endsWith("]")) {
+              // Found an extension field
+              String fieldName = key.substring(1, key.length() - 1);
+              String resolved = ctx.resolve(ctx::getExtendFieldForFullName, fieldName, true);
+              if (resolved != null) {
+                return new Pair<>("[" + resolved + "]", value);
+              }
+            }
+            return new Pair<>(key, value);
+          })
+          .collect(Collectors.toMap(Pair::getFirst, Pair::getSecond,
+              (e1, e2) -> e1, TreeMap::new));
     }
-    for (String key : keys) {
-      Object value = valueMap.get(key);
-      if (ctx.normalize() && key.startsWith("[") && key.endsWith("]")) {
-        // Found an extension field
-        String fieldName = key.substring(1, key.length() - 1);
-        String resolved = ctx.resolve(ctx::getExtendFieldForFullName, fieldName, true);
-        if (resolved != null) {
-          key = "[" + resolved + "]";
-        }
-      }
+    for (Map.Entry<String, Object> entry : valueMap.entrySet()) {
+      String key = entry.getKey();
+      Object value = entry.getValue();
       String endl = index != lastIndex ? "," : "";
       String kv = new StringBuilder()
           .append(key)
@@ -983,13 +989,17 @@ public class ProtobufSchemaUtils {
 
   private static String formatNumber(FormatContext formatContext, Object value) {
     if (formatContext.normalize()) {
-      Number num;
-      if (value instanceof Number) {
-        num = (Number) value;
-      } else {
-        num = formatContext.parseNumber(value.toString());
+      try {
+        Number num;
+        if (value instanceof Number) {
+          num = (Number) value;
+        } else {
+          num = formatContext.parseNumber(value.toString());
+        }
+        value = formatContext.formatNumber(num);
+      } catch (NumberFormatException e) {
+        // ignore, could be -inf or nan for example
       }
-      value = formatContext.formatNumber(num);
     }
     return value.toString();
   }
@@ -1058,7 +1068,7 @@ public class ProtobufSchemaUtils {
                     o.isParenthesized())))
             .sorted(Comparator.comparing(OptionElement::getName))
             .collect(Collectors.groupingBy(OptionElement::getName,
-                LinkedHashMap::new,
+                LinkedHashMap::new,  // deterministic order
                 Collectors.toList()))
             .entrySet()
             .stream()
