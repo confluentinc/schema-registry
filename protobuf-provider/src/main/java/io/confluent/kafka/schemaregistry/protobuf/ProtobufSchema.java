@@ -1904,14 +1904,19 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public String fullName(String originalPath) {
-    Descriptor descriptor = toDescriptor();
-    FileDescriptor fd = descriptor.getFile();
-    DescriptorProtos.FileOptions o = fd.getOptions();
-    String p = o.hasJavaPackage() ? o.getJavaPackage() : fd.getPackage();
+    Map<String, OptionElement> options = mergeOptions(schemaObj.getOptions());
+    OptionElement javaPackageName = options.get(JAVA_PACKAGE);
+    OptionElement javaOuterClassname = options.get(JAVA_OUTER_CLASSNAME);
+    OptionElement javaMultipleFiles = options.get(JAVA_MULTIPLE_FILES);
+
+    String p = javaPackageName != null
+        ? javaPackageName.getValue().toString()
+        : schemaObj.getPackageName();
     String outer = "";
-    if (!o.getJavaMultipleFiles()) {
-      if (o.hasJavaOuterClassname()) {
-        outer = o.getJavaOuterClassname();
+    if (javaMultipleFiles == null
+        || !Boolean.parseBoolean(javaMultipleFiles.getValue().toString())) {
+      if (javaOuterClassname != null) {
+        outer = javaOuterClassname.getValue().toString();
       } else if (originalPath != null) {
         String path = originalPath.replace(File.separatorChar, '.');
         if (path.endsWith(".proto")) {
@@ -1922,25 +1927,22 @@ public class ProtobufSchema implements ParsedSchema {
           outer = underscoresToCamelCase(parts[parts.length - 1], true);
         }
       } else {
-        // Can't determine full name without either java_outer_classname or java_multiple_files
+        // Can't determine full name w/o either java_outer_classname or java_multiple_files=true
         return null;
       }
     }
     StringBuilder inner = new StringBuilder();
-    while (descriptor != null) {
-      if (inner.length() == 0) {
-        inner.insert(0, descriptor.getName());
-      } else {
-        inner.insert(0, descriptor.getName() + "$");
+    List<MessageElement> messageElems = toMessageElements(name());
+    for (MessageElement messageElem : messageElems) {
+      if (inner.length() > 0) {
+        inner.append("$");
       }
-      descriptor = descriptor.getContainingType();
+      inner.append(messageElem.getName());
     }
     String d1 = (!outer.isEmpty() || inner.length() != 0 ? "." : "");
     String d2 = (!outer.isEmpty() && inner.length() != 0 ? "$" : "");
     return p + d1 + outer + d2 + inner;
   }
-
-
 
   public MessageIndexes toMessageIndexes(String name) {
     return toMessageIndexes(name, false);
@@ -2009,6 +2011,24 @@ public class ProtobufSchema implements ParsedSchema {
       }
     }
     return null;
+  }
+
+  private List<MessageElement> toMessageElements(String name) {
+    List<MessageElement> messageElems = new ArrayList<>();
+    String[] parts = name.split("\\.");
+    List<TypeElement> types = schemaObj.getTypes();
+    for (String part : parts) {
+      for (TypeElement type : types) {
+        if (type instanceof MessageElement) {
+          if (type.getName().equals(part)) {
+            messageElems.add((MessageElement) type);
+            types = type.getNestedTypes();
+            break;
+          }
+        }
+      }
+    }
+    return messageElems;
   }
 
   public static String toMapEntry(String s) {
