@@ -337,6 +337,8 @@ public class ProtobufSchema implements ParsedSchema {
 
   private static final Base64.Decoder base64Decoder = Base64.getDecoder();
 
+  private static volatile Method extensionFields;
+
   public ProtobufSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null, null);
   }
@@ -696,8 +698,14 @@ public class ProtobufSchema implements ParsedSchema {
       ExtendableMessage<?> options) {
     // We use reflection to access getExtensionFields as an optimization over calling getAllFields
     try {
-      Method extensionFields = ExtendableMessage.class.getDeclaredMethod("getExtensionFields");
-      extensionFields.setAccessible(true);
+      if (extensionFields == null) {
+        synchronized (ProtobufSchema.class) {
+          if (extensionFields == null) {
+            extensionFields = ExtendableMessage.class.getDeclaredMethod("getExtensionFields");
+          }
+        }
+        extensionFields.setAccessible(true);
+      }
       return (Map<Descriptors.FieldDescriptor, Object>) extensionFields.invoke(options);
     } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
       throw new RuntimeException(e);
