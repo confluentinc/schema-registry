@@ -1947,9 +1947,6 @@ public class ProtobufSchema implements ParsedSchema {
     OptionElement javaOuterClassname = options.get(JAVA_OUTER_CLASSNAME);
     OptionElement javaMultipleFiles = options.get(JAVA_MULTIPLE_FILES);
 
-    String p = javaPackageName != null
-        ? javaPackageName.getValue().toString()
-        : schemaObj.getPackageName();
     String outer = "";
     if (javaMultipleFiles == null
         || !Boolean.parseBoolean(javaMultipleFiles.getValue().toString())) {
@@ -1969,6 +1966,9 @@ public class ProtobufSchema implements ParsedSchema {
         return null;
       }
     }
+    String p = javaPackageName != null
+        ? javaPackageName.getValue().toString()
+        : schemaObj.getPackageName();
     StringBuilder inner = new StringBuilder();
     String typeName = name;
     if (typeName == null && !schemaObj.getTypes().isEmpty()) {
