@@ -1816,7 +1816,6 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public void validate() {
-    // Create a dynamic schema to resolve references
     toDynamicSchema();
   }
 
@@ -1920,15 +1919,7 @@ public class ProtobufSchema implements ParsedSchema {
         }
         String[] parts = path.split("\\.");
         if (parts.length > 0) {
-          outer = parts[parts.length - 1];
-          if (outer.length() > 0 && !Character.isUpperCase(outer.charAt(0))) {
-            if (outer.contains("_")) {
-              // Convert last part to upper camel case
-              outer = LOWER_UNDERSCORE.to(UPPER_CAMEL, outer);
-            } else {
-              outer = Character.toUpperCase(outer.charAt(0)) + outer.substring(1);
-            }
-          }
+          outer = underscoresToCamelCase(parts[parts.length - 1], true);
         }
       } else {
         // Can't determine full name without either java_outer_classname or java_multiple_files
@@ -1948,6 +1939,8 @@ public class ProtobufSchema implements ParsedSchema {
     String d2 = (!outer.isEmpty() && inner.length() != 0 ? "$" : "");
     return p + d1 + outer + d2 + inner;
   }
+
+
 
   public MessageIndexes toMessageIndexes(String name) {
     return toMessageIndexes(name, false);
@@ -2034,6 +2027,38 @@ public class ProtobufSchema implements ParsedSchema {
       parts[parts.length - 1] = lastPart;
     }
     return String.join(".", parts);
+  }
+
+  // Adapted from java_helpers.cc in protobuf
+  public static String underscoresToCamelCase(String input, boolean capitalizeNextLetter) {
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < input.length(); i++) {
+      char c = input.charAt(i);
+      if ('a' <= c && c <= 'z') {
+        if (capitalizeNextLetter) {
+          result.append(Character.toUpperCase(c));
+        } else {
+          result.append(c);
+        }
+        capitalizeNextLetter = false;
+      } else if ('A' <= c && c <= 'Z') {
+        if (i == 0 && !capitalizeNextLetter) {
+          // Force first letter to lower-case unless explicitly told to
+          // capitalize it.
+          result.append(Character.toLowerCase(c));
+        } else {
+          // Capital letters after the first are left as-is.
+          result.append(c);
+        }
+        capitalizeNextLetter = false;
+      } else if ('0' <= c && c <= '9') {
+        result.append(c);
+        capitalizeNextLetter = true;
+      } else {
+        capitalizeNextLetter = true;
+      }
+    }
+    return result.toString();
   }
 
   public enum Format {
