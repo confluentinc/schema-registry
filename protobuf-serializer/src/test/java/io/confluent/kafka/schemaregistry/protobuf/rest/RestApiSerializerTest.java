@@ -403,6 +403,16 @@ public class RestApiSerializerTest extends ClusterTestHarness {
       String schemaString,
       List<SchemaReference> references,
       int expectedId,
+      String subject
+  ) throws IOException, RestClientException {
+    registerAndVerifySchema(restService, schemaString, references, expectedId, subject, false);
+  }
+
+  public static void registerAndVerifySchema(
+      RestService restService,
+      String schemaString,
+      List<SchemaReference> references,
+      int expectedId,
       String subject,
       boolean normalize
   ) throws IOException, RestClientException {
