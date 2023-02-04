@@ -42,6 +42,7 @@ import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.Descriptors.GenericDescriptor;
 import com.google.protobuf.DurationProto;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.EmptyProto;
@@ -403,6 +404,20 @@ public class ProtobufSchema implements ParsedSchema {
     this.schemaObj = toProtoFile(enumDescriptor.getFile(), dependencies);
     this.version = null;
     this.name = enumDescriptor.getFullName();
+    this.references = Collections.unmodifiableList(references);
+    this.dependencies = Collections.unmodifiableMap(dependencies);
+    this.descriptor = null;
+  }
+
+  public ProtobufSchema(FileDescriptor fileDescriptor) {
+    this(fileDescriptor, Collections.emptyList());
+  }
+
+  public ProtobufSchema(FileDescriptor fileDescriptor, List<SchemaReference> references) {
+    Map<String, ProtoFileElement> dependencies = new HashMap<>();
+    this.schemaObj = toProtoFile(fileDescriptor, dependencies);
+    this.version = null;
+    this.name = null;
     this.references = Collections.unmodifiableList(references);
     this.dependencies = Collections.unmodifiableMap(dependencies);
     this.descriptor = null;
@@ -1903,7 +1918,7 @@ public class ProtobufSchema implements ParsedSchema {
     return canonicalString();
   }
 
-  public Descriptor toSpecificDescriptor(String originalPath) {
+  public GenericDescriptor toSpecificDescriptor(String originalPath) {
     String clsName = fullName(originalPath);
     if (clsName == null) {
       return null;
@@ -1911,7 +1926,7 @@ public class ProtobufSchema implements ParsedSchema {
     try {
       Class<?> cls = Class.forName(clsName);
       Method parseMethod = cls.getDeclaredMethod("getDescriptor");
-      return (Descriptor) parseMethod.invoke(null);
+      return (GenericDescriptor) parseMethod.invoke(null);
     } catch (ClassNotFoundException e) {
       throw new IllegalArgumentException("Class " + clsName + " could not be found.");
     } catch (NoSuchMethodException e) {
@@ -1955,12 +1970,16 @@ public class ProtobufSchema implements ParsedSchema {
       }
     }
     StringBuilder inner = new StringBuilder();
-    List<MessageElement> messageElems = toMessageElements(name());
-    for (MessageElement messageElem : messageElems) {
+    String typeName = name;
+    if (typeName == null && !schemaObj.getTypes().isEmpty()) {
+      typeName = name();
+    }
+    List<TypeElement> typeElems = toTypeElements(typeName);
+    for (TypeElement typeElem : typeElems) {
       if (inner.length() > 0) {
         inner.append("$");
       }
-      inner.append(messageElem.getName());
+      inner.append(typeElem.getName());
     }
     String d1 = (!outer.isEmpty() || inner.length() != 0 ? "." : "");
     String d2 = (!outer.isEmpty() && inner.length() != 0 ? "$" : "");
@@ -2036,22 +2055,23 @@ public class ProtobufSchema implements ParsedSchema {
     return null;
   }
 
-  private List<MessageElement> toMessageElements(String name) {
-    List<MessageElement> messageElems = new ArrayList<>();
+  private List<TypeElement> toTypeElements(String name) {
+    List<TypeElement> typeElems = new ArrayList<>();
+    if (name == null) {
+      return Collections.emptyList();
+    }
     String[] parts = name.split("\\.");
     List<TypeElement> types = schemaObj.getTypes();
     for (String part : parts) {
       for (TypeElement type : types) {
-        if (type instanceof MessageElement) {
-          if (type.getName().equals(part)) {
-            messageElems.add((MessageElement) type);
-            types = type.getNestedTypes();
-            break;
-          }
+        if (type.getName().equals(part)) {
+          typeElems.add(type);
+          types = type.getNestedTypes();
+          break;
         }
       }
     }
-    return messageElems;
+    return typeElems;
   }
 
   public static String toMapEntry(String s) {
