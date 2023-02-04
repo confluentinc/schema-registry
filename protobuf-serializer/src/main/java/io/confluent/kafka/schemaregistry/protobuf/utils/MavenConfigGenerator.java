@@ -37,12 +37,6 @@ public class MavenConfigGenerator {
     String outputFile = args.length > 1 ? args[1] : null;
     String replacementChar = args.length > 2 ? args[2] : null;
 
-    /*
-    inputDir = "/Users/ryokota/code/work/square/2023-02-02-bug/square-ipload2";
-    outputFile = "/tmp/all.txt";
-    replacementChar = ".";
-    */
-
     Map<Path, List<String>> schemas = new TreeMap<>();
     Path dir = Paths.get(inputDir);
     Files.walk(dir).forEach(path -> {
