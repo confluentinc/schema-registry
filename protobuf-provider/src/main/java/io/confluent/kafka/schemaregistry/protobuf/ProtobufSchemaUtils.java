@@ -1064,12 +1064,20 @@ public class ProtobufSchemaUtils {
       if (normalize) {
         options = options.stream()
             // qualify names and transform from Kind.OPTION to Kind.MAP
-            .map(o -> !o.isParenthesized() ? o
-                : transform(new OptionElement(
-                    resolve(this::getExtendFieldForFullName, o.getName(), true),
-                    o.getKind(),
-                    o.getValue(),
-                    o.isParenthesized())))
+            .map(o -> {
+              if (o.isParenthesized()) {
+                String resolved = resolve(this::getExtendFieldForFullName, o.getName(), true);
+                if (resolved != null) {
+                  return transform(new OptionElement(
+                      resolved,
+                      o.getKind(),
+                      o.getValue(),
+                      o.isParenthesized())
+                  );
+                }
+              }
+              return o;
+            })
             .sorted(Comparator.comparing(OptionElement::getName))
             .collect(Collectors.groupingBy(OptionElement::getName,
                 LinkedHashMap::new,  // deterministic order
