@@ -847,7 +847,9 @@ public class ProtobufSchemaUtils {
       sb.append('}');
     } else if (value instanceof List) {
       List<Object> list = (List<Object>) value;
-      if (ctx.normalize() && list.size() == 1) {
+      if (ctx.normalize() && list.isEmpty()) {
+        // noop
+      } else if (ctx.normalize() && list.size() == 1) {
         sb.append(formatOptionMapOrListValue(ctx, list.get(0)));
       } else {
         sb.append("[\n");

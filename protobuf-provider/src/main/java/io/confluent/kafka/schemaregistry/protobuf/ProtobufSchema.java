@@ -682,11 +682,26 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   private static List<OptionElement> toCustomOptions(ExtendableMessage<?> options) {
-    return options.getAllFields().entrySet().stream()
+    // Uncomment this in case the getExtensionFields method is deprecated
+    //return options.getAllFields().entrySet().stream()
+    return getExtensionFields(options).entrySet().stream()
         .filter(e -> e.getKey().isExtension()
             && !e.getKey().getFullName().startsWith(CONFLUENT_PREFIX))
         .flatMap(e -> toOptionElements(e.getKey().getFullName(), e.getValue()))
         .collect(Collectors.toList());
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<Descriptors.FieldDescriptor, Object> getExtensionFields(
+      ExtendableMessage<?> options) {
+    // We use reflection to access getExtensionFields as an optimization over calling getAllFields
+    try {
+      Method extensionFields = ExtendableMessage.class.getDeclaredMethod("getExtensionFields");
+      extensionFields.setAccessible(true);
+      return (Map<Descriptors.FieldDescriptor, Object>) extensionFields.invoke(options);
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private static Stream<OptionElement> toOptionElements(String name, Object value) {
