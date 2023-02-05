@@ -520,6 +520,15 @@ public class DynamicSchema {
     }
 
     // Note: added
+    public Builder setJavaGenerateEqualsAndHash(boolean javaGenerateEqualsAndHash) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setJavaGenerateEqualsAndHash(javaGenerateEqualsAndHash);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
     public Builder setJavaStringCheckUtf8(boolean javaStringCheckUtf8) {
       FileOptions.Builder optionsBuilder =
           DescriptorProtos.FileOptions.newBuilder();
