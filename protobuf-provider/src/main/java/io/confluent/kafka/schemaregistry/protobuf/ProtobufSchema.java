@@ -47,6 +47,7 @@ import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor.Type;
 import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.Descriptors.GenericDescriptor;
 import com.google.protobuf.DurationProto;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.EmptyProto;
@@ -106,6 +107,9 @@ import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
 import java.io.IOException;
+import java.io.File;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -173,6 +177,7 @@ public class ProtobufSchema implements ParsedSchema {
   private static final String JAVA_PACKAGE = "java_package";
   private static final String JAVA_OUTER_CLASSNAME = "java_outer_classname";
   private static final String JAVA_MULTIPLE_FILES = "java_multiple_files";
+  private static final String JAVA_GENERATE_EQUALS_AND_HASH = "java_generate_equals_and_hash";
   private static final String JAVA_STRING_CHECK_UTF8 = "java_string_check_utf8";
   private static final String OPTIMIZE_FOR = "optimize_for";
   private static final String GO_PACKAGE = "go_package";
@@ -361,6 +366,8 @@ public class ProtobufSchema implements ParsedSchema {
 
   private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
 
+  private static volatile Method extensionFields;
+
   public ProtobufSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null, null);
   }
@@ -443,6 +450,22 @@ public class ProtobufSchema implements ParsedSchema {
     this.schemaObj = toProtoFile(enumDescriptor.getFile(), dependencies);
     this.version = null;
     this.name = enumDescriptor.getFullName();
+    this.references = Collections.unmodifiableList(references);
+    this.dependencies = Collections.unmodifiableMap(dependencies);
+    this.metadata = null;
+    this.ruleSet = null;
+    this.descriptor = null;
+  }
+
+  public ProtobufSchema(FileDescriptor fileDescriptor) {
+    this(fileDescriptor, Collections.emptyList());
+  }
+
+  public ProtobufSchema(FileDescriptor fileDescriptor, List<SchemaReference> references) {
+    Map<String, ProtoFileElement> dependencies = new HashMap<>();
+    this.schemaObj = toProtoFile(fileDescriptor, dependencies);
+    this.version = null;
+    this.name = null;
     this.references = Collections.unmodifiableList(references);
     this.dependencies = Collections.unmodifiableMap(dependencies);
     this.metadata = null;
@@ -672,6 +695,11 @@ public class ProtobufSchema implements ParsedSchema {
       options.add(new OptionElement(
           JAVA_MULTIPLE_FILES, Kind.BOOLEAN, file.getOptions().getJavaMultipleFiles(), false));
     }
+    if (file.getOptions().hasJavaGenerateEqualsAndHash()) {
+      options.add(new OptionElement(
+          JAVA_GENERATE_EQUALS_AND_HASH, Kind.BOOLEAN,
+          file.getOptions().getJavaGenerateEqualsAndHash(), false));
+    }
     if (file.getOptions().hasJavaStringCheckUtf8()) {
       options.add(new OptionElement(
           JAVA_STRING_CHECK_UTF8, Kind.BOOLEAN, file.getOptions().getJavaStringCheckUtf8(), false));
@@ -777,11 +805,32 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   private static List<OptionElement> toCustomOptions(ExtendableMessage<?> options) {
-    return options.getAllFields().entrySet().stream()
+    // Uncomment this in case the getExtensionFields method is deprecated
+    //return options.getAllFields().entrySet().stream()
+    return getExtensionFields(options).entrySet().stream()
         .filter(e -> e.getKey().isExtension()
             && !e.getKey().getFullName().startsWith(CONFLUENT_PREFIX))
         .flatMap(e -> toOptionElements(e.getKey().getFullName(), e.getValue()))
         .collect(Collectors.toList());
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<Descriptors.FieldDescriptor, Object> getExtensionFields(
+      ExtendableMessage<?> options) {
+    // We use reflection to access getExtensionFields as an optimization over calling getAllFields
+    try {
+      if (extensionFields == null) {
+        synchronized (ProtobufSchema.class) {
+          if (extensionFields == null) {
+            extensionFields = ExtendableMessage.class.getDeclaredMethod("getExtensionFields");
+          }
+        }
+        extensionFields.setAccessible(true);
+      }
+      return (Map<Descriptors.FieldDescriptor, Object>) extensionFields.invoke(options);
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private static Stream<OptionElement> toOptionElements(String name, Object value) {
@@ -837,10 +886,14 @@ public class ProtobufSchema implements ParsedSchema {
 
   private static Map<String, Object> toOptionMap(Message message) {
     return message.getAllFields().entrySet().stream()
-        .map(e -> new Pair<>(e.getKey().getName(), toOptionValue(e.getValue(), true)))
+        .map(e -> new Pair<>(toOptionMapKey(e.getKey()), toOptionValue(e.getValue(), true)))
         .filter(p -> p.getSecond() != null)
         .collect(Collectors.toMap(Pair::getFirst, Pair::getSecond,
             (e1, e2) -> e1, LinkedHashMap::new));
+  }
+
+  private static String toOptionMapKey(FieldDescriptor field) {
+    return field.isExtension() ? "[" + field.getFullName() + "]" : field.getName();
   }
 
   private static MessageElement toMessage(FileDescriptorProto file, DescriptorProto descriptor) {
@@ -1340,6 +1393,11 @@ public class ProtobufSchema implements ParsedSchema {
       OptionElement javaMultipleFiles = options.get(JAVA_MULTIPLE_FILES);
       if (javaMultipleFiles != null) {
         schema.setJavaMultipleFiles(Boolean.parseBoolean(javaMultipleFiles.getValue().toString()));
+      }
+      OptionElement javaGenerateEqualsAndHash = options.get(JAVA_GENERATE_EQUALS_AND_HASH);
+      if (javaGenerateEqualsAndHash != null) {
+        schema.setJavaGenerateEqualsAndHash(
+            Boolean.parseBoolean(javaGenerateEqualsAndHash.getValue().toString()));
       }
       OptionElement javaStringCheckUtf8 = options.get(JAVA_STRING_CHECK_UTF8);
       if (javaStringCheckUtf8 != null) {
@@ -1913,7 +1971,8 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public void validate() {
-    toDynamicSchema();
+    // Normalization will try to resolve types
+    normalize();
   }
 
   @Override
@@ -1970,28 +2029,68 @@ public class ProtobufSchema implements ParsedSchema {
     return canonicalString();
   }
 
+  public GenericDescriptor toSpecificDescriptor(String originalPath) {
+    String clsName = fullName(originalPath);
+    if (clsName == null) {
+      return null;
+    }
+    try {
+      Class<?> cls = Class.forName(clsName);
+      Method parseMethod = cls.getDeclaredMethod("getDescriptor");
+      return (GenericDescriptor) parseMethod.invoke(null);
+    } catch (ClassNotFoundException e) {
+      throw new IllegalArgumentException("Class " + clsName + " could not be found.");
+    } catch (NoSuchMethodException e) {
+      throw new IllegalArgumentException("Class " + clsName
+          + " is not a valid protobuf message class", e);
+    } catch (IllegalAccessException | InvocationTargetException e) {
+      throw new IllegalArgumentException("Not a valid protobuf builder");
+    }
+  }
+
   public String fullName() {
-    Descriptor descriptor = toDescriptor();
-    FileDescriptor fd = descriptor.getFile();
-    DescriptorProtos.FileOptions o = fd.getOptions();
-    String p = o.hasJavaPackage() ? o.getJavaPackage() : fd.getPackage();
+    return fullName(null);
+  }
+
+  public String fullName(String originalPath) {
+    Map<String, OptionElement> options = mergeOptions(schemaObj.getOptions());
+    OptionElement javaPackageName = options.get(JAVA_PACKAGE);
+    OptionElement javaOuterClassname = options.get(JAVA_OUTER_CLASSNAME);
+    OptionElement javaMultipleFiles = options.get(JAVA_MULTIPLE_FILES);
+
     String outer = "";
-    if (!o.getJavaMultipleFiles()) {
-      if (o.hasJavaOuterClassname()) {
-        outer = o.getJavaOuterClassname();
+    if (javaMultipleFiles == null
+        || !Boolean.parseBoolean(javaMultipleFiles.getValue().toString())) {
+      if (javaOuterClassname != null) {
+        outer = javaOuterClassname.getValue().toString();
+      } else if (originalPath != null) {
+        String path = originalPath.replace(File.separatorChar, '.');
+        if (path.endsWith(".proto")) {
+          path = path.substring(0, path.length() - ".proto".length());
+        }
+        String[] parts = path.split("\\.");
+        if (parts.length > 0) {
+          outer = underscoresToCamelCase(parts[parts.length - 1], true);
+        }
       } else {
-        // Can't determine full name without either java_outer_classname or java_multiple_files
+        // Can't determine full name w/o either java_outer_classname or java_multiple_files=true
         return null;
       }
     }
+    String p = javaPackageName != null
+        ? javaPackageName.getValue().toString()
+        : schemaObj.getPackageName();
     StringBuilder inner = new StringBuilder();
-    while (descriptor != null) {
-      if (inner.length() == 0) {
-        inner.insert(0, descriptor.getName());
-      } else {
-        inner.insert(0, descriptor.getName() + "$");
+    String typeName = name;
+    if (typeName == null && !schemaObj.getTypes().isEmpty()) {
+      typeName = name();
+    }
+    List<TypeElement> typeElems = toTypeElements(typeName);
+    for (TypeElement typeElem : typeElems) {
+      if (inner.length() > 0) {
+        inner.append("$");
       }
-      descriptor = descriptor.getContainingType();
+      inner.append(typeElem.getName());
     }
     String d1 = (!outer.isEmpty() || inner.length() != 0 ? "." : "");
     String d2 = (!outer.isEmpty() && inner.length() != 0 ? "$" : "");
@@ -2065,6 +2164,25 @@ public class ProtobufSchema implements ParsedSchema {
       }
     }
     return null;
+  }
+
+  private List<TypeElement> toTypeElements(String name) {
+    List<TypeElement> typeElems = new ArrayList<>();
+    if (name == null) {
+      return Collections.emptyList();
+    }
+    String[] parts = name.split("\\.");
+    List<TypeElement> types = schemaObj.getTypes();
+    for (String part : parts) {
+      for (TypeElement type : types) {
+        if (type.getName().equals(part)) {
+          typeElems.add(type);
+          types = type.getNestedTypes();
+          break;
+        }
+      }
+    }
+    return typeElems;
   }
 
   public static String toMapEntry(String s) {
@@ -2280,6 +2398,38 @@ public class ProtobufSchema implements ParsedSchema {
       }
       ((ObjectNode) entityNode).replace("options", jsonMapper.valueToTree(mergedOptions.values()));
     }
+  }
+
+  // Adapted from java_helpers.cc in protobuf
+  public static String underscoresToCamelCase(String input, boolean capitalizeNextLetter) {
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < input.length(); i++) {
+      char c = input.charAt(i);
+      if ('a' <= c && c <= 'z') {
+        if (capitalizeNextLetter) {
+          result.append(Character.toUpperCase(c));
+        } else {
+          result.append(c);
+        }
+        capitalizeNextLetter = false;
+      } else if ('A' <= c && c <= 'Z') {
+        if (i == 0 && !capitalizeNextLetter) {
+          // Force first letter to lower-case unless explicitly told to
+          // capitalize it.
+          result.append(Character.toLowerCase(c));
+        } else {
+          // Capital letters after the first are left as-is.
+          result.append(c);
+        }
+        capitalizeNextLetter = false;
+      } else if ('0' <= c && c <= '9') {
+        result.append(c);
+        capitalizeNextLetter = true;
+      } else {
+        capitalizeNextLetter = true;
+      }
+    }
+    return result.toString();
   }
 
   public enum Format {
