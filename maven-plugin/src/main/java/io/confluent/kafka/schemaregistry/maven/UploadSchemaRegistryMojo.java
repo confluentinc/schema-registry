@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import com.google.common.base.Preconditions;
-import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
@@ -137,10 +136,17 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
   protected static String decode(String subject) {
     try {
       // Replace _x colon with percent sign, since percent is not allowed in XML name
-      subject = subject.replaceAll(PERCENT_REPLACEMENT, "%");
-      return URLDecoder.decode(subject, "UTF-8");
-    } catch (UnsupportedEncodingException e) {
-      throw new RuntimeException(e);
+      String newSubject = subject.replaceAll(PERCENT_REPLACEMENT, "%");
+      return URLDecoder.decode(newSubject, "UTF-8");
+    } catch (Exception e) {
+      try {
+        // Try just replacing _x2F (slash), and ignore other occurrences of _x
+        String newSubject = subject.replaceAll(PERCENT_REPLACEMENT + "2F", "%2F");
+        return URLDecoder.decode(newSubject, "UTF-8");
+      } catch (Exception e2) {
+        // Not a URL encoded string, return original subject
+        return subject;
+      }
     }
   }
 
