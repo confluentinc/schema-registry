@@ -48,7 +48,6 @@ public class MavenConfigGenerator {
             new OutputStreamWriter(new FileOutputStream(outputFile), StandardCharsets.UTF_8))
         : new PrintWriter(
             new OutputStreamWriter(System.out, StandardCharsets.UTF_8));
-    printWriter.println("<decodeSubject>false</decodeSubject>");
     printSubjects(printWriter, schemas, replacementChar);
     printSchemaTypes(printWriter, schemas, replacementChar);
     printReferences(printWriter, schemas, replacementChar);
@@ -70,7 +69,7 @@ public class MavenConfigGenerator {
     }
   }
 
-  private static String toSubject(String path, String replacementChar) {
+  private static String toSubject(String path, String replacementChar, boolean inTag) {
     String subject;
     if (path.endsWith(".proto")) {
       subject = path.substring(0, path.length() - ".proto".length());
@@ -79,6 +78,8 @@ public class MavenConfigGenerator {
     }
     if (replacementChar != null) {
       subject = subject.replace(String.valueOf(File.separatorChar), replacementChar);
+    } else if (inTag) {
+      subject = subject.replace(String.valueOf(File.separatorChar), "_x2F"); // escaped %2F
     }
     return subject;
   }
@@ -93,7 +94,7 @@ public class MavenConfigGenerator {
     printWriter.println("<schemaTypes>");
     for (Map.Entry<Path, List<String>> entry : schemas.entrySet()) {
       Path path = entry.getKey();
-      String subject = toSubject(path.toString(), replacementChar);
+      String subject = toSubject(path.toString(), replacementChar, true);
       printWriter.print("  <");
       printWriter.print(subject);
       printWriter.print(">PROTOBUF</");
@@ -108,7 +109,7 @@ public class MavenConfigGenerator {
     printWriter.println("<subjects>");
     for (Map.Entry<Path, List<String>> entry : schemas.entrySet()) {
       Path path = entry.getKey();
-      String subject = toSubject(path.toString(), replacementChar);
+      String subject = toSubject(path.toString(), replacementChar, true);
       printWriter.print("  <");
       printWriter.print(subject);
       printWriter.print(">");
@@ -126,7 +127,7 @@ public class MavenConfigGenerator {
     for (Map.Entry<Path, List<String>> entry : schemas.entrySet()) {
       Path path = entry.getKey();
       List<String> imports = entry.getValue();
-      String subject = toSubject(path.toString(), replacementChar);
+      String subject = toSubject(path.toString(), replacementChar, true);
       if (imports.isEmpty()) {
         printWriter.print("  <");
         printWriter.print(subject);
@@ -141,7 +142,7 @@ public class MavenConfigGenerator {
           printWriter.print(dep);
           printWriter.println("</name>");
           printWriter.print("      <subject>");
-          printWriter.print(toSubject(dep, replacementChar));
+          printWriter.print(toSubject(dep, replacementChar, false));
           printWriter.println("</subject>");
           printWriter.println("    </reference>");
 
