@@ -95,6 +95,34 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
   }
 
   @Test
+  public void registerSubjectWithSlashAndUnderscoreX() throws IOException, MojoFailureException, MojoExecutionException {
+    Map<String, Integer> expectedVersions = new LinkedHashMap<>();
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    int version = 1;
+    for (int i = 0; i < 100; i++) {
+      // Slash is _x2F
+      String keySubject = String.format("TestSubject%03d_x2Fkey_x", i);
+      String valueSubject = String.format("TestSubject%03d_x2Fvalue_x", i);
+      Schema keySchema = Schema.create(Schema.Type.STRING);
+      Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+      File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
+      File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
+      writeSchema(keySchemaFile, keySchema);
+      writeSchema(valueSchemaFile, valueSchema);
+      subjectToFile.put(keySubject, keySchemaFile);
+      expectedVersions.put(UploadSchemaRegistryMojo.decode(keySubject), version);
+      subjectToFile.put(valueSubject, valueSchemaFile);
+      expectedVersions.put(UploadSchemaRegistryMojo.decode(valueSubject), version);
+    }
+
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+
+    Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
+  }
+
+  @Test
   public void registerSubjectWithSlashDontDecode() throws IOException, MojoFailureException, MojoExecutionException {
     Map<String, Integer> expectedVersions = new LinkedHashMap<>();
 
