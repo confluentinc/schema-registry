@@ -110,6 +110,8 @@ import java.io.IOException;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -2064,13 +2066,16 @@ public class ProtobufSchema implements ParsedSchema {
       if (javaOuterClassname != null) {
         outer = javaOuterClassname.getValue().toString();
       } else if (originalPath != null) {
-        String path = originalPath.replace(File.separatorChar, '.');
-        if (path.endsWith(".proto")) {
-          path = path.substring(0, path.length() - ".proto".length());
-        }
-        String[] parts = path.split("\\.");
-        if (parts.length > 0) {
-          outer = underscoresToCamelCase(parts[parts.length - 1], true);
+        Path path = Paths.get(originalPath).getFileName();
+        if (path != null) {
+          String fileName = path.toString();
+          if (fileName.endsWith(".proto")) {
+            fileName = fileName.substring(0, fileName.length() - ".proto".length());
+          }
+          outer = underscoresToCamelCase(fileName, true);
+          if (hasConflictingClassName(outer)) {
+            outer += "OuterClass";
+          }
         }
       } else {
         // Can't determine full name w/o either java_outer_classname or java_multiple_files=true
@@ -2095,6 +2100,39 @@ public class ProtobufSchema implements ParsedSchema {
     String d1 = (!outer.isEmpty() || inner.length() != 0 ? "." : "");
     String d2 = (!outer.isEmpty() && inner.length() != 0 ? "$" : "");
     return p + d1 + outer + d2 + inner;
+  }
+
+  private boolean hasConflictingClassName(String className) {
+    for (TypeElement type : schemaObj.getTypes()) {
+      if (type.getName().equals(className)) {
+        return true;
+      }
+      if (type instanceof MessageElement) {
+        if (messageHasConflictingClassName(className, ((MessageElement) type))) {
+          return true;
+        }
+      }
+    }
+    for (ServiceElement service : schemaObj.getServices()) {
+      if (service.getName().equals(className)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean messageHasConflictingClassName(String className, MessageElement message) {
+    for (TypeElement type : message.getNestedTypes()) {
+      if (type.getName().equals(className)) {
+        return true;
+      }
+      if (type instanceof MessageElement) {
+        if (messageHasConflictingClassName(className, ((MessageElement) type))) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   public MessageIndexes toMessageIndexes(String name) {
