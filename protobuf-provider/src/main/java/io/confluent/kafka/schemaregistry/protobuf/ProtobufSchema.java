@@ -93,9 +93,10 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
-import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.stream.Stream;
 import kotlin.Pair;
@@ -1954,13 +1955,13 @@ public class ProtobufSchema implements ParsedSchema {
       if (javaOuterClassname != null) {
         outer = javaOuterClassname.getValue().toString();
       } else if (originalPath != null) {
-        String path = originalPath.replace(File.separatorChar, '.');
-        if (path.endsWith(".proto")) {
-          path = path.substring(0, path.length() - ".proto".length());
-        }
-        String[] parts = path.split("\\.");
-        if (parts.length > 0) {
-          outer = underscoresToCamelCase(parts[parts.length - 1], true);
+        Path path = Paths.get(originalPath).getFileName();
+        if (path != null) {
+          String fileName = path.toString();
+          if (fileName.endsWith(".proto")) {
+            fileName = fileName.substring(0, fileName.length() - ".proto".length());
+          }
+          outer = underscoresToCamelCase(fileName, true);
           if (hasConflictingClassName(outer)) {
             outer += "OuterClass";
           }
