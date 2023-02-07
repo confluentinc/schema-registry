@@ -304,6 +304,7 @@ public class ProtobufData {
   private boolean useWrapperForNullables;
   private boolean useWrapperForRawPrimitives;
   private boolean generateStructForNulls;
+  private boolean generateIndexForUnions;
 
   public ProtobufData() {
     this(new ProtobufDataConfig.Builder().with(
@@ -329,6 +330,7 @@ public class ProtobufData {
     this.useWrapperForNullables = protobufDataConfig.useWrapperForNullables();
     this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
     this.generateStructForNulls = protobufDataConfig.generateStructForNulls();
+    this.generateIndexForUnions = protobufDataConfig.generateIndexForUnions();
   }
 
   /**
@@ -1359,7 +1361,11 @@ public class ProtobufData {
   }
 
   private String unionFieldName(OneofDescriptor oneofDescriptor) {
-    return oneofDescriptor.getName() + "_" + oneofDescriptor.getIndex();
+    String name = oneofDescriptor.getName();
+    if (generateIndexForUnions) {
+      name += "_" + oneofDescriptor.getIndex();
+    }
+    return name;
   }
 
   private void setStructField(

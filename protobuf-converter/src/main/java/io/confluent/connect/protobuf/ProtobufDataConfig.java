@@ -64,6 +64,11 @@ public class ProtobufDataConfig extends AbstractDataConfig {
   public static final String GENERATE_STRUCT_FOR_NULLS_DOC = "Whether to generate a default struct "
       + "for null messages";
 
+  public static final String GENERATE_INDEX_FOR_UNIONS_CONFIG = "generate.index.for.unions";
+  public static final boolean GENERATE_INDEX_FOR_UNIONS_DEFAULT = true;
+  public static final String GENERATE_INDEX_FOR_UNIONS_DOC = "Whether to suffix union"
+      + "names with an underscore followed by an index";
+
   public static ConfigDef baseConfigDef() {
     return AbstractDataConfig.baseConfigDef()
         .define(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG,
@@ -102,7 +107,12 @@ public class ProtobufDataConfig extends AbstractDataConfig {
             ConfigDef.Type.BOOLEAN,
             GENERATE_STRUCT_FOR_NULLS_DEFAULT,
             ConfigDef.Importance.MEDIUM,
-            GENERATE_STRUCT_FOR_NULLS_DOC
+            GENERATE_STRUCT_FOR_NULLS_DOC)
+        .define(GENERATE_INDEX_FOR_UNIONS_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            GENERATE_INDEX_FOR_UNIONS_DEFAULT,
+            ConfigDef.Importance.LOW,
+            GENERATE_INDEX_FOR_UNIONS_DOC
         );
   }
 
@@ -140,6 +150,10 @@ public class ProtobufDataConfig extends AbstractDataConfig {
 
   public boolean generateStructForNulls() {
     return this.getBoolean(GENERATE_STRUCT_FOR_NULLS_CONFIG);
+  }
+
+  public boolean generateIndexForUnions() {
+    return this.getBoolean(GENERATE_INDEX_FOR_UNIONS_CONFIG);
   }
 
   public static class Builder {
