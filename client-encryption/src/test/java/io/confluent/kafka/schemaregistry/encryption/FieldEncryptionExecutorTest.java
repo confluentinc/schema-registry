@@ -152,8 +152,8 @@ public abstract class FieldEncryptionExecutorTest {
     FieldEncryptionExecutor executor =
         (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE);
     Cryptor spy = spy(new Cryptor(Cryptor.RANDOM_KEY_FORMAT));
-    doThrow(new GeneralSecurityException()).when(spy).encrypt(any(), any());
-    doThrow(new GeneralSecurityException()).when(spy).decrypt(any(), any());
+    doThrow(new GeneralSecurityException()).when(spy).encrypt(any(), any(), any());
+    doThrow(new GeneralSecurityException()).when(spy).decrypt(any(), any(), any());
     if (executor != null) {
       executor.setCryptor(Cryptor.RANDOM_KEY_FORMAT, spy);
     }
@@ -207,10 +207,10 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(avroSerializer);
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
     cryptor = addSpyToCryptor(avroDeserializer);
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
   }
 
@@ -234,10 +234,10 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(reflectionAvroSerializer);
     byte[] bytes = reflectionAvroSerializer.serialize(topic, headers, widget);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
     cryptor = addSpyToCryptor(reflectionAvroDeserializer);
     Object obj = reflectionAvroDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
 
     assertTrue(
         "Returned object should be a Widget",
@@ -270,10 +270,10 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(avroSerializerWithoutKey);
     byte[] bytes = avroSerializerWithoutKey.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
     cryptor = addSpyToCryptor(avroDeserializerWithoutKey);
     GenericRecord record = (GenericRecord) avroDeserializerWithoutKey.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
   }
 
@@ -309,10 +309,10 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer);
     byte[] bytes = jsonSchemaSerializer.serialize(topic, headers, widget);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
     cryptor = addSpyToCryptor(jsonSchemaDeserializer);
     Object obj = jsonSchemaDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
 
     assertTrue(
         "Returned object should be a Widget",
@@ -377,10 +377,10 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer2);
     byte[] bytes = jsonSchemaSerializer2.serialize(topic, headers, widget);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
     cryptor = addSpyToCryptor(jsonSchemaDeserializer);
     Object obj = jsonSchemaDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
 
     assertTrue(
         "Returned object should be a Widget",
@@ -438,10 +438,10 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(protobufSerializer);
     byte[] bytes = protobufSerializer.serialize(topic, headers, widget);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
     cryptor = addSpyToCryptor(protobufDeserializer);
     Object obj = protobufDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
 
     assertTrue(
         "Returned object should be a Widget",
@@ -503,11 +503,11 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(avroSerializer);
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
 
     cryptor = addSpyToCryptor(avroDeserializer);
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name").toString());
   }
 
@@ -527,19 +527,19 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(avroSerializer);
     byte[] oldBytes = avroSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
 
     // Try to serialize with same headers, no encryption should happen
     expectedEncryptions = 0;
     cryptor = addSpyToCryptor(avroSerializer);
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
     assertArrayEquals(oldBytes, bytes);
 
     expectedEncryptions = 1;
     cryptor = addSpyToCryptor(avroDeserializer);
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
 
     // Try to deserialize with no headers, no decryption should happen
@@ -547,7 +547,7 @@ public abstract class FieldEncryptionExecutorTest {
     headers = new RecordHeaders();
     cryptor = addSpyToCryptor(avroDeserializer);
     record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertNotEquals("testUser", record.get("name")); // still encrypted
   }
 
@@ -577,7 +577,7 @@ public abstract class FieldEncryptionExecutorTest {
     headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(avroSerializer);
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
 
     addBadSpyToCryptor(avroDeserializer);
     try {
@@ -605,17 +605,17 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addBadSpyToCryptor(avroSerializer);
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
 
     // Run good serializer to get bytes
     headers = new RecordHeaders();
     cryptor = addSpyToCryptor(avroSerializer);
     bytes = avroSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
 
     cryptor = addBadSpyToCryptor(avroDeserializer);
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertNotEquals("testUser", record.get("name").toString()); // still encrypted
   }
 
@@ -644,7 +644,7 @@ public abstract class FieldEncryptionExecutorTest {
     headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(avroSerializer);
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
 
     try {
       badDeserializer.deserialize(topic, headers, bytes);
@@ -671,20 +671,20 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(badSerializer);
     byte[] oldBytes = badSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
 
     // Run good serializer to get bytes
     expectedEncryptions = 1;
     headers = new RecordHeaders();
     cryptor = addSpyToCryptor(avroSerializer);
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
     assertFalse(Arrays.equals(oldBytes, bytes));
 
     expectedEncryptions = 0;
     cryptor = addSpyToCryptor(badDeserializer);
     GenericRecord record = (GenericRecord) badDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any());
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertNotEquals("testUser", record.get("name").toString()); // still encrypted
   }
 

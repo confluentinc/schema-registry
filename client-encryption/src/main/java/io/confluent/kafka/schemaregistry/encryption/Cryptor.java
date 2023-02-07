@@ -16,8 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
-import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.EMPTY_AAD;
-
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.DeterministicAead;
 import com.google.crypto.tink.KeyTemplates;
@@ -54,30 +52,32 @@ public class Cryptor {
     return Registry.newKey(dekTemplate).toByteArray();
   }
 
-  public byte[] encrypt(byte[] dek, byte[] plaintext) throws GeneralSecurityException {
+  public byte[] encrypt(byte[] dek, byte[] plaintext, byte[] associatedData)
+      throws GeneralSecurityException {
     // Use DEK to encrypt plaintext.
     byte[] ciphertext;
     if (isDeterministic) {
       DeterministicAead aead = Registry.getPrimitive(
           dekTemplate.getTypeUrl(), dek, DeterministicAead.class);
-      ciphertext = aead.encryptDeterministically(plaintext, EMPTY_AAD);
+      ciphertext = aead.encryptDeterministically(plaintext, associatedData);
     } else {
       Aead aead = Registry.getPrimitive(dekTemplate.getTypeUrl(), dek, Aead.class);
-      ciphertext = aead.encrypt(plaintext, EMPTY_AAD);
+      ciphertext = aead.encrypt(plaintext, associatedData);
     }
     return ciphertext;
   }
 
-  public byte[] decrypt(byte[] dek, byte[] ciphertext) throws GeneralSecurityException {
+  public byte[] decrypt(byte[] dek, byte[] ciphertext, byte[] associatedData)
+      throws GeneralSecurityException {
     try {
       // Use DEK to decrypt ciphertext.
       if (isDeterministic) {
         DeterministicAead aead = Registry.getPrimitive(
             dekTemplate.getTypeUrl(), dek, DeterministicAead.class);
-        return aead.decryptDeterministically(ciphertext, EMPTY_AAD);
+        return aead.decryptDeterministically(ciphertext, associatedData);
       } else {
         Aead aead = Registry.getPrimitive(dekTemplate.getTypeUrl(), dek, Aead.class);
-        return aead.decrypt(ciphertext, EMPTY_AAD);
+        return aead.decrypt(ciphertext, associatedData);
       }
     } catch (IndexOutOfBoundsException
              | BufferUnderflowException
