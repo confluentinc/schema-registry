@@ -303,6 +303,7 @@ public class ProtobufData {
   private boolean supportOptionalForProto2;
   private boolean useWrapperForNullables;
   private boolean useWrapperForRawPrimitives;
+  private boolean generateStructForNulls;
 
   public ProtobufData() {
     this(new ProtobufDataConfig.Builder().with(
@@ -327,6 +328,7 @@ public class ProtobufData {
     this.supportOptionalForProto2 = protobufDataConfig.supportOptionalForProto2();
     this.useWrapperForNullables = protobufDataConfig.useWrapperForNullables();
     this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
+    this.generateStructForNulls = protobufDataConfig.generateStructForNulls();
   }
 
   /**
@@ -1369,7 +1371,7 @@ public class ProtobufData {
     final String fieldName = fieldDescriptor.getName();
     final Field field = schema.field(fieldName);
     if ((isPrimitiveOrRepeated(fieldDescriptor) && !isOptional(fieldDescriptor))
-        || message.hasField(fieldDescriptor)) {
+        || (generateStructForNulls || message.hasField(fieldDescriptor))) {
       Object obj = message.getField(fieldDescriptor);
       result.put(fieldName, toConnectData(field.schema(), obj));
     }
