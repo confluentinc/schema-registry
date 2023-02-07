@@ -261,6 +261,45 @@ public class ProtobufDataTest {
     return enumUnionBuilder;
   }
 
+  private SchemaBuilder getEnumUnionSchemaBuilderWithoutIndex() {
+    final SchemaBuilder enumUnionBuilder = SchemaBuilder.struct();
+    enumUnionBuilder.name("EnumUnion");
+    final SchemaBuilder someValBuilder = SchemaBuilder.struct();
+    someValBuilder.name("io.confluent.connect.protobuf.Union.some_val");
+    someValBuilder.field(
+        "one_id",
+        SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    someValBuilder.field(
+        "other_id",
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    someValBuilder.field(
+        "some_status",
+        SchemaBuilder.string()
+            .name("Status")
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(3))
+            .parameter(PROTOBUF_TYPE_ENUM, "Status")
+            .parameter(PROTOBUF_TYPE_ENUM + ".ACTIVE", "0")
+            .parameter(PROTOBUF_TYPE_ENUM + ".INACTIVE", "1")
+            .build()
+    );
+    enumUnionBuilder.field("some_val", someValBuilder.optional().build());
+    enumUnionBuilder.field(
+        "status",
+        SchemaBuilder.string()
+            .name("Status")
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(4))
+            .parameter(PROTOBUF_TYPE_ENUM, "Status")
+            .parameter(PROTOBUF_TYPE_ENUM + ".ACTIVE", "0")
+            .parameter(PROTOBUF_TYPE_ENUM + ".INACTIVE", "1")
+            .build()
+    );
+    return enumUnionBuilder;
+  }
+
   private SchemaBuilder getEnumUnionSchemaBuilderWithGeneralizedSumTypeSupport() {
     final SchemaBuilder enumUnionBuilder = SchemaBuilder.struct();
     enumUnionBuilder.name("EnumUnion");
@@ -307,6 +346,16 @@ public class ProtobufDataTest {
     Struct union = new Struct(schema.field("some_val_0").schema());
     union.put("one_id", "ID");
     result.put("some_val_0", union);
+    result.put("status", "INACTIVE");
+    return result;
+  }
+
+  private Struct getEnumUnionWithStringWithoutIndex() throws ParseException {
+    Schema schema = getEnumUnionSchemaBuilderWithoutIndex().build();
+    Struct result = new Struct(schema.schema());
+    Struct union = new Struct(schema.field("some_val").schema());
+    union.put("one_id", "ID");
+    result.put("some_val", union);
     result.put("status", "INACTIVE");
     return result;
   }
@@ -702,11 +751,25 @@ public class ProtobufDataTest {
   public void testToConnectEnumUnionWithString() throws Exception {
     EnumUnion message = createEnumUnionWithString();
     SchemaAndValue result = getSchemaAndValue(message);
-      Schema expectedSchema = getEnumUnionSchemaBuilder().build();
-      assertSchemasEqual(expectedSchema, result.schema());
-      Struct expected = getEnumUnionWithString();
-      assertEquals(expected, result.value());
-    }
+    Schema expectedSchema = getEnumUnionSchemaBuilder().build();
+    assertSchemasEqual(expectedSchema, result.schema());
+    Struct expected = getEnumUnionWithString();
+    assertEquals(expected, result.value());
+  }
+
+  @Test
+  public void testToConnectEnumUnionWithStringWithoutIndex() throws Exception {
+    EnumUnion message = createEnumUnionWithString();
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.GENERATE_INDEX_FOR_UNIONS_CONFIG, "false")
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue result = getSchemaAndValue(protobufData, message);
+    Schema expectedSchema = getEnumUnionSchemaBuilderWithoutIndex().build();
+    assertSchemasEqual(expectedSchema, result.schema());
+    Struct expected = getEnumUnionWithStringWithoutIndex();
+    assertEquals(expected, result.value());
+  }
 
   @Test
   public void testToConnectEnumUnionWithStringWithGeneralizedSumTypeSupport() throws Exception {
