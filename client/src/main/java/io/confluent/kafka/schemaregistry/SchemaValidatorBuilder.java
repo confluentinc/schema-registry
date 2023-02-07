@@ -115,8 +115,8 @@ public final class SchemaValidatorBuilder {
         if (existing.toString().length() <= MAX_SCHEMA_SIZE_FOR_LOGGING) {
           messages.add("{oldSchema: '" + existing + "'}");
         } else {
-          messages.add("{oldSchema: <truncated to " + MAX_SCHEMA_SIZE_FOR_LOGGING + " characters> '"
-                         + existing.toString().substring(0, MAX_SCHEMA_SIZE_FOR_LOGGING) + "'}");
+          messages.add("{oldSchema: <truncated> '"
+                         + existing.toString().substring(0, MAX_SCHEMA_SIZE_FOR_LOGGING) + "...'}");
         }
       }
     }
