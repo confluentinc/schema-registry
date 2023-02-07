@@ -755,7 +755,7 @@ public class ProtobufDataTest {
 
     ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
             .with(ProtobufDataConfig.WRAPPER_FOR_RAW_PRIMITIVES_CONFIG, true)
-            .with(ProtobufDataConfig.EXPOSE_NULL_STRUCTS_CONFIG, true)
+            .with(ProtobufDataConfig.GENERATE_STRUCT_FOR_NULLS_CONFIG, true)
             .build();
     ProtobufData protobufData = new ProtobufData(protobufDataConfig);
     SchemaAndValue result = getSchemaAndValue(protobufData, message);
@@ -773,7 +773,7 @@ public class ProtobufDataTest {
 
     ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
             .with(ProtobufDataConfig.WRAPPER_FOR_RAW_PRIMITIVES_CONFIG, true)
-            .with(ProtobufDataConfig.EXPOSE_NULL_STRUCTS_CONFIG, false)
+            .with(ProtobufDataConfig.GENERATE_STRUCT_FOR_NULLS_CONFIG, false)
             .build();
     ProtobufData protobufData = new ProtobufData(protobufDataConfig);
     SchemaAndValue result = getSchemaAndValue(protobufData, message);
