@@ -33,6 +33,7 @@ public final class SchemaValidatorBuilder {
   private SchemaValidationStrategy strategy;
   private static final String NEW_PREFIX = "new";
   private static final String OLD_PREFIX = "old";
+  private static int MAX_SCHEMA_SIZE_FOR_LOGGING = 10 * 1024;
 
   /**
    * Use a strategy that validates that a schema can be used to read existing
@@ -111,7 +112,12 @@ public final class SchemaValidatorBuilder {
         if (existing.version() != null) {
           messages.add("{oldSchemaVersion: " + existing.version() + "}");
         }
-        messages.add("{oldSchema: '" + existing + "'}");
+        if (existing.toString().length() <= MAX_SCHEMA_SIZE_FOR_LOGGING) {
+          messages.add("{oldSchema: '" + existing + "'}");
+        } else {
+          messages.add("{oldSchema: <truncated> '"
+                         + existing.toString().substring(0, MAX_SCHEMA_SIZE_FOR_LOGGING) + "...'}");
+        }
       }
     }
     return messages;
