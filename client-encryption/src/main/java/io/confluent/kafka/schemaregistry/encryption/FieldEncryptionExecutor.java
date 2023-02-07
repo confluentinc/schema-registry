@@ -370,12 +370,12 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
             if (plaintext == null) {
               return fieldValue;
             }
-            ciphertext = cryptor.encrypt(dek.getRawDek(), plaintext);
+            ciphertext = cryptor.encrypt(dek.getRawDek(), plaintext, EMPTY_AAD);
             count++;
             return Base64.getEncoder().encodeToString(ciphertext);
           case READ:
             ciphertext = Base64.getDecoder().decode(fieldValue.toString());
-            plaintext = cryptor.decrypt(dek.getRawDek(), ciphertext);
+            plaintext = cryptor.decrypt(dek.getRawDek(), ciphertext, EMPTY_AAD);
             count++;
             Object result = toObject(fieldCtx, plaintext);
             return result != null ? result : fieldValue;

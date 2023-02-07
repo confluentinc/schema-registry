@@ -42,10 +42,10 @@ public class CryptorTest {
     Cryptor cryptor = new Cryptor(Cryptor.RANDOM_KEY_FORMAT);
     byte[] dek = cryptor.generateKey();
     byte[] plaintext = "hello world".getBytes(StandardCharsets.UTF_8);
-    byte[] ciphertext = cryptor.encrypt(dek, plaintext);
+    byte[] ciphertext = cryptor.encrypt(dek, plaintext, new byte[0]);
     assertNotEquals(plaintext, ciphertext);
 
-    plaintext = cryptor.decrypt(dek, ciphertext);
+    plaintext = cryptor.decrypt(dek, ciphertext, new byte[0]);
     assertEquals("hello world", new String(plaintext, StandardCharsets.UTF_8));
   }
 
@@ -54,14 +54,14 @@ public class CryptorTest {
     Cryptor cryptor = new Cryptor(Cryptor.DETERMINISTIC_KEY_FORMAT);
     byte[] dek = cryptor.generateKey();
     byte[] plaintext = "hello world".getBytes(StandardCharsets.UTF_8);
-    byte[] ciphertext = cryptor.encrypt(dek, plaintext);
+    byte[] ciphertext = cryptor.encrypt(dek, plaintext, new byte[0]);
     assertNotEquals(plaintext, ciphertext);
 
-    plaintext = cryptor.decrypt(dek, ciphertext);
+    plaintext = cryptor.decrypt(dek, ciphertext, new byte[0]);
     assertEquals("hello world", new String(plaintext, StandardCharsets.UTF_8));
 
     // ciphertext is same given same key and plaintext
-    byte[] ciphertext2 = cryptor.encrypt(dek, plaintext);
+    byte[] ciphertext2 = cryptor.encrypt(dek, plaintext, new byte[0]);
     assertArrayEquals(ciphertext, ciphertext2);
   }
 }
