@@ -42,6 +42,7 @@ import io.confluent.connect.protobuf.test.KeyValueProto2;
 import io.confluent.connect.protobuf.test.KeyValueWrapper;
 import io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry;
 import io.confluent.connect.protobuf.test.MapReferences.MapReferencesMessage;
+import io.confluent.connect.protobuf.test.NestedKeyValue;
 import io.confluent.connect.protobuf.test.RecursiveKeyValue;
 import io.confluent.kafka.serializers.protobuf.test.DateValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.DateValueOuterClass.DateValue;
@@ -746,6 +747,42 @@ public class ProtobufDataTest {
   }
 
   // Data Conversion tests
+
+  @Test
+  public void testToConnectNestedNull() throws Exception {
+    NestedKeyValue.NestedKeyValueMessage.Builder builder = NestedKeyValue.NestedKeyValueMessage.newBuilder();
+    NestedKeyValue.NestedKeyValueMessage message = builder.build();
+
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+            .with(ProtobufDataConfig.WRAPPER_FOR_RAW_PRIMITIVES_CONFIG, true)
+            .with(ProtobufDataConfig.GENERATE_STRUCT_FOR_NULLS_CONFIG, true)
+            .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue result = getSchemaAndValue(protobufData, message);
+
+    Schema schema = result.schema();
+    Struct value = (Struct) result.value();
+
+    assertNotNull(value.get(schema.field("wrapper_field").schema().field("nested_field")));
+  }
+
+  @Test
+  public void testToConnectNestedNullNegative() throws Exception {
+    NestedKeyValue.NestedKeyValueMessage.Builder builder = NestedKeyValue.NestedKeyValueMessage.newBuilder();
+    NestedKeyValue.NestedKeyValueMessage message = builder.build();
+
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+            .with(ProtobufDataConfig.WRAPPER_FOR_RAW_PRIMITIVES_CONFIG, true)
+            .with(ProtobufDataConfig.GENERATE_STRUCT_FOR_NULLS_CONFIG, false)
+            .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue result = getSchemaAndValue(protobufData, message);
+
+    Schema schema = result.schema();
+    Struct value = (Struct) result.value();
+
+    assertNull(value.get(schema.field("wrapper_field").schema().field("nested_field")));
+  }
 
   @Test
   public void testToConnectNull() {
