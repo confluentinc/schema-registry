@@ -17,9 +17,6 @@
 package io.confluent.kafka.schemaregistry;
 
 import com.google.common.collect.EnumHashBiMap;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
