@@ -36,12 +36,18 @@ public class LocalFieldEncryptionProperties implements FieldEncryptionProperties
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL, "60");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "exec");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.class",
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "rule1,rule2");
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.class",
         LocalFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param."
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param."
         + LOCAL_SECRET, "mysecret");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param."
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param."
+        + LOCAL_OLD_SECRETS, "old1, old2");
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.class",
+        LocalFieldEncryptionExecutor.class.getName());
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param."
+        + LOCAL_SECRET, "mysecret2");
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param."
         + LOCAL_OLD_SECRETS, "old1, old2");
     return props;
   }

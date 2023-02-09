@@ -41,10 +41,13 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleBase;
+import java.util.AbstractMap;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -100,7 +103,7 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
   protected Map<String, String> metadata;
-  protected Map<String, RuleExecutor> ruleExecutors;
+  protected Map<String, Map<String, RuleExecutor>> ruleExecutors;
   protected Map<String, RuleAction> ruleActions;
   protected boolean isKey;
 
@@ -168,8 +171,8 @@ public abstract class AbstractKafkaSchemaSerDe {
       MapPropertyParser parser = new MapPropertyParser();
       metadata = parser.parse(config.getLatestWithMetadataSpec());
     }
-    ruleExecutors = (Map<String, RuleExecutor>) initRuleObjects(config, RULE_EXECUTORS);
-    ruleActions = new HashMap<>((Map<String, RuleAction>) initRuleObjects(config, RULE_ACTIONS));
+    ruleExecutors = initRuleExecutors(config, RULE_EXECUTORS);
+    ruleActions = new HashMap<>((Map<String, RuleAction>) initRuleActions(config, RULE_ACTIONS));
     ruleActions.put(ErrorAction.TYPE, new ErrorAction());
     ruleActions.put(NoneAction.TYPE, new NoneAction());
   }
@@ -186,13 +189,30 @@ public abstract class AbstractKafkaSchemaSerDe {
     }
   }
 
-  private Map<String, ? extends RuleBase> initRuleObjects(
+  private Map<String, Map<String, RuleExecutor>> initRuleExecutors(
+      AbstractKafkaSchemaSerDeConfig config, String configName) {
+    List<String> names = config.getList(configName);
+    return names.stream()
+        .flatMap(n -> initRuleObject(n, config, configName)
+            .map(r -> new AbstractMap.SimpleEntry<>(n, r)))
+        .collect(Collectors.groupingBy(e -> e.getValue().type(),
+            Collectors.toMap(SimpleEntry::getKey, e -> {
+              log.info("Registering rule executor {} for {}: {}",
+                  e.getKey(),
+                  e.getValue().type(),
+                  e.getValue().getClass().getName()
+              );
+              return (RuleExecutor) e.getValue();
+            }, (e1, e2) -> e1, LinkedHashMap::new)));
+  }
+
+  private Map<String, ? extends RuleBase> initRuleActions(
       AbstractKafkaSchemaSerDeConfig config, String configName) {
     List<String> names = config.getList(configName);
     return names.stream()
         .flatMap(n -> initRuleObject(n, config, configName))
         .collect(Collectors.toMap(RuleBase::type, e -> {
-          log.info("Registering rule executor for {}: {}",
+          log.info("Registering rule action for {}: {}",
               e.type(),
               e.getClass().getName()
           );
@@ -221,8 +241,25 @@ public abstract class AbstractKafkaSchemaSerDe {
   }
 
   // Visible for testing
-  public Map<String, RuleExecutor> getRuleExecutors() {
+  public Map<String, Map<String, RuleExecutor>> getRuleExecutors() {
     return ruleExecutors;
+  }
+
+  private RuleExecutor getRuleExecutor(RuleContext ctx) {
+    Rule rule = ctx.rule();
+    Map<String, RuleExecutor> executors =
+        ruleExecutors.get(rule.getType().toUpperCase(Locale.ROOT));
+    if (executors != null && !executors.isEmpty()) {
+      RuleExecutor executor = executors.get(rule.getName());
+      if (executor != null) {
+        return executor;
+      } else {
+        // Use any executor registered for the given rule type.
+        // This is to allow multiple rules to use the same rule executor.
+        return executors.entrySet().iterator().next().getValue();
+      }
+    }
+    return null;
   }
 
   public boolean isKey() {
@@ -537,11 +574,18 @@ public abstract class AbstractKafkaSchemaSerDe {
       }
     } else if (ruleMode == RuleMode.DOWNGRADE) {
       if (source.ruleSet() != null) {
-        rules = source.ruleSet().getMigrationRules();
+        rules = new ArrayList<>(source.ruleSet().getMigrationRules());
+        // Execute downgrade rules in reverse order for symmetry
+        Collections.reverse(rules);
       }
     } else {
       if (target.ruleSet() != null) {
         rules = target.ruleSet().getDomainRules();
+        if (ruleMode == RuleMode.READ) {
+          rules = new ArrayList<>(rules);
+          // Execute read rules in reverse order for symmetry
+          Collections.reverse(rules);
+        }
       }
     }
     for (Rule rule : rules) {
@@ -561,7 +605,7 @@ public abstract class AbstractKafkaSchemaSerDe {
       }
       RuleContext ctx = new RuleContext(source, target,
           subject, topic, headers, key(), isKey ? null : original, isKey, ruleMode, rule);
-      RuleExecutor ruleExecutor = ruleExecutors.get(rule.getType().toUpperCase(Locale.ROOT));
+      RuleExecutor ruleExecutor = getRuleExecutor(ctx);
       if (ruleExecutor != null) {
         try {
           message = ruleExecutor.transform(ctx, message);

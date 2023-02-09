@@ -14,7 +14,6 @@
  */
 package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
-import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.DEFAULT_KMS_KEY_ID;
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.EMPTY_AAD;
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultFieldEncryptionExecutor.TOKEN_ID;
@@ -49,12 +48,18 @@ public class HcVaultFieldEncryptionProperties implements FieldEncryptionProperti
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL, "60");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "exec");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.class",
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "rule1,rule2");
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.class",
         HcVaultFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + TOKEN_ID,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + TOKEN_ID,
         "dev-only-token");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + TEST_CLIENT,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + TEST_CLIENT,
+        testClient);
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.class",
+        HcVaultFieldEncryptionExecutor.class.getName());
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + TOKEN_ID,
+        "dev-only-token");
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + TEST_CLIENT,
         testClient);
     return props;
   }

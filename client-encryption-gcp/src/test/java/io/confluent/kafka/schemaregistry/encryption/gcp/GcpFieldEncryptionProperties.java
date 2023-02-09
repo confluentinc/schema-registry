@@ -14,7 +14,6 @@
  */
 package io.confluent.kafka.schemaregistry.encryption.gcp;
 
-import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.DEFAULT_KMS_KEY_ID;
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpFieldEncryptionExecutor.CLIENT_EMAIL;
 import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpFieldEncryptionExecutor.CLIENT_ID;
@@ -48,18 +47,30 @@ public class GcpFieldEncryptionProperties implements FieldEncryptionProperties {
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL, "60");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "exec");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.class",
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "rule1,rule2");
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.class",
         GcpFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + CLIENT_ID,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + CLIENT_ID,
         clientId);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + CLIENT_EMAIL,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + CLIENT_EMAIL,
         clientEmail);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + PRIVATE_KEY_ID,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + PRIVATE_KEY_ID,
         privateKeyId);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + PRIVATE_KEY,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + PRIVATE_KEY,
         privateKey);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + TEST_CLIENT,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + TEST_CLIENT,
+        testClient);
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.class",
+        GcpFieldEncryptionExecutor.class.getName());
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + CLIENT_ID,
+        clientId);
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + CLIENT_EMAIL,
+        clientEmail);
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + PRIVATE_KEY_ID,
+        privateKeyId);
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + PRIVATE_KEY,
+        privateKey);
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + TEST_CLIENT,
         testClient);
     return props;
   }

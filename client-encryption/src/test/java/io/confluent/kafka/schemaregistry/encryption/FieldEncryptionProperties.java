@@ -25,7 +25,9 @@ public interface FieldEncryptionProperties {
 
   default Map<String, Object> getClientProperties() throws Exception {
     Map<String, Object> props = getClientPropertiesWithoutKey();
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".exec.param." + DEFAULT_KMS_KEY_ID,
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + DEFAULT_KMS_KEY_ID,
+        getKeyId());
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + DEFAULT_KMS_KEY_ID,
         getKeyId());
     return props;
   }
