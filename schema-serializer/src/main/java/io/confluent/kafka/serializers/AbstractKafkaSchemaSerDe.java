@@ -203,8 +203,7 @@ public abstract class AbstractKafkaSchemaSerDe {
                   e.getValue().getClass().getName()
               );
               return (RuleExecutor) e.getValue();
-            },
-            (e1, e2) -> e1, LinkedHashMap::new)));
+            }, (e1, e2) -> e1, LinkedHashMap::new)));
   }
 
   private Map<String, ? extends RuleBase> initRuleActions(
