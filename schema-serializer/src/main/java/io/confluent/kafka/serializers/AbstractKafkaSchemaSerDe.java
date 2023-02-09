@@ -197,14 +197,14 @@ public abstract class AbstractKafkaSchemaSerDe {
             .map(r -> new AbstractMap.SimpleEntry<>(n, r)))
         .collect(Collectors.groupingBy(e -> e.getValue().type(),
             Collectors.toMap(SimpleEntry::getKey, e -> {
-                  log.info("Registering rule executor {} for {}: {}",
-                      e.getKey(),
-                      e.getValue().type(),
-                      e.getValue().getClass().getName()
-                  );
-                  return (RuleExecutor) e.getValue();
-                },
-                (e1, e2) -> e1, LinkedHashMap::new)));
+              log.info("Registering rule executor {} for {}: {}",
+                  e.getKey(),
+                  e.getValue().type(),
+                  e.getValue().getClass().getName()
+              );
+              return (RuleExecutor) e.getValue();
+            },
+            (e1, e2) -> e1, LinkedHashMap::new)));
   }
 
   private Map<String, ? extends RuleBase> initRuleActions(
