@@ -58,8 +58,10 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   public static final String DEFAULT_KMS_KEY_ID = "default.kms.key.id";
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
 
+  private static final String ENCRYPT_PREFIX = "encrypt.";
+  private static final String KMS_KEY_ID = "kms.key.id";
+
   public static final byte[] EMPTY_AAD = new byte[0];
-  public static final String HEADER_NAME_PREFIX = "encrypt";
   public static final String CACHE_EXPIRY_SECS = "cache.expiry.secs";
   public static final String CACHE_SIZE = "cache.size";
   public static final String KEY_DETERMINISTIC = "key.deterministic";
@@ -235,7 +237,11 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   private static String getHeaderName(RuleContext ctx) {
-    return HEADER_NAME_PREFIX + (ctx.isKey() ? "-key" : "-value");
+    return getEncryptPrefix(ctx) + (ctx.isKey() ? "key" : "value");
+  }
+
+  private static String getEncryptPrefix(RuleContext ctx) {
+    return ENCRYPT_PREFIX + ctx.rule().getName() + ".";
   }
 
   class FieldEncryptionExecutorTransform implements FieldTransform {
@@ -284,7 +290,10 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
       if (metadata != null) {
         Map<String, String> properties = metadata.getProperties();
         if (properties != null) {
-          String keyId = properties.get(ENCRYPT_KMS_KEY_ID);
+          String keyId = properties.get(getEncryptPrefix(ctx) + KMS_KEY_ID);
+          if (keyId == null) {
+            keyId = properties.get(ENCRYPT_KMS_KEY_ID);
+          }
           if (keyId != null) {
             kekId = getKeyUrlPrefix() + keyId;
           }
