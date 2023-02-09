@@ -141,8 +141,7 @@ public abstract class FieldEncryptionExecutorTest {
     Map<String, RuleExecutor> executorsByType = executors.get(FieldEncryptionExecutor.TYPE);
     FieldEncryptionExecutor executor = null;
     if (executorsByType != null && !executorsByType.isEmpty()) {
-      executor = (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).entrySet()
-          .iterator().next().getValue();
+      executor = (FieldEncryptionExecutor) executorsByType.entrySet().iterator().next().getValue();
     }
     Cryptor spy = spy(new Cryptor(Cryptor.RANDOM_KEY_FORMAT));
     if (executor != null) {
@@ -301,6 +300,7 @@ public abstract class FieldEncryptionExecutorTest {
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
+    assertEquals("testUser2", record.get("name2"));
   }
 
   @Test

@@ -254,6 +254,8 @@ public abstract class AbstractKafkaSchemaSerDe {
       if (executor != null) {
         return executor;
       } else {
+        // Use any executor registered for the given rule type.
+        // This is to allow multiple rules to use the same rule executor.
         return executors.entrySet().iterator().next().getValue();
       }
     }
