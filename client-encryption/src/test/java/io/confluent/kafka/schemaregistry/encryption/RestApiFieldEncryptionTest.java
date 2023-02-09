@@ -39,6 +39,7 @@ import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.apache.avro.generic.GenericData;
@@ -59,7 +60,8 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
   public void testFieldEncryption() throws Exception {
     String topic = "test";
     FieldEncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties();
-    Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties();
+    List<String> ruleNames = ImmutableList.of("myRule");
+    Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties(ruleNames);
     FakeTicker fakeTicker = new FakeTicker();
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(
         restApp.restClient,

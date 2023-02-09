@@ -30,6 +30,7 @@ import com.google.crypto.tink.KeysetHandle;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class AzureFieldEncryptionProperties implements FieldEncryptionProperties {
@@ -40,22 +41,22 @@ public class AzureFieldEncryptionProperties implements FieldEncryptionProperties
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey() throws Exception {
+  public Map<String, Object> getClientPropertiesWithoutKey(List<String> ruleNames)
+      throws Exception {
     CryptographyClient testClient = mockClient(getKeyId());
     Map<String, Object> props = new HashMap<>();
-    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL, "60");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "rule1,rule2");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.class",
-        AzureFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + TEST_CLIENT,
-        testClient);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.class",
-        AzureFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + TEST_CLIENT,
-        testClient);
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, String.join(",", ruleNames));
+    for (String ruleName : ruleNames) {
+      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
+          AzureFieldEncryptionExecutor.class.getName());
+      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
+              + ".param." + TEST_CLIENT,
+          testClient);
+    }
     return props;
   }
 

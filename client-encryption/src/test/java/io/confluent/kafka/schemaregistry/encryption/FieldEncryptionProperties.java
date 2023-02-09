@@ -17,21 +17,23 @@ package io.confluent.kafka.schemaregistry.encryption;
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.DEFAULT_KMS_KEY_ID;
 
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import java.util.List;
 import java.util.Map;
 
 public interface FieldEncryptionProperties {
 
   String getKeyId();
 
-  default Map<String, Object> getClientProperties() throws Exception {
-    Map<String, Object> props = getClientPropertiesWithoutKey();
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + DEFAULT_KMS_KEY_ID,
-        getKeyId());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + DEFAULT_KMS_KEY_ID,
-        getKeyId());
+  default Map<String, Object> getClientProperties(List<String> ruleNames) throws Exception {
+    Map<String, Object> props = getClientPropertiesWithoutKey(ruleNames);
+    for (String ruleName : ruleNames) {
+      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
+              + ".param." + DEFAULT_KMS_KEY_ID,
+          getKeyId());
+    }
     return props;
   }
 
-  Map<String, Object> getClientPropertiesWithoutKey() throws Exception;
+  Map<String, Object> getClientPropertiesWithoutKey(List<String> ruleNames) throws Exception;
 }
 
