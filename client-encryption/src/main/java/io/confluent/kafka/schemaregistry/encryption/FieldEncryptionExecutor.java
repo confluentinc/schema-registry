@@ -292,6 +292,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
         if (properties != null) {
           String keyId = properties.get(getEncryptPrefix(ctx) + KMS_KEY_ID);
           if (keyId == null) {
+            // If kms key id not found for specific rule name, fall back to general kms key id
             keyId = properties.get(ENCRYPT_KMS_KEY_ID);
           }
           if (keyId != null) {
