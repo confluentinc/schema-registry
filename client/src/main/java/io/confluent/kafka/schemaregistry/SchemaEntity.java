@@ -59,6 +59,21 @@ public class SchemaEntity {
 
   public enum EntityType {
     SR_RECORD,
-    SR_FIELD
+    SR_FIELD;
+
+    public static EntityType forName(String name) {
+      if (name == null) {
+        return null;
+      }
+
+      name = name.toUpperCase();
+      if (SR_RECORD.name().equals(name)) {
+        return SR_RECORD;
+      } else if (SR_FIELD.name().equals(name)) {
+        return SR_FIELD;
+      } else {
+        return null;
+      }
+    }
   }
 }
