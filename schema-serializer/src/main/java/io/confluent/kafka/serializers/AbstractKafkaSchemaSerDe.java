@@ -247,7 +247,8 @@ public abstract class AbstractKafkaSchemaSerDe {
 
   private RuleExecutor getRuleExecutor(RuleContext ctx) {
     Rule rule = ctx.rule();
-    Map<String, RuleExecutor> executors = ruleExecutors.get(rule.getType());
+    Map<String, RuleExecutor> executors =
+        ruleExecutors.get(rule.getType().toUpperCase(Locale.ROOT));
     if (executors != null && !executors.isEmpty()) {
       RuleExecutor executor = executors.get(rule.getName());
       if (executor != null) {
