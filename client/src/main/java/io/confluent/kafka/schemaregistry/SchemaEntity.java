@@ -16,7 +16,9 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import com.google.common.collect.EnumHashBiMap;
 import java.util.Objects;
+import java.util.Set;
 
 public class SchemaEntity {
 
@@ -58,7 +60,39 @@ public class SchemaEntity {
   }
 
   public enum EntityType {
-    SR_RECORD,
-    SR_FIELD
+    SR_RECORD("sr_record"),
+    SR_FIELD("sr_field");
+
+    private static final EnumHashBiMap<SchemaEntity.EntityType, String> lookup =
+        EnumHashBiMap.create(SchemaEntity.EntityType.class);
+
+    static {
+      for (SchemaEntity.EntityType type : SchemaEntity.EntityType.values()) {
+        lookup.put(type, type.symbol());
+      }
+    }
+
+    private final String symbol;
+
+    EntityType(String symbol) {
+      this.symbol = symbol;
+    }
+
+    public String symbol() {
+      return symbol;
+    }
+
+    public static SchemaEntity.EntityType get(String symbol) {
+      return lookup.inverse().get(symbol);
+    }
+
+    public static Set<String> symbols() {
+      return lookup.inverse().keySet();
+    }
+
+    @Override
+    public String toString() {
+      return symbol();
+    }
   }
 }
