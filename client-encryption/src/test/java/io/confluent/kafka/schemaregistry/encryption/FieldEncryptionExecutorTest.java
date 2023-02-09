@@ -304,6 +304,35 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerDoubleEncryption() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
+    Rule rule2 = new Rule("rule2", null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule, rule2));
+    Metadata metadata = new Metadata(
+        Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer, "rule1");
+    Cryptor cryptor2 = addSpyToCryptor(avroSerializer, "rule2");
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    verify(cryptor2, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer, "rule1");
+    cryptor2 = addSpyToCryptor(avroDeserializer, "rule2");
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
+  }
+
+  @Test
   public void testKafkaAvroSerializerWithoutKey() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());

@@ -572,11 +572,18 @@ public abstract class AbstractKafkaSchemaSerDe {
       }
     } else if (ruleMode == RuleMode.DOWNGRADE) {
       if (source.ruleSet() != null) {
-        rules = source.ruleSet().getMigrationRules();
+        rules = new ArrayList<>(source.ruleSet().getMigrationRules());
+        // Execute downgrade rules in reverse order for symmetry
+        Collections.reverse(rules);
       }
     } else {
       if (target.ruleSet() != null) {
         rules = target.ruleSet().getDomainRules();
+        if (ruleMode == RuleMode.READ) {
+          rules = new ArrayList<>(rules);
+          // Execute read rules in reverse order for symmetry
+          Collections.reverse(rules);
+        }
       }
     }
     for (Rule rule : rules) {
