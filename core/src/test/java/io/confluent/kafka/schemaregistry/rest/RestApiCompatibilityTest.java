@@ -441,7 +441,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"},"
         + " {\"type\":\"string\",\"name\":\"f3\"}]}");
-    Rule r3 = new Rule("zap", null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, false);
+    Rule r3 = new Rule("zap", null, null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, false);
     rules = Collections.singletonList(r3);
     ruleSet = new RuleSet(rules, null);
     RegisterSchemaRequest request3 = new RegisterSchemaRequest(schema3);
