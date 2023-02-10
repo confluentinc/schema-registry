@@ -216,7 +216,7 @@ public abstract class FieldEncryptionExecutorTest {
   public void testKafkaAvroSerializer() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = new Metadata(
@@ -243,7 +243,7 @@ public abstract class FieldEncryptionExecutorTest {
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
     Schema schema = createWidgetSchema();
     AvroSchema avroSchema = new AvroSchema(schema);
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = new Metadata(
@@ -277,9 +277,9 @@ public abstract class FieldEncryptionExecutorTest {
   public void testKafkaAvroSerializerMultipleRules() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
-    Rule rule2 = new Rule("rule2", null, null,
+    Rule rule2 = new Rule("rule2", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII2"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule, rule2));
     Metadata metadata = new Metadata(
@@ -307,9 +307,9 @@ public abstract class FieldEncryptionExecutorTest {
   public void testKafkaAvroSerializerDoubleEncryption() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
-    Rule rule2 = new Rule("rule2", null, null,
+    Rule rule2 = new Rule("rule2", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule, rule2));
     Metadata metadata = new Metadata(
@@ -336,7 +336,7 @@ public abstract class FieldEncryptionExecutorTest {
   public void testKafkaAvroSerializerWithoutKey() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Map<String, String> properties = new HashMap<>();
@@ -377,7 +377,7 @@ public abstract class FieldEncryptionExecutorTest {
         + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
         + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     Metadata metadata = new Metadata(
@@ -445,7 +445,7 @@ public abstract class FieldEncryptionExecutorTest {
         + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
         + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     Metadata metadata = new Metadata(
@@ -506,7 +506,7 @@ public abstract class FieldEncryptionExecutorTest {
         .setSize(123)
         .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     Metadata metadata = new Metadata(
@@ -571,7 +571,7 @@ public abstract class FieldEncryptionExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     // Tag in rule differs from data
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("NOT_PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = new Metadata(
@@ -595,7 +595,7 @@ public abstract class FieldEncryptionExecutorTest {
   public void testNoEncryptionsDueToHeaders() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = new Metadata(
@@ -635,7 +635,7 @@ public abstract class FieldEncryptionExecutorTest {
   public void testBadCryptor() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = new Metadata(
@@ -673,7 +673,7 @@ public abstract class FieldEncryptionExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     // NONE,NONE ignores errors during WRITE,READ
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, "NONE,NONE", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = new Metadata(
@@ -703,7 +703,7 @@ public abstract class FieldEncryptionExecutorTest {
   public void testBadSerializerWithMissingRuleExecutors() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = new Metadata(
@@ -739,7 +739,7 @@ public abstract class FieldEncryptionExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     // NONE,NONE ignores errors during WRITE,READ
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, "NONE,NONE", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = new Metadata(
