@@ -240,7 +240,7 @@ public abstract class FieldEncryptionExecutorTest {
 
   @After
   public void tearDown() {
-    schemaRegistry.reset();;
+    schemaRegistry.reset();
   }
 
   @Test
