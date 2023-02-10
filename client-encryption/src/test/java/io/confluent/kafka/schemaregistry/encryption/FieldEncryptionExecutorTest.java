@@ -74,6 +74,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.junit.After;
 import org.junit.Test;
 
 public abstract class FieldEncryptionExecutorTest {
@@ -235,6 +236,11 @@ public abstract class FieldEncryptionExecutorTest {
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
     return schema;
+  }
+
+  @After
+  public void tearDown() {
+    schemaRegistry.reset();;
   }
 
   @Test
