@@ -88,7 +88,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     assertEquals("testUser", record.get("name").toString());
 
-    Rule rule = new Rule("myRule", null, null,
+    Rule rule = new Rule("myRule", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, "NONE,NONE", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = new Metadata(

@@ -29,6 +29,7 @@ import java.util.SortedSet;
 public class Rule {
 
   private String name;
+  private String doc;
   private RuleKind kind;
   private RuleMode mode;
   private String type;
@@ -40,6 +41,7 @@ public class Rule {
 
   @JsonCreator
   public Rule(@JsonProperty("name") String name,
+              @JsonProperty("doc") String doc,
               @JsonProperty("kind") RuleKind kind,
               @JsonProperty("mode") RuleMode mode,
               @JsonProperty("type") String type,
@@ -49,6 +51,7 @@ public class Rule {
               @JsonProperty("onFailure") String onFailure,
               @JsonProperty("disabled") boolean disabled) {
     this.name = name;
+    this.doc = doc;
     this.kind = kind;
     this.mode = mode;
     this.type = type;
@@ -61,6 +64,7 @@ public class Rule {
 
   public Rule(io.confluent.kafka.schemaregistry.client.rest.entities.Rule rule) {
     this.name = rule.getName();
+    this.doc = rule.getDoc();
     this.kind = RuleKind.fromEntity(rule.getKind());
     this.mode = RuleMode.fromEntity(rule.getMode());
     this.type = rule.getType();
@@ -80,6 +84,17 @@ public class Rule {
   @JsonProperty("name")
   public void setName(String name) {
     this.name = name;
+  }
+
+  @Schema(description = "Rule doc")
+  @JsonProperty("doc")
+  public String getDoc() {
+    return doc;
+  }
+
+  @JsonProperty("doc")
+  public void setDoc(String doc) {
+    this.doc = doc;
   }
 
   @Schema(description = "Rule kind")
@@ -180,6 +195,7 @@ public class Rule {
     }
     Rule rule = (Rule) o;
     return Objects.equals(name, rule.name)
+        && Objects.equals(doc, rule.doc)
         && kind == rule.kind
         && mode == rule.mode
         && Objects.equals(type, rule.type)
@@ -192,13 +208,14 @@ public class Rule {
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, kind, mode, type, tags, expr, onSuccess, onFailure, disabled);
+    return Objects.hash(name, doc, kind, mode, type, tags, expr, onSuccess, onFailure, disabled);
   }
 
   @Override
   public String toString() {
     return "Rule{"
         + "name=" + name
+        + ", doc=" + doc
         + ", kind=" + kind
         + ", mode=" + mode
         + ", type='" + type + '\''
@@ -213,6 +230,7 @@ public class Rule {
   public io.confluent.kafka.schemaregistry.client.rest.entities.Rule toRuleEntity() {
     return new io.confluent.kafka.schemaregistry.client.rest.entities.Rule(
         getName(),
+        getDoc(),
         getKind().toEntity(),
         getMode().toEntity(),
         getType(),
