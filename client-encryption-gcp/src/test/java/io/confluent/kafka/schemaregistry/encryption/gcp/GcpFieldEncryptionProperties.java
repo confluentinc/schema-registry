@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class GcpFieldEncryptionProperties implements FieldEncryptionProperties {
@@ -35,7 +36,8 @@ public class GcpFieldEncryptionProperties implements FieldEncryptionProperties {
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey() throws Exception {
+  public Map<String, Object> getClientPropertiesWithoutKey(List<String> ruleNames)
+      throws Exception {
     // The following dummy values are borrowed from Google Tink tests
     String clientId = "111876397550362269561";
     String clientEmail = "unit-and-integration-testing@tink-test-infrastructure.iam.gserviceaccount.com";
@@ -43,35 +45,30 @@ public class GcpFieldEncryptionProperties implements FieldEncryptionProperties {
     String privateKey = "-----BEGIN PRIVATE KEY-----\nMIICdwIBADANBgkqhkiG9w0BAQEFAASCAmEwggJdAgEAAoGBAMtJlaQD79xGIC28\nowTpj7wkdi34piSubtDKttgC3lL00ioyQf/WMqLnyDWySNufCjhavQ7/sxXQAUCL\n5B3WDwM8+mFqQM2wJB18NBWBSfGOFSMwVQyWv7Y/1AFr+PvNKVlw4RZ4G8VuJzXZ\n9v/+5zyKv8py66sGVoHPI+LGfIprAgMBAAECgYEAxcgX8PVrnrITiKwpJxReJbyL\nxnpOmw2i/zza3BseVzOebjNrhw/NQDWl0qhcvmBjvyR5IGiiwiwXq8bu8CBdhRiE\nw3vKf1iuVOKhH07RB2wvCaGbVlB/p15gYau3sTRn5nej0tjYHX7xa/St/DwPk2H/\nxYGTRhyYtNL6wdtMjYECQQD+LVVJf0rLnxyPADTcz7Wdb+FUX79nWtMlzQOEB09+\nJj4ie0kD0cIvTQFjV3pOsg3uW2khFpjg110TXpJJfPjhAkEAzL7RhhfDdL7Dn2zl\n1orUthcGa2pzEAmg1tGBNb1pOg7LbVHKSa3GOOwyPRsActoyrPw18/fXaJdEfByY\ne9kwywJAB7rHMjH9y01uZ+bgtKpYYo5JcvBqeLEpZKfkaHp0b2ioURIguU4Csr+L\nwEKjxIrjo5ECFHCEe6nw+arRlgyH4QJBAIfQmEn733LEzB0n7npXU2yKb363eSYN\nTPzSsoREZdXWVIjqtWYUeKXvwA+apryJEw5+qwdvwxslJI+zpE6bLusCQE6M1lO9\nN6A3PtQv7Z3XwrEE/sPEVv4M4VHj0YHLs/32UuSXq5taMizKILfis1Stry4WjRHp\nQxEqdLrIkb13NH8=\n-----END PRIVATE KEY-----\n";
     CloudKMS testClient = new FakeCloudKms(Collections.singletonList(getKeyId()));
     Map<String, Object> props = new HashMap<>();
-    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL, "60");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, "rule1,rule2");
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.class",
-        GcpFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + CLIENT_ID,
-        clientId);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + CLIENT_EMAIL,
-        clientEmail);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + PRIVATE_KEY_ID,
-        privateKeyId);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + PRIVATE_KEY,
-        privateKey);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule1.param." + TEST_CLIENT,
-        testClient);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.class",
-        GcpFieldEncryptionExecutor.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + CLIENT_ID,
-        clientId);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + CLIENT_EMAIL,
-        clientEmail);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + PRIVATE_KEY_ID,
-        privateKeyId);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + PRIVATE_KEY,
-        privateKey);
-    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".rule2.param." + TEST_CLIENT,
-        testClient);
+    props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, String.join(",", ruleNames));
+    for (String ruleName : ruleNames) {
+      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
+          GcpFieldEncryptionExecutor.class.getName());
+      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
+              + ".param." + CLIENT_ID,
+          clientId);
+      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
+              + ".param." + CLIENT_EMAIL,
+          clientEmail);
+      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
+              + ".param." + PRIVATE_KEY_ID,
+          privateKeyId);
+      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
+              + ".param." + PRIVATE_KEY,
+          privateKey);
+      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
+              + ".param." + TEST_CLIENT,
+          testClient);
+    }
     return props;
   }
 }
