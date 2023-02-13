@@ -367,7 +367,7 @@ public abstract class FieldEncryptionExecutorTest {
   public void testKafkaAvroSerializerQualifiedRuleNames() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null,
+    Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = new Metadata(
@@ -376,7 +376,7 @@ public abstract class FieldEncryptionExecutorTest {
     // Register to key subject
     schemaRegistry.register(topic + "-key", avroSchema);
 
-    rule = new Rule("rule1", null, null,
+    rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII2"), null, null, null, false);
     ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     avroSchema = avroSchema.copy(metadata, ruleSet);
