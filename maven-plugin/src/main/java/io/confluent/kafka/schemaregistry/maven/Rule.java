@@ -29,6 +29,9 @@ public class Rule {
   protected String name;
 
   @Parameter(required = false)
+  protected String doc;
+
+  @Parameter(required = false)
   protected RuleKind kind;
 
   @Parameter(required = false)
@@ -56,6 +59,7 @@ public class Rule {
   public String toString() {
     return "Rule{"
         + "name='" + name + '\''
+        + ", doc=" + doc
         + ", kind=" + kind
         + ", mode=" + mode
         + ", type='" + type + '\''
@@ -69,7 +73,7 @@ public class Rule {
 
   public io.confluent.kafka.schemaregistry.client.rest.entities.Rule toRuleEntity() {
     return new io.confluent.kafka.schemaregistry.client.rest.entities.Rule(
-        name, kind, mode, type, tags, expr, onSuccess, onFailure, disabled
+        name, doc, kind, mode, type, tags, expr, onSuccess, onFailure, disabled
     );
   }
 }

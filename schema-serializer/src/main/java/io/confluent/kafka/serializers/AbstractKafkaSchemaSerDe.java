@@ -250,14 +250,19 @@ public abstract class AbstractKafkaSchemaSerDe {
     Map<String, RuleExecutor> executors =
         ruleExecutors.get(rule.getType().toUpperCase(Locale.ROOT));
     if (executors != null && !executors.isEmpty()) {
-      RuleExecutor executor = executors.get(rule.getName());
+      // First try rule name qualified with subject
+      RuleExecutor executor = executors.get(ctx.subject() + ":" + rule.getName());
       if (executor != null) {
         return executor;
-      } else {
-        // Use any executor registered for the given rule type.
-        // This is to allow multiple rules to use the same rule executor.
-        return executors.entrySet().iterator().next().getValue();
       }
+      // Next try rule name
+      executor = executors.get(rule.getName());
+      if (executor != null) {
+        return executor;
+      }
+      // Finally try any executor registered for the given rule type.
+      // This is to allow multiple rules to use the same rule executor.
+      return executors.entrySet().iterator().next().getValue();
     }
     return null;
   }

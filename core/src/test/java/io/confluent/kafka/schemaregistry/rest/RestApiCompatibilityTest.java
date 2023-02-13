@@ -381,7 +381,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
 
-    Rule r1 = new Rule("foo", null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, false);
+    Rule r1 = new Rule("foo", null, null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, false);
     List<Rule> rules = Collections.singletonList(r1);
     RuleSet ruleSet = new RuleSet(rules, null);
     ConfigUpdateRequest config = new ConfigUpdateRequest();
@@ -391,7 +391,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         config,
         restApp.restClient.updateConfig(config, null));
 
-    Rule r2 = new Rule("bar", null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, false);
+    Rule r2 = new Rule("bar", null, null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, false);
     rules = Collections.singletonList(r2);
     ruleSet = new RuleSet(rules, null);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
@@ -441,7 +441,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"},"
         + " {\"type\":\"string\",\"name\":\"f3\"}]}");
-    Rule r3 = new Rule("zap", null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, false);
+    Rule r3 = new Rule("zap", null, null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, false);
     rules = Collections.singletonList(r3);
     ruleSet = new RuleSet(rules, null);
     RegisterSchemaRequest request3 = new RegisterSchemaRequest(schema3);
@@ -505,7 +505,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     // register just ruleSet, schema should be inherited from version 1
     RegisterSchemaRequest request2 = new RegisterSchemaRequest();
-    Rule r1 = new Rule("foo", null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, false);
+    Rule r1 = new Rule("foo", null, null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, false);
     List<Rule> rules = Collections.singletonList(r1);
     RuleSet ruleSet = new RuleSet(rules, null);
     request2.setRuleSet(ruleSet);
@@ -561,7 +561,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
   @Test
   public void testConfigInvalidRuleSet() throws Exception {
-    Rule r1 = new Rule("foo", null, RuleMode.READ, "IGNORE", null, null, null, null, false);
+    Rule r1 = new Rule("foo", null, null, RuleMode.READ, "IGNORE", null, null, null, null, false);
     List<Rule> rules = Collections.singletonList(r1);
     // Add READ rule to migrationRules
     RuleSet ruleSet = new RuleSet(rules, null);
@@ -579,7 +579,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     }
 
     // Add rule with duplicate name
-    Rule r2 = new Rule("foo", null, RuleMode.READ, "IGNORE", null, null, null, null, false);
+    Rule r2 = new Rule("foo", null, null, RuleMode.READ, "IGNORE", null, null, null, null, false);
     rules = ImmutableList.of(r1, r2);
     ruleSet = new RuleSet(null, rules);
     config = new ConfigUpdateRequest();
