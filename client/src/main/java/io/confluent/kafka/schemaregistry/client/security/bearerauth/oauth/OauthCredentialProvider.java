@@ -68,9 +68,9 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
     ConfigurationUtils cu = new ConfigurationUtils(map);
 
     targetSchemaRegistry = cu.validateString(
-        SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER);
+        SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, false);
     targetIdentityPoolId = cu.validateString(
-        SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID);
+        SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, false);
 
     tokenRetriever = new CachedOauthTokenRetriever();
     tokenRetriever.configure(getTokenRetriever(cu), getTokenValidator(map),
