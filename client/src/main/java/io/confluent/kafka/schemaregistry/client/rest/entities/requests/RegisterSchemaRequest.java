@@ -67,6 +67,18 @@ public class RegisterSchemaRequest {
     this.schema = schema.getSchema();
   }
 
+  public RegisterSchemaRequest(Integer version, Integer id, String schemaType,
+      List<SchemaReference> references, Metadata metadata, RuleSet ruleSet, String schema
+  ) {
+    this.version = version;
+    this.id = id;
+    this.schemaType = schemaType;
+    this.references = references;
+    this.metadata = metadata;
+    this.ruleSet = ruleSet;
+    this.schema = schema;
+  }
+
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, RegisterSchemaRequest.class);
   }
