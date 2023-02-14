@@ -441,15 +441,6 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC
     )
-    .define(KAFKAGROUP_REBALANCE_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 300000, atLeast(0),
-        ConfigDef.Importance.MEDIUM, KAFKAGROUP_REBALANCE_TIMEOUT_DOC
-    )
-    .define(KAFKAGROUP_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 45000, atLeast(0),
-        ConfigDef.Importance.MEDIUM, KAFKAGROUP_SESSION_TIMEOUT_DOC
-    )
-    .define(KAFKAGROUP_HEARTBEAT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT, 3000, atLeast(0),
-        ConfigDef.Importance.MEDIUM, KAFKAGROUP_HEARTBEAT_INTERVAL_DOC
-    )
     .define(KAFKASTORE_CHECKPOINT_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
         ConfigDef.Importance.MEDIUM, KAFKASTORE_CHECKPOINT_DIR_DOC
     )
@@ -458,6 +449,15 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(KAFKASTORE_UPDATE_HANDLERS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, KAFKASTORE_UPDATE_HANDLERS_DOC
+    )
+    .define(KAFKAGROUP_REBALANCE_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 300000, atLeast(0),
+        ConfigDef.Importance.MEDIUM, KAFKAGROUP_REBALANCE_TIMEOUT_DOC
+    )
+    .define(KAFKAGROUP_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 10000, atLeast(0),
+        ConfigDef.Importance.MEDIUM, KAFKAGROUP_SESSION_TIMEOUT_DOC
+    )
+    .define(KAFKAGROUP_HEARTBEAT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT, 3000, atLeast(0),
+        ConfigDef.Importance.MEDIUM, KAFKAGROUP_HEARTBEAT_INTERVAL_DOC
     )
     .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
         ConfigDef.Importance.HIGH, HOST_DOC
