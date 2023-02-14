@@ -2386,8 +2386,7 @@ public class ProtobufSchema implements ParsedSchema {
         metaName = CONFLUENT_MESSAGE_META;
       } else {
         messageElement = findMatchingMessageElement(original, identifiers, identifiers.length - 1);
-        FieldElement fieldElement =
-            findMatchingFieldElement(messageElement, identifiers[identifiers.length - 1]);
+        FieldElement fieldElement = findMatchingFieldElement(messageElement, identifiers);
         entityNode = findMatchingNode(node, identifiers, identifiers.length - 1);
         allOptions = new LinkedList<>(fieldElement.getOptions());
         metaName = CONFLUENT_FIELD_META;

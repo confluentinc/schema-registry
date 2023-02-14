@@ -131,20 +131,36 @@ public class ProtobufSchemaUtils {
         return currNode;
       }
     }
-    throw new IllegalArgumentException(
-      String.format("No matching field '%s' with value '%s' found in the schema",
-        targetFieldName, targetFieldValue));
+    return null;
   }
 
   public static JsonNode findMatchingNode(JsonNode node, String[] identifiers, int lastIndex) {
     JsonNode nodePtr = node;
+    int idx;
     // skipping the first entry because path starts with leading dot
-    for (int i = 1; i < lastIndex; i++) {
-      if (i == 1) {
-        nodePtr = findMatchingNodeHelper(nodePtr, "types", "name", identifiers[i]);
+    for (idx = 1; idx < lastIndex; idx++) {
+      JsonNode found;
+      String targetName = identifiers[idx];
+      if (idx == 1) {
+        found = findMatchingNodeHelper(nodePtr, "types", "name", targetName);
       } else {
-        nodePtr = findMatchingNodeHelper(nodePtr, "nestedTypes", "name", identifiers[i]);
+        found = findMatchingNodeHelper(nodePtr, "nestedTypes", "name", targetName);
       }
+
+      if (found != null) {
+        nodePtr = found;
+      } else if (idx == 1 || idx != lastIndex - 1) {
+        throw new IllegalArgumentException(
+            String.format("No matching field 'name' with value '%s' found in the schema",
+                targetName));
+      } else {
+        break;
+      }
+    }
+
+    // need to find the oneOf fields
+    if (idx == lastIndex - 1) {
+      nodePtr = findMatchingNodeHelper(nodePtr, "oneOfs", "name", identifiers[idx]);
     }
 
     // find the fieldNode
@@ -161,15 +177,32 @@ public class ProtobufSchemaUtils {
         return (MessageElement) typeElement;
       }
     }
-    throw new IllegalArgumentException(
-      String.format("No matching Message with name '%s' found in the schema", name));
+    return null;
   }
 
   public static FieldElement findMatchingFieldElement(MessageElement messageElement,
-                                                      String fieldName) {
+                                                      String[] identifiers) {
+    String fieldName = identifiers[identifiers.length - 1];
     for (FieldElement fieldElement : messageElement.getFields()) {
       if (fieldName.equals(fieldElement.getName())) {
         return fieldElement;
+      }
+    }
+    // search oneOf fields
+    if (identifiers.length > 3) {
+      String oneOfFieldName = identifiers[identifiers.length - 2];
+      OneOfElement foundOneOfElement = null;
+      for (OneOfElement oneOfElement : messageElement.getOneOfs()) {
+        if (oneOfFieldName.equals(oneOfElement.getName())) {
+          foundOneOfElement = oneOfElement;
+        }
+      }
+      if (foundOneOfElement != null) {
+        for (FieldElement fieldElement : foundOneOfElement.getFields()) {
+          if (fieldName.equals(fieldElement.getName())) {
+            return fieldElement;
+          }
+        }
       }
     }
     throw new IllegalArgumentException(String.format(
@@ -182,10 +215,20 @@ public class ProtobufSchemaUtils {
     MessageElement messageElement = null;
 
     for (int i = 1; i < lastIndex; i++) {
+      MessageElement found;
+      String targetName = identifiers[i];
       if (i == 1) {
-        messageElement = findMatchingMessage(original.getTypes(), identifiers[i]);
+        found = findMatchingMessage(original.getTypes(), targetName);
       } else {
-        messageElement = findMatchingMessage(messageElement.getNestedTypes(), identifiers[i]);
+        found = findMatchingMessage(messageElement.getNestedTypes(), targetName);
+      }
+      if (found != null) {
+        messageElement = found;
+      } else if (i == 1 || i != lastIndex - 1) {
+        // if the last message cannot be found, it could be the last identifier is the oneof
+        // field's name, return the previous messageElement in this case
+        throw new IllegalArgumentException(
+            String.format("No matching Message with name '%s' found in the schema", targetName));
       }
     }
     return messageElement;
