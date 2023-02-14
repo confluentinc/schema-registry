@@ -2499,6 +2499,10 @@ public class ProtobufSchemaTest {
         "    otherOption = \"foo\",\n" +
         "    (confluent.field_meta).tags = \"PRIVATE\"\n" +
         "  ];\n" +
+        "  oneof some_val {\n" +
+        "    int32 other_id = 11 [(confluent.field_meta).tags = \"PRIVATE\"];\n" +
+        "    string one_id = 12;\n" +
+        "  }\n" +
         "\n" +
         "  message NestedRecord {\n" +
         "    int64 nested_filed1 = 4 [(confluent.field_meta).tags = [\"PII\"]];\n" +
@@ -2527,6 +2531,11 @@ public class ProtobufSchemaTest {
       "  }];\n" +
       "  int32 my_field4 = 5 [otherOption = \"foo\"];\n" +
       "\n" +
+      "  oneof some_val {\n" +
+      "    int32 other_id = 11;\n" +
+      "    string one_id = 12;\n" +
+      "  }\n" +
+      "\n" +
       "  message NestedRecord {\n" +
       "    int64 nested_filed1 = 4 [(confluent.field_meta) = {\n" +
       "      tags: [\n" +
@@ -2547,6 +2556,8 @@ public class ProtobufSchemaTest {
       SchemaEntity.EntityType.SR_FIELD), Collections.singleton("PRIVATE"));
     tags.put(new SchemaEntity(".SampleRecord.NestedRecord.nested_filed1",
       SchemaEntity.EntityType.SR_FIELD), Collections.singleton("PRIVATE"));
+    tags.put(new SchemaEntity(".SampleRecord.some_val.other_id",
+        SchemaEntity.EntityType.SR_FIELD), Collections.singleton("PRIVATE"));
     ParsedSchema schema = new ProtobufSchema(schemaString).copy(Collections.emptyMap(), tags);
     assertEquals(afterRemovedTag, schema.canonicalString());
   }
