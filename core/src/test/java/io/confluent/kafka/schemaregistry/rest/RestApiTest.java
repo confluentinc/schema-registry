@@ -37,11 +37,14 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.SchemaParseException;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.*;
@@ -63,6 +66,21 @@ public class RestApiTest extends ClusterTestHarness {
 
   public RestApiTest() {
     super(1, true);
+  }
+
+  @Before
+  public void setUp() throws Exception {
+    super.setUp();
+    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
+      public void handle(RegisterSchemaRequest request) {
+      }
+
+      public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
+        return ruleSet != null
+            ? new io.confluent.kafka.schemaregistry.storage.RuleSet(ruleSet)
+            : null;
+      }
+    });
   }
 
   @Test

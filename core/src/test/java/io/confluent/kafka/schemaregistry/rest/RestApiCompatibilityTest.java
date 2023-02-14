@@ -30,10 +30,13 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.Before;
 import org.junit.Test;
 
 import static org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE;
@@ -45,6 +48,21 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
   public RestApiCompatibilityTest() {
     super(1, true, CompatibilityLevel.BACKWARD.name);
+  }
+
+  @Before
+  public void setUp() throws Exception {
+    super.setUp();
+    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
+      public void handle(RegisterSchemaRequest request) {
+      }
+
+      public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
+        return ruleSet != null
+            ? new io.confluent.kafka.schemaregistry.storage.RuleSet(ruleSet)
+            : null;
+      }
+    });
   }
 
   @Test
