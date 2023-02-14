@@ -584,7 +584,6 @@ public class ProtobufSchema implements ParsedSchema {
     JsonNode original = jsonMapper.valueToTree(schemaCopy.rawSchema());
     modifySchemaTags(schemaCopy.rawSchema(), original, tagsToAdd, tagsToRemove);
     try {
-      System.out.println(original.toPrettyString());
       ProtoFileElement newFileElement = jsonToFile(original);
       return new ProtobufSchema(newFileElement.toSchema(),
         schemaCopy.references(),
