@@ -168,8 +168,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     // Use listener endpoint for identity when a matching named inter instance listener was found.
     // Default to existing behavior of using host name config and listener port otherwise.
     String internalListenerName = internalListener.getName();
-    String host =   (internalListenerName != null
-                      && internalListenerName.equals(interInstanceListenerNameConfig))
+    String host =  (internalListenerName != null
+                      && internalListenerName.equalsIgnoreCase(interInstanceListenerNameConfig))
                     ? internalListener.getUri().getHost()
                     : config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
