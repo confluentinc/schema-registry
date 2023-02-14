@@ -22,24 +22,16 @@ import org.slf4j.LoggerFactory;
 
 public class RuleSetHandler {
 
-  private static final Logger log = LoggerFactory.getLogger(KafkaStore.class);
+  private static final Logger log = LoggerFactory.getLogger(RuleSetHandler.class);
 
   public RuleSetHandler() {
   }
 
-  public RegisterSchemaRequest filter(RegisterSchemaRequest request) {
+  public void handle(RegisterSchemaRequest request) {
     if (request.getRuleSet() != null) {
       log.warn("RuleSets are only supported by Confluent Enterprise and Confluent Cloud");
+      request.setRuleSet(null);
     }
-    return new RegisterSchemaRequest(
-        request.getVersion(),
-        request.getId(),
-        request.getSchemaType(),
-        request.getReferences(),
-        request.getMetadata(),
-        null,
-        request.getSchema()
-    );
   }
 
   public RuleSet transform(io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet) {
