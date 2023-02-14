@@ -169,7 +169,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     // Default to existing behavior of using host name config and listener port otherwise.
     String internalListenerName = internalListener.getName();
     String host =   (internalListenerName != null
-                      && internalListenerName.equals(interInstanceListenerNameConfig))
+                      && internalListenerName.equalsIgnoreCase(interInstanceListenerNameConfig))
                     ? internalListener.getUri().getHost()
                     : config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
