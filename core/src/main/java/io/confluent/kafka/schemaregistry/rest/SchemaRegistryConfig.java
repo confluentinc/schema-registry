@@ -109,6 +109,20 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>kafkastore.update.handler</code>
    */
   public static final String KAFKASTORE_UPDATE_HANDLERS_CONFIG = "kafkastore.update.handlers";
+  /**
+   * <code>kafkagroup.rebalance.timeout.ms</code>
+   */
+  public static final String KAFKAGROUP_REBALANCE_TIMEOUT_MS_CONFIG =
+      "kafkagroup.rebalance.timeout.ms";
+  /**
+   * <code>kafkagroup.session.timeout.ms</code>
+   */
+  public static final String KAFKAGROUP_SESSION_TIMEOUT_MS_CONFIG = "kafkagroup.session.timeout.ms";
+  /**
+   * <code>kafkagroup.heartbeat.interval.ms</code>
+   */
+  public static final String KAFKAGROUP_HEARTBEAT_INTERVAL_MS_CONFIG =
+      "kafkagroup.heartbeat.interval.ms";
 
   /**
    * <code>leader.eligibility</code>*
@@ -273,6 +287,13 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_UPDATE_HANDLERS_DOC =
       "  A list of classes to use as StoreUpdateHandler. Implementing the interface "
           + "<code>StoreUpdateHandler</code> allows you to handle Kafka store update events.";
+  protected static final String KAFKAGROUP_REBALANCE_TIMEOUT_DOC =
+      "The maximum allowed time for each worker to join the group once a rebalance has begun.";
+  protected static final String KAFKAGROUP_SESSION_TIMEOUT_DOC =
+      "The timeout used to detect client failures when using Kafka's group management facility.";
+  protected static final String KAFKAGROUP_HEARTBEAT_INTERVAL_DOC =
+      "The expected time between heartbeats to the consumer coordinator when using "
+          + "Kafka's group management facilities.";
   protected static final String HOST_DOC =
       "The host name. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes. This name is also used in the endpoint for inter instance "
@@ -455,6 +476,15 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(KAFKASTORE_UPDATE_HANDLERS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, KAFKASTORE_UPDATE_HANDLERS_DOC
+    )
+    .define(KAFKAGROUP_REBALANCE_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 300000, atLeast(0),
+        ConfigDef.Importance.MEDIUM, KAFKAGROUP_REBALANCE_TIMEOUT_DOC
+    )
+    .define(KAFKAGROUP_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 10000, atLeast(0),
+        ConfigDef.Importance.MEDIUM, KAFKAGROUP_SESSION_TIMEOUT_DOC
+    )
+    .define(KAFKAGROUP_HEARTBEAT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT, 3000, atLeast(0),
+        ConfigDef.Importance.MEDIUM, KAFKAGROUP_HEARTBEAT_INTERVAL_DOC
     )
     .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
         ConfigDef.Importance.HIGH, HOST_DOC
