@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -1918,6 +1919,27 @@ public class RestApiTest extends ClusterTestHarness {
       assertEquals("Subject is in read-only mode", Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
           .getErrorCode());
     }
+  }
+
+  @Test
+  public void testRegisterWithAndWithoutMetadata() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    Map<String, String> properties = Collections.singletonMap("application.version", "2");
+    Metadata metadata = new Metadata(null, properties, null);
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    request1.setMetadata(metadata);
+
+    int id = restApp.restClient.registerSchema(request1, subject, false);
+
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema1);
+    int id2 = restApp.restClient.registerSchema(request2, subject, false);
+    assertEquals(id, id2);
   }
 
   @Test
