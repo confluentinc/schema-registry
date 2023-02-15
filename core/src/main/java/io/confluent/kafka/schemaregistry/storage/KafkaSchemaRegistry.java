@@ -566,19 +566,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
               config, parsedSchema, undeletedVersions);
       final boolean isCompatible = compatibilityErrorLogs.isEmpty();
 
-      try {
-        if (normalize) {
-          parsedSchema = parsedSchema.normalize();
+      maybeValidateAndNormalizeSchema(parsedSchema, schema, false, normalize);
+
+      // see if the schema to be registered already exists, after population and re-normalization
+      SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
+      if (schemaIdAndSubjects != null
+          && (schemaId < 0 || schemaId == schemaIdAndSubjects.getSchemaId())) {
+        if (schemaIdAndSubjects.hasSubject(subject)
+            && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
+          // return only if the schema was previously registered under the input subject
+          return schemaIdAndSubjects.getSchemaId();
+        } else {
+          // need to register schema under the input subject
+          schemaId = schemaIdAndSubjects.getSchemaId();
         }
-      } catch (Exception e) {
-        String errMsg = "Invalid schema " + schema + ", details: " + e.getMessage();
-        log.error(errMsg, e);
-        throw new InvalidSchemaException(errMsg, e);
       }
-      // Allow schema providers to modify the schema during compatibility checks
-      schema.setSchemaType(parsedSchema.schemaType());
-      schema.setSchema(parsedSchema.canonicalString());
-      schema.setReferences(parsedSchema.references());
 
       Mode mode = getModeInScope(subject);
       if (isCompatible || mode == Mode.IMPORT) {
@@ -1163,15 +1165,23 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private ParsedSchema canonicalizeSchema(Schema schema, boolean isNew, boolean normalize)
-          throws InvalidSchemaException {
+      throws InvalidSchemaException {
     if (schema == null
         || schema.getSchema() == null
         || schema.getSchema().trim().isEmpty()) {
       return null;
     }
     ParsedSchema parsedSchema = parseSchema(schema, isNew, normalize);
+    return maybeValidateAndNormalizeSchema(parsedSchema, schema, true, normalize);
+  }
+
+  private ParsedSchema maybeValidateAndNormalizeSchema(
+      ParsedSchema parsedSchema, Schema schema, boolean validate, boolean normalize)
+          throws InvalidSchemaException {
     try {
-      parsedSchema.validate();
+      if (validate) {
+        parsedSchema.validate();
+      }
       if (normalize) {
         parsedSchema = parsedSchema.normalize();
       }
