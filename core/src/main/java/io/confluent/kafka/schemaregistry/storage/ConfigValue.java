@@ -69,6 +69,20 @@ public class ConfigValue extends SubjectValue {
     this.finalRuleSet = finalRuleSet != null ? new RuleSet(finalRuleSet) : null;
   }
 
+  public ConfigValue(String subject, Config configEntity, RuleSetHandler ruleSetHandler) {
+    super(subject);
+    this.compatibilityLevel = CompatibilityLevel.forName(configEntity.getCompatibilityLevel());
+    this.compatibilityGroup = configEntity.getCompatibilityGroup();
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata initialMetadata =
+        configEntity.getInitialMetadata();
+    this.initialMetadata = initialMetadata != null ? new Metadata(initialMetadata) : null;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata finalMetadata =
+        configEntity.getFinalMetadata();
+    this.finalMetadata = finalMetadata != null ? new Metadata(finalMetadata) : null;
+    this.initialRuleSet = ruleSetHandler.transform(configEntity.getInitialRuleSet());
+    this.finalRuleSet = ruleSetHandler.transform(configEntity.getFinalRuleSet());
+  }
+
   public ConfigValue(String subject, CompatibilityLevel compatibilityLevel) {
     super(subject);
     this.compatibilityLevel = compatibilityLevel;
