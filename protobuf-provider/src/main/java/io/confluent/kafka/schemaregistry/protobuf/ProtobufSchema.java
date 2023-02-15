@@ -1425,7 +1425,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   private static Map<String, ?> transformOptionMap(OptionElement option) {
     if (option.getKind() != Kind.OPTION) {
-      throw new IllegalArgumentException("Expected option of type kind OPTION");
+      throw new IllegalArgumentException("Expected option of kind OPTION");
     }
     OptionElement value = (OptionElement) option.getValue();
     Object mapValue = value.getValue();
