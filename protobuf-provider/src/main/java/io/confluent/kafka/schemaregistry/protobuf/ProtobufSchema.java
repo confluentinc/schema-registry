@@ -1416,17 +1416,28 @@ public class ProtobufSchema implements ParsedSchema {
 
   protected static OptionElement transform(OptionElement option) {
     if (option.getKind() == Kind.OPTION) {
-      OptionElement value = (OptionElement) option.getValue();
-      Object mapValue = value.getValue();
-      Kind kind = value.getKind();
-      if (kind == Kind.BOOLEAN || kind == Kind.ENUM || kind == Kind.NUMBER) {
-        mapValue = new OptionElement.OptionPrimitive(kind, mapValue);
-      }
-      Map<String, ?> map = Collections.singletonMap(value.getName(), mapValue);
+      Map<String, ?> map = transformOptionMap(option);
       return new OptionElement(option.getName(), Kind.MAP, map, option.isParenthesized());
     } else {
       return option;
     }
+  }
+
+  private static Map<String, ?> transformOptionMap(OptionElement option) {
+    if (option.getKind() != Kind.OPTION) {
+      throw new IllegalArgumentException("Expected option of kind OPTION");
+    }
+    OptionElement value = (OptionElement) option.getValue();
+    Object mapValue = value.getValue();
+    Kind kind = value.getKind();
+    if (kind == Kind.BOOLEAN || kind == Kind.ENUM || kind == Kind.NUMBER) {
+      // Wire only creates OptionPrimitive for the above kinds
+      mapValue = new OptionElement.OptionPrimitive(kind, mapValue);
+    } else if (kind == Kind.OPTION) {
+      // Recursively convert options of kind OPTION to maps
+      mapValue = transformOptionMap(value);
+    }
+    return Collections.singletonMap(value.getName(), mapValue);
   }
 
   private static MessageDefinition toDynamicMessage(
