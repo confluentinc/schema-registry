@@ -297,8 +297,7 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String HOST_DOC =
       "The host name. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes. This name is also used in the endpoint for inter instance "
-      + "communication if inter.instance.listener.name is not specified or does not match "
-      + "any listener ";
+      + "communication";
   protected static final String SCHEMA_PROVIDERS_DOC =
       "  A list of classes to use as SchemaProvider. Implementing the interface "
           + "<code>SchemaProvider</code> allows you to add custom schema types to Schema Registry.";
