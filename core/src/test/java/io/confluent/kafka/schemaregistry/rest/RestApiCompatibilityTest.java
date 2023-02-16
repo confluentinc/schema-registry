@@ -30,10 +30,13 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.Before;
 import org.junit.Test;
 
 import static org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE;
@@ -45,6 +48,24 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
   public RestApiCompatibilityTest() {
     super(1, true, CompatibilityLevel.BACKWARD.name);
+  }
+
+  @Before
+  public void setUp() throws Exception {
+    super.setUp();
+    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
+      public void handle(ConfigUpdateRequest request) {
+      }
+
+      public void handle(RegisterSchemaRequest request) {
+      }
+
+      public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
+        return ruleSet != null
+            ? new io.confluent.kafka.schemaregistry.storage.RuleSet(ruleSet)
+            : null;
+      }
+    });
   }
 
   @Test
@@ -595,4 +616,30 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
           e.getStatus());
     }
   }
+
+  @Test
+  public void testRegisterInvalidRuleSet() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    Rule r1 = new Rule("foo", null, null, RuleMode.READ, null, null, null, null, null, false);
+    List<Rule> rules = Collections.singletonList(r1);
+    RuleSet ruleSet = new RuleSet(rules, null);
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    request1.setRuleSet(ruleSet);
+    try {
+      restApp.restClient.registerSchema(request1, subject, false);
+      fail("Registering an invalid ruleSet should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals("Should get a bad request status",
+          RestInvalidRuleSetException.DEFAULT_ERROR_CODE,
+          e.getStatus());
+    }
+  }
+
 }

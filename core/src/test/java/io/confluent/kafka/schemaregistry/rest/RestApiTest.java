@@ -31,17 +31,21 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.SchemaParseException;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.*;
@@ -1943,7 +1947,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testRegisterInvalidRuleSet() throws Exception {
+  public void testRegisterDropsRuleSet() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -1951,21 +1955,18 @@ public class RestApiTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
 
-    Rule r1 = new Rule("foo", null, null, RuleMode.READ, null, null, null, null, null, false);
+    Rule r1 = new Rule("foo", null, null, RuleMode.READ, "ENCRYPT", null, null, null, null, false);
     List<Rule> rules = Collections.singletonList(r1);
-    RuleSet ruleSet = new RuleSet(rules, null);
+    RuleSet ruleSet = new RuleSet(null, rules);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setRuleSet(ruleSet);
-    // add config ruleSet
-    try {
-      restApp.restClient.registerSchema(request1, subject, false);
-      fail("Registering an invalid ruleSet should fail");
-    } catch (RestClientException e) {
-      // this is expected.
-      assertEquals("Should get a bad request status",
-          RestInvalidRuleSetException.DEFAULT_ERROR_CODE,
-          e.getStatus());
-    }
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request1, subject, false));
+
+    SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1, subject);
+    assertNull(schemaString.getRuleSet());
   }
 
   @Override

@@ -106,6 +106,9 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
+
+    schemaRegistry.getRuleSetHandler().handle(request);
+
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
     if (request.getCompatibilityLevel() != null && compatibilityLevel == null) {
@@ -215,6 +218,9 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
+
+    schemaRegistry.getRuleSetHandler().handle(request);
+
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
     if (request.getCompatibilityLevel() != null && compatibilityLevel == null) {

@@ -127,6 +127,24 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     this.deleted = false;
   }
 
+  public SchemaValue(Schema schemaEntity, RuleSetHandler ruleSetHandler) {
+    super(schemaEntity.getSubject());
+    this.version = schemaEntity.getVersion();
+    this.id = schemaEntity.getId();
+    this.schemaType = schemaEntity.getSchemaType();
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
+        = schemaEntity.getReferences();
+    this.references = refs == null ? null : refs.stream()
+        .map(SchemaReference::new)
+        .collect(Collectors.toList());
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata =
+        schemaEntity.getMetadata();
+    this.metadata = metadata != null ? new Metadata(metadata) : null;
+    this.ruleSet = ruleSetHandler.transform(schemaEntity.getRuleSet());
+    this.schema = schemaEntity.getSchema();
+    this.deleted = false;
+  }
+
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
