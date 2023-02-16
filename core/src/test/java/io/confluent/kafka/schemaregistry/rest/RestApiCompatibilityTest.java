@@ -616,4 +616,30 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
           e.getStatus());
     }
   }
+
+  @Test
+  public void testRegisterInvalidRuleSet() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    Rule r1 = new Rule("foo", null, null, RuleMode.READ, null, null, null, null, null, false);
+    List<Rule> rules = Collections.singletonList(r1);
+    RuleSet ruleSet = new RuleSet(rules, null);
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    request1.setRuleSet(ruleSet);
+    try {
+      restApp.restClient.registerSchema(request1, subject, false);
+      fail("Registering an invalid ruleSet should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals("Should get a bad request status",
+          RestInvalidRuleSetException.DEFAULT_ERROR_CODE,
+          e.getStatus());
+    }
+  }
+
 }

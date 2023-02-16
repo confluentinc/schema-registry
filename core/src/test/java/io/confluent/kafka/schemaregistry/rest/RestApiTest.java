@@ -69,24 +69,6 @@ public class RestApiTest extends ClusterTestHarness {
     super(1, true);
   }
 
-  @Before
-  public void setUp() throws Exception {
-    super.setUp();
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
-      public void handle(ConfigUpdateRequest request) {
-      }
-
-      public void handle(RegisterSchemaRequest request) {
-      }
-
-      public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
-        return ruleSet != null
-            ? new io.confluent.kafka.schemaregistry.storage.RuleSet(ruleSet)
-            : null;
-      }
-    });
-  }
-
   @Test
   public void testBasic() throws Exception {
     String subject1 = "testTopic1";
@@ -1965,7 +1947,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testRegisterInvalidRuleSet() throws Exception {
+  public void testRegisterDropsRuleSet() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -1973,21 +1955,18 @@ public class RestApiTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
 
-    Rule r1 = new Rule("foo", null, null, RuleMode.READ, null, null, null, null, null, false);
+    Rule r1 = new Rule("foo", null, null, RuleMode.READ, "ENCRYPT", null, null, null, null, false);
     List<Rule> rules = Collections.singletonList(r1);
-    RuleSet ruleSet = new RuleSet(rules, null);
+    RuleSet ruleSet = new RuleSet(null, rules);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setRuleSet(ruleSet);
-    // add config ruleSet
-    try {
-      restApp.restClient.registerSchema(request1, subject, false);
-      fail("Registering an invalid ruleSet should fail");
-    } catch (RestClientException e) {
-      // this is expected.
-      assertEquals("Should get a bad request status",
-          RestInvalidRuleSetException.DEFAULT_ERROR_CODE,
-          e.getStatus());
-    }
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request1, subject, false));
+
+    SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1, subject);
+    assertNull(schemaString.getRuleSet());
   }
 
   @Override
