@@ -121,6 +121,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final MetadataEncoderService metadataEncoder;
+  private RuleSetHandler ruleSetHandler;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
   private final CompatibilityLevel defaultCompatibilityLevel;
@@ -201,6 +202,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
     this.metadataEncoder = new MetadataEncoderService(this);
+    this.ruleSetHandler = new RuleSetHandler();
   }
 
   private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
@@ -279,6 +281,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public MetadataEncoderService getMetadataEncoder() {
     return metadataEncoder;
+  }
+
+  public RuleSetHandler getRuleSetHandler() {
+    return ruleSetHandler;
+  }
+
+  public void setRuleSetHandler(RuleSetHandler ruleSetHandler) {
+    this.ruleSetHandler = ruleSetHandler;
   }
 
   protected IdGenerator identityGenerator(SchemaRegistryConfig config) {
@@ -596,7 +606,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
 
         SchemaKey schemaKey = new SchemaKey(subject, schema.getVersion());
-        SchemaValue schemaValue = new SchemaValue(schema);
+        SchemaValue schemaValue = new SchemaValue(schema, ruleSetHandler);
         metadataEncoder.encodeMetadata(schemaValue);
         if (schemaId >= 0) {
           checkIfSchemaWithIdExist(schemaId, schema);
@@ -1654,7 +1664,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       ConfigValue oldConfig = (ConfigValue) kafkaStore.get(configKey);
-      ConfigValue newConfig = new ConfigValue(subject, config);
+      ConfigValue newConfig = new ConfigValue(subject, config, ruleSetHandler);
       kafkaStore.put(configKey, ConfigValue.update(oldConfig, newConfig));
       log.debug("Wrote new config : " + config + " to the Kafka data store with key " + configKey);
     } catch (StoreException e) {
