@@ -59,7 +59,6 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
 
   private static final String ENCRYPT_PREFIX = "encrypt.";
-  private static final String KMS_KEY_ID = "kms.key.id";
 
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String CACHE_EXPIRY_SECS = "cache.expiry.secs";
@@ -286,21 +285,22 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
 
     protected String getKekId(RuleContext ctx) {
       String kekId = null;
-      Metadata metadata = ctx.target().metadata();
-      if (metadata != null) {
-        Map<String, String> properties = metadata.getProperties();
-        if (properties != null) {
-          String keyId = properties.get(getEncryptPrefix(ctx) + KMS_KEY_ID);
-          if (keyId == null) {
-            // If kms key id not found for specific rule name, fall back to general kms key id
-            keyId = properties.get(ENCRYPT_KMS_KEY_ID);
-          }
-          if (keyId != null) {
-            kekId = getKeyUrlPrefix() + keyId;
-          }
+      String keyId = null;
+      Map<String, String> params = ctx.rule().getParams();
+      if (params != null) {
+        keyId = params.get(ENCRYPT_KMS_KEY_ID);
+      }
+      if (keyId == null) {
+        Metadata metadata = ctx.target().metadata();
+        if (metadata != null) {
+          // If kms key id not found for specific rule, fall back to general kms key id
+          Map<String, String> properties = metadata.getProperties();
+          keyId = properties.get(ENCRYPT_KMS_KEY_ID);
         }
       }
-      if (kekId == null) {
+      if (keyId != null) {
+        kekId = getKeyUrlPrefix() + keyId;
+      } else {
         kekId = defaultKekId;
       }
       if (kekId == null) {
