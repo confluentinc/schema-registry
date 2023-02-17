@@ -284,7 +284,6 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
     }
 
     protected String getKekId(RuleContext ctx) {
-      String kekId = null;
       String keyId = null;
       Map<String, String> params = ctx.rule().getParams();
       if (params != null) {
@@ -300,11 +299,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
           }
         }
       }
-      if (keyId != null) {
-        kekId = getKeyUrlPrefix() + keyId;
-      } else {
-        kekId = defaultKekId;
-      }
+      String kekId = keyId != null ? getKeyUrlPrefix() + keyId : defaultKekId;
       if (kekId == null) {
         throw new IllegalArgumentException("No key id found");
       }
