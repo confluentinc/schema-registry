@@ -62,7 +62,7 @@ public class Rule {
     this.mode = mode;
     this.type = type;
     this.tags = tags != null ? Collections.unmodifiableSortedSet(tags) : null;
-    this.params = params != null ? Collections.unmodifiableSortedMap(params): null;
+    this.params = params != null ? Collections.unmodifiableSortedMap(params) : null;
     this.expr = expr;
     this.onSuccess = onSuccess;
     this.onFailure = onFailure;
