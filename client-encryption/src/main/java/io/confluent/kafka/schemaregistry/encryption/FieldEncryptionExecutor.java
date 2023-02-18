@@ -284,21 +284,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
     }
 
     protected String getKekId(RuleContext ctx) {
-      String keyId = null;
-      Map<String, String> params = ctx.rule().getParams();
-      if (params != null) {
-        keyId = params.get(ENCRYPT_KMS_KEY_ID);
-      }
-      if (keyId == null) {
-        Metadata metadata = ctx.target().metadata();
-        if (metadata != null) {
-          // If kms key id not found for specific rule, fall back to general kms key id
-          Map<String, String> properties = metadata.getProperties();
-          if (properties != null) {
-            keyId = properties.get(ENCRYPT_KMS_KEY_ID);
-          }
-        }
-      }
+      String keyId = ctx.getParameter(ENCRYPT_KMS_KEY_ID);
       String kekId = keyId != null ? getKeyUrlPrefix() + keyId : defaultKekId;
       if (kekId == null) {
         throw new IllegalArgumentException("No key id found");

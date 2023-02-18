@@ -130,6 +130,25 @@ public class RuleContext {
     return tags;
   }
 
+  public String getParameter(String name) {
+    String value = null;
+    Map<String, String> params = rule.getParams();
+    if (params != null) {
+      value = params.get(name);
+    }
+    if (value == null) {
+      Metadata metadata = target.metadata();
+      if (metadata != null) {
+        // If property not found in rule parameters, look in metadata properties
+        Map<String, String> properties = metadata.getProperties();
+        if (properties != null) {
+          value = properties.get(name);
+        }
+      }
+    }
+    return value;
+  }
+
   public FieldContext currentField() {
     return fieldContexts.peekLast();
   }
