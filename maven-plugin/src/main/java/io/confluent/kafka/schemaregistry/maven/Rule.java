@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import java.util.Map;
 import java.util.Set;
 import org.apache.maven.plugins.annotations.Parameter;
 
@@ -44,6 +45,9 @@ public class Rule {
   protected Set<String> tags;
 
   @Parameter(required = false)
+  protected Map<String, String> params;
+
+  @Parameter(required = false)
   protected String expr;
 
   @Parameter(required = false)
@@ -64,6 +68,7 @@ public class Rule {
         + ", mode=" + mode
         + ", type='" + type + '\''
         + ", tags=" + tags
+        + ", params=" + params
         + ", expr='" + expr + '\''
         + ", onSuccess='" + onSuccess + '\''
         + ", onFailure='" + onFailure + '\''
@@ -73,7 +78,7 @@ public class Rule {
 
   public io.confluent.kafka.schemaregistry.client.rest.entities.Rule toRuleEntity() {
     return new io.confluent.kafka.schemaregistry.client.rest.entities.Rule(
-        name, doc, kind, mode, type, tags, expr, onSuccess, onFailure, disabled
+        name, doc, kind, mode, type, tags, params, expr, onSuccess, onFailure, disabled
     );
   }
 }

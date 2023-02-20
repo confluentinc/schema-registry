@@ -189,7 +189,7 @@ public class CelExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.READ,
-        CelExecutor.TYPE, null, "message.name == \"testUser\" && message.kind == \"ONE\"",
+        CelExecutor.TYPE, null, null, "message.name == \"testUser\" && message.kind == \"ONE\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -204,7 +204,7 @@ public class CelExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.READ,
-        CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        CelExecutor.TYPE, null, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -219,7 +219,7 @@ public class CelExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.READ,
-        CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        CelExecutor.TYPE, null, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, "NONE", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -234,7 +234,7 @@ public class CelExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.READ,
-        CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        CelExecutor.TYPE, null, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, "DLQ", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -258,7 +258,7 @@ public class CelExecutorTest {
     schemaRegistry.register(topic + "-key", avroSchema);
 
     Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.READ,
-        CelExecutor.TYPE, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        CelExecutor.TYPE, null, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
         null, "DLQ", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -290,7 +290,7 @@ public class CelExecutorTest {
     Schema schema = ReflectData.get().getSchema(widget.getClass());
     AvroSchema avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.READ,
-        CelExecutor.TYPE, null, "message.name == \"alice\"", null, null, false);
+        CelExecutor.TYPE, null, null, "message.name == \"alice\"", null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
@@ -318,7 +318,7 @@ public class CelExecutorTest {
     Schema schema = createWidgetSchema();
     AvroSchema avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -346,7 +346,7 @@ public class CelExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelExecutor.TYPE, null, "{'name': 'Bob', 'kind': 'TWO'}",
+        CelExecutor.TYPE, null, null, "{'name': 'Bob', 'kind': 'TWO'}",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -363,7 +363,7 @@ public class CelExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelExecutor.TYPE, null, "message",
+        CelExecutor.TYPE, null, null, "message",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -379,7 +379,7 @@ public class CelExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelExecutor.TYPE, null, "message.name == \"testUser\"",
+        CelExecutor.TYPE, null, null, "message.name == \"testUser\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -393,7 +393,7 @@ public class CelExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelExecutor.TYPE, null, "null",
+        CelExecutor.TYPE, null, null, "null",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -419,7 +419,7 @@ public class CelExecutorTest {
         .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     protobufSchema = protobufSchema.copy(null, ruleSet);
@@ -488,7 +488,7 @@ public class CelExecutorTest {
         .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelExecutor.TYPE, null, "io.confluent.kafka.schemaregistry.rules.Widget{ name: \"Bob\" }",
+        CelExecutor.TYPE, null, null, "io.confluent.kafka.schemaregistry.rules.Widget{ name: \"Bob\" }",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
 
@@ -527,7 +527,7 @@ public class CelExecutorTest {
         .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelExecutor.TYPE, null, "message",
+        CelExecutor.TYPE, null, null, "message",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
 
@@ -603,7 +603,7 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     jsonSchema = jsonSchema.copy(null, ruleSet);
@@ -667,7 +667,7 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), "value + \"-suffix\"",
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     jsonSchema = jsonSchema.copy(null, ruleSet);
@@ -731,7 +731,7 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelExecutor.TYPE, null, "{'name': 'Bob'}",
+        CelExecutor.TYPE, null, null, "{'name': 'Bob'}",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     jsonSchema = jsonSchema.copy(null, ruleSet);

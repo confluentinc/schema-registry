@@ -114,7 +114,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     assertEquals("testUser", record.get("name").toString());
 
     Rule rule = new Rule("myRule", null, null, null,
-        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, "NONE,NONE", false);
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = new Metadata(
         Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
