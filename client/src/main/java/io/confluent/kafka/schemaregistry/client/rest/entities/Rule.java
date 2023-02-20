@@ -20,14 +20,19 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Collections;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
@@ -36,16 +41,18 @@ import java.util.stream.Collectors;
 @Schema(description = "Rule")
 public class Rule {
 
-  private String name;
-  private String doc;
-  private RuleKind kind;
-  private RuleMode mode;
-  private String type;
-  private SortedSet<String> tags;
-  private String expr;
-  private String onSuccess;
-  private String onFailure;
-  private boolean disabled;
+  private final String name;
+  private final String doc;
+  private final RuleKind kind;
+  private final RuleMode mode;
+  private final String type;
+  private final SortedSet<String> tags;
+  @JsonPropertyOrder(alphabetic = true)
+  private final SortedMap<String, String> params;
+  private final String expr;
+  private final String onSuccess;
+  private final String onFailure;
+  private final boolean disabled;
 
   @JsonCreator
   public Rule(@JsonProperty("name") String name,
@@ -54,6 +61,7 @@ public class Rule {
               @JsonProperty("mode") RuleMode mode,
               @JsonProperty("type") String type,
               @JsonProperty("tags") Set<String> tags,
+              @JsonProperty("params") Map<String, String> params,
               @JsonProperty("expr") String expr,
               @JsonProperty("onSuccess") String onSuccess,
               @JsonProperty("onFailure") String onFailure,
@@ -68,7 +76,17 @@ public class Rule {
         .sorted()
         .collect(Collectors.toCollection(TreeSet::new))
         : Collections.emptySortedSet();
-    this.tags = sortedTags;
+    SortedMap<String, String> sortedParams = params != null
+        ? params.entrySet().stream()
+        .sorted(Map.Entry.comparingByKey())
+        .collect(Collectors.toMap(
+            Entry::getKey,
+            Entry::getValue,
+            (e1, e2) -> e1,
+            TreeMap::new))
+        : Collections.emptySortedMap();
+    this.tags = Collections.unmodifiableSortedSet(sortedTags);
+    this.params = Collections.unmodifiableSortedMap(sortedParams);
     this.expr = expr;
     this.onSuccess = onSuccess;
     this.onFailure = onFailure;
@@ -81,20 +99,10 @@ public class Rule {
     return name;
   }
 
-  @JsonProperty("name")
-  public void setName(String name) {
-    this.name = name;
-  }
-
   @Schema(description = "Rule doc")
   @JsonProperty("doc")
   public String getDoc() {
     return doc;
-  }
-
-  @JsonProperty("doc")
-  public void setDoc(String doc) {
-    this.doc = doc;
   }
 
   @Schema(description = "Rule kind")
@@ -103,20 +111,10 @@ public class Rule {
     return kind;
   }
 
-  @JsonProperty("kind")
-  public void setKind(RuleKind kind) {
-    this.kind = kind;
-  }
-
   @Schema(description = "Rule mode")
   @JsonProperty("mode")
   public RuleMode getMode() {
     return mode;
-  }
-
-  @JsonProperty("mode")
-  public void setMode(RuleMode mode) {
-    this.mode = mode;
   }
 
   @Schema(description = "Rule type")
@@ -125,31 +123,22 @@ public class Rule {
     return this.type;
   }
 
-  @JsonProperty("type")
-  public void setType(String type) {
-    this.type = type;
-  }
-
   @Schema(description = "The tags to which this rule applies")
   @JsonProperty("tags")
   public SortedSet<String> getTags() {
     return tags;
   }
 
-  @JsonProperty("tags")
-  public void setTags(SortedSet<String> tags) {
-    this.tags = tags;
+  @Schema(description = "Optional params for the rule")
+  @JsonProperty("params")
+  public SortedMap<String, String> getParams() {
+    return params;
   }
 
   @Schema(description = "Rule expression")
   @JsonProperty("expr")
   public String getExpr() {
     return expr;
-  }
-
-  @JsonProperty("expr")
-  public void setExpression(String expr) {
-    this.expr = expr;
   }
 
   /**
@@ -163,11 +152,6 @@ public class Rule {
     return onSuccess;
   }
 
-  @JsonProperty("onSuccess")
-  public void setOnSuccess(String onSuccess) {
-    this.onSuccess = onSuccess;
-  }
-
   /**
    * If the mode is WRITEREAD or UPDOWN, the on-failure action can be a comma separated
    * pair of actions, such as "none,error".  The first action applies to WRITE (or UP)
@@ -179,20 +163,10 @@ public class Rule {
     return onFailure;
   }
 
-  @JsonProperty("onFailure")
-  public void setOnFailure(String onFailure) {
-    this.onFailure = onFailure;
-  }
-
   @Schema(description = "Whether the rule is disabled")
   @JsonProperty("disabled")
   public boolean isDisabled() {
     return disabled;
-  }
-
-  @JsonProperty("disabled")
-  public void setDisabled(boolean disabled) {
-    this.disabled = disabled;
   }
 
   @Override
@@ -210,6 +184,7 @@ public class Rule {
         && mode == rule.mode
         && Objects.equals(type, rule.type)
         && Objects.equals(tags, rule.tags)
+        && Objects.equals(params, rule.params)
         && Objects.equals(expr, rule.expr)
         && Objects.equals(onSuccess, rule.onSuccess)
         && Objects.equals(onFailure, rule.onFailure)
@@ -218,7 +193,8 @@ public class Rule {
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, doc, kind, mode, type, tags, expr, onSuccess, onFailure, disabled);
+    return Objects.hash(name, doc, kind, mode, type, tags, params,
+        expr, onSuccess, onFailure, disabled);
   }
 
   @Override
@@ -230,6 +206,7 @@ public class Rule {
         + ", mode=" + mode
         + ", type='" + type + '\''
         + ", tags='" + tags + '\''
+        + ", params='" + params + '\''
         + ", expr='" + expr + '\''
         + ", onSuccess='" + onSuccess + '\''
         + ", onFailure='" + onFailure + '\''
@@ -256,6 +233,12 @@ public class Rule {
     if (tags != null) {
       tags.forEach(s -> md.update(s.getBytes(StandardCharsets.UTF_8)));
     }
+    if (params != null) {
+      params.forEach((key, value) -> {
+        md.update(key.getBytes(StandardCharsets.UTF_8));
+        md.update(value.getBytes(StandardCharsets.UTF_8));
+      });
+    }
     if (expr != null) {
       md.update(expr.getBytes(StandardCharsets.UTF_8));
     }
@@ -278,5 +261,4 @@ public class Rule {
       throw new RuleException("Missing rule type");
     }
   }
-
 }

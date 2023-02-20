@@ -24,7 +24,6 @@ import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.daead.DeterministicAeadConfig;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -59,7 +58,6 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
 
   private static final String ENCRYPT_PREFIX = "encrypt.";
-  private static final String KMS_KEY_ID = "kms.key.id";
 
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String CACHE_EXPIRY_SECS = "cache.expiry.secs";
@@ -285,24 +283,8 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
     }
 
     protected String getKekId(RuleContext ctx) {
-      String kekId = null;
-      Metadata metadata = ctx.target().metadata();
-      if (metadata != null) {
-        Map<String, String> properties = metadata.getProperties();
-        if (properties != null) {
-          String keyId = properties.get(getEncryptPrefix(ctx) + KMS_KEY_ID);
-          if (keyId == null) {
-            // If kms key id not found for specific rule name, fall back to general kms key id
-            keyId = properties.get(ENCRYPT_KMS_KEY_ID);
-          }
-          if (keyId != null) {
-            kekId = getKeyUrlPrefix() + keyId;
-          }
-        }
-      }
-      if (kekId == null) {
-        kekId = defaultKekId;
-      }
+      String keyId = ctx.getParameter(ENCRYPT_KMS_KEY_ID);
+      String kekId = keyId != null ? getKeyUrlPrefix() + keyId : defaultKekId;
       if (kekId == null) {
         throw new IllegalArgumentException("No key id found");
       }

@@ -63,8 +63,8 @@ public class MergeEntitiesTest {
 
   @Test
   public void mergeRuleSets() throws Exception {
-    Rule r1 = new Rule("hi", null, null, null, null, null, null, null, null, false);
-    Rule r2 = new Rule("bye", null, null, null, null, null, null, null, null, false);
+    Rule r1 = new Rule("hi", null, null, null, null, null, null, null, null, null, false);
+    Rule r2 = new Rule("bye", null, null, null, null, null, null, null, null, null, false);
     List<Rule> rules1 = ImmutableList.of(r1, r2);
     RuleSet rs1 = new RuleSet(rules1, null);
     List<Rule> rules2 = ImmutableList.of(r2, r1);
