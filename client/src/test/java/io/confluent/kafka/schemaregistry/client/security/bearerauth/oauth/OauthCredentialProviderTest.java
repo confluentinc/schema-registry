@@ -69,7 +69,9 @@ public class OauthCredentialProviderTest {
   public void TestConfigureInsufficientConfigs() {
     List<String> optionalConfigs = Arrays.asList(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE,
         SchemaRegistryClientConfig.BEARER_AUTH_SCOPE_CLAIM_NAME,
-        SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME);
+        SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME,
+        SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID,
+        SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER);
     for (String missingKey : CONFIG_MAP.keySet()) {
       // ignoring optional keys
       if (optionalConfigs.contains(missingKey)) {
