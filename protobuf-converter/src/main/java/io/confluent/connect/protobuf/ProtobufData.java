@@ -35,6 +35,7 @@ import com.google.protobuf.StringValue;
 import com.google.protobuf.util.Timestamps;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -745,8 +746,7 @@ public class ProtobufData {
               fieldDef.getName(),
               fieldDef.getNum(),
               fieldDef.getDefaultVal(),
-              fieldDef.getDoc(),
-              fieldDef.getParams()
+              fieldDef.getMeta()
           );
         } else {
           message.addField(
@@ -755,8 +755,7 @@ public class ProtobufData {
               fieldDef.getName(),
               fieldDef.getNum(),
               fieldDef.getDefaultVal(),
-              fieldDef.getDoc(),
-              fieldDef.getParams()
+              fieldDef.getMeta()
           );
         }
       }
@@ -791,8 +790,7 @@ public class ProtobufData {
             fieldDef.getName(),
             fieldDef.getNum(),
             fieldDef.getDefaultVal(),
-            fieldDef.getDoc(),
-            fieldDef.getParams()
+            fieldDef.getMeta()
         );
       }
     }
@@ -863,8 +861,7 @@ public class ProtobufData {
         name,
         tag,
         defaultVal != null ? defaultVal.toString() : null,
-        null,
-        params
+        new ProtobufMeta(null, params, null)
     );
   }
 
@@ -931,18 +928,16 @@ public class ProtobufData {
     private final String name;
     private final int num;
     private final String defaultVal;
-    private final String doc;
-    private final Map<String, String> params;
+    private final ProtobufMeta meta;
 
     public FieldDefinition(String label, String type, String name, int num, String defaultVal,
-        String doc, Map<String, String> params) {
+        ProtobufMeta meta) {
       this.label = label;
       this.type = type;
       this.name = name;
       this.num = num;
       this.defaultVal = defaultVal;
-      this.doc = doc;
-      this.params = params;
+      this.meta = meta;
     }
 
     public String getType() {
@@ -965,12 +960,8 @@ public class ProtobufData {
       return label;
     }
 
-    public String getDoc() {
-      return doc;
-    }
-
-    public Map<String, String> getParams() {
-      return params;
+    public ProtobufMeta getMeta() {
+      return meta;
     }
 
     @Override
@@ -987,13 +978,12 @@ public class ProtobufData {
           && Objects.equals(type, that.type)
           && Objects.equals(name, that.name)
           && Objects.equals(defaultVal, that.defaultVal)
-          && Objects.equals(doc, that.doc)
-          && Objects.equals(params, that.params);
+          && Objects.equals(meta, that.meta);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(label, type, name, num, defaultVal, doc, params);
+      return Objects.hash(label, type, name, num, defaultVal, meta);
     }
   }
 
@@ -1010,7 +1000,7 @@ public class ProtobufData {
         1
     );
     map.addField(key.getLabel(), key.getType(), key.getName(), key.getNum(),
-        key.getDefaultVal(), null, null);
+        key.getDefaultVal(), null);
     FieldDefinition val = fieldDefinitionFromConnectSchema(
         ctx,
         schema,
@@ -1020,7 +1010,7 @@ public class ProtobufData {
         2
     );
     map.addField(val.getLabel(), val.getType(), val.getName(), val.getNum(),
-        val.getDefaultVal(), null, null);
+        val.getDefaultVal(), null);
     return map.build();
   }
 

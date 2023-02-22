@@ -31,6 +31,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -81,11 +82,17 @@ public class AvroConverter implements Converter {
 
   @Override
   public byte[] fromConnectData(String topic, Schema schema, Object value) {
+    return fromConnectData(topic, null, schema, value);
+  }
+
+  @Override
+  public byte[] fromConnectData(String topic, Headers headers, Schema schema, Object value) {
     try {
       org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
       return serializer.serialize(
           topic,
           isKey,
+          headers,
           avroData.fromConnectData(schema, avroSchema, value),
           new AvroSchema(avroSchema));
     } catch (SerializationException e) {
@@ -102,9 +109,14 @@ public class AvroConverter implements Converter {
 
   @Override
   public SchemaAndValue toConnectData(String topic, byte[] value) {
+    return toConnectData(topic, null, value);
+  }
+
+  @Override
+  public SchemaAndValue toConnectData(String topic, Headers headers, byte[] value) {
     try {
       GenericContainerWithVersion containerWithVersion =
-          deserializer.deserialize(topic, isKey, value);
+          deserializer.deserialize(topic, isKey, headers, value);
       if (containerWithVersion == null) {
         return SchemaAndValue.NULL;
       }
@@ -146,12 +158,14 @@ public class AvroConverter implements Converter {
     }
 
     public byte[] serialize(
-        String topic, boolean isKey, Object value, AvroSchema schema) {
+        String topic, boolean isKey, Headers headers, Object value, AvroSchema schema) {
       if (value == null) {
         return null;
       }
       return serializeImpl(
           getSubjectName(topic, isKey, value, schema),
+          topic,
+          headers,
           value,
           schema);
     }
@@ -168,8 +182,9 @@ public class AvroConverter implements Converter {
       configure(new KafkaAvroDeserializerConfig(configs));
     }
 
-    public GenericContainerWithVersion deserialize(String topic, boolean isKey, byte[] payload) {
-      return deserializeWithSchemaAndVersion(topic, isKey, payload);
+    public GenericContainerWithVersion deserialize(
+        String topic, boolean isKey, Headers headers, byte[] payload) {
+      return deserializeWithSchemaAndVersion(topic, isKey, headers, payload);
     }
   }
 }

@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.IOException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -36,19 +37,19 @@ public class KafkaProtobufSerializer<T extends Message>
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
-  private boolean isKey;
   private Map<Descriptor, ProtobufSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaProtobufSerializer() {
-    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client) {
-    schemaRegistry = client;
-    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
+    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -57,9 +58,10 @@ public class KafkaProtobufSerializer<T extends Message>
 
   public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props,
                                  int cacheCapacity) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
     configure(serializerConfig(props));
-    schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
   }
 
   @Override
@@ -69,7 +71,12 @@ public class KafkaProtobufSerializer<T extends Message>
   }
 
   @Override
-  public byte[] serialize(String topic, T record) {
+  public byte[] serialize(String topic, T data) {
+    return serialize(topic, null, data);
+  }
+
+  @Override
+  public byte[] serialize(String topic, Headers headers, T record) {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
           "SchemaRegistryClient not found. You need to configure the serializer "
@@ -86,7 +93,7 @@ public class KafkaProtobufSerializer<T extends Message>
         boolean autoRegisterForDeps = autoRegisterSchema && !onlyLookupReferencesBySchema;
         boolean useLatestForDeps = useLatestVersion && !onlyLookupReferencesBySchema;
         schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
-            useLatestForDeps, latestCompatStrict, latestVersions,
+            useLatestForDeps, latestCompatStrict, latestVersionsCache(),
             skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
       } catch (IOException | RestClientException e) {
         throw new SerializationException("Error serializing Protobuf message", e);
@@ -94,7 +101,7 @@ public class KafkaProtobufSerializer<T extends Message>
       schemaCache.put(record.getDescriptorForType(), schema);
     }
     return serializeImpl(getSubjectName(topic, isKey, record, schema),
-        topic, isKey, record, schema);
+        topic, isKey, headers, record, schema);
   }
 
   @Override

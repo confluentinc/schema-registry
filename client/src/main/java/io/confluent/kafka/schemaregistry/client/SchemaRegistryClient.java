@@ -16,6 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import com.google.common.base.Ticker;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
@@ -31,13 +35,32 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 
 public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
+  default Ticker ticker() {
+    return Ticker.systemTicker();
+  }
+
   Optional<ParsedSchema> parseSchema(
       String schemaType,
       String schemaString,
       List<SchemaReference> references);
 
+  default Optional<ParsedSchema> parseSchema(
+      String schemaType,
+      String schemaString,
+      List<SchemaReference> references,
+      Metadata metadata,
+      RuleSet ruleSet) {
+    return parseSchema(schemaType, schemaString, references).map(s -> s.copy(metadata, ruleSet));
+  }
+
   default Optional<ParsedSchema> parseSchema(Schema schema) {
-    return parseSchema(schema.getSchemaType(), schema.getSchema(), schema.getReferences());
+    return parseSchema(
+        schema.getSchemaType(),
+        schema.getSchema(),
+        schema.getReferences(),
+        schema.getMetadata(),
+        schema.getRuleSet()
+    );
   }
 
   /**
@@ -145,6 +168,11 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
+  default SchemaMetadata getLatestWithMetadata(String subject, Map<String, String> metadata,
+      boolean lookupDeletedSchema) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   @Deprecated
   default int getVersion(String subject, org.apache.avro.Schema schema)
       throws IOException, RestClientException {
@@ -180,12 +208,29 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
-  public String updateCompatibility(String subject, String compatibility)
-      throws IOException, RestClientException;
+  default String updateCompatibility(String subject, String compatibility)
+      throws IOException, RestClientException {
+    return updateConfig(subject, new Config(compatibility)).getCompatibilityLevel();
+  }
 
-  public String getCompatibility(String subject) throws IOException, RestClientException;
+  default String getCompatibility(String subject) throws IOException, RestClientException {
+    return getConfig(subject).getCompatibilityLevel();
+  }
 
   default void deleteCompatibility(String subject) throws IOException, RestClientException {
+    deleteConfig(subject);
+  }
+
+  default Config updateConfig(String subject, Config config)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default Config getConfig(String subject) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default void deleteConfig(String subject) throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 

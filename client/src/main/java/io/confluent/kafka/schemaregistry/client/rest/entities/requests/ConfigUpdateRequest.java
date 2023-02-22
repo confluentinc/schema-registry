@@ -19,6 +19,9 @@ package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -31,6 +34,23 @@ import java.util.Objects;
 public class ConfigUpdateRequest {
 
   private String compatibilityLevel;
+  private String compatibilityGroup;
+  private Metadata initialMetadata;
+  private Metadata finalMetadata;
+  private RuleSet initialRuleSet;
+  private RuleSet finalRuleSet;
+
+  public ConfigUpdateRequest() {
+  }
+
+  public ConfigUpdateRequest(Config config) {
+    this.compatibilityLevel = config.getCompatibilityLevel();
+    this.compatibilityGroup = config.getCompatibilityGroup();
+    this.initialMetadata = config.getInitialMetadata();
+    this.finalMetadata = config.getFinalMetadata();
+    this.initialRuleSet = config.getInitialRuleSet();
+    this.finalRuleSet = config.getFinalRuleSet();
+  }
 
   public static ConfigUpdateRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, ConfigUpdateRequest.class);
@@ -50,6 +70,56 @@ public class ConfigUpdateRequest {
     this.compatibilityLevel = compatibilityLevel;
   }
 
+  @JsonProperty("compatibilityGroup")
+  public String getCompatibilityGroup() {
+    return this.compatibilityGroup;
+  }
+
+  @JsonProperty("compatibilityGroup")
+  public void setCompatibilityGroup(String compatibilityGroup) {
+    this.compatibilityGroup = compatibilityGroup;
+  }
+
+  @JsonProperty("initialMetadata")
+  public Metadata getInitialMetadata() {
+    return this.initialMetadata;
+  }
+
+  @JsonProperty("initialMetadata")
+  public void setInitialMetadata(Metadata initialMetadata) {
+    this.initialMetadata = initialMetadata;
+  }
+
+  @JsonProperty("finalMetadata")
+  public Metadata getFinalMetadata() {
+    return this.finalMetadata;
+  }
+
+  @JsonProperty("finalMetadata")
+  public void setFinalMetadata(Metadata finalMetadata) {
+    this.finalMetadata = finalMetadata;
+  }
+
+  @JsonProperty("initialRuleSet")
+  public RuleSet getInitialRuleSet() {
+    return this.initialRuleSet;
+  }
+
+  @JsonProperty("initialRuleSet")
+  public void setInitialRuleSet(RuleSet initialRuleSet) {
+    this.initialRuleSet = initialRuleSet;
+  }
+
+  @JsonProperty("finalRuleSet")
+  public RuleSet getFinalRuleSet() {
+    return this.finalRuleSet;
+  }
+
+  @JsonProperty("finalRuleSet")
+  public void setFinalRuleSet(RuleSet finalRuleSet) {
+    this.finalRuleSet = finalRuleSet;
+  }
+
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
@@ -63,11 +133,17 @@ public class ConfigUpdateRequest {
       return false;
     }
     ConfigUpdateRequest that = (ConfigUpdateRequest) o;
-    return Objects.equals(compatibilityLevel, that.compatibilityLevel);
+    return Objects.equals(compatibilityLevel, that.compatibilityLevel)
+        && Objects.equals(compatibilityGroup, that.compatibilityGroup)
+        && Objects.equals(initialMetadata, that.initialMetadata)
+        && Objects.equals(finalMetadata, that.finalMetadata)
+        && Objects.equals(initialRuleSet, that.initialRuleSet)
+        && Objects.equals(finalRuleSet, that.finalRuleSet);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(compatibilityLevel);
+    return Objects.hash(compatibilityLevel, compatibilityGroup,
+        initialMetadata, finalMetadata, initialRuleSet, finalRuleSet);
   }
 }

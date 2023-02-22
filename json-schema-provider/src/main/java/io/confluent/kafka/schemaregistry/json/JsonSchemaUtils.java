@@ -29,16 +29,19 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.annotations.Schema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import org.apache.commons.compress.utils.Lists;
 
 public class JsonSchemaUtils {
 
@@ -277,5 +280,94 @@ public class JsonSchemaUtils {
     jsonMapper.writeValue(out, value);
     String jsonString = out.toString();
     return jsonString.getBytes(StandardCharsets.UTF_8);
+  }
+
+  public static JsonNode findMatchingEntity(JsonNode node, SchemaEntity entity) {
+    String[] identifiers = entity.getEntityPath().split("\\.");
+    LinkedList<String> identifiersList = new LinkedList<>();
+    Collections.addAll(identifiersList, identifiers);
+    JsonNode entityNode = findNodeHelper(node, entity.getEntityType(), identifiersList);
+    if (entityNode == null) {
+      throw new IllegalArgumentException(String.format(
+        "No matching path '%s' found in the schema", entity.getEntityPath()));
+    }
+    return entityNode;
+  }
+
+  private static JsonNode findNodeHelper(JsonNode node,
+                                         SchemaEntity.EntityType entityType,
+                                         LinkedList<String> identifiersList) {
+    String type = identifiersList.poll();
+    if (type == null) {
+      return null;
+    }
+    switch (type) {
+      case "object":
+        if (SchemaEntity.EntityType.SR_RECORD == entityType && identifiersList.isEmpty()) {
+          return node;
+        }
+        JsonNode fields = node.get("properties");
+        String word = identifiersList.poll();
+        if (word == null) {
+          return null;
+        }
+        StringBuilder fieldNameBuilder = new StringBuilder(word);
+        while (!fields.has(fieldNameBuilder.toString()) && !identifiersList.isEmpty()) {
+          fieldNameBuilder.append(".");
+          word = identifiersList.poll();
+          if (word == null) {
+            return null;
+          }
+          fieldNameBuilder.append(word);
+        }
+        JsonNode fieldNode = fields.get(fieldNameBuilder.toString());
+        if (fieldNode == null || identifiersList.isEmpty()) {
+          return fieldNode;
+        } else {
+          return findNodeHelper(fieldNode, entityType, identifiersList);
+        }
+      case "array":
+        return findNodeHelper(node.get("items"), entityType, identifiersList);
+      case "anyof":
+        if (node.has("anyOf")) {
+          return findSubSchemasFromIndex(node, entityType, "anyOf", identifiersList);
+        }
+
+        // handle "type": ["null", "object"] etc
+        identifiersList.poll();
+        return findNodeHelper(node, entityType, identifiersList);
+      case "allof":
+        if (node.has("allOf")) {
+          return findSubSchemasFromIndex(node, entityType, "allOf", identifiersList);
+        }
+
+        // handle if-then-else
+        identifiersList.poll();
+        if ("conditional".equals(identifiersList.peek())) {
+          identifiersList.poll();
+          return findNodeHelper(node.get(identifiersList.poll()), entityType, identifiersList);
+        } else {
+          return findNodeHelper(node, entityType, identifiersList);
+        }
+      case "oneof":
+        return findSubSchemasFromIndex(node, entityType, "oneOf", identifiersList);
+      case "not":
+        return findNodeHelper(node.get(type), entityType, identifiersList);
+      default:
+        return null;
+    }
+  }
+
+  private static JsonNode findSubSchemasFromIndex(JsonNode node,
+                                                  SchemaEntity.EntityType entityType,
+                                                  String compositionType,
+                                                  LinkedList<String> identifiersList) {
+    String index = identifiersList.poll();
+    if (index == null) {
+      return null;
+    }
+    List<JsonNode> jsonNodeList = Lists.newArrayList(node.get(compositionType).elements());
+    jsonNodeList.sort(new JsonNodeComparator());
+    return findNodeHelper(jsonNodeList.get(Integer.parseInt(index)), entityType, identifiersList);
   }
 }

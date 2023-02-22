@@ -9,6 +9,7 @@ option java_outer_classname = "MetaProto";
 message Meta {
   string doc = 1;
   map<string, string> params = 2;
+  repeated string tags = 3;
 }
 
 extend google.protobuf.FileOptions {

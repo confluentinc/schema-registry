@@ -18,6 +18,7 @@ package io.confluent.kafka.streams.serdes.avro;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
@@ -60,7 +61,12 @@ public class GenericAvroDeserializer implements Deserializer<GenericRecord> {
 
   @Override
   public GenericRecord deserialize(final String topic, final byte[] bytes) {
-    return (GenericRecord) inner.deserialize(topic, bytes);
+    return deserialize(topic, null, bytes);
+  }
+
+  @Override
+  public GenericRecord deserialize(final String topic, final Headers headers, final byte[] bytes) {
+    return (GenericRecord) inner.deserialize(topic, headers, bytes);
   }
 
   @Override
