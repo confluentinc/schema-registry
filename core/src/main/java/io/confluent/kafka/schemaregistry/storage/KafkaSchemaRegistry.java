@@ -1601,7 +1601,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         String unqualifiedSubjectOrPrefix =
             subjectOrPrefix.substring(idx + CONTEXT_WILDCARD.length());
         if (!unqualifiedSubjectOrPrefix.isEmpty()) {
-          return allVersionsFromAllContexts(unqualifiedSubjectOrPrefix, isPrefix);
+          return allVersionsFromAllContexts(prefix, unqualifiedSubjectOrPrefix, isPrefix);
         }
         start = prefix + CONTEXT_PREFIX + CONTEXT_DELIMITER;
         end = prefix + CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER;
@@ -1624,14 +1624,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private CloseableIterator<SchemaRegistryValue> allVersionsFromAllContexts(
-      String unqualifiedSubjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
+      String tenantPrefix, String unqualifiedSubjectOrPrefix, boolean isPrefix)
+      throws SchemaRegistryException {
+    List<SchemaRegistryValue> versions = new ArrayList<>();
+    // Add versions from default context
+    try (CloseableIterator<SchemaRegistryValue> iter =
+        allVersions(tenantPrefix + unqualifiedSubjectOrPrefix, isPrefix)) {
+      while (iter.hasNext()) {
+        versions.add(iter.next());
+      }
+    }
     List<ContextValue> contexts = new ArrayList<>();
     try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
       while (iter.hasNext()) {
         contexts.add((ContextValue) iter.next());
       }
     }
-    List<SchemaRegistryValue> versions = new ArrayList<>();
     for (ContextValue v : contexts) {
       QualifiedSubject qualSub =
           new QualifiedSubject(v.getTenant(), v.getContext(), unqualifiedSubjectOrPrefix);
