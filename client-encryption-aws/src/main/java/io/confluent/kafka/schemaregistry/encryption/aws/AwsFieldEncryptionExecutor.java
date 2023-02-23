@@ -23,6 +23,7 @@ import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.kms.AWSKMS;
 import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
+import com.google.crypto.tink.integration.awskms.AwsKmsClient;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

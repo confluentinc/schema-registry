@@ -20,6 +20,7 @@ import com.google.api.services.cloudkms.v1.CloudKMS;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
+import com.google.crypto.tink.integration.gcpkms.GcpKmsClient;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
