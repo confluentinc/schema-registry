@@ -1493,7 +1493,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       String tenantPrefix, String unqualifiedSubjectOrPrefix, boolean isPrefix)
       throws SchemaRegistryException {
     List<SchemaRegistryValue> versions = new ArrayList<>();
-    // Add default versions from default context
+    // Add versions from default context
     try (CloseableIterator<SchemaRegistryValue> iter =
         allVersions(tenantPrefix + unqualifiedSubjectOrPrefix, isPrefix)) {
       while (iter.hasNext()) {
