@@ -79,11 +79,13 @@ public abstract class ShutdownableThread extends Thread {
       if (isRunning()) {
         log.info("Shutting down");
         shutdownInitiated.countDown();
-        if (isInterruptible)
+        if (isInterruptible) {
           interrupt();
+        }
         return true;
-      } else
+      } else {
         return false;
+      }
     }
   }
 
@@ -91,29 +93,32 @@ public abstract class ShutdownableThread extends Thread {
    * After calling initiateShutdown(), use this API to wait until the shutdown is complete.
    */
   public void awaitShutdown() throws InterruptedException {
-    if (!isShutdownInitiated())
+    if (!isShutdownInitiated()) {
       throw new IllegalStateException("initiateShutdown() was not called before awaitShutdown()");
-    else {
-      if (isStarted)
+    } else {
+      if (isStarted) {
         shutdownComplete.await();
+      }
       log.info("Shutdown completed");
     }
   }
 
   /**
-   * Causes the current thread to wait until the shutdown is initiated,
-   * or the specified waiting time elapses.
+   * Causes the current thread to wait until the shutdown is initiated, or the specified waiting
+   * time elapses.
    *
    * @param timeout wait time in units.
    * @param unit    TimeUnit value for the wait time.
    */
   public void pause(long timeout, TimeUnit unit) throws InterruptedException {
-    if (shutdownInitiated.await(timeout, unit))
+    if (shutdownInitiated.await(timeout, unit)) {
       log.trace("shutdownInitiated latch count reached zero. Shutdown called.");
+    }
   }
 
   /**
-   * This method is repeatedly invoked until the thread shuts down or this method throws an exception
+   * This method is repeatedly invoked until the thread shuts down or this method throws an
+   * exception
    */
   public abstract void doWork();
 
@@ -121,16 +126,18 @@ public abstract class ShutdownableThread extends Thread {
     isStarted = true;
     log.info("Starting");
     try {
-      while (isRunning())
+      while (isRunning()) {
         doWork();
+      }
     } catch (FatalExitError e) {
       shutdownInitiated.countDown();
       shutdownComplete.countDown();
       log.info("Stopped");
       Exit.exit(e.statusCode());
     } catch (Throwable e) {
-      if (isRunning())
+      if (isRunning()) {
         log.error("Error due to", e);
+      }
     } finally {
       shutdownComplete.countDown();
     }
