@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
 import io.confluent.kafka.schemaregistry.storage.StoreUpdateHandler.ValidationStatus;
+import io.confluent.kafka.schemaregistry.utils.ShutdownableThread;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,7 +36,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.server.util.ShutdownableThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
