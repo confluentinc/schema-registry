@@ -320,7 +320,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     properties.put("configKey", "configValue");
     Metadata metadata = new Metadata(null, properties, null);
     ConfigUpdateRequest config = new ConfigUpdateRequest();
-    config.setInitialMetadata(metadata);
+    config.setDefaultMetadata(metadata);
     // add config metadata
     assertEquals("Adding config with initial metadata should succeed",
         config,
@@ -406,7 +406,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     List<Rule> rules = Collections.singletonList(r1);
     RuleSet ruleSet = new RuleSet(rules, null);
     ConfigUpdateRequest config = new ConfigUpdateRequest();
-    config.setInitialRuleSet(ruleSet);
+    config.setDefaultRuleSet(ruleSet);
     // add config ruleSet
     assertEquals("Adding config with initial ruleSet should succeed",
         config,
@@ -587,7 +587,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     // Add READ rule to migrationRules
     RuleSet ruleSet = new RuleSet(rules, null);
     ConfigUpdateRequest config = new ConfigUpdateRequest();
-    config.setInitialRuleSet(ruleSet);
+    config.setDefaultRuleSet(ruleSet);
     // add config ruleSet
     try {
       restApp.restClient.updateConfig(config, null);
@@ -604,7 +604,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     rules = ImmutableList.of(r1, r2);
     ruleSet = new RuleSet(null, rules);
     config = new ConfigUpdateRequest();
-    config.setInitialRuleSet(ruleSet);
+    config.setDefaultRuleSet(ruleSet);
     // add config ruleSet
     try {
       restApp.restClient.updateConfig(config, null);
