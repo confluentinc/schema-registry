@@ -31,24 +31,24 @@ public class Config {
 
   private String compatibilityLevel;
   private String compatibilityGroup;
-  private Metadata initialMetadata;
-  private Metadata finalMetadata;
-  private RuleSet initialRuleSet;
-  private RuleSet finalRuleSet;
+  private Metadata defaultMetadata;
+  private Metadata overrideMetadata;
+  private RuleSet defaultRuleSet;
+  private RuleSet overrideRuleSet;
 
   @JsonCreator
   public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel,
                 @JsonProperty("compatibilityGroup") String compatibilityGroup,
-                @JsonProperty("initialMetadata") Metadata initialMetadata,
-                @JsonProperty("finalMetadata") Metadata finalMetadata,
-                @JsonProperty("initialRuleSet") RuleSet initialRuleSet,
-                @JsonProperty("finalRuleSet") RuleSet finalRuleSet) {
+                @JsonProperty("defaultMetadata") Metadata defaultMetadata,
+                @JsonProperty("overrideMetadata") Metadata overrideMetadata,
+                @JsonProperty("defaultRuleSet") RuleSet defaultRuleSet,
+                @JsonProperty("overrideRuleSet") RuleSet overrideRuleSet) {
     this.compatibilityLevel = compatibilityLevel;
     this.compatibilityGroup = compatibilityGroup;
-    this.initialMetadata = initialMetadata;
-    this.finalMetadata = finalMetadata;
-    this.initialRuleSet = initialRuleSet;
-    this.finalRuleSet = finalRuleSet;
+    this.defaultMetadata = defaultMetadata;
+    this.overrideMetadata = overrideMetadata;
+    this.defaultRuleSet = defaultRuleSet;
+    this.overrideRuleSet = overrideRuleSet;
   }
 
   public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel) {
@@ -61,10 +61,10 @@ public class Config {
   public Config(ConfigUpdateRequest request) {
     this.compatibilityLevel = request.getCompatibilityLevel();
     this.compatibilityGroup = request.getCompatibilityGroup();
-    this.initialMetadata = request.getInitialMetadata();
-    this.finalMetadata = request.getInitialMetadata();
-    this.initialRuleSet = request.getInitialRuleSet();
-    this.finalRuleSet = request.getFinalRuleSet();
+    this.defaultMetadata = request.getDefaultMetadata();
+    this.overrideMetadata = request.getDefaultMetadata();
+    this.defaultRuleSet = request.getDefaultRuleSet();
+    this.overrideRuleSet = request.getOverrideRuleSet();
   }
 
   @Schema(description = "Compatibility Level",
@@ -91,44 +91,44 @@ public class Config {
     this.compatibilityGroup = compatibilityGroup;
   }
 
-  @JsonProperty("initialMetadata")
-  public Metadata getInitialMetadata() {
-    return this.initialMetadata;
+  @JsonProperty("defaultMetadata")
+  public Metadata getDefaultMetadata() {
+    return this.defaultMetadata;
   }
 
-  @JsonProperty("initialMetadata")
-  public void setInitialMetadata(Metadata initialMetadata) {
-    this.initialMetadata = initialMetadata;
+  @JsonProperty("defaultMetadata")
+  public void setDefaultMetadata(Metadata defaultMetadata) {
+    this.defaultMetadata = defaultMetadata;
   }
 
-  @JsonProperty("finalMetadata")
-  public Metadata getFinalMetadata() {
-    return this.finalMetadata;
+  @JsonProperty("overrideMetadata")
+  public Metadata getOverrideMetadata() {
+    return this.overrideMetadata;
   }
 
-  @JsonProperty("finalMetadata")
-  public void setFinalMetadata(Metadata finalMetadata) {
-    this.finalMetadata = finalMetadata;
+  @JsonProperty("overrideMetadata")
+  public void setOverrideMetadata(Metadata overrideMetadata) {
+    this.overrideMetadata = overrideMetadata;
   }
 
-  @JsonProperty("initialRuleSet")
-  public RuleSet getInitialRuleSet() {
-    return this.initialRuleSet;
+  @JsonProperty("defaultRuleSet")
+  public RuleSet getDefaultRuleSet() {
+    return this.defaultRuleSet;
   }
 
-  @JsonProperty("initialRuleSet")
-  public void setInitialRuleSet(RuleSet initialRuleSet) {
-    this.initialRuleSet = initialRuleSet;
+  @JsonProperty("defaultRuleSet")
+  public void setDefaultRuleSet(RuleSet defaultRuleSet) {
+    this.defaultRuleSet = defaultRuleSet;
   }
 
-  @JsonProperty("finalRuleSet")
-  public RuleSet getFinalRuleSet() {
-    return this.finalRuleSet;
+  @JsonProperty("overrideRuleSet")
+  public RuleSet getOverrideRuleSet() {
+    return this.overrideRuleSet;
   }
 
-  @JsonProperty("finalRuleSet")
-  public void setFinalRuleSet(RuleSet finalRuleSet) {
-    this.finalRuleSet = finalRuleSet;
+  @JsonProperty("overrideRuleSet")
+  public void setOverrideRuleSet(RuleSet overrideRuleSet) {
+    this.overrideRuleSet = overrideRuleSet;
   }
 
   @Override
@@ -142,16 +142,16 @@ public class Config {
     Config config = (Config) o;
     return Objects.equals(compatibilityLevel, config.compatibilityLevel)
         && Objects.equals(compatibilityGroup, config.compatibilityGroup)
-        && Objects.equals(initialMetadata, config.initialMetadata)
-        && Objects.equals(finalMetadata, config.finalMetadata)
-        && Objects.equals(initialRuleSet, config.initialRuleSet)
-        && Objects.equals(finalRuleSet, config.finalRuleSet);
+        && Objects.equals(defaultMetadata, config.defaultMetadata)
+        && Objects.equals(overrideMetadata, config.overrideMetadata)
+        && Objects.equals(defaultRuleSet, config.defaultRuleSet)
+        && Objects.equals(overrideRuleSet, config.overrideRuleSet);
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(compatibilityLevel, compatibilityGroup,
-        initialMetadata, finalMetadata, initialRuleSet, finalRuleSet);
+        defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
 
   @Override
@@ -159,10 +159,10 @@ public class Config {
     return "Config{"
         + "compatibilityLevel='" + compatibilityLevel + '\''
         + ", compatibilityGroup='" + compatibilityGroup + '\''
-        + ", initialMetadata=" + initialMetadata
-        + ", finalMetadata=" + finalMetadata
-        + ", initialRuleSet=" + initialRuleSet
-        + ", finalRuleSet=" + finalRuleSet
+        + ", defaultMetadata=" + defaultMetadata
+        + ", overrideMetadata=" + overrideMetadata
+        + ", defaultRuleSet=" + defaultRuleSet
+        + ", overrideRuleSet=" + overrideRuleSet
         + '}';
   }
 }
