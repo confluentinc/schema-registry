@@ -705,12 +705,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       specificMetadata = previousSchema.metadata();
     }
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata mergedMetadata;
-    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata initialMetadata;
-    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata finalMetadata;
-    initialMetadata = config.getInitialMetadata();
-    finalMetadata = config.getFinalMetadata();
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata defaultMetadata;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata overrideMetadata;
+    defaultMetadata = config.getDefaultMetadata();
+    overrideMetadata = config.getOverrideMetadata();
     mergedMetadata =
-        mergeMetadata(mergeMetadata(initialMetadata, specificMetadata), finalMetadata);
+        mergeMetadata(mergeMetadata(defaultMetadata, specificMetadata), overrideMetadata);
     io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet specificRuleSet = null;
     if (parsedSchema.ruleSet() != null) {
       specificRuleSet = parsedSchema.ruleSet();
@@ -718,11 +718,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       specificRuleSet = previousSchema.ruleSet();
     }
     io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet mergedRuleSet;
-    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet initialRuleSet;
-    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet finalRuleSet;
-    initialRuleSet = config.getInitialRuleSet();
-    finalRuleSet = config.getFinalRuleSet();
-    mergedRuleSet = mergeRuleSets(mergeRuleSets(initialRuleSet, specificRuleSet), finalRuleSet);
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet defaultRuleSet;
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet overrideRuleSet;
+    defaultRuleSet = config.getDefaultRuleSet();
+    overrideRuleSet = config.getOverrideRuleSet();
+    mergedRuleSet = mergeRuleSets(mergeRuleSets(defaultRuleSet, specificRuleSet), overrideRuleSet);
     if (mergedMetadata != null || mergedRuleSet != null) {
       parsedSchema = parsedSchema.copy(mergedMetadata, mergedRuleSet);
       schema.setMetadata(parsedSchema.metadata());

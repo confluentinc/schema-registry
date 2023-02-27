@@ -29,10 +29,10 @@ public class RuleSetHandler {
   }
 
   public void handle(ConfigUpdateRequest request) {
-    if (request.getInitialRuleSet() != null || request.getFinalRuleSet() != null) {
+    if (request.getDefaultRuleSet() != null || request.getOverrideRuleSet() != null) {
       log.warn("RuleSets are only supported by Confluent Enterprise and Confluent Cloud");
-      request.setInitialRuleSet(null);
-      request.setFinalRuleSet(null);
+      request.setDefaultRuleSet(null);
+      request.setOverrideRuleSet(null);
     }
   }
 

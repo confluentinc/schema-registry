@@ -114,16 +114,16 @@ public class ConfigResource {
     if (request.getCompatibilityLevel() != null && compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
     }
-    if (request.getInitialRuleSet() != null) {
+    if (request.getDefaultRuleSet() != null) {
       try {
-        request.getInitialRuleSet().validate();
+        request.getDefaultRuleSet().validate();
       } catch (RuleException e) {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
     }
-    if (request.getFinalRuleSet() != null) {
+    if (request.getOverrideRuleSet() != null) {
       try {
-        request.getFinalRuleSet().validate();
+        request.getOverrideRuleSet().validate();
       } catch (RuleException e) {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
@@ -226,16 +226,16 @@ public class ConfigResource {
     if (request.getCompatibilityLevel() != null && compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
     }
-    if (request.getInitialRuleSet() != null) {
+    if (request.getDefaultRuleSet() != null) {
       try {
-        request.getInitialRuleSet().validate();
+        request.getDefaultRuleSet().validate();
       } catch (RuleException e) {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
     }
-    if (request.getFinalRuleSet() != null) {
+    if (request.getOverrideRuleSet() != null) {
       try {
-        request.getFinalRuleSet().validate();
+        request.getOverrideRuleSet().validate();
       } catch (RuleException e) {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
