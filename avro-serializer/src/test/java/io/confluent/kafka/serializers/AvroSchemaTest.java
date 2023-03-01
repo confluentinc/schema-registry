@@ -828,7 +828,7 @@ public class AvroSchemaTest {
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
-    assertEquals(ImmutableSet.of(), resultSchema.inlineTags());
+    assertEquals(ImmutableSet.of("PRIVATE"), resultSchema.inlineTags());
   }
 
   @Test
@@ -1041,7 +1041,7 @@ public class AvroSchemaTest {
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
-    assertEquals(ImmutableSet.of(), resultSchema.inlineTags());
+    assertEquals(ImmutableSet.of("PRIVATE"), resultSchema.inlineTags());
   }
 
   @Test
