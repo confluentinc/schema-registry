@@ -101,6 +101,29 @@ public interface ParsedSchema {
   RuleSet ruleSet();
 
   /**
+   * Returns the set of tags used by the schema.
+   *
+   * @return the tags
+   */
+  default Set<String> tags() {
+    Set<String> allTags = inlineTags();
+    Metadata metadata = metadata();
+    if (metadata != null && metadata.getTags() != null) {
+      metadata.getTags().forEach((key, value) -> allTags.addAll(value));
+    }
+    return allTags;
+  }
+
+  /**
+   * Returns the set of inline tags embedded in the schema.
+   *
+   * @return the tags
+   */
+  default Set<String> inlineTags() {
+    return Collections.emptySet();
+  }
+
+  /**
    * Returns a copy of this schema.
    *
    * @return a copy of this schema

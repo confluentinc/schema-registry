@@ -617,6 +617,23 @@ public class AvroSchema implements ParsedSchema {
     }
   }
 
+  @Override
+  public Set<String> inlineTags() {
+    try {
+      Set<String> tags = new LinkedHashSet<>();
+      JsonNode jsonNode = jsonMapper.readTree(canonicalString());
+      getInlineTagsRecursively(tags, jsonNode);
+      return tags;
+    } catch (IOException e) {
+      throw new IllegalStateException("Could not parse schema: " + canonicalString());
+    }
+  }
+
+  private void getInlineTagsRecursively(Set<String> tags, JsonNode node) {
+    tags.addAll(getInlineTags(node));
+    node.forEach(n -> getInlineTagsRecursively(tags, n));
+  }
+
   private Set<String> getInlineTags(Schema.Field field) {
     Set<String> tags = new HashSet<>();
     Object prop = field.getObjectProp(TAGS);
