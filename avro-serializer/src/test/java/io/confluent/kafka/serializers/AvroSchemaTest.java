@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.collect.ImmutableSet;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
@@ -823,9 +824,11 @@ public class AvroSchemaTest {
       Collections.singleton("PII"));
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("PII", "PRIVATE"), resultSchema.inlineTags());
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("PRIVATE"), resultSchema.inlineTags());
   }
 
   @Test
@@ -1034,9 +1037,11 @@ public class AvroSchemaTest {
       Collections.singleton("PII"));
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("PII", "PRIVATE"), resultSchema.inlineTags());
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("PRIVATE"), resultSchema.inlineTags());
   }
 
   @Test

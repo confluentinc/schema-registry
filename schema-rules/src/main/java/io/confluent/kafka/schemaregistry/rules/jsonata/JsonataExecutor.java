@@ -26,10 +26,38 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import java.io.IOException;
+import java.util.Map;
+import org.apache.kafka.common.config.ConfigException;
 
 public class JsonataExecutor implements RuleExecutor {
 
   public static final String TYPE = "JSONATA";
+
+  public static final String TIMEOUT_MS = "timeout.ms";
+  public static final String MAX_DEPTH = "max.depth";
+
+  private long timeoutMs = 60000;
+  private int maxDepth = 1000;
+
+  @Override
+  public void configure(Map<String, ?> configs) {
+    Object timeoutMsConfig = configs.get(TIMEOUT_MS);
+    if (timeoutMsConfig != null) {
+      try {
+        this.timeoutMs = Long.parseLong(timeoutMsConfig.toString());
+      } catch (NumberFormatException e) {
+        throw new ConfigException("Cannot parse " + TIMEOUT_MS);
+      }
+    }
+    Object maxDepthConfig = configs.get(MAX_DEPTH);
+    if (maxDepthConfig != null) {
+      try {
+        this.maxDepth = Integer.parseInt(maxDepthConfig.toString());
+      } catch (NumberFormatException e) {
+        throw new ConfigException("Cannot parse " + MAX_DEPTH);
+      }
+    }
+  }
 
   @Override
   public String type() {
@@ -53,7 +81,7 @@ public class JsonataExecutor implements RuleExecutor {
       throw new RuleException(e);
     }
     try {
-      JsonNode result = expr.evaluate(jsonObj);
+      JsonNode result = expr.evaluate(jsonObj, timeoutMs, maxDepth);
       return result;
     } catch (EvaluateException e) {
       throw new RuleException("Could not evaluate expression", e);
