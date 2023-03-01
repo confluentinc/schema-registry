@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.collect.ImmutableSet;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -538,9 +539,11 @@ public class JsonSchemaTest {
 
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("record", "PII"), resultSchema.inlineTags());
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of(), resultSchema.inlineTags());
   }
 
   @Test
@@ -641,6 +644,7 @@ public class JsonSchemaTest {
 
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("record", "testConditional"), resultSchema.inlineTags());
   }
 
   @Test
@@ -696,6 +700,7 @@ public class JsonSchemaTest {
 
     ParsedSchema resultSchema = jsonSchema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("testRecursive", "PII"), resultSchema.inlineTags());
   }
 
   private static Map<String, String> getJsonSchemaWithReferences() {

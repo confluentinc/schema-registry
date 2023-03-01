@@ -643,6 +643,18 @@ public class JsonSchema implements ParsedSchema {
         || objectSchema.getPropertySchemas().size() == 0;
   }
 
+  @Override
+  public Set<String> inlineTags() {
+    Set<String> tags = new LinkedHashSet<>();
+    getInlineTagsRecursively(tags, jsonNode);
+    return tags;
+  }
+
+  private void getInlineTagsRecursively(Set<String> tags, JsonNode node) {
+    tags.addAll(getInlineTags(node));
+    node.forEach(n -> getInlineTagsRecursively(tags, n));
+  }
+
   private Set<String> getInlineTags(Schema propertySchema) {
     Set<String> tags = new HashSet<>();
     Object prop = propertySchema.getUnprocessedProperties().get(TAGS);

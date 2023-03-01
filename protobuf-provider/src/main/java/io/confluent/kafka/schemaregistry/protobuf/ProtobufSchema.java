@@ -2367,6 +2367,37 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
+  @Override
+  public Set<String> inlineTags() {
+    Set<String> tags = new LinkedHashSet<>();
+    for (TypeElement type : schemaObj.getTypes()) {
+      if (type instanceof MessageElement) {
+        getInlineTagsRecursively(tags, (MessageElement) type);
+      }
+    }
+    return tags;
+  }
+
+  private void getInlineTagsRecursively(Set<String> tags, MessageElement messageElem) {
+    Map<String, OptionElement> options = mergeOptions(messageElem.getOptions());
+    ProtobufMeta meta = findMeta(CONFLUENT_MESSAGE_META, options);
+    if (meta != null && meta.getTags() != null) {
+      tags.addAll(meta.getTags());
+    }
+    for (FieldElement field : messageElem.getFields()) {
+      Map<String, OptionElement> fieldOptions = mergeOptions(field.getOptions());
+      ProtobufMeta fieldMeta = findMeta(CONFLUENT_FIELD_META, fieldOptions);
+      if (fieldMeta != null && fieldMeta.getTags() != null) {
+        tags.addAll(fieldMeta.getTags());
+      }
+    }
+    for (TypeElement type : messageElem.getNestedTypes()) {
+      if (type instanceof MessageElement) {
+        getInlineTagsRecursively(tags, (MessageElement) type);
+      }
+    }
+  }
+
   private Set<String> getInlineTags(FieldDescriptor fd) {
     Set<String> tags = new HashSet<>();
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {

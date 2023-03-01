@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.google.common.collect.ImmutableSet;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
@@ -2548,6 +2549,7 @@ public class ProtobufSchemaTest {
       Collections.singleton("PII"));
     ParsedSchema schema = new ProtobufSchema(schemaString).copy(tagsToAdd, Collections.emptyMap());
     assertEquals(expectedString, schema.canonicalString());
+    assertEquals(ImmutableSet.of("OTHER", "PII", "PRIVATE"), schema.inlineTags());
 
     Map<SchemaEntity, Set<String>> tagsToRemove = new HashMap<>();
     tagsToRemove.put(new SchemaEntity(".SampleRecord.my_field1",
@@ -2570,6 +2572,7 @@ public class ProtobufSchemaTest {
       Collections.singleton("PII"));
     schema = new ProtobufSchema(schema.canonicalString()).copy(Collections.emptyMap(), tagsToRemove);
     assertEquals(removedTagSchema, schema.canonicalString());
+    assertEquals(ImmutableSet.of("PII", "PRIVATE"), schema.inlineTags());
   }
 
   @Test
@@ -2634,6 +2637,7 @@ public class ProtobufSchemaTest {
       Collections.singleton("PRIVATE"));
     ParsedSchema schema = new ProtobufSchema(schemaString).copy(tags, Collections.emptyMap());
     assertEquals(expectedSchemaString, schema.canonicalString());
+    assertEquals(ImmutableSet.of("PRIVATE"), schema.inlineTags());
   }
 
   @Test
@@ -2724,6 +2728,7 @@ public class ProtobufSchemaTest {
         SchemaEntity.EntityType.SR_FIELD), Collections.singleton("PRIVATE"));
     ParsedSchema schema = new ProtobufSchema(schemaString).copy(Collections.emptyMap(), tags);
     assertEquals(afterRemovedTag, schema.canonicalString());
+    assertEquals(ImmutableSet.of("PII"), schema.inlineTags());
   }
 
   @Test
