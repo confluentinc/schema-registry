@@ -30,6 +30,7 @@ import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
@@ -2573,6 +2574,12 @@ public class ProtobufSchemaTest {
     schema = new ProtobufSchema(schema.canonicalString()).copy(Collections.emptyMap(), tagsToRemove);
     assertEquals(removedTagSchema, schema.canonicalString());
     assertEquals(ImmutableSet.of("PII", "PRIVATE"), schema.inlineTags());
+
+    Map<String, Set<String>> pathTags =
+        Collections.singletonMap("some.path", Collections.singleton("EXTERNAL"));
+    Metadata metadata = new Metadata(pathTags, null, null);
+    schema = schema.copy(metadata, null);
+    assertEquals(ImmutableSet.of("PII", "PRIVATE", "EXTERNAL"), schema.tags());
   }
 
   @Test

@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableSet;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import java.util.Collections;
 import java.util.Optional;
 import org.apache.avro.Schema;
@@ -829,6 +830,12 @@ public class AvroSchemaTest {
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
     assertEquals(ImmutableSet.of("PRIVATE"), resultSchema.inlineTags());
+
+    Map<String, Set<String>> pathTags =
+        Collections.singletonMap("some.path", Collections.singleton("EXTERNAL"));
+    Metadata metadata = new Metadata(pathTags, null, null);
+    resultSchema = resultSchema.copy(metadata, null);
+    assertEquals(ImmutableSet.of("PRIVATE", "EXTERNAL"), resultSchema.tags());
   }
 
   @Test
