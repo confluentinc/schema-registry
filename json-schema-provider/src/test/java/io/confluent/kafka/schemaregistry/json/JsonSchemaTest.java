@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableSet;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
@@ -544,6 +545,12 @@ public class JsonSchemaTest {
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
     assertEquals(ImmutableSet.of(), resultSchema.inlineTags());
+
+    Map<String, Set<String>> pathTags =
+        Collections.singletonMap("some.path", Collections.singleton("EXTERNAL"));
+    Metadata metadata = new Metadata(pathTags, null, null);
+    resultSchema = resultSchema.copy(metadata, null);
+    assertEquals(ImmutableSet.of("EXTERNAL"), resultSchema.tags());
   }
 
   @Test

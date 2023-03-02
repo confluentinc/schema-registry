@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -106,11 +107,13 @@ public interface ParsedSchema {
    * @return the tags
    */
   default Set<String> tags() {
-    Set<String> allTags = inlineTags();
+    Set<String> inlineTags = inlineTags();
     Metadata metadata = metadata();
-    if (metadata != null && metadata.getTags() != null) {
-      metadata.getTags().forEach((key, value) -> allTags.addAll(value));
+    if (metadata == null || metadata.getTags() == null) {
+      return inlineTags;
     }
+    Set<String> allTags = new LinkedHashSet<>(inlineTags);
+    metadata.getTags().forEach((key, value) -> allTags.addAll(value));
     return allTags;
   }
 
