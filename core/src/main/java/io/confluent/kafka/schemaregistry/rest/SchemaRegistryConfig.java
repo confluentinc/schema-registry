@@ -138,6 +138,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_READ_TIMEOUT_MS = "leader.read.timeout.ms";
   public static final int DEFAULT_LEADER_READ_TIMEOUT_MS = 60000;
   /**
+   * <code>leader.election.delay</code>*
+   */
+  public static final String LEADER_ELECTION_DELAY = "leader.election.delay";
+  public static final boolean DEFAULT_LEADER_ELECTION_DELAY = true;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -311,6 +316,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for connections when forwarding requests to the leader.";
   protected static final String LEADER_READ_TIMEOUT_MS_DOC =
       "The timeout for reading responses after forwarding requests to the leader.";
+  protected static final String LEADER_ELECTION_DELAY_DOC =
+      "Whether to delay leader election until after initialization.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
@@ -491,6 +498,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_READ_TIMEOUT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_READ_TIMEOUT_MS,
         ConfigDef.Importance.LOW, LEADER_READ_TIMEOUT_MS_DOC
+    )
+    .define(LEADER_ELECTION_DELAY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_DELAY,
+        ConfigDef.Importance.LOW, LEADER_ELECTION_DELAY_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
