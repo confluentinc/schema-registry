@@ -2374,23 +2374,27 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public Set<String> inlineTags() {
     Set<String> tags = new LinkedHashSet<>();
+    ProtobufMeta meta = findMeta(CONFLUENT_FILE_META, schemaObj.getOptions());
+    if (meta != null && meta.getTags() != null) {
+      tags.addAll(meta.getTags());
+    }
     for (TypeElement type : schemaObj.getTypes()) {
       if (type instanceof MessageElement) {
         getInlineTagsRecursively(tags, (MessageElement) type);
+      } else if (type instanceof EnumElement) {
+        getInlineTagsRecursively(tags, (EnumElement) type);
       }
     }
     return tags;
   }
 
   private void getInlineTagsRecursively(Set<String> tags, MessageElement messageElem) {
-    Map<String, OptionElement> options = mergeOptions(messageElem.getOptions());
-    ProtobufMeta meta = findMeta(CONFLUENT_MESSAGE_META, options);
+    ProtobufMeta meta = findMeta(CONFLUENT_MESSAGE_META, messageElem.getOptions());
     if (meta != null && meta.getTags() != null) {
       tags.addAll(meta.getTags());
     }
     for (FieldElement field : messageElem.getFields()) {
-      Map<String, OptionElement> fieldOptions = mergeOptions(field.getOptions());
-      ProtobufMeta fieldMeta = findMeta(CONFLUENT_FIELD_META, fieldOptions);
+      ProtobufMeta fieldMeta = findMeta(CONFLUENT_FIELD_META, field.getOptions());
       if (fieldMeta != null && fieldMeta.getTags() != null) {
         tags.addAll(fieldMeta.getTags());
       }
@@ -2398,6 +2402,21 @@ public class ProtobufSchema implements ParsedSchema {
     for (TypeElement type : messageElem.getNestedTypes()) {
       if (type instanceof MessageElement) {
         getInlineTagsRecursively(tags, (MessageElement) type);
+      } else if (type instanceof EnumElement) {
+        getInlineTagsRecursively(tags, (EnumElement) type);
+      }
+    }
+  }
+
+  private void getInlineTagsRecursively(Set<String> tags, EnumElement enumElem) {
+    ProtobufMeta meta = findMeta(CONFLUENT_ENUM_META, enumElem.getOptions());
+    if (meta != null && meta.getTags() != null) {
+      tags.addAll(meta.getTags());
+    }
+    for (EnumConstantElement constant : enumElem.getConstants()) {
+      ProtobufMeta constantMeta = findMeta(CONFLUENT_ENUM_VALUE_META, constant.getOptions());
+      if (constantMeta != null && constantMeta.getTags() != null) {
+        tags.addAll(constantMeta.getTags());
       }
     }
   }
