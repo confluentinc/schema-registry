@@ -168,12 +168,12 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String KEY_FIELD = "key";
   public static final String VALUE_FIELD = "value";
 
-  protected static final String CONFLUENT_PREFIX = "confluent.";
-  protected static final String CONFLUENT_FILE_META = "confluent.file_meta";
-  protected static final String CONFLUENT_MESSAGE_META = "confluent.message_meta";
-  protected static final String CONFLUENT_FIELD_META = "confluent.field_meta";
-  protected static final String CONFLUENT_ENUM_META = "confluent.enum_meta";
-  protected static final String CONFLUENT_ENUM_VALUE_META = "confluent.enum_value_meta";
+  public static final String CONFLUENT_PREFIX = "confluent.";
+  public static final String CONFLUENT_FILE_META = "confluent.file_meta";
+  public static final String CONFLUENT_MESSAGE_META = "confluent.message_meta";
+  public static final String CONFLUENT_FIELD_META = "confluent.field_meta";
+  public static final String CONFLUENT_ENUM_META = "confluent.enum_meta";
+  public static final String CONFLUENT_ENUM_VALUE_META = "confluent.enum_value_meta";
 
   private static final String JAVA_PACKAGE = "java_package";
   private static final String JAVA_OUTER_CLASSNAME = "java_outer_classname";
@@ -1745,6 +1745,10 @@ public class ProtobufSchema implements ParsedSchema {
   public static Optional<OptionElement> findOption(
       String name, Map<String, OptionElement> options) {
     return Optional.ofNullable(options.get(name));
+  }
+
+  public static ProtobufMeta findMeta(String name, List<OptionElement> options) {
+    return findMeta(name, mergeOptions(options));
   }
 
   public static ProtobufMeta findMeta(String name, Map<String, OptionElement> options) {
