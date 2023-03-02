@@ -2417,6 +2417,7 @@ public class ProtobufSchemaTest {
       "\n" +
       "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
       "option java_outer_classname = \"ComplexProto\";\n" +
+      "option (confluent.file_meta).tags = \"FILE\";\n" +
       "\n" +
       "message SampleRecord {\n" +
       "  option (confluent.message_meta).tags = \"OTHER\";\n" +
@@ -2435,6 +2436,15 @@ public class ProtobufSchemaTest {
       "  message NestedRecord {\n" +
       "    int64 nested_filed1 = 4;\n" +
       "  }\n" +
+      "  enum Kind {\n" +
+      "    option (confluent.enum_meta).tags = \"ENUM\";\n" +
+      "    APPLE = 6 [(confluent.enum_value_meta) = {\n" +
+      "      tags: [\n" +
+      "        \"CONST\"\n" +
+      "      ]\n" +
+      "    }];\n" +
+      "    BANANA = 7;\n" +
+      "  }\n" +
       "}\n";
 
     String expectedString = "syntax = \"proto3\";\n" +
@@ -2445,6 +2455,7 @@ public class ProtobufSchemaTest {
       "\n" +
       "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
       "option java_outer_classname = \"ComplexProto\";\n" +
+      "option (confluent.file_meta).tags = \"FILE\";\n" +
       "\n" +
       "message SampleRecord {\n" +
       "  option (confluent.message_meta) = {\n" +
@@ -2487,6 +2498,15 @@ public class ProtobufSchemaTest {
       "      ]\n" +
       "    }];\n" +
       "  }\n" +
+      "  enum Kind {\n" +
+      "    option (confluent.enum_meta).tags = \"ENUM\";\n" +
+      "    APPLE = 6 [(confluent.enum_value_meta) = {\n" +
+      "      tags: [\n" +
+      "        \"CONST\"\n" +
+      "      ]\n" +
+      "    }];\n" +
+      "    BANANA = 7;\n" +
+      "  }\n" +
       "}\n";
 
     String removedTagSchema = "syntax = \"proto3\";\n" +
@@ -2497,6 +2517,7 @@ public class ProtobufSchemaTest {
       "\n" +
       "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n" +
       "option java_outer_classname = \"ComplexProto\";\n" +
+      "option (confluent.file_meta).tags = \"FILE\";\n" +
       "\n" +
       "message SampleRecord {\n" +
       "  option (confluent.message_meta) = {\n" +
@@ -2527,6 +2548,15 @@ public class ProtobufSchemaTest {
       "      ]\n" +
       "    }];\n" +
       "  }\n" +
+      "  enum Kind {\n" +
+      "    option (confluent.enum_meta).tags = \"ENUM\";\n" +
+      "    APPLE = 6 [(confluent.enum_value_meta) = {\n" +
+      "      tags: [\n" +
+      "        \"CONST\"\n" +
+      "      ]\n" +
+      "    }];\n" +
+      "    BANANA = 7;\n" +
+      "  }\n" +
       "}\n";
 
     Map<SchemaEntity, Set<String>> tagsToAdd = new HashMap<>();
@@ -2550,7 +2580,7 @@ public class ProtobufSchemaTest {
       Collections.singleton("PII"));
     ParsedSchema schema = new ProtobufSchema(schemaString).copy(tagsToAdd, Collections.emptyMap());
     assertEquals(expectedString, schema.canonicalString());
-    assertEquals(ImmutableSet.of("OTHER", "PII", "PRIVATE"), schema.inlineTags());
+    assertEquals(ImmutableSet.of("FILE", "OTHER", "PII", "PRIVATE", "ENUM", "CONST"), schema.inlineTags());
 
     Map<SchemaEntity, Set<String>> tagsToRemove = new HashMap<>();
     tagsToRemove.put(new SchemaEntity(".SampleRecord.my_field1",
@@ -2573,13 +2603,13 @@ public class ProtobufSchemaTest {
       Collections.singleton("PII"));
     schema = new ProtobufSchema(schema.canonicalString()).copy(Collections.emptyMap(), tagsToRemove);
     assertEquals(removedTagSchema, schema.canonicalString());
-    assertEquals(ImmutableSet.of("PII", "PRIVATE"), schema.inlineTags());
+    assertEquals(ImmutableSet.of("FILE", "PII", "PRIVATE", "ENUM", "CONST"), schema.inlineTags());
 
     Map<String, Set<String>> pathTags =
         Collections.singletonMap("some.path", Collections.singleton("EXTERNAL"));
     Metadata metadata = new Metadata(pathTags, null, null);
     schema = schema.copy(metadata, null);
-    assertEquals(ImmutableSet.of("PII", "PRIVATE", "EXTERNAL"), schema.tags());
+    assertEquals(ImmutableSet.of("FILE", "PII", "PRIVATE", "ENUM", "CONST", "EXTERNAL"), schema.tags());
   }
 
   @Test
