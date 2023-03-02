@@ -130,6 +130,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final int initTimeout;
   private final int kafkaStoreMaxRetries;
   private final boolean isEligibleForLeaderElector;
+  private final boolean delayLeaderElection;
   private final boolean allowModeChanges;
   private SchemaRegistryIdentity leaderIdentity;
   private RestService leaderRestService;
@@ -157,6 +158,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       leaderEligibility = config.getBoolean(SchemaRegistryConfig.LEADER_ELIGIBILITY);
     }
     this.isEligibleForLeaderElector = leaderEligibility;
+    this.delayLeaderElection = config.getBoolean(SchemaRegistryConfig.LEADER_ELECTION_DELAY);
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
 
     String interInstanceListenerNameConfig = config.interInstanceListenerName();
@@ -360,9 +362,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
 
     config.checkBootstrapServers();
+    if (!delayLeaderElection) {
+      electLeader();
+    }
   }
 
   public void postInit() throws SchemaRegistryException {
+    if (delayLeaderElection) {
+      electLeader();
+    }
+  }
+
+  private void electLeader() throws SchemaRegistryException {
     log.info("Joining schema registry with Kafka-based coordination");
     leaderElector = new KafkaGroupLeaderElector(config, myIdentity, this);
     try {
