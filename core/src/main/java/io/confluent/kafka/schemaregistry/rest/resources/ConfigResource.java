@@ -296,7 +296,7 @@ public class ConfigResource {
   public void deleteTopLevelConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers) {
-    log.info("Deleting Global compatibility setting and reverting back to default");
+    log.debug("Deleting Global compatibility setting and reverting back to default");
 
     Config deletedConfig;
     try {
@@ -340,7 +340,7 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
-    log.info("Deleting compatibility setting for subject {}", subject);
+    log.debug("Deleting compatibility setting for subject {}", subject);
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 

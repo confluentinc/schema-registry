@@ -245,7 +245,7 @@ public class ModeResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
-    log.info("Deleting mode for subject {}", subject);
+    log.debug("Deleting mode for subject {}", subject);
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
