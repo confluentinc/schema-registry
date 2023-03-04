@@ -16,24 +16,34 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.EnumHashBiMap;
 import java.util.Objects;
 import java.util.Set;
 
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class SchemaEntity {
 
   private final String entityPath;
   private final EntityType entityType;
 
-  public SchemaEntity(String entityPath, EntityType entityType) {
+  @JsonCreator
+  public SchemaEntity(@JsonProperty("entityPath") String entityPath,
+                      @JsonProperty("entityType") EntityType entityType) {
     this.entityPath = entityPath;
     this.entityType = entityType;
   }
 
+  @JsonProperty("entityPath")
   public String getEntityPath() {
     return entityPath;
   }
 
+  @JsonProperty("entityType")
   public EntityType getEntityType() {
     return entityType;
   }
@@ -60,7 +70,9 @@ public class SchemaEntity {
   }
 
   public enum EntityType {
+    @JsonProperty("sr_record")
     SR_RECORD("sr_record"),
+    @JsonProperty("sr_field")
     SR_FIELD("sr_field");
 
     private static final EnumHashBiMap<SchemaEntity.EntityType, String> lookup =
