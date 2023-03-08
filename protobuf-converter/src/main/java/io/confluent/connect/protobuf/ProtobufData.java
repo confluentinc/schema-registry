@@ -1213,7 +1213,6 @@ public class ProtobufData {
               Object obj = message.getField(fieldDescriptor);
               if (obj != null) {
                 setUnionField(schema, message, struct, oneOfDescriptor, fieldDescriptor);
-                break;
               }
             }
           }
