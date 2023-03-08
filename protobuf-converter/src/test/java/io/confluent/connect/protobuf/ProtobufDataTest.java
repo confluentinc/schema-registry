@@ -38,6 +38,7 @@ import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
 import io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry;
 import io.confluent.connect.protobuf.test.MapReferences.MapReferencesMessage;
 import io.confluent.connect.protobuf.test.RecursiveKeyValue;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.EnumUnion;
 import io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status;
 import org.apache.kafka.connect.data.ConnectSchema;
@@ -1231,6 +1232,37 @@ public class ProtobufDataTest {
     assertEquals(expectedNested.name(), actualNested.name());
     assertEquals(expectedNested.type(), actualNested.type());
     assertEquals(expectedNested.parameters(), actualNested.parameters());
+  }
+
+  @Test
+  public void testMultipleOneofs() throws Exception {
+    String schema = "syntax = \"proto3\";\n"
+        + "\n"
+        + "package foo;\n"
+        + "\n"
+        + "message Customer {\n"
+        + "    int64 count = 1;\n"
+        + "    string first_name = 2;\n"
+        + "    string last_name = 3;\n"
+        + "    string address = 4;\n"
+        + "    oneof survey_id {\n"
+        + "        string survey_response_id = 5;\n"
+        + "        string outgoing_action_id = 6;\n"
+        + "    }\n"
+        + "    oneof comment {\n"
+        + "        string email = 7;\n"
+        + "        string platform = 8;\n"
+        + "    }\n"
+        + "}";
+    ProtobufSchema protobufSchema = new ProtobufSchema(schema);
+    Map<String, Object> configs = new HashMap<>();
+    ProtobufData protobufData = new ProtobufData(new ProtobufDataConfig(configs));
+    String json = "{\"count\":\"0\",\"firstName\":\"Bob\",\"lastName\":\"Jones\",\"address\":\"123 Main St\",\"outgoingActionId\":\"my outgoing_action_id\",\"platform\":\"my platform\"}";
+    Message message = (Message) ProtobufSchemaUtils.toObject(json, protobufSchema);
+    SchemaAndValue result = protobufData.toConnectData(protobufSchema, message);
+    Struct value = (Struct) result.value();
+    assertEquals("my outgoing_action_id", ((Struct) value.get("survey_id_0")).get("outgoing_action_id"));
+    assertEquals("my platform", ((Struct) value.get("comment_1")).get("platform"));
   }
 
   @Test
