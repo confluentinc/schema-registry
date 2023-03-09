@@ -111,7 +111,7 @@ public class SubjectsResource {
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
-    log.info("Schema lookup under subject {}, deleted {}, type {}",
+    log.debug("Schema lookup under subject {}, deleted {}, type {}",
              subject, lookupDeletedSchema, request.getSchemaType());
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -265,7 +265,7 @@ public class SubjectsResource {
       @PathParam("subject") String subject,
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
-    log.info("Deleting subject {}", subject);
+    log.debug("Deleting subject {}", subject);
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
