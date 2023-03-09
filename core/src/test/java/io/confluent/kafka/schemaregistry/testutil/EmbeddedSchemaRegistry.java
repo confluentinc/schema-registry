@@ -3,7 +3,6 @@
  */
 package io.confluent.kafka.schemaregistry.testutil;
 
-//import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.eclipse.jetty.server.Server;
 
@@ -19,10 +18,8 @@ import static java.util.Objects.requireNonNull;
 public class EmbeddedSchemaRegistry {
 
     private final String bootstrapServers;
-
     private Server registryServer;
     private String schemaRegistryUrl;
-
     public EmbeddedSchemaRegistry(String bootstrapServers) {
         this.bootstrapServers = requireNonNull(bootstrapServers);
     }
@@ -50,9 +47,6 @@ public class EmbeddedSchemaRegistry {
             closeable.close();
         }
     }
-//    public void stop() {
-//        Utils.closeQuietly(registryServer::stop, "embedded Schema Registry cluster");
-//    }
 
     public String schemaRegistryUrl() {
         return schemaRegistryUrl;
