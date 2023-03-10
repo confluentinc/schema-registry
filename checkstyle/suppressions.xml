@@ -10,7 +10,7 @@
               files="ErrorMessage.java"/>
 
     <suppress checks="ParameterNumber"
-              files="(AbstractKafkaProtobufSerializer|DynamicSchema|MessageDefinition|ProtobufSchema|Rule|SchemaRegistryCoordinator).java"/>
+              files="(AbstractKafkaProtobufSerializer|DynamicSchema|MessageDefinition|ProtobufSchema|Rule|RuleContext|SchemaRegistryCoordinator).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(AzureKmsClient|AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|AbstractKafkaSchemaSerDe|CachedSchemaRegistryClient|RestService|Errors|SchemaRegistryRestApplication|Context|KafkaSchemaRegistry|KafkaStore|AvroConverter|AvroData|AvroSchemaUtils|KafkaGroupLeaderElector|ProtobufSchema|ProtobufData|JsonSchemaData|InMemoryCache|SchemaMessageReader|Jackson|JsonSchemaConverter|MetricsContainer|ProtobufSchema|ProtobufSchemaUtils|MetadataEncoderService|ProtoFileElementDeserializer).java"/>

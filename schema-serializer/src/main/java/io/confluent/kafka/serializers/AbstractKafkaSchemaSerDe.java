@@ -593,7 +593,8 @@ public abstract class AbstractKafkaSchemaSerDe {
         }
       }
     }
-    for (Rule rule : rules) {
+    for (int i = 0; i < rules.size(); i++) {
+      Rule rule = rules.get(i);
       if (rule.isDisabled()) {
         continue;
       }
@@ -609,7 +610,7 @@ public abstract class AbstractKafkaSchemaSerDe {
         continue;
       }
       RuleContext ctx = new RuleContext(source, target,
-          subject, topic, headers, key(), isKey ? null : original, isKey, ruleMode, rule);
+          subject, topic, headers, key(), isKey ? null : original, isKey, ruleMode, rule, i, rules);
       RuleExecutor ruleExecutor = getRuleExecutor(ctx);
       if (ruleExecutor != null) {
         try {

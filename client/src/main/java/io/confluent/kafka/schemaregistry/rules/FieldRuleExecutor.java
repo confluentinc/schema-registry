@@ -25,7 +25,11 @@ public interface FieldRuleExecutor extends RuleExecutor {
 
   default Object transform(RuleContext ctx, Object message) throws RuleException {
     try (FieldTransform transform = newTransform(ctx)) {
-      return ctx.target().transformMessage(ctx, transform, message);
+      if (transform != null) {
+        return ctx.target().transformMessage(ctx, transform, message);
+      } else {
+        return message;
+      }
     }
   }
 }
