@@ -24,6 +24,7 @@ import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.daead.DeterministicAeadConfig;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -187,10 +188,37 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   @Override
-  public FieldTransform newTransform(RuleContext ruleContext) throws RuleException {
+  public FieldTransform newTransform(RuleContext ctx) throws RuleException {
+    switch (ctx.ruleMode()) {
+      case WRITE:
+        for (int i = ctx.index() + 1; i < ctx.rules().size(); i++) {
+          if (haveSameTags(ctx.rule(), ctx.rules().get(i))) {
+            // ignore this rule if a later one has the same tags
+            return null;
+          }
+        }
+        break;
+      case READ:
+        for (int i = 0; i < ctx.index(); i++) {
+          if (haveSameTags(ctx.rule(), ctx.rules().get(i))) {
+            // ignore this rule if an earlier one has the same tags
+            return null;
+          }
+        }
+        break;
+      default:
+        return null;
+    }
     FieldTransform transform = new FieldEncryptionExecutorTransform();
-    transform.init(ruleContext);
+    transform.init(ctx);
     return transform;
+  }
+
+  private boolean haveSameTags(Rule rule1, Rule rule2) {
+    return rule1.getKind() == rule2.getKind()
+        && rule1.getMode() == rule2.getMode()
+        && Objects.equals(rule1.getType(), rule2.getType())
+        && Objects.equals(rule1.getTags(), rule2.getTags());
   }
 
   private Cryptor getCryptor(boolean isKey) {

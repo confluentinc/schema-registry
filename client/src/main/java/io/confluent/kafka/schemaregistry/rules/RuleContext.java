@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.utils.WildcardMatcher;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -46,6 +47,8 @@ public class RuleContext {
   private final boolean isKey;
   private final RuleMode ruleMode;
   private final Rule rule;
+  private final int index;
+  private final List<Rule> rules;
   private final Map<Object, Object> customData = new ConcurrentHashMap<>();
   private final Deque<FieldContext> fieldContexts;
 
@@ -59,7 +62,9 @@ public class RuleContext {
       Object originalValue,
       boolean isKey,
       RuleMode ruleMode,
-      Rule rule) {
+      Rule rule,
+      int index,
+      List<Rule> rules) {
     this.source = source;
     this.target = target;
     this.subject = subject;
@@ -70,6 +75,8 @@ public class RuleContext {
     this.isKey = isKey;
     this.ruleMode = ruleMode;
     this.rule = rule;
+    this.index = index;
+    this.rules = rules;
     this.fieldContexts = new ArrayDeque<>();
   }
 
@@ -111,6 +118,14 @@ public class RuleContext {
 
   public Rule rule() {
     return rule;
+  }
+
+  public int index() {
+    return index;
+  }
+
+  public List<Rule> rules() {
+    return rules;
   }
 
   public Map<Object, Object> customData() {
