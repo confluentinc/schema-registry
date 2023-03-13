@@ -16,6 +16,8 @@
 package io.confluent.kafka.serializers.json;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
 import io.confluent.kafka.schemaregistry.annotations.SchemaReference;
@@ -151,19 +153,26 @@ public class KafkaJsonSchemaSerializerTest {
         + "  \"title\": \"Schema references\",\n"
         + "  \"description\": \"List of schema references for multiple types in a single topic\",\n"
         + "  \"oneOf\": [\n"
+        + "    { \"$ref\": \"customer.json\"},\n"
         + "    { \"$ref\": \"user.json\"}\n"
         + "  ]\n"
         + "}";
 
+    Customer customer = new Customer("acme", null);
     User user = new User("john", "doe", (short) 50, "jack", null);
     JsonSchema userSchema = JsonSchemaUtils.getSchema(user);
+    JsonSchema customerSchema = JsonSchemaUtils.getSchema(customer);
     schemaRegistry.register("user", userSchema);
+    schemaRegistry.register("customer", customerSchema);
     List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs =
-        Collections.singletonList(
+        ImmutableList.of(
             new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
-                "user.json", "user", 1));
-    Map<String, String> resolvedRefs =
-        Collections.singletonMap("user.json", userSchema.canonicalString());
+                "user.json", "user", 1),
+            new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
+                "customer.json", "customer", 1));
+    Map<String, String> resolvedRefs = ImmutableMap.of(
+        "user.json", userSchema.canonicalString(),
+        "customer.json", customerSchema.canonicalString());
     JsonSchema jsonSchema = new JsonSchema(schema, refs, resolvedRefs, null);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
@@ -172,6 +181,47 @@ public class KafkaJsonSchemaSerializerTest {
     // Test for javaType property
     Object deserialized = getDeserializer(null).deserialize(topic, bytes);
     assertEquals(user, deserialized);
+
+    bytes = latestSerializer.serialize(topic, customer);
+
+    // Test for javaType property
+    deserialized = getDeserializer(null).deserialize(topic, bytes);
+    assertEquals(customer, deserialized);
+  }
+
+  // Generate javaType property
+  @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
+      value="io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerTest$Customer")})
+  public static class Customer {
+    @JsonProperty
+    public String customerName;
+    @JsonProperty
+    public LocalDate acquireDate;
+
+    public Customer() {}
+
+    public Customer(String customerName, LocalDate acquireDate) {
+      this.customerName = customerName;
+      this.acquireDate = acquireDate;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      Customer customer = (Customer) o;
+      return Objects.equals(customerName, customer.customerName)
+          && Objects.equals(acquireDate, customer.acquireDate);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(customerName, acquireDate);
+    }
   }
 
   // Generate javaType property
