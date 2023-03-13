@@ -24,6 +24,9 @@ import java.util.Properties;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ReferenceSchema;
+import org.everit.json.schema.Schema;
 import org.everit.json.schema.ValidationException;
 
 import java.io.ByteArrayInputStream;
@@ -125,8 +128,6 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       int length = buffer.limit() - 1 - idSize;
       int start = buffer.position() + buffer.arrayOffset();
 
-      String typeName = schema.getString(typeProperty);
-
       JsonNode jsonNode = null;
       if (validate) {
         try {
@@ -145,19 +146,30 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         value = jsonNode != null
             ? objectMapper.convertValue(jsonNode, type)
             : objectMapper.readValue(buffer.array(), start, length, type);
-      } else if (typeName != null) {
-        value = jsonNode != null
-            ? deriveType(jsonNode, typeName)
-            : deriveType(buffer, length, start, typeName);
-      } else if (Object.class.equals(type)) {
-        value = jsonNode != null
-            ? objectMapper.convertValue(jsonNode, type)
-            : objectMapper.readValue(buffer.array(), start, length, type);
       } else {
-        // Return JsonNode if type is null
-        value = jsonNode != null
-            ? jsonNode
-            : objectMapper.readTree(new ByteArrayInputStream(buffer.array(), start, length));
+        String typeName;
+        if (schema.rawSchema() instanceof CombinedSchema) {
+          if (jsonNode == null) {
+            jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+          }
+          typeName = getTypeName(schema.rawSchema(), jsonNode);
+        } else {
+          typeName = schema.getString(typeProperty);
+        }
+        if (typeName != null) {
+          value = jsonNode != null
+              ? deriveType(jsonNode, typeName)
+              : deriveType(buffer, length, start, typeName);
+        } else if (Object.class.equals(type)) {
+          value = jsonNode != null
+              ? objectMapper.convertValue(jsonNode, type)
+              : objectMapper.readValue(buffer.array(), start, length, type);
+        } else {
+          // Return JsonNode if type is null
+          value = jsonNode != null
+              ? jsonNode
+              : objectMapper.readTree(new ByteArrayInputStream(buffer.array(), start, length));
+        }
       }
 
       if (includeSchemaAndVersion) {
@@ -181,6 +193,26 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     } catch (RestClientException e) {
       throw toKafkaException(e, "Error retrieving JSON schema for id " + id);
     }
+  }
+
+  private String getTypeName(Schema schema, JsonNode jsonNode) {
+    if (schema instanceof CombinedSchema) {
+      for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
+        boolean valid = false;
+        try {
+          JsonSchema.validate(subschema, jsonNode);
+          valid = true;
+        } catch (Exception e) {
+          // noop
+        }
+        if (valid) {
+          return getTypeName(subschema, jsonNode);
+        }
+      }
+    } else if (schema instanceof ReferenceSchema) {
+      return getTypeName(((ReferenceSchema)schema).getReferredSchema(), jsonNode);
+    }
+    return (String) schema.getUnprocessedProperties().get(typeProperty);
   }
 
   private Object deriveType(
