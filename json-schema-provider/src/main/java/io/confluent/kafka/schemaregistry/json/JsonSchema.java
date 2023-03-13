@@ -405,7 +405,7 @@ public class JsonSchema implements ParsedSchema {
     validate(rawSchema(), value);
   }
 
-  private static void validate(Schema schema, Object value)
+  public static void validate(Schema schema, Object value)
       throws JsonProcessingException, ValidationException {
     Object primitiveValue = NONE_MARKER;
     if (isPrimitive(value)) {
