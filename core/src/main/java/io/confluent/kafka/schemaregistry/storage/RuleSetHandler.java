@@ -29,6 +29,10 @@ public class RuleSetHandler {
   }
 
   public void handle(ConfigUpdateRequest request) {
+    handle(null, request);
+  }
+
+  public void handle(String subject, ConfigUpdateRequest request) {
     if (request.getDefaultRuleSet() != null || request.getOverrideRuleSet() != null) {
       log.warn("RuleSets are only supported by Confluent Enterprise and Confluent Cloud");
       request.setDefaultRuleSet(null);
@@ -37,6 +41,10 @@ public class RuleSetHandler {
   }
 
   public void handle(RegisterSchemaRequest request) {
+    handle(null, request);
+  }
+
+  public void handle(String subject, RegisterSchemaRequest request) {
     if (request.getRuleSet() != null) {
       log.warn("RuleSets are only supported by Confluent Enterprise and Confluent Cloud");
       request.setRuleSet(null);
