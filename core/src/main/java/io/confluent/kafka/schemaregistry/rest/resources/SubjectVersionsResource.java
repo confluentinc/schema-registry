@@ -384,7 +384,7 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
-    schemaRegistry.getRuleSetHandler().handle(subjectName, request);
+    schemaRegistry.getRuleSetHandler().handle(subjectName, normalize, request);
 
     if (request.getRuleSet() != null) {
       try {

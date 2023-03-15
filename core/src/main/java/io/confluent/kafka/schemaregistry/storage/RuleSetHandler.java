@@ -40,11 +40,7 @@ public class RuleSetHandler {
     }
   }
 
-  public void handle(RegisterSchemaRequest request) {
-    handle(null, request);
-  }
-
-  public void handle(String subject, RegisterSchemaRequest request) {
+  public void handle(String subject, boolean normalize, RegisterSchemaRequest request) {
     if (request.getRuleSet() != null) {
       log.warn("RuleSets are only supported by Confluent Enterprise and Confluent Cloud");
       request.setRuleSet(null);
