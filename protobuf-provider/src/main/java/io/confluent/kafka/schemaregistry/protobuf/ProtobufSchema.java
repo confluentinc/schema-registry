@@ -1481,7 +1481,7 @@ public class ProtobufSchema implements ParsedSchema {
     // which may not be using the alternative aggregate syntax.
     return options.stream()
         .collect(Collectors.toMap(
-            OptionElement::getName,
+            o -> o.getName().startsWith(".") ? o.getName().substring(1) : o.getName(),
             o -> transform(o),
             ProtobufSchema::merge));
   }
