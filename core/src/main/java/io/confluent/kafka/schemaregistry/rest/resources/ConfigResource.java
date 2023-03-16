@@ -107,7 +107,7 @@ public class ConfigResource {
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
 
-    schemaRegistry.getRuleSetHandler().handle(request);
+    schemaRegistry.getRuleSetHandler().handle(subject, request);
 
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());

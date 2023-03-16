@@ -54,10 +54,10 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
   public void setUp() throws Exception {
     super.setUp();
     ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
-      public void handle(ConfigUpdateRequest request) {
+      public void handle(String subject, ConfigUpdateRequest request) {
       }
 
-      public void handle(RegisterSchemaRequest request) {
+      public void handle(String subject, boolean normalize, RegisterSchemaRequest request) {
       }
 
       public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
