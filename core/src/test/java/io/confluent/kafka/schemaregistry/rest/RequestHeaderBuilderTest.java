@@ -24,6 +24,7 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 import javax.ws.rs.core.HttpHeaders;
 
@@ -36,7 +37,8 @@ public class RequestHeaderBuilderTest {
     HttpHeaders httpHeaders = mockHttpHeaders(ImmutableMap.of(
         "Content-Type", "application/json",
         "Accept", "application/json",
-        "Authorization", "test"
+        "Authorization", "test",
+        "X-Request-ID", "24b9afef-3cc7-4e32-944d-f89253c1b64b"
     ));
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
@@ -46,6 +48,7 @@ public class RequestHeaderBuilderTest {
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
     Assert.assertEquals("test", requestProps.get("Authorization"));
+    Assert.assertEquals("24b9afef-3cc7-4e32-944d-f89253c1b64b", requestProps.get("X-Request-ID"));
   }
 
   private HttpHeaders mockHttpHeaders(Map<String, String> headers) {
@@ -61,7 +64,8 @@ public class RequestHeaderBuilderTest {
     HttpHeaders httpHeaders = mockHttpHeaders(ImmutableMap.of(
         "Content-Type", "application/json",
         "Accept", "application/json",
-        "Authorization", ""
+        "Authorization", "",
+        "X-Request-ID", "24b9afef-3cc7-4e32-944d-f89253c1b64b"
     ));
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
@@ -70,6 +74,7 @@ public class RequestHeaderBuilderTest {
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
+    Assert.assertEquals("24b9afef-3cc7-4e32-944d-f89253c1b64b", requestProps.get("X-Request-ID"));
     Assert.assertNull( requestProps.get("Authorization"));
   }
 
@@ -78,7 +83,9 @@ public class RequestHeaderBuilderTest {
     HttpHeaders httpHeaders = mockHttpHeaders(ImmutableMap.of(
         "Content-Type", "application/json",
         "Accept", "application/json",
-        "Authorization", ""));
+        "Authorization", "",
+        "X-Request-ID", "24b9afef-3cc7-4e32-944d-f89253c1b64b"
+    ));
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
     Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(
@@ -87,16 +94,19 @@ public class RequestHeaderBuilderTest {
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
     Assert.assertNull( requestProps.get("Authorization"));
+    Assert.assertEquals("24b9afef-3cc7-4e32-944d-f89253c1b64b", requestProps.get("X-Request-ID"));
   }
 
   @Test
   public void testForwardOneHeader(){
-    HttpHeaders httpHeaders = mockHttpHeaders(ImmutableMap.of(
-        "Content-Type", "",
-        "Accept", "",
-        "Authorization", "",
-        "target-sr-cluster", "sr-xyz",
-        "some-other-header", "abc"));
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", "");
+    headers.put("Accept", "");
+    headers.put("Authorization", "");
+    headers.put("target-sr-cluster", "sr-xyz");
+    headers.put("some-other-header", "abc");
+    headers.put("X-Request-ID", "24b9afef-3cc7-4e32-944d-f89253c1b64b");
+    HttpHeaders httpHeaders = mockHttpHeaders(headers);
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
     Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(
@@ -104,17 +114,19 @@ public class RequestHeaderBuilderTest {
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("sr-xyz", requestProps.get("target-sr-cluster"));
     Assert.assertNull(requestProps.get("some-other-header"));
+    Assert.assertEquals("24b9afef-3cc7-4e32-944d-f89253c1b64b", requestProps.get("X-Request-ID"));
   }
 
   @Test
   public void testForwardMultipleHeaders(){
-    HttpHeaders httpHeaders = mockHttpHeaders(ImmutableMap.of(
-        "Content-Type", "",
-        "Accept", "",
-        "Authorization", "",
-        "target-sr-cluster", "sr-xyz",
-        "some-other-header", "abc"
-    ));
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", "");
+    headers.put("Accept", "");
+    headers.put("Authorization", "");
+    headers.put("target-sr-cluster", "sr-xyz");
+    headers.put("some-other-header", "abc");
+    headers.put("X-Request-ID", "24b9afef-3cc7-4e32-944d-f89253c1b64b");
+    HttpHeaders httpHeaders = mockHttpHeaders(headers);
 
     List<String> headersForward = ImmutableList.of("target-sr-cluster", "some-other-header");
 
@@ -124,17 +136,19 @@ public class RequestHeaderBuilderTest {
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("sr-xyz", requestProps.get("target-sr-cluster"));
     Assert.assertEquals("abc", requestProps.get("some-other-header"));
+    Assert.assertEquals("24b9afef-3cc7-4e32-944d-f89253c1b64b", requestProps.get("X-Request-ID"));
   }
 
   @Test
   public void testDoNotForwardHeaders() {
-    HttpHeaders httpHeaders = mockHttpHeaders(ImmutableMap.of(
-        "Content-Type", "",
-        "Accept", "",
-        "Authorization", "",
-        "target-sr-cluster", "sr-xyz",
-        "some-other-header", "abc"
-    ));
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", "");
+    headers.put("Accept", "");
+    headers.put("Authorization", "");
+    headers.put("target-sr-cluster", "sr-xyz");
+    headers.put("some-other-header", "abc");
+    headers.put("X-Request-ID", "24b9afef-3cc7-4e32-944d-f89253c1b64b");
+    HttpHeaders httpHeaders = mockHttpHeaders(headers);
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
     Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(
@@ -142,17 +156,19 @@ public class RequestHeaderBuilderTest {
     Assert.assertNotNull(requestProps);
     Assert.assertNull(requestProps.get("target-sr-cluster"));
     Assert.assertNull(requestProps.get("some-other-header"));
+    Assert.assertEquals("24b9afef-3cc7-4e32-944d-f89253c1b64b", requestProps.get("X-Request-ID"));
   }
 
   @Test
   public void testNullWhitelist() {
-    HttpHeaders httpHeaders = mockHttpHeaders(ImmutableMap.of(
-        "Content-Type", "application/json",
-        "Accept", "application/json",
-        "Authorization", "test",
-        "target-sr-cluster", "sr-xyz",
-        "some-other-header", "abc"
-    ));
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", "application/json");
+    headers.put("Accept", "application/json");
+    headers.put("Authorization", "test");
+    headers.put("target-sr-cluster", "sr-xyz");
+    headers.put("some-other-header", "abc");
+    headers.put("X-Request-ID", "24b9afef-3cc7-4e32-944d-f89253c1b64b");
+    HttpHeaders httpHeaders = mockHttpHeaders(headers);
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
     Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(
@@ -163,5 +179,6 @@ public class RequestHeaderBuilderTest {
     Assert.assertEquals("test", requestProps.get("Authorization"));
     Assert.assertNull(requestProps.get("target-sr-cluster"));
     Assert.assertNull(requestProps.get("some-other-header"));
+    Assert.assertEquals("24b9afef-3cc7-4e32-944d-f89253c1b64b", requestProps.get("X-Request-ID"));
   }
 }
