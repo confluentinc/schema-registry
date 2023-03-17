@@ -10,7 +10,11 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 import javax.annotation.Priority;
-import javax.ws.rs.container.*;
+import javax.ws.rs.container.PreMatching;
+import javax.ws.rs.container.ContainerRequestFilter;
+import javax.ws.rs.container.ContainerResponseFilter;
+import javax.ws.rs.container.ContainerRequestContext;
+import javax.ws.rs.container.ContainerResponseContext;
 import javax.ws.rs.core.MultivaluedMap;
 import java.io.IOException;
 import org.eclipse.jetty.util.StringUtil;
@@ -34,7 +38,7 @@ public class RequestIdFilter implements ContainerRequestFilter, ContainerRespons
     if (headersMap.containsKey(REQUEST_ID_HEADER)
         && headersMap.get(REQUEST_ID_HEADER).size() == 1
         && StringUtil.isNotBlank(headersMap.get(REQUEST_ID_HEADER).get(0))
-    ){
+    ) {
       requestId = headersMap.get(REQUEST_ID_HEADER).get(0);
     } else {
       // generate a V4 UUID
