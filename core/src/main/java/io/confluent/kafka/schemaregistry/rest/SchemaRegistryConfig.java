@@ -412,7 +412,7 @@ public class SchemaRegistryConfig extends RestConfig {
       + "inter.instance.protocol instead.";
   protected static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
       = "A list of ``http`` headers to forward from follower to leader, "
-      + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
+      + "in addition to ``Content-Type``, ``Accept``, ``Authorization``, ``X-Request-ID``.";
   protected static final String INTER_INSTANCE_LISTENER_NAME_DOC
       = "Name of listener used for communication between schema registry instances. If this value "
       + "is unset, the listener used is defined by inter.instance.protocol. If both properties "
