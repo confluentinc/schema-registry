@@ -145,7 +145,7 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>leader.election.delay</code>*
    */
   public static final String LEADER_ELECTION_DELAY = "leader.election.delay";
-  public static final boolean DEFAULT_LEADER_ELECTION_DELAY = true;
+  public static final boolean DEFAULT_LEADER_ELECTION_DELAY = false;
   /**
    * <code>mode.mutability</code>*
    */
