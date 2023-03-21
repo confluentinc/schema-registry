@@ -17,7 +17,6 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
-import io.confluent.kafka.schemaregistry.rest.filters.RequestIdFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.ContextFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.RestCallMetricFilter;
 import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
@@ -59,6 +58,8 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   protected void configurePreResourceHandling(ServletContextHandler context) {
     super.configurePreResourceHandling(context);
     context.setErrorHandler(new JsonErrorHandler());
+    // This handler runs before first Session, Security or ServletHandler
+    context.insertHandler(new RequestIdHandler());
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
@@ -116,7 +117,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new CompatibilityResource(schemaRegistry));
     config.register(new ModeResource(schemaRegistry));
     config.register(new ServerMetadataResource(schemaRegistry));
-    config.register(new RequestIdFilter());
     config.register(new ContextFilter());
     config.register(new RestCallMetricFilter(
             schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
