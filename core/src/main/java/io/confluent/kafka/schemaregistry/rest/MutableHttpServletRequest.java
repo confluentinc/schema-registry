@@ -68,6 +68,9 @@ final class MutableHttpServletRequest extends HttpServletRequestWrapper {
   public Enumeration<String> getHeaderNames() {
     // Return the unique (case-insensitive) header names in customHeaders and HttpServletRequest
     HttpServletRequest request = (HttpServletRequest)getRequest();
+    // Use two sets to maintain the case of the headers being returned.
+    // The `set` stores one of the original header names.
+    // The `usedHeaders` set stores the lowercase header names to check for duplicates.
     Set<String> set = new HashSet<String>();
     Set<String> usedHeaders = new HashSet<String>();
 
@@ -87,7 +90,7 @@ final class MutableHttpServletRequest extends HttpServletRequestWrapper {
       // add the names of the request headers into the list
       String key = e.nextElement();
       String keyLower = key.toLowerCase();
-      // Only add custom header it hasn't already been added (case insensitive)
+      // Only add custom header it hasn't already been added (case-insensitive)
       if (!usedHeaders.contains(keyLower)) {
         set.add(key);
         usedHeaders.add(keyLower);

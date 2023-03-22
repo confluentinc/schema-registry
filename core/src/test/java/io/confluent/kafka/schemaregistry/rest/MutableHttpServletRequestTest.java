@@ -160,13 +160,14 @@ public class MutableHttpServletRequestTest {
     Assert.assertEquals("new-header-value-100", mutableRequest.getHeader("header-key-0"));
     Assert.assertEquals("new-header-value-100", mutableRequest.getHeader("Header-Key-0"));
 
-    mutableRequest.putHeader("HEADER-KEY-0", "new-header-value-999"); // overwrite above
+    mutableRequest.putHeader("HEADER-KEY-0", "new-header-value-999"); // overwrite above (case-insensitive)
     Assert.assertEquals("new-header-value-999", mutableRequest.getHeader("header-key-0"));
     Assert.assertEquals("new-header-value-999", mutableRequest.getHeader("Header-Key-0"));
 
     mutableRequest.putHeader("header-key-1", "new-header-value-54"); // new
     Assert.assertEquals("new-header-value-54", mutableRequest.getHeader("header-key-1"));
     Assert.assertEquals("new-header-value-54", mutableRequest.getHeader("HEADER-key-1"));
+
 
     // Test getHeaders
     headerValues = mutableRequest.getHeaders("header-key-0");
