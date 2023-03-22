@@ -18,31 +18,34 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
+import java.util.List;
 import java.util.Set;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletRequestWrapper;
 
+import org.glassfish.jersey.internal.util.collection.StringKeyIgnoreCaseMultivaluedMap;
+
 final class MutableHttpServletRequest extends HttpServletRequestWrapper {
   // Allows for adding and replacing custom headers in the HttpServletRequest object.
-  private final Map<String, String> customHeaders;
+  // Only one value per custom header is allowed.
+  private final StringKeyIgnoreCaseMultivaluedMap<String> customHeaders;
 
   public MutableHttpServletRequest(HttpServletRequest request) {
     super(request);
-    this.customHeaders = new HashMap<String, String>();
+    this.customHeaders = new StringKeyIgnoreCaseMultivaluedMap<String>();
   }
 
   public void putHeader(String name, String value) {
-    // Putting a new header will take precedence over existing values in HttpServletRequest
-    this.customHeaders.put(name, value);
+    // Putting a new header will take precedence over existing values in HttpServletRequest.
+    // Value will also overwrite any existing custom header value.
+    this.customHeaders.putSingle(name, value);
   }
 
   public String getHeader(String name) {
-    // check the custom headers first
-    String headerValue = customHeaders.get(name);
+    // check the custom headers first and return the value if it exists.
+    String headerValue = customHeaders.getFirst(name);
 
     if (headerValue != null) {
       return headerValue;
@@ -52,26 +55,43 @@ final class MutableHttpServletRequest extends HttpServletRequestWrapper {
   }
 
   public Enumeration<String> getHeaders(String name) {
-    // check the custom headers first
-    String headerValue = customHeaders.get(name);
+    // check the custom headers first and return the value if it exists.
+    List<String> headerValues = customHeaders.get(name);
 
-    if (headerValue != null) {
-      return Collections.enumeration(Collections.singletonList(headerValue));
+    if (headerValues != null) {
+      return Collections.enumeration(headerValues);
     }
     // else return from into the original wrapped object
     return ((HttpServletRequest) getRequest()).getHeaders(name);
   }
 
   public Enumeration<String> getHeaderNames() {
-    // create a set of the custom header names
-    Set<String> set = new HashSet<String>(customHeaders.keySet());
+    // Return the unique (case-insensitive) header names in customHeaders and HttpServletRequest
+    HttpServletRequest request = (HttpServletRequest)getRequest();
+    Set<String> set = new HashSet<String>();
+    Set<String> usedHeaders = new HashSet<String>();
 
-    // now add the headers from the wrapped request object
-    Enumeration<String> e = ((HttpServletRequest) getRequest()).getHeaderNames();
+    // add the custom headers
+    for (String key : customHeaders.keySet()) {
+      // Only add custom header it hasn't already been added (case-insensitive)
+      String keyLower = key.toLowerCase();
+      if (!usedHeaders.contains(keyLower)) {
+        set.add(key);
+        usedHeaders.add(keyLower);
+      }
+    }
+
+    // add the HttpServletRequest headers
+    Enumeration<String> e = request.getHeaderNames();
     while (e.hasMoreElements()) {
       // add the names of the request headers into the list
-      String n = e.nextElement();
-      set.add(n);
+      String key = e.nextElement();
+      String keyLower = key.toLowerCase();
+      // Only add custom header it hasn't already been added (case insensitive)
+      if (!usedHeaders.contains(keyLower)) {
+        set.add(key);
+        usedHeaders.add(keyLower);
+      }
     }
 
     // create an enumeration from the set and return

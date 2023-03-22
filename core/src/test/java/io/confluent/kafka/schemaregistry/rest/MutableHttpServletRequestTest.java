@@ -4,13 +4,11 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import org.eclipse.jetty.server.Request;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import java.util.Arrays;
 import java.util.Collections;
@@ -61,8 +59,6 @@ public class MutableHttpServletRequestTest {
 
   @Test
   public void testGetAndPutWithNoInitialHeaders() {
-    String headerValue;
-    Enumeration<String> headerValues;
     Enumeration<String> headerNames;
     List<String> headerValuesList;
     List<String> headerNamesList;
@@ -74,17 +70,40 @@ public class MutableHttpServletRequestTest {
 
     // Add a "header-key-0" header
     mutableRequest.putHeader("header-key-0", "new-header-value-98");
-    headerValue = mutableRequest.getHeader("header-key-0");
-    Assert.assertEquals("new-header-value-98", headerValue);
 
-    // Validate gets
-    headerValue = mutableRequest.getHeader("header-key-0");
-    Assert.assertEquals("new-header-value-98", headerValue);
+    // Validate gets (should be case-insensitive)
+    Assert.assertEquals("new-header-value-98", mutableRequest.getHeader("header-Key-0"));
+    Assert.assertEquals("new-header-value-98", mutableRequest.getHeader("header-key-0"));
+    Assert.assertEquals("new-header-value-98", mutableRequest.getHeader("HEADER-KEY-0"));
 
-    headerValues = mutableRequest.getHeaders("header-key-0");
-    headerValuesList = Collections.list(headerValues);
+    headerValuesList = Collections.list(mutableRequest.getHeaders("header-key-0"));
     Assert.assertEquals(1, headerValuesList.size());
     Assert.assertEquals("new-header-value-98", headerValuesList.get(0));
+
+    headerValuesList = Collections.list(mutableRequest.getHeaders("header-KEY-0"));
+    Assert.assertEquals(1, headerValuesList.size());
+    Assert.assertEquals("new-header-value-98", headerValuesList.get(0));
+
+    headerNames = mutableRequest.getHeaderNames();
+    headerNamesList = Collections.list(headerNames);
+    Assert.assertEquals(1, headerNamesList.size());
+    Assert.assertTrue(headerNamesList.contains("header-key-0"));
+
+    // Replace with a "header-Key-0" header key to test cast-insensitivity
+    mutableRequest.putHeader("header-Key-0", "new-header-value-75");
+
+    // Validate gets (should be case-insensitive)
+    Assert.assertEquals("new-header-value-75", mutableRequest.getHeader("header-Key-0"));
+    Assert.assertEquals("new-header-value-75", mutableRequest.getHeader("header-key-0"));
+    Assert.assertEquals("new-header-value-75", mutableRequest.getHeader("HEADER-KEY-0"));
+
+    headerValuesList = Collections.list(mutableRequest.getHeaders("header-key-0"));
+    Assert.assertEquals(1, headerValuesList.size());
+    Assert.assertEquals("new-header-value-75", headerValuesList.get(0));
+
+    headerValuesList = Collections.list(mutableRequest.getHeaders("header-KEY-0"));
+    Assert.assertEquals(1, headerValuesList.size());
+    Assert.assertEquals("new-header-value-75", headerValuesList.get(0));
 
     headerNames = mutableRequest.getHeaderNames();
     headerNamesList = Collections.list(headerNames);
@@ -95,7 +114,6 @@ public class MutableHttpServletRequestTest {
   @Test
   public void testGetAndPutWithInitialHeaders(){
     // A more comprehensive test
-    String headerValue;
     Enumeration<String> headerValues;
     Enumeration<String> headerNames;
     List<String> headerValuesList;
@@ -105,19 +123,18 @@ public class MutableHttpServletRequestTest {
     when(httpServletRequest.getHeader("header-key-0")).thenReturn("header-value-78.1");
     when(httpServletRequest.getHeaders("header-key-0")).thenReturn(
         Collections.enumeration(Arrays.asList("header-value-78.1", "header-value-78.2")));
-    when(httpServletRequest.getHeaderNames()).thenReturn(
-        Collections.enumeration(Collections.singletonList("header-key-0")));
 
     when(httpServletRequest.getHeader("header-key-2")).thenReturn("header-value-62.1");
     when(httpServletRequest.getHeaders("header-key-2")).thenReturn(
         Collections.enumeration(Arrays.asList("header-value-62.1", "header-value-62.2")));
+
+    // Include "header-KEY-0" here to make sure that getHeaderNames() filters it out.
     when(httpServletRequest.getHeaderNames()).thenReturn(
-        Collections.enumeration(Collections.singletonList("header-key-2")));
+        Collections.enumeration(Arrays.asList("header-key-0", "header-KEY-0", "header-key-2")));
 
 
     // Test getting header values from HttpServletRequest (should match the mock values above)
-    headerValue = mutableRequest.getHeader("header-key-0");
-    Assert.assertEquals("header-value-78.1", headerValue);
+    Assert.assertEquals("header-value-78.1", mutableRequest.getHeader("header-key-0"));
 
     headerValues = mutableRequest.getHeaders("header-key-0");
     headerValuesList = Collections.list(headerValues);
@@ -125,8 +142,7 @@ public class MutableHttpServletRequestTest {
     Assert.assertTrue(headerValuesList.contains("header-value-78.1"));
     Assert.assertTrue(headerValuesList.contains("header-value-78.2"));
 
-    headerValue = mutableRequest.getHeader("header-key-2");
-    Assert.assertEquals("header-value-62.1", headerValue);
+    Assert.assertEquals("header-value-62.1", mutableRequest.getHeader("header-key-2"));
 
     headerValues = mutableRequest.getHeaders("header-key-2");
     headerValuesList = Collections.list(headerValues);
@@ -137,25 +153,36 @@ public class MutableHttpServletRequestTest {
 
     // Test putHeader (overwrite and new values) and getHeader
     mutableRequest.putHeader("header-key-0", "new-header-value-98"); // overwrite mock
-    headerValue = mutableRequest.getHeader("header-key-0");
-    Assert.assertEquals("new-header-value-98", headerValue);
+    Assert.assertEquals("new-header-value-98", mutableRequest.getHeader("header-key-0"));
+    Assert.assertEquals("new-header-value-98", mutableRequest.getHeader("header-KEY-0"));
 
     mutableRequest.putHeader("header-key-0", "new-header-value-100"); // overwrite above
-    headerValue = mutableRequest.getHeader("header-key-0");
-    Assert.assertEquals("new-header-value-100", headerValue);
+    Assert.assertEquals("new-header-value-100", mutableRequest.getHeader("header-key-0"));
+    Assert.assertEquals("new-header-value-100", mutableRequest.getHeader("Header-Key-0"));
+
+    mutableRequest.putHeader("HEADER-KEY-0", "new-header-value-999"); // overwrite above
+    Assert.assertEquals("new-header-value-999", mutableRequest.getHeader("header-key-0"));
+    Assert.assertEquals("new-header-value-999", mutableRequest.getHeader("Header-Key-0"));
 
     mutableRequest.putHeader("header-key-1", "new-header-value-54"); // new
-    headerValue = mutableRequest.getHeader("header-key-1");
-    Assert.assertEquals("new-header-value-54", headerValue);
-
+    Assert.assertEquals("new-header-value-54", mutableRequest.getHeader("header-key-1"));
+    Assert.assertEquals("new-header-value-54", mutableRequest.getHeader("HEADER-key-1"));
 
     // Test getHeaders
     headerValues = mutableRequest.getHeaders("header-key-0");
     headerValuesList = Collections.list(headerValues);
     Assert.assertEquals(1, headerValuesList.size());
-    Assert.assertEquals("new-header-value-100", headerValuesList.get(0));
+    Assert.assertEquals("new-header-value-999", headerValuesList.get(0));
+    headerValues = mutableRequest.getHeaders("Header-Key-0"); // Test case-insensitivity
+    headerValuesList = Collections.list(headerValues);
+    Assert.assertEquals(1, headerValuesList.size());
+    Assert.assertEquals("new-header-value-999", headerValuesList.get(0));
 
     headerValues = mutableRequest.getHeaders("header-key-1");
+    headerValuesList = Collections.list(headerValues);
+    Assert.assertEquals(1, headerValuesList.size());
+    Assert.assertEquals("new-header-value-54", headerValuesList.get(0));
+    headerValues = mutableRequest.getHeaders("HEADER-key-1"); // Test case-insensitivity
     headerValuesList = Collections.list(headerValues);
     Assert.assertEquals(1, headerValuesList.size());
     Assert.assertEquals("new-header-value-54", headerValuesList.get(0));
