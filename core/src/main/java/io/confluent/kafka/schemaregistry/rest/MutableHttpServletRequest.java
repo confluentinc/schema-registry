@@ -27,9 +27,11 @@ import javax.servlet.http.HttpServletRequestWrapper;
 
 import org.glassfish.jersey.internal.util.collection.StringKeyIgnoreCaseMultivaluedMap;
 
+/**
+ * Allows for adding and replacing custom headers in the HttpServletRequest object.
+ * Only one value per custom header is allowed.
+ */
 final class MutableHttpServletRequest extends HttpServletRequestWrapper {
-  // Allows for adding and replacing custom headers in the HttpServletRequest object.
-  // Only one value per custom header is allowed.
   private final StringKeyIgnoreCaseMultivaluedMap<String> customHeaders;
 
   public MutableHttpServletRequest(HttpServletRequest request) {
@@ -37,8 +39,10 @@ final class MutableHttpServletRequest extends HttpServletRequestWrapper {
     this.customHeaders = new StringKeyIgnoreCaseMultivaluedMap<String>();
   }
 
+  /**
+   * Puts a new header will take precedence over existing header in the HttpServletRequest object.
+   */
   public void putHeader(String name, String value) {
-    // Putting a new header will take precedence over existing values in HttpServletRequest.
     // Value will also overwrite any existing custom header value.
     this.customHeaders.putSingle(name, value);
   }
@@ -65,8 +69,10 @@ final class MutableHttpServletRequest extends HttpServletRequestWrapper {
     return ((HttpServletRequest) getRequest()).getHeaders(name);
   }
 
+  /**
+   * Get the unique (case-insensitive) header names in customHeaders and HttpServletRequest.
+   */
   public Enumeration<String> getHeaderNames() {
-    // Return the unique (case-insensitive) header names in customHeaders and HttpServletRequest
     HttpServletRequest request = (HttpServletRequest)getRequest();
     // Use two sets to maintain the case of the headers being returned.
     // The `set` stores one of the original header names.
@@ -85,10 +91,10 @@ final class MutableHttpServletRequest extends HttpServletRequestWrapper {
     }
 
     // add the HttpServletRequest headers
-    Enumeration<String> e = request.getHeaderNames();
-    while (e.hasMoreElements()) {
+    Enumeration<String> servletRequestHeaders = request.getHeaderNames();
+    while (servletRequestHeaders.hasMoreElements()) {
       // add the names of the request headers into the list
-      String key = e.nextElement();
+      String key = servletRequestHeaders.nextElement();
       String keyLower = key.toLowerCase();
       // Only add custom header it hasn't already been added (case-insensitive)
       if (!usedHeaders.contains(keyLower)) {
