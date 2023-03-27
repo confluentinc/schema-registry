@@ -4,6 +4,8 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_W
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -186,5 +188,15 @@ public class QualifiedSubjectTest {
   public void testToStringQualifiedContext() {
     QualifiedSubject qs = new QualifiedSubject("tenant1", ".ctx1", null);
     assertEquals("tenant1_:.ctx1:", qs.toString());
+  }
+
+  @Test
+  public void testValidation() {
+    assertTrue(QualifiedSubject.isValid("default", "foo"));
+    assertFalse(QualifiedSubject.isValid("default", null));
+    assertFalse(QualifiedSubject.isValid("default", ""));
+    assertFalse(QualifiedSubject.isValid("default", String.valueOf((char) 31)));
+    assertFalse(QualifiedSubject.isValid("default", "  "));
+    assertFalse(QualifiedSubject.isValid("default", "__GLOBAL"));
   }
 }

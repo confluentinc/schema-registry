@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.utils;
 
+import com.google.common.base.CharMatcher;
 import java.util.Objects;
 
 public class QualifiedSubject implements Comparable<QualifiedSubject> {
@@ -35,6 +36,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   public static final String WILDCARD = "*";
 
   public static final String CONTEXT_WILDCARD = CONTEXT_DELIMITER + WILDCARD + CONTEXT_DELIMITER;
+
+  // Subject name under which global permissions are stored.
+  public static final String GLOBAL_SUBJECT_NAME = "__GLOBAL";
 
   private final String tenant;
   private final String context;  // assumed to start with CONTEXT_SEPARATOR
@@ -179,6 +183,19 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
       context = CONTEXT_SEPARATOR + context;
     }
     return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
+  }
+
+  public static boolean isValid(String tenant, String qualifiedSubject) {
+    if (qualifiedSubject == null || CharMatcher.javaIsoControl().matchesAnyOf(qualifiedSubject)) {
+      return false;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
+    if (qs == null
+        || qs.getSubject().trim().isEmpty()
+        || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)) {
+      return false;
+    }
+    return true;
   }
 
   @Override
