@@ -107,7 +107,7 @@ public class ConfigResource {
       throw new RestInvalidCompatibilityException();
     }
 
-    if (!QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
+    if (subject != null && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
       throw Errors.invalidSubjectException(subject);
     }
 

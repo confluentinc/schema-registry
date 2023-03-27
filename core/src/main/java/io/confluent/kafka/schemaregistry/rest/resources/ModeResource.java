@@ -105,7 +105,7 @@ public class ModeResource {
       @QueryParam("force") boolean force
   ) {
 
-    if (!QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
+    if (subject != null && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
       throw Errors.invalidSubjectException(subject);
     }
 
