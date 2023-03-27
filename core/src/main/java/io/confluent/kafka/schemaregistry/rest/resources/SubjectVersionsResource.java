@@ -379,7 +379,7 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
-    if (!QualifiedSubject.isValid(schemaRegistry.tenant(), subjectName)) {
+    if (!QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subjectName)) {
       throw Errors.invalidSubjectException(subjectName);
     }
 

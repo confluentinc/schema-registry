@@ -185,7 +185,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
-  public static boolean isValid(String tenant, String qualifiedSubject) {
+  public static boolean isValidSubject(String tenant, String qualifiedSubject) {
     if (qualifiedSubject == null || CharMatcher.javaIsoControl().matchesAnyOf(qualifiedSubject)) {
       return false;
     }
