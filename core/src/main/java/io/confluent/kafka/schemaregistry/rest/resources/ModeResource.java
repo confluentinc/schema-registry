@@ -15,9 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOBAL_RESOURCE_NAME;
-
-import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
@@ -108,9 +105,7 @@ public class ModeResource {
       @QueryParam("force") boolean force
   ) {
 
-    if (subject != null && (CharMatcher.javaIsoControl().matchesAnyOf(subject)
-        || QualifiedSubject.create(this.schemaRegistry.tenant(), subject).getSubject()
-            .equals(GLOBAL_RESOURCE_NAME))) {
+    if (subject != null && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
       throw Errors.invalidSubjectException(subject);
     }
 
