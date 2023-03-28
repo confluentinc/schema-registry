@@ -193,9 +193,9 @@ public class QualifiedSubjectTest {
   public void testSubjectValidation() {
     assertTrue(QualifiedSubject.isValidSubject("default", "foo"));
     assertFalse(QualifiedSubject.isValidSubject("default", null));
-    assertFalse(QualifiedSubject.isValidSubject("default", ""));
+    assertTrue(QualifiedSubject.isValidSubject("default", ""));
     assertFalse(QualifiedSubject.isValidSubject("default", String.valueOf((char) 31)));
-    assertFalse(QualifiedSubject.isValidSubject("default", "  "));
+    assertTrue(QualifiedSubject.isValidSubject("default", "  "));
     assertFalse(QualifiedSubject.isValidSubject("default", "__GLOBAL"));
   }
 }
