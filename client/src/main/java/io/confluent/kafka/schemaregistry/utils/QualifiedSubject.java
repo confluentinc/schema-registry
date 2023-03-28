@@ -190,9 +190,8 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
       return false;
     }
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
-    if (qs == null
-        || qs.getSubject().trim().isEmpty()
-        || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)) {
+    // For backward compatibility, we allow an empty subject
+    if (qs == null || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)) {
       return false;
     }
     return true;
