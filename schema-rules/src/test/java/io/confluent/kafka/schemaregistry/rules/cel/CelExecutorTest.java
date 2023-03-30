@@ -189,6 +189,18 @@ public class CelExecutorTest {
     return schema;
   }
 
+  private Schema createWidgetSchemaNoTags() {
+    String userSchema = "{\"type\":\"record\",\"name\":\"OldWidget\",\"namespace\":\"io.confluent.kafka.schemaregistry.rules.cel.CelExecutorTest\",\"fields\":\n"
+        + "[{\"name\": \"name\", \"type\": \"string\"},\n"
+        + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"}},\n"
+        + "{\"name\": \"piiArray\", \"type\": { \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\":\"OldPii\", \"fields\":\n"
+        + "[{\"name\": \"pii\", \"type\": \"string\"}]}}},\n"
+        + "{\"name\": \"piiMap\", \"type\": { \"type\": \"map\", \"values\": \"OldPii\"}}]}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(userSchema);
+    return schema;
+  }
+
   @Test
   public void testKafkaAvroSerializer() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
@@ -324,6 +336,41 @@ public class CelExecutorTest {
     AvroSchema avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    bytes = reflectionAvroSerializer.serialize(topic, widget);
+
+    obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
+    assertTrue(
+        "Returned object should be a Widget",
+        OldWidget.class.isInstance(obj)
+    );
+    assertEquals(widget, obj);
+    assertEquals("alice-suffix", ((OldWidget)obj).getName());
+    assertEquals("123-suffix", ((OldWidget)obj).getSsn().get(0));
+    assertEquals("456-suffix", ((OldWidget)obj).getSsn().get(1));
+    assertEquals("789-suffix", ((OldWidget)obj).getPiiArray().get(0).getPii());
+    assertEquals("012-suffix", ((OldWidget)obj).getPiiArray().get(1).getPii());
+    assertEquals("345-suffix", ((OldWidget)obj).getPiiMap().get("key1").getPii());
+    assertEquals("678-suffix", ((OldWidget)obj).getPiiMap().get("key2").getPii());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerReflectionFieldTransformNoTags() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    OldWidget widget = new OldWidget("alice");
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
+    Schema schema = createWidgetSchemaNoTags();
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null, "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);

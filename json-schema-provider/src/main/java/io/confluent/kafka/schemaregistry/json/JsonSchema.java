@@ -592,10 +592,15 @@ public class JsonSchema implements ParsedSchema {
     } else {
       if (fieldCtx != null) {
         try {
-          Set<String> intersect = new HashSet<>(fieldCtx.getTags());
-          intersect.retainAll(ctx.rule().getTags());
-          if (!intersect.isEmpty()) {
+          Set<String> ruleTags = ctx.rule().getTags();
+          if (ruleTags.isEmpty()) {
             return transform.transform(ctx, fieldCtx, message);
+          } else {
+            Set<String> intersect = new HashSet<>(fieldCtx.getTags());
+            intersect.retainAll(ruleTags);
+            if (!intersect.isEmpty()) {
+              return transform.transform(ctx, fieldCtx, message);
+            }
           }
         } catch (RuleException e) {
           throw new RuntimeException(e);
