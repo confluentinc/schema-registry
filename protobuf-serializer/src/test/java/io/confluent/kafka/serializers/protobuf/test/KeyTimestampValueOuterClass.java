@@ -85,74 +85,6 @@ public final class KeyTimestampValueOuterClass {
     getUnknownFields() {
       return this.unknownFields;
     }
-    private KeyTimestampValue(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 8: {
-
-              key_ = input.readInt32();
-              break;
-            }
-            case 18: {
-              io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue.Builder subBuilder = null;
-              if (value_ != null) {
-                subBuilder = value_.toBuilder();
-              }
-              value_ = input.readMessage(io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(value_);
-                value_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            case 26: {
-              com.google.protobuf.Timestamp.Builder subBuilder = null;
-              if (value2_ != null) {
-                subBuilder = value2_.toBuilder();
-              }
-              value2_ = input.readMessage(com.google.protobuf.Timestamp.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(value2_);
-                value2_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
-    }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
       return io.confluent.kafka.serializers.protobuf.test.KeyTimestampValueOuterClass.internal_static_KeyTimestampValue_descriptor;
@@ -252,7 +184,7 @@ public final class KeyTimestampValueOuterClass {
       if (value2_ != null) {
         output.writeMessage(3, getValue2());
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -273,7 +205,7 @@ public final class KeyTimestampValueOuterClass {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(3, getValue2());
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -300,7 +232,7 @@ public final class KeyTimestampValueOuterClass {
         if (!getValue2()
             .equals(other.getValue2())) return false;
       }
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -321,7 +253,7 @@ public final class KeyTimestampValueOuterClass {
         hash = (37 * hash) + VALUE2_FIELD_NUMBER;
         hash = (53 * hash) + getValue2().hashCode();
       }
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -442,18 +374,13 @@ public final class KeyTimestampValueOuterClass {
 
       // Construct using io.confluent.kafka.serializers.protobuf.test.KeyTimestampValueOuterClass.KeyTimestampValue.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -566,7 +493,7 @@ public final class KeyTimestampValueOuterClass {
         if (other.hasValue2()) {
           mergeValue2(other.getValue2());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -581,17 +508,49 @@ public final class KeyTimestampValueOuterClass {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        io.confluent.kafka.serializers.protobuf.test.KeyTimestampValueOuterClass.KeyTimestampValue parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 8: {
+                key_ = input.readInt32();
+
+                break;
+              } // case 8
+              case 18: {
+                input.readMessage(
+                    getValueFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 18
+              case 26: {
+                input.readMessage(
+                    getValue2FieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 26
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (io.confluent.kafka.serializers.protobuf.test.KeyTimestampValueOuterClass.KeyTimestampValue) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -896,7 +855,18 @@ public final class KeyTimestampValueOuterClass {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new KeyTimestampValue(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
