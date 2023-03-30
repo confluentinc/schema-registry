@@ -2329,7 +2329,7 @@ public class ProtobufSchema implements ParsedSchema {
             return transform.transform(ctx, fieldCtx, message);
           } else {
             Set<String> intersect = new HashSet<>(fieldCtx.getTags());
-            intersect.retainAll(ctx.rule().getTags());
+            intersect.retainAll(ruleTags);
             if (!intersect.isEmpty()) {
               return transform.transform(ctx, fieldCtx, message);
             }
