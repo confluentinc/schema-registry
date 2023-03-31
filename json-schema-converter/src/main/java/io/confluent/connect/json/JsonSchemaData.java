@@ -15,12 +15,17 @@
 
 package io.confluent.connect.json;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.BinaryNode;
+import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
@@ -69,6 +74,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import static io.confluent.connect.json.JsonSchemaDataConfig.SCHEMAS_CACHE_SIZE_CONFIG;
@@ -809,7 +815,7 @@ public class JsonSchemaData {
         }
       }
       if (schema.defaultValue() != null) {
-        builder.defaultValue(fromConnectData(schema, schema.defaultValue()));
+        builder.defaultValue(toJsonSchemaValue(fromConnectData(schema, schema.defaultValue())));
       }
 
       if (!ignoreOptional) {
@@ -836,6 +842,43 @@ public class JsonSchemaData {
     }
     return builder.unprocessedProperties(unprocessedProps).build();
   }
+
+  private static final Object NONE_MARKER = new Object();
+
+  private static Object toJsonSchemaValue(Object value) {
+    try {
+      Object primitiveValue = NONE_MARKER;
+      if (value instanceof BinaryNode) {
+        primitiveValue = ((BinaryNode) value).asText();
+      } else if (value instanceof BooleanNode) {
+        primitiveValue = ((BooleanNode) value).asBoolean();
+      } else if (value instanceof NullNode) {
+        primitiveValue = null;
+      } else if (value instanceof NumericNode) {
+        primitiveValue = ((NumericNode) value).numberValue();
+      } else if (value instanceof TextNode) {
+        primitiveValue = ((TextNode) value).asText();
+      }
+      if (primitiveValue != NONE_MARKER) {
+        return primitiveValue;
+      } else {
+        Object jsonObject;
+        if (value instanceof ArrayNode) {
+          jsonObject = OBJECT_MAPPER.treeToValue(((ArrayNode) value), JSONArray.class);
+        } else if (value instanceof JsonNode) {
+          jsonObject = OBJECT_MAPPER.treeToValue(((JsonNode) value), JSONObject.class);
+        } else if (value.getClass().isArray()) {
+          jsonObject = OBJECT_MAPPER.convertValue(value, JSONArray.class);
+        } else {
+          jsonObject = OBJECT_MAPPER.convertValue(value, JSONObject.class);
+        }
+        return jsonObject;
+      }
+    } catch (JsonProcessingException e) {
+      throw new DataException("Invalid default value", e);
+    }
+  }
+
 
   private static Schema nonOptional(Schema schema) {
     return new ConnectSchema(schema.type(),
