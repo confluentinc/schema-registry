@@ -34,6 +34,7 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.connect.json.JsonSchemaData.SchemaWrapper;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Decimal;
@@ -41,6 +42,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.json.DecimalFormat;
 import org.everit.json.schema.ArraySchema;
@@ -351,6 +353,25 @@ public class JsonSchemaDataTest {
         new BigDecimal(new BigInteger("15600"), 4)
     );
     jsonSchemaData = new JsonSchemaData();
+  }
+
+  @Test
+  public void testFromConnectTimestampWithDefault() {
+    NumberSchema schema = NumberSchema.builder()
+        .requiresInteger(true)
+        .title("org.apache.kafka.connect.data.Timestamp")
+        .defaultValue(0L)
+        .unprocessedProperties(ImmutableMap.of("connect.type",
+            "int64",
+            "connect.version",
+            1
+        ))
+        .build();
+    checkNonObjectConversion(schema,
+        LongNode.valueOf(1234567890),
+        Timestamp.builder().defaultValue(new Date(0)).build(),
+        new Date(1234567890)
+    );
   }
 
   @Test
