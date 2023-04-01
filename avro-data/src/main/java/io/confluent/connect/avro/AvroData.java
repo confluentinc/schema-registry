@@ -1948,8 +1948,12 @@ public class AvroData {
       builder.parameter(AVRO_FIELD_DEFAULT_FLAG_PROP, "true");
     }
     if (fieldDefaultVal != null) {
-      builder.defaultValue(
-          defaultValueFromAvro(builder, schema, fieldDefaultVal, toConnectContext));
+      try {
+        builder.defaultValue(
+            defaultValueFromAvro(builder, schema, fieldDefaultVal, toConnectContext));
+      } catch (DataException e) {
+        log.warn("Ignoring invalid default for schema " + schema.getName(), e);
+      }
     }
 
     Object connectNameJson = schema.getObjectProp(CONNECT_NAME_PROP);
