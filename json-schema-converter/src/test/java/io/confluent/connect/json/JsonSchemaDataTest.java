@@ -544,7 +544,7 @@ public class JsonSchemaDataTest {
         .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
         .build();
     StringSchema stringSchema = StringSchema.builder()
-        .defaultValue(TextNode.valueOf("default-string"))
+        .defaultValue("default-string")
         .build();
     CombinedSchema oneof = CombinedSchema.oneOf(ImmutableList.of(NullSchema.INSTANCE,
             stringSchema
