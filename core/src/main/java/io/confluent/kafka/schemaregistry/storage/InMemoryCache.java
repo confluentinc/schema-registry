@@ -39,7 +39,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.contextFor;
 
 
 /**
@@ -107,7 +106,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public SchemaIdAndSubjects schemaIdAndSubjects(Schema schema) throws StoreException {
-    String ctx = contextFor(tenant(), schema.getSubject());
+    String ctx = QualifiedSubject.contextFor(tenant(), schema.getSubject());
     List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
         = schema.getReferences();
     MD5 md5 = MD5.ofString(schema.getSchema(), refs == null ? null : refs.stream()
@@ -137,7 +136,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public Set<Integer> referencesSchema(SchemaKey schema) throws StoreException {
-    String ctx = contextFor(tenant(), schema.getSubject());
+    String ctx = QualifiedSubject.contextFor(tenant(), schema.getSubject());
     Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
         referencedBy.getOrDefault(tenant(), Collections.emptyMap());
     Map<SchemaKey, Set<Integer>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
@@ -167,7 +166,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   @Override
   public void schemaDeleted(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
-    String ctx = contextFor(tenant(), schemaKey.getSubject());
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
     Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
         guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<Integer, Map<String, Integer>> guids =
@@ -200,7 +199,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (schemaValue == null) {
       return;
     }
-    String ctx = contextFor(tenant(), schemaKey.getSubject());
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
     Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
         guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
     Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
@@ -218,7 +217,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   @Override
   public void schemaRegistered(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
-    String ctx = contextFor(tenant(), schemaKey.getSubject());
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
     Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
         guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<Integer, Map<String, Integer>> guids =
@@ -240,7 +239,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
-    String ctx = contextFor(tenant(), schemaKey.getSubject());
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
     MD5 md5 = MD5.ofString(schemaValue.getSchema(), schemaValue.getReferences());
     Map<String, Map<MD5, Integer>> ctxHashes =
         hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
@@ -349,7 +348,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   private Map<String, Integer> clearSubjects(String subject, Predicate<String> match) {
-    String ctx = contextFor(tenant(), subject);
+    String ctx = QualifiedSubject.contextFor(tenant(), subject);
     BiPredicate<String, Integer> matchDeleted = matchDeleted(match);
 
     Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
@@ -390,7 +389,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return s -> qs == null
         || subject.equals(s)
         // check context match for a qualified subject with an empty subject
-        || (qs.getSubject().isEmpty() && qs.getContext().equals(contextFor(tenant(), s)));
+        || (qs.getSubject().isEmpty() && qs.toQualifiedContext().equals(
+            QualifiedSubject.qualifiedContextFor(tenant(), s)));
   }
 
   private BiPredicate<String, Integer> matchDeleted(Predicate<String> match) {
