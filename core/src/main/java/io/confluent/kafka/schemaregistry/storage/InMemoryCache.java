@@ -145,7 +145,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public SchemaKey schemaKeyById(Integer id, String subject) throws StoreException {
-    String ctx = QualifiedSubject.contextFor(tenant(), subject);
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    String ctx = qs != null ? qs.getContext() : DEFAULT_CONTEXT;
     Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
         guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
     Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
@@ -153,8 +154,13 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return null;
     }
-    Map.Entry<String, Integer> entry = subjectVersions.entrySet().iterator().next();
-    return new SchemaKey(entry.getKey(), entry.getValue());
+    if (qs == null || qs.getSubject().isEmpty()) {
+      Map.Entry<String, Integer> entry = subjectVersions.entrySet().iterator().next();
+      return new SchemaKey(entry.getKey(), entry.getValue());
+    } else {
+      Integer version = subjectVersions.get(subject);
+      return version != null ? new SchemaKey(subject, version) : null;
+    }
   }
 
   @Override
@@ -379,7 +385,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   protected Predicate<String> matchingSubjectPredicate(String subject) {
-    return s -> subject == null || subject.equals(s);
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    return s -> qs == null
+        // a qualified subject with an empty subject matches context only
+        || (qs.getSubject().isEmpty() && s.startsWith(qs.toQualifiedContext()))
+        || subject.equals(s);
   }
 
   private BiPredicate<String, Integer> matchDeleted(Predicate<String> match) {
