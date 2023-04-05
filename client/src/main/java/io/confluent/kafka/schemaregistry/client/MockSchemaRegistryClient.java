@@ -670,6 +670,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public String setMode(String mode, String subject, boolean force)
+      throws IOException, RestClientException {
+    modes.put(subject, mode);
+    return mode;
+  }
+
+  @Override
   public String getMode() throws IOException, RestClientException {
     return modes.getOrDefault(WILDCARD, "READWRITE");
   }
