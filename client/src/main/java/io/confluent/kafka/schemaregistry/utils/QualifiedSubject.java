@@ -150,6 +150,11 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return qs != null ? qs.getContext() : DEFAULT_CONTEXT;
   }
 
+  public static String qualifiedContextFor(String tenant, String qualifiedSubject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
+    return qs != null ? qs.toQualifiedContext() : "";
+  }
+
   /**
    * Normalizes the given qualified subject name.
    *
