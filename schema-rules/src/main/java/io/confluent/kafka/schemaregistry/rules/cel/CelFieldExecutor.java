@@ -41,9 +41,13 @@ public class CelFieldExecutor extends CelExecutor implements FieldRuleExecutor {
   @Override
   public FieldTransform newTransform(RuleContext ruleContext) {
     return (ctx, fieldCtx, fieldValue) ->
-        execute(ctx, fieldValue, ImmutableMap.of(
-            "value", fieldValue, "fullName", fieldCtx.getFullName(), "name", fieldCtx.getName(),
-            "tags", new ArrayList<>(fieldCtx.getTags()),
-            "message", fieldCtx.getContainingMessage()));
+        execute(ctx, fieldValue, ImmutableMap.<String, Object>builder()
+            .put("value", fieldValue)
+            .put("fullName", fieldCtx.getFullName())
+            .put("name", fieldCtx.getName())
+            .put("typeName", fieldCtx.getType().name())
+            .put("tags", new ArrayList<>(fieldCtx.getTags()))
+            .put("message", fieldCtx.getContainingMessage())
+            .build());
   }
 }
