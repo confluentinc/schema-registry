@@ -82,7 +82,6 @@
         <swagger.version>1.6.2</swagger.version>
         <spotbugs.plugin.version>4.0.0</spotbugs.plugin.version>
         <commons.compress.version>1.21</commons.compress.version>
-        <snake.yaml.version>1.32</snake.yaml.version>
     </properties>
 
     <repositories>
@@ -205,11 +204,6 @@
                         <artifactId>guava</artifactId>
                     </exclusion>
                 </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-                <version>${snake.yaml.version}</version>
             </dependency>
 
             <!--children-->
