@@ -570,11 +570,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           schema.setId(schemaId);
           kafkaStore.put(schemaKey, new SchemaValue(schema));
         } else {
+          String qctx = QualifiedSubject.qualifiedContextFor(tenant(), subject);
           int retries = 0;
           while (retries++ < kafkaStoreMaxRetries) {
             int newId = idGenerator.id(new SchemaValue(schema));
             // Verify id is not already in use
-            if (lookupCache.schemaKeyById(newId, subject) == null) {
+            if (lookupCache.schemaKeyById(newId, qctx) == null) {
               schema.setId(newId);
               if (retries > 1) {
                 log.warn(String.format("Retrying to register the schema with ID %s", newId));
@@ -890,7 +891,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public void checkIfSchemaWithIdExist(int id, Schema schema)
       throws SchemaRegistryException, StoreException {
-    SchemaKey existingKey = this.lookupCache.schemaKeyById(id, schema.getSubject());
+    String qctx = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
+    SchemaKey existingKey = this.lookupCache.schemaKeyById(id, qctx);
     if (existingKey != null) {
       SchemaRegistryValue existingValue = this.lookupCache.get(existingKey);
       if (existingValue != null
@@ -1242,10 +1244,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
     boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
     SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
-    if (subject == null
-        || subject.isEmpty()
+    if (qs == null
+        || qs.getSubject().isEmpty()
         || isQualifiedSubject
-        || schemaKeyMatchesSubject(subjectVersionKey, qs)) {
+        || subjectVersionKey != null) {
       return subjectVersionKey;
     }
     // Try qualifying the subject with each known context
@@ -1255,25 +1257,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         QualifiedSubject qualSub =
             new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
         SchemaKey key = lookupCache.schemaKeyById(id, qualSub.toQualifiedSubject());
-        if (schemaKeyMatchesSubject(key, qualSub)) {
+        if (key != null) {
           return key;
         }
       }
     }
     // Could not find the id in subjects in other contexts,
-    // just return the id in the default context if found
-    return subjectVersionKey;
-  }
-
-  private boolean schemaKeyMatchesSubject(SchemaKey key, QualifiedSubject qs) {
-    if (key == null) {
-      return false;
-    } else if (qs == null) {
-      return true;
-    } else {
-      QualifiedSubject keyQs = QualifiedSubject.create(tenant(), key.getSubject());
-      return keyQs != null && qs.getSubject().equals(keyQs.getSubject());
-    }
+    // just return the id in the given context if found
+    return lookupCache.schemaKeyById(id, qs.toQualifiedContext());
   }
 
   private CloseableIterator<SchemaRegistryValue> allContexts() throws SchemaRegistryException {

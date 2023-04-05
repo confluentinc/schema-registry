@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.Collections;
 import java.util.List;
 import org.apache.kafka.common.TopicPartition;
@@ -74,7 +75,9 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
         }
       }
       try {
-        SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId(), schemaObj.getSubject());
+        String qctx = QualifiedSubject.qualifiedContextFor(
+            schemaRegistry.tenant(), schemaObj.getSubject());
+        SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId(), qctx);
         if (oldKey != null) {
           SchemaValue oldSchema;
           oldSchema = (SchemaValue) lookupCache.get(oldKey);
