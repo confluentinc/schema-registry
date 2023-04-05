@@ -84,7 +84,6 @@
         <swagger.version>1.6.2</swagger.version>
         <io.confluent.schema-registry.version>6.2.10-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
-        <snake.yaml.version>1.32</snake.yaml.version>
     </properties>
 
     <repositories>
@@ -218,11 +217,6 @@
                         <artifactId>guava</artifactId>
                     </exclusion>
                 </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-                <version>${snake.yaml.version}</version>
             </dependency>
 
             <!--children-->
