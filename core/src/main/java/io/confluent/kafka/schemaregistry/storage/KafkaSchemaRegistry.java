@@ -66,6 +66,7 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.NamedURI;
+import com.google.common.cache.Weigher;
 
 import java.util.Map;
 import java.util.List;
@@ -189,7 +190,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
     this.providers = initProviders(config);
     this.schemaCache = CacheBuilder.newBuilder()
-        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
+        .maximumWeight(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_MAXIMUM_WEIGHT_CONFIG))
+        .weigher((Weigher<RawSchema, ParsedSchema>) (k, v) -> v.canonicalString().length())
         .expireAfterAccess(
             config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
         .build(new CacheLoader<RawSchema, ParsedSchema>() {

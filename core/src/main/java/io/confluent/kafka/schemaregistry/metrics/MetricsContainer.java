@@ -66,6 +66,9 @@ public class MetricsContainer {
   public static final String METRIC_NAME_JSON_SCHEMAS_DELETED = "json-schemas-deleted";
   public static final String METRIC_NAME_PB_SCHEMAS_CREATED = "protobuf-schemas-created";
   public static final String METRIC_NAME_PB_SCHEMAS_DELETED = "protobuf-schemas-deleted";
+  public static final String METRIC_NAME_SCHEMA_CACHE_SIZE = "schema-cache-size";
+  public static final String METRIC_NAME_SCHEMA_CACHE_HIT = "schema-cache-hit";
+  public static final String METRIC_NAME_SCHEMA_CACHE_MISS = "schema-cache-miss";
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
@@ -86,6 +89,9 @@ public class MetricsContainer {
   private final SchemaRegistryMetric avroSchemasDeleted;
   private final SchemaRegistryMetric jsonSchemasDeleted;
   private final SchemaRegistryMetric protobufSchemasDeleted;
+  private final SchemaRegistryMetric schemaCacheHit;
+  private final SchemaRegistryMetric schemaCacheMiss;
+  private final SchemaRegistryMetric schemaCacheSize;
 
   private final MetricsContext metricsContext;
 
@@ -146,6 +152,12 @@ public class MetricsContainer {
 
     this.protobufSchemasDeleted = createMetric(METRIC_NAME_PB_SCHEMAS_DELETED,
             "Number of deleted Protobuf schemas", new CumulativeCount());
+
+    this.schemaCacheHit = createMetric("schema-cache-hit", "Number of times the local schema cache has been hit");
+
+    this.schemaCacheMiss = createMetric("schema-cache-miss", "Number of times the local schema cache has been missed");
+
+    this.schemaCacheSize = createMetric("schema-cache-size", "Size of the local schema cache");
   }
 
   public Metrics getMetrics() {
