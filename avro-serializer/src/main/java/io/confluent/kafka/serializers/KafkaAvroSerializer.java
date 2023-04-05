@@ -70,6 +70,6 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   @Override
   public void close() {
-
+    super.close();
   }
 }

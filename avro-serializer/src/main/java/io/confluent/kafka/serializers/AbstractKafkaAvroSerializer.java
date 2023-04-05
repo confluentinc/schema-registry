@@ -106,7 +106,6 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       return null;
     }
     String restClientErrorMsg = "";
-    preOp(object);
     try {
       int id;
       if (autoRegisterSchema) {
@@ -161,7 +160,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     } catch (RestClientException e) {
       throw toKafkaException(e, restClientErrorMsg + schema);
     } finally {
-      postOp();
+      postOp(object);
     }
   }
 

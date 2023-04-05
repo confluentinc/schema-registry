@@ -100,7 +100,6 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       return null;
     }
     String restClientErrorMsg = "";
-    preOp(object);
     try {
       boolean autoRegisterForDeps = autoRegisterSchema && !onlyLookupReferencesBySchema;
       boolean useLatestForDeps = useLatestVersion && !onlyLookupReferencesBySchema;
@@ -152,7 +151,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     } catch (RestClientException e) {
       throw toKafkaException(e, restClientErrorMsg + schema);
     } finally {
-      postOp();
+      postOp(object);
     }
   }
 
