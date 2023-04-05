@@ -412,6 +412,7 @@ public class CelExecutorTest {
     Object obj;
 
     OldWidget widget = new OldWidget("alice");
+    widget.setSize(123);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
@@ -439,6 +440,7 @@ public class CelExecutorTest {
     assertEquals("012-suffix", ((OldWidget)obj).getPiiArray().get(1).getPii());
     assertEquals("345-suffix", ((OldWidget)obj).getPiiMap().get("key1").getPii());
     assertEquals("678-suffix", ((OldWidget)obj).getPiiMap().get("key2").getPii());
+    assertEquals(123, ((OldWidget)obj).getSize());
   }
 
   @Test
