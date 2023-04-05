@@ -657,6 +657,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public String setMode(String mode, String subject, boolean force)
+      throws IOException, RestClientException {
+    ModeUpdateRequest response = restService.setMode(mode, subject, force);
+    return response.getMode();
+  }
+
+  @Override
   public String getMode() throws IOException, RestClientException {
     Mode response = restService.getMode();
     return response.getMode();
