@@ -19,8 +19,10 @@ package io.confluent.kafka.schemaregistry.rules;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
@@ -46,7 +48,9 @@ public class DlqAction implements RuleAction {
     }
     KafkaProducer<byte[], byte[]> producer = (KafkaProducer<byte[], byte[]>) configs.get(PRODUCER);
     if (producer == null) {
-      producer = new KafkaProducer<>((Map<String, Object>) configs);
+      Map<String, Object> producerConfigs = baseProducerConfigs();
+      producerConfigs.putAll(configs);
+      producer = new KafkaProducer<>(producerConfigs);
     }
     this.producer = producer;
   }
@@ -88,5 +92,26 @@ public class DlqAction implements RuleAction {
       JsonNode json = ctx.target().toJson(message);
       return JacksonMapper.INSTANCE.writeValueAsBytes(json);
     }
+  }
+
+  static Map<String, Object> baseProducerConfigs() {
+    Map<String, Object> producerProps = new HashMap<>();
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+        "org.apache.kafka.common.serialization.ByteArraySerializer");
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+        "org.apache.kafka.common.serialization.ByteArraySerializer");
+    // These settings will execute infinite retries on retriable exceptions.
+    producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
+    producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+    producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
+    producerProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
+    producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG,
+        Integer.toString(Integer.MAX_VALUE));
+    return producerProps;
+  }
+
+  @Override
+  public void close() {
+    producer.close();
   }
 }

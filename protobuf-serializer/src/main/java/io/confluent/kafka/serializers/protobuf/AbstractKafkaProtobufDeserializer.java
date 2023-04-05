@@ -127,7 +127,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     }
 
     int id = -1;
-    preOp(payload);
     try {
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
@@ -226,7 +225,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     } catch (RestClientException e) {
       throw toKafkaException(e, "Error retrieving Protobuf schema for id " + id);
     } finally {
-      postOp();
+      postOp(payload);
     }
   }
 
