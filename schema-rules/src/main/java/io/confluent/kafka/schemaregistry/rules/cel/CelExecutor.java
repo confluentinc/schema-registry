@@ -84,7 +84,21 @@ public class CelExecutor implements RuleExecutor {
   protected Object execute(
       RuleContext ctx, Object obj, Map<String, Object> args)
       throws RuleException {
-    return execute(ctx.rule().getExpr(), obj, args);
+    String expr = ctx.rule().getExpr();
+    // An optional guard (followed by semicolon) can precede the expr
+    int index = expr.indexOf(';');
+    if (index >= 0) {
+      String guard = expr.substring(0, index);
+      if (!guard.trim().isEmpty()) {
+        Object guardResult = execute(guard, obj, args);
+        if (!Boolean.TRUE.equals(guardResult)) {
+          // Skip the expr
+          return ctx.rule().getKind() == RuleKind.CONDITION ? Boolean.TRUE : obj;
+        }
+      }
+      expr = expr.substring(index + 1);
+    }
+    return execute(expr, obj, args);
   }
 
   private Object execute(String rule, Object obj, Map<String, Object> args)
