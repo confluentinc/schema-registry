@@ -445,7 +445,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
     Object read(AvroSchema writerAvroSchema, AvroSchema readerAvroSchema) {
-      preOp(payload);
       try {
         List<Migration> migrations = Collections.emptyList();
         if (readerAvroSchema == null) {
@@ -518,7 +517,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         throw new SerializationException("Error deserializing Avro message for id "
             + schemaId, e);
       } finally {
-        postOp();
+        postOp(payload);
       }
     }
   }

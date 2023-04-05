@@ -22,10 +22,13 @@ import org.apache.kafka.common.Configurable;
 /**
  * Base type for rule interfaces.
  */
-public interface RuleBase extends Configurable {
+public interface RuleBase extends AutoCloseable, Configurable {
 
   default void configure(Map<String, ?> configs) {
   }
 
   String type();
+
+  default void close() {
+  }
 }

@@ -99,5 +99,6 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   @Override
   public void close() {
+    super.close();
   }
 }

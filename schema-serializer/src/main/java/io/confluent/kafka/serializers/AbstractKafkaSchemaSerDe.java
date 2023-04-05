@@ -41,6 +41,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleBase;
+import java.io.Closeable;
 import java.util.AbstractMap;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
@@ -85,7 +86,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
  */
-public abstract class AbstractKafkaSchemaSerDe {
+public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(AbstractKafkaSchemaSerDe.class);
 
@@ -177,14 +178,10 @@ public abstract class AbstractKafkaSchemaSerDe {
     ruleActions.put(NoneAction.TYPE, new NoneAction());
   }
 
-  protected void preOp(Object payload) {
+  protected void postOp(Object payload) {
     if (isKey) {
       setKey(payload);
-    }
-  }
-
-  protected void postOp() {
-    if (!isKey) {
+    } else {
       clearKey();
     }
   }
@@ -610,7 +607,10 @@ public abstract class AbstractKafkaSchemaSerDe {
         continue;
       }
       RuleContext ctx = new RuleContext(source, target,
-          subject, topic, headers, key(), isKey ? null : original, isKey, ruleMode, rule, i, rules);
+          subject, topic, headers,
+          isKey ? original : key(),
+          isKey ? null : original,
+          isKey, ruleMode, rule, i, rules);
       RuleExecutor ruleExecutor = getRuleExecutor(ctx);
       if (ruleExecutor != null) {
         try {
@@ -664,6 +664,29 @@ public abstract class AbstractKafkaSchemaSerDe {
       }
     } else {
       return actionName;
+    }
+  }
+
+  @Override
+  public void close() {
+    for (Map.Entry<String, RuleAction> entry : ruleActions.entrySet()) {
+      closeQuietly(entry.getValue(), "rule action " + entry.getKey());
+    }
+    for (Map.Entry<String, Map<String, RuleExecutor>> outer : ruleExecutors.entrySet()) {
+      for (Map.Entry<String, RuleExecutor> inner : outer.getValue().entrySet()) {
+        closeQuietly(
+            inner.getValue(), "rule executor " + inner.getKey() + " for " + outer.getKey());
+      }
+    }
+  }
+
+  private static void closeQuietly(AutoCloseable closeable, String name) {
+    if (closeable != null) {
+      try {
+        closeable.close();
+      } catch (Throwable t) {
+        log.error("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
+      }
     }
   }
 
