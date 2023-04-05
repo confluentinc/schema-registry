@@ -181,6 +181,11 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   public String setMode(String mode, String subject)
       throws IOException, RestClientException;
 
+  default String setMode(String mode, String subject, boolean force)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public String getMode() throws IOException, RestClientException;
 
   public String getMode(String subject) throws IOException, RestClientException;
