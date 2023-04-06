@@ -66,6 +66,7 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.NamedURI;
+import com.google.common.cache.Weigher;
 
 import java.util.Map;
 import java.util.List;
@@ -188,21 +189,36 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
     this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
     this.providers = initProviders(config);
-    this.schemaCache = CacheBuilder.newBuilder()
-        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
-        .expireAfterAccess(
-            config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
+    this.schemaCache = this.buildLocalSchemaCache();
+    this.lookupCache = lookupCache();
+    this.idGenerator = identityGenerator(config);
+    this.kafkaStore = kafkaStore(config);
+    this.metadataEncoder = new MetadataEncoderService(this);
+    this.ruleSetHandler = new RuleSetHandler();
+  }
+
+  private Cache buildLocalSchemaCache() {
+    if (config.getBoolean(SchemaRegistryConfig.SCHEMA_CACHE_USE_WEIGHT_CONFIG)) {
+      return CacheBuilder.newBuilder()
+        .maximumWeight(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_MAXIMUM_WEIGHT_CONFIG))
+        .weigher((Weigher<RawSchema, ParsedSchema>) (k, v) -> v.canonicalString().length())
+        .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
         .build(new CacheLoader<RawSchema, ParsedSchema>() {
           @Override
           public ParsedSchema load(RawSchema s) throws Exception {
             return loadSchema(s.getSchema(), s.isNew(), s.isNormalize());
           }
         });
-    this.lookupCache = lookupCache();
-    this.idGenerator = identityGenerator(config);
-    this.kafkaStore = kafkaStore(config);
-    this.metadataEncoder = new MetadataEncoderService(this);
-    this.ruleSetHandler = new RuleSetHandler();
+    }
+    return CacheBuilder.newBuilder()
+      .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
+      .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
+      .build(new CacheLoader<RawSchema, ParsedSchema>() {
+        @Override
+        public ParsedSchema load(RawSchema s) throws Exception {
+          return loadSchema(s.getSchema(), s.isNew(), s.isNormalize());
+        }
+      });
   }
 
   private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
