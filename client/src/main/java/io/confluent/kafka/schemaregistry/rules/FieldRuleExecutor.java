@@ -47,7 +47,7 @@ public interface FieldRuleExecutor extends RuleExecutor {
         }
         break;
       default:
-        return message;
+        throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
     }
 
     try (FieldTransform transform = newTransform(ctx)) {
