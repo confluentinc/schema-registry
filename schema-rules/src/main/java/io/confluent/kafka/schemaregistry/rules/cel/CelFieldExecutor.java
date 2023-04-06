@@ -20,10 +20,9 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
-import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.util.ArrayList;
 
-public class CelFieldExecutor extends CelExecutor implements FieldRuleExecutor {
+public class CelFieldExecutor implements FieldRuleExecutor {
 
   public static final String TYPE = "CEL_FIELD";
 
@@ -32,16 +31,9 @@ public class CelFieldExecutor extends CelExecutor implements FieldRuleExecutor {
   }
 
   @Override
-  public Object transform(RuleContext ctx, Object message) throws RuleException {
-    try (FieldTransform transform = newTransform(ctx)) {
-      return ctx.target().transformMessage(ctx, transform, message);
-    }
-  }
-
-  @Override
   public FieldTransform newTransform(RuleContext ruleContext) {
     return (ctx, fieldCtx, fieldValue) ->
-        execute(ctx, fieldValue, ImmutableMap.<String, Object>builder()
+        CelExecutor.execute(ctx, fieldValue, ImmutableMap.<String, Object>builder()
             .put("value", fieldValue)
             .put("fullName", fieldCtx.getFullName())
             .put("name", fieldCtx.getName())

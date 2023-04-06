@@ -444,6 +444,44 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerReflectionFieldTransformWithSameTag() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    OldWidget widget = new OldWidget("alice");
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
+    Schema schema = createWidgetSchema();
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    Rule rule2 = new Rule("myRule2", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix2\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule, rule2));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    bytes = reflectionAvroSerializer.serialize(topic, widget);
+
+    obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
+    assertTrue(
+        "Returned object should be a Widget",
+        OldWidget.class.isInstance(obj)
+    );
+    assertEquals(widget, obj);
+    assertEquals("alice-suffix2", ((OldWidget)obj).getName());
+    assertEquals("123-suffix2", ((OldWidget)obj).getSsn().get(0));
+    assertEquals("456-suffix2", ((OldWidget)obj).getSsn().get(1));
+    assertEquals("789-suffix2", ((OldWidget)obj).getPiiArray().get(0).getPii());
+    assertEquals("012-suffix2", ((OldWidget)obj).getPiiArray().get(1).getPii());
+    assertEquals("345-suffix2", ((OldWidget)obj).getPiiMap().get("key1").getPii());
+    assertEquals("678-suffix2", ((OldWidget)obj).getPiiMap().get("key2").getPii());
+  }
+
+  @Test
   public void testKafkaAvroSerializerNewMapTransform() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
