@@ -113,7 +113,7 @@ public class CompatibilityResource {
              + "\"latest\" checks compatibility of the input schema with the last registered "
              + "schema "
              + "under the specified subject", required = true) @PathParam("version") String version,
-      @Parameter(description = "Whether to register the normalized schema")
+      @Parameter(description = "Whether to normalize the given schema")
       @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request,
@@ -205,7 +205,7 @@ public class CompatibilityResource {
       @Parameter(description = "Subject of the schema version against which compatibility is to "
           + "be tested",
           required = true) @PathParam("subject") String subject,
-      @Parameter(description = "Whether to register the normalized schema")
+      @Parameter(description = "Whether to normalize the given schema")
       @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request,

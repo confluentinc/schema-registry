@@ -33,7 +33,7 @@ paths:
           type: string
       - name: normalize
         in: query
-        description: Whether to register the normalized schema
+        description: Whether to normalize the given schema
         schema:
           type: boolean
       - name: verbose
@@ -192,7 +192,7 @@ paths:
           type: string
       - name: normalize
         in: query
-        description: Whether to register the normalized schema
+        description: Whether to normalize the given schema
         schema:
           type: boolean
       - name: verbose
@@ -1353,7 +1353,7 @@ paths:
           type: string
       - name: normalize
         in: query
-        description: Whether to lookup the normalized schema
+        description: Whether to normalize the given schema
         schema:
           type: boolean
       - name: deleted
@@ -1577,7 +1577,7 @@ paths:
           type: string
       - name: normalize
         in: query
-        description: Whether to register the normalized schema
+        description: Whether to normalize the given schema
         schema:
           type: boolean
       requestBody:

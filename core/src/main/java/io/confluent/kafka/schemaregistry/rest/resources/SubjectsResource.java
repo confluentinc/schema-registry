@@ -104,7 +104,7 @@ public class SubjectsResource {
       final @Suspended AsyncResponse asyncResponse,
       @Parameter(description = "Subject under which the schema will be registered", required = true)
       @PathParam("subject") String subject,
-      @Parameter(description = "Whether to lookup the normalized schema")
+      @Parameter(description = "Whether to normalize the given schema")
       @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Whether to lookup deleted schemas")
       @QueryParam("deleted") boolean lookupDeletedSchema,
