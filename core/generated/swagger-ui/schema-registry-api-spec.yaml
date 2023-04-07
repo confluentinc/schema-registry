@@ -31,6 +31,11 @@ paths:
         required: true
         schema:
           type: string
+      - name: normalize
+        in: query
+        description: Whether to normalize the given schema
+        schema:
+          type: boolean
       - name: verbose
         in: query
         description: Whether to return detailed error messages
@@ -185,6 +190,11 @@ paths:
         required: true
         schema:
           type: string
+      - name: normalize
+        in: query
+        description: Whether to normalize the given schema
+        schema:
+          type: boolean
       - name: verbose
         in: query
         description: Whether to return detailed error messages
@@ -1343,7 +1353,7 @@ paths:
           type: string
       - name: normalize
         in: query
-        description: Whether to lookup the normalized schema
+        description: Whether to normalize the given schema
         schema:
           type: boolean
       - name: deleted
@@ -1567,7 +1577,7 @@ paths:
           type: string
       - name: normalize
         in: query
-        description: Whether to register the normalized schema
+        description: Whether to normalize the given schema
         schema:
           type: boolean
       requestBody:

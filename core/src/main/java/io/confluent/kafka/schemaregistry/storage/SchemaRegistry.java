@@ -96,7 +96,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   List<String> isCompatible(String subject,
                             Schema newSchema,
-                            List<Schema> previousSchemas) throws SchemaRegistryException;
+                            List<Schema> previousSchemas,
+                            boolean normalize) throws SchemaRegistryException;
 
   void close();
 

@@ -628,14 +628,22 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public boolean testCompatibility(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
-    return restService.testCompatibility(request, subject, "latest", false).isEmpty();
+    return restService.testCompatibility(request, subject, "latest", false, false).isEmpty();
   }
 
   @Override
   public List<String> testCompatibilityVerbose(String subject, ParsedSchema schema)
           throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
-    return restService.testCompatibility(request, subject, "latest", true);
+    return restService.testCompatibility(request, subject, "latest", false, true);
+  }
+
+  @Override
+  public List<String> testCompatibilityVerbose(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    return restService.testCompatibility(request, subject, "latest", normalize, true);
   }
 
   @Override

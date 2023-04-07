@@ -973,6 +973,30 @@ public class RestApiTest extends ClusterTestHarness {
         restApp.restClient.lookUpSubjectVersion(lookUpRequest, subject1, true, false).getVersion();
     assertEquals("1st schema under subject1 should have version 1", 1,
         versionOfRegisteredSchema1Subject1);
+
+
+    String recordInvalidDefaultSchema =
+        "{\"namespace\": \"namespace\",\n"
+            + " \"type\": \"record\",\n"
+            + " \"name\": \"test\",\n"
+            + " \"fields\": [\n"
+            + "     {\"name\": \"string_default\", \"type\": \"string\", \"default\": null}\n"
+            + "]\n"
+            + "}";
+    registerRequest = new RegisterSchemaRequest();
+    registerRequest.setSchema(recordInvalidDefaultSchema);
+    try {
+      restApp.restClient.registerSchema(registerRequest, subject1, true);
+      fail("Registering bad schema should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema",
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    List<String> messages = restApp.restClient.testCompatibility(
+        registerRequest, subject1, null, true, true);
+    assertTrue(messages.size() > 0 && messages.get(0).contains("Invalid schema"));
   }
 
   @Test
