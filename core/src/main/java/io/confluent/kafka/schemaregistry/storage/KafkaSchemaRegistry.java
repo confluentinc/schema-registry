@@ -1659,7 +1659,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       log.error("Latest schema not provided");
       throw new InvalidSchemaException("Latest schema not provided");
     }
-    return isCompatible(subject, newSchema, Collections.singletonList(latestSchema));
+    return isCompatible(subject, newSchema, Collections.singletonList(latestSchema), false);
   }
 
   /**
@@ -1668,7 +1668,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public List<String> isCompatible(String subject,
                                    Schema newSchema,
-                                   List<Schema> previousSchemas)
+                                   List<Schema> previousSchemas,
+                                   boolean normalize) {
       throws SchemaRegistryException {
 
     if (previousSchemas == null) {
@@ -1682,7 +1683,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       prevParsedSchemas.add(prevParsedSchema);
     }
 
-    ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true, false);
+    ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true, normalize);
     return isCompatibleWithPrevious(subject, parsedSchema, prevParsedSchemas);
   }
 
