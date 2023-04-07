@@ -1669,7 +1669,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public List<String> isCompatible(String subject,
                                    Schema newSchema,
                                    List<Schema> previousSchemas,
-                                   boolean normalize) {
+                                   boolean normalize)
       throws SchemaRegistryException {
 
     if (previousSchemas == null) {
