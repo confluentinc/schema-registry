@@ -571,7 +571,7 @@ public class RestService implements Configurable {
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
-    return testCompatibility(request, subject, null, verbose);
+    return testCompatibility(request, subject, null, false, verbose);
   }
 
   // Visible for testing
@@ -579,7 +579,7 @@ public class RestService implements Configurable {
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
-    return testCompatibility(request, subject, version, false);
+    return testCompatibility(request, subject, version, false, false);
   }
 
   public List<String> testCompatibility(String schemaString,
@@ -593,31 +593,35 @@ public class RestService implements Configurable {
     request.setSchema(schemaString);
     request.setSchemaType(schemaType);
     request.setReferences(references);
-    return testCompatibility(request, subject, version, verbose);
+    return testCompatibility(request, subject, version, false, verbose);
   }
 
   public List<String> testCompatibility(RegisterSchemaRequest registerSchemaRequest,
                                         String subject,
                                         String version,
+                                        boolean normalize,
                                         boolean verbose)
       throws IOException, RestClientException {
     return testCompatibility(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest,
-                             subject, version, verbose);
+                             subject, version, normalize, verbose);
   }
 
   public List<String> testCompatibility(Map<String, String> requestProperties,
                                         RegisterSchemaRequest registerSchemaRequest,
                                         String subject,
                                         String version,
+                                        boolean normalize,
                                         boolean verbose)
       throws IOException, RestClientException {
     String path;
     if (version != null) {
       path = UriBuilder.fromPath("/compatibility/subjects/{subject}/versions/{version}")
+          .queryParam("normalize", normalize)
           .queryParam("verbose", verbose)
           .build(subject, version).toString();
     } else {
       path = UriBuilder.fromPath("/compatibility/subjects/{subject}/versions/")
+          .queryParam("normalize", normalize)
           .queryParam("verbose", verbose)
           .build(subject).toString();
     }
