@@ -81,7 +81,7 @@ public class CelExecutor implements RuleExecutor {
     }
   }
 
-  protected Object execute(
+  protected static Object execute(
       RuleContext ctx, Object obj, Map<String, Object> args)
       throws RuleException {
     String expr = ctx.rule().getExpr();
@@ -101,7 +101,7 @@ public class CelExecutor implements RuleExecutor {
     return execute(expr, obj, args);
   }
 
-  private Object execute(String rule, Object obj, Map<String, Object> args)
+  private static Object execute(String rule, Object obj, Map<String, Object> args)
       throws RuleException {
     try {
       boolean isAvro = false;
