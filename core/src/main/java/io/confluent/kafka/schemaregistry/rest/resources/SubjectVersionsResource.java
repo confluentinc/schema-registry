@@ -373,7 +373,7 @@ public class SubjectVersionsResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subjectName,
-      @Parameter(description = "Whether to register the normalized schema")
+      @Parameter(description = "Whether to normalize the given schema")
       @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {

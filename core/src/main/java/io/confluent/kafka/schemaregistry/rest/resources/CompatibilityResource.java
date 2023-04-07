@@ -113,6 +113,8 @@ public class CompatibilityResource {
              + "\"latest\" checks compatibility of the input schema with the last registered "
              + "schema "
              + "under the specified subject", required = true) @PathParam("version") String version,
+      @Parameter(description = "Whether to normalize the given schema")
+      @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request,
       @Parameter(description = "Whether to return detailed error messages")
@@ -147,7 +149,8 @@ public class CompatibilityResource {
           subject, schema,
           schemaForSpecifiedVersion != null
               ? Collections.singletonList(schemaForSpecifiedVersion)
-              : Collections.emptyList()
+              : Collections.emptyList(),
+          normalize
       );
     } catch (InvalidSchemaException e) {
       if (verbose) {
@@ -202,6 +205,8 @@ public class CompatibilityResource {
       @Parameter(description = "Subject of the schema version against which compatibility is to "
           + "be tested",
           required = true) @PathParam("subject") String subject,
+      @Parameter(description = "Whether to normalize the given schema")
+      @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request,
       @Parameter(description = "Whether to return detailed error messages")
@@ -224,7 +229,7 @@ public class CompatibilityResource {
     }
     Schema schema = new Schema(subject, request);
     try {
-      errorMessages = schemaRegistry.isCompatible(subject, schema, previousSchemas);
+      errorMessages = schemaRegistry.isCompatible(subject, schema, previousSchemas, normalize);
     } catch (InvalidSchemaException e) {
       if (verbose) {
         errorMessages = Collections.singletonList(e.getMessage());
