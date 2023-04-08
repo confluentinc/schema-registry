@@ -360,6 +360,7 @@ public class RestApiTest extends ClusterTestHarness {
     List<String> response = restApp.restClient.testCompatibility(registerRequest, subject,
       String.valueOf(
         idOfRegisteredSchema1Subject1),
+      false,
       true);
     assertTrue(response.size() > 0);
     assertTrue(response.get(2).contains("oldSchemaVersion:"));
