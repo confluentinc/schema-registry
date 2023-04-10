@@ -72,6 +72,8 @@ public class DlqAction implements RuleAction {
       producer.send(producerRecord, (metadata, exception) -> {
         if (exception != null) {
           log.error("Could not produce message to dlq topic " + topic, exception);
+        } else {
+          log.info("Sent message to dlq topic " + topic);
         }
       });
     } catch (IOException e) {
