@@ -1,0 +1,44 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "@com_fasterxml_jackson_core_jackson_databind",
+        "@com_google_guava_guava",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_utils",
+        "@io_swagger_core_v3_swagger_annotations",
+        "@org_apache_avro_avro",
+        "@org_apache_commons_commons_compress",
+        "@org_apache_kafka_kafka_clients//:linkable",
+        "@org_yaml_snakeyaml"
+    ],
+    runtime_deps = [
+        "//client/src/main/resources:resources"
+    ],
+)
+     
+
+
+java_library(
+    name = "tests_dependencies",
+    testonly = 1,
+    exports = [
+        "@com_google_guava_guava_testlib",
+        "@junit_junit",
+        "@org_easymock_easymock",
+        "@org_mockito_mockito_core",
+        "@org_mockito_mockito_inline",
+        "main_dependencies"
+    ],
+    runtime_deps = [
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@org_apache_kafka_kafka_clients//:linkable"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

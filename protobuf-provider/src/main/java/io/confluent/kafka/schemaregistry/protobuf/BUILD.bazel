@@ -1,0 +1,21 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "agg=._diff_dynamic",
+    srcs = [
+        "//protobuf-provider/src/main/java/io/confluent/kafka/schemaregistry/protobuf/diff:sources" , 
+        "//protobuf-provider/src/main/java/io/confluent/kafka/schemaregistry/protobuf/dynamic:sources" , 
+        "//protobuf-provider/src/main/java/io/confluent/kafka/schemaregistry/protobuf:sources"
+    ],
+    deps = [
+        "//protobuf-provider:main_dependencies" , 
+        "//protobuf-types/src/main/java/io/confluent/protobuf/type:type" , 
+        "//protobuf-types/src/main/java/io/confluent/protobuf:protobuf"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

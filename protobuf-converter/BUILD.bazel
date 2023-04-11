@@ -1,0 +1,46 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "//client:main_dependencies",
+        "//protobuf-provider:main_dependencies",
+        "//protobuf-serializer:main_dependencies",
+        "//protobuf-types:main_dependencies",
+        "//schema-converter:main_dependencies",
+        "//schema-serializer:main_dependencies",
+        "@com_google_protobuf_protobuf_java",
+        "@com_google_protobuf_protobuf_java_util",
+        "@com_squareup_okio_okio_jvm",
+        "@com_squareup_wire_wire_schema_jvm",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_utils",
+        "@org_apache_kafka_connect_api",
+        "@org_jetbrains_kotlin_kotlin_stdlib"
+    ],
+)
+     
+
+
+java_library(
+    name = "tests_dependencies",
+    testonly = 1,
+    exports = [
+        "//protobuf-serializer:main_dependencies",
+        "@junit_junit",
+        "@org_mockito_mockito_core",
+        "main_dependencies"
+    ],
+    runtime_deps = [
+        "//protobuf-converter/src/test/resources:resources",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@org_apache_kafka_connect_api//:linkable",
+        "@org_apache_kafka_kafka_clients//:linkable"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

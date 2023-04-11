@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "exceptions",
+    srcs = [
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/exceptions:sources"
+    ],
+    deps = [
+        "//core:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

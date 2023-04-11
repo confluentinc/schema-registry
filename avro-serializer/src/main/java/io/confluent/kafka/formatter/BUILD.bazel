@@ -1,0 +1,19 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "formatter",
+    srcs = [
+        "//avro-serializer/src/main/java/io/confluent/kafka/formatter:sources"
+    ],
+    deps = [
+        "//avro-serializer/src/main/java/io/confluent/kafka/serializers:serializers" , 
+        "//avro-serializer:main_dependencies" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/formatter:formatter"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

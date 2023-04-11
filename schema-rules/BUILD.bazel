@@ -1,0 +1,43 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "//client:main_dependencies",
+        "//schema-serializer:main_dependencies",
+        "@com_ibm_jsonata4java_JSONata4Java",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_utils",
+        "@org_antlr_antlr4_runtime",
+        "@org_apache_kafka_kafka_2_13",
+        "@org_projectnessie_cel_cel_jackson",
+        "@org_projectnessie_cel_cel_tools"
+    ],
+)
+     
+
+
+java_library(
+    name = "tests_dependencies",
+    testonly = 1,
+    exports = [
+        "//avro-serializer:main_dependencies",
+        "//json-schema-serializer:main_dependencies",
+        "//protobuf-serializer:main_dependencies",
+        "//protobuf-types:main_dependencies",
+        "@junit_junit",
+        "@org_mockito_mockito_core",
+        "main_dependencies"
+    ],
+    runtime_deps = [
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@org_apache_kafka_kafka_2_13//:linkable",
+        "@org_apache_kafka_kafka_clients//:linkable"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

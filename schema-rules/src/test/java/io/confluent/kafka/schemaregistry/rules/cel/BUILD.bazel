@@ -1,0 +1,34 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "cel",
+    srcs = [
+        "//schema-rules/src/test/java/io/confluent/kafka/schemaregistry/rules/cel:sources"
+    ],
+    deps = [
+        "//avro-serializer/src/main/java/io/confluent/kafka/serializers:serializers" , 
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json:agg=._diff" , 
+        "//json-schema-serializer/src/main/java/io/confluent/kafka/serializers/json:json" , 
+        "//protobuf-provider/src/main/java/io/confluent/kafka/schemaregistry/protobuf:agg=._diff_dynamic" , 
+        "//protobuf-serializer/src/main/java/io/confluent/kafka/serializers/protobuf:protobuf" , 
+        "//schema-rules/src/main/java/io/confluent/kafka/schemaregistry/rules/cel:cel" , 
+        "//schema-rules/src/test/java/io/confluent/kafka/schemaregistry/rules:rules" , 
+        "//schema-rules:tests_dependencies" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers:agg=._subject"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "cel_test_discovery",
+    tests_from = [":cel"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

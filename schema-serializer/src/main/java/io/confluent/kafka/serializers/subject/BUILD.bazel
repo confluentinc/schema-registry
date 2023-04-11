@@ -1,0 +1,4 @@
+
+sources(
+    visibility = ["//schema-serializer/src/main/java/io/confluent/kafka/serializers:__pkg__"]
+)

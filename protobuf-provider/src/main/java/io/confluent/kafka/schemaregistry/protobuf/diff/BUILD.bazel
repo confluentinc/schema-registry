@@ -1,0 +1,4 @@
+
+sources(
+    visibility = ["//protobuf-provider/src/main/java/io/confluent/kafka/schemaregistry/protobuf:__pkg__"]
+)

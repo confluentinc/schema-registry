@@ -1,0 +1,4 @@
+
+sources(
+    visibility = ["//client/src/main/java/io/confluent/kafka/schemaregistry:__pkg__"]
+)

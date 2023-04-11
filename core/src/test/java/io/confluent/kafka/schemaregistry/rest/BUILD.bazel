@@ -1,0 +1,35 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "rest",
+    srcs = [
+        "//core/src/test/java/io/confluent/kafka/schemaregistry/rest:sources"
+    ],
+    deps = [
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/avro:avro" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/exceptions:exceptions" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/rest/exceptions:exceptions" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/utils:utils" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry:agg=id_leaderelector/kafka_metrics_rest_rest/extensions_rest/filters_rest/resources_storage_storage/encoder_storage/serialization" , 
+        "//core/src/test/java/io/confluent/kafka/schemaregistry/rest/json:json" , 
+        "//core/src/test/java/io/confluent/kafka/schemaregistry/rest/protobuf:protobuf" , 
+        "//core/src/test/java/io/confluent/kafka/schemaregistry/utils:utils" , 
+        "//core/src/test/java/io/confluent/kafka/schemaregistry:schemaregistry" , 
+        "//core:tests_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "rest_test_discovery",
+    tests_from = [":rest"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

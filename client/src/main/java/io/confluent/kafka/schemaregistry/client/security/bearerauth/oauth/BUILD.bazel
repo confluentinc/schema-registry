@@ -1,0 +1,19 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "oauth",
+    srcs = [
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client/security/bearerauth/oauth:sources"
+    ],
+    deps = [
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client/security/bearerauth/oauth/exceptions:exceptions" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry:agg=._avro_client_client/rest_client/rest/entities_client/rest/entities/requests_client/security/basicauth_client/security/bearerauth_rules_testutil" , 
+        "//client:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Implementation-ArtifactId: schema-registry-console-scripts
+Implementation-Version: fixed.version-SNAPSHOT
+Implementation-Vendor-Id: io.confluent
+

@@ -1,0 +1,30 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "agg=._avro_client_client/rest_client/rest/entities_client/rest/entities/requests_client/security/basicauth_client/security/bearerauth_rules_testutil",
+    srcs = [
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/avro:sources" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client/rest/entities/requests:sources" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client/rest/entities:sources" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client/rest:sources" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client/security/basicauth:sources" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client/security/bearerauth:sources" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client:sources" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/rules:sources" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/testutil:sources" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry:sources"
+    ],
+    deps = [
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client/rest/exceptions:exceptions" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client/rest/utils:utils" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client/security:security" , 
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/utils:utils" , 
+        "//client:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

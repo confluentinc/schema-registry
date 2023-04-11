@@ -1,0 +1,20 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "avro",
+    srcs = [
+        "//avro-converter/src/main/java/io/confluent/connect/avro:sources"
+    ],
+    deps = [
+        "//avro-converter:main_dependencies" , 
+        "//avro-data/src/main/java/io/confluent/connect/avro:avro" , 
+        "//avro-serializer/src/main/java/io/confluent/kafka/serializers:serializers" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers:agg=._subject"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

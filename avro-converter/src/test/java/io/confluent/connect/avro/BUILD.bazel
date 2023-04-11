@@ -1,0 +1,29 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "avro",
+    srcs = [
+        "//avro-converter/src/test/java/io/confluent/connect/avro:sources"
+    ],
+    deps = [
+        "//avro-converter/src/main/java/io/confluent/connect/avro:avro" , 
+        "//avro-converter:tests_dependencies" , 
+        "//avro-serializer/src/main/java/io/confluent/kafka/serializers:serializers" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers:agg=._subject"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "avro_test_discovery",
+    tests_from = [":avro"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "protobuf",
+    srcs = [
+        "//protobuf-types/src/main/java/io/confluent/protobuf:sources"
+    ],
+    deps = [
+        "//protobuf-types:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

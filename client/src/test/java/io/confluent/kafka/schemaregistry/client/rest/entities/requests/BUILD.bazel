@@ -1,0 +1,26 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "requests",
+    srcs = [
+        "//client/src/test/java/io/confluent/kafka/schemaregistry/client/rest/entities/requests:sources"
+    ],
+    deps = [
+        "//client:tests_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "requests_test_discovery",
+    tests_from = [":requests"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

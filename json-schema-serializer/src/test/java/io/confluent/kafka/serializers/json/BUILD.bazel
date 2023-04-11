@@ -1,0 +1,28 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "json",
+    srcs = [
+        "//json-schema-serializer/src/test/java/io/confluent/kafka/serializers/json:sources"
+    ],
+    deps = [
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json:agg=._diff" , 
+        "//json-schema-serializer/src/main/java/io/confluent/kafka/serializers/json:json" , 
+        "//json-schema-serializer:tests_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "json_test_discovery",
+    tests_from = [":json"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

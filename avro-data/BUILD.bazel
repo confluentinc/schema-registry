@@ -1,0 +1,40 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "//avro-serializer:main_dependencies",
+        "//schema-converter:main_dependencies",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_utils",
+        "@org_apache_avro_avro",
+        "@org_apache_kafka_connect_api",
+        "@org_apache_kafka_kafka_clients"
+    ],
+)
+     
+
+
+java_library(
+    name = "tests_dependencies",
+    testonly = 1,
+    exports = [
+        "@com_google_guava_guava",
+        "@javax_xml_ws_jaxws_api",
+        "@junit_junit",
+        "@org_powermock_powermock_module_junit4",
+        "@uk_co_jemos_podam_podam",
+        "main_dependencies"
+    ],
+    runtime_deps = [
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@org_apache_kafka_connect_api//:linkable",
+        "@org_apache_kafka_kafka_clients//:linkable"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

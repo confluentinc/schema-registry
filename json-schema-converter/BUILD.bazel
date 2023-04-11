@@ -1,0 +1,42 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "//client:main_dependencies",
+        "//json-schema-provider:main_dependencies",
+        "//json-schema-serializer:main_dependencies",
+        "//schema-converter:main_dependencies",
+        "//schema-serializer:main_dependencies",
+        "@com_github_erosb_everit_json_schema",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_utils",
+        "@org_apache_kafka_connect_api",
+        "@org_apache_kafka_connect_json"
+    ],
+)
+     
+
+
+java_library(
+    name = "tests_dependencies",
+    testonly = 1,
+    exports = [
+        "@junit_junit",
+        "@org_mockito_mockito_core",
+        "main_dependencies"
+    ],
+    runtime_deps = [
+        "//json-schema-converter/src/test/resources:resources",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@org_apache_kafka_connect_api//:linkable",
+        "@org_apache_kafka_connect_json//:linkable",
+        "@org_apache_kafka_kafka_clients//:linkable"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

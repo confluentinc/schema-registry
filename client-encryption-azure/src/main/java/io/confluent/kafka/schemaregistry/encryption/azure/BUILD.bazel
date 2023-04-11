@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "azure",
+    srcs = [
+        "//client-encryption-azure/src/main/java/io/confluent/kafka/schemaregistry/encryption/azure:sources"
+    ],
+    deps = [
+        "//client-encryption-azure:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

@@ -1,0 +1,4 @@
+
+sources(
+    visibility = ["//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json:__pkg__"]
+)

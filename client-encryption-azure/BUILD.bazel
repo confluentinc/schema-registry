@@ -1,0 +1,50 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "//client-encryption:main_dependencies",
+        "//client:main_dependencies",
+        "//schema-serializer:main_dependencies",
+        "@com_azure_azure_core",
+        "@com_azure_azure_identity",
+        "@com_azure_azure_security_keyvault_keys",
+        "@com_google_crypto_tink_tink",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_utils"
+    ],
+)
+     
+
+
+java_library(
+    name = "tests_dependencies",
+    testonly = 1,
+    exports = [
+        "//avro-serializer:main_dependencies",
+        "//client-encryption:main_dependencies",
+        "//core:main_dependencies",
+        "//json-schema-serializer:main_dependencies",
+        "//protobuf-serializer:main_dependencies",
+        "//protobuf-types:main_dependencies",
+        "@com_google_guava_guava_testlib",
+        "@junit_junit",
+        "@org_apache_kafka_kafka_2_13_test//:linkable",
+        "@org_apache_kafka_kafka_clients_test//:linkable",
+        "@org_mockito_mockito_core",
+        "main_dependencies"
+    ],
+    runtime_deps = [
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@org_apache_kafka_kafka_2_13//:linkable",
+        "@org_apache_kafka_kafka_2_13_test//:linkable",
+        "@org_apache_kafka_kafka_clients//:linkable",
+        "@org_apache_kafka_kafka_clients_test//:linkable"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

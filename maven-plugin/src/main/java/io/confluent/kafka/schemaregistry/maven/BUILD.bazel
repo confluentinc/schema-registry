@@ -1,0 +1,20 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "maven",
+    srcs = [
+        "//maven-plugin/src/main/java/io/confluent/kafka/schemaregistry/maven:sources"
+    ],
+    deps = [
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json:agg=._diff" , 
+        "//maven-plugin/src/main/java/io/confluent/kafka/schemaregistry/maven/derive/schema:schema" , 
+        "//maven-plugin:main_dependencies" , 
+        "//protobuf-provider/src/main/java/io/confluent/kafka/schemaregistry/protobuf:agg=._diff_dynamic"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

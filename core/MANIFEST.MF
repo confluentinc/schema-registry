@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Implementation-ArtifactId: kafka-schema-registry
+Implementation-Version: fixed.version-SNAPSHOT
+Implementation-Vendor-Id: io.confluent
+

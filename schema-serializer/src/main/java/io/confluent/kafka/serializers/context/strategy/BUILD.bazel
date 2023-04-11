@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "strategy",
+    srcs = [
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers/context/strategy:sources"
+    ],
+    deps = [
+        "//schema-serializer:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "jackson",
+    srcs = [
+        "//json-serializer/src/main/java/io/confluent/kafka/serializers/jackson:sources"
+    ],
+    deps = [
+        "//json-serializer:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

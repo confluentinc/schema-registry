@@ -1,0 +1,43 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "//client:main_dependencies",
+        "@com_fasterxml_jackson_datatype_jackson_datatype_guava",
+        "@com_fasterxml_jackson_datatype_jackson_datatype_jdk8",
+        "@com_fasterxml_jackson_datatype_jackson_datatype_joda",
+        "@com_fasterxml_jackson_datatype_jackson_datatype_jsr310",
+        "@com_fasterxml_jackson_module_jackson_module_parameter_names",
+        "@com_github_erosb_everit_json_schema",
+        "@com_kjetland_mbknor_jackson_jsonschema_2_13",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_utils",
+        "@org_jetbrains_kotlin_kotlin_scripting_compiler_embeddable",
+        "@org_jetbrains_kotlin_kotlin_scripting_jvm",
+        "@org_jetbrains_kotlin_kotlin_stdlib"
+    ],
+)
+     
+
+
+java_library(
+    name = "tests_dependencies",
+    testonly = 1,
+    exports = [
+        "@junit_junit",
+        "@org_mockito_mockito_core",
+        "main_dependencies"
+    ],
+    runtime_deps = [
+        "//json-schema-provider/src/test/resources:resources",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@org_apache_kafka_kafka_clients//:linkable"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

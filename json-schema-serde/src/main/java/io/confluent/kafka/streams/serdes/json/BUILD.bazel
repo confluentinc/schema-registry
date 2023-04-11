@@ -1,0 +1,18 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "json",
+    srcs = [
+        "//json-schema-serde/src/main/java/io/confluent/kafka/streams/serdes/json:sources"
+    ],
+    deps = [
+        "//json-schema-serde:main_dependencies" , 
+        "//json-schema-serializer/src/main/java/io/confluent/kafka/serializers/json:json"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

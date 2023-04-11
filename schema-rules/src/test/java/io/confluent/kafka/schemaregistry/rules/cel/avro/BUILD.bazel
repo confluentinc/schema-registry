@@ -1,0 +1,27 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "avro",
+    srcs = [
+        "//schema-rules/src/test/java/io/confluent/kafka/schemaregistry/rules/cel/avro:sources"
+    ],
+    deps = [
+        "//schema-rules/src/main/java/io/confluent/kafka/schemaregistry/rules/cel/avro:avro" , 
+        "//schema-rules:tests_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "avro_test_discovery",
+    tests_from = [":avro"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

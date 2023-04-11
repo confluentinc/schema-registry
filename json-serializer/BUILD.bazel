@@ -1,0 +1,37 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "@com_fasterxml_jackson_core_jackson_databind",
+        "@com_fasterxml_jackson_datatype_jackson_datatype_jdk8",
+        "@com_fasterxml_jackson_datatype_jackson_datatype_jsr310",
+        "@com_fasterxml_jackson_module_jackson_module_parameter_names",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_config",
+        "@io_confluent_common_utils",
+        "@org_apache_kafka_kafka_2_13"
+    ],
+)
+     
+
+
+java_library(
+    name = "tests_dependencies",
+    testonly = 1,
+    exports = [
+        "@junit_junit",
+        "main_dependencies"
+    ],
+    runtime_deps = [
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@org_apache_kafka_kafka_2_13//:linkable",
+        "@org_apache_kafka_kafka_clients//:linkable"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

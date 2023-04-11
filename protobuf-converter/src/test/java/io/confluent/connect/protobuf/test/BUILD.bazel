@@ -1,0 +1,26 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "test",
+    srcs = [
+        "//protobuf-converter/src/test/java/io/confluent/connect/protobuf/test:sources"
+    ],
+    deps = [
+        "//protobuf-converter:tests_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "test_test_discovery",
+    tests_from = [":test"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

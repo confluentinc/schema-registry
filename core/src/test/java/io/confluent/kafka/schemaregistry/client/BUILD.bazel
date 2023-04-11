@@ -1,0 +1,30 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "client",
+    srcs = [
+        "//core/src/test/java/io/confluent/kafka/schemaregistry/client:sources"
+    ],
+    deps = [
+        "//avro-serializer/src/main/java/io/confluent/kafka/serializers:serializers" , 
+        "//core/src/test/java/io/confluent/kafka/schemaregistry:schemaregistry" , 
+        "//core:tests_dependencies" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers/context/strategy:strategy" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers:agg=._subject"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "client_test_discovery",
+    tests_from = [":client"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

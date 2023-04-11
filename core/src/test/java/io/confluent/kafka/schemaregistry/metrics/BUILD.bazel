@@ -1,0 +1,29 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "metrics",
+    srcs = [
+        "//core/src/test/java/io/confluent/kafka/schemaregistry/metrics:sources"
+    ],
+    deps = [
+        "//core/src/main/java/io/confluent/kafka/schemaregistry:agg=id_leaderelector/kafka_metrics_rest_rest/extensions_rest/filters_rest/resources_storage_storage/encoder_storage/serialization" , 
+        "//core/src/test/java/io/confluent/kafka/schemaregistry/utils:utils" , 
+        "//core/src/test/java/io/confluent/kafka/schemaregistry:schemaregistry" , 
+        "//core:tests_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "metrics_test_discovery",
+    tests_from = [":metrics"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()
