@@ -1179,16 +1179,17 @@ public class AvroData {
       defaultVal = JsonProperties.NULL_VALUE;
     }
     org.apache.avro.Schema.Field field;
+    org.apache.avro.Schema schema = fromConnectSchema(fieldSchema, fromConnectContext, false);
     try {
       field = new org.apache.avro.Schema.Field(
           fieldName,
-          fromConnectSchema(fieldSchema, fromConnectContext, false),
+          schema,
           discardTypeDocDefault ? fieldSchema.doc() : fieldDoc,
           defaultVal);
     } catch (AvroTypeException e) {
       field = new org.apache.avro.Schema.Field(
           fieldName,
-          fromConnectSchema(fieldSchema, fromConnectContext, false),
+          schema,
           discardTypeDocDefault ? fieldSchema.doc() : fieldDoc);
       log.warn("Ignoring invalid default for field " + fieldName, e);
     }
