@@ -899,6 +899,37 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testFromConnectOptionalWithInvalidDefault() {
+    Schema schema = SchemaBuilder.struct()
+        .field("array", SchemaBuilder.array(SchemaBuilder.string().optional().build())
+            .defaultValue(Arrays.asList("a", "b", "c")).build())
+        .build();
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+    org.apache.avro.Schema arraySchema = org.apache.avro.SchemaBuilder.builder().array().items()
+        .unionOf().nullType().and().stringType().endUnion();
+    ArrayNode arrayNode = JsonNodeFactory.instance.arrayNode();
+    arrayNode.add("a");
+    arrayNode.add("b");
+    arrayNode.add("c");
+    arraySchema.addProp("connect.default", arrayNode);
+    org.apache.avro.Schema expectedAvroSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("ConnectDefault").namespace("io.confluent.connect.avro").fields()
+        .name("array").type(arraySchema).noDefault()  // no default
+        .endRecord();
+
+    assertEquals(expectedAvroSchema, avroSchema);
+
+    Struct struct = new Struct(schema)
+        .put("array", Arrays.asList("a", "b", "c"));
+    Object convertedRecord = avroData.fromConnectData(schema, struct);
+    org.apache.avro.generic.GenericRecord avroRecord = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
+        .set("array", Arrays.asList("a", "b", "c"))
+        .build();
+
+    assertEquals(avroRecord, convertedRecord);
+  }
+
+  @Test
   public void testFromConnectOptionalAnonymousStruct() {
     Schema schema = SchemaBuilder.struct().optional()
         .field("int32", Schema.INT32_SCHEMA)

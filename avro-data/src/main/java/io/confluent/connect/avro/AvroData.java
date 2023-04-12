@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.regex.Pattern;
+import org.apache.avro.AvroTypeException;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -1177,11 +1178,21 @@ public class AvroData {
     } else if (fieldSchema.isOptional()) {
       defaultVal = JsonProperties.NULL_VALUE;
     }
-    org.apache.avro.Schema.Field field = new org.apache.avro.Schema.Field(
-        fieldName,
-        fromConnectSchema(fieldSchema, fromConnectContext, false),
-        discardTypeDocDefault ? fieldSchema.doc() : fieldDoc,
-        defaultVal);
+    org.apache.avro.Schema.Field field;
+    org.apache.avro.Schema schema = fromConnectSchema(fieldSchema, fromConnectContext, false);
+    try {
+      field = new org.apache.avro.Schema.Field(
+          fieldName,
+          schema,
+          discardTypeDocDefault ? fieldSchema.doc() : fieldDoc,
+          defaultVal);
+    } catch (AvroTypeException e) {
+      field = new org.apache.avro.Schema.Field(
+          fieldName,
+          schema,
+          discardTypeDocDefault ? fieldSchema.doc() : fieldDoc);
+      log.warn("Ignoring invalid default for field " + fieldName, e);
+    }
     fields.add(field);
   }
 
