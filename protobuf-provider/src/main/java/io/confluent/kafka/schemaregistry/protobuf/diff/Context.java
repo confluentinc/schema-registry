@@ -16,7 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
+import com.squareup.wire.schema.Field;
 import com.squareup.wire.schema.ProtoType;
+import com.squareup.wire.schema.internal.parser.ExtendElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 
@@ -42,6 +44,8 @@ public class Context {
   private final Set<MessageElement> schemas;
   private final Map<String, TypeElementInfo> originalTypes;
   private final Map<String, TypeElementInfo> updateTypes;
+  private final Map<String, ExtendFieldElementInfo> originalExtendFields;
+  private final Map<String, ExtendFieldElementInfo> updateExtendFields;
   private String originalPackageName;
   private String updatePackageName;
   private final Deque<String> fullPath;
@@ -57,6 +61,8 @@ public class Context {
     this.schemas = Collections.newSetFromMap(new IdentityHashMap<>());
     this.originalTypes = new HashMap<>();
     this.updateTypes = new HashMap<>();
+    this.originalExtendFields = new HashMap<>();
+    this.updateExtendFields = new HashMap<>();
     this.fullPath = new ArrayDeque<>();
     this.fullName = new ArrayDeque<>();
     this.diffs = new ArrayList<>();
@@ -97,6 +103,7 @@ public class Context {
       boolean isOriginal
   ) {
     setPackageName(protoFile.getPackageName(), isOriginal);
+    collectExtendInfo(ref, protoFile.getExtendDeclarations(), isOriginal);
     collectTypeInfo(ref, protoFile.getTypes(), isOriginal);
   }
 
@@ -112,6 +119,7 @@ public class Context {
         Optional<FieldElement> value = Optional.empty();
         if (typeElement instanceof MessageElement) {
           MessageElement messageElement = (MessageElement) typeElement;
+          collectExtendInfo(ref, messageElement.getExtendDeclarations(), isOriginal);
           isMap = ProtobufSchema.findOption("map_entry", messageElement.getOptions())
               .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(false);
           if (isMap) {
@@ -142,13 +150,47 @@ public class Context {
     }
   }
 
+  private void collectExtendInfo(
+      final SchemaReference ref,
+      final List<ExtendElement> extendElements,
+      boolean isOriginal
+  ) {
+    for (ExtendElement extendElement : extendElements) {
+      for (FieldElement fieldElement : extendElement.getFields()) {
+        try (Context.NamedScope namedScope = enterName(fieldElement.getName())) {
+          addExtendField(ref, fieldElement, isOriginal);
+        }
+      }
+    }
+  }
+
+  private void addExtendField(
+      final SchemaReference ref, final FieldElement field, final boolean isOriginal) {
+    String name = String.join(".", fullPath);
+    String packageName = isOriginal ? originalPackageName : updatePackageName;
+    if (!packageName.isEmpty()) {
+      name = packageName + "." + name;
+    }
+    ExtendFieldElementInfo fieldInfo = new ExtendFieldElementInfo(packageName, ref, field);
+    if (isOriginal) {
+      originalExtendFields.put(name, fieldInfo);
+    } else {
+      updateExtendFields.put(name, fieldInfo);
+    }
+  }
+
   private static Optional<FieldElement> findField(String name, List<FieldElement> options) {
     return options.stream().filter(o -> o.getName().equals(name)).findFirst();
   }
 
   public TypeElementInfo getType(final String name, final boolean isOriginal) {
-    String fullName = resolve(name, isOriginal);
+    String fullName = resolve(this::getTypeForFullName, name, isOriginal);
     return fullName != null ? getTypeForFullName(fullName, isOriginal) : null;
+  }
+
+  public ExtendFieldElementInfo getExtendField(final String name, final boolean isOriginal) {
+    String fullName = resolve(this::getExtendFieldForFullName, name, isOriginal);
+    return fullName != null ? getExtendFieldForFullName(fullName, isOriginal) : null;
   }
 
   public void setPackageName(final String packageName, final boolean isOriginal) {
@@ -184,10 +226,14 @@ public class Context {
   }
 
   public String resolve(String name, boolean isOriginal) {
+    return resolve(this::getTypeForFullName, name, isOriginal);
+  }
+
+  public <T> String resolve(Resolver<T> resolver, String name, boolean isOriginal) {
     if (name.startsWith(".")) {
       String n = name.substring(1);
-      TypeElementInfo type = getTypeForFullName(n, isOriginal);
-      if (type != null) {
+      T elem = resolver.resolve(n, isOriginal);
+      if (elem != null) {
         return n;
       }
     } else {
@@ -206,14 +252,14 @@ public class Context {
       prefix.addAll(fullName);
       while (!prefix.isEmpty()) {
         String n = String.join(".", prefix) + "." + name;
-        TypeElementInfo type = getTypeForFullName(n, isOriginal);
-        if (type != null) {
+        T elem = resolver.resolve(n, isOriginal);
+        if (elem != null) {
           return n;
         }
         prefix.removeLast();
       }
-      TypeElementInfo type = getTypeForFullName(name, isOriginal);
-      if (type != null) {
+      T elem = resolver.resolve(name, isOriginal);
+      if (elem != null) {
         return name;
       }
     }
@@ -229,6 +275,19 @@ public class Context {
       return originalTypes.get(name);
     } else {
       return updateTypes.get(name);
+    }
+  }
+
+  public ExtendFieldElementInfo getExtendFieldForFullName(
+      final String fullName, final boolean isOriginal) {
+    String name = fullName;
+    if (name.startsWith(".")) {
+      name = name.substring(1);
+    }
+    if (isOriginal) {
+      return originalExtendFields.get(name);
+    } else {
+      return updateExtendFields.get(name);
     }
   }
 
@@ -296,6 +355,10 @@ public class Context {
     }
   }
 
+  public interface Resolver<T> {
+    T resolve(String name, boolean isOriginal);
+  }
+
   public static class TypeElementInfo {
     private final String packageName;
     private final SchemaReference ref;
@@ -340,6 +403,36 @@ public class Context {
 
     public ProtoType getMapType() {
       return isMap ? ProtoType.get("map<" + key.getType() + ", " + value.getType() + ">") : null;
+    }
+  }
+
+  public static class ExtendFieldElementInfo {
+    private final String packageName;
+    private final SchemaReference ref;
+    private final FieldElement field;
+    private final boolean repeated;
+
+    public ExtendFieldElementInfo(String packageName, SchemaReference ref, FieldElement field) {
+      this.packageName = packageName;
+      this.ref = ref;
+      this.field = field;
+      this.repeated = Field.Label.REPEATED == field.getLabel();
+    }
+
+    public String packageName() {
+      return packageName;
+    }
+
+    public SchemaReference reference() {
+      return ref;
+    }
+
+    public FieldElement field() {
+      return field;
+    }
+
+    public boolean isRepeated() {
+      return repeated;
     }
   }
 }

@@ -38,7 +38,8 @@ public class RegisterSchemaResponse {
     return JacksonMapper.INSTANCE.readValue(json, RegisterSchemaResponse.class);
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.ID_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.ID_DESC,
+      example = Schema.ID_EXAMPLE)
   @JsonProperty("id")
   public int getId() {
     return id;
