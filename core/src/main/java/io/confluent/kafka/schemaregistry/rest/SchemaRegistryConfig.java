@@ -175,7 +175,7 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>schema.cache.use.weight</code>
    */
   public static final String SCHEMA_CACHE_USE_WEIGHT_CONFIG = "schema.cache.use.weight";
-  public static final int SCHEMA_CACHE_USE_WEIGHT_DEFAULT = false;
+  public static final boolean SCHEMA_CACHE_USE_WEIGHT_DEFAULT = false;
 
   /**
    * <code>schema.cache.size</code>

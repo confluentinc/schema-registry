@@ -153,11 +153,22 @@ public class MetricsContainer {
     this.protobufSchemasDeleted = createMetric(METRIC_NAME_PB_SCHEMAS_DELETED,
             "Number of deleted Protobuf schemas", new CumulativeCount());
 
-    this.schemaCacheHit = createMetric("schema-cache-hit", "Number of times the local schema cache has been hit");
+    this.schemaCacheHit = createMetric(
+            METRIC_NAME_SCHEMA_CACHE_HIT,
+            "Number of times the local schema cache has been hit",
+            new CumulativeCount()
+    );
 
-    this.schemaCacheMiss = createMetric("schema-cache-miss", "Number of times the local schema cache has been missed");
+    this.schemaCacheMiss = createMetric(
+            METRIC_NAME_SCHEMA_CACHE_MISS,
+            "Number of times the local schema cache has been missed",
+            new CumulativeCount()
+    );
 
-    this.schemaCacheSize = createMetric("schema-cache-size", "Size of the local schema cache");
+    this.schemaCacheSize = createMetric(
+            METRIC_NAME_SCHEMA_CACHE_SIZE,
+            "Size of the local schema cache",
+            new CumulativeCount());
   }
 
   public Metrics getMetrics() {

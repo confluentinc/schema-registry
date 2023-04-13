@@ -197,12 +197,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.ruleSetHandler = new RuleSetHandler();
   }
 
-  private Cache buildLocalSchemaCache() {
+  private LoadingCache buildLocalSchemaCache() {
     if (config.getBoolean(SchemaRegistryConfig.SCHEMA_CACHE_USE_WEIGHT_CONFIG)) {
       return CacheBuilder.newBuilder()
         .maximumWeight(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_MAXIMUM_WEIGHT_CONFIG))
         .weigher((Weigher<RawSchema, ParsedSchema>) (k, v) -> v.canonicalString().length())
-        .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
+        .expireAfterAccess(
+                config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
+                TimeUnit.SECONDS
+        )
         .build(new CacheLoader<RawSchema, ParsedSchema>() {
           @Override
           public ParsedSchema load(RawSchema s) throws Exception {
@@ -212,7 +215,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
     return CacheBuilder.newBuilder()
       .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
-      .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
+      .expireAfterAccess(
+              config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
+              TimeUnit.SECONDS
+      )
       .build(new CacheLoader<RawSchema, ParsedSchema>() {
         @Override
         public ParsedSchema load(RawSchema s) throws Exception {
