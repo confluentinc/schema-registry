@@ -83,7 +83,6 @@
         <proto-google-common-protos.version>2.5.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <okio.version>3.0.0</okio.version>
-        <snakeyaml.version>1.32</snakeyaml.version>
         <wire.version>4.4.3</wire.version>
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.3.4-0</io.confluent.schema-registry.version>
@@ -139,11 +138,6 @@
                 <groupId>com.google.protobuf</groupId>
                 <artifactId>protobuf-java-util</artifactId>
                 <version>${protobuf.version}</version>
-            </dependency>
-            <dependency>
-            <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-                <version>${snakeyaml.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.api.grpc</groupId>
