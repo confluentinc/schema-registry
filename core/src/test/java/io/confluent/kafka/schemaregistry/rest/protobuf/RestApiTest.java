@@ -16,10 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.protobuf;
 
-import com.google.protobuf.ByteString;
-import com.google.protobuf.Descriptors;
-import com.google.protobuf.Message;
-import com.google.protobuf.UnknownFieldSet;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.utils.ResourceLoader;
 import org.junit.Assert;
 import org.junit.Test;
@@ -45,11 +42,11 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.serializers.protobuf.test.Ref;
 import io.confluent.kafka.serializers.protobuf.test.Root;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertTrue;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -226,6 +223,63 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchemaType(ProtobufSchema.TYPE);
     request.setReferences(Collections.emptyList());
     restApp.restClient.registerSchema(request, "referrer", false);
+  }
+
+  @Test
+  public void testIncompatibleSchema() throws Exception {
+    String subject = "testSubject";
+
+    // Make two incompatible schemas - field 'myField2' has different types
+    String schema1String = "syntax = \"proto3\";\n" +
+                             "package pkg3;\n" +
+                             "\n" +
+                             "message Schema1 {\n" +
+                             "  string f1 = 1;\n" +
+                             "  string f2 = 2;\n" +
+                             "}\n";
+
+    RegisterSchemaRequest registerRequest = new RegisterSchemaRequest();
+    registerRequest.setSchema(schema1String);
+    registerRequest.setSchemaType(ProtobufSchema.TYPE);
+
+    String schema2String = "syntax = \"proto3\";\n" +
+                             "package pkg3;\n" +
+                             "\n" +
+                             "message Schema1 {\n" +
+                             "  string f1 = 1;\n" +
+                             "  int32 f2 = 2;\n" +
+                             "}\n";
+
+    // ensure registering incompatible schemas will raise an error
+    restApp.restClient.updateCompatibility(
+      CompatibilityLevel.FULL.name, subject);
+
+    // test that compatibility check for incompatible schema returns false and the appropriate
+    // error response from Avro
+    int idOfRegisteredSchema1Subject1 = restApp.restClient.registerSchema(registerRequest, subject, true);
+
+    try {
+      registerRequest.setSchema(schema2String);
+      registerRequest.setSchemaType(ProtobufSchema.TYPE);
+      restApp.restClient.registerSchema(registerRequest, subject, true);
+      fail("Registering incompatible schema should fail with "
+             + Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE);
+    } catch (RestClientException e) {
+      assertTrue(e.getMessage().length() > 0);
+      assertTrue(e.getMessage().contains("oldSchemaVersion:"));
+      assertTrue(e.getMessage().contains("oldSchema:"));
+      assertTrue(e.getMessage().contains("compatibility:"));
+    }
+
+    List<String> response = restApp.restClient.testCompatibility(registerRequest, subject,
+      String.valueOf(
+        idOfRegisteredSchema1Subject1),
+      false,
+      true);
+    assertTrue(response.size() > 0);
+    assertTrue(response.get(2).contains("oldSchemaVersion:"));
+    assertTrue(response.get(3).contains("oldSchema:"));
+    assertTrue(response.get(4).contains("compatibility:"));
   }
 
   @Test

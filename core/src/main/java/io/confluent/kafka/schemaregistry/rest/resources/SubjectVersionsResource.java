@@ -35,6 +35,8 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedE
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -379,6 +381,15 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
+    schemaRegistry.getRuleSetHandler().handle(subjectName, normalize, request);
+
+    if (request.getRuleSet() != null) {
+      try {
+        request.getRuleSet().validate();
+      } catch (RuleException e) {
+        throw new RestInvalidRuleSetException(e.getMessage());
+      }
+    }
     if (subjectName != null
         && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subjectName)) {
       throw Errors.invalidSubjectException(subjectName);

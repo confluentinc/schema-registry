@@ -35,6 +35,7 @@ import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DynamicMessage;
 
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.io.ByteArrayOutputStream;
@@ -341,16 +342,22 @@ public class DynamicSchema {
     mEnumDescriptorMapShort.put(enumTypeNameShort, enumType);
   }
 
-  static Meta toMeta(String doc, Map<String, String> params) {
-    if (doc == null && params == null) {
+  static Meta toMeta(ProtobufMeta meta) {
+    if (meta == null || meta.isEmpty()) {
       return null;
     }
     Meta.Builder metaBuilder = Meta.newBuilder();
+    String doc = meta.getDoc();
     if (doc != null) {
       metaBuilder.setDoc(doc);
     }
-    if (params != null) {
+    Map<String, String> params = meta.getParams();
+    if (params != null && !params.isEmpty()) {
       metaBuilder.putAllParams(params);
+    }
+    List<String> tags = meta.getTags();
+    if (tags != null && !tags.isEmpty()) {
+      metaBuilder.addAllTags(tags);
     }
     return metaBuilder.build();
   }
@@ -453,15 +460,14 @@ public class DynamicSchema {
         int num,
         String defaultVal,
         String jsonName,
-        String doc,
-        Map<String, String> params,
+        ProtobufMeta meta,
         CType ctype,
         Boolean isPacked,
         JSType jstype,
         Boolean isDeprecated
     ) {
       FieldDescriptorProto.Builder fieldBuilder = MessageDefinition.getFieldBuilder(label, false,
-          type, name, num, defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated,
+          type, name, num, defaultVal, jsonName, meta, ctype, isPacked, jstype, isDeprecated,
           null);
       fieldBuilder.setExtendee(extendee);
       mFileDescProtoBuilder.addExtension(fieldBuilder.build());
@@ -673,12 +679,12 @@ public class DynamicSchema {
     }
 
     // Note: added
-    public Builder setMeta(String doc, Map<String, String> params) {
-      Meta meta = toMeta(doc, params);
-      if (meta != null) {
+    public Builder setMeta(ProtobufMeta meta) {
+      Meta m = toMeta(meta);
+      if (m != null) {
         DescriptorProtos.FileOptions.Builder optionsBuilder =
                 DescriptorProtos.FileOptions.newBuilder();
-        optionsBuilder.setExtension(MetaProto.fileMeta, meta);
+        optionsBuilder.setExtension(MetaProto.fileMeta, m);
         mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
       }
       return this;

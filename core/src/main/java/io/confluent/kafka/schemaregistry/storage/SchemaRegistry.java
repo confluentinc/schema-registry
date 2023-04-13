@@ -86,6 +86,10 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
       throws SchemaRegistryException;
 
+  Schema getLatestWithMetadata(
+      String subject, Map<String, String> metadata, boolean lookupDeletedSchema)
+      throws SchemaRegistryException;
+
   List<String> isCompatible(String subject,
                             Schema newSchema,
                             Schema targetSchema) throws SchemaRegistryException;

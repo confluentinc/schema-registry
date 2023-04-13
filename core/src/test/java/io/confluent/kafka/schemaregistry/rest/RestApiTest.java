@@ -16,26 +16,36 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.SchemaParseException;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.*;
@@ -430,6 +440,10 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       assertEquals("Schema register should fail since schema is incompatible",
           Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE, e.getErrorCode());
+      assertTrue(e.getMessage().length() > 0);
+      assertTrue(e.getMessage().contains("oldSchemaVersion:"));
+      assertTrue(e.getMessage().contains("oldSchema:"));
+      assertTrue(e.getMessage().contains("compatibility:"));
     }
   }
 
@@ -1933,6 +1947,50 @@ public class RestApiTest extends ClusterTestHarness {
       assertEquals("Subject is in read-only mode", Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
           .getErrorCode());
     }
+  }
+
+  @Test
+  public void testRegisterWithAndWithoutMetadata() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    Map<String, String> properties = Collections.singletonMap("application.version", "2");
+    Metadata metadata = new Metadata(null, properties, null);
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    request1.setMetadata(metadata);
+
+    int id = restApp.restClient.registerSchema(request1, subject, false);
+
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema1);
+    int id2 = restApp.restClient.registerSchema(request2, subject, false);
+    assertEquals(id, id2);
+  }
+
+  @Test
+  public void testRegisterDropsRuleSet() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    Rule r1 = new Rule("foo", null, null, RuleMode.READ, "ENCRYPT", null, null, null, null, null, false);
+    List<Rule> rules = Collections.singletonList(r1);
+    RuleSet ruleSet = new RuleSet(null, rules);
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    request1.setRuleSet(ruleSet);
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request1, subject, false));
+
+    SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1, subject);
+    assertNull(schemaString.getRuleSet());
   }
 
   @Override

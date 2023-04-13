@@ -19,6 +19,7 @@ package io.confluent.kafka.serializers.protobuf;
 import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -39,6 +40,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
+import org.apache.kafka.common.header.Headers;
 
 public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
@@ -48,7 +50,6 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   protected boolean onlyLookupReferencesBySchema;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
-  protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
   protected String schemaFormat;
   protected boolean skipKnownTypes;
@@ -61,7 +62,6 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     this.onlyLookupReferencesBySchema = config.onlyLookupReferencesBySchema();
     this.useSchemaId = config.useSchemaId();
     this.idCompatStrict = config.getIdCompatibilityStrict();
-    this.useLatestVersion = config.useLatestVersion();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
     this.schemaFormat = config.getSchemaFormat();
     this.skipKnownTypes = config.skipKnownTypes();
@@ -78,6 +78,13 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
 
   protected byte[] serializeImpl(
       String subject, String topic, boolean isKey, T object, ProtobufSchema schema
+  ) throws SerializationException, InvalidConfigurationException {
+    return serializeImpl(subject, topic, isKey, null, object, schema);
+  }
+
+  @SuppressWarnings("unchecked")
+  protected byte[] serializeImpl(
+      String subject, String topic, boolean isKey, Headers headers, T object, ProtobufSchema schema
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
@@ -97,7 +104,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterForDeps = autoRegisterSchema && !onlyLookupReferencesBySchema;
       boolean useLatestForDeps = useLatestVersion && !onlyLookupReferencesBySchema;
       schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
-          useLatestForDeps, latestCompatStrict, latestVersions,
+          useLatestForDeps, latestCompatStrict, latestVersionsCache(),
           skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
       int id;
       if (autoRegisterSchema) {
@@ -116,6 +123,10 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         schema = (ProtobufSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
         id = schemaRegistry.getId(subject, schema);
+      } else if (metadata != null) {
+        restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
+        schema = (ProtobufSchema) getLatestWithMetadata(subject);
+        id = schemaRegistry.getId(subject, schema);
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
         schema = (ProtobufSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
@@ -124,6 +135,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         restClientErrorMsg = "Error retrieving Protobuf schema: ";
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
+      object = (T) executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());
@@ -138,6 +150,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       throw new SerializationException("Error serializing Protobuf message", e);
     } catch (RestClientException e) {
       throw toKafkaException(e, restClientErrorMsg + schema);
+    } finally {
+      postOp(object);
     }
   }
 

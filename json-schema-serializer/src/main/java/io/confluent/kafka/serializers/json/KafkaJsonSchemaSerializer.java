@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.json;
 
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.IOException;
@@ -32,19 +33,19 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
-  private boolean isKey;
   private Map<Class<?>, JsonSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaJsonSchemaSerializer() {
-    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client) {
-    schemaRegistry = client;
-    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
+    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -53,9 +54,10 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props,
                                    int cacheCapacity) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
     configure(serializerConfig(props));
-    schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
   }
 
   @Override
@@ -64,8 +66,14 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     configure(new KafkaJsonSchemaSerializerConfig(config));
   }
 
+
   @Override
   public byte[] serialize(String topic, T record) {
+    return serialize(topic, null, record);
+  }
+
+  @Override
+  public byte[] serialize(String topic, Headers headers, T record) {
     if (record == null) {
       return null;
     }
@@ -76,7 +84,8 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
       schema = schemaCache.computeIfAbsent(record.getClass(), k -> getSchema(record));
     }
     Object value = JsonSchemaUtils.getValue(record);
-    return serializeImpl(getSubjectName(topic, isKey, value, schema), (T) value, schema);
+    return serializeImpl(
+        getSubjectName(topic, isKey, value, schema), topic, headers, (T) value, schema);
   }
 
   private JsonSchema getSchema(T record) {
@@ -90,5 +99,6 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   @Override
   public void close() {
+    super.close();
   }
 }

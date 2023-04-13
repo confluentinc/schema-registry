@@ -167,7 +167,7 @@ public class CompatibilityResource {
     }
 
     CompatibilityCheckResponse compatibilityCheckResponse =
-            createCompatiblityCheckResponse(errorMessages, verbose);
+            createCompatibilityCheckResponse(errorMessages, verbose);
     asyncResponse.resume(compatibilityCheckResponse);
   }
 
@@ -245,11 +245,11 @@ public class CompatibilityResource {
     }
 
     CompatibilityCheckResponse compatibilityCheckResponse =
-        createCompatiblityCheckResponse(errorMessages, verbose);
+        createCompatibilityCheckResponse(errorMessages, verbose);
     asyncResponse.resume(compatibilityCheckResponse);
   }
 
-  private static CompatibilityCheckResponse createCompatiblityCheckResponse(
+  private static CompatibilityCheckResponse createCompatibilityCheckResponse(
           List<String> errorMessages,
           boolean verbose) {
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();

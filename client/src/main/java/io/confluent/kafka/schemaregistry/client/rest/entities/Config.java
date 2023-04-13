@@ -16,10 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -27,13 +30,41 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public class Config {
 
   private String compatibilityLevel;
+  private String compatibilityGroup;
+  private Metadata defaultMetadata;
+  private Metadata overrideMetadata;
+  private RuleSet defaultRuleSet;
+  private RuleSet overrideRuleSet;
+
+  @JsonCreator
+  public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel,
+                @JsonProperty("compatibilityGroup") String compatibilityGroup,
+                @JsonProperty("defaultMetadata") Metadata defaultMetadata,
+                @JsonProperty("overrideMetadata") Metadata overrideMetadata,
+                @JsonProperty("defaultRuleSet") RuleSet defaultRuleSet,
+                @JsonProperty("overrideRuleSet") RuleSet overrideRuleSet) {
+    this.compatibilityLevel = compatibilityLevel;
+    this.compatibilityGroup = compatibilityGroup;
+    this.defaultMetadata = defaultMetadata;
+    this.overrideMetadata = overrideMetadata;
+    this.defaultRuleSet = defaultRuleSet;
+    this.overrideRuleSet = overrideRuleSet;
+  }
 
   public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
   }
 
   public Config() {
-    compatibilityLevel = null;
+  }
+
+  public Config(ConfigUpdateRequest request) {
+    this.compatibilityLevel = request.getCompatibilityLevel();
+    this.compatibilityGroup = request.getCompatibilityGroup();
+    this.defaultMetadata = request.getDefaultMetadata();
+    this.overrideMetadata = request.getDefaultMetadata();
+    this.defaultRuleSet = request.getDefaultRuleSet();
+    this.overrideRuleSet = request.getOverrideRuleSet();
   }
 
   @Schema(description = "Compatibility Level",
@@ -50,6 +81,56 @@ public class Config {
     this.compatibilityLevel = compatibilityLevel;
   }
 
+  @JsonProperty("compatibilityGroup")
+  public String getCompatibilityGroup() {
+    return this.compatibilityGroup;
+  }
+
+  @JsonProperty("compatibilityGroup")
+  public void setCompatibilityGroup(String compatibilityGroup) {
+    this.compatibilityGroup = compatibilityGroup;
+  }
+
+  @JsonProperty("defaultMetadata")
+  public Metadata getDefaultMetadata() {
+    return this.defaultMetadata;
+  }
+
+  @JsonProperty("defaultMetadata")
+  public void setDefaultMetadata(Metadata defaultMetadata) {
+    this.defaultMetadata = defaultMetadata;
+  }
+
+  @JsonProperty("overrideMetadata")
+  public Metadata getOverrideMetadata() {
+    return this.overrideMetadata;
+  }
+
+  @JsonProperty("overrideMetadata")
+  public void setOverrideMetadata(Metadata overrideMetadata) {
+    this.overrideMetadata = overrideMetadata;
+  }
+
+  @JsonProperty("defaultRuleSet")
+  public RuleSet getDefaultRuleSet() {
+    return this.defaultRuleSet;
+  }
+
+  @JsonProperty("defaultRuleSet")
+  public void setDefaultRuleSet(RuleSet defaultRuleSet) {
+    this.defaultRuleSet = defaultRuleSet;
+  }
+
+  @JsonProperty("overrideRuleSet")
+  public RuleSet getOverrideRuleSet() {
+    return this.overrideRuleSet;
+  }
+
+  @JsonProperty("overrideRuleSet")
+  public void setOverrideRuleSet(RuleSet overrideRuleSet) {
+    this.overrideRuleSet = overrideRuleSet;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -58,19 +139,30 @@ public class Config {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-
-    Config that = (Config) o;
-
-    return this.compatibilityLevel.equals(that.compatibilityLevel);
+    Config config = (Config) o;
+    return Objects.equals(compatibilityLevel, config.compatibilityLevel)
+        && Objects.equals(compatibilityGroup, config.compatibilityGroup)
+        && Objects.equals(defaultMetadata, config.defaultMetadata)
+        && Objects.equals(overrideMetadata, config.overrideMetadata)
+        && Objects.equals(defaultRuleSet, config.defaultRuleSet)
+        && Objects.equals(overrideRuleSet, config.overrideRuleSet);
   }
 
   @Override
   public int hashCode() {
-    return 31 * compatibilityLevel.hashCode();
+    return Objects.hash(compatibilityLevel, compatibilityGroup,
+        defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
 
   @Override
   public String toString() {
-    return "{compatibilityLevel=" + this.compatibilityLevel + "}";
+    return "Config{"
+        + "compatibilityLevel='" + compatibilityLevel + '\''
+        + ", compatibilityGroup='" + compatibilityGroup + '\''
+        + ", defaultMetadata=" + defaultMetadata
+        + ", overrideMetadata=" + overrideMetadata
+        + ", defaultRuleSet=" + defaultRuleSet
+        + ", overrideRuleSet=" + overrideRuleSet
+        + '}';
   }
 }

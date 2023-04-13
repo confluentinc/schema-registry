@@ -96,7 +96,7 @@ public class RestService implements Configurable {
   private static final TypeReference<JsonNode> GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE =
       new TypeReference<JsonNode>() {
       };
-  private static final TypeReference<Schema> GET_SCHEMA_BY_VERSION_RESPONSE_TYPE =
+  private static final TypeReference<Schema> GET_SCHEMA_RESPONSE_TYPE =
       new TypeReference<Schema>() {
       };
   private static final TypeReference<List<Integer>> GET_REFERENCED_BY_RESPONSE_TYPE =
@@ -146,8 +146,8 @@ public class RestService implements Configurable {
       new TypeReference<ServerClusterId>() {
       };
   private static final TypeReference<SchemaRegistryServerVersion> GET_SR_VERSION_RESPONSE_TYPE =
-          new TypeReference<SchemaRegistryServerVersion>() {
-          };
+      new TypeReference<SchemaRegistryServerVersion>() {
+      };
 
   private static final int HTTP_CONNECT_TIMEOUT_MS = 60000;
   private static final int HTTP_READ_TIMEOUT_MS = 60000;
@@ -913,7 +913,7 @@ public class RestService implements Configurable {
     String path = builder.build(subject, version).toString();
 
     Schema response = httpRequest(path, "GET", null, requestProperties,
-        GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
+                                  GET_SCHEMA_RESPONSE_TYPE);
     return response;
   }
 
@@ -929,7 +929,7 @@ public class RestService implements Configurable {
     String path = builder.build(subject).toString();
 
     Schema response = httpRequest(path, "GET", null, requestProperties,
-                                  GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
+                                  GET_SCHEMA_RESPONSE_TYPE);
     return response;
   }
 
@@ -951,6 +951,28 @@ public class RestService implements Configurable {
     JsonNode response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
             GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
     return response.toString();
+  }
+
+  public Schema getLatestWithMetadata(
+      String subject, Map<String, String> metadata, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    return getLatestWithMetadata(
+        DEFAULT_REQUEST_PROPERTIES, subject, metadata, lookupDeletedSchema);
+  }
+
+  public Schema getLatestWithMetadata(Map<String, String> requestProperties,
+      String subject, Map<String, String> metadata, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/metadata");
+    for (Map.Entry<String, String> entry : metadata.entrySet()) {
+      builder.queryParam("key", entry.getKey());
+      builder.queryParam("value", entry.getValue());
+    }
+    builder.queryParam("deleted", lookupDeletedSchema);
+    String path = builder.build(subject).toString();
+
+    Schema response = httpRequest(path, "GET", null, requestProperties, GET_SCHEMA_RESPONSE_TYPE);
+    return response;
   }
 
   public List<Integer> getReferencedBy(String subject, int version) throws IOException,

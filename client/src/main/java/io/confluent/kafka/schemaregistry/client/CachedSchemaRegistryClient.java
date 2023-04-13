@@ -72,6 +72,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Cache<SubjectAndSchema, Long> missingSchemaCache;
   private final Cache<SubjectAndId, Long> missingIdCache;
   private final Map<String, SchemaProvider> providers;
+  private final Ticker ticker;
 
   private static final String NO_SUBJECT = "";
   private static final int HTTP_NOT_FOUND = 404;
@@ -187,6 +188,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.idCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.versionCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.restService = restService;
+    this.ticker = ticker;
 
     long missingIdTTL = SchemaRegistryClientConfig.getMissingIdTTL(configs);
     long missingSchemaTTL = SchemaRegistryClientConfig.getMissingSchemaTTL(configs);
@@ -235,6 +237,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         restService.setHostnameVerifier(getHostnameVerifier(sslConfigs));
       }
     }
+  }
+
+  @Override
+  public Ticker ticker() {
+    return ticker;
   }
 
   private HostnameVerifier getHostnameVerifier(Map<String, Object> config) {
@@ -498,6 +505,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public SchemaMetadata getLatestWithMetadata(String subject, Map<String, String> metadata,
+      boolean lookupDeletedSchema) throws IOException, RestClientException {
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
+        = restService.getLatestWithMetadata(subject, metadata, lookupDeletedSchema);
+    return new SchemaMetadata(response);
+  }
+
+  @Override
   public int getVersion(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     return getVersion(subject, schema, false);
@@ -632,20 +647,20 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public String updateCompatibility(String subject, String compatibility)
+  public Config updateConfig(String subject, Config config)
       throws IOException, RestClientException {
-    ConfigUpdateRequest response = restService.updateCompatibility(compatibility, subject);
-    return response.getCompatibilityLevel();
+    ConfigUpdateRequest response = restService.updateConfig(
+        new ConfigUpdateRequest(config), subject);
+    return new Config(response);
   }
 
   @Override
-  public String getCompatibility(String subject) throws IOException, RestClientException {
-    Config response = restService.getConfig(subject);
-    return response.getCompatibilityLevel();
+  public Config getConfig(String subject) throws IOException, RestClientException {
+    return restService.getConfig(subject);
   }
 
   @Override
-  public void deleteCompatibility(String subject) throws IOException, RestClientException {
+  public void deleteConfig(String subject) throws IOException, RestClientException {
     restService.deleteConfig(subject);
   }
 
