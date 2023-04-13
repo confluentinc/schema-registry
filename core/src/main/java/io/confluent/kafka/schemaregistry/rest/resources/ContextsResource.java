@@ -21,16 +21,17 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
-import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.List;
 
 @Path("/contexts")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -41,7 +42,6 @@ import org.slf4j.LoggerFactory;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ContextsResource {
 
-  private static final Logger log = LoggerFactory.getLogger(ContextsResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
   public ContextsResource(KafkaSchemaRegistry schemaRegistry) {
@@ -49,9 +49,14 @@ public class ContextsResource {
   }
 
   @GET
-  @ApiOperation(value = "Get a list of contexts.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")})
+  @Operation(summary = "List contexts",
+      description = "Retrieves a list of contexts.",
+      responses = {
+        @ApiResponse(responseCode = "200", description = "The contexts", content = @Content(
+            array = @ArraySchema(schema = @Schema(implementation = String.class)))),
+        @ApiResponse(responseCode = "500",
+                     description = "Error code 50001 -- Error in the backend data store")
+      })
   @PerformanceMetric("contexts.list")
   public List<String> listContexts() {
     try {
