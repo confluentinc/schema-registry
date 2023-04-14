@@ -67,7 +67,9 @@ public final class AvroRegistry implements TypeRegistry {
     } else {
       throw new IllegalArgumentException("argument is not of type Schema or GenericContainer");
     }
-    typeDescription(s);
+    if (s.getType() == Schema.Type.RECORD) {
+      typeDescription(s);
+    }
   }
 
   @Override

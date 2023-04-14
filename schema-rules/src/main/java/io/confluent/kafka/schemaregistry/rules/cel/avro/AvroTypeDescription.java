@@ -25,6 +25,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecord;
+import org.apache.avro.util.Utf8;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.pb.Checked;
 import org.projectnessie.cel.common.types.ref.FieldType;
@@ -121,7 +122,11 @@ public final class AvroTypeDescription implements TypeDescription {
     Schema schema = getSchema(value);
     GenericData data = getData(value);
     Schema.Field f = schema.getField(property);
-    return data.getField(value, f.name(), f.pos());
+    Object result = data.getField(value, f.name(), f.pos());
+    if (result instanceof Utf8) {
+      result = result.toString();
+    }
+    return result;
   }
 
   Type type() {
