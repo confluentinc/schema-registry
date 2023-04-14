@@ -57,6 +57,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecord;
+import org.apache.avro.util.Utf8;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -562,6 +563,9 @@ public class AvroSchema implements ParsedSchema {
           try (FieldContext fc = ctx.enterField(
               ctx, message, fullName, f.name(), getType(f.schema()), getInlineTags(f))) {
             Object value = data.getField(message, f.name(), f.pos());
+            if (value instanceof Utf8) {
+              value = value.toString();
+            }
             Object newValue = toTransformedMessage(ctx, f.schema(), value, transform);
             data.setField(message, f.name(), f.pos(), newValue);
           }
