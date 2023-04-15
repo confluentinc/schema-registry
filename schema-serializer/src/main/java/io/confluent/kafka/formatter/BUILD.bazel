@@ -1,0 +1,19 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "formatter",
+    srcs = [
+        "//schema-serializer/src/main/java/io/confluent/kafka/formatter:sources"
+    ],
+    deps = [
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers/subject/strategy:strategy" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers:agg=._subject" , 
+        "//schema-serializer:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

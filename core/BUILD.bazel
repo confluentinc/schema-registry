@@ -1,0 +1,72 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "//client:main_dependencies",
+        "//json-schema-provider:main_dependencies",
+        "//protobuf-provider:main_dependencies",
+        "@com_google_crypto_tink_tink",
+        "@com_google_guava_guava",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_utils",
+        "@io_confluent_logredactor",
+        "@io_confluent_rest_utils",
+        "@io_kcache_kcache",
+        "@io_netty_netty_codec",
+        "@io_swagger_core_v3_swagger_annotations",
+        "@io_swagger_core_v3_swagger_core",
+        "@org_apache_avro_avro",
+        "@org_apache_commons_commons_compress",
+        "@org_apache_kafka_kafka_2_13//:linkable",
+        "@org_apache_kafka_kafka_clients//:linkable",
+        "@org_apache_zookeeper_zookeeper",
+        "@org_glassfish_jersey_ext_jersey_bean_validation",
+        "@org_hibernate_validator_hibernate_validator",
+        "@org_slf4j_slf4j_reload4j"
+    ],
+    runtime_deps = [
+        "//core/src/main/resources:resources"
+    ],
+)
+     
+
+
+java_library(
+    name = "tests_dependencies",
+    testonly = 1,
+    exports = [
+        "//avro-serializer:main_dependencies",
+        "//protobuf-types:main_dependencies",
+        "@junit_junit",
+        "@org_apache_directory_api_api_all",
+        "@org_apache_directory_server_apacheds_core_api",
+        "@org_apache_directory_server_apacheds_interceptor_kerberos",
+        "@org_apache_directory_server_apacheds_jdbm_partition",
+        "@org_apache_directory_server_apacheds_ldif_partition",
+        "@org_apache_directory_server_apacheds_mavibot_partition",
+        "@org_apache_directory_server_apacheds_protocol_kerberos",
+        "@org_apache_directory_server_apacheds_protocol_ldap",
+        "@org_apache_directory_server_apacheds_protocol_shared",
+        "@org_apache_kafka_kafka_2_13_test//:linkable",
+        "@org_apache_kafka_kafka_clients_test//:linkable",
+        "@org_bouncycastle_bcpkix_jdk15on",
+        "@org_easymock_easymock",
+        "@org_mockito_mockito_core",
+        "main_dependencies"
+    ],
+    runtime_deps = [
+        "//core/src/test/resources:resources",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@org_apache_kafka_kafka_2_13//:linkable",
+        "@org_apache_kafka_kafka_2_13_test//:linkable",
+        "@org_apache_kafka_kafka_clients//:linkable",
+        "@org_apache_kafka_kafka_clients_test//:linkable"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

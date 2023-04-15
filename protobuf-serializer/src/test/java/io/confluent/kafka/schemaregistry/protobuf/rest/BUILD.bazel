@@ -1,0 +1,34 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "rest",
+    srcs = [
+        "//protobuf-serializer/src/test/java/io/confluent/kafka/schemaregistry/protobuf/rest:sources"
+    ],
+    deps = [
+        "//protobuf-provider/src/main/java/io/confluent/kafka/schemaregistry/protobuf:agg=._diff_dynamic" , 
+        "//protobuf-serializer/src/main/java/io/confluent/kafka/serializers/protobuf:protobuf" , 
+        "//protobuf-serializer/src/test/java/com/acme/glup:glup" , 
+        "//protobuf-serializer/src/test/java/io/confluent/connect/protobuf/test:test" , 
+        "//protobuf-serializer/src/test/java/io/confluent/kafka/serializers/protobuf/test:test" , 
+        "//protobuf-serializer/src/test/java/io/confluent/kafka/serializers/protobuf:protobuf" , 
+        "//protobuf-serializer:tests_dependencies" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers/subject/strategy:strategy" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers:agg=._subject"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "rest_test_discovery",
+    tests_from = [":rest"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

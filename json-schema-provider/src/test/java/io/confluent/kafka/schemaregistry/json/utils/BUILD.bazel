@@ -1,0 +1,27 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "utils",
+    srcs = [
+        "//json-schema-provider/src/test/java/io/confluent/kafka/schemaregistry/json/utils:sources"
+    ],
+    deps = [
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json/utils:utils" , 
+        "//json-schema-provider:tests_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "utils_test_discovery",
+    tests_from = [":utils"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

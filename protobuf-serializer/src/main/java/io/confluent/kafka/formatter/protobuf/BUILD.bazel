@@ -1,0 +1,20 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "protobuf",
+    srcs = [
+        "//protobuf-serializer/src/main/java/io/confluent/kafka/formatter/protobuf:sources"
+    ],
+    deps = [
+        "//protobuf-provider/src/main/java/io/confluent/kafka/schemaregistry/protobuf:agg=._diff_dynamic" , 
+        "//protobuf-serializer/src/main/java/io/confluent/kafka/serializers/protobuf:protobuf" , 
+        "//protobuf-serializer:main_dependencies" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/formatter:formatter"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

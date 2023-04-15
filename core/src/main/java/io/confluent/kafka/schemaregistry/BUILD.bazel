@@ -1,0 +1,30 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "agg=id_leaderelector/kafka_metrics_rest_rest/extensions_rest/filters_rest/resources_storage_storage/encoder_storage/serialization",
+    srcs = [
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/id:sources" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/leaderelector/kafka:sources" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/metrics:sources" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/rest/extensions:sources" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/rest/filters:sources" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/rest/resources:sources" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/rest:sources" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/storage/encoder:sources" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/storage/serialization:sources" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/storage:sources"
+    ],
+    deps = [
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/exceptions:exceptions" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/rest/exceptions:exceptions" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/storage/exceptions:exceptions" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry/utils:utils" , 
+        "//core:main_dependencies" , 
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json:agg=._diff" , 
+        "//protobuf-provider/src/main/java/io/confluent/kafka/schemaregistry/protobuf:agg=._diff_dynamic"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)

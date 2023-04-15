@@ -1,0 +1,34 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "encryption",
+    srcs = [
+        "//client-encryption/src/test/java/io/confluent/kafka/schemaregistry/encryption:sources"
+    ],
+    deps = [
+        "//avro-serializer/src/main/java/io/confluent/kafka/serializers:serializers" , 
+        "//client-encryption/src/test/java/io/confluent/kafka/schemaregistry/rules:rules" , 
+        "//client-encryption:tests_dependencies" , 
+        "//core/src/main/java/io/confluent/kafka/schemaregistry:agg=id_leaderelector/kafka_metrics_rest_rest/extensions_rest/filters_rest/resources_storage_storage/encoder_storage/serialization" , 
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json:agg=._diff" , 
+        "//json-schema-serializer/src/main/java/io/confluent/kafka/serializers/json:json" , 
+        "//protobuf-provider/src/main/java/io/confluent/kafka/schemaregistry/protobuf:agg=._diff_dynamic" , 
+        "//protobuf-serializer/src/main/java/io/confluent/kafka/serializers/protobuf:protobuf" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers:agg=._subject"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "encryption_test_discovery",
+    tests_from = [":encryption"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

@@ -1,0 +1,19 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "local",
+    srcs = [
+        "//client-encryption/src/main/java/io/confluent/kafka/schemaregistry/encryption/local:sources"
+    ],
+    deps = [
+        "//client-encryption/src/main/java/io/confluent/kafka/schemaregistry/encryption:encryption" , 
+        "//client-encryption:main_dependencies" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers:agg=._subject"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

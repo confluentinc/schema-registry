@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "jackson",
+    srcs = [
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json/jackson:sources"
+    ],
+    deps = [
+        "//json-schema-provider:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

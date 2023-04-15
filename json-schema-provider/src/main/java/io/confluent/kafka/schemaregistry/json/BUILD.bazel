@@ -1,0 +1,20 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "agg=._diff",
+    srcs = [
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json/diff:sources" , 
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json:sources"
+    ],
+    deps = [
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json/jackson:jackson" , 
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json/utils:utils" , 
+        "//json-schema-provider:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

@@ -1,0 +1,21 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "agg=._subject",
+    srcs = [
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers/subject:sources" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers:sources"
+    ],
+    deps = [
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers/context/strategy:strategy" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers/context:context" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers/subject/strategy:strategy" , 
+        "//schema-serializer:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

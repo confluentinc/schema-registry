@@ -1,0 +1,34 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "//client:main_dependencies",
+        "//protobuf-serializer:main_dependencies",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_utils",
+        "@org_apache_kafka_kafka_streams//:linkable"
+    ],
+)
+     
+
+
+java_library(
+    name = "tests_dependencies",
+    testonly = 1,
+    exports = [
+        "@junit_junit",
+        "main_dependencies"
+    ],
+    runtime_deps = [
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@org_apache_kafka_kafka_clients//:linkable",
+        "@org_apache_kafka_kafka_streams//:linkable"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

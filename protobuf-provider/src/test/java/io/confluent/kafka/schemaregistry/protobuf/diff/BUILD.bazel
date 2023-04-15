@@ -1,0 +1,27 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "diff",
+    srcs = [
+        "//protobuf-provider/src/test/java/io/confluent/kafka/schemaregistry/protobuf/diff:sources"
+    ],
+    deps = [
+        "//protobuf-provider/src/main/java/io/confluent/kafka/schemaregistry/protobuf:agg=._diff_dynamic" , 
+        "//protobuf-provider:tests_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "diff_test_discovery",
+    tests_from = [":diff"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

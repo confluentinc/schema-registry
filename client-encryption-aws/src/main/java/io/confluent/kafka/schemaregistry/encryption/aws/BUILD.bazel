@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "aws",
+    srcs = [
+        "//client-encryption-aws/src/main/java/io/confluent/kafka/schemaregistry/encryption/aws:sources"
+    ],
+    deps = [
+        "//client-encryption-aws:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

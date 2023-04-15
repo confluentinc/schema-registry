@@ -1,0 +1,21 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "json",
+    srcs = [
+        "//json-schema-serializer/src/main/java/io/confluent/kafka/formatter/json:sources"
+    ],
+    deps = [
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json/jackson:jackson" , 
+        "//json-schema-provider/src/main/java/io/confluent/kafka/schemaregistry/json:agg=._diff" , 
+        "//json-schema-serializer/src/main/java/io/confluent/kafka/serializers/json:json" , 
+        "//json-schema-serializer:main_dependencies" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/formatter:formatter"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

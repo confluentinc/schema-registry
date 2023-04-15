@@ -1,0 +1,19 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "//client:main_dependencies",
+        "//core:main_dependencies",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_utils",
+        "@io_confluent_logredactor",
+        "@org_slf4j_slf4j_reload4j"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

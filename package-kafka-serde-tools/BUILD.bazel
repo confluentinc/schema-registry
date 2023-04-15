@@ -1,0 +1,35 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "main_dependencies",
+    exports = [
+        "//avro-converter:main_dependencies",
+        "//avro-data:main_dependencies",
+        "//avro-serde:main_dependencies",
+        "//avro-serializer:main_dependencies",
+        "//client-encryption-aws:main_dependencies",
+        "//client-encryption-azure:main_dependencies",
+        "//client-encryption-gcp:main_dependencies",
+        "//client-encryption-hcvault:main_dependencies",
+        "//client-encryption:main_dependencies",
+        "//json-schema-converter:main_dependencies",
+        "//json-schema-serde:main_dependencies",
+        "//json-schema-serializer:main_dependencies",
+        "//json-serializer:main_dependencies",
+        "//protobuf-converter:main_dependencies",
+        "//protobuf-serde:main_dependencies",
+        "//protobuf-serializer:main_dependencies",
+        "//schema-rules:main_dependencies",
+        "@io_confluent_assembly_plugin_boilerplate_resources//:unpacked",
+        "@io_confluent_common_utils",
+        "@org_apache_kafka_connect_file",
+        "@org_apache_kafka_connect_json",
+        "@org_apache_kafka_connect_runtime"
+    ],
+)
+     
+
+filegroup(
+    name = "coordinates",
+    srcs = ["MANIFEST.MF"],
+)

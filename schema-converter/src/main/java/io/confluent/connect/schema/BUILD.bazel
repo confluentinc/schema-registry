@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "schema",
+    srcs = [
+        "//schema-converter/src/main/java/io/confluent/connect/schema:sources"
+    ],
+    deps = [
+        "//schema-converter:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

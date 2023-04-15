@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+
+    name = "utils",
+    srcs = [
+        "//client/src/main/java/io/confluent/kafka/schemaregistry/client/rest/utils:sources"
+    ],
+    deps = [
+        "//client:main_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+    
+)
+
+sources()

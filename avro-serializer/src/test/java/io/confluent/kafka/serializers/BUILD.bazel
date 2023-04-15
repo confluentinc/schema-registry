@@ -1,0 +1,31 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "serializers",
+    srcs = [
+        "//avro-serializer/src/test/java/io/confluent/kafka/serializers:sources"
+    ],
+    deps = [
+        "//avro-serializer/src/main/java/io/confluent/kafka/serializers:serializers" , 
+        "//avro-serializer/src/test/java/io/confluent/kafka/example:example" , 
+        "//avro-serializer:tests_dependencies" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers/context/strategy:strategy" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers/subject/strategy:strategy" , 
+        "//schema-serializer/src/main/java/io/confluent/kafka/serializers:agg=._subject"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "serializers_test_discovery",
+    tests_from = [":serializers"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()

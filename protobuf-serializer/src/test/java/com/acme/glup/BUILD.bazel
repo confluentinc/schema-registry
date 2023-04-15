@@ -1,0 +1,26 @@
+package(default_visibility = ["//visibility:public"])
+java_library(
+    name = "glup",
+    srcs = [
+        "//protobuf-serializer/src/test/java/com/acme/glup:sources"
+    ],
+    deps = [
+        "//protobuf-serializer:tests_dependencies"
+    ],
+    runtime_deps = [
+        
+    ],
+        testonly = 1,
+)
+
+java_test_discovery(
+    name = "glup_test_discovery",
+    tests_from = [":glup"],
+    size = "small",
+    print_discovered_classes = True,
+    suffixes = ["Test", "Tests", "IT", "E2E"],
+    prefixes = ["Test", "Tests", "IT", "E2E"],
+    testonly = 1
+)
+
+sources()
