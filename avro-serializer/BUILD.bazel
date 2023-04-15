@@ -1,3 +1,77 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
+load("@io_bazel_rules_avro//avro:avro.bzl", "avro_gen", "avro_java_library")
 # gazelle:java_module_granularity module
+
+avro_java_library(
+    name = "avro-resources",
+    srcs = glob([
+        "src/test/avro/*.avsc"
+    ]),
+    visibility = ["//:__subpackages__"],
+)
+
+java_library(
+    name = "avro-serializer",
+    srcs = [
+        "src/main/java/io/confluent/kafka/formatter/AvroMessageFormatter.java",
+        "src/main/java/io/confluent/kafka/formatter/AvroMessageReader.java",
+        "src/main/java/io/confluent/kafka/serializers/AbstractKafkaAvroDeserializer.java",
+        "src/main/java/io/confluent/kafka/serializers/AbstractKafkaAvroSerDeConfig.java",
+        "src/main/java/io/confluent/kafka/serializers/AbstractKafkaAvroSerializer.java",
+        "src/main/java/io/confluent/kafka/serializers/AvroData.java",
+        "src/main/java/io/confluent/kafka/serializers/GenericContainerWithVersion.java",
+        "src/main/java/io/confluent/kafka/serializers/KafkaAvroDecoder.java",
+        "src/main/java/io/confluent/kafka/serializers/KafkaAvroDeserializer.java",
+        "src/main/java/io/confluent/kafka/serializers/KafkaAvroDeserializerConfig.java",
+        "src/main/java/io/confluent/kafka/serializers/KafkaAvroSerializer.java",
+        "src/main/java/io/confluent/kafka/serializers/KafkaAvroSerializerConfig.java",
+        "src/main/java/io/confluent/kafka/serializers/NonRecordContainer.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = [
+        "//client:client",
+        "@maven//:org_apache_avro_avro",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+    deps = [
+        "//client:client",
+        "//schema-serializer",
+        ":avro-resources",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_guava_guava",
+        "@maven//:org_apache_avro_avro",
+        "@maven//:org_apache_kafka_kafka_2_13",
+        "@maven//:org_apache_kafka_kafka_clients",
+        "@maven//:org_slf4j_slf4j_api",
+    ],
+)
+
+java_test_suite(
+    name = "avro-serializer-tests",
+    runner = "junit4",
+    srcs = [
+        "src/test/java/io/confluent/kafka/example/ExtendedWidget.java",
+        "src/test/java/io/confluent/kafka/example/Widget.java",
+        "src/test/java/io/confluent/kafka/formatter/AvroMessageFormatterTest.java",
+        "src/test/java/io/confluent/kafka/formatter/KafkaAvroFormatterTest.java",
+        "src/test/java/io/confluent/kafka/serializers/AbstractKafkaAvroDeserializerTest.java",
+        "src/test/java/io/confluent/kafka/serializers/AvroSchemaTest.java",
+        "src/test/java/io/confluent/kafka/serializers/ContextNameStrategyTest.java",
+        "src/test/java/io/confluent/kafka/serializers/KafkaAvroSerializerTest.java",
+    ],
+    deps = [
+        ":avro-serializer",
+        ":avro-resources",
+        "//client",
+        "//core",
+        "//schema-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_guava_guava",
+        "@maven//:junit_junit",
+        "@maven//:org_apache_avro_avro",
+        "@maven//:org_apache_kafka_kafka_2_13",
+        "@maven//:org_apache_kafka_kafka_clients",
+        "@maven//:org_hamcrest_hamcrest_core",
+    ],
+)

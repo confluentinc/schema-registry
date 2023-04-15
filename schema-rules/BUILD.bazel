@@ -1,3 +1,71 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
 # gazelle:java_module_granularity module
+
+java_library(
+    name = "schema-rules",
+    srcs = [
+        "src/main/java/io/confluent/kafka/schemaregistry/rules/cel/CelExecutor.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/rules/cel/CelFieldExecutor.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroEnumDescription.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroEnumValue.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroFieldType.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroObjectT.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroRegistry.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroTypeDescription.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/rules/jsonata/JsonataExecutor.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = [
+        "@maven//:org_apache_avro_avro",
+        "@maven//:org_projectnessie_cel_cel_core",
+        "@maven//:org_projectnessie_cel_cel_generated_pb",
+    ],
+    deps = [
+        "//client",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_ibm_jsonata4java_JSONata4Java",
+        "@maven//:org_apache_avro_avro",
+        "@maven//:org_apache_kafka_kafka_clients",
+        "@maven//:org_projectnessie_cel_cel_core",
+        "@maven//:org_projectnessie_cel_cel_generated_pb",
+        "@maven//:org_projectnessie_cel_cel_jackson",
+        "@maven//:org_projectnessie_cel_cel_tools",
+    ],
+)
+
+java_test_suite(
+    name = "schema-rules-tests",
+    srcs = [
+        "src/test/java/io/confluent/kafka/schemaregistry/rules/NewWidgetProto.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/rules/PiiProto.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetWithRefProto.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/CelExecutorTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroScriptHostTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/rules/jsonata/JsonataExecutorTest.java",
+    ],
+    deps = [
+        ":schema-rules",
+        "//avro-serializer",
+        "//client",
+        "//core",
+        "//json-schema-provider",
+        "//json-schema-serializer",
+        "//protobuf-provider",
+        "//protobuf-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_annotations",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:junit_junit",
+        "@maven//:org_apache_avro_avro",
+        "@maven//:org_apache_kafka_kafka_clients",
+        "@maven//:org_mockito_mockito_core",
+        "@maven//:org_projectnessie_cel_cel_core",
+        "@maven//:org_projectnessie_cel_cel_tools",
+    ],
+)

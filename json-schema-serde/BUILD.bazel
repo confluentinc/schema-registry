@@ -1,3 +1,29 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
 # gazelle:java_module_granularity module
+
+java_library(
+    name = "json-schema-serde",
+    srcs = ["src/main/java/io/confluent/kafka/streams/serdes/json/KafkaJsonSchemaSerde.java"],
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//json-schema-serializer",
+        "//client",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+)
+
+java_test_suite(
+    name = "json-schema-serde-tests",
+    srcs = ["src/test/java/io/confluent/kafka/streams/serdes/json/KafkaJsonSchemaSerdeTest.java"],
+    deps = [
+        ":json-schema-serde",
+        "//avro-serializer",
+        "//core",
+        "//json-schema-provider",
+        "@maven//:com_fasterxml_jackson_core_jackson_annotations",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:junit_junit",
+        "@maven//:org_hamcrest_hamcrest_core",
+    ],
+)

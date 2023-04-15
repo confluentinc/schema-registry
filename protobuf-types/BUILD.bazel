@@ -1,3 +1,15 @@
 load("@rules_java//java:defs.bzl", "java_library")
-load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
-# gazelle:java_module_granularity module
+
+java_library(
+    name = "protobuf-types",
+    srcs = [
+        "src/main/java/io/confluent/protobuf/MetaProto.java",
+        "src/main/java/io/confluent/protobuf/type/Decimal.java",
+        "src/main/java/io/confluent/protobuf/type/DecimalOrBuilder.java",
+        "src/main/java/io/confluent/protobuf/type/DecimalProto.java",
+        "src/main/java/io/confluent/protobuf/type/utils/DecimalUtils.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = ["@maven//:com_google_protobuf_protobuf_java"],
+    deps = ["@maven//:com_google_protobuf_protobuf_java"],
+)

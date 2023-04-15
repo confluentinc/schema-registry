@@ -1,3 +1,38 @@
-load("@rules_java//java:defs.bzl", "java_library")
+load("@rules_java//java:defs.bzl", "java_binary", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
 # gazelle:java_module_granularity module
+
+java_library(
+    name = "benchmark",
+    srcs = ["src/main/java/io/confluent/schemaregistry/benchmark/SerdeBenchmark.java"],
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//core",
+        "//avro-serializer",
+        "//json-serializer",
+        "//json-schema-serializer",
+        "//protobuf-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_annotations",
+        "@maven//:com_google_guava_guava",
+        "@maven//:org_apache_kafka_kafka_clients",
+        "@maven//:org_openjdk_jmh_jmh_core",
+    ],
+)
+
+java_binary(
+    name = "SerdeBenchmark",
+    main_class = "io.confluent.schemaregistry.benchmark.SerdeBenchmark",
+    visibility = ["//visibility:public"],
+    runtime_deps = [":benchmark"],
+)
+
+java_test_suite(
+    name = "benchmark-tests",
+    srcs = ["src/test/java/io/confluent/schemaregistry/benchmark/SerdeBenchmarkTest.java"],
+    deps = [
+        ":benchmark",
+        "@maven//:com_google_guava_guava",
+        "@maven//:junit_junit",
+        "@maven//:org_hamcrest_hamcrest_core",
+    ],
+)

@@ -424,6 +424,7 @@ public class CachedSchemaRegistryClientTest {
     verify(restService);
   }
 
+  @Test
   public void testDeleteVersionNotInVersionCache() throws Exception {
     expect(client.deleteSchemaVersion(Collections.emptyMap(), SUBJECT_0, "0"))
         .andReturn(10);

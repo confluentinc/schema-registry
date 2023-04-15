@@ -1,3 +1,36 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
 # gazelle:java_module_granularity module
+
+java_library(
+    name = "client-encryption-aws",
+    srcs = ["src/main/java/io/confluent/kafka/schemaregistry/encryption/aws/AwsFieldEncryptionExecutor.java"],
+    visibility = ["//:__subpackages__"],
+    exports = ["@maven//:com_google_crypto_tink_tink"],
+    deps = [
+        "//client-encryption",
+        "@maven//:com_amazonaws_aws_java_sdk_core",
+        "@maven//:com_amazonaws_aws_java_sdk_kms",
+        "@maven//:com_google_crypto_tink_tink",
+        "@maven//:com_google_crypto_tink_tink_awskms",
+    ],
+)
+
+java_test_suite(
+    name = "client-encryption-aws-tests",
+    srcs = [
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/AwsFieldEncryptionExecutorTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/AwsFieldEncryptionProperties.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/FakeAwsKms.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/RestApiAwsFieldEncryptionTest.java",
+    ],
+    deps = [
+        "//client-encryption",
+        ":client-encryption-aws",
+        "//avro-serializer",
+        "//schema-serializer",
+        "@maven//:com_amazonaws_aws_java_sdk_core",
+        "@maven//:com_amazonaws_aws_java_sdk_kms",
+        "@maven//:com_google_crypto_tink_tink",
+    ],
+)
