@@ -211,3 +211,19 @@ maven_install(
 load("@maven//:defs.bzl", "pinned_maven_install")
 
 pinned_maven_install()
+
+# for avro plugin
+RULES_AVRO_VERSION = "a4c607a5610bea5649b1fb466ea8abcd9916121b"
+
+RULES_AVRO_SHA256 = "aebc8fc6f8a6a3476d8e8f6f6878fc1cf7a253399e1b2668963e896512be1cc6"
+
+http_archive(
+    name = "io_bazel_rules_avro",
+    sha256 = RULES_AVRO_SHA256,
+    strip_prefix = "rules_avro-%s" % RULES_AVRO_VERSION,
+    url = "https://github.com/chenrui333/rules_avro/archive/%s.tar.gz" % RULES_AVRO_VERSION,
+)
+
+load("@io_bazel_rules_avro//avro:avro.bzl", "avro_repositories")
+
+avro_repositories()

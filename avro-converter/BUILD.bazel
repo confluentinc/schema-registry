@@ -1,3 +1,44 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
 # gazelle:java_module_granularity module
+
+java_library(
+    name = "avro-converter",
+    srcs = [
+        "src/main/java/io/confluent/connect/avro/AvroConverter.java",
+        "src/main/java/io/confluent/connect/avro/AvroConverterConfig.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = ["@maven//:org_apache_kafka_connect_api"],
+    deps = [
+        "//avro-data",
+        "//avro-serializer",
+        "//client",
+        "//schema-serializer",
+        "@maven//:org_apache_avro_avro",
+        "@maven//:org_apache_commons_commons_compress",
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+)
+
+java_test_suite(
+    name = "avro-converter-tests",
+    srcs = [
+        "src/test/java/io/confluent/connect/avro/AvroConverterTest.java",
+        "src/test/java/io/confluent/connect/avro/DeprecatedTestTopicNameStrategy.java",
+    ],
+    deps = [
+        ":avro-converter",
+        "//avro-serializer",
+        "//client",
+        "//core",
+        "//schema-serializer",
+        "@maven//:com_google_guava_guava",
+        "@maven//:junit_junit",
+        "@maven//:org_apache_avro_avro",
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_hamcrest_hamcrest_core",
+        "@maven//:org_powermock_powermock_reflect",
+    ],
+)

@@ -1,3 +1,0 @@
-load("@rules_java//java:defs.bzl", "java_library")
-load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
-# gazelle:java_module_granularity module

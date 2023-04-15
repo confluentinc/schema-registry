@@ -1,3 +1,56 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
 # gazelle:java_module_granularity module
+
+java_library(
+    name = "json-schema-serializer",
+    srcs = [
+        "src/main/java/io/confluent/kafka/formatter/json/JsonSchemaMessageFormatter.java",
+        "src/main/java/io/confluent/kafka/formatter/json/JsonSchemaMessageReader.java",
+        "src/main/java/io/confluent/kafka/serializers/json/AbstractKafkaJsonSchemaDeserializer.java",
+        "src/main/java/io/confluent/kafka/serializers/json/AbstractKafkaJsonSchemaSerializer.java",
+        "src/main/java/io/confluent/kafka/serializers/json/JsonSchemaAndValue.java",
+        "src/main/java/io/confluent/kafka/serializers/json/KafkaJsonSchemaDeserializer.java",
+        "src/main/java/io/confluent/kafka/serializers/json/KafkaJsonSchemaDeserializerConfig.java",
+        "src/main/java/io/confluent/kafka/serializers/json/KafkaJsonSchemaSerializer.java",
+        "src/main/java/io/confluent/kafka/serializers/json/KafkaJsonSchemaSerializerConfig.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = [
+        "//json-schema-provider",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+    deps = [
+        "//client",
+        "//json-schema-provider",
+        "//schema-serializer",
+        "//json-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_github_erosb_everit_json_schema",
+        "@maven//:com_google_guava_guava",
+        "@maven//:org_apache_kafka_kafka_2_13",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+)
+
+java_test_suite(
+    name = "json-schema-serializer-tests",
+    srcs = [
+        "src/test/java/io/confluent/kafka/formatter/json/KafkaJsonSchemaFormatterTest.java",
+        "src/test/java/io/confluent/kafka/serializers/json/KafkaJsonSchemaSerializerTest.java",
+    ],
+    deps = [
+        ":json-schema-serializer",
+        "//client",
+        "//core",
+        "//json-schema-provider",
+        "@maven//:com_fasterxml_jackson_core_jackson_annotations",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_kjetland_mbknor_jackson_jsonschema_2_13",
+        "@maven//:junit_junit",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+)

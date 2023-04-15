@@ -1,3 +1,64 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
 # gazelle:java_module_granularity module
+
+java_library(
+    name = "protobuf-converter",
+    srcs = [
+        "src/main/java/io/confluent/connect/protobuf/ProtobufConverter.java",
+        "src/main/java/io/confluent/connect/protobuf/ProtobufConverterConfig.java",
+        "src/main/java/io/confluent/connect/protobuf/ProtobufData.java",
+        "src/main/java/io/confluent/connect/protobuf/ProtobufDataConfig.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = [
+        "//protobuf-provider",
+        "//protobuf-serializer",
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+    deps = [
+        "//protobuf-provider",
+        "//protobuf-serializer",
+        "//protobuf-types",
+        "//schema-converter",
+        "@maven//:com_google_api_grpc_proto_google_common_protos",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_google_protobuf_protobuf_java_util",
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+)
+
+java_test_suite(
+    name = "protobuf-converter-tests",
+    srcs = [
+        "src/test/java/io/confluent/connect/protobuf/ProtobufConverterTest.java",
+        "src/test/java/io/confluent/connect/protobuf/ProtobufDataTest.java",
+        "src/test/java/io/confluent/connect/protobuf/test/Key.java",
+        "src/test/java/io/confluent/connect/protobuf/test/KeyValue.java",
+        "src/test/java/io/confluent/connect/protobuf/test/KeyValueOptional.java",
+        "src/test/java/io/confluent/connect/protobuf/test/KeyValueProto2.java",
+        "src/test/java/io/confluent/connect/protobuf/test/KeyValueWrapper.java",
+        "src/test/java/io/confluent/connect/protobuf/test/MapReferences.java",
+        "src/test/java/io/confluent/connect/protobuf/test/NestedKeyValue.java",
+        "src/test/java/io/confluent/connect/protobuf/test/RecursiveKeyValue.java",
+    ],
+    deps = [
+        ":protobuf-converter",
+        "//avro-serializer",
+        "//client",
+        "//core",
+        "//protobuf-provider",
+        "//protobuf-serializer",
+        "//schema-serializer",
+        "@maven//:com_google_api_grpc_proto_google_common_protos",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_google_protobuf_protobuf_java_util",
+        "@maven//:com_squareup_wire_wire_schema_jvm",
+        "@maven//:junit_junit",
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_slf4j_slf4j_api",
+    ],
+)

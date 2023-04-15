@@ -1,3 +1,57 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
+load("@io_bazel_rules_avro//avro:avro.bzl", "avro_gen", "avro_java_library")
 # gazelle:java_module_granularity module
+
+java_library(
+    name = "avro-data",
+    srcs = [
+        "src/main/java/io/confluent/connect/avro/AvroData.java",
+        "src/main/java/io/confluent/connect/avro/AvroDataConfig.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = [
+        "@maven//:org_apache_avro_avro",
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+    deps = [
+        "//schema-converter",
+        "//avro-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:org_apache_avro_avro",
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_apache_kafka_kafka_clients",
+        "@maven//:org_slf4j_slf4j_api",
+    ],
+)
+
+avro_java_library(
+    name = "avro-resources",
+    srcs = glob([
+        "src/test/avro/*.avsc",
+    ]),
+)
+
+java_test_suite(
+    name = "avro-data-tests",
+    srcs = [
+        "src/test/java/io/confluent/connect/avro/AdditionalAvroDataTest.java",
+        "src/test/java/io/confluent/connect/avro/AvroDataTest.java",
+    ],
+    deps = [
+        ":avro-data",
+        ":avro-resources",
+        "//avro-converter",
+        "//avro-serializer",
+        "//core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_guava_guava",
+        "@maven//:junit_junit",
+        "@maven//:org_apache_avro_avro",
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_hamcrest_hamcrest_core",
+        "@maven//:org_powermock_powermock_reflect",
+        "@maven//:uk_co_jemos_podam_podam",
+    ],
+)

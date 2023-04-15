@@ -1,3 +1,48 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
 # gazelle:java_module_granularity module
+
+java_library(
+    name = "json-serializer",
+    srcs = [
+        "src/main/java/io/confluent/kafka/serializers/KafkaJsonDecoder.java",
+        "src/main/java/io/confluent/kafka/serializers/KafkaJsonDecoderConfig.java",
+        "src/main/java/io/confluent/kafka/serializers/KafkaJsonDeserializer.java",
+        "src/main/java/io/confluent/kafka/serializers/KafkaJsonDeserializerConfig.java",
+        "src/main/java/io/confluent/kafka/serializers/KafkaJsonSerializer.java",
+        "src/main/java/io/confluent/kafka/serializers/KafkaJsonSerializerConfig.java",
+        "src/main/java/io/confluent/kafka/serializers/jackson/Jackson.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = [
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+    deps = [
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_fasterxml_jackson_datatype_jackson_datatype_jdk8",
+        "@maven//:com_fasterxml_jackson_datatype_jackson_datatype_jsr310",
+        "@maven//:com_fasterxml_jackson_module_jackson_module_parameter_names",
+        "@maven//:org_apache_kafka_kafka_2_13",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+)
+
+java_test_suite(
+    name = "json-serializer-tests",
+    srcs = [
+        "src/test/java/io/confluent/kafka/serializers/KafkaJsonDecoderTest.java",
+        "src/test/java/io/confluent/kafka/serializers/KafkaJsonDeserializerTest.java",
+        "src/test/java/io/confluent/kafka/serializers/KafkaJsonSerializerTest.java",
+    ],
+    deps = [
+        ":json-serializer",
+        "//avro-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_annotations",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:junit_junit",
+        "@maven//:org_apache_kafka_kafka_2_13",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+)
