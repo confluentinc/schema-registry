@@ -39,7 +39,6 @@ public class CelFieldExecutor implements FieldRuleExecutor {
             .put("name", fieldCtx.getName())
             .put("typeName", fieldCtx.getType().name())
             .put("tags", new ArrayList<>(fieldCtx.getTags()))
-            .put("message", fieldCtx.getContainingMessage())
             .build());
   }
 }
