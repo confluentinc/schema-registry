@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package io.confluent.kafka.schemaregistry.rules;
 
+import "schema-rules/src/test/proto/Pii.proto";
+
 option java_package = "io.confluent.kafka.schemaregistry.rules";
 option java_outer_classname = "NewWidgetProto";
 option java_multiple_files = false;
@@ -13,8 +15,4 @@ message NewWidget {
     map<string, Pii> pii_map = 4;
     int32 height = 5;
     int32 version = 6;
-}
-
-message Pii {
-    string pii = 1;
 }

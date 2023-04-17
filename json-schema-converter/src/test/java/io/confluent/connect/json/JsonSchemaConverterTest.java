@@ -134,7 +134,7 @@ public class JsonSchemaConverterTest {
   public void testComplexWithDefaults() {
     int dateDefVal = 100;
     int timeDefVal = 1000 * 60 * 60 * 2;
-    long tsDefVal = 1000 * 60 * 60 * 24 * 365 + 100;
+    long tsDefVal = 1000L * 60 * 60 * 24 * 365 + 100;
     java.util.Date dateDef = Date.toLogical(Date.SCHEMA, dateDefVal);
     java.util.Date timeDef = Time.toLogical(Time.SCHEMA, timeDefVal);
     java.util.Date tsDef = Timestamp.toLogical(Timestamp.SCHEMA, tsDefVal);

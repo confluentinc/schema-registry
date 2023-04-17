@@ -21,6 +21,7 @@ java_test_suite(
         "//avro-serializer",
         "//core",
         "//protobuf-provider",
+        "//schema-serializer",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:junit_junit",
         "@maven//:org_hamcrest_hamcrest_core",

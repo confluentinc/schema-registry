@@ -1786,7 +1786,7 @@ public class RestApiTest extends ClusterTestHarness {
                     true));
     for (Integer i : expectedResponse) {
       try {
-        restApp.restClient.lookUpSubjectVersion(schemas.get(i-i), subject, false);
+        restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject, false);
         fail(String.format("Subject %s should not be found", subject));
       } catch (RestClientException rce) {
         assertEquals("Subject Not Found", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());

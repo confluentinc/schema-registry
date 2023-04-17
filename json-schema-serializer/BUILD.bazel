@@ -24,8 +24,8 @@ java_library(
     deps = [
         "//client",
         "//json-schema-provider",
-        "//schema-serializer",
         "//json-serializer",
+        "//schema-serializer",
         "@maven//:com_fasterxml_jackson_core_jackson_core",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:com_github_erosb_everit_json_schema",
@@ -50,6 +50,7 @@ java_test_suite(
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:com_google_guava_guava",
         "@maven//:com_kjetland_mbknor_jackson_jsonschema_2_13",
+        "@maven//:javax_validation_validation_api",
         "@maven//:junit_junit",
         "@maven//:org_apache_kafka_kafka_clients",
     ],

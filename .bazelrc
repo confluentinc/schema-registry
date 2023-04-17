@@ -1,0 +1,3 @@
+build --java_language_version=11
+build --java_runtime_version=remotejdk_11
+build --protocopt=--experimental_allow_proto3_optional

@@ -13,27 +13,8 @@ proto_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//:root_proto",
-        "//confluent:confluent_proto",
+        "//protobuf-types/src/main/proto:confluent_proto",
     ],
-)
-
-go_proto_library(
-    name = "io_confluent_kafka_schemaregistry_rules_go_proto",
-    importpath = "github.com/your/project/schema-rules/src/test/proto",
-    proto = ":io_confluent_kafka_schemaregistry_rules_proto",
-    visibility = ["//visibility:public"],
-    deps = [
-        "//:Pii.proto",
-        "//confluent:meta_proto",
-    ],
-)
-
-go_library(
-    name = "proto",
-    embed = [":io_confluent_kafka_schemaregistry_rules_go_proto"],
-    importpath = "github.com/your/project/schema-rules/src/test/proto",
-    visibility = ["//visibility:public"],
 )
 
 java_proto_library(

@@ -51,6 +51,7 @@ java_test_suite(
         "//core",
         "//protobuf-provider",
         "//protobuf-serializer",
+        "//protobuf-serializer:test-utils",
         "//schema-serializer",
         "@maven//:com_google_api_grpc_proto_google_common_protos",
         "@maven//:com_google_guava_guava",

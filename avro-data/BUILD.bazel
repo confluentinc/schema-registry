@@ -16,8 +16,8 @@ java_library(
         "@maven//:org_apache_kafka_kafka_clients",
     ],
     deps = [
-        "//schema-converter",
         "//avro-serializer",
+        "//schema-converter",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:org_apache_avro_avro",
         "@maven//:org_apache_kafka_connect_api",
@@ -27,10 +27,31 @@ java_library(
 )
 
 avro_java_library(
-    name = "avro-resources",
+    name = "avro-resources-1",
+    srcs = glob(
+        [
+            "src/test/avro/*.avsc",
+        ],
+        exclude = [
+            "src/test/avro/EnumStringUnion.avsc",
+            "src/test/avro/RepeatedTypeWithDocFull.avsc",
+        ],
+    ),
+)
+
+# We have to split them to a different package due to they contain
+# duplicated class definitions.
+avro_java_library(
+    name = "avro-resources-2",
     srcs = glob([
-        "src/test/avro/*.avsc",
+        "src/test/avro/EnumStringUnion.avsc",
+        "src/test/avro/RepeatedTypeWithDocFull.avsc",
     ]),
+)
+
+filegroup(
+    name = "avsc-srcs",
+    srcs = glob(["src/test/avro/*.avsc"]),
 )
 
 java_test_suite(
@@ -39,9 +60,11 @@ java_test_suite(
         "src/test/java/io/confluent/connect/avro/AdditionalAvroDataTest.java",
         "src/test/java/io/confluent/connect/avro/AvroDataTest.java",
     ],
+    data = [":avsc-srcs"],
     deps = [
         ":avro-data",
-        ":avro-resources",
+        ":avro-resources-1",
+        ":avro-resources-2",
         "//avro-converter",
         "//avro-serializer",
         "//core",
