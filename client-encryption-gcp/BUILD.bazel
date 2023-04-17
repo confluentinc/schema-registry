@@ -28,6 +28,8 @@ java_test_suite(
         ":client-encryption-gcp",
         "//avro-serializer",
         "//client-encryption",
+        "//client-encryption:test-utils",
+        "//schema-serializer",
         "@maven//:com_google_api_client_google_api_client",
         "@maven//:com_google_apis_google_api_services_cloudkms",
         "@maven//:com_google_crypto_tink_tink",

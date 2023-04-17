@@ -31,6 +31,8 @@ java_test_suite(
         ":client-encryption-azure",
         "//avro-serializer",
         "//client-encryption",
+        "//client-encryption:test-utils",
+        "//schema-serializer",
         "@maven//:com_azure_azure_security_keyvault_keys",
         "@maven//:com_google_crypto_tink_tink",
         "@maven//:org_mockito_mockito_core",

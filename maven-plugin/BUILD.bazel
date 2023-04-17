@@ -29,11 +29,11 @@ java_library(
     ],
     visibility = ["//:__subpackages__"],
     exports = [
-        "//client:client",
+        "//client",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
     ],
     deps = [
-        "//client:client",
+        "//client",
         "//json-schema-provider",
         "//protobuf-provider",
         "@maven//:com_fasterxml_jackson_core_jackson_core",
@@ -45,6 +45,22 @@ java_library(
         "@maven//:org_codehaus_plexus_plexus_classworlds",
         "@maven//:org_eclipse_sisu_org_eclipse_sisu_inject",
         "@maven//:org_eclipse_sisu_org_eclipse_sisu_plexus",
+    ],
+)
+
+java_library(
+    name = "test-utils",
+    srcs = [
+        "src/test/java/io/confluent/kafka/schemaregistry/maven/SchemaRegistryTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/maven/derive/schema/DeriveJsonSchemaTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/maven/derive/schema/DeriveSchemaTest.java",
+    ],
+    deps = [
+        ":maven-plugin",
+        "//json-schema-provider",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:junit_junit",
     ],
 )
 
@@ -68,6 +84,7 @@ java_test_suite(
     ],
     deps = [
         ":maven-plugin",
+        ":test-utils",
         "//avro-serializer",
         "//client",
         "//core",

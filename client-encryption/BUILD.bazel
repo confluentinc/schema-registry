@@ -15,12 +15,37 @@ java_library(
     deps = [
         "//client",
         "//schema-serializer",
+        "@maven//:com_google_code_findbugs_jsr305",
         "@maven//:com_google_crypto_tink_tink",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:org_apache_kafka_kafka_clients",
-        "@maven//:com_google_code_findbugs_jsr305",
+    ],
+)
+
+java_library(
+    name = "test-utils",
+    srcs = [
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/FieldEncryptionExecutorTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/FieldEncryptionProperties.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/RestApiFieldEncryptionTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":client-encryption",
+        "//avro-serializer",
+        "//core",
+        "//core:test-utils",
+        "//json-schema-provider",
+        "//json-schema-serializer",
+        "//protobuf-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_annotations",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_guava_guava_testlib",
+        "@maven//:junit_junit",
+        "@maven//:org_mockito_mockito_core",
     ],
 )
 
@@ -28,19 +53,17 @@ java_test_suite(
     name = "client-encryption-tests",
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/CryptorTest.java",
-        "src/test/java/io/confluent/kafka/schemaregistry/encryption/FieldEncryptionExecutorTest.java",
-        "src/test/java/io/confluent/kafka/schemaregistry/encryption/FieldEncryptionProperties.java",
-        "src/test/java/io/confluent/kafka/schemaregistry/encryption/RestApiFieldEncryptionTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/local/LocalFieldEncryptionExecutorTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/local/LocalFieldEncryptionProperties.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/local/RestApiLocalFieldEncryptionTest.java",
-        "src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java",
     ],
     deps = [
         ":client-encryption",
+        ":test-utils",
         "//avro-serializer",
         "//client",
         "//core",
+        "//core:test-utils",
         "//json-schema-provider",
         "//json-schema-serializer",
         "//protobuf-provider",

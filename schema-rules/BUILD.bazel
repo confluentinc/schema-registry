@@ -1,6 +1,16 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
+load("@io_bazel_rules_avro//avro:avro.bzl", "avro_java_library")
 # gazelle:java_module_granularity module
+
+avro_java_library(
+    name = "avro-resources",
+    srcs = glob(
+        [
+            "src/test/avro/*.avsc",
+        ],
+    ),
+)
 
 java_library(
     name = "schema-rules",
@@ -49,6 +59,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/rules/jsonata/JsonataExecutorTest.java",
     ],
     deps = [
+        ":avro-resources",
         ":schema-rules",
         "//avro-serializer",
         "//client",

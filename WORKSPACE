@@ -168,9 +168,11 @@ maven_install(
         "org.apache.kafka:connect-json:7.5.0-130-ccs",
         "org.apache.kafka:connect-runtime:7.5.0-130-ccs",
         "org.apache.kafka:kafka-clients:7.5.0-130-ccs",
+        "org.apache.kafka:kafka-clients:jar:test:7.5.0-130-ccs",
         #        "org.apache.kafka:kafka-clients:test",
         "org.apache.kafka:kafka-streams:7.5.0-130-ccs",
         "org.apache.kafka:kafka_2.13:7.5.0-130-ccs",
+        "org.apache.kafka:kafka_2.13:jar:test:7.5.0-130-ccs",
         #        "org.apache.kafka:kafka_2.13:test",
         "org.apache.maven.plugin-tools:maven-plugin-annotations:3.6.0",
         "org.apache.maven:maven-plugin-api:3.8.1",
@@ -193,6 +195,7 @@ maven_install(
         "org.yaml:snakeyaml:1.32",
         "uk.co.jemos.podam:podam:7.2.11.RELEASE",
     ],
+    maven_install_json = "//:maven_install.json",
     repositories = [
         # Private repositories are supported through HTTP Basic auth
         "https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven/",
@@ -205,7 +208,6 @@ maven_install(
         "https://maven.google.com",
     ],
     use_credentials_from_home_netrc_file = True,
-    maven_install_json = "//:maven_install.json",
 )
 
 load("@maven//:defs.bzl", "pinned_maven_install")
@@ -226,4 +228,4 @@ http_archive(
 
 load("@io_bazel_rules_avro//avro:avro.bzl", "avro_repositories")
 
-avro_repositories()
+avro_repositories(version = "1.11.0")
