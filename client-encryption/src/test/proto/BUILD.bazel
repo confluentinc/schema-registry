@@ -1,0 +1,20 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@rules_java//java:defs.bzl", "java_library", "java_proto_library")
+
+proto_library(
+    name = "io_confluent_kafka_schemaregistry_rules_proto",
+    srcs = ["Widget.proto"],
+    visibility = ["//visibility:public"],
+    deps = ["//confluent:confluent_proto"],
+)
+
+java_proto_library(
+    name = "io_confluent_kafka_schemaregistry_rules_java_proto",
+    deps = [":io_confluent_kafka_schemaregistry_rules_proto"],
+)
+
+java_library(
+    name = "io_confluent_kafka_schemaregistry_rules_java_library",
+    visibility = ["//:__subpackages__"],
+    exports = [":io_confluent_kafka_schemaregistry_rules_java_proto"],
+)
