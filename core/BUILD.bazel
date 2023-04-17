@@ -211,10 +211,10 @@ java_binary(
 
 avro_java_library(
     name = "avro-resources",
-    srcs = glob([
-        "src/test/avro/subrecord.avsc",
+    srcs = [
+        "src/test/avro/asubrecord.avsc",
         "src/test/avro/record.avsc",
-    ]),
+    ],
     files_not_dirs = True,
 )
 

@@ -127,6 +127,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/serializers/protobuf/test/UInt32ValueOuterClass.java",
     ],
     deps = [
+        ":test-utils",
         ":protobuf-serializer",
         "//avro-serializer",
         "//client",
