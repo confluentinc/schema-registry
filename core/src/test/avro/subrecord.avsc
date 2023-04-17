@@ -1,11 +1,11 @@
 {
-  "namespace": "ns",
+  "namespace": "otherns",
   "type": "record",
-  "name": "MyRecord",
+  "name": "Subrecord",
   "fields": [
     {
-      "name": "field1",
-      "type": "otherns.Subrecord"
+      "name": "field2",
+      "type": "string"
     }
   ]
 }
