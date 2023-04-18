@@ -20,9 +20,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
+import java.io.InterruptedIOException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.everit.json.schema.ValidationException;
 
 import java.io.ByteArrayOutputStream;
@@ -135,6 +137,8 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       byte[] bytes = out.toByteArray();
       out.close();
       return bytes;
+    } catch (InterruptedIOException e) {
+      throw new TimeoutException("Error serializing JSON message", e);
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error serializing JSON message", e);
     } catch (RestClientException e) {
