@@ -51,6 +51,8 @@ public class CelExecutor implements RuleExecutor {
 
   public static final String TYPE = "CEL";
 
+  public static final String IGNORE_GUARD_SEPARATOR = "ignore.guard.separator";
+
   private static final ObjectMapper mapper = new ObjectMapper();
 
   @Override
@@ -85,18 +87,22 @@ public class CelExecutor implements RuleExecutor {
       RuleContext ctx, Object obj, Map<String, Object> args)
       throws RuleException {
     String expr = ctx.rule().getExpr();
-    // An optional guard (followed by semicolon) can precede the expr
-    int index = expr.indexOf(';');
-    if (index >= 0) {
-      String guard = expr.substring(0, index);
-      if (!guard.trim().isEmpty()) {
-        Object guardResult = execute(guard, obj, args);
-        if (!Boolean.TRUE.equals(guardResult)) {
-          // Skip the expr
-          return ctx.rule().getKind() == RuleKind.CONDITION ? Boolean.TRUE : obj;
+    String ignoreGuardStr = ctx.getParameter(IGNORE_GUARD_SEPARATOR);
+    boolean ignoreGuard = Boolean.parseBoolean(ignoreGuardStr);
+    if (!ignoreGuard) {
+      // An optional guard (followed by semicolon) can precede the expr
+      int index = expr.indexOf(';');
+      if (index >= 0) {
+        String guard = expr.substring(0, index);
+        if (!guard.trim().isEmpty()) {
+          Object guardResult = execute(guard, obj, args);
+          if (!Boolean.TRUE.equals(guardResult)) {
+            // Skip the expr
+            return ctx.rule().getKind() == RuleKind.CONDITION ? Boolean.TRUE : obj;
+          }
         }
+        expr = expr.substring(index + 1);
       }
-      expr = expr.substring(index + 1);
     }
     return execute(expr, obj, args);
   }
