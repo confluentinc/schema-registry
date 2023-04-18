@@ -21,10 +21,12 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.Converter;
 
 import java.util.Collections;
@@ -102,6 +104,11 @@ public class ProtobufConverter implements Converter {
       } else {
         throw new DataException("Unsupported object of class " + v.getClass().getName());
       }
+    } catch (TimeoutException e) {
+      throw new RetriableException(String.format(
+          "Failed to serialize Protobuf data from topic %s :",
+          topic
+      ), e);
     } catch (SerializationException e) {
       throw new DataException(String.format(
           "Failed to serialize Protobuf data from topic %s :",
@@ -138,6 +145,11 @@ public class ProtobufConverter implements Converter {
             topic
         ));
       }
+    } catch (TimeoutException e) {
+      throw new RetriableException(String.format(
+          "Failed to deserialize data for topic %s to Protobuf: ",
+          topic
+      ), e);
     } catch (SerializationException e) {
       throw new DataException(String.format(
           "Failed to deserialize data for topic %s to Protobuf: ",

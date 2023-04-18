@@ -20,6 +20,7 @@ import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import java.io.InterruptedIOException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -40,6 +41,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 
 public abstract class AbstractKafkaProtobufSerializer<T extends Message>
@@ -146,6 +148,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       byte[] bytes = out.toByteArray();
       out.close();
       return bytes;
+    } catch (InterruptedIOException e) {
+      throw new TimeoutException("Error serializing Protobuf message", e);
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error serializing Protobuf message", e);
     } catch (RestClientException e) {
