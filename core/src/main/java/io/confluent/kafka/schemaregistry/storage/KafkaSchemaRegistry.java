@@ -568,13 +568,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           undeletedVersions.add(undeletedSchema);
         }
       }
-      Collections.reverse(undeletedVersions);
 
       Config config = getConfigInScope(subject);
       if (schemaId < 0) {
         parsedSchema = maybePopulateFromPrevious(config, schema, parsedSchema, undeletedVersions);
       }
 
+      Collections.reverse(undeletedVersions);
       final List<String> compatibilityErrorLogs = isCompatibleWithPrevious(
               config, parsedSchema, undeletedVersions);
       final boolean isCompatible = compatibilityErrorLogs.isEmpty();
