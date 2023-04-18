@@ -21,6 +21,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -50,6 +51,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaSerDe {
@@ -198,6 +200,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       AvroSchema subjectSchema = (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
       version = schemaRegistry.getVersion(subject, subjectSchema);
       return version;
+    } catch (InterruptedIOException e) {
+      String errorMessage = "Error retrieving Avro "
+          + getSchemaType(isKey)
+          + " schema version for id "
+          + id;
+      throw new TimeoutException(errorMessage, e);
     } catch (IOException e) {
       throw new SerializationException("Error retrieving Avro "
           + getSchemaType(isKey)
@@ -384,6 +392,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         String subjectName = isKey == null || strategyUsesSchema(isKey)
             ? getContext() : getSubject();
         return (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subjectName, schemaId);
+      } catch (InterruptedIOException e) {
+        String errorMessage = "Error retrieving Avro "
+            + getSchemaType(isKey)
+            + " schema for id "
+            + schemaId;
+        throw new TimeoutException(errorMessage, e);
       } catch (IOException e) {
         throw new SerializationException("Error retrieving Avro "
                                          + getSchemaType(isKey)
@@ -403,6 +417,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         return isDeprecatedSubjectNameStrategy(isKey)
             ? AvroSchemaUtils.copyOf(schemaFromRegistry())
             : (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(getSubject(), schemaId);
+      } catch (InterruptedIOException e) {
+        String errorMessage = "Error retrieving Avro "
+            + getSchemaType(isKey)
+            + " schema for id "
+            + schemaId;
+        throw new TimeoutException(errorMessage, e);
       } catch (IOException e) {
         throw new SerializationException("Error retrieving Avro "
                                          + getSchemaType(isKey)

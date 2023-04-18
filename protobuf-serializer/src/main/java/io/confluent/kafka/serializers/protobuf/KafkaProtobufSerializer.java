@@ -21,8 +21,10 @@ import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -95,6 +97,8 @@ public class KafkaProtobufSerializer<T extends Message>
         schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
             useLatestForDeps, latestCompatStrict, latestVersionsCache(),
             skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
+      } catch (InterruptedIOException e) {
+        throw new TimeoutException("Error serializing Protobuf message", e);
       } catch (IOException | RestClientException e) {
         throw new SerializationException("Error serializing Protobuf message", e);
       }

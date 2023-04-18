@@ -31,10 +31,12 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.Converter;
 
 import java.util.Collections;
@@ -95,6 +97,11 @@ public class AvroConverter implements Converter {
           headers,
           avroData.fromConnectData(schema, avroSchema, value),
           new AvroSchema(avroSchema));
+    } catch (TimeoutException e) {
+      throw new RetriableException(
+          String.format("Failed to serialize Avro data from topic %s :", topic),
+          e
+      );
     } catch (SerializationException e) {
       throw new DataException(
           String.format("Failed to serialize Avro data from topic %s :", topic),
@@ -130,6 +137,11 @@ public class AvroConverter implements Converter {
       }
       throw new DataException(
           String.format("Unsupported type returned during deserialization of topic %s ", topic)
+      );
+    } catch (TimeoutException e) {
+      throw new RetriableException(
+          String.format("Failed to deserialize data for topic %s to Avro: ", topic),
+          e
       );
     } catch (SerializationException e) {
       throw new DataException(
