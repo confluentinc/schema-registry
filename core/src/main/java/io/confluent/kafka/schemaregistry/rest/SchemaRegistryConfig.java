@@ -183,6 +183,18 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG =
       "schema.canonicalize.on.consume";
 
+  /**
+   * <code>schema.search.default.limit</code>
+   */
+  public static final String SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG = "schema.search.default.limit";
+  public static final int SCHEMA_SEARCH_DEFAULT_LIMIT_DEFAULT = 1000;
+
+  /**
+   * <code>schema.search.max.limit</code>
+   */
+  public static final String SCHEMA_SEARCH_MAX_LIMIT_CONFIG = "schema.search.max.limit";
+  public static final int SCHEMA_SEARCH_MAX_LIMIT_DEFAULT = 1000;
+
   public static final String METADATA_ENCODER_SECRET_CONFIG = "metadata.encoder.secret";
   public static final String METADATA_ENCODER_OLD_SECRET_CONFIG = "metadata.encoder.old.secret";
 
@@ -322,6 +334,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "The expiration in seconds for entries accessed in the cache.";
   protected static final String SCHEMA_CANONICALIZE_ON_CONSUME_DOC =
       "A list of schema types to canonicalize on consume, to be used if canonicalization changes.";
+  protected static final String SCHEMA_SEARCH_DEFAULT_LIMIT_DOC =
+      "The default limit for schema searches.";
+  protected static final String SCHEMA_SEARCH_MAX_LIMIT_DOC =
+      "The max limit for schema searches.";
   protected static final String METADATA_ENCODER_SECRET_DOC =
       "The secret used to encrypt and decrypt encoder keysets. "
       + "Use a random string with high entropy.";
@@ -512,6 +528,14 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, SCHEMA_CANONICALIZE_ON_CONSUME_DOC
+    )
+    .define(SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
+        SCHEMA_SEARCH_DEFAULT_LIMIT_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_SEARCH_DEFAULT_LIMIT_DOC
+    )
+    .define(SCHEMA_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
+        SCHEMA_SEARCH_MAX_LIMIT_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_SEARCH_MAX_LIMIT_DOC
     )
     .define(METADATA_ENCODER_SECRET_CONFIG, ConfigDef.Type.PASSWORD, null,
         ConfigDef.Importance.HIGH, METADATA_ENCODER_SECRET_DOC
