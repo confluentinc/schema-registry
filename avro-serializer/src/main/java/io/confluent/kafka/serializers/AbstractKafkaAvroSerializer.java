@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Properties;
@@ -38,6 +39,7 @@ import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSerDe {
 
@@ -160,6 +162,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       return bytes;
     } catch (ExecutionException ex) {
       throw new SerializationException("Error serializing Avro message", ex.getCause());
+    } catch (InterruptedIOException e) {
+      throw new TimeoutException("Error serializing Avro message", e);
     } catch (IOException | RuntimeException e) {
       // avro serialization can throw AvroRuntimeException, NullPointerException,
       // ClassCastException, etc
