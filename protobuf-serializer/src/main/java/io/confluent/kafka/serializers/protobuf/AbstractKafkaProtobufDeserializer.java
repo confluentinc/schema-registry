@@ -20,6 +20,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+import java.io.InterruptedIOException;
 import java.util.Objects;
 import java.util.Properties;
 import org.apache.kafka.common.config.ConfigException;
@@ -39,6 +40,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
+import org.apache.kafka.common.errors.TimeoutException;
 
 public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
@@ -171,6 +173,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       }
 
       return value;
+    } catch (InterruptedIOException e) {
+      throw new TimeoutException("Error deserializing Protobuf message for id " + id, e);
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error deserializing Protobuf message for id " + id, e);
     } catch (RestClientException e) {

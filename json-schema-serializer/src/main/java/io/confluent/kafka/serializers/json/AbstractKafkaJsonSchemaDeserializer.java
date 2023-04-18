@@ -20,10 +20,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.InterruptedIOException;
 import java.util.Properties;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
@@ -188,6 +190,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       }
 
       return value;
+    } catch (InterruptedIOException e) {
+      throw new TimeoutException("Error deserializing JSON message for id " + id, e);
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error deserializing JSON message for id " + id, e);
     } catch (RestClientException e) {
