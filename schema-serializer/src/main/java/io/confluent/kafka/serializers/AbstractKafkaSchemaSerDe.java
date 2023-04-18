@@ -669,13 +669,17 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   @Override
   public void close() {
-    for (Map.Entry<String, RuleAction> entry : ruleActions.entrySet()) {
-      closeQuietly(entry.getValue(), "rule action " + entry.getKey());
+    if (ruleActions != null) {
+      for (Map.Entry<String, RuleAction> entry : ruleActions.entrySet()) {
+        closeQuietly(entry.getValue(), "rule action " + entry.getKey());
+      }
     }
-    for (Map.Entry<String, Map<String, RuleExecutor>> outer : ruleExecutors.entrySet()) {
-      for (Map.Entry<String, RuleExecutor> inner : outer.getValue().entrySet()) {
-        closeQuietly(
-            inner.getValue(), "rule executor " + inner.getKey() + " for " + outer.getKey());
+    if (ruleExecutors != null) {
+      for (Map.Entry<String, Map<String, RuleExecutor>> outer : ruleExecutors.entrySet()) {
+        for (Map.Entry<String, RuleExecutor> inner : outer.getValue().entrySet()) {
+          closeQuietly(
+              inner.getValue(), "rule executor " + inner.getKey() + " for " + outer.getKey());
+        }
       }
     }
   }
