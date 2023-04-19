@@ -22,7 +22,7 @@ public class RestClientException extends Exception {
   private final int errorCode;
 
   public RestClientException(final String message, final int status, final int errorCode) {
-    super(message + "; error code: " + errorCode);
+    super(message + "; error code: " + errorCode + "; status code: " + status);
     this.status = status;
     this.errorCode = errorCode;
   }
