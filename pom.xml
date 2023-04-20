@@ -94,7 +94,8 @@
         <proto-google-common-protos.version>2.5.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <okio.version>3.0.0</okio.version>
-        <tink.version>1.8.0</tink.version>
+        <tink.version>1.9.0</tink.version>
+        <tink.kms.version>1.8.0</tink.kms.version>
         <wire.version>4.4.3</wire.version>
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.4.0-0</io.confluent.schema-registry.version>
@@ -262,12 +263,12 @@
             <dependency>
                 <groupId>com.google.crypto.tink</groupId>
                 <artifactId>tink-awskms</artifactId>
-                <version>${tink.version}</version>
+                <version>${tink.kms.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.crypto.tink</groupId>
                 <artifactId>tink-gcpkms</artifactId>
-                <version>${tink.version}</version>
+                <version>${tink.kms.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.api-client</groupId>
