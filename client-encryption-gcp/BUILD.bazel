@@ -35,5 +35,7 @@ java_test_suite(
         "@maven//:com_google_crypto_tink_tink",
         "@maven//:com_google_http_client_google_http_client",
         "@maven//:com_google_http_client_google_http_client_gson",
+        "@maven//:com_squareup_okio_okio",
+        "@maven//:com_squareup_okio_okio_jvm",
     ],
 )

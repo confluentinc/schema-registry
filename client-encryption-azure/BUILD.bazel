@@ -35,6 +35,8 @@ java_test_suite(
         "//schema-serializer",
         "@maven//:com_azure_azure_security_keyvault_keys",
         "@maven//:com_google_crypto_tink_tink",
+        "@maven//:com_squareup_okio_okio",
+        "@maven//:com_squareup_okio_okio_jvm",
         "@maven//:org_mockito_mockito_core",
     ],
 )

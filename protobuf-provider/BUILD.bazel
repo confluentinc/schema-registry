@@ -39,12 +39,12 @@ java_library(
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:com_google_protobuf_protobuf_java_util",
+        "@maven//:com_squareup_wire_wire_runtime_jvm",
         "@maven//:com_squareup_wire_wire_schema_jvm",
         "@maven//:org_apache_commons_commons_lang3",
         "@maven//:org_apache_kafka_kafka_clients",
         "@maven//:org_jetbrains_kotlin_kotlin_stdlib",
         "@maven//:org_slf4j_slf4j_api",
-        "@maven//:com_squareup_wire_wire_runtime_jvm",
     ],
 )
 
@@ -62,6 +62,8 @@ java_test_suite(
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_squareup_okio_okio",
+        "@maven//:com_squareup_okio_okio_jvm",
         "@maven//:com_squareup_wire_wire_schema_jvm",
         "@maven//:junit_junit",
         "@maven//:org_hamcrest_hamcrest_core",
