@@ -33,5 +33,7 @@ java_test_suite(
         "@maven//:com_amazonaws_aws_java_sdk_core",
         "@maven//:com_amazonaws_aws_java_sdk_kms",
         "@maven//:com_google_crypto_tink_tink",
+        "@maven//:com_squareup_okio_okio",
+        "@maven//:com_squareup_okio_okio_jvm",
     ],
 )

@@ -57,6 +57,8 @@ java_test_suite(
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:com_google_protobuf_protobuf_java_util",
+        "@maven//:com_squareup_okio_okio",
+        "@maven//:com_squareup_okio_okio_jvm",
         "@maven//:com_squareup_wire_wire_schema_jvm",
         "@maven//:junit_junit",
         "@maven//:org_apache_kafka_connect_api",

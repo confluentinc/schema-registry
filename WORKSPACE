@@ -191,7 +191,7 @@ maven_install(
         "org.powermock:powermock-module-junit4:2.0.9",
         "org.projectnessie.cel:cel-jackson:0.3.11",
         "org.projectnessie.cel:cel-tools:0.3.11",
-        "org.slf4j:slf4j-reload4j:1.7.36",
+        "org.slf4j:slf4j-reload4j:2.0.3",
         "org.yaml:snakeyaml:1.32",
         "uk.co.jemos.podam:podam:7.2.11.RELEASE",
     ],

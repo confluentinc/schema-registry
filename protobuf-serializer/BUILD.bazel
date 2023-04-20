@@ -88,6 +88,8 @@ java_library(
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:com_google_api_grpc_proto_google_common_protos",
         "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_squareup_okio_okio",
+        "@maven//:com_squareup_okio_okio_jvm",
         "@maven//:junit_junit",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
@@ -127,8 +129,8 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/serializers/protobuf/test/UInt32ValueOuterClass.java",
     ],
     deps = [
-        ":test-utils",
         ":protobuf-serializer",
+        ":test-utils",
         "//avro-serializer",
         "//client",
         "//core",
