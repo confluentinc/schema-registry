@@ -216,14 +216,16 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   private static byte[] toBytes(FieldContext fieldCtx, Object obj) {
     switch (fieldCtx.getType()) {
       case BYTES:
-        if (obj instanceof ByteString) {
-          return ((ByteString) obj).toByteArray();
-        } else if (obj instanceof ByteBuffer) {
+        if (obj instanceof ByteBuffer) {
           return ((ByteBuffer) obj).array();
-        } else if (obj instanceof String) {
-          return ((String) obj).getBytes(StandardCharsets.UTF_8);
+        } else if (obj instanceof ByteString) {
+          return ((ByteString) obj).toByteArray();
+        } else if (obj instanceof byte[]) {
+          return (byte[]) obj;
+        } else {
+          throw new IllegalArgumentException(
+              "Unrecognized bytes object of type: " + obj.getClass().getName());
         }
-        return (byte[]) obj;
       case STRING:
         return obj.toString().getBytes(StandardCharsets.UTF_8);
       default:
