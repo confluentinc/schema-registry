@@ -24,10 +24,12 @@ import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.daead.DeterministicAeadConfig;
+import com.google.protobuf.ByteString;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
+import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -215,7 +217,16 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   private static byte[] toBytes(FieldContext fieldCtx, Object obj) {
     switch (fieldCtx.getType()) {
       case BYTES:
-        return (byte[]) obj;
+        if (obj instanceof ByteBuffer) {
+          return ((ByteBuffer) obj).array();
+        } else if (obj instanceof ByteString) {
+          return ((ByteString) obj).toByteArray();
+        } else if (obj instanceof byte[]) {
+          return (byte[]) obj;
+        } else {
+          throw new IllegalArgumentException(
+              "Unrecognized bytes object of type: " + obj.getClass().getName());
+        }
       case STRING:
         return obj.toString().getBytes(StandardCharsets.UTF_8);
       default:
@@ -364,9 +375,15 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
             }
             ciphertext = cryptor.encrypt(dek.getRawDek(), plaintext, EMPTY_AAD);
             count++;
-            return Base64.getEncoder().encodeToString(ciphertext);
+            if (fieldCtx.getType() == Type.STRING) {
+              ciphertext = Base64.getEncoder().encode(ciphertext);
+            }
+            return toObject(fieldCtx, ciphertext);
           case READ:
-            ciphertext = Base64.getDecoder().decode(fieldValue.toString());
+            ciphertext = toBytes(fieldCtx, fieldValue);
+            if (fieldCtx.getType() == Type.STRING) {
+              ciphertext = Base64.getDecoder().decode(ciphertext);
+            }
             plaintext = cryptor.decrypt(dek.getRawDek(), ciphertext, EMPTY_AAD);
             count++;
             Object result = toObject(fieldCtx, plaintext);

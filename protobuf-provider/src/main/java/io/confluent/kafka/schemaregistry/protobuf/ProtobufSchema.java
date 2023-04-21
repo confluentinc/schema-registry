@@ -24,6 +24,7 @@ import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.AnyProto;
 import com.google.protobuf.ApiProto;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.DescriptorProto.ExtensionRange;
@@ -2326,12 +2327,20 @@ public class ProtobufSchema implements ParsedSchema {
         try {
           Set<String> ruleTags = ctx.rule().getTags();
           if (ruleTags.isEmpty()) {
-            return transform.transform(ctx, fieldCtx, message);
+            Object result = transform.transform(ctx, fieldCtx, message);
+            if (result instanceof byte[]) {
+              result = ByteString.copyFrom((byte[]) result);
+            }
+            return result;
           } else {
             Set<String> intersect = new HashSet<>(fieldCtx.getTags());
             intersect.retainAll(ruleTags);
             if (!intersect.isEmpty()) {
-              return transform.transform(ctx, fieldCtx, message);
+              Object result = transform.transform(ctx, fieldCtx, message);
+              if (result instanceof byte[]) {
+                result = ByteString.copyFrom((byte[]) result);
+              }
+              return result;
             }
           }
         } catch (RuleException e) {
