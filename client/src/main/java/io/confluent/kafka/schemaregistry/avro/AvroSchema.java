@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -576,12 +577,20 @@ public class AvroSchema implements ParsedSchema {
           try {
             Set<String> ruleTags = ctx.rule().getTags();
             if (ruleTags.isEmpty()) {
-              return transform.transform(ctx, fieldCtx, message);
+              Object result = transform.transform(ctx, fieldCtx, message);
+              if (result instanceof byte[]) {
+                result = ByteBuffer.wrap((byte[]) result);
+              }
+              return result;
             } else {
               Set<String> intersect = new HashSet<>(fieldCtx.getTags());
               intersect.retainAll(ruleTags);
               if (!intersect.isEmpty()) {
-                return transform.transform(ctx, fieldCtx, message);
+                Object result = transform.transform(ctx, fieldCtx, message);
+                if (result instanceof byte[]) {
+                  result = ByteBuffer.wrap((byte[]) result);
+                }
+                return result;
               }
             }
           } catch (RuleException e) {

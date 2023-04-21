@@ -34,6 +34,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.crypto.tink.aead.AeadConfig;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -49,6 +50,8 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
+import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.PiiBytes;
+import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.WidgetBytes;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
@@ -59,6 +62,8 @@ import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -103,6 +108,7 @@ public abstract class FieldEncryptionExecutorTest {
   private final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
   private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   private final KafkaProtobufSerializer<Widget> protobufSerializer;
+  private final KafkaProtobufSerializer<WidgetBytes> protobufSerializerBytes;
   private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   private final KafkaAvroSerializer badSerializer;
   private final KafkaAvroDeserializer badDeserializer;
@@ -152,6 +158,7 @@ public abstract class FieldEncryptionExecutorTest {
     jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, clientProps);
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
+    protobufSerializerBytes = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
     protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, clientProps);
 
     Map<String, Object> badClientProps = new HashMap<>(clientProps);
@@ -224,6 +231,26 @@ public abstract class FieldEncryptionExecutorTest {
     return avroRecord;
   }
 
+  private Schema createUserBytesSchema() {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
+        + "\"name\": \"User\","
+        + "\"fields\": ["
+        + "{\"name\": \"name\", \"type\": [\"null\", \"bytes\"], \"confluent:tags\": [\"PII\", \"PII3\"]},"
+        + "{\"name\": \"name2\", \"type\": [\"null\", \"bytes\"], \"confluent:tags\": [\"PII2\"]}"
+        + "]}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(userSchema);
+    return schema;
+  }
+
+  private IndexedRecord createUserBytesRecord() {
+    Schema schema = createUserBytesSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", ByteBuffer.wrap("testUser".getBytes(StandardCharsets.UTF_8)));
+    avroRecord.put("name2", ByteBuffer.wrap("testUser2".getBytes(StandardCharsets.UTF_8)));
+    return avroRecord;
+  }
+
   private Schema createWidgetSchema() {
     String userSchema = "{\"type\":\"record\",\"name\":\"OldWidget\",\"namespace\":\"io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest\",\"fields\":\n"
         + "[{\"name\": \"name\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]},\n"
@@ -264,6 +291,29 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerBytes() throws Exception {
+    IndexedRecord avroRecord = createUserBytesRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserBytesSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = new Metadata(
+        Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals(ByteBuffer.wrap("testUser".getBytes(StandardCharsets.UTF_8)), record.get("name"));
   }
 
   @Test
@@ -667,6 +717,64 @@ public abstract class FieldEncryptionExecutorTest {
         "Returned object should be a NewWidget",
         ImmutableList.of("345", "678"),
         ssnMapValues
+    );
+  }
+
+  @Test
+  public void testKafkaProtobufSerializerBytes() throws Exception {
+    WidgetBytes widget = WidgetBytes.newBuilder()
+        .setName(ByteString.copyFromUtf8("alice"))
+        .addSsn(ByteString.copyFromUtf8("123"))
+        .addSsn(ByteString.copyFromUtf8("456"))
+        .addPiiArray(PiiBytes.newBuilder().setPii(ByteString.copyFromUtf8("789")).build())
+        .addPiiArray(PiiBytes.newBuilder().setPii(ByteString.copyFromUtf8("012")).build())
+        .setSize(123)
+        .build();
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = new Metadata(
+        Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    protobufSchema = protobufSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    int expectedEncryptions = 5;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(protobufSerializerBytes);
+    byte[] bytes = protobufSerializerBytes.serialize(topic, headers, widget);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(protobufDeserializer);
+    Object obj = protobufDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+
+    assertTrue(
+        "Returned object should be a Widget",
+        DynamicMessage.class.isInstance(obj)
+    );
+    DynamicMessage dynamicMessage = (DynamicMessage) obj;
+    Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ByteString.copyFromUtf8("alice"),
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of(ByteString.copyFromUtf8("123"), ByteString.copyFromUtf8("456")),
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("ssn"))
+    );
+    List<ByteString> ssnArrayValues = ((List<?>)((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("pii_array")))
+        .stream()
+        .map(o -> {
+          DynamicMessage msg = (DynamicMessage) o;
+          return (ByteString) msg.getField(msg.getDescriptorForType().findFieldByName("pii"));
+        })
+        .collect(Collectors.toList());
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of(ByteString.copyFromUtf8("789"), ByteString.copyFromUtf8("012")),
+        ssnArrayValues
     );
   }
 
