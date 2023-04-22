@@ -240,12 +240,14 @@
                 <artifactId>azure-core</artifactId>
                 <version>1.33.0</version>
             </dependency>
-            <!-- after updating azure-identity (when new version is available)
-                 please check if teh pin of msal4j can be removed -->
+            <!-- Updating azure-identity from 1.7.3. to 1.8.2 per rayokota suggestion
+                 this does not resolve CVE-2023-1370, and pin of msal4j is still required
+                 after updating azure-identity (when new version is available)
+                 please check if the pin of msal4j can be removed -->
             <dependency>
                 <groupId>com.azure</groupId>
                 <artifactId>azure-identity</artifactId>
-                <version>1.7.3</version>
+                <version>1.8.2</version>
             </dependency>
             <dependency>
                 <groupId>com.azure</groupId>
