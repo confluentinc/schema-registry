@@ -240,15 +240,26 @@
                 <artifactId>azure-core</artifactId>
                 <version>1.33.0</version>
             </dependency>
+            <!-- Updating azure-identity from 1.7.3. to 1.8.2 per rayokota suggestion
+                 this does not resolve CVE-2023-1370, and pin of msal4j is still required
+                 after updating azure-identity (when new version is available)
+                 please check if the pin of msal4j can be removed -->
             <dependency>
                 <groupId>com.azure</groupId>
                 <artifactId>azure-identity</artifactId>
-                <version>1.7.3</version>
+                <version>1.8.2</version>
             </dependency>
             <dependency>
                 <groupId>com.azure</groupId>
                 <artifactId>azure-security-keyvault-keys</artifactId>
                 <version>4.5.1</version>
+            </dependency>
+            <!-- subdependncy of azure-identity, security hygiene fix for CVE-2023-1370
+                 updated mslal4j brings updated nimbus that does not ship vulnderable json-smart -->
+            <dependency>
+                <groupId>com.microsoft.azure</groupId>
+                <artifactId>msal4j</artifactId>
+                <version>1.13.8</version>
             </dependency>
             <dependency>
                 <groupId>com.bettercloud</groupId>
