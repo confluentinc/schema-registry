@@ -27,6 +27,7 @@ java_library(
         "src/main/java/io/confluent/kafka/schemaregistry/maven/derive/schema/DeriveSchema.java",
         "src/main/java/io/confluent/kafka/schemaregistry/maven/derive/schema/DeriveSchemaUtils.java",
     ],
+    resources = glob(["src/main/resources/**/*"]),
     visibility = ["//:__subpackages__"],
     exports = [
         "//client",
