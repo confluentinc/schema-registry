@@ -86,6 +86,9 @@ java_library(
         "src/main/java/io/confluent/kafka/schemaregistry/utils/QualifiedSubject.java",
         "src/main/java/io/confluent/kafka/schemaregistry/utils/WildcardMatcher.java",
     ],
+    resources = glob([
+        "src/main/resources/**/*",
+    ]),
     visibility = ["//:__subpackages__"],
     exports = [
         "@maven//:com_fasterxml_jackson_core_jackson_databind",

@@ -64,6 +64,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/json/diff/SchemaDiffTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/json/utils/MaximumCardinalityMatchTest.java",
     ],
+    resources = glob(["src/test/resources/**/*"]),
     deps = [
         ":json-schema-provider",
         "//client",

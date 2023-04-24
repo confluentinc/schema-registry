@@ -6,7 +6,7 @@ load("@io_bazel_rules_avro//avro:avro.bzl", "avro_gen", "avro_java_library")
 avro_java_library(
     name = "avro-resources",
     srcs = glob([
-        "src/test/avro/*.avsc"
+        "src/test/avro/*.avsc",
     ]),
     visibility = ["//:__subpackages__"],
 )
@@ -30,15 +30,17 @@ java_library(
     ],
     visibility = ["//:__subpackages__"],
     exports = [
-        "//client:client",
+        "//client",
         "@maven//:org_apache_avro_avro",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
     deps = [
-        "//client:client",
-        "//schema-serializer",
         ":avro-resources",
+        "//client",
+        "//schema-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_fasterxml_jackson_dataformat_jackson_dataformat_csv",
         "@maven//:com_google_guava_guava",
         "@maven//:org_apache_avro_avro",
         "@maven//:org_apache_kafka_kafka_2_13",
@@ -49,7 +51,6 @@ java_library(
 
 java_test_suite(
     name = "avro-serializer-tests",
-    runner = "junit4",
     srcs = [
         "src/test/java/io/confluent/kafka/example/ExtendedWidget.java",
         "src/test/java/io/confluent/kafka/example/Widget.java",
@@ -60,9 +61,10 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/serializers/ContextNameStrategyTest.java",
         "src/test/java/io/confluent/kafka/serializers/KafkaAvroSerializerTest.java",
     ],
+    runner = "junit4",
     deps = [
-        ":avro-serializer",
         ":avro-resources",
+        ":avro-serializer",
         "//client",
         "//core",
         "//schema-serializer",
