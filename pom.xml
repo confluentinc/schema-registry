@@ -86,9 +86,9 @@
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.6.0</kotlin.version>
         <antlr.version>4.11.1</antlr.version>
-        <cel-version>0.3.11</cel-version>
+        <cel-version>0.3.15</cel-version>
         <google.api-client.version>1.35.2</google.api-client.version>
-        <jsonata-version>2.2.5</jsonata-version>
+        <jsonata-version>2.4.1</jsonata-version>
         <json-schema.version>1.14.1</json-schema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.5.1</proto-google-common-protos.version>
@@ -238,7 +238,7 @@
             <dependency>
                 <groupId>com.azure</groupId>
                 <artifactId>azure-core</artifactId>
-                <version>1.33.0</version>
+                <version>1.38.0</version>
             </dependency>
             <!-- Updating azure-identity from 1.7.3. to 1.8.2 per rayokota suggestion
                  this does not resolve CVE-2023-1370, and pin of msal4j is still required
@@ -252,10 +252,10 @@
             <dependency>
                 <groupId>com.azure</groupId>
                 <artifactId>azure-security-keyvault-keys</artifactId>
-                <version>4.5.1</version>
+                <version>4.6.1</version>
             </dependency>
-            <!-- subdependncy of azure-identity, security hygiene fix for CVE-2023-1370
-                 updated mslal4j brings updated nimbus that does not ship vulnderable json-smart -->
+            <!-- subdependency of azure-identity, security hygiene fix for CVE-2023-1370
+                 updated mslal4j brings updated nimbus that does not ship vulnerable json-smart -->
             <dependency>
                 <groupId>com.microsoft.azure</groupId>
                 <artifactId>msal4j</artifactId>
