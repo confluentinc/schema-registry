@@ -34,9 +34,12 @@ public class StaticTokenCredentialProviderTest {
   public void testBearerToken() throws MalformedURLException {
     Map<String, Object> clientConfig = new HashMap<>();
     clientConfig.put(SchemaRegistryClientConfig.BEARER_AUTH_TOKEN_CONFIG, "auth-token");
+    clientConfig.put(SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, "lsrc-xyz123");
     StaticTokenCredentialProvider provider = new StaticTokenCredentialProvider();
     provider.configure(clientConfig);
     Assert.assertEquals("auth-token", provider.getBearerToken(new URL("http://localhost")));
+    Assert.assertEquals("lsrc-xyz123", provider.getTargetSchemaRegistry());
+    Assert.assertNull(provider.getTargetIdentityPoolId());
   }
 
   @Test(expected = ConfigException.class)
