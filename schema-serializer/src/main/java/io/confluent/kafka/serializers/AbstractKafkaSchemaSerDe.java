@@ -108,6 +108,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected Map<String, Map<String, RuleBase>> ruleActions;
   protected boolean isKey;
 
+  private static final ErrorAction ERROR_ACTION = new ErrorAction();
+  private static final NoneAction NONE_ACTION = new NoneAction();
+
   // Track the key for use when deserializing/serializing the value, such as for a DLQ.
   // We take advantage of the fact the value serde is called after the key serde.
   private static final ThreadLocal<Object> key = new ThreadLocal<>();
@@ -232,9 +235,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   private RuleAction getRuleAction(RuleContext ctx, String actionName) {
     if (actionName.equals(ErrorAction.TYPE)) {
-      return new ErrorAction();
+      return ERROR_ACTION;
     } else if (actionName.equals(NoneAction.TYPE)) {
-      return new NoneAction();
+      return NONE_ACTION;
     } else {
       return (RuleAction) getRuleObject(ctx, ruleActions, actionName);
     }
@@ -667,22 +670,20 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   @Override
   public void close() {
-    if (ruleActions != null) {
-      for (Map.Entry<String, Map<String, RuleBase>> outer : ruleActions.entrySet()) {
+    closeRuleObjects(ruleActions);
+    closeRuleObjects(ruleExecutors);
+  }
+
+  private void closeRuleObjects(Map<String, Map<String, RuleBase>> ruleBases) {
+    if (ruleBases != null) {
+      for (Map.Entry<String, Map<String, RuleBase>> outer : ruleBases.entrySet()) {
         for (Map.Entry<String, RuleBase> inner : outer.getValue().entrySet()) {
           closeQuietly(
-              inner.getValue(), "rule action " + inner.getKey() + " for " + outer.getKey());
+              inner.getValue(), "rule object " + inner.getKey() + " for " + outer.getKey());
         }
       }
     }
-    if (ruleExecutors != null) {
-      for (Map.Entry<String, Map<String, RuleBase>> outer : ruleExecutors.entrySet()) {
-        for (Map.Entry<String, RuleBase> inner : outer.getValue().entrySet()) {
-          closeQuietly(
-              inner.getValue(), "rule executor " + inner.getKey() + " for " + outer.getKey());
-        }
-      }
-    }
+
   }
 
   private static void closeQuietly(AutoCloseable closeable, String name) {
