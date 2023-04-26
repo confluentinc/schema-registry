@@ -246,17 +246,17 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     Map<String, RuleBase> ruleObjects = ruleBases.get(type.toUpperCase(Locale.ROOT));
     if (ruleObjects != null && !ruleObjects.isEmpty()) {
       // First try rule name qualified with subject
-      RuleBase executor = ruleObjects.get(ctx.subject() + ":" + rule.getName());
-      if (executor != null) {
-        return executor;
+      RuleBase ruleObject = ruleObjects.get(ctx.subject() + ":" + rule.getName());
+      if (ruleObject != null) {
+        return ruleObject;
       }
       // Next try rule name
-      executor = ruleObjects.get(rule.getName());
-      if (executor != null) {
-        return executor;
+      ruleObject = ruleObjects.get(rule.getName());
+      if (ruleObject != null) {
+        return ruleObject;
       }
-      // Finally try any executor registered for the given rule type.
-      // This is to allow multiple rules to use the same rule executor.
+      // Finally try any rule object registered for the given rule type.
+      // This is to allow multiple rules to use the same rule object.
       return ruleObjects.entrySet().iterator().next().getValue();
     }
     return null;
