@@ -316,6 +316,7 @@ java_test_suite(
         "//json-schema-provider",
         "//protobuf-provider",
         "//schema-serializer",
+        "//core/src/test/proto:io_confluent_kafka_serializers_protobuf_test_java_library",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:com_fasterxml_jackson_dataformat_jackson_dataformat_csv",
         "@maven//:com_google_guava_guava",
