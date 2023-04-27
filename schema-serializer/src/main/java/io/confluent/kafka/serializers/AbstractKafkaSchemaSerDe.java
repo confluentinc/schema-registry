@@ -104,9 +104,12 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
   protected Map<String, String> metadata;
-  protected Map<String, Map<String, RuleExecutor>> ruleExecutors;
-  protected Map<String, RuleAction> ruleActions;
+  protected Map<String, Map<String, RuleBase>> ruleExecutors;
+  protected Map<String, Map<String, RuleBase>> ruleActions;
   protected boolean isKey;
+
+  private static final ErrorAction ERROR_ACTION = new ErrorAction();
+  private static final NoneAction NONE_ACTION = new NoneAction();
 
   // Track the key for use when deserializing/serializing the value, such as for a DLQ.
   // We take advantage of the fact the value serde is called after the key serde.
@@ -172,10 +175,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       MapPropertyParser parser = new MapPropertyParser();
       metadata = parser.parse(config.getLatestWithMetadataSpec());
     }
-    ruleExecutors = initRuleExecutors(config, RULE_EXECUTORS);
-    ruleActions = new HashMap<>((Map<String, RuleAction>) initRuleActions(config, RULE_ACTIONS));
-    ruleActions.put(ErrorAction.TYPE, new ErrorAction());
-    ruleActions.put(NoneAction.TYPE, new NoneAction());
+    ruleExecutors = initRuleObjects(config, RULE_EXECUTORS);
+    ruleActions = initRuleObjects(config, RULE_ACTIONS);
   }
 
   protected void postOp(Object payload) {
@@ -186,7 +187,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     }
   }
 
-  private Map<String, Map<String, RuleExecutor>> initRuleExecutors(
+  private Map<String, Map<String, RuleBase>> initRuleObjects(
       AbstractKafkaSchemaSerDeConfig config, String configName) {
     List<String> names = config.getList(configName);
     return names.stream()
@@ -194,30 +195,16 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
             .map(r -> new AbstractMap.SimpleEntry<>(n, r)))
         .collect(Collectors.groupingBy(e -> e.getValue().type(),
             Collectors.toMap(SimpleEntry::getKey, e -> {
-              log.info("Registering rule executor {} for {}: {}",
+              log.info("Registering rule object {} for {}: {}",
                   e.getKey(),
                   e.getValue().type(),
                   e.getValue().getClass().getName()
               );
-              return (RuleExecutor) e.getValue();
+              return e.getValue();
             }, (e1, e2) -> e1, LinkedHashMap::new)));
   }
 
-  private Map<String, ? extends RuleBase> initRuleActions(
-      AbstractKafkaSchemaSerDeConfig config, String configName) {
-    List<String> names = config.getList(configName);
-    return names.stream()
-        .flatMap(n -> initRuleObject(n, config, configName))
-        .collect(Collectors.toMap(RuleBase::type, e -> {
-          log.info("Registering rule action for {}: {}",
-              e.type(),
-              e.getClass().getName()
-          );
-          return e;
-        }));
-  }
-
-  private Stream<? extends RuleBase> initRuleObject(
+  private Stream<RuleBase> initRuleObject(
       String name, AbstractKafkaSchemaSerDeConfig config, String configName) {
     String propertyName = configName + "." + name + ".class";
     Object propertyValue = config.originals().get(propertyName);
@@ -232,34 +219,48 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       ruleObject.configure(params);
       return Stream.of(ruleObject);
     } catch (ClassNotFoundException e) {
-      log.error("Could not load rule executor class " + name, e);
-      throw new ConfigException("Could not load rule executor class " + name);
+      log.error("Could not load rule object class " + name, e);
+      throw new ConfigException("Could not load rule object class " + name);
     }
   }
 
   // Visible for testing
-  public Map<String, Map<String, RuleExecutor>> getRuleExecutors() {
+  public Map<String, Map<String, RuleBase>> getRuleExecutors() {
     return ruleExecutors;
   }
 
   private RuleExecutor getRuleExecutor(RuleContext ctx) {
+    return (RuleExecutor) getRuleObject(ctx, ruleExecutors, ctx.rule().getType());
+  }
+
+  private RuleAction getRuleAction(RuleContext ctx, String actionName) {
+    if (actionName.equals(ErrorAction.TYPE)) {
+      return ERROR_ACTION;
+    } else if (actionName.equals(NoneAction.TYPE)) {
+      return NONE_ACTION;
+    } else {
+      return (RuleAction) getRuleObject(ctx, ruleActions, actionName);
+    }
+  }
+
+  private RuleBase getRuleObject(
+      RuleContext ctx, Map<String, Map<String, RuleBase>> ruleBases, String type) {
     Rule rule = ctx.rule();
-    Map<String, RuleExecutor> executors =
-        ruleExecutors.get(rule.getType().toUpperCase(Locale.ROOT));
-    if (executors != null && !executors.isEmpty()) {
+    Map<String, RuleBase> ruleObjects = ruleBases.get(type.toUpperCase(Locale.ROOT));
+    if (ruleObjects != null && !ruleObjects.isEmpty()) {
       // First try rule name qualified with subject
-      RuleExecutor executor = executors.get(ctx.subject() + ":" + rule.getName());
-      if (executor != null) {
-        return executor;
+      RuleBase ruleObject = ruleObjects.get(ctx.subject() + ":" + rule.getName());
+      if (ruleObject != null) {
+        return ruleObject;
       }
       // Next try rule name
-      executor = executors.get(rule.getName());
-      if (executor != null) {
-        return executor;
+      ruleObject = ruleObjects.get(rule.getName());
+      if (ruleObject != null) {
+        return ruleObject;
       }
-      // Finally try any executor registered for the given rule type.
-      // This is to allow multiple rules to use the same rule executor.
-      return executors.entrySet().iterator().next().getValue();
+      // Finally try any rule object registered for the given rule type.
+      // This is to allow multiple rules to use the same rule object.
+      return ruleObjects.entrySet().iterator().next().getValue();
     }
     return null;
   }
@@ -638,7 +639,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       actionName = defaultAction;
     }
     if (actionName != null) {
-      RuleAction ruleAction = ruleActions.get(actionName.toUpperCase(Locale.ROOT));
+      RuleAction ruleAction = getRuleAction(ctx, actionName);
       try {
         ruleAction.run(ctx, message, ex);
       } catch (RuleException e) {
@@ -669,19 +670,20 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   @Override
   public void close() {
-    if (ruleActions != null) {
-      for (Map.Entry<String, RuleAction> entry : ruleActions.entrySet()) {
-        closeQuietly(entry.getValue(), "rule action " + entry.getKey());
-      }
-    }
-    if (ruleExecutors != null) {
-      for (Map.Entry<String, Map<String, RuleExecutor>> outer : ruleExecutors.entrySet()) {
-        for (Map.Entry<String, RuleExecutor> inner : outer.getValue().entrySet()) {
+    closeRuleObjects(ruleActions);
+    closeRuleObjects(ruleExecutors);
+  }
+
+  private void closeRuleObjects(Map<String, Map<String, RuleBase>> ruleBases) {
+    if (ruleBases != null) {
+      for (Map.Entry<String, Map<String, RuleBase>> outer : ruleBases.entrySet()) {
+        for (Map.Entry<String, RuleBase> inner : outer.getValue().entrySet()) {
           closeQuietly(
-              inner.getValue(), "rule executor " + inner.getKey() + " for " + outer.getKey());
+              inner.getValue(), "rule object " + inner.getKey() + " for " + outer.getKey());
         }
       }
     }
+
   }
 
   private static void closeQuietly(AutoCloseable closeable, String name) {
