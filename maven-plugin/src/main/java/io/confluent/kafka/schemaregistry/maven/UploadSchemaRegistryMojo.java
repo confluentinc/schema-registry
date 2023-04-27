@@ -84,6 +84,8 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       subjects = decode(subjects);
       schemaTypes = decode(schemaTypes);
       references = decode(references);
+      metadata = decode(metadata);
+      ruleSet = decode(ruleSet);
     }
 
     for (String subject : subjects.keySet()) {
