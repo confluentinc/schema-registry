@@ -23,6 +23,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -78,6 +79,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 public class CelExecutorTest {
 
@@ -96,6 +98,7 @@ public class CelExecutorTest {
   private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   private final String topic;
   private final KafkaProducer<byte[], byte[]> producer;
+  private final KafkaProducer<byte[], byte[]> producer2;
 
   public CelExecutorTest() {
     topic = "test";
@@ -103,6 +106,9 @@ public class CelExecutorTest {
         new AvroSchemaProvider(), new ProtobufSchemaProvider(), new JsonSchemaProvider()));
     producer = mock(KafkaProducer.class);
     when(producer.send(any(ProducerRecord.class), any(Callback.class))).thenReturn(
+        CompletableFuture.completedFuture(null));
+    producer2 = mock(KafkaProducer.class);
+    when(producer2.send(any(ProducerRecord.class), any(Callback.class))).thenReturn(
         CompletableFuture.completedFuture(null));
 
     Map<String, Object> defaultConfig = new HashMap<>();
@@ -114,13 +120,19 @@ public class CelExecutorTest {
         CelExecutor.class.getName());
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".cel-field.class",
         CelFieldExecutor.class.getName());
-    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS, "dlq");
-    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".dlq.class",
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS, "cel,cel_field");
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel.class",
         DlqAction.class.getName());
-    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".dlq.param." + DlqAction.TOPIC,
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel.param." + DlqAction.TOPIC,
         "dlq-topic");
-    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".dlq.param." + DlqAction.PRODUCER,
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel.param." + DlqAction.PRODUCER,
         producer);
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.class",
+        DlqAction.class.getName());
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.param." + DlqAction.TOPIC,
+        "dlq-topic2");
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.param." + DlqAction.PRODUCER,
+        producer2);
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, defaultConfig);
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, defaultConfig);
     avroKeySerializer = new KafkaAvroSerializer(schemaRegistry);
@@ -390,6 +402,7 @@ public class CelExecutorTest {
     }
 
     verify(producer).send(any(ProducerRecord.class), any(Callback.class));
+    verifyNoInteractions(producer2);
   }
 
   @Test
@@ -420,6 +433,7 @@ public class CelExecutorTest {
     // Verify producer record has both key and value
     assertNotNull(argument.getValue().key());
     assertNotNull(argument.getValue().value());
+    verifyNoInteractions(producer2);
   }
 
   @Test

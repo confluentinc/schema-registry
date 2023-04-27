@@ -49,6 +49,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.rules.RuleBase;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.PiiBytes;
 import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.WidgetBytes;
@@ -170,8 +171,8 @@ public abstract class FieldEncryptionExecutorTest {
   protected abstract FieldEncryptionProperties getFieldEncryptionProperties();
 
   private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
-    Map<String, Map<String, RuleExecutor>> executors = serde.getRuleExecutors();
-    Map<String, RuleExecutor> executorsByType = executors.get(FieldEncryptionExecutor.TYPE);
+    Map<String, Map<String, RuleBase>> executors = serde.getRuleExecutors();
+    Map<String, RuleBase> executorsByType = executors.get(FieldEncryptionExecutor.TYPE);
     FieldEncryptionExecutor executor = null;
     if (executorsByType != null && !executorsByType.isEmpty()) {
       executor = (FieldEncryptionExecutor) executorsByType.entrySet().iterator().next().getValue();
@@ -184,8 +185,8 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, String name) throws Exception {
-    Map<String, Map<String, RuleExecutor>> executors = serde.getRuleExecutors();
-    Map<String, RuleExecutor> executorsByType = executors.get(FieldEncryptionExecutor.TYPE);
+    Map<String, Map<String, RuleBase>> executors = serde.getRuleExecutors();
+    Map<String, RuleBase> executorsByType = executors.get(FieldEncryptionExecutor.TYPE);
     FieldEncryptionExecutor executor = null;
     if (executorsByType != null && !executorsByType.isEmpty()) {
       executor = (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).get(name);
@@ -198,7 +199,7 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   private Cryptor addBadSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
-    Map<String, Map<String, RuleExecutor>> executors = serde.getRuleExecutors();
+    Map<String, Map<String, RuleBase>> executors = serde.getRuleExecutors();
     FieldEncryptionExecutor executor =
         (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).entrySet()
             .iterator().next().getValue();
