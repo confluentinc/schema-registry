@@ -1,0 +1,8 @@
+load("@rules_pkg//pkg:zip.bzl", "pkg_zip")
+
+pkg_zip(
+    name = "schema_registry_console_scripts_resources",
+    srcs = [
+        "//bin:schema_registry_console_scripts_src",
+    ]
+)

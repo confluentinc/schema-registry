@@ -1,0 +1,18 @@
+filegroup(
+    name = "client_console_scripts_src",
+    srcs = glob([
+        "kafka-avro-console-*",
+        "kafka-json-schema-console-*",
+        "kafka-protobuf-console-*",
+        "schema-registry-run-class",
+    ]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "schema_registry_console_scripts_src",
+    srcs = glob([
+        "schema-registry-*",
+    ]),
+    visibility = ["//visibility:public"],
+)

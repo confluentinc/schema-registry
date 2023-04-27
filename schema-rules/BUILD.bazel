@@ -69,7 +69,9 @@ java_test_suite(
         "//protobuf-provider",
         "//protobuf-serializer",
         "@maven//:com_fasterxml_jackson_core_jackson_annotations",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_fasterxml_jackson_dataformat_jackson_dataformat_csv",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:com_squareup_okio_okio",
@@ -79,6 +81,7 @@ java_test_suite(
         "@maven//:org_apache_kafka_kafka_clients",
         "@maven//:org_mockito_mockito_core",
         "@maven//:org_projectnessie_cel_cel_core",
+        "@maven//:org_projectnessie_cel_cel_jackson",
         "@maven//:org_projectnessie_cel_cel_tools",
     ],
 )

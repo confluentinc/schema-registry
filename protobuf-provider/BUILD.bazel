@@ -55,6 +55,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/protobuf/diff/ResourceLoader.java",
         "src/test/java/io/confluent/kafka/schemaregistry/protobuf/diff/SchemaDiffTest.java",
     ],
+    resources = glob(["src/test/resources/**/*"]),
     deps = [
         ":protobuf-provider",
         "//client",

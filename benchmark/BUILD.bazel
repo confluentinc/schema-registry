@@ -1,5 +1,7 @@
 load("@rules_java//java:defs.bzl", "java_binary", "java_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
+load("@com_github_johnynek_bazel_jar_jar//:jar_jar.bzl", "jar_jar")
+load("@rules_jmh//:defs.bzl", "jmh_java_benchmarks")
 # gazelle:java_module_granularity module
 
 java_library(
@@ -19,11 +21,34 @@ java_library(
     ],
 )
 
-java_binary(
-    name = "SerdeBenchmark",
-    main_class = "io.confluent.schemaregistry.benchmark.SerdeBenchmark",
-    visibility = ["//visibility:public"],
-    runtime_deps = [":benchmark"],
+#  for experiment only.
+#jar_jar(
+#    name = "shaded_benchmark",
+#    input_jar = ":SerdeBenchmark_deploy.jar",
+#    inline_rules = ["rule io.confluent.schemaregistry.benchmark.** benchmarks.@1"]
+#)
+
+#java_binary(
+#    name = "SerdeBenchmark",
+#    main_class = "io.confluent.schemaregistry.benchmark.SerdeBenchmark",
+#    visibility = ["//visibility:public"],
+#    runtime_deps = [":benchmark"],
+#)
+
+jmh_java_benchmarks(
+    name = "benchmarks",
+    srcs = ["src/main/java/io/confluent/schemaregistry/benchmark/SerdeBenchmark.java"],
+    deps = [
+        "//core",
+        "//avro-serializer",
+        "//json-serializer",
+        "//json-schema-serializer",
+        "//protobuf-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_annotations",
+        "@maven//:com_google_guava_guava",
+        "@maven//:org_apache_kafka_kafka_clients",
+        "@maven//:org_openjdk_jmh_jmh_core",
+    ],
 )
 
 java_test_suite(
