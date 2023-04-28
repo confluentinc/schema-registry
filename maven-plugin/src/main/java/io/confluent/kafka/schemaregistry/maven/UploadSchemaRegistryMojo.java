@@ -84,6 +84,8 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       subjects = decode(subjects);
       schemaTypes = decode(schemaTypes);
       references = decode(references);
+      metadata = decodeMetadata(metadata);
+      ruleSet = decode(ruleSet);
     }
 
     for (String subject : subjects.keySet()) {
@@ -135,6 +137,20 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     } finally {
       subjectsProcessed.add(key);
     }
+  }
+
+  protected static Map<String, Metadata> decodeMetadata(Map<String, Metadata> map) {
+    return map.entrySet().stream()
+        .collect(Collectors.toMap(
+            e -> e.getKey().contains(PERCENT_REPLACEMENT) ? decode(e.getKey()) : e.getKey(),
+            e -> {
+              Metadata m = e.getValue();
+              Metadata copy = new Metadata();
+              copy.properties = m.properties;
+              copy.sensitive = m.sensitive;
+              copy.tags = decode(m.tags);
+              return copy;
+            }));
   }
 
   protected static <V> Map<String, V> decode(Map<String, V> map) {

@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -25,10 +26,10 @@ public class RuleSet {
   // For mojo, cannot have any constructors besides default constructor
 
   @Parameter(required = false)
-  protected List<Rule> migrationRules;
+  protected List<Rule> migrationRules = new ArrayList<>();
 
   @Parameter(required = false)
-  protected List<Rule> domainRules;
+  protected List<Rule> domainRules = new ArrayList<>();
 
   @Override
   public String toString() {
