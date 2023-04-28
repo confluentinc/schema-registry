@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -25,13 +27,13 @@ public class Metadata {
   // For mojo, cannot have any constructors besides default constructor
 
   @Parameter(required = false)
-  protected Map<String, Set<String>> tags;
+  protected Map<String, Set<String>> tags = new HashMap<>();
 
   @Parameter(required = false)
-  protected Map<String, String> properties;
+  protected Map<String, String> properties = new HashMap<>();
 
   @Parameter(required = false)
-  protected Set<String> sensitive;
+  protected Set<String> sensitive = new HashSet<>();
 
   @Override
   public String toString() {
