@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -42,10 +44,10 @@ public class Rule {
   protected String type;
 
   @Parameter(required = false)
-  protected Set<String> tags;
+  protected Set<String> tags = new HashSet<>();
 
   @Parameter(required = false)
-  protected Map<String, String> params;
+  protected Map<String, String> params = new HashMap<>();
 
   @Parameter(required = false)
   protected String expr;
