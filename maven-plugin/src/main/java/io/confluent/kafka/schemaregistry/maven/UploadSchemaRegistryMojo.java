@@ -139,13 +139,6 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     }
   }
 
-  protected static <V> Map<String, V> decode(Map<String, V> map) {
-    return map.entrySet().stream()
-        .collect(Collectors.toMap(
-            e -> e.getKey().contains(PERCENT_REPLACEMENT) ? decode(e.getKey()) : e.getKey(),
-            Entry::getValue));
-  }
-
   protected static Map<String, Metadata> decodeMetadata(Map<String, Metadata> map) {
     return map.entrySet().stream()
         .collect(Collectors.toMap(
@@ -158,6 +151,13 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
               copy.tags = decode(m.tags);
               return copy;
             }));
+  }
+
+  protected static <V> Map<String, V> decode(Map<String, V> map) {
+    return map.entrySet().stream()
+        .collect(Collectors.toMap(
+            e -> e.getKey().contains(PERCENT_REPLACEMENT) ? decode(e.getKey()) : e.getKey(),
+            Entry::getValue));
   }
 
   protected static String decode(String subject) {
