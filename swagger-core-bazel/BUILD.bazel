@@ -4,11 +4,11 @@ load(":gen.bzl", "generate_openapi_spec")
 #swagger_deps()
 
 generate_openapi_spec(
-    #    name = "gen",
-    properties_file = "src/main/resources/swagger.properties",
     additional_runtime_deps = [
-        "//core:core"
-    ]
+        "//core:core",
+    ],
+    output_file = "output/schema-registry-api-spec.yaml",
+    properties_file = "src/main/resources/swagger.properties",
 )
 
 #java_binary(

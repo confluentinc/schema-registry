@@ -295,9 +295,9 @@ http_archive(
 maven_install(
     name = "swagger_deps",
     artifacts = [
-        "io.swagger.core.v3:swagger-core:2.2.9",
-        "io.swagger.core.v3:swagger-integration:2.2.9",
-        "io.swagger.core.v3:swagger-jaxrs2:2.2.9",
+        "io.swagger.core.v3:swagger-core:2.1.10",
+        "io.swagger.core.v3:swagger-integration:2.1.10",
+        "io.swagger.core.v3:swagger-jaxrs2:2.1.10",
         "org.codehaus.plexus:plexus-utils:3.5.1",
 
         # reflectively loaded by swagger-core
@@ -319,7 +319,21 @@ maven_install(
     use_credentials_from_home_netrc_file = True,
 )
 
+### for aspect-bazel-lib
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+http_archive(
+    name = "aspect_bazel_lib",
+    sha256 = "97fa63d95cc9af006c4c7b2123ddd2a91fb8d273012f17648e6423bae2c69470",
+    strip_prefix = "bazel-lib-1.30.2",
+    url = "https://github.com/aspect-build/bazel-lib/releases/download/v1.30.2/bazel-lib-v1.30.2.tar.gz",
+)
+
+load("@aspect_bazel_lib//lib:repositories.bzl", "aspect_bazel_lib_dependencies")
+
+aspect_bazel_lib_dependencies()
+
+###
 
 #local_repository(
 #    name = "confluent_rules",

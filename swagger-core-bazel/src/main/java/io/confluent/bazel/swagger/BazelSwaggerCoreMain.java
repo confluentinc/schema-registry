@@ -45,10 +45,25 @@ public class BazelSwaggerCoreMain {
     public static void main(String[] args) {
         BazelSwaggerCoreMain main = new BazelSwaggerCoreMain();
         main.setProperties();
+
+        String[] split = args[0].split("/");
+        String fileName = split[split.length - 1];
+
+        // output dir is everything before the file name
+        String outputDir = args[0].substring(0, args[0].lastIndexOf("/"));
+
+        System.out.println("full path: " + args[0]);
+        System.out.println("fileName: " + fileName);
+        System.out.println("outputDir: " + outputDir);
+
+        main.outputFileName = fileName;
+        main.outputPath = outputDir;
+
         main.execute();
     }
 
     public void setProperties() {
+        // todo configurable location
         String propertiesFile = "swagger.properties";
         if (propertiesFile != null) {
             try {
@@ -159,7 +174,7 @@ public class BazelSwaggerCoreMain {
                     openapiYaml = context.getOutputYamlMapper().writeValueAsString(openAPI);
                 }
             }
-            Path path = Paths.get(outputPath, "temp");
+            Path path = Paths.get(outputPath);
             System.out.println("path: " + path.toAbsolutePath());
 //            System.out.println("openApiYaml: " + openapiYaml);
             System.out.println("OpenApiYamlLength: " + openapiYaml.length());
@@ -174,7 +189,9 @@ public class BazelSwaggerCoreMain {
 //                getLog().info( "JSON output: " + path.toFile().getCanonicalPath());
             }
             if (openapiYaml != null) {
-                path = Paths.get(outputPath, outputFileName + ".yaml");
+//                path = Paths.get(outputPath, outputFileName + ".yaml");
+                path = Paths.get(outputPath, outputFileName); // todo
+                System.out.println("Writing to: " + path.toAbsolutePath());
                 Files.write(path, openapiYaml.getBytes(Charset.forName(encoding)));
 //                getLog().info( "YAML output: " + path.toFile().getCanonicalPath());
             }
@@ -380,6 +397,8 @@ public class BazelSwaggerCoreMain {
         if (isCollectionNotBlank(modelConverterClasses)) {
             config.modelConverterClasses(modelConverterClasses);
         }
+
+        System.out.println("Resource Packages: " + resourcePackages);
 
         return config;
     }
