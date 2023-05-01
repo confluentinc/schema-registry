@@ -28,4 +28,5 @@ def generate_openapi_spec(
         files = {
             output_file: output_file,
         },
+        diff_test = False,
     )
