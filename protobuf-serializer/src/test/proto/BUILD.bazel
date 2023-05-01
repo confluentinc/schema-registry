@@ -25,6 +25,15 @@ proto_library(
 )
 
 proto_library(
+    name = "customOptions2_proto",
+    srcs = ["CustomOptions2.proto"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_protobuf//:descriptor_proto",
+    ],
+)
+
+proto_library(
     name = "EnumUnion_proto",
     srcs = ["EnumUnion.proto"],
     visibility = ["//visibility:public"],
@@ -43,6 +52,9 @@ java_proto_library(
     name = "io_confluent_kafka_schemaregistry_rules_java_proto",
     deps = [
         ":io_confluent_kafka_schemaregistry_rules_proto",
+        ":customOptions2_proto",
+        ":EnumUnion_proto",
+        ":Ranges_proto"
     ],
 )
 
