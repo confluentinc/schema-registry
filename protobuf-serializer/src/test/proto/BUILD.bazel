@@ -8,9 +8,7 @@ proto_library(
         exclude = [
             "EnumUnion.proto",
             "Ranges.proto",
-            "common_proto.proto",
-            "exampleProtoAcme.proto",
-            "metadata_proto.proto",
+            "CustomOptions2.proto",
         ],
     ),
     visibility = ["//visibility:public"],
