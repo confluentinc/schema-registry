@@ -131,6 +131,7 @@ java_test_suite(
     deps = [
         ":protobuf-serializer",
         ":test-utils",
+        "//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
         "//avro-serializer",
         "//client",
         "//core",
