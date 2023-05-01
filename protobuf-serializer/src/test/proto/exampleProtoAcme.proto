@@ -2,8 +2,7 @@ syntax = "proto3";
 package Acme.Glup;
 option java_package = "com.acme.glup";
 
-import "metadata_proto.proto";
-import "common_proto.proto";
+import "protobuf-serializer/src/test/proto/metadata_proto.proto";
 
 message ClickCas {
   option (contains_nullable_fields) = true;
