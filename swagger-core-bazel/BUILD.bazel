@@ -1,0 +1,40 @@
+load(":gen.bzl", "generate_openapi_spec")
+#load(":deps.bzl", "swagger_deps")
+#
+#swagger_deps()
+
+generate_openapi_spec(
+    #    name = "gen",
+    properties_file = "src/main/resources/swagger.properties",
+    additional_runtime_deps = [
+        "//core:core"
+    ]
+)
+
+#java_binary(
+#    name = "bazel_swagger_core_bin",
+#    main_class = "io.confluent.bazel.swagger.BazelSwaggerCoreMain",
+#    resources = [
+#        "src/main/resources/swagger.properties",
+#    ],
+#    runtime_deps = [
+#        ":bazel_swagger_core",
+#    ],
+#)
+
+java_library(
+    name = "bazel_swagger_core_lib",
+    srcs = [
+        "src/main/java/io/confluent/bazel/swagger/BazelSwaggerCoreMain.java",
+    ],
+    deps = [
+        "@swagger_deps//:com_fasterxml_jackson_core_jackson_core",
+        "@swagger_deps//:io_swagger_core_v3_swagger_core",
+        "@swagger_deps//:io_swagger_core_v3_swagger_integration",
+        "@swagger_deps//:io_swagger_core_v3_swagger_jaxrs2",
+        "@swagger_deps//:io_swagger_core_v3_swagger_models",
+        "@swagger_deps//:javax_servlet_javax_servlet_api",
+        "@swagger_deps//:javax_ws_rs_javax_ws_rs_api",
+        "@swagger_deps//:org_codehaus_plexus_plexus_utils",
+    ],
+)
