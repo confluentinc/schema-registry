@@ -61,6 +61,7 @@ java_test_suite(
     deps = [
         ":avro-resources",
         ":schema-rules",
+        "//schema-rules/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
         "//avro-serializer",
         "//client",
         "//core",

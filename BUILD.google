@@ -1,0 +1,11 @@
+proto_library(
+  name = 'date_proto',
+  srcs = ['google/type/date.proto'],
+  visibility = ['//visibility:public']
+)
+
+proto_library(
+  name = 'timeofday_proto',
+  srcs = ['google/type/timeofday.proto'],
+  visibility = ['//visibility:public']
+)

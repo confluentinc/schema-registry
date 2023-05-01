@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-import "NestedTestProto.proto";
-import "PublicTestProto.proto";
+import "protobuf-serializer/src/test/proto/NestedTestProto.proto";
+import "protobuf-serializer/src/test/proto/PublicTestProto.proto";
 
 package io.confluent.kafka.serializers.protobuf.test;
 

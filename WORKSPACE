@@ -230,9 +230,6 @@ load("@io_bazel_rules_avro//avro:avro.bzl", "avro_repositories")
 
 avro_repositories(version = "1.11.0")
 
-# for shaded jar - we might not need it since it is for relocation.
-load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
-
 git_repository(
     name = "com_github_johnynek_bazel_jar_jar",
     commit = "78c8c13ff437e8397ffe80c9a4c905376720a339",
@@ -243,30 +240,44 @@ load(
     "@com_github_johnynek_bazel_jar_jar//:jar_jar.bzl",
     "jar_jar_repositories",
 )
+
 jar_jar_repositories()
 
 # for jmh benchmark
 http_archive(
-  name = "rules_jmh",
-  strip_prefix = "buchgr-rules_jmh-6ccf8d7",
-  url = "https://github.com/buchgr/rules_jmh/zipball/6ccf8d7b270083982e5c143935704b9f3f18b256",
-  type = "zip",
-  sha256 = "dbb7d7e5ec6e932eddd41b910691231ffd7b428dff1ef9a24e4a9a59c1a1762d",
+    name = "rules_jmh",
+    sha256 = "dbb7d7e5ec6e932eddd41b910691231ffd7b428dff1ef9a24e4a9a59c1a1762d",
+    strip_prefix = "buchgr-rules_jmh-6ccf8d7",
+    type = "zip",
+    url = "https://github.com/buchgr/rules_jmh/zipball/6ccf8d7b270083982e5c143935704b9f3f18b256",
 )
 
 load("@rules_jmh//:deps.bzl", "rules_jmh_deps")
+
 rules_jmh_deps()
+
 load("@rules_jmh//:defs.bzl", "rules_jmh_maven_deps")
+
 rules_jmh_maven_deps()
 
 # for maven-assembly-plugin.
 http_archive(
     name = "rules_pkg",
+    sha256 = "335632735e625d408870ec3e361e192e99ef7462315caa887417f4d88c4c8fb8",
     urls = [
         "https://mirror.bazel.build/github.com/bazelbuild/rules_pkg/releases/download/0.9.0/rules_pkg-0.9.0.tar.gz",
         "https://github.com/bazelbuild/rules_pkg/releases/download/0.9.0/rules_pkg-0.9.0.tar.gz",
     ],
-    sha256 = "335632735e625d408870ec3e361e192e99ef7462315caa887417f4d88c4c8fb8",
 )
+
 load("@rules_pkg//:deps.bzl", "rules_pkg_dependencies")
+
 rules_pkg_dependencies()
+
+# for googleapis
+http_archive(
+    name = "googleapis",
+    build_file = "@//:BUILD.google",
+    strip_prefix = "googleapis-common-protos-1_3_1/",
+    url = "https://github.com/googleapis/googleapis/archive/common-protos-1_3_1.zip",
+)
