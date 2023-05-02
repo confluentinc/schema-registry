@@ -38,8 +38,8 @@ java_proto_library(
     name = "io_confluent_kafka_schemaregistry_rules_java_proto",
     deps = [
         ":io_confluent_kafka_schemaregistry_rules_proto",
-#        ":io_confluent_kafka_schemaregistry_rules_proto_2",
-#        ":io_confluent_kafka_schemaregistry_rules_proto_3",
+        ":io_confluent_kafka_schemaregistry_rules_proto_2",
+        ":io_confluent_kafka_schemaregistry_rules_proto_3",
     ],
 )
 

@@ -11,5 +11,9 @@ java_library(
     ],
     visibility = ["//:__subpackages__"],
     exports = ["@maven//:com_google_protobuf_protobuf_java"],
-    deps = ["@maven//:com_google_protobuf_protobuf_java"],
+    deps = [
+        "@maven//:com_google_protobuf_protobuf_java",
+        "//protobuf-types/src/main/proto/confluent/type:confluent_type_java_library",
+        "//protobuf-types/src/main/proto:confluent_java_library"
+    ],
 )
