@@ -1,0 +1,7 @@
+load("@contrib_rules_jvm//java/private:spotbugs_config.bzl", "spotbugs_config")
+
+spotbugs_config(
+    name = "spotbugs_config",
+    exclude_filter = "findbugs-exclude.xml",
+    visibility = ["//visibility:public"],
+)

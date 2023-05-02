@@ -82,8 +82,8 @@ contrib_rules_jvm_gazelle_deps()
 # for linters config
 load("@apple_rules_lint//lint:setup.bzl", "lint_setup")
 lint_setup({
-  "java-checkstyle": "@contrib_rules_jvm//java:checkstyle-default-config",
-  "java-spotbugs": "@contrib_rules_jvm//java:spotbugs-default-config",
+  "java-checkstyle": "//checkstyle:checkstyle_config",
+  "java-spotbugs": "//findbugs:spotbugs_config",
 })
 
 load("@contrib_rules_jvm//:setup.bzl", "contrib_rules_jvm_setup")
