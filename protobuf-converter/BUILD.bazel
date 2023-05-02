@@ -39,6 +39,7 @@ java_test_suite(
     deps = [
         ":protobuf-converter",
         "//protobuf-converter/src/test/proto:proto_java_library",
+        "//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
         "//avro-serializer",
         "//client",
         "//core",

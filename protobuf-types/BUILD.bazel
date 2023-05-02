@@ -3,17 +3,16 @@ load("@contrib_rules_jvm//java:defs.bzl", "java_library")
 java_library(
     name = "protobuf-types",
     srcs = [
-        "src/main/java/io/confluent/protobuf/MetaProto.java",
-        "src/main/java/io/confluent/protobuf/type/Decimal.java",
-        "src/main/java/io/confluent/protobuf/type/DecimalOrBuilder.java",
-        "src/main/java/io/confluent/protobuf/type/DecimalProto.java",
         "src/main/java/io/confluent/protobuf/type/utils/DecimalUtils.java",
     ],
-    visibility = ["//:__subpackages__"],
-    exports = ["@maven//:com_google_protobuf_protobuf_java"],
+    exports = [
+        "//protobuf-types/src/main/proto/confluent/type:confluent_type_java_library",
+        "//protobuf-types/src/main/proto:confluent_java_library",
+    ],
     deps = [
         "@maven//:com_google_protobuf_protobuf_java",
         "//protobuf-types/src/main/proto/confluent/type:confluent_type_java_library",
-        "//protobuf-types/src/main/proto:confluent_java_library"
+        "//protobuf-types/src/main/proto:confluent_java_library",
     ],
+    visibility = ["//visibility:public"]
 )
