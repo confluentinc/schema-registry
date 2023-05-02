@@ -21,8 +21,18 @@ import org.apache.kafka.common.Configurable;
 
 public interface BearerAuthCredentialProvider extends Configurable {
 
-  String alias();
+  /*
+  Making alias() default method as custom implementation loaded using CustomTokenProvider don't
+  need to Implement it.
+  */
+  default String alias() {
+    return null;
+  }
 
+  /*
+   This getBearerToken method should Ideally return a token from a cache. The cache should be
+   responsible for refreshing the token.
+  */
   String getBearerToken(URL url);
 
   default String getTargetSchemaRegistry() {
