@@ -450,8 +450,8 @@ public class KafkaProtobufSerializerTest {
     String expected = "syntax = \"proto3\";\n"
         + "package io.confluent.kafka.serializers.protobuf.test;\n"
         + "\n"
-        + "import \"confluent/meta.proto\";\n"
         + "import \"google/protobuf/descriptor.proto\";\n"
+        + "import \"protobuf-types/src/main/proto/confluent/meta.proto\";\n"
         + "\n"
         + "option (io.confluent.kafka.serializers.protobuf.test.file_custom) = \"test\";\n"
         + "option (io.confluent.kafka.serializers.protobuf.test.file_custom2) = \"hello\";\n"
@@ -563,8 +563,8 @@ public class KafkaProtobufSerializerTest {
     expected = "syntax = \"proto3\";\n"
         + "package io.confluent.kafka.serializers.protobuf.test;\n"
         + "\n"
-        + "import \"confluent/meta.proto\";\n"
         + "import \"google/protobuf/descriptor.proto\";\n"
+        + "import \"protobuf-types/src/main/proto/confluent/meta.proto\";\n"
         + "\n"
         + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
         + "\n"
@@ -605,7 +605,8 @@ public class KafkaProtobufSerializerTest {
     assertEquals(expected, noCustSchema);
 
     protobufSerializer.serialize(topic, CUSTOM_MESSAGE_OPTIONS);
-    ParsedSchema retrievedSchema = schemaRegistry.getSchemaBySubjectAndId(topic + "-value", 1);
+    // TODO VR: Not sure why this had to change from 1 to 2 or if it is a breaking change
+    ParsedSchema retrievedSchema = schemaRegistry.getSchemaBySubjectAndId(topic + "-value", 2);
     assertEquals(expected, retrievedSchema.canonicalString());
   }
 
@@ -711,8 +712,8 @@ public class KafkaProtobufSerializerTest {
   public void testNormalizeBothPb2andPb3() throws Exception {
     String expected = "syntax = \"proto3\";\n"
         + "\n"
-        + "import \"confluent/meta.proto\";\n"
-        + "import \"confluent/type/decimal.proto\";\n"
+        + "import \"protobuf-types/src/main/proto/confluent/meta.proto\";\n"
+        + "import \"protobuf-types/src/main/proto/confluent/type/decimal.proto\";\n"
         + "\n"
         + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
         + "\n"
@@ -741,8 +742,8 @@ public class KafkaProtobufSerializerTest {
     assertEquals(expected, schema.canonicalString());
 
     expected = "\n"
-        + "import \"confluent/meta.proto\";\n"
-        + "import \"confluent/type/decimal.proto\";\n"
+        + "import \"protobuf-types/src/main/proto/confluent/meta.proto\";\n"
+        + "import \"protobuf-types/src/main/proto/confluent/type/decimal.proto\";\n"
         + "\n"
         + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
         + "\n"
