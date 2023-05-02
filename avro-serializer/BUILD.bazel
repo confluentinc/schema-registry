@@ -1,5 +1,4 @@
-load("@rules_java//java:defs.bzl", "java_library")
-load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
+load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite", "java_library")
 load("@io_bazel_rules_avro//avro:avro.bzl", "avro_gen", "avro_java_library")
 # gazelle:java_module_granularity module
 

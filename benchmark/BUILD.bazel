@@ -1,5 +1,4 @@
-load("@rules_java//java:defs.bzl", "java_binary", "java_library")
-load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite")
+load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite", "java_library", "java_binary")
 load("@com_github_johnynek_bazel_jar_jar//:jar_jar.bzl", "jar_jar")
 load("@rules_jmh//:defs.bzl", "jmh_java_benchmarks")
 # gazelle:java_module_granularity module
