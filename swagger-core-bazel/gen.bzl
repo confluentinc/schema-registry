@@ -3,12 +3,13 @@ load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
 
 def generate_openapi_spec(
         properties_file,
+        config_file,
         output_file,
         additional_runtime_deps = []):
     java_binary(
         name = "_bin_generate_openapi_spec",
         main_class = "io.confluent.bazel.swagger.BazelSwaggerCoreMain",
-        resources = [properties_file],
+        resources = [properties_file, config_file],
         runtime_deps = [
             "//swagger-core-bazel:bazel_swagger_core_lib",
         ] + additional_runtime_deps,

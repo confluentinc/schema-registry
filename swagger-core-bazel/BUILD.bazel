@@ -7,6 +7,7 @@ generate_openapi_spec(
     additional_runtime_deps = [
         "//core:core",
     ],
+    config_file = "src/main/resources/openapi.yaml",
     output_file = "output/schema-registry-api-spec.yaml",
     properties_file = "src/main/resources/swagger.properties",
 )
@@ -36,5 +37,6 @@ java_library(
         "@swagger_deps//:javax_servlet_javax_servlet_api",
         "@swagger_deps//:javax_ws_rs_javax_ws_rs_api",
         "@swagger_deps//:org_codehaus_plexus_plexus_utils",
+        "@swagger_deps//:org_slf4j_slf4j_api",
     ],
 )

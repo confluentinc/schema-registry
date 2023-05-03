@@ -1,0 +1,9 @@
+resourcePackages:
+  - io.confluent.kafka.schemaregistry.rest.resources
+prettyPrint: true
+# TODO: Try generating a completely new spec using maven to see if the ordering is still different.
+sortOutput: false
+openAPI:
+  info:
+    title: Confluent Schema Registry
+    version: v1
