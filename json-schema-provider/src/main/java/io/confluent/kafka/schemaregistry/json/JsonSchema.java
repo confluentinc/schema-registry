@@ -466,7 +466,7 @@ public class JsonSchema implements ParsedSchema {
       }
       return errorMessages;
     } else {
-      return Lists.newArrayList();
+      return new ArrayList<>();
     }
   }
 

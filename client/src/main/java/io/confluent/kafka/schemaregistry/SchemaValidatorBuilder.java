@@ -81,7 +81,7 @@ public final class SchemaValidatorBuilder {
         ParsedSchema existing = schemas.next();
         return strategy.validate(toValidate, existing);
       }
-      return new ArrayList();
+      return new ArrayList<>();
     };
   }
 
@@ -94,7 +94,7 @@ public final class SchemaValidatorBuilder {
           return errorMessages;
         }
       }
-      return new ArrayList();
+      return new ArrayList<>();
     };
   }
 
