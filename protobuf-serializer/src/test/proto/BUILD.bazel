@@ -11,6 +11,7 @@ proto_library(
             "CustomOptions2.proto",
         ],
     ),
+    strip_import_prefix = "/protobuf-serializer/src/test/proto",
     visibility = ["//visibility:public"],
     deps = [
         "//protobuf-types/src/main/proto:confluent_proto",
@@ -25,6 +26,7 @@ proto_library(
 proto_library(
     name = "customOptions2_proto",
     srcs = ["CustomOptions2.proto"],
+    strip_import_prefix = "/protobuf-serializer/src/test/proto",
     visibility = ["//visibility:public"],
     deps = [
         "@com_google_protobuf//:descriptor_proto",
@@ -34,12 +36,14 @@ proto_library(
 proto_library(
     name = "EnumUnion_proto",
     srcs = ["EnumUnion.proto"],
+    strip_import_prefix = "/protobuf-serializer/src/test/proto",
     visibility = ["//visibility:public"],
 )
 
 proto_library(
     name = "Ranges_proto",
     srcs = ["Ranges.proto"],
+    strip_import_prefix = "/protobuf-serializer/src/test/proto",
     visibility = ["//visibility:public"],
     deps = [
         "@com_google_protobuf//:descriptor_proto",

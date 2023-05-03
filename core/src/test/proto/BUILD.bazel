@@ -7,6 +7,7 @@ proto_library(
         "ref.proto",
         "root.proto",
     ],
+    strip_import_prefix = "/core/src/test/proto",
     visibility = ["//visibility:public"],
     deps = [
         "//protobuf-types/src/main/proto:confluent_proto",

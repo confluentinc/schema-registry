@@ -13,6 +13,7 @@ proto_library(
         "mapreferences.proto",
         "recursivekeyvalue.proto",
     ],
+    strip_import_prefix = "/protobuf-converter/src/test/proto",
     visibility = ["//visibility:public"],
     deps = [
         "@com_google_protobuf//:descriptor_proto",
@@ -26,6 +27,7 @@ proto_library(
         "keyvalueproto2.proto",
         "nestedfield.proto",
     ],
+    strip_import_prefix = "/protobuf-converter/src/test/proto",
     visibility = ["//visibility:public"],
     deps = [
         "@com_google_protobuf//:descriptor_proto",

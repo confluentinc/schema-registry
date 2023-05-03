@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import public "protobuf-serializer/src/test/proto/TestProto.proto";
+import public "TestProto.proto";
 
 package io.confluent.kafka.serializers.protobuf.test;
 

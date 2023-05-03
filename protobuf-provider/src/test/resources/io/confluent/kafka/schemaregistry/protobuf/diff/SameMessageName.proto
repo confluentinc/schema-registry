@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-import "protobuf-provider/src/test/resources/io/confluent/kafka/schemaregistry/protobuf/diff/TestProto.proto";
-import "protobuf-provider/src/test/resources/io/confluent/kafka/schemaregistry/protobuf/diff/TestProto2.proto";
+import "TestProto.proto";
+import "TestProto2.proto";
 
 package test3;
 

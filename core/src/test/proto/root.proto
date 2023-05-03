@@ -1,8 +1,8 @@
 syntax = "proto3";
 package io.confluent.kafka.serializers.protobuf.test;
 
-import "core/src/test/proto/ref.proto";
-import "protobuf-types/src/main/proto/confluent/meta.proto";
+import "ref.proto";
+import "confluent/meta.proto";
 
 message ReferrerMessage {
     option (.confluent.message_meta).doc = "ReferrerMessage";

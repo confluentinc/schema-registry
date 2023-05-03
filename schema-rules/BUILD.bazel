@@ -52,6 +52,10 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/CelExecutorTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroScriptHostTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/rules/jsonata/JsonataExecutorTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/rules/NewWidgetProto.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/rules/PiiProto.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetWithRefProto.java",
     ],
     deps = [
         ":avro-resources",
@@ -63,6 +67,7 @@ java_test_suite(
         "//json-schema-provider",
         "//json-schema-serializer",
         "//protobuf-provider",
+        "//protobuf-types",
         "//protobuf-serializer",
         "@maven//:com_fasterxml_jackson_core_jackson_annotations",
         "@maven//:com_fasterxml_jackson_core_jackson_core",

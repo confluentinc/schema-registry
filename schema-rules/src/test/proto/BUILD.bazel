@@ -9,6 +9,7 @@ proto_library(
         "Pii.proto",
         "WidgetWithRef.proto",
     ],
+    strip_import_prefix = "/schema-rules/src/test/proto",
     visibility = ["//visibility:public"],
     deps = [
         "//protobuf-types/src/main/proto:confluent_proto",
@@ -20,6 +21,7 @@ proto_library(
     srcs = [
         "NewWidget.proto",
     ],
+    strip_import_prefix = "/schema-rules/src/test/proto",
     visibility = ["//visibility:public"],
 )
 
@@ -28,6 +30,7 @@ proto_library(
     srcs = [
         "Widget.proto",
     ],
+    strip_import_prefix = "/schema-rules/src/test/proto",
     visibility = ["//visibility:public"],
     deps = [
         "//protobuf-types/src/main/proto:confluent_proto",

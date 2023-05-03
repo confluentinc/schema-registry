@@ -6,6 +6,7 @@ load("@rules_java//java:defs.bzl", "java_library", "java_proto_library")
 proto_library(
     name = "confluent_type_proto",
     srcs = ["decimal.proto"],
+    strip_import_prefix = "/protobuf-types/src/main/proto",
     visibility = ["//visibility:public"],
 )
 

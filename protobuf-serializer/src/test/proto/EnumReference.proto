@@ -3,7 +3,7 @@ syntax = "proto3";
 option java_package = "io.confluent.kafka.serializers.protobuf.test";
 option java_outer_classname = "EnumReferenceOuter";
 
-import "protobuf-serializer/src/test/proto/EnumRoot.proto";
+import "EnumRoot.proto";
 
 message EnumReference {
   EnumRoot enum_root = 1;

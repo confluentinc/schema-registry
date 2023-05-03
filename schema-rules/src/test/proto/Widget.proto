@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "protobuf-types/src/main/proto/confluent/meta.proto";
+import "confluent/meta.proto";
 
 package io.confluent.kafka.schemaregistry.rules;
 

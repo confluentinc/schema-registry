@@ -7,6 +7,7 @@ proto_library(
     name = "confluent_proto",
     srcs = ["confluent/meta.proto"],
     visibility = ["//visibility:public"],
+    strip_import_prefix = "/protobuf-types/src/main/proto",
     deps = ["@com_google_protobuf//:descriptor_proto"],
 )
 
