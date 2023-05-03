@@ -20,8 +20,7 @@
 
 package io.confluent.kafka.schemaregistry;
 
-import org.apache.commons.compress.utils.Lists;
-
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -82,7 +81,7 @@ public final class SchemaValidatorBuilder {
         ParsedSchema existing = schemas.next();
         return strategy.validate(toValidate, existing);
       }
-      return Lists.newArrayList();
+      return new ArrayList();
     };
   }
 
@@ -95,7 +94,7 @@ public final class SchemaValidatorBuilder {
           return errorMessages;
         }
       }
-      return Lists.newArrayList();
+      return new ArrayList();
     };
   }
 
