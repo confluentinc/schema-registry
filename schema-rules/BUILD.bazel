@@ -9,6 +9,7 @@ avro_java_library(
             "src/test/avro/*.avsc",
         ],
     ),
+    avro_libs = {"core": "@maven//:org_apache_avro_avro", "tools": "@avro//:org_apache_avro_avro_tools"}
 )
 
 java_library(
@@ -52,10 +53,6 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/CelExecutorTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroScriptHostTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/rules/jsonata/JsonataExecutorTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rules/NewWidgetProto.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rules/PiiProto.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetWithRefProto.java",
     ],
     deps = [
         ":avro-resources",
