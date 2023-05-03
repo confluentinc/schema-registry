@@ -1,32 +1,21 @@
 load(":gen.bzl", "generate_openapi_spec")
-#load(":deps.bzl", "swagger_deps")
-#
-#swagger_deps()
 
 generate_openapi_spec(
     additional_runtime_deps = [
         "//core:core",
     ],
     config_file = "src/main/resources/openapi.yaml",
-    output_file = "output/schema-registry-api-spec.yaml",
-    properties_file = "src/main/resources/swagger.properties",
+    output_files = [
+        "output/schema-registry-api-spec.yaml",
+#        "output/schema-registry-api-spec.json"
+        ],
+    properties_file = "src/main/resources/swagger-core-bazel.properties",
 )
 
-#java_binary(
-#    name = "bazel_swagger_core_bin",
-#    main_class = "io.confluent.bazel.swagger.BazelSwaggerCoreMain",
-#    resources = [
-#        "src/main/resources/swagger.properties",
-#    ],
-#    runtime_deps = [
-#        ":bazel_swagger_core",
-#    ],
-#)
-
 java_library(
-    name = "bazel_swagger_core_lib",
+    name = "swagger_core_bazel_lib",
     srcs = [
-        "src/main/java/io/confluent/bazel/swagger/BazelSwaggerCoreMain.java",
+        "src/main/java/io/confluent/bazel/swagger/SwaggerCoreBazel.java",
     ],
     deps = [
         "@swagger_deps//:com_fasterxml_jackson_core_jackson_core",

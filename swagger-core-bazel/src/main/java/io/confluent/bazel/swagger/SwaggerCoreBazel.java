@@ -8,7 +8,6 @@ import io.swagger.v3.core.util.Json;
 import io.swagger.v3.core.util.Yaml;
 import io.swagger.v3.jaxrs2.integration.JaxrsOpenApiContextBuilder;
 import io.swagger.v3.oas.integration.GenericOpenApiContextBuilder;
-import io.swagger.v3.oas.integration.OpenApiConfigurationException;
 import io.swagger.v3.oas.integration.SwaggerConfiguration;
 import io.swagger.v3.oas.integration.api.OpenApiContext;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -21,7 +20,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
-import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -33,6 +31,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -40,37 +39,43 @@ import java.util.function.BiFunction;
 
 import static java.lang.String.format;
 
-public class BazelSwaggerCoreMain {
+
+public class SwaggerCoreBazel {
 
     public enum Format {JSON, YAML, JSONANDYAML}
 
-    private static final Logger LOG = LoggerFactory.getLogger(BazelSwaggerCoreMain.class);
-
+    private static final Logger LOG = LoggerFactory.getLogger(SwaggerCoreBazel.class);
 
     public static void main(String[] args) {
-        BazelSwaggerCoreMain main = new BazelSwaggerCoreMain();
+        final SwaggerCoreBazel main = new SwaggerCoreBazel();
+        boolean isJson = false;
+        boolean isYaml = false;
+
         main.setProperties();
 
-        if (args.length > 0) {
-            String[] split = args[0].split("/");
-            String fileName = split[split.length - 1];
+        for (String arg : args) {
+            final String[] split = arg.split("/");
+            final String outputDir = arg.substring(0, arg.lastIndexOf("/"));
+            final String fileName = split[split.length - 1];
+            final String fileType = fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
+            final Format format = fileType.equals("json") ? Format.JSON : Format.YAML;
 
-            // output dir is everything before the file name
-            String outputDir = args[0].substring(0, args[0].lastIndexOf("/"));
+            if (fileType.equals("json")) {
+                isJson = true;
+            } else if (fileType.equals("yaml") || fileType.equals("yml")) {
+                isYaml = true;
+            }
 
-            System.out.println("full path: " + args[0]);
-            System.out.println("fileName: " + fileName);
-            System.out.println("outputDir: " + outputDir);
-
-            main.outputFileName = fileName;
-            main.outputPath = outputDir;
+            main.outputFileNames.put(format, fileName);
+            main.outputPaths.put(format, outputDir);
         }
+
+        main.outputFormat = isJson && isYaml ? Format.JSONANDYAML : isJson ? Format.JSON : Format.YAML;
         main.execute();
     }
 
     public void setProperties() {
-        // todo configurable location
-        String propertiesFile = "swagger.properties";
+        String propertiesFile = "swagger-core-bazel.properties";
         if (propertiesFile != null) {
             try {
                 Properties props = new Properties();
@@ -78,7 +83,7 @@ public class BazelSwaggerCoreMain {
                 props.load(is);
                 for (String key : props.stringPropertyNames()) {
                     try {
-                        Field field = BazelSwaggerCoreMain.class.getDeclaredField(key);
+                        Field field = SwaggerCoreBazel.class.getDeclaredField(key);
                         field.setAccessible(true);
                         String property = props.getProperty(key);
                         getLog().info("Setting field: " + key + " to " + property);
@@ -152,9 +157,6 @@ public class BazelSwaggerCoreMain {
                 }
             }
 
-            System.out.println("Output format: " + outputFormat);
-//            System.out.println("openApi: " + openAPI);
-
             String openapiJson = null;
             String openapiYaml = null;
             if (Format.JSON.equals(outputFormat) || Format.JSONANDYAML.equals(outputFormat)) {
@@ -171,39 +173,41 @@ public class BazelSwaggerCoreMain {
                     openapiYaml = context.getOutputYamlMapper().writeValueAsString(openAPI);
                 }
             }
-            Path path = Paths.get(outputPath);
-            final File parentFile = path.toFile().getParentFile();
-            if (parentFile != null) {
-                parentFile.mkdirs();
-            }
 
-            if (openapiJson != null) {
-                path = Paths.get(outputPath, outputFileName + ".json");
-                Files.write(path, openapiJson.getBytes(Charset.forName(encoding)));
-                getLog().info( "JSON output: " + path.toFile().getCanonicalPath());
-            }
-            if (openapiYaml != null) {
-//                path = Paths.get(outputPath, outputFileName + ".yaml");
-                path = Paths.get(outputPath, outputFileName); // todo
-                System.out.println("Writing to: " + path.toAbsolutePath());
-                Files.write(path, openapiYaml.getBytes(Charset.forName(encoding)));
-//                getLog().info( "YAML output: " + path.toFile().getCanonicalPath());
-            }
+            List<Format> formats = new ArrayList<>();
+            if (openapiJson != null) { formats.add(Format.JSON); }
+            if (openapiYaml != null) { formats.add(Format.YAML); }
+            for (Format fmt : formats) {
+                String outputPath = outputPaths.get(fmt);
+                String outputFileName = outputFileNames.get(fmt);
 
-        } catch (OpenApiConfigurationException e) {
-//            getLog().error( "Error resolving API specification" , e);
-//            throw new MojoFailureException(e.getMessage(), e);
+                Path path = Paths.get(outputPath);
+                final File parentFile = path.toFile().getParentFile();
+                if (parentFile != null) {
+                    parentFile.mkdirs();
+                }
+
+                Path fullPath = Paths.get(outputPath, outputFileName);
+                if (fmt.equals(Format.JSON)) {
+                    Files.write(fullPath, openapiJson.getBytes(Charset.forName(encoding)));
+                    System.out.println("Writing to: " + fullPath.toAbsolutePath());
+                    getLog().info( "JSON output: " + fullPath.toFile().getCanonicalPath());
+                }
+                if (fmt.equals(Format.YAML)) {
+                    System.out.println("Writing to: " + fullPath.toAbsolutePath());
+                    Files.write(fullPath, openapiYaml.getBytes(Charset.forName(encoding)));
+                }
+            }
         } catch (IOException e) {
-//            getLog().error( "Error writing API specification" , e);
-//            throw new MojoExecutionException("Failed to write API definition", e);
+            getLog().error( "Error writing API specification" , e);
+            throw new RuntimeException("Failed to write API definition", e);
         } catch (Exception e) {
-//            getLog().error( "Error resolving API specification" , e);
-//            throw new MojoExecutionException(e.getMessage(), e);
+            getLog().error( "Error resolving API specification" , e);
+            throw new RuntimeException(e.getMessage(), e);
         }
     }
 
     private void setDefaultsIfMissing(SwaggerConfiguration config) {
-
         if (prettyPrint == null) {
             prettyPrint = Boolean.FALSE;
         }
@@ -215,9 +219,6 @@ public class BazelSwaggerCoreMain {
         }
         if (alwaysResolveAppPath == null) {
             alwaysResolveAppPath = Boolean.FALSE;
-        }
-        if (openapi31 == null) {
-            openapi31 = Boolean.FALSE;
         }
         if (config.isPrettyPrint() == null) {
             config.prettyPrint(prettyPrint);
@@ -250,29 +251,18 @@ public class BazelSwaggerCoreMain {
             }
 
             Path pathObj = Paths.get(filePath);
-            // read from resources
             InputStream resource = getClass().getClassLoader().getResourceAsStream(filePath);
-            String fileContent = null;
-            if (resource != null) {
-                fileContent = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
-                System.out.println("filePath: " + filePath + " fileContent: " + fileContent);
 
+            if (resource == null) {
+                throw new IllegalArgumentException(
+                        format("passed path does not exist or is not a file: '%s'", filePath));
             }
 
-//            // if file does not exist or is not an actual file, finish with error
-//            if (!pathObj.toFile().exists() || !pathObj.toFile().isFile()) {
-//                throw new IllegalArgumentException(
-//                        format("passed path does not exist or is not a file: '%s'", filePath));
-//            }
-//
-//            String fileContent = new String(Files.readAllBytes(pathObj), encoding);
+            String fileContent = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
 
-            System.out.println("filePath: " + filePath + " fileContent: " + fileContent);
-
-            // if provided file is empty, log warning and finish
             if (StringUtils.isBlank(fileContent)) {
-//                getLog().warn(format("It seems that file '%s' defined in config %s is empty",
-//                        pathObj.toString(), configName));
+                getLog().warn(format("It seems that file '%s' defined in config %s is empty",
+                        pathObj, configName));
                 return Optional.empty();
             }
 
@@ -298,14 +288,13 @@ public class BazelSwaggerCoreMain {
                     caughtExs.add(new IllegalStateException("undefined state"));
                 }
 
-
                 // we give more importance to the first exception, it was produced by the preferred mapper
                 Throwable caughtEx = caughtExs.get(0);
-//                getLog().error(format("Could not read file '%s' for config %s", pathObj, configName), caughtEx);
+                getLog().error(format("Could not read file '%s' for config %s", pathObj, configName), caughtEx);
 
                 if(caughtExs.size() > 1){
                     for (Throwable ex : caughtExs.subList(1, caughtExs.size())) {
-//                        getLog().warn(format("Also could not read file '%s' for config %s with alternate mapper", pathObj, configName), ex);
+                        getLog().warn(format("Also could not read file '%s' for config %s with alternate mapper", pathObj, configName), ex);
                     }
                 }
 
@@ -314,8 +303,7 @@ public class BazelSwaggerCoreMain {
 
             return Optional.of(instance);
         } catch (Exception e) {
-//            getLog().error(format("Error reading/deserializing config %s file", configName), e);
-//            throw new MojoFailureException(e.getMessage(), e);
+            getLog().error(format("Error reading/deserializing config %s file", configName), e);
             return Optional.empty();
         }
     }
@@ -331,10 +319,7 @@ public class BazelSwaggerCoreMain {
      */
     private <T> List<BiFunction<String, Class<T>, T>> getSortedMappers(Path pathObj) {
         String ext = FileUtils.extension(pathObj.toString());
-        boolean yamlPreferred = false;
-        if (ext.equalsIgnoreCase("yaml") || ext.equalsIgnoreCase("yml")) {
-            yamlPreferred = true;
-        }
+        boolean yamlPreferred = ext.equalsIgnoreCase("yaml") || ext.equalsIgnoreCase("yml");
 
         List<BiFunction<String, Class<T>, T>> list = new ArrayList<>(2);
 
@@ -361,8 +346,7 @@ public class BazelSwaggerCoreMain {
     }
 
     private SwaggerConfiguration mergeConfig(OpenAPI openAPIInput, SwaggerConfiguration config) {
-        // todo
-        // overwrite all settings provided by other maven config
+        // overwrite all settings provided by bazel properties file config
         if (StringUtils.isNotBlank(filterClass)) {
             config.filterClass(filterClass);
         }
@@ -410,8 +394,13 @@ public class BazelSwaggerCoreMain {
         return collection != null && !collection.isEmpty();
     }
 
-    private String outputFileName = "openapi";
-    private String outputPath;
+    private final Map<Format, String> outputFileNames = new HashMap<>(Map.of(
+            Format.JSON, "openapi.json",
+            Format.YAML, "openapi.yaml"
+    ));
+
+    private final Map<Format, String> outputPaths = new HashMap<>();
+
     private Format outputFormat = Format.JSON;
 
     private Set<String> resourcePackages;
@@ -426,39 +415,12 @@ public class BazelSwaggerCoreMain {
     private Collection<String> ignoredRoutes;
     private String contextId;
     private Boolean skip = Boolean.FALSE;
-
     private String openapiFilePath;
-
     private String configurationFilePath;
-
     private String encoding;
     private Boolean sortOutput;
-
     private Boolean alwaysResolveAppPath;
-
-    private Boolean openapi31;
-
-
     private String projectEncoding = "UTF-8";
     private SwaggerConfiguration config;
 
-    public String getOutputPath() {
-        return outputPath;
-    }
-
-    public String getOpenapiFilePath() {
-        return openapiFilePath;
-    }
-
-    String getConfigurationFilePath() {
-        return configurationFilePath;
-    }
-
-    void setContextId(String contextId) {
-        this.contextId = contextId;
-    }
-
-    SwaggerConfiguration getInternalConfiguration() {
-        return config;
-    }
 }

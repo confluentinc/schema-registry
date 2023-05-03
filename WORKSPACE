@@ -292,6 +292,8 @@ http_archive(
     url = "https://github.com/googleapis/googleapis/archive/common-protos-1_3_1.zip",
 )
 
+### For swagger-core
+
 maven_install(
     name = "swagger_deps",
     artifacts = [
