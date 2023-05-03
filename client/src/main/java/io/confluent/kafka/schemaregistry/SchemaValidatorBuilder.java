@@ -20,12 +20,10 @@
 
 package io.confluent.kafka.schemaregistry;
 
-import org.apache.avro.generic.GenericData;
+import org.apache.commons.compress.utils.Lists;
 
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.ArrayList;
 
 /**
  * <p>
@@ -68,9 +66,9 @@ public final class SchemaValidatorBuilder {
 
     this.strategy = (toValidate, existing) -> {
       List<String> result = formatErrorMessages(existing.isBackwardCompatible(toValidate),
-        existing, OLD_PREFIX, NEW_PREFIX, false);
+          existing, OLD_PREFIX, NEW_PREFIX, false);
       result.addAll(formatErrorMessages(toValidate.isBackwardCompatible(existing),
-        existing, NEW_PREFIX, OLD_PREFIX, true));
+          existing, NEW_PREFIX, OLD_PREFIX, true));
       return result;
     };
     return this;
@@ -84,7 +82,7 @@ public final class SchemaValidatorBuilder {
         ParsedSchema existing = schemas.next();
         return strategy.validate(toValidate, existing);
       }
-      return Collections.emptyList();
+      return Lists.newArrayList();
     };
   }
 
@@ -97,7 +95,7 @@ public final class SchemaValidatorBuilder {
           return errorMessages;
         }
       }
-      return Collections.emptyList();
+      return Lists.newArrayList();
     };
   }
 
@@ -120,7 +118,8 @@ public final class SchemaValidatorBuilder {
             messages.add("{oldSchema: '" + existing + "'}");
           } else {
             messages.add("{oldSchema: <truncated> '"
-                           + existing.toString().substring(0, MAX_SCHEMA_SIZE_FOR_LOGGING) + "...'}");
+                           + existing.toString().substring(0, MAX_SCHEMA_SIZE_FOR_LOGGING)
+                           + "...'}");
           }
         }
       } catch (UnsupportedOperationException e) {

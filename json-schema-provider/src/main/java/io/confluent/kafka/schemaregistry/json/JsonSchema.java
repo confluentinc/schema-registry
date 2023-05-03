@@ -35,6 +35,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.fasterxml.jackson.databind.ser.PropertyWriter;
+import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -448,7 +449,7 @@ public class JsonSchema implements ParsedSchema {
   @Override
   public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
-      return Collections.singletonList("Incompatible because of different schema type");
+      return Lists.newArrayList("Incompatible because of different schema type");
     }
     final List<Difference> differences = SchemaDiff.compare(
         ((JsonSchema) previousSchema).rawSchema(),
@@ -465,7 +466,7 @@ public class JsonSchema implements ParsedSchema {
       }
       return errorMessages;
     } else {
-      return Collections.emptyList();
+      return Lists.newArrayList();
     }
   }
 

@@ -1842,8 +1842,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     if (errorMessages.size() > 0) {
       try {
         errorMessages.add(String.format("{compatibility: '%s'}", compatibility));
-      } catch(UnsupportedOperationException e) {
+      } catch (UnsupportedOperationException e) {
         // Ignore and return errorMessages
+        log.debug("Failed to append 'compabitility' to error message");
       }
     }
     return errorMessages;
