@@ -20,9 +20,12 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import org.apache.avro.generic.GenericData;
+
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * <p>
@@ -65,9 +68,9 @@ public final class SchemaValidatorBuilder {
 
     this.strategy = (toValidate, existing) -> {
       List<String> result = formatErrorMessages(existing.isBackwardCompatible(toValidate),
-          existing, OLD_PREFIX, NEW_PREFIX, false);
+        existing, OLD_PREFIX, NEW_PREFIX, false);
       result.addAll(formatErrorMessages(toValidate.isBackwardCompatible(existing),
-          existing, NEW_PREFIX, OLD_PREFIX, true));
+        existing, NEW_PREFIX, OLD_PREFIX, true));
       return result;
     };
     return this;
@@ -107,17 +110,21 @@ public final class SchemaValidatorBuilder {
   private List<String> formatErrorMessages(List<String> messages, ParsedSchema existing,
                                            String reader, String writer, boolean appendSchema) {
     if (messages.size() > 0) {
-      messages.replaceAll(e -> String.format(e, reader, writer));
-      if (appendSchema) {
-        if (existing.version() != null) {
-          messages.add("{oldSchemaVersion: " + existing.version() + "}");
+      try {
+        messages.replaceAll(e -> String.format(e, reader, writer));
+        if (appendSchema) {
+          if (existing.version() != null) {
+            messages.add("{oldSchemaVersion: " + existing.version() + "}");
+          }
+          if (existing.toString().length() <= MAX_SCHEMA_SIZE_FOR_LOGGING) {
+            messages.add("{oldSchema: '" + existing + "'}");
+          } else {
+            messages.add("{oldSchema: <truncated> '"
+                           + existing.toString().substring(0, MAX_SCHEMA_SIZE_FOR_LOGGING) + "...'}");
+          }
         }
-        if (existing.toString().length() <= MAX_SCHEMA_SIZE_FOR_LOGGING) {
-          messages.add("{oldSchema: '" + existing + "'}");
-        } else {
-          messages.add("{oldSchema: <truncated> '"
-                         + existing.toString().substring(0, MAX_SCHEMA_SIZE_FOR_LOGGING) + "...'}");
-        }
+      } catch (UnsupportedOperationException e) {
+        // Ignore and return messages
       }
     }
     return messages;
