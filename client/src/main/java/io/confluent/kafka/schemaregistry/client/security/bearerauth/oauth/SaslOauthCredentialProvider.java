@@ -85,12 +85,12 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
     JaasOptionsUtils jou = new JaasOptionsUtils((Map<String, Object>) jaasconfig);
 
     targetSchemaRegistry = cu.validateString(
-        SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER);
+        SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, false);
 
     // if the schema registry oauth configs are set it is given higher preference
     targetIdentityPoolId = cu.get(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID) != null
         ? cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID)
-        : jou.validateString(SASL_IDENTITY_POOL_CONFIG);
+        : jou.validateString(SASL_IDENTITY_POOL_CONFIG, false);
 
     tokenRetriever = new CachedOauthTokenRetriever();
     tokenRetriever.configure(getTokenRetriever(cu, jou), getTokenValidator(cu, configs),
