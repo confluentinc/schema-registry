@@ -81,6 +81,7 @@ import java.util.Properties;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.apache.avro.reflect.Nullable;
@@ -144,6 +145,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final String kafkaClusterId;
   private final String groupId;
   private final List<Consumer<Boolean>> leaderChangeListeners = new CopyOnWriteArrayList<>();
+  private final AtomicBoolean initialized = new AtomicBoolean(false);
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -378,6 +380,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     if (delayLeaderElection) {
       electLeader();
     }
+    initialized.set(true);
   }
 
   private void electLeader() throws SchemaRegistryException {
@@ -398,7 +401,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   public boolean initialized() {
-    return kafkaStore.initialized();
+    return kafkaStore.initialized() && initialized.get();
   }
 
   /**
