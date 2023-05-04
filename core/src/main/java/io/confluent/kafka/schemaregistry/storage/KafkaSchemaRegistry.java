@@ -1840,7 +1840,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
     List<String> errorMessages = parsedSchema.isCompatible(compatibility, previousSchemas);
     if (errorMessages.size() > 0) {
-      errorMessages.add(String.format("{compatibility: '%s'}", compatibility));
+      try {
+        errorMessages.add(String.format("{compatibility: '%s'}", compatibility));
+      } catch (UnsupportedOperationException e) {
+        // Ignore and return errorMessages
+        log.warn("Failed to append 'compabitibility' to error messages");
+      }
     }
     return errorMessages;
   }

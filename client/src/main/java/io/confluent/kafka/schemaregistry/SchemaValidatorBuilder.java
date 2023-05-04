@@ -20,7 +20,10 @@
 
 package io.confluent.kafka.schemaregistry;
 
-import java.util.Collections;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -34,6 +37,7 @@ public final class SchemaValidatorBuilder {
   private static final String NEW_PREFIX = "new";
   private static final String OLD_PREFIX = "old";
   private static int MAX_SCHEMA_SIZE_FOR_LOGGING = 10 * 1024;
+  private static final Logger log = LoggerFactory.getLogger(SchemaValidatorBuilder.class);
 
   /**
    * Use a strategy that validates that a schema can be used to read existing
@@ -81,7 +85,7 @@ public final class SchemaValidatorBuilder {
         ParsedSchema existing = schemas.next();
         return strategy.validate(toValidate, existing);
       }
-      return Collections.emptyList();
+      return new ArrayList<>();
     };
   }
 
@@ -94,7 +98,7 @@ public final class SchemaValidatorBuilder {
           return errorMessages;
         }
       }
-      return Collections.emptyList();
+      return new ArrayList<>();
     };
   }
 
@@ -107,17 +111,23 @@ public final class SchemaValidatorBuilder {
   private List<String> formatErrorMessages(List<String> messages, ParsedSchema existing,
                                            String reader, String writer, boolean appendSchema) {
     if (messages.size() > 0) {
-      messages.replaceAll(e -> String.format(e, reader, writer));
-      if (appendSchema) {
-        if (existing.version() != null) {
-          messages.add("{oldSchemaVersion: " + existing.version() + "}");
+      try {
+        messages.replaceAll(e -> String.format(e, reader, writer));
+        if (appendSchema) {
+          if (existing.version() != null) {
+            messages.add("{oldSchemaVersion: " + existing.version() + "}");
+          }
+          if (existing.toString().length() <= MAX_SCHEMA_SIZE_FOR_LOGGING) {
+            messages.add("{oldSchema: '" + existing + "'}");
+          } else {
+            messages.add("{oldSchema: <truncated> '"
+                           + existing.toString().substring(0, MAX_SCHEMA_SIZE_FOR_LOGGING)
+                           + "...'}");
+          }
         }
-        if (existing.toString().length() <= MAX_SCHEMA_SIZE_FOR_LOGGING) {
-          messages.add("{oldSchema: '" + existing + "'}");
-        } else {
-          messages.add("{oldSchema: <truncated> '"
-                         + existing.toString().substring(0, MAX_SCHEMA_SIZE_FOR_LOGGING) + "...'}");
-        }
+      } catch (UnsupportedOperationException e) {
+        // Ignore and return messages
+        log.warn("Failed to append schema and version to error messages");
       }
     }
     return messages;

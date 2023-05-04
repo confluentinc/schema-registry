@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import com.google.common.collect.Lists;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -208,7 +209,7 @@ public interface ParsedSchema {
     if (level != CompatibilityLevel.NONE) {
       for (ParsedSchema previousSchema : previousSchemas) {
         if (!schemaType().equals(previousSchema.schemaType())) {
-          return Collections.singletonList("Incompatible because of different schema type");
+          return Lists.newArrayList("Incompatible because of different schema type");
         }
       }
     }
