@@ -1,4 +1,4 @@
-load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite", "java_library")
+load("@contrib_rules_jvm//java:defs.bzl", "java_library", "java_test_suite")
 # gazelle:java_module_granularity module
 
 java_library(
@@ -40,9 +40,9 @@ java_test_suite(
     deps = [
         ":avro-serde",
         "//avro-serializer",
-        "//schema-serializer",
         "//avro-serializer:avro-resources",
         "//core",
+        "//schema-serializer",
         "@maven//:junit_junit",
         "@maven//:org_apache_avro_avro",
         "@maven//:org_hamcrest_hamcrest_core",

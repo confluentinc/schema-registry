@@ -25,8 +25,11 @@ http_archive(
         "https://github.com/bazelbuild/rules_proto/archive/refs/tags/5.3.0-21.7.tar.gz",
     ],
 )
+
 load("@rules_proto//proto:repositories.bzl", "rules_proto_dependencies", "rules_proto_toolchains")
+
 rules_proto_dependencies()
+
 rules_proto_toolchains()
 
 http_archive(
@@ -81,9 +84,10 @@ contrib_rules_jvm_gazelle_deps()
 
 # for linters config
 load("@apple_rules_lint//lint:setup.bzl", "lint_setup")
+
 lint_setup({
-  "java-checkstyle": "//checkstyle:checkstyle_config",
-  "java-spotbugs": "//findbugs:spotbugs_config",
+    "java-checkstyle": "//checkstyle:checkstyle_config",
+    "java-spotbugs": "//findbugs:spotbugs_config",
 })
 
 load("@contrib_rules_jvm//:setup.bzl", "contrib_rules_jvm_setup")
@@ -93,7 +97,6 @@ contrib_rules_jvm_setup()
 load("@contrib_rules_jvm//:gazelle_setup.bzl", "contrib_rules_jvm_gazelle_setup")
 
 contrib_rules_jvm_gazelle_setup()
-
 
 ##### RULES_JVM_EXTERNAL
 RULES_JVM_EXTERNAL_TAG = "5.1"
@@ -203,7 +206,7 @@ maven_install(
     ],
     excluded_artifacts = [
         "xml-apis:xml-apis",
-        "org.apache.directory.api:api-ldap-schema-data"
+        "org.apache.directory.api:api-ldap-schema-data",
     ],
     maven_install_json = "//:maven_install.json",
     repositories = [

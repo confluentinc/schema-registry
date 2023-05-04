@@ -1,4 +1,4 @@
-load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite", "java_library", "java_binary")
+load("@contrib_rules_jvm//java:defs.bzl", "java_binary", "java_library", "java_test_suite")
 load("@com_github_johnynek_bazel_jar_jar//:jar_jar.bzl", "jar_jar")
 load("@rules_jmh//:defs.bzl", "jmh_java_benchmarks")
 # gazelle:java_module_granularity module
@@ -8,10 +8,10 @@ java_library(
     srcs = ["src/main/java/io/confluent/schemaregistry/benchmark/SerdeBenchmark.java"],
     visibility = ["//:__subpackages__"],
     deps = [
-        "//core",
         "//avro-serializer",
-        "//json-serializer",
+        "//core",
         "//json-schema-serializer",
+        "//json-serializer",
         "//protobuf-serializer",
         "@maven//:com_fasterxml_jackson_core_jackson_annotations",
         "@maven//:com_google_guava_guava",
@@ -38,10 +38,10 @@ jmh_java_benchmarks(
     name = "benchmarks",
     srcs = ["src/main/java/io/confluent/schemaregistry/benchmark/SerdeBenchmark.java"],
     deps = [
-        "//core",
         "//avro-serializer",
-        "//json-serializer",
+        "//core",
         "//json-schema-serializer",
+        "//json-serializer",
         "//protobuf-serializer",
         "@maven//:com_fasterxml_jackson_core_jackson_annotations",
         "@maven//:com_google_guava_guava",

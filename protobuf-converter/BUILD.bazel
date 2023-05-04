@@ -1,4 +1,4 @@
-load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite", "java_library")
+load("@contrib_rules_jvm//java:defs.bzl", "java_library", "java_test_suite")
 # gazelle:java_module_granularity module
 
 java_library(
@@ -38,14 +38,14 @@ java_test_suite(
     resources = glob(["src/test/resources/**/*"]),
     deps = [
         ":protobuf-converter",
-        "//protobuf-converter/src/test/proto:proto_java_library",
-        "//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
         "//avro-serializer",
         "//client",
         "//core",
+        "//protobuf-converter/src/test/proto:proto_java_library",
         "//protobuf-provider",
         "//protobuf-serializer",
         "//protobuf-serializer:test-utils",
+        "//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
         "//schema-serializer",
         "@maven//:com_google_api_grpc_proto_google_common_protos",
         "@maven//:com_google_guava_guava",

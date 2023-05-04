@@ -5,14 +5,14 @@ java_library(
     srcs = [
         "src/main/java/io/confluent/protobuf/type/utils/DecimalUtils.java",
     ],
+    visibility = ["//visibility:public"],
     exports = [
-        "//protobuf-types/src/main/proto/confluent/type:confluent_type_java_library",
         "//protobuf-types/src/main/proto:confluent_java_library",
+        "//protobuf-types/src/main/proto/confluent/type:confluent_type_java_library",
     ],
     deps = [
-        "@maven//:com_google_protobuf_protobuf_java",
-        "//protobuf-types/src/main/proto/confluent/type:confluent_type_java_library",
         "//protobuf-types/src/main/proto:confluent_java_library",
+        "//protobuf-types/src/main/proto/confluent/type:confluent_type_java_library",
+        "@maven//:com_google_protobuf_protobuf_java",
     ],
-    visibility = ["//visibility:public"]
 )

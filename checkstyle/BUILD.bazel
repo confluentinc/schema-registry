@@ -3,5 +3,5 @@ load("@contrib_rules_jvm//java/private:checkstyle_config.bzl", "checkstyle_binar
 checkstyle_config(
     name = "checkstyle_config",
     config_file = "suppressions.xml",
-    visibility = ["//visibility:public"]
+    visibility = ["//visibility:public"],
 )

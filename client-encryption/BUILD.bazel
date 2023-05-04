@@ -1,4 +1,4 @@
-load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite", "java_library")
+load("@contrib_rules_jvm//java:defs.bzl", "java_library", "java_test_suite")
 # gazelle:java_module_granularity module
 
 java_library(
@@ -35,6 +35,7 @@ java_library(
     deps = [
         ":client-encryption",
         "//avro-serializer",
+        "//client-encryption/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
         "//core",
         "//core:test-utils",
         "//json-schema-provider",
