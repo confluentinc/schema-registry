@@ -306,6 +306,9 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/storage/SchemaValuesTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/storage/encoder/MetadataEncoderServiceTest.java",
     ],
+    runtime_deps = [
+        "@maven//:org_slf4j_slf4j_reload4j",
+    ],
     data = glob(["test/resources/*"]),
     deps = [
         ":avro-resources",
@@ -328,7 +331,7 @@ java_test_suite(
         "@maven//:jakarta_ws_rs_jakarta_ws_rs_api",
         "@maven//:junit_junit",
         "@maven//:org_apache_avro_avro",
-        "@maven//:org_apache_directory_api_api_ldap_schema_data",
+        "@maven//:org_apache_directory_api_api_all",
         "@maven//:org_apache_directory_server_apacheds_interceptor_kerberos",
         "@maven//:org_apache_directory_server_apacheds_ldif_partition",
         "@maven//:org_apache_directory_server_apacheds_protocol_kerberos",
@@ -344,5 +347,6 @@ java_test_suite(
         "@maven//:org_mockito_mockito_core",
         "@maven//:org_scala_lang_scala_library",
         "@maven//:org_slf4j_slf4j_api",
+        "@maven//:com_squareup_okio_okio_jvm",
     ],
 )

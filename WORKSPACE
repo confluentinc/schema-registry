@@ -201,6 +201,10 @@ maven_install(
         "org.yaml:snakeyaml:1.32",
         "uk.co.jemos.podam:podam:7.2.11.RELEASE",
     ],
+    excluded_artifacts = [
+        "xml-apis:xml-apis",
+        "org.apache.directory.api:api-ldap-schema-data"
+    ],
     maven_install_json = "//:maven_install.json",
     repositories = [
         # Private repositories are supported through HTTP Basic auth
