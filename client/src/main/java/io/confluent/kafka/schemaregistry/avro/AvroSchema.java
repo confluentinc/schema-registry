@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.EnumHashBiMap;
+import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -322,7 +323,7 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
-      return Collections.singletonList("Incompatible because of different schema type");
+      return Lists.newArrayList("Incompatible because of different schema type");
     }
     try {
       SchemaCompatibility.SchemaPairCompatibility result =
@@ -335,7 +336,7 @@ public class AvroSchema implements ParsedSchema {
           .collect(Collectors.toCollection(ArrayList::new));
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
-      return Collections.singletonList(
+      return Lists.newArrayList(
               "Unexpected exception during compatibility check: " + e.getMessage());
     }
   }
