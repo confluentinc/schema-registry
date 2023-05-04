@@ -1,31 +1,5 @@
-load(":gen.bzl", "generate_openapi_spec")
-
-generate_openapi_spec(
-    additional_runtime_deps = [
-        "//core:core",
-    ],
-    config_file = "src/main/resources/openapi.yaml",
-    output_files = [
-        "output/schema-registry-api-spec.yaml",
-#        "output/schema-registry-api-spec.json"
-        ],
-    properties_file = "src/main/resources/swagger-core-bazel.properties",
-)
-
-java_library(
-    name = "swagger_core_bazel_lib",
-    srcs = [
-        "src/main/java/io/confluent/bazel/swagger/SwaggerCoreBazel.java",
-    ],
-    deps = [
-        "@swagger_deps//:com_fasterxml_jackson_core_jackson_core",
-        "@swagger_deps//:io_swagger_core_v3_swagger_core",
-        "@swagger_deps//:io_swagger_core_v3_swagger_integration",
-        "@swagger_deps//:io_swagger_core_v3_swagger_jaxrs2",
-        "@swagger_deps//:io_swagger_core_v3_swagger_models",
-        "@swagger_deps//:javax_servlet_javax_servlet_api",
-        "@swagger_deps//:javax_ws_rs_javax_ws_rs_api",
-        "@swagger_deps//:org_codehaus_plexus_plexus_utils",
-        "@swagger_deps//:org_slf4j_slf4j_api",
-    ],
+exports_files(
+    [
+        "src/main/java/io/confluent/bazel/swagger/SwaggerCoreBazel.java"
+    ]
 )

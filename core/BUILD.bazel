@@ -3,6 +3,19 @@ load("@contrib_rules_jvm//java:defs.bzl", "java_binary", "java_library", "java_t
 load("@io_bazel_rules_avro//avro:avro.bzl", "avro_gen", "avro_java_library")
 # gazelle:java_module_granularity module
 
+load("//swagger-core-bazel:gen.bzl", "generate_openapi_spec")
+
+generate_openapi_spec(
+    additional_runtime_deps = [
+        "//core:core",
+    ],
+    config_file = "src/main/resources/openapi.yaml",
+    output_files = [
+        "generated/swagger-ui/schema-registry-api-spec.yaml",
+        ],
+    properties_file = "src/main/resources/swagger-core-bazel.properties",
+)
+
 java_library(
     name = "core",
     srcs = [
