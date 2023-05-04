@@ -53,10 +53,10 @@ proto_library(
 java_proto_library(
     name = "io_confluent_kafka_schemaregistry_rules_java_proto",
     deps = [
-        ":io_confluent_kafka_schemaregistry_rules_proto",
-        ":customOptions2_proto",
         ":EnumUnion_proto",
-        ":Ranges_proto"
+        ":Ranges_proto",
+        ":customOptions2_proto",
+        ":io_confluent_kafka_schemaregistry_rules_proto",
     ],
 )
 

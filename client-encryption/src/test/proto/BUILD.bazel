@@ -3,7 +3,10 @@ load("@rules_java//java:defs.bzl", "java_library", "java_proto_library")
 
 proto_library(
     name = "io_confluent_kafka_schemaregistry_rules_proto",
-    srcs = ["Widget.proto"],
+    srcs = [
+        "Widget.proto",
+        "WidgetBytes.proto",
+    ],
     strip_import_prefix = "/client-encryption/src/test/proto",
     visibility = ["//visibility:public"],
     deps = ["//protobuf-types/src/main/proto:confluent_proto"],

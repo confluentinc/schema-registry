@@ -25,13 +25,13 @@ java_library(
     ],
     visibility = ["//:__subpackages__"],
     exports = [
-        "//client:client",
+        "//client",
         "@maven//:com_google_guava_guava",
         "@maven//:org_apache_avro_avro",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
     deps = [
-        "//client:client",
+        "//client",
         "@maven//:com_fasterxml_jackson_core_jackson_core",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:com_fasterxml_jackson_dataformat_jackson_dataformat_csv",

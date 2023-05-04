@@ -1,5 +1,5 @@
 load("@rules_java//java:defs.bzl", "java_proto_library")
-load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite", "java_library", "java_binary")
+load("@contrib_rules_jvm//java:defs.bzl", "java_binary", "java_library", "java_test_suite")
 load("@io_bazel_rules_avro//avro:avro.bzl", "avro_gen", "avro_java_library")
 # gazelle:java_module_granularity module
 
@@ -306,24 +306,25 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/storage/SchemaValuesTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/storage/encoder/MetadataEncoderServiceTest.java",
     ],
+    data = glob(["test/resources/*"]),
     runtime_deps = [
         "@maven//:org_slf4j_slf4j_reload4j",
     ],
-    data = glob(["test/resources/*"]),
     deps = [
         ":avro-resources",
         ":core",
         ":test-utils",
         "//avro-serializer",
         "//client",
+        "//core/src/test/proto:io_confluent_kafka_serializers_protobuf_test_java_library",
         "//json-schema-provider",
         "//protobuf-provider",
         "//schema-serializer",
-        "//core/src/test/proto:io_confluent_kafka_serializers_protobuf_test_java_library",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:com_fasterxml_jackson_dataformat_jackson_dataformat_csv",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_squareup_okio_okio_jvm",
         "@maven//:com_squareup_wire_wire_schema_jvm",
         "@maven//:io_confluent_common_utils",
         "@maven//:io_confluent_rest_utils",
@@ -347,6 +348,5 @@ java_test_suite(
         "@maven//:org_mockito_mockito_core",
         "@maven//:org_scala_lang_scala_library",
         "@maven//:org_slf4j_slf4j_api",
-        "@maven//:com_squareup_okio_okio_jvm",
     ],
 )

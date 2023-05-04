@@ -1,4 +1,4 @@
-load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite", "java_library")
+load("@contrib_rules_jvm//java:defs.bzl", "java_library", "java_test_suite")
 load("@io_bazel_rules_avro//avro:avro.bzl", "avro_java_library")
 # gazelle:java_module_granularity module
 
@@ -9,7 +9,10 @@ avro_java_library(
             "src/test/avro/*.avsc",
         ],
     ),
-    avro_libs = {"core": "@maven//:org_apache_avro_avro", "tools": "@avro//:org_apache_avro_avro_tools"}
+    avro_libs = {
+        "core": "@maven//:org_apache_avro_avro",
+        "tools": "@avro//:org_apache_avro_avro_tools",
+    },
 )
 
 java_library(
@@ -57,15 +60,15 @@ java_test_suite(
     deps = [
         ":avro-resources",
         ":schema-rules",
-        "//schema-rules/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
         "//avro-serializer",
         "//client",
         "//core",
         "//json-schema-provider",
         "//json-schema-serializer",
         "//protobuf-provider",
-        "//protobuf-types",
         "//protobuf-serializer",
+        "//protobuf-types",
+        "//schema-rules/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
         "@maven//:com_fasterxml_jackson_core_jackson_annotations",
         "@maven//:com_fasterxml_jackson_core_jackson_core",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",

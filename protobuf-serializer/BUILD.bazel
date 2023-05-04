@@ -1,4 +1,4 @@
-load("@contrib_rules_jvm//java:defs.bzl", "java_test_suite", "java_library", "java_binary")
+load("@contrib_rules_jvm//java:defs.bzl", "java_binary", "java_library", "java_test_suite")
 # gazelle:java_module_granularity module
 
 java_library(
@@ -53,12 +53,12 @@ java_library(
     exports = ["//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library"],
     deps = [
         ":protobuf-serializer",
-        "//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
         "//avro-serializer",
         "//client",
         "//core",
         "//core:test-utils",
         "//protobuf-provider",
+        "//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
         "//schema-serializer",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:com_google_api_grpc_proto_google_common_protos",
@@ -80,13 +80,13 @@ java_test_suite(
     deps = [
         ":protobuf-serializer",
         ":test-utils",
-        "//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
-        "//protobuf-types",
         "//avro-serializer",
         "//client",
         "//core",
         "//core:test-utils",
         "//protobuf-provider",
+        "//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
+        "//protobuf-types",
         "//schema-serializer",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:com_google_api_grpc_proto_google_common_protos",
