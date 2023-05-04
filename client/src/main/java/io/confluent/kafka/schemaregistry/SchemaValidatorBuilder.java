@@ -20,6 +20,9 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -34,6 +37,7 @@ public final class SchemaValidatorBuilder {
   private static final String NEW_PREFIX = "new";
   private static final String OLD_PREFIX = "old";
   private static int MAX_SCHEMA_SIZE_FOR_LOGGING = 10 * 1024;
+  private static final Logger log = LoggerFactory.getLogger(SchemaValidatorBuilder.class);
 
   /**
    * Use a strategy that validates that a schema can be used to read existing
@@ -123,6 +127,7 @@ public final class SchemaValidatorBuilder {
         }
       } catch (UnsupportedOperationException e) {
         // Ignore and return messages
+        log.warn("Failed to append schema and version to error messages");
       }
     }
     return messages;
