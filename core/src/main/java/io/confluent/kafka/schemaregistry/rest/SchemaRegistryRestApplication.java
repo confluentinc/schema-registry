@@ -100,9 +100,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   @Override
   public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
-    List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions =
-        schemaRegistry.getResourceExtensions();
-
     config.register(RootResource.class);
     config.register(new ConfigResource(schemaRegistry));
     config.register(new ContextsResource(schemaRegistry));
@@ -117,6 +114,8 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
             schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
             schemaRegistry.getMetricsContainer().getApiCallsFailure()));
 
+    List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions =
+        schemaRegistry.getResourceExtensions();
     if (schemaRegistryResourceExtensions != null) {
       try {
         for (SchemaRegistryResourceExtension
