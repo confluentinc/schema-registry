@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry;
 
-import com.google.common.collect.Lists;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
