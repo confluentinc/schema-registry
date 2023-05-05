@@ -27,4 +27,5 @@ java_test_suite(
         "@maven//:junit_junit",
         "@maven//:org_hamcrest_hamcrest_core",
     ],
+    tags = ["no-java-spotbugs"],
 )

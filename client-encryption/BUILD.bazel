@@ -21,6 +21,7 @@ java_library(
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
+    tags = ["no-java-spotbugs"]
 )
 
 java_library(
@@ -47,6 +48,7 @@ java_library(
         "@maven//:junit_junit",
         "@maven//:org_mockito_mockito_core",
     ],
+    tags = ["no-java-spotbugs"],
 )
 
 java_test_suite(
@@ -82,4 +84,5 @@ java_test_suite(
         "@maven//:org_mockito_mockito_core",
         "@maven//:org_slf4j_slf4j_reload4j",
     ],
+    tags = ["no-java-spotbugs"],
 )

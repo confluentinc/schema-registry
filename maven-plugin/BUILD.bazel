@@ -62,6 +62,7 @@ java_library(
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:junit_junit",
     ],
+    tags = ["no-java-spotbugs"],
 )
 
 java_test_suite(
@@ -99,4 +100,5 @@ java_test_suite(
         "@maven//:org_apache_maven_maven_plugin_api",
         "@maven//:org_hamcrest_hamcrest_core",
     ],
+    tags = ["no-java-spotbugs"],
 )

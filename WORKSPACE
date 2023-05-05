@@ -1,11 +1,24 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 
-http_archive(
+#http_archive(
+#    name = "contrib_rules_jvm",
+#    sha256 = "09c022847c96f24d085e2c82a6174f0ab98218e6e0903d0793d69af9f771a291",
+#    strip_prefix = "rules_jvm-0.12.0",
+#    url = "https://github.com/bazel-contrib/rules_jvm/releases/download/v0.12.0/rules_jvm-v0.12.0.tar.gz",
+#)
+
+#local_repository(
+#    name = "contrib_rules_jvm",
+#    path = "../rules_jvm",
+#)
+
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+git_repository(
     name = "contrib_rules_jvm",
-    sha256 = "09c022847c96f24d085e2c82a6174f0ab98218e6e0903d0793d69af9f771a291",
-    strip_prefix = "rules_jvm-0.12.0",
-    url = "https://github.com/bazel-contrib/rules_jvm/releases/download/v0.12.0/rules_jvm-v0.12.0.tar.gz",
+    commit = "f2c51bbeae6d7ec7059eb12c7c3b685dd347049f",
+    remote = "https://github.com/lyao-77/rules_jvm",
 )
 
 http_archive(
@@ -203,6 +216,7 @@ maven_install(
         "org.slf4j:slf4j-reload4j:2.0.3",
         "org.yaml:snakeyaml:1.32",
         "uk.co.jemos.podam:podam:7.2.11.RELEASE",
+        "com.github.spotbugs:spotbugs:4.7.1",
     ],
     excluded_artifacts = [
         "xml-apis:xml-apis",

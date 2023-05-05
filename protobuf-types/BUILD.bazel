@@ -6,6 +6,11 @@ java_library(
         "src/main/java/io/confluent/protobuf/type/utils/DecimalUtils.java",
     ],
     visibility = ["//visibility:public"],
+    resources = [
+        "//protobuf-types/src/main/proto:proto_files",
+        "//protobuf-types/src/main/proto/confluent/type:proto_files",
+    ],
+    resource_strip_prefix = "protobuf-types/src/main/proto",
     exports = [
         "//protobuf-types/src/main/proto:confluent_java_library",
         "//protobuf-types/src/main/proto/confluent/type:confluent_type_java_library",

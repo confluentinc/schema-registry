@@ -284,6 +284,7 @@ java_library(
         "@maven//:org_scala_lang_scala_library",
         "@maven//:org_slf4j_slf4j_api",
     ],
+    tags = ["no-java-spotbugs"],
 )
 
 java_test_suite(
@@ -332,6 +333,7 @@ java_test_suite(
         "//core/src/test/proto:io_confluent_kafka_serializers_protobuf_test_java_library",
         "//json-schema-provider",
         "//protobuf-provider",
+        "//protobuf-types",
         "//schema-serializer",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:com_fasterxml_jackson_dataformat_jackson_dataformat_csv",
@@ -362,4 +364,5 @@ java_test_suite(
         "@maven//:org_scala_lang_scala_library",
         "@maven//:org_slf4j_slf4j_api",
     ],
+    tags = ["no-java-spotbugs"],
 )

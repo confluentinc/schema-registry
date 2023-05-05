@@ -20,3 +20,11 @@ java_library(
     visibility = ["//:__subpackages__"],
     exports = [":confluent_type_java_proto"],
 )
+
+filegroup(
+    name = "proto_files",
+    visibility = ["//visibility:public"],
+    srcs = [
+        "decimal.proto",
+    ],
+)
