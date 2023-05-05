@@ -48,7 +48,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryRestApplication.class);
   private KafkaSchemaRegistry schemaRegistry = null;
-  private List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions = null;
 
   public SchemaRegistryRestApplication(Properties props) throws RestConfigException {
     this(new SchemaRegistryConfig(props));
@@ -101,11 +100,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   @Override
   public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
-    schemaRegistryResourceExtensions =
-        schemaRegistryConfig.getConfiguredInstances(
-            schemaRegistryConfig.definedResourceExtensionConfigName(),
-            SchemaRegistryResourceExtension.class);
-
     config.register(RootResource.class);
     config.register(new ConfigResource(schemaRegistry));
     config.register(new ContextsResource(schemaRegistry));
@@ -120,6 +114,8 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
             schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
             schemaRegistry.getMetricsContainer().getApiCallsFailure()));
 
+    List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions =
+        schemaRegistry.getResourceExtensions();
     if (schemaRegistryResourceExtensions != null) {
       try {
         for (SchemaRegistryResourceExtension
@@ -148,11 +144,14 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   @Override
   public void onShutdown() {
-
-    if (schemaRegistry != null) {
-      schemaRegistry.close();
+    if (schemaRegistry == null) {
+      return;
     }
 
+    schemaRegistry.close();
+
+    List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions =
+        schemaRegistry.getResourceExtensions();
     if (schemaRegistryResourceExtensions != null) {
       for (SchemaRegistryResourceExtension
           schemaRegistryResourceExtension : schemaRegistryResourceExtensions) {
