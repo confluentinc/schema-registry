@@ -41,4 +41,5 @@ java_library(
         "@maven//:org_apache_kafka_kafka_clients",
         "@maven//:org_slf4j_slf4j_api",
     ],
+    tags = ["no-java-spotbugs"],
 )

@@ -21,3 +21,11 @@ java_library(
     visibility = ["//:__subpackages__"],
     exports = [":confluent_java_proto"],
 )
+
+filegroup(
+    name = "proto_files",
+    visibility = ["//visibility:public"],
+    srcs = [
+        "confluent/meta.proto",
+    ],
+)

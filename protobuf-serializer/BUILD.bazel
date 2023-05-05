@@ -68,6 +68,7 @@ java_library(
         "@maven//:junit_junit",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
+    tags = ["no-java-spotbugs"],
 )
 
 java_test_suite(
@@ -94,4 +95,5 @@ java_test_suite(
         "@maven//:junit_junit",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
+    tags = ["no-java-spotbugs"],
 )

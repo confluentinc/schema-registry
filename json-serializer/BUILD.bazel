@@ -44,4 +44,5 @@ java_test_suite(
         "@maven//:org_apache_kafka_kafka_2_13",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
+    tags = ["no-java-spotbugs"],
 )

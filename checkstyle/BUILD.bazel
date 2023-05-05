@@ -1,7 +1,8 @@
-load("@contrib_rules_jvm//java/private:checkstyle_config.bzl", "checkstyle_binary", "checkstyle_config")
+load("@contrib_rules_jvm//java:defs.bzl", "checkstyle_config")
 
 checkstyle_config(
     name = "checkstyle_config",
-    config_file = "suppressions.xml",
+    config_file = "checkstyle_with_supressions.xml",
+    data = ["suppressions.xml"],
     visibility = ["//visibility:public"],
 )

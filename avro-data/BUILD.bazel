@@ -76,4 +76,5 @@ java_test_suite(
         "@maven//:org_powermock_powermock_reflect",
         "@maven//:uk_co_jemos_podam_podam",
     ],
+    tags = ["no-java-spotbugs"],
 )

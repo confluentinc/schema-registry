@@ -75,4 +75,5 @@ java_test_suite(
         "@maven//:org_apache_kafka_kafka_clients",
         "@maven//:org_hamcrest_hamcrest_core",
     ],
+    tags = ["no-java-spotbugs"],
 )

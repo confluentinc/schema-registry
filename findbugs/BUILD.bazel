@@ -1,7 +1,16 @@
-load("@contrib_rules_jvm//java/private:spotbugs_config.bzl", "spotbugs_config")
+load("@contrib_rules_jvm//java:defs.bzl", "spotbugs_config", "spotbugs_binary")
+
+spotbugs_binary(
+    name = "spotbugs_cli",
+    runtime_deps = [
+        "@maven//:com_github_spotbugs_spotbugs",
+        "@maven//:org_slf4j_slf4j_reload4j",
+    ],
+)
 
 spotbugs_config(
     name = "spotbugs_config",
     exclude_filter = "findbugs-exclude.xml",
     visibility = ["//visibility:public"],
+    spotbugs_binary = "@contrib_rules_jvm//java:spotbugs_cli"
 )

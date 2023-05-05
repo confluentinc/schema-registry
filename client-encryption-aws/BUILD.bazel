@@ -35,4 +35,5 @@ java_test_suite(
         "@maven//:com_squareup_okio_okio",
         "@maven//:com_squareup_okio_okio_jvm",
     ],
+    tags = ["no-java-spotbugs"],
 )
