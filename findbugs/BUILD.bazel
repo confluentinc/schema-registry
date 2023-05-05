@@ -12,5 +12,5 @@ spotbugs_config(
     name = "spotbugs_config",
     exclude_filter = "findbugs-exclude.xml",
     visibility = ["//visibility:public"],
-    spotbugs_binary = "@contrib_rules_jvm//java:spotbugs_cli"
+    spotbugs_binary = ":spotbugs_cli"
 )
