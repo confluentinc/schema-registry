@@ -3,7 +3,7 @@ load("@contrib_rules_jvm//java:defs.bzl", "java_binary", "java_library", "java_t
 load("@io_bazel_rules_avro//avro:avro.bzl", "avro_gen", "avro_java_library")
 # gazelle:java_module_granularity module
 
-load("//swagger-core-bazel:gen.bzl", "generate_openapi_spec")
+load("@confluent_rules//java/swagger-core-bazel:gen.bzl", "generate_openapi_spec")
 
 generate_openapi_spec(
     additional_runtime_deps = [

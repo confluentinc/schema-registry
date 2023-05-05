@@ -1,6 +1,6 @@
 openapi: 3.0.1
 info:
-  title: Confluent Schema Registry
+  title: Confluent Schema
   version: v1
 paths:
   /compatibility/subjects/{subject}/versions/{version}:

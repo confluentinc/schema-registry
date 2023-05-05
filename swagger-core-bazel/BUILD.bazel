@@ -1,5 +1,0 @@
-exports_files(
-    [
-        "src/main/java/io/confluent/bazel/swagger/SwaggerCoreBazel.java"
-    ]
-)

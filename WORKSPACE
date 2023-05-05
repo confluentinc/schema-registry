@@ -295,36 +295,7 @@ http_archive(
     url = "https://github.com/googleapis/googleapis/archive/common-protos-1_3_1.zip",
 )
 
-### For swagger-core
-
-maven_install(
-    name = "swagger_deps",
-    artifacts = [
-        "io.swagger.core.v3:swagger-core:2.1.10",
-        "io.swagger.core.v3:swagger-integration:2.1.10",
-        "io.swagger.core.v3:swagger-jaxrs2:2.1.10",
-        "org.codehaus.plexus:plexus-utils:3.5.1",
-
-        # reflectively loaded by swagger-core
-        "javax.ws.rs:javax.ws.rs-api:2.1.1",
-        "javax.servlet:javax.servlet-api:4.0.1",
-    ],
-    # maven_install_json = "//:maven_install.json",
-    repositories = [
-        # Private repositories are supported through HTTP Basic auth
-        "https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven/",
-        "https://confluent-519856050701.dp.confluent.io/maven/maven-public/",
-        "https://packages.confluent.io/maven/",
-        "https://jitpack.io",
-        "https://oss.sonatype.org/content/repositories/snapshots",
-        "https://repo1.maven.org/maven2",
-        "https://repository.apache.org/snapshots",
-        "https://maven.google.com",
-    ],
-    use_credentials_from_home_netrc_file = True,
-)
-
-### for aspect-bazel-lib
+#### for aspect-bazel-lib
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
@@ -340,10 +311,26 @@ aspect_bazel_lib_dependencies()
 
 ###
 
+#http_archive(
+#    name = "confluent_rules",
+#    auth_patterns = {
+#        "github.com": "Bearer <password>",
+#    },
+#    sha256 = "3d706df2b6c42672490b9701356539a76ff02c5f1748eece170a7513961ffe14",
+#    strip_prefix = "confluent-bazel-rules-0.0.4",
+#    url = "https://github.com/confluentinc/confluent-bazel-rules/archive/refs/tags/0.0.4.tar.gz",
+#)
+
+git_repository(
+    name = "confluent_rules",
+    commit = "c9233322645fe0d3d000aa4e8e88927aca75cdc6",
+    remote = "https://github.com/confluentinc/confluent-bazel-rules.git",
+)
+#
 #local_repository(
 #    name = "confluent_rules",
 #    path = "/Users/vrose/dev/confluentinc/confluent-bazel-rules",
 #)
-#
-#load("@confluent_rules//swagger-core-bazel:deps.bzl", "swagger_deps")
-#swagger_deps()
+
+load("@confluent_rules//java/swagger-core-bazel:deps.bzl", "swagger_deps")
+swagger_deps()
