@@ -133,6 +133,8 @@ rules_jvm_external_setup()
 
 load("@rules_jvm_external//:defs.bzl", "maven_install")
 
+SWAGGER_CORE_VERSION = "2.1.10"
+
 maven_install(
     artifacts = [
         "com.azure:azure-core:1.33.0",
@@ -167,8 +169,8 @@ maven_install(
         "io.confluent:rest-utils:7.5.0-344",
         "io.kcache:kcache:4.0.11",
         "io.netty:netty-codec:4.1.86.Final",
-        "io.swagger.core.v3:swagger-annotations:2.1.10",
-        "io.swagger.core.v3:swagger-core:2.1.10",
+        "io.swagger.core.v3:swagger-annotations:" + SWAGGER_CORE_VERSION,
+        "io.swagger.core.v3:swagger-core:" + SWAGGER_CORE_VERSION,
         "javax.xml.ws:jaxws-api:2.3.0",
         #        "junit:junit:4.12",
         "junit:junit:4.13.2",
@@ -335,16 +337,16 @@ aspect_bazel_lib_dependencies()
 #    url = "https://github.com/confluentinc/confluent-bazel-rules/archive/refs/tags/0.0.4.tar.gz",
 #)
 
-git_repository(
-    name = "confluent_rules",
-    commit = "c9233322645fe0d3d000aa4e8e88927aca75cdc6",
-    remote = "https://github.com/confluentinc/confluent-bazel-rules.git",
-)
-#
-#local_repository(
+#git_repository(
 #    name = "confluent_rules",
-#    path = "/Users/vrose/dev/confluentinc/confluent-bazel-rules",
+#    commit = "c9233322645fe0d3d000aa4e8e88927aca75cdc6",
+#    remote = "https://github.com/confluentinc/confluent-bazel-rules.git",
 #)
+#
+local_repository(
+    name = "confluent_rules",
+    path = "/Users/vrose/dev/confluentinc/confluent-bazel-rules",
+)
 
 load("@confluent_rules//java/swagger-core-bazel:deps.bzl", "swagger_deps")
-swagger_deps()
+swagger_deps(swagger_core_version = SWAGGER_CORE_VERSION)
