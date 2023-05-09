@@ -1,0 +1,67 @@
+load("@rules_pkg//pkg:zip.bzl", "pkg_zip")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("@rules_pkg//pkg:mappings.bzl", "pkg_attributes", "pkg_filegroup", "pkg_files", "pkg_mkdirs", "strip_prefix")
+
+pkg_files(
+    name = "runtime_deps",
+    srcs = [
+        "@maven//:org_rocksdb_rocksdbjni",
+        "@maven//:org_projectnessie_cel_cel_tools",
+    ],
+    prefix = "share/java/schema-registry"
+)
+
+pkg_files(
+    name = "doc_files",
+    srcs = ["//:package_docs"],
+    prefix = "share/doc/schema-registry",
+    strip_prefix = strip_prefix.from_pkg(),
+)
+
+pkg_filegroup(
+    name = "notices",
+    srcs = ["//:notices"],
+    prefix = "share/doc/schema-registry/notices",
+)
+
+pkg_filegroup(
+    name = "licenses",
+    srcs = ["//:licenses"],
+    prefix = "share/doc/schema-registry/licenses",
+)
+
+pkg_filegroup(
+    name = "bin",
+    srcs = ["//bin:bin"],
+    prefix = "bin",
+)
+
+pkg_filegroup(
+    name = "config",
+    srcs = ["//:config"],
+    prefix = "etc/schema-registry",
+)
+
+pkg_zip(
+    name = "package_zip",
+    srcs = [
+        ":runtime_deps",
+        ":doc_files",
+        ":notices",
+        ":licenses",
+        ":bin",
+        ":config"
+    ]
+)
+
+pkg_tar(
+    name = "package_tar",
+    srcs = [
+        ":runtime_deps",
+        ":doc_files",
+        ":notices",
+        ":licenses",
+        ":bin",
+        ":config",
+    ]
+)

@@ -1,8 +1,51 @@
 load("@rules_pkg//pkg:zip.bzl", "pkg_zip")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("@rules_pkg//pkg:mappings.bzl", "pkg_attributes", "pkg_filegroup", "pkg_files", "pkg_mkdirs", "strip_prefix")
+
+pkg_files(
+    name = "runtime_deps",
+    srcs = [
+        "@maven//:org_rocksdb_rocksdbjni",
+        "@maven//:org_projectnessie_cel_cel_tools",
+    ],
+    prefix = "share/java/kafka-serde-tools"
+)
+
+pkg_files(
+    name = "doc_files",
+    srcs = ["//:package_docs"],
+    prefix = "share/doc/kafka-serde-tools",
+    strip_prefix = strip_prefix.from_pkg(),
+)
+
+pkg_filegroup(
+    name = "notices",
+    srcs = ["//:notices"],
+    prefix = "share/doc/kafka-serde-tools/notices",
+)
+
+pkg_filegroup(
+    name = "licenses",
+    srcs = ["//:licenses"],
+    prefix = "share/doc/kafka-serde-tools/licenses",
+)
 
 pkg_zip(
-    name = "client_console_scripts_resources",
+    name = "package_zip",
     srcs = [
-        "//bin:client_console_scripts_src",
-    ],
+        ":runtime_deps",
+        ":doc_files",
+        ":notices",
+        ":licenses",
+    ]
+)
+
+pkg_tar(
+    name = "package_tar",
+    srcs = [
+        ":runtime_deps",
+        ":doc_files",
+        ":notices",
+        ":licenses",
+    ]
 )

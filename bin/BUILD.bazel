@@ -1,3 +1,5 @@
+load("@rules_pkg//pkg:mappings.bzl", "pkg_attributes", "pkg_filegroup", "pkg_files", "pkg_mklink")
+
 filegroup(
     name = "client_console_scripts_src",
     srcs = glob([
@@ -14,5 +16,14 @@ filegroup(
     srcs = glob([
         "schema-registry-*",
     ]),
+    visibility = ["//visibility:public"],
+)
+
+pkg_files(
+    name = "bin",
+    srcs = glob(
+        ["**/*"],
+        exclude = ["BUILD.bazel"]
+    ),
     visibility = ["//visibility:public"],
 )
