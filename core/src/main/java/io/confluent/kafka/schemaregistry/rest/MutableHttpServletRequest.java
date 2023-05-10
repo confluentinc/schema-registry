@@ -31,7 +31,7 @@ import org.glassfish.jersey.internal.util.collection.StringKeyIgnoreCaseMultival
  * Allows for adding and replacing custom headers in the HttpServletRequest object.
  * Only one value per custom header is allowed.
  */
-final class MutableHttpServletRequest extends HttpServletRequestWrapper {
+public final class MutableHttpServletRequest extends HttpServletRequestWrapper {
   private final StringKeyIgnoreCaseMultivaluedMap<String> customHeaders;
 
   public MutableHttpServletRequest(HttpServletRequest request) {

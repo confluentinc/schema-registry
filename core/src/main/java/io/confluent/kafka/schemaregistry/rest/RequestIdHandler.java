@@ -29,7 +29,7 @@ import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.server.Request;
 import org.slf4j.MDC;
 
-class RequestIdHandler extends HandlerWrapper {
+public class RequestIdHandler extends HandlerWrapper {
   public static final String REQUEST_ID_HEADER = "X-Request-ID";
 
   @Override
