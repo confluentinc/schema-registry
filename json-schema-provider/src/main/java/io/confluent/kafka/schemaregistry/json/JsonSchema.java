@@ -651,7 +651,9 @@ public class JsonSchema implements ParsedSchema {
   @Override
   public Set<String> inlineTags() {
     Set<String> tags = new LinkedHashSet<>();
-    getInlineTagsRecursively(tags, jsonNode);
+    if (jsonNode != null) {
+      getInlineTagsRecursively(tags, jsonNode);
+    }
     return tags;
   }
 
