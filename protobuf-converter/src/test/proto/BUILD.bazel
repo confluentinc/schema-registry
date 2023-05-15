@@ -1,0 +1,50 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_java//java:defs.bzl", "java_library", "java_proto_library")
+
+proto_library(
+    name = "proto_keyvalue",
+    srcs = [
+        "key.proto",
+        "keyvalue.proto",
+        "keyvalueoptional.proto",
+        "keyvaluewrapper.proto",
+        "mapreferences.proto",
+        "recursivekeyvalue.proto",
+    ],
+    strip_import_prefix = "/protobuf-converter/src/test/proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_protobuf//:descriptor_proto",
+        "@com_google_protobuf//:wrappers_proto",
+    ],
+)
+
+proto_library(
+    name = "proto_keyvalue2",
+    srcs = [
+        "keyvalueproto2.proto",
+        "nestedfield.proto",
+    ],
+    strip_import_prefix = "/protobuf-converter/src/test/proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_protobuf//:descriptor_proto",
+        "@com_google_protobuf//:wrappers_proto",
+    ],
+)
+
+java_proto_library(
+    name = "proto_java_proto",
+    deps = [
+        ":proto_keyvalue",
+        ":proto_keyvalue2",
+    ],
+)
+
+java_library(
+    name = "proto_java_library",
+    visibility = ["//:__subpackages__"],
+    exports = [":proto_java_proto"],
+)

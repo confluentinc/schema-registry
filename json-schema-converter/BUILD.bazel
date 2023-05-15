@@ -1,0 +1,66 @@
+load("@contrib_rules_jvm//java:defs.bzl", "java_library", "java_test_suite")
+# gazelle:java_module_granularity module
+
+java_library(
+    name = "json-schema-converter",
+    srcs = [
+        "src/main/java/io/confluent/connect/json/JsonSchemaConverter.java",
+        "src/main/java/io/confluent/connect/json/JsonSchemaConverterConfig.java",
+        "src/main/java/io/confluent/connect/json/JsonSchemaData.java",
+        "src/main/java/io/confluent/connect/json/JsonSchemaDataConfig.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = [
+        "//client",
+        "//json-schema-provider",
+        "//json-schema-serializer",
+        "//schema-converter",
+        "//schema-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_apache_kafka_connect_json",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+    deps = [
+        "//client",
+        "//json-schema-provider",
+        "//json-schema-serializer",
+        "//schema-converter",
+        "//schema-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_github_erosb_everit_json_schema",
+        "@maven//:com_google_guava_guava",
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_apache_kafka_connect_json",
+        "@maven//:org_apache_kafka_kafka_clients",
+        "@maven//:org_json_json",
+    ],
+)
+
+java_test_suite(
+    name = "json-schema-converter-tests",
+    srcs = [
+        "src/test/java/io/confluent/connect/json/AdditionalJsonSchemaDataTest.java",
+        "src/test/java/io/confluent/connect/json/JsonSchemaConverterTest.java",
+        "src/test/java/io/confluent/connect/json/JsonSchemaDataTest.java",
+        "src/test/java/io/confluent/connect/json/ResourceLoader.java",
+    ],
+    resources = glob(["src/test/resources/**/*"]),
+    deps = [
+        ":json-schema-converter",
+        "//avro-serializer",
+        "//client",
+        "//core",
+        "//json-schema-provider",
+        "//json-schema-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_github_erosb_everit_json_schema",
+        "@maven//:com_google_guava_guava",
+        "@maven//:junit_junit",
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_apache_kafka_connect_json",
+        "@maven//:org_json_json",
+    ],
+    tags = ["no-java-spotbugs"],
+)

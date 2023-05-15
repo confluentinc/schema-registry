@@ -317,7 +317,7 @@
                         <configuration>
                             <testSourceDirectory>${project.basedir}/src/test/avro</testSourceDirectory>
                             <imports>
-                                <import>${project.basedir}/src/test/avro/subrecord.avsc</import>
+                                <import>${project.basedir}/src/test/avro/asubrecord.avsc</import>
                             </imports>
                         </configuration>
                     </execution>

@@ -1,0 +1,41 @@
+load("@contrib_rules_jvm//java:defs.bzl", "java_library", "java_test_suite")
+# gazelle:java_module_granularity module
+
+java_library(
+    name = "client-encryption-gcp",
+    srcs = ["src/main/java/io/confluent/kafka/schemaregistry/encryption/gcp/GcpFieldEncryptionExecutor.java"],
+    visibility = ["//:__subpackages__"],
+    exports = ["@maven//:com_google_crypto_tink_tink"],
+    deps = [
+        "//client-encryption",
+        "@maven//:com_google_apis_google_api_services_cloudkms",
+        "@maven//:com_google_auth_google_auth_library_oauth2_http",
+        "@maven//:com_google_crypto_tink_tink",
+        "@maven//:com_google_crypto_tink_tink_gcpkms",
+    ],
+)
+
+java_test_suite(
+    name = "client-encryption-gcp-tests",
+    srcs = [
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/FakeCloudKms.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/GcpFieldEncryptionExecutorTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/GcpFieldEncryptionProperties.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/RestApiGcpFieldEncryptionTest.java",
+    ],
+    deps = [
+        ":client-encryption-gcp",
+        "//avro-serializer",
+        "//client-encryption",
+        "//client-encryption:test-utils",
+        "//schema-serializer",
+        "@maven//:com_google_api_client_google_api_client",
+        "@maven//:com_google_apis_google_api_services_cloudkms",
+        "@maven//:com_google_crypto_tink_tink",
+        "@maven//:com_google_http_client_google_http_client",
+        "@maven//:com_google_http_client_google_http_client_gson",
+        "@maven//:com_squareup_okio_okio",
+        "@maven//:com_squareup_okio_okio_jvm",
+    ],
+    tags = ["no-java-spotbugs"],
+)

@@ -1,0 +1,72 @@
+load("@contrib_rules_jvm//java:defs.bzl", "java_library", "java_test_suite")
+# gazelle:java_module_granularity module
+
+java_library(
+    name = "protobuf-provider",
+    srcs = [
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/MessageIndexes.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/ProtoFileElementDeserializer.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/ProtobufSchema.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/ProtobufSchemaProvider.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/ProtobufSchemaUtils.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/diff/Context.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/diff/Difference.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/diff/EnumSchemaDiff.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/diff/FieldSchemaDiff.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/diff/MessageSchemaDiff.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/diff/OneOfDiff.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/diff/SchemaDiff.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/dynamic/DynamicSchema.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/dynamic/EnumDefinition.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/dynamic/MessageDefinition.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/dynamic/ServiceDefinition.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = [
+        "//client",
+        "//protobuf-types",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_squareup_wire_wire_schema_jvm",
+    ],
+    deps = [
+        "//client",
+        "//protobuf-types",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_api_grpc_proto_google_common_protos",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_google_protobuf_protobuf_java_util",
+        "@maven//:com_squareup_wire_wire_runtime_jvm",
+        "@maven//:com_squareup_wire_wire_schema_jvm",
+        "@maven//:org_apache_commons_commons_lang3",
+        "@maven//:org_apache_kafka_kafka_clients",
+        "@maven//:org_jetbrains_kotlin_kotlin_stdlib",
+        "@maven//:org_slf4j_slf4j_api",
+    ],
+)
+
+java_test_suite(
+    name = "protobuf-provider-tests",
+    srcs = [
+        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/ProtobufSchemaTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/diff/ResourceLoader.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/diff/SchemaDiffTest.java",
+    ],
+    resources = glob(["src/test/resources/**/*"]),
+    deps = [
+        ":protobuf-provider",
+        "//client",
+        "//core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_squareup_okio_okio",
+        "@maven//:com_squareup_okio_okio_jvm",
+        "@maven//:com_squareup_wire_wire_schema_jvm",
+        "@maven//:junit_junit",
+        "@maven//:org_hamcrest_hamcrest_core",
+    ],
+    tags = ["no-java-spotbugs"],
+)

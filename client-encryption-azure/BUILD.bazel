@@ -1,0 +1,42 @@
+load("@contrib_rules_jvm//java:defs.bzl", "java_library", "java_test_suite")
+# gazelle:java_module_granularity module
+
+java_library(
+    name = "client-encryption-azure",
+    srcs = [
+        "src/main/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionExecutor.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureKmsAead.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureKmsClient.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = ["@maven//:com_google_crypto_tink_tink"],
+    deps = [
+        "//client-encryption",
+        "@maven//:com_azure_azure_core",
+        "@maven//:com_azure_azure_identity",
+        "@maven//:com_azure_azure_security_keyvault_keys",
+        "@maven//:com_google_crypto_tink_tink",
+    ],
+)
+
+java_test_suite(
+    name = "client-encryption-azure-tests",
+    srcs = [
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionExecutorTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionProperties.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/RestApiAzureFieldEncryptionTest.java",
+    ],
+    deps = [
+        ":client-encryption-azure",
+        "//avro-serializer",
+        "//client-encryption",
+        "//client-encryption:test-utils",
+        "//schema-serializer",
+        "@maven//:com_azure_azure_security_keyvault_keys",
+        "@maven//:com_google_crypto_tink_tink",
+        "@maven//:com_squareup_okio_okio",
+        "@maven//:com_squareup_okio_okio_jvm",
+        "@maven//:org_mockito_mockito_core",
+    ],
+    tags = ["no-java-spotbugs"],
+)

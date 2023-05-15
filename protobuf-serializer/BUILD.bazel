@@ -1,0 +1,99 @@
+load("@contrib_rules_jvm//java:defs.bzl", "java_binary", "java_library", "java_test_suite")
+# gazelle:java_module_granularity module
+
+java_library(
+    name = "protobuf-serializer",
+    srcs = [
+        "src/main/java/io/confluent/kafka/formatter/protobuf/ProtobufMessageFormatter.java",
+        "src/main/java/io/confluent/kafka/formatter/protobuf/ProtobufMessageReader.java",
+        "src/main/java/io/confluent/kafka/schemaregistry/protobuf/utils/MavenConfigGenerator.java",
+        "src/main/java/io/confluent/kafka/serializers/protobuf/AbstractKafkaProtobufDeserializer.java",
+        "src/main/java/io/confluent/kafka/serializers/protobuf/AbstractKafkaProtobufSerializer.java",
+        "src/main/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufDeserializer.java",
+        "src/main/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufDeserializerConfig.java",
+        "src/main/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializer.java",
+        "src/main/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializerConfig.java",
+        "src/main/java/io/confluent/kafka/serializers/protobuf/ProtobufSchemaAndValue.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = [
+        "//protobuf-provider",
+        "//schema-serializer",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+    deps = [
+        "//client",
+        "//protobuf-provider",
+        "//schema-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_google_protobuf_protobuf_java_util",
+        "@maven//:com_squareup_wire_wire_schema_jvm",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+)
+
+java_binary(
+    name = "MavenConfigGenerator",
+    main_class = "io.confluent.kafka.schemaregistry.protobuf.utils.MavenConfigGenerator",
+    visibility = ["//visibility:public"],
+    runtime_deps = [":protobuf-serializer"],
+)
+
+java_library(
+    name = "test-utils",
+    srcs = [
+        "src/test/java/io/confluent/kafka/formatter/protobuf/KafkaProtobufFormatterTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/rest/RestApiSerializerTest.java",
+        "src/test/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializerTest.java",
+    ],
+    visibility = ["//visibility:public"],
+    exports = ["//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library"],
+    deps = [
+        ":protobuf-serializer",
+        "//avro-serializer",
+        "//client",
+        "//core",
+        "//core:test-utils",
+        "//protobuf-provider",
+        "//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
+        "//schema-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_api_grpc_proto_google_common_protos",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_squareup_okio_okio",
+        "@maven//:com_squareup_okio_okio_jvm",
+        "@maven//:junit_junit",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+    tags = ["no-java-spotbugs"],
+)
+
+java_test_suite(
+    name = "protobuf-serializer-tests",
+    srcs = [
+        "src/test/java/io/confluent/kafka/formatter/protobuf/KafkaProtobufFormatterTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/rest/RestApiSerializerTest.java",
+        "src/test/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializerTest.java",
+    ],
+    deps = [
+        ":protobuf-serializer",
+        ":test-utils",
+        "//avro-serializer",
+        "//client",
+        "//core",
+        "//core:test-utils",
+        "//protobuf-provider",
+        "//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library",
+        "//protobuf-types",
+        "//schema-serializer",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_google_api_grpc_proto_google_common_protos",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:junit_junit",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+    tags = ["no-java-spotbugs"],
+)

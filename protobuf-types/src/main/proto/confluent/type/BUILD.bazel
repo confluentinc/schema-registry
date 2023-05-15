@@ -1,0 +1,30 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_java//java:defs.bzl", "java_library", "java_proto_library")
+
+proto_library(
+    name = "confluent_type_proto",
+    srcs = ["decimal.proto"],
+    strip_import_prefix = "/protobuf-types/src/main/proto",
+    visibility = ["//visibility:public"],
+)
+
+java_proto_library(
+    name = "confluent_type_java_proto",
+    deps = [":confluent_type_proto"],
+)
+
+java_library(
+    name = "confluent_type_java_library",
+    visibility = ["//:__subpackages__"],
+    exports = [":confluent_type_java_proto"],
+)
+
+filegroup(
+    name = "proto_files",
+    visibility = ["//visibility:public"],
+    srcs = [
+        "decimal.proto",
+    ],
+)

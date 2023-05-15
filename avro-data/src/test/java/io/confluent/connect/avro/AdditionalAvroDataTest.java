@@ -38,13 +38,14 @@ public class AdditionalAvroDataTest
                                                    .build();
 
         avroData = new AvroData(avroDataConfig);
+        System.out.println("Working Directory = " + System.getProperty("user.dir"));
     }
 
 
     @Test
     public void testDocumentationPreservedSchema() throws IOException
     {
-        Schema avroSchema = new Parser().parse(new File("src/test/avro/DocTestRecord.avsc"));
+        Schema avroSchema = new Parser().parse(new File("avro-data/src/test/avro/DocTestRecord.avsc"));
 
         org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
 
@@ -70,7 +71,7 @@ public class AdditionalAvroDataTest
     public void testComplexUnionSchema() throws IOException
     {
         // Here is a schema complex union schema
-        Schema avroSchema = new Parser().parse(new File("src/test/avro/AvroMessage.avsc"));
+        Schema avroSchema = new Parser().parse(new File("avro-data/src/test/avro/AvroMessage.avsc"));
 
         org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
 
@@ -219,7 +220,7 @@ public class AdditionalAvroDataTest
         avroData = new AvroData(avroDataConfig);
 
         Schema avroSchema =
-            new Parser().parse(new File("src/test/avro/RepeatedTypeWithDocFull.avsc"));
+            new Parser().parse(new File("avro-data/src/test/avro/RepeatedTypeWithDocFull.avsc"));
 
         Assert.assertEquals(avroSchema.getField("enumField").schema(),
             avroSchema.getField("anotherEnumField").schema());
@@ -309,7 +310,7 @@ public class AdditionalAvroDataTest
         avroData = new AvroData(avroDataConfig);
 
         Schema avroSchema =
-            new Parser().parse(new File("src/test/avro/RepeatedTypeWithDefault.avsc"));
+            new Parser().parse(new File("avro-data/src/test/avro/RepeatedTypeWithDefault.avsc"));
 
         org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
 
@@ -345,7 +346,7 @@ public class AdditionalAvroDataTest
         avroData = new AvroData(avroDataConfig);
 
         Schema avroSchema =
-                new Parser().parse(new File("src/test/avro/RepeatedTypeWithDefault.avsc"));
+                new Parser().parse(new File("avro-data/src/test/avro/RepeatedTypeWithDefault.avsc"));
 
         org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
         Assert.assertNull(connectSchema.field("stringField").schema().parameters());
@@ -362,8 +363,9 @@ public class AdditionalAvroDataTest
     @Test
     public void testArrayOfRecordsWithDefaultValue() throws IOException
     {
+        System.out.println("Working Directory = " + System.getProperty("user.dir"));
         Schema avroSchema =
-            new Parser().parse(new File("src/test/avro/ArrayOfRecordsWithDefault.avsc"));
+            new Parser().parse(new File("avro-data/src/test/avro/ArrayOfRecordsWithDefault.avsc"));
 
         org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
 
@@ -399,7 +401,7 @@ public class AdditionalAvroDataTest
         avroData = new AvroData(avroDataConfig);
 
         Schema avroSchema =
-            new Parser().parse(new File("src/test/avro/RepeatedTypeWithDocFull.avsc"));
+            new Parser().parse(new File("avro-data/src/test/avro/RepeatedTypeWithDocFull.avsc"));
 
         org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
 
@@ -450,7 +452,7 @@ public class AdditionalAvroDataTest
         avroData = new AvroData(avroDataConfig);
 
         Schema avroSchema =
-            new Parser().parse(new File("src/test/avro/RepeatedTypeWithDefault.avsc"));
+            new Parser().parse(new File("avro-data/src/test/avro/RepeatedTypeWithDefault.avsc"));
         org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
 
         Assert.assertEquals("field's default", connectSchema.field("stringField").schema().defaultValue());

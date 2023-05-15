@@ -1,0 +1,67 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@rules_java//java:defs.bzl", "java_library", "java_proto_library")
+
+proto_library(
+    name = "io_confluent_kafka_schemaregistry_rules_proto",
+    srcs = glob(
+        ["*.proto"],
+        exclude = [
+            "EnumUnion.proto",
+            "Ranges.proto",
+            "CustomOptions2.proto",
+        ],
+    ),
+    strip_import_prefix = "/protobuf-serializer/src/test/proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//protobuf-types/src/main/proto:confluent_proto",
+        "//protobuf-types/src/main/proto/confluent/type:confluent_type_proto",
+        "@com_google_protobuf//:descriptor_proto",
+        "@com_google_protobuf//:timestamp_proto",
+        "@googleapis//:date_proto",
+        "@googleapis//:timeofday_proto",
+    ],
+)
+
+proto_library(
+    name = "customOptions2_proto",
+    srcs = ["CustomOptions2.proto"],
+    strip_import_prefix = "/protobuf-serializer/src/test/proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_protobuf//:descriptor_proto",
+    ],
+)
+
+proto_library(
+    name = "EnumUnion_proto",
+    srcs = ["EnumUnion.proto"],
+    strip_import_prefix = "/protobuf-serializer/src/test/proto",
+    visibility = ["//visibility:public"],
+)
+
+proto_library(
+    name = "Ranges_proto",
+    srcs = ["Ranges.proto"],
+    strip_import_prefix = "/protobuf-serializer/src/test/proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_protobuf//:descriptor_proto",
+    ],
+)
+
+java_proto_library(
+    name = "io_confluent_kafka_schemaregistry_rules_java_proto",
+    deps = [
+        ":EnumUnion_proto",
+        ":Ranges_proto",
+        ":customOptions2_proto",
+        ":io_confluent_kafka_schemaregistry_rules_proto",
+    ],
+)
+
+java_library(
+    name = "io_confluent_kafka_schemaregistry_rules_java_library",
+    visibility = ["//:__subpackages__"],
+    exports = [":io_confluent_kafka_schemaregistry_rules_java_proto"],
+)

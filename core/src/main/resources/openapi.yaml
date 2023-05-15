@@ -1,0 +1,8 @@
+resourcePackages:
+  - io.confluent.kafka.schemaregistry.rest.resources
+prettyPrint: true
+sortOutput: false
+openAPI:
+  info:
+    title: Confluent Schema Registry
+    version: v1

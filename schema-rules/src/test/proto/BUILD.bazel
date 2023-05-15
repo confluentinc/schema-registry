@@ -1,0 +1,53 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_java//java:defs.bzl", "java_library", "java_proto_library")
+
+proto_library(
+    name = "io_confluent_kafka_schemaregistry_rules_proto",
+    srcs = [
+        "Pii.proto",
+        "WidgetWithRef.proto",
+    ],
+    strip_import_prefix = "/schema-rules/src/test/proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//protobuf-types/src/main/proto:confluent_proto",
+    ],
+)
+
+proto_library(
+    name = "io_confluent_kafka_schemaregistry_rules_proto_2",
+    srcs = [
+        "NewWidget.proto",
+    ],
+    strip_import_prefix = "/schema-rules/src/test/proto",
+    visibility = ["//visibility:public"],
+)
+
+proto_library(
+    name = "io_confluent_kafka_schemaregistry_rules_proto_3",
+    srcs = [
+        "Widget.proto",
+    ],
+    strip_import_prefix = "/schema-rules/src/test/proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//protobuf-types/src/main/proto:confluent_proto",
+    ],
+)
+
+java_proto_library(
+    name = "io_confluent_kafka_schemaregistry_rules_java_proto",
+    deps = [
+        ":io_confluent_kafka_schemaregistry_rules_proto",
+        ":io_confluent_kafka_schemaregistry_rules_proto_2",
+        ":io_confluent_kafka_schemaregistry_rules_proto_3",
+    ],
+)
+
+java_library(
+    name = "io_confluent_kafka_schemaregistry_rules_java_library",
+    visibility = ["//:__subpackages__"],
+    exports = [":io_confluent_kafka_schemaregistry_rules_java_proto"],
+)

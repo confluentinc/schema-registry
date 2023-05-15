@@ -70,6 +70,11 @@ public class KafkaJsonSchemaSerdeTest {
       return Objects.equals(string, that.string) &&
               Objects.equals(number, that.number);
     }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(this.string.hashCode(), this.number.hashCode());
+    }
   }
 
   private Object createJsonRecord() throws IOException {

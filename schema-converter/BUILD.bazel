@@ -1,0 +1,19 @@
+load("@contrib_rules_jvm//java:defs.bzl", "java_library")
+
+java_library(
+    name = "schema-converter",
+    srcs = [
+        "src/main/java/io/confluent/connect/schema/AbstractDataConfig.java",
+        "src/main/java/io/confluent/connect/schema/ConnectEnum.java",
+        "src/main/java/io/confluent/connect/schema/ConnectUnion.java",
+    ],
+    visibility = ["//:__subpackages__"],
+    exports = [
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+    deps = [
+        "@maven//:org_apache_kafka_connect_api",
+        "@maven//:org_apache_kafka_kafka_clients",
+    ],
+)
