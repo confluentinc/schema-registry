@@ -318,7 +318,7 @@ public class CelExecutorTest {
   public void testKafkaAvroSerializer() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
-    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITEREAD,
         CelExecutor.TYPE, null, null, "message.name == \"testUser\" && message.kind == \"ONE\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
