@@ -14,6 +14,123 @@ public final class WidgetWithRefProto {
     registerAllExtensions(
         (com.google.protobuf.ExtensionRegistryLite) registry);
   }
+  /**
+   * Protobuf enum {@code io.confluent.kafka.schemaregistry.rules.Kind}
+   */
+  public enum Kind
+      implements com.google.protobuf.ProtocolMessageEnum {
+    /**
+     * <code>ZERO = 0;</code>
+     */
+    ZERO(0),
+    /**
+     * <code>ONE = 1;</code>
+     */
+    ONE(1),
+    /**
+     * <code>TWO = 2;</code>
+     */
+    TWO(2),
+    UNRECOGNIZED(-1),
+    ;
+
+    /**
+     * <code>ZERO = 0;</code>
+     */
+    public static final int ZERO_VALUE = 0;
+    /**
+     * <code>ONE = 1;</code>
+     */
+    public static final int ONE_VALUE = 1;
+    /**
+     * <code>TWO = 2;</code>
+     */
+    public static final int TWO_VALUE = 2;
+
+
+    public final int getNumber() {
+      if (this == UNRECOGNIZED) {
+        throw new java.lang.IllegalArgumentException(
+            "Can't get the number of an unknown enum value.");
+      }
+      return value;
+    }
+
+    /**
+     * @param value The numeric wire value of the corresponding enum entry.
+     * @return The enum associated with the given numeric wire value.
+     * @deprecated Use {@link #forNumber(int)} instead.
+     */
+    @java.lang.Deprecated
+    public static Kind valueOf(int value) {
+      return forNumber(value);
+    }
+
+    /**
+     * @param value The numeric wire value of the corresponding enum entry.
+     * @return The enum associated with the given numeric wire value.
+     */
+    public static Kind forNumber(int value) {
+      switch (value) {
+        case 0: return ZERO;
+        case 1: return ONE;
+        case 2: return TWO;
+        default: return null;
+      }
+    }
+
+    public static com.google.protobuf.Internal.EnumLiteMap<Kind>
+        internalGetValueMap() {
+      return internalValueMap;
+    }
+    private static final com.google.protobuf.Internal.EnumLiteMap<
+        Kind> internalValueMap =
+          new com.google.protobuf.Internal.EnumLiteMap<Kind>() {
+            public Kind findValueByNumber(int number) {
+              return Kind.forNumber(number);
+            }
+          };
+
+    public final com.google.protobuf.Descriptors.EnumValueDescriptor
+        getValueDescriptor() {
+      if (this == UNRECOGNIZED) {
+        throw new java.lang.IllegalStateException(
+            "Can't get the descriptor of an unrecognized enum value.");
+      }
+      return getDescriptor().getValues().get(ordinal());
+    }
+    public final com.google.protobuf.Descriptors.EnumDescriptor
+        getDescriptorForType() {
+      return getDescriptor();
+    }
+    public static final com.google.protobuf.Descriptors.EnumDescriptor
+        getDescriptor() {
+      return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.getDescriptor().getEnumTypes().get(0);
+    }
+
+    private static final Kind[] VALUES = values();
+
+    public static Kind valueOf(
+        com.google.protobuf.Descriptors.EnumValueDescriptor desc) {
+      if (desc.getType() != getDescriptor()) {
+        throw new java.lang.IllegalArgumentException(
+          "EnumValueDescriptor is not for this type.");
+      }
+      if (desc.getIndex() == -1) {
+        return UNRECOGNIZED;
+      }
+      return VALUES[desc.getIndex()];
+    }
+
+    private final int value;
+
+    private Kind(int value) {
+      this.value = value;
+    }
+
+    // @@protoc_insertion_point(enum_scope:io.confluent.kafka.schemaregistry.rules.Kind)
+  }
+
   public interface WidgetWithRefOrBuilder extends
       // @@protoc_insertion_point(interface_extends:io.confluent.kafka.schemaregistry.rules.WidgetWithRef)
       com.google.protobuf.MessageOrBuilder {
@@ -31,24 +148,59 @@ public final class WidgetWithRefProto {
         getNameBytes();
 
     /**
-     * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+     * <code>string lastName = 2;</code>
+     * @return The lastName.
+     */
+    java.lang.String getLastName();
+    /**
+     * <code>string lastName = 2;</code>
+     * @return The bytes for lastName.
+     */
+    com.google.protobuf.ByteString
+        getLastNameBytes();
+
+    /**
+     * <code>string fullName = 3;</code>
+     * @return The fullName.
+     */
+    java.lang.String getFullName();
+    /**
+     * <code>string fullName = 3;</code>
+     * @return The bytes for fullName.
+     */
+    com.google.protobuf.ByteString
+        getFullNameBytes();
+
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+     * @return The enum numeric value on the wire for kind.
+     */
+    int getKindValue();
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+     * @return The kind.
+     */
+    io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind getKind();
+
+    /**
+     * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
      * @return A list containing the ssn.
      */
     java.util.List<java.lang.String>
         getSsnList();
     /**
-     * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+     * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
      * @return The count of ssn.
      */
     int getSsnCount();
     /**
-     * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+     * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
      * @param index The index of the element to return.
      * @return The ssn at the given index.
      */
     java.lang.String getSsn(int index);
     /**
-     * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+     * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
      * @param index The index of the value to return.
      * @return The bytes of the ssn at the given index.
      */
@@ -56,35 +208,35 @@ public final class WidgetWithRefProto {
         getSsnBytes(int index);
 
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
      */
     java.util.List<io.confluent.kafka.schemaregistry.rules.PiiProto.Pii> 
         getPiiArrayList();
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
      */
     io.confluent.kafka.schemaregistry.rules.PiiProto.Pii getPiiArray(int index);
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
      */
     int getPiiArrayCount();
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
      */
     java.util.List<? extends io.confluent.kafka.schemaregistry.rules.PiiProto.PiiOrBuilder> 
         getPiiArrayOrBuilderList();
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
      */
     io.confluent.kafka.schemaregistry.rules.PiiProto.PiiOrBuilder getPiiArrayOrBuilder(
         int index);
 
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
      */
     int getPiiMapCount();
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
      */
     boolean containsPiiMap(
         java.lang.String key);
@@ -95,32 +247,32 @@ public final class WidgetWithRefProto {
     java.util.Map<java.lang.String, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii>
     getPiiMap();
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
      */
     java.util.Map<java.lang.String, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii>
     getPiiMapMap();
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
      */
 
     io.confluent.kafka.schemaregistry.rules.PiiProto.Pii getPiiMapOrDefault(
         java.lang.String key,
         io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue);
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
      */
 
     io.confluent.kafka.schemaregistry.rules.PiiProto.Pii getPiiMapOrThrow(
         java.lang.String key);
 
     /**
-     * <code>int32 size = 5;</code>
+     * <code>int32 size = 8;</code>
      * @return The size.
      */
     int getSize();
 
     /**
-     * <code>int32 version = 6;</code>
+     * <code>int32 version = 9;</code>
      * @return The version.
      */
     int getVersion();
@@ -139,6 +291,9 @@ public final class WidgetWithRefProto {
     }
     private WidgetWithRef() {
       name_ = "";
+      lastName_ = "";
+      fullName_ = "";
+      kind_ = 0;
       ssn_ = com.google.protobuf.LazyStringArrayList.EMPTY;
       piiArray_ = java.util.Collections.emptyList();
     }
@@ -165,7 +320,7 @@ public final class WidgetWithRefProto {
     protected com.google.protobuf.MapField internalGetMapField(
         int number) {
       switch (number) {
-        case 4:
+        case 7:
           return internalGetPiiMap();
         default:
           throw new RuntimeException(
@@ -218,10 +373,105 @@ public final class WidgetWithRefProto {
       }
     }
 
-    public static final int SSN_FIELD_NUMBER = 2;
+    public static final int LASTNAME_FIELD_NUMBER = 2;
+    private volatile java.lang.Object lastName_;
+    /**
+     * <code>string lastName = 2;</code>
+     * @return The lastName.
+     */
+    @java.lang.Override
+    public java.lang.String getLastName() {
+      java.lang.Object ref = lastName_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        lastName_ = s;
+        return s;
+      }
+    }
+    /**
+     * <code>string lastName = 2;</code>
+     * @return The bytes for lastName.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getLastNameBytes() {
+      java.lang.Object ref = lastName_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        lastName_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    public static final int FULLNAME_FIELD_NUMBER = 3;
+    private volatile java.lang.Object fullName_;
+    /**
+     * <code>string fullName = 3;</code>
+     * @return The fullName.
+     */
+    @java.lang.Override
+    public java.lang.String getFullName() {
+      java.lang.Object ref = fullName_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        fullName_ = s;
+        return s;
+      }
+    }
+    /**
+     * <code>string fullName = 3;</code>
+     * @return The bytes for fullName.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getFullNameBytes() {
+      java.lang.Object ref = fullName_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        fullName_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    public static final int KIND_FIELD_NUMBER = 4;
+    private int kind_;
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+     * @return The enum numeric value on the wire for kind.
+     */
+    @java.lang.Override public int getKindValue() {
+      return kind_;
+    }
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+     * @return The kind.
+     */
+    @java.lang.Override public io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind getKind() {
+      @SuppressWarnings("deprecation")
+      io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind result = io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.valueOf(kind_);
+      return result == null ? io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.UNRECOGNIZED : result;
+    }
+
+    public static final int SSN_FIELD_NUMBER = 5;
     private com.google.protobuf.LazyStringList ssn_;
     /**
-     * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+     * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
      * @return A list containing the ssn.
      */
     public com.google.protobuf.ProtocolStringList
@@ -229,14 +479,14 @@ public final class WidgetWithRefProto {
       return ssn_;
     }
     /**
-     * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+     * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
      * @return The count of ssn.
      */
     public int getSsnCount() {
       return ssn_.size();
     }
     /**
-     * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+     * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
      * @param index The index of the element to return.
      * @return The ssn at the given index.
      */
@@ -244,7 +494,7 @@ public final class WidgetWithRefProto {
       return ssn_.get(index);
     }
     /**
-     * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+     * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
      * @param index The index of the value to return.
      * @return The bytes of the ssn at the given index.
      */
@@ -253,17 +503,17 @@ public final class WidgetWithRefProto {
       return ssn_.getByteString(index);
     }
 
-    public static final int PII_ARRAY_FIELD_NUMBER = 3;
+    public static final int PII_ARRAY_FIELD_NUMBER = 6;
     private java.util.List<io.confluent.kafka.schemaregistry.rules.PiiProto.Pii> piiArray_;
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
      */
     @java.lang.Override
     public java.util.List<io.confluent.kafka.schemaregistry.rules.PiiProto.Pii> getPiiArrayList() {
       return piiArray_;
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
      */
     @java.lang.Override
     public java.util.List<? extends io.confluent.kafka.schemaregistry.rules.PiiProto.PiiOrBuilder> 
@@ -271,21 +521,21 @@ public final class WidgetWithRefProto {
       return piiArray_;
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
      */
     @java.lang.Override
     public int getPiiArrayCount() {
       return piiArray_.size();
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
      */
     @java.lang.Override
     public io.confluent.kafka.schemaregistry.rules.PiiProto.Pii getPiiArray(int index) {
       return piiArray_.get(index);
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
      */
     @java.lang.Override
     public io.confluent.kafka.schemaregistry.rules.PiiProto.PiiOrBuilder getPiiArrayOrBuilder(
@@ -293,7 +543,7 @@ public final class WidgetWithRefProto {
       return piiArray_.get(index);
     }
 
-    public static final int PII_MAP_FIELD_NUMBER = 4;
+    public static final int PII_MAP_FIELD_NUMBER = 7;
     private static final class PiiMapDefaultEntryHolder {
       static final com.google.protobuf.MapEntry<
           java.lang.String, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii> defaultEntry =
@@ -320,7 +570,7 @@ public final class WidgetWithRefProto {
       return internalGetPiiMap().getMap().size();
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
      */
 
     @java.lang.Override
@@ -338,7 +588,7 @@ public final class WidgetWithRefProto {
       return getPiiMapMap();
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
      */
     @java.lang.Override
 
@@ -346,7 +596,7 @@ public final class WidgetWithRefProto {
       return internalGetPiiMap().getMap();
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
      */
     @java.lang.Override
 
@@ -359,7 +609,7 @@ public final class WidgetWithRefProto {
       return map.containsKey(key) ? map.get(key) : defaultValue;
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
      */
     @java.lang.Override
 
@@ -374,10 +624,10 @@ public final class WidgetWithRefProto {
       return map.get(key);
     }
 
-    public static final int SIZE_FIELD_NUMBER = 5;
+    public static final int SIZE_FIELD_NUMBER = 8;
     private int size_;
     /**
-     * <code>int32 size = 5;</code>
+     * <code>int32 size = 8;</code>
      * @return The size.
      */
     @java.lang.Override
@@ -385,10 +635,10 @@ public final class WidgetWithRefProto {
       return size_;
     }
 
-    public static final int VERSION_FIELD_NUMBER = 6;
+    public static final int VERSION_FIELD_NUMBER = 9;
     private int version_;
     /**
-     * <code>int32 version = 6;</code>
+     * <code>int32 version = 9;</code>
      * @return The version.
      */
     @java.lang.Override
@@ -413,23 +663,32 @@ public final class WidgetWithRefProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(name_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, name_);
       }
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(lastName_)) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 2, lastName_);
+      }
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(fullName_)) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 3, fullName_);
+      }
+      if (kind_ != io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.ZERO.getNumber()) {
+        output.writeEnum(4, kind_);
+      }
       for (int i = 0; i < ssn_.size(); i++) {
-        com.google.protobuf.GeneratedMessageV3.writeString(output, 2, ssn_.getRaw(i));
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 5, ssn_.getRaw(i));
       }
       for (int i = 0; i < piiArray_.size(); i++) {
-        output.writeMessage(3, piiArray_.get(i));
+        output.writeMessage(6, piiArray_.get(i));
       }
       com.google.protobuf.GeneratedMessageV3
         .serializeStringMapTo(
           output,
           internalGetPiiMap(),
           PiiMapDefaultEntryHolder.defaultEntry,
-          4);
+          7);
       if (size_ != 0) {
-        output.writeInt32(5, size_);
+        output.writeInt32(8, size_);
       }
       if (version_ != 0) {
-        output.writeInt32(6, version_);
+        output.writeInt32(9, version_);
       }
       getUnknownFields().writeTo(output);
     }
@@ -443,6 +702,16 @@ public final class WidgetWithRefProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(name_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, name_);
       }
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(lastName_)) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, lastName_);
+      }
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(fullName_)) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(3, fullName_);
+      }
+      if (kind_ != io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.ZERO.getNumber()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeEnumSize(4, kind_);
+      }
       {
         int dataSize = 0;
         for (int i = 0; i < ssn_.size(); i++) {
@@ -453,7 +722,7 @@ public final class WidgetWithRefProto {
       }
       for (int i = 0; i < piiArray_.size(); i++) {
         size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(3, piiArray_.get(i));
+          .computeMessageSize(6, piiArray_.get(i));
       }
       for (java.util.Map.Entry<java.lang.String, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii> entry
            : internalGetPiiMap().getMap().entrySet()) {
@@ -463,15 +732,15 @@ public final class WidgetWithRefProto {
             .setValue(entry.getValue())
             .build();
         size += com.google.protobuf.CodedOutputStream
-            .computeMessageSize(4, piiMap__);
+            .computeMessageSize(7, piiMap__);
       }
       if (size_ != 0) {
         size += com.google.protobuf.CodedOutputStream
-          .computeInt32Size(5, size_);
+          .computeInt32Size(8, size_);
       }
       if (version_ != 0) {
         size += com.google.protobuf.CodedOutputStream
-          .computeInt32Size(6, version_);
+          .computeInt32Size(9, version_);
       }
       size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
@@ -490,6 +759,11 @@ public final class WidgetWithRefProto {
 
       if (!getName()
           .equals(other.getName())) return false;
+      if (!getLastName()
+          .equals(other.getLastName())) return false;
+      if (!getFullName()
+          .equals(other.getFullName())) return false;
+      if (kind_ != other.kind_) return false;
       if (!getSsnList()
           .equals(other.getSsnList())) return false;
       if (!getPiiArrayList()
@@ -513,6 +787,12 @@ public final class WidgetWithRefProto {
       hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + NAME_FIELD_NUMBER;
       hash = (53 * hash) + getName().hashCode();
+      hash = (37 * hash) + LASTNAME_FIELD_NUMBER;
+      hash = (53 * hash) + getLastName().hashCode();
+      hash = (37 * hash) + FULLNAME_FIELD_NUMBER;
+      hash = (53 * hash) + getFullName().hashCode();
+      hash = (37 * hash) + KIND_FIELD_NUMBER;
+      hash = (53 * hash) + kind_;
       if (getSsnCount() > 0) {
         hash = (37 * hash) + SSN_FIELD_NUMBER;
         hash = (53 * hash) + getSsnList().hashCode();
@@ -640,7 +920,7 @@ public final class WidgetWithRefProto {
       protected com.google.protobuf.MapField internalGetMapField(
           int number) {
         switch (number) {
-          case 4:
+          case 7:
             return internalGetPiiMap();
           default:
             throw new RuntimeException(
@@ -651,7 +931,7 @@ public final class WidgetWithRefProto {
       protected com.google.protobuf.MapField internalGetMutableMapField(
           int number) {
         switch (number) {
-          case 4:
+          case 7:
             return internalGetMutablePiiMap();
           default:
             throw new RuntimeException(
@@ -680,6 +960,12 @@ public final class WidgetWithRefProto {
       public Builder clear() {
         super.clear();
         name_ = "";
+
+        lastName_ = "";
+
+        fullName_ = "";
+
+        kind_ = 0;
 
         ssn_ = com.google.protobuf.LazyStringArrayList.EMPTY;
         bitField0_ = (bitField0_ & ~0x00000001);
@@ -723,6 +1009,9 @@ public final class WidgetWithRefProto {
         io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef result = new io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef(this);
         int from_bitField0_ = bitField0_;
         result.name_ = name_;
+        result.lastName_ = lastName_;
+        result.fullName_ = fullName_;
+        result.kind_ = kind_;
         if (((bitField0_ & 0x00000001) != 0)) {
           ssn_ = ssn_.getUnmodifiableView();
           bitField0_ = (bitField0_ & ~0x00000001);
@@ -792,6 +1081,17 @@ public final class WidgetWithRefProto {
         if (!other.getName().isEmpty()) {
           name_ = other.name_;
           onChanged();
+        }
+        if (!other.getLastName().isEmpty()) {
+          lastName_ = other.lastName_;
+          onChanged();
+        }
+        if (!other.getFullName().isEmpty()) {
+          fullName_ = other.fullName_;
+          onChanged();
+        }
+        if (other.kind_ != 0) {
+          setKindValue(other.getKindValue());
         }
         if (!other.ssn_.isEmpty()) {
           if (ssn_.isEmpty()) {
@@ -869,12 +1169,27 @@ public final class WidgetWithRefProto {
                 break;
               } // case 10
               case 18: {
+                lastName_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 18
+              case 26: {
+                fullName_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 26
+              case 32: {
+                kind_ = input.readEnum();
+
+                break;
+              } // case 32
+              case 42: {
                 java.lang.String s = input.readStringRequireUtf8();
                 ensureSsnIsMutable();
                 ssn_.add(s);
                 break;
-              } // case 18
-              case 26: {
+              } // case 42
+              case 50: {
                 io.confluent.kafka.schemaregistry.rules.PiiProto.Pii m =
                     input.readMessage(
                         io.confluent.kafka.schemaregistry.rules.PiiProto.Pii.parser(),
@@ -886,25 +1201,25 @@ public final class WidgetWithRefProto {
                   piiArrayBuilder_.addMessage(m);
                 }
                 break;
-              } // case 26
-              case 34: {
+              } // case 50
+              case 58: {
                 com.google.protobuf.MapEntry<java.lang.String, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii>
                 piiMap__ = input.readMessage(
                     PiiMapDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
                 internalGetMutablePiiMap().getMutableMap().put(
                     piiMap__.getKey(), piiMap__.getValue());
                 break;
-              } // case 34
-              case 40: {
+              } // case 58
+              case 64: {
                 size_ = input.readInt32();
 
                 break;
-              } // case 40
-              case 48: {
+              } // case 64
+              case 72: {
                 version_ = input.readInt32();
 
                 break;
-              } // case 48
+              } // case 72
               default: {
                 if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                   done = true; // was an endgroup tag
@@ -998,6 +1313,212 @@ public final class WidgetWithRefProto {
         return this;
       }
 
+      private java.lang.Object lastName_ = "";
+      /**
+       * <code>string lastName = 2;</code>
+       * @return The lastName.
+       */
+      public java.lang.String getLastName() {
+        java.lang.Object ref = lastName_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          lastName_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <code>string lastName = 2;</code>
+       * @return The bytes for lastName.
+       */
+      public com.google.protobuf.ByteString
+          getLastNameBytes() {
+        java.lang.Object ref = lastName_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          lastName_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <code>string lastName = 2;</code>
+       * @param value The lastName to set.
+       * @return This builder for chaining.
+       */
+      public Builder setLastName(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        lastName_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string lastName = 2;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearLastName() {
+        
+        lastName_ = getDefaultInstance().getLastName();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string lastName = 2;</code>
+       * @param value The bytes for lastName to set.
+       * @return This builder for chaining.
+       */
+      public Builder setLastNameBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        
+        lastName_ = value;
+        onChanged();
+        return this;
+      }
+
+      private java.lang.Object fullName_ = "";
+      /**
+       * <code>string fullName = 3;</code>
+       * @return The fullName.
+       */
+      public java.lang.String getFullName() {
+        java.lang.Object ref = fullName_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          fullName_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <code>string fullName = 3;</code>
+       * @return The bytes for fullName.
+       */
+      public com.google.protobuf.ByteString
+          getFullNameBytes() {
+        java.lang.Object ref = fullName_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          fullName_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <code>string fullName = 3;</code>
+       * @param value The fullName to set.
+       * @return This builder for chaining.
+       */
+      public Builder setFullName(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        fullName_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string fullName = 3;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearFullName() {
+        
+        fullName_ = getDefaultInstance().getFullName();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string fullName = 3;</code>
+       * @param value The bytes for fullName to set.
+       * @return This builder for chaining.
+       */
+      public Builder setFullNameBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        
+        fullName_ = value;
+        onChanged();
+        return this;
+      }
+
+      private int kind_ = 0;
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+       * @return The enum numeric value on the wire for kind.
+       */
+      @java.lang.Override public int getKindValue() {
+        return kind_;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+       * @param value The enum numeric value on the wire for kind to set.
+       * @return This builder for chaining.
+       */
+      public Builder setKindValue(int value) {
+        
+        kind_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+       * @return The kind.
+       */
+      @java.lang.Override
+      public io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind getKind() {
+        @SuppressWarnings("deprecation")
+        io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind result = io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.valueOf(kind_);
+        return result == null ? io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.UNRECOGNIZED : result;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+       * @param value The kind to set.
+       * @return This builder for chaining.
+       */
+      public Builder setKind(io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind value) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        
+        kind_ = value.getNumber();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearKind() {
+        
+        kind_ = 0;
+        onChanged();
+        return this;
+      }
+
       private com.google.protobuf.LazyStringList ssn_ = com.google.protobuf.LazyStringArrayList.EMPTY;
       private void ensureSsnIsMutable() {
         if (!((bitField0_ & 0x00000001) != 0)) {
@@ -1006,7 +1527,7 @@ public final class WidgetWithRefProto {
          }
       }
       /**
-       * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+       * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
        * @return A list containing the ssn.
        */
       public com.google.protobuf.ProtocolStringList
@@ -1014,14 +1535,14 @@ public final class WidgetWithRefProto {
         return ssn_.getUnmodifiableView();
       }
       /**
-       * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+       * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
        * @return The count of ssn.
        */
       public int getSsnCount() {
         return ssn_.size();
       }
       /**
-       * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+       * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
        * @param index The index of the element to return.
        * @return The ssn at the given index.
        */
@@ -1029,7 +1550,7 @@ public final class WidgetWithRefProto {
         return ssn_.get(index);
       }
       /**
-       * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+       * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
        * @param index The index of the value to return.
        * @return The bytes of the ssn at the given index.
        */
@@ -1038,7 +1559,7 @@ public final class WidgetWithRefProto {
         return ssn_.getByteString(index);
       }
       /**
-       * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+       * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
        * @param index The index to set the value at.
        * @param value The ssn to set.
        * @return This builder for chaining.
@@ -1054,7 +1575,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+       * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
        * @param value The ssn to add.
        * @return This builder for chaining.
        */
@@ -1069,7 +1590,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+       * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
        * @param values The ssn to add.
        * @return This builder for chaining.
        */
@@ -1082,7 +1603,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+       * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
        * @return This builder for chaining.
        */
       public Builder clearSsn() {
@@ -1092,7 +1613,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated string ssn = 2 [(.confluent.field_meta) = { ... }</code>
+       * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
        * @param value The bytes of the ssn to add.
        * @return This builder for chaining.
        */
@@ -1121,7 +1642,7 @@ public final class WidgetWithRefProto {
           io.confluent.kafka.schemaregistry.rules.PiiProto.Pii, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii.Builder, io.confluent.kafka.schemaregistry.rules.PiiProto.PiiOrBuilder> piiArrayBuilder_;
 
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public java.util.List<io.confluent.kafka.schemaregistry.rules.PiiProto.Pii> getPiiArrayList() {
         if (piiArrayBuilder_ == null) {
@@ -1131,7 +1652,7 @@ public final class WidgetWithRefProto {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public int getPiiArrayCount() {
         if (piiArrayBuilder_ == null) {
@@ -1141,7 +1662,7 @@ public final class WidgetWithRefProto {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.PiiProto.Pii getPiiArray(int index) {
         if (piiArrayBuilder_ == null) {
@@ -1151,7 +1672,7 @@ public final class WidgetWithRefProto {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public Builder setPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii value) {
@@ -1168,7 +1689,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public Builder setPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii.Builder builderForValue) {
@@ -1182,7 +1703,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public Builder addPiiArray(io.confluent.kafka.schemaregistry.rules.PiiProto.Pii value) {
         if (piiArrayBuilder_ == null) {
@@ -1198,7 +1719,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public Builder addPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii value) {
@@ -1215,7 +1736,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public Builder addPiiArray(
           io.confluent.kafka.schemaregistry.rules.PiiProto.Pii.Builder builderForValue) {
@@ -1229,7 +1750,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public Builder addPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii.Builder builderForValue) {
@@ -1243,7 +1764,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public Builder addAllPiiArray(
           java.lang.Iterable<? extends io.confluent.kafka.schemaregistry.rules.PiiProto.Pii> values) {
@@ -1258,7 +1779,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public Builder clearPiiArray() {
         if (piiArrayBuilder_ == null) {
@@ -1271,7 +1792,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public Builder removePiiArray(int index) {
         if (piiArrayBuilder_ == null) {
@@ -1284,14 +1805,14 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.PiiProto.Pii.Builder getPiiArrayBuilder(
           int index) {
         return getPiiArrayFieldBuilder().getBuilder(index);
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.PiiProto.PiiOrBuilder getPiiArrayOrBuilder(
           int index) {
@@ -1301,7 +1822,7 @@ public final class WidgetWithRefProto {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public java.util.List<? extends io.confluent.kafka.schemaregistry.rules.PiiProto.PiiOrBuilder> 
            getPiiArrayOrBuilderList() {
@@ -1312,14 +1833,14 @@ public final class WidgetWithRefProto {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.PiiProto.Pii.Builder addPiiArrayBuilder() {
         return getPiiArrayFieldBuilder().addBuilder(
             io.confluent.kafka.schemaregistry.rules.PiiProto.Pii.getDefaultInstance());
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.PiiProto.Pii.Builder addPiiArrayBuilder(
           int index) {
@@ -1327,7 +1848,7 @@ public final class WidgetWithRefProto {
             index, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii.getDefaultInstance());
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 3;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
        */
       public java.util.List<io.confluent.kafka.schemaregistry.rules.PiiProto.Pii.Builder> 
            getPiiArrayBuilderList() {
@@ -1375,7 +1896,7 @@ public final class WidgetWithRefProto {
         return internalGetPiiMap().getMap().size();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
        */
 
       @java.lang.Override
@@ -1393,7 +1914,7 @@ public final class WidgetWithRefProto {
         return getPiiMapMap();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
        */
       @java.lang.Override
 
@@ -1401,7 +1922,7 @@ public final class WidgetWithRefProto {
         return internalGetPiiMap().getMap();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
        */
       @java.lang.Override
 
@@ -1414,7 +1935,7 @@ public final class WidgetWithRefProto {
         return map.containsKey(key) ? map.get(key) : defaultValue;
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
        */
       @java.lang.Override
 
@@ -1435,7 +1956,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
        */
 
       public Builder removePiiMap(
@@ -1454,7 +1975,7 @@ public final class WidgetWithRefProto {
         return internalGetMutablePiiMap().getMutableMap();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
        */
       public Builder putPiiMap(
           java.lang.String key,
@@ -1469,7 +1990,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 4;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
        */
 
       public Builder putAllPiiMap(
@@ -1481,7 +2002,7 @@ public final class WidgetWithRefProto {
 
       private int size_ ;
       /**
-       * <code>int32 size = 5;</code>
+       * <code>int32 size = 8;</code>
        * @return The size.
        */
       @java.lang.Override
@@ -1489,7 +2010,7 @@ public final class WidgetWithRefProto {
         return size_;
       }
       /**
-       * <code>int32 size = 5;</code>
+       * <code>int32 size = 8;</code>
        * @param value The size to set.
        * @return This builder for chaining.
        */
@@ -1500,7 +2021,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>int32 size = 5;</code>
+       * <code>int32 size = 8;</code>
        * @return This builder for chaining.
        */
       public Builder clearSize() {
@@ -1512,7 +2033,7 @@ public final class WidgetWithRefProto {
 
       private int version_ ;
       /**
-       * <code>int32 version = 6;</code>
+       * <code>int32 version = 9;</code>
        * @return The version.
        */
       @java.lang.Override
@@ -1520,7 +2041,7 @@ public final class WidgetWithRefProto {
         return version_;
       }
       /**
-       * <code>int32 version = 6;</code>
+       * <code>int32 version = 9;</code>
        * @param value The version to set.
        * @return This builder for chaining.
        */
@@ -1531,7 +2052,7 @@ public final class WidgetWithRefProto {
         return this;
       }
       /**
-       * <code>int32 version = 6;</code>
+       * <code>int32 version = 9;</code>
        * @return This builder for chaining.
        */
       public Builder clearVersion() {
@@ -1625,18 +2146,21 @@ public final class WidgetWithRefProto {
     java.lang.String[] descriptorData = {
       "\n\023WidgetWithRef.proto\022\'io.confluent.kafk" +
       "a.schemaregistry.rules\032\024confluent/meta.p" +
-      "roto\032\tPii.proto\"\347\002\n\rWidgetWithRef\022!\n\004nam" +
-      "e\030\001 \001(\tB\023\202D\005\032\003PII\202D\010\032\006PUBLIC\022!\n\003ssn\030\002 \003(" +
-      "\tB\024\202D\005\032\003PII\202D\t\032\007PRIVATE\022?\n\tpii_array\030\003 \003" +
-      "(\0132,.io.confluent.kafka.schemaregistry.r" +
-      "ules.Pii\022S\n\007pii_map\030\004 \003(\0132B.io.confluent" +
-      ".kafka.schemaregistry.rules.WidgetWithRe" +
-      "f.PiiMapEntry\022\014\n\004size\030\005 \001(\005\022\017\n\007version\030\006" +
-      " \001(\005\032[\n\013PiiMapEntry\022\013\n\003key\030\001 \001(\t\022;\n\005valu" +
-      "e\030\002 \001(\0132,.io.confluent.kafka.schemaregis" +
-      "try.rules.Pii:\0028\001B?\n\'io.confluent.kafka." +
-      "schemaregistry.rulesB\022WidgetWithRefProto" +
-      "P\000b\006proto3"
+      "roto\032\tPii.proto\"\310\003\n\rWidgetWithRef\022!\n\004nam" +
+      "e\030\001 \001(\tB\023\202D\005\032\003PII\202D\010\032\006PUBLIC\022\020\n\010lastName" +
+      "\030\002 \001(\t\022\020\n\010fullName\030\003 \001(\t\022;\n\004kind\030\004 \001(\0162-" +
+      ".io.confluent.kafka.schemaregistry.rules" +
+      ".Kind\022!\n\003ssn\030\005 \003(\tB\024\202D\005\032\003PII\202D\t\032\007PRIVATE" +
+      "\022?\n\tpii_array\030\006 \003(\0132,.io.confluent.kafka" +
+      ".schemaregistry.rules.Pii\022S\n\007pii_map\030\007 \003" +
+      "(\0132B.io.confluent.kafka.schemaregistry.r" +
+      "ules.WidgetWithRef.PiiMapEntry\022\014\n\004size\030\010" +
+      " \001(\005\022\017\n\007version\030\t \001(\005\032[\n\013PiiMapEntry\022\013\n\003" +
+      "key\030\001 \001(\t\022;\n\005value\030\002 \001(\0132,.io.confluent." +
+      "kafka.schemaregistry.rules.Pii:\0028\001*\"\n\004Ki" +
+      "nd\022\010\n\004ZERO\020\000\022\007\n\003ONE\020\001\022\007\n\003TWO\020\002B?\n\'io.con" +
+      "fluent.kafka.schemaregistry.rulesB\022Widge" +
+      "tWithRefProtoP\000b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -1649,7 +2173,7 @@ public final class WidgetWithRefProto {
     internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_descriptor,
-        new java.lang.String[] { "Name", "Ssn", "PiiArray", "PiiMap", "Size", "Version", });
+        new java.lang.String[] { "Name", "LastName", "FullName", "Kind", "Ssn", "PiiArray", "PiiMap", "Size", "Version", });
     internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_PiiMapEntry_descriptor =
       internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_descriptor.getNestedTypes().get(0);
     internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_PiiMapEntry_fieldAccessorTable = new

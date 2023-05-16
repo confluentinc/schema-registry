@@ -61,7 +61,6 @@ import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.FalseSchema;
 import org.everit.json.schema.NotSchema;
-import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
@@ -528,11 +527,11 @@ public class JsonSchema implements ParsedSchema {
 
   private Object toTransformedMessage(
       RuleContext ctx, Schema schema, String path, Object message, FieldTransform transform) {
-    if (schema == null || message == null) {
+    FieldContext fieldCtx = ctx.currentField();
+    if (schema == null) {
       return message;
     }
     message = getValue(message);
-    FieldContext fieldCtx = ctx.currentField();
     if (fieldCtx != null) {
       fieldCtx.setType(getType(schema));
     }
@@ -566,6 +565,9 @@ public class JsonSchema implements ParsedSchema {
       }
       return result;
     } else if (schema instanceof ObjectSchema) {
+      if (message == null) {
+        return message;
+      }
       Map<String, Schema> propertySchemas = ((ObjectSchema) schema).getPropertySchemas();
       for (Map.Entry<String, Schema> entry : propertySchemas.entrySet()) {
         String propertyName = entry.getKey();
@@ -582,13 +584,15 @@ public class JsonSchema implements ParsedSchema {
       }
       return message;
     } else if (schema instanceof ReferenceSchema) {
+      if (message == null) {
+        return message;
+      }
       return toTransformedMessage(ctx, ((ReferenceSchema)schema).getReferredSchema(),
           path, message, transform);
     } else if (schema instanceof ConditionalSchema
         || schema instanceof EmptySchema
         || schema instanceof FalseSchema
-        || schema instanceof NotSchema
-        || schema instanceof NullSchema) {
+        || schema instanceof NotSchema) {
       return message;
     } else {
       if (fieldCtx != null) {
@@ -618,6 +622,8 @@ public class JsonSchema implements ParsedSchema {
       return ((NumericNode)message).numberValue();
     } else if (message instanceof BooleanNode) {
       return ((BooleanNode) message).asBoolean();
+    } else if (message instanceof NullNode) {
+      return null;
     } else {
       return message;
     }

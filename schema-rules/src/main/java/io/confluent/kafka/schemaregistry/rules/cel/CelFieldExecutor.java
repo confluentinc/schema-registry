@@ -16,11 +16,11 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel;
 
-import com.google.common.collect.ImmutableMap;
-import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
+import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 public class CelFieldExecutor implements FieldRuleExecutor {
 
@@ -33,12 +33,16 @@ public class CelFieldExecutor implements FieldRuleExecutor {
   @Override
   public FieldTransform newTransform(RuleContext ruleContext) {
     return (ctx, fieldCtx, fieldValue) ->
-        CelExecutor.execute(ctx, fieldValue, ImmutableMap.<String, Object>builder()
-            .put("value", fieldValue)
-            .put("fullName", fieldCtx.getFullName())
-            .put("name", fieldCtx.getName())
-            .put("typeName", fieldCtx.getType().name())
-            .put("tags", new ArrayList<>(fieldCtx.getTags()))
-            .build());
+        CelExecutor.execute(ctx, fieldValue, new HashMap<String, Object>() {
+              {
+                put("value", fieldValue);  // fieldValue may be null
+                put("fullName", fieldCtx.getFullName());
+                put("name", fieldCtx.getName());
+                put("typeName", fieldCtx.getType().name());
+                put("tags", new ArrayList<>(fieldCtx.getTags()));
+                put("message", fieldCtx.getContainingMessage());
+              }
+            }
+        );
   }
 }

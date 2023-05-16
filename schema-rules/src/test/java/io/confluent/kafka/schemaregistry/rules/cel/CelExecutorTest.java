@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rules.cel;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,6 +49,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.DlqAction;
 import io.confluent.kafka.schemaregistry.rules.PiiProto;
+import io.confluent.kafka.schemaregistry.rules.WidgetProto.Kind;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
 import io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef;
@@ -69,7 +71,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.reflect.ReflectData;
@@ -79,7 +80,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
 
 public class CelExecutorTest {
 
@@ -155,7 +155,7 @@ public class CelExecutorTest {
   }
 
   private Schema createEnumSchema() {
-    String enumSchema = "{\"name\": \"Kind\",\n"
+    String enumSchema = "{\"name\": \"Kind\",\"namespace\": \"example.avro\",\n"
         + "   \"type\": \"enum\",\n"
         + "  \"symbols\" : [\"ONE\", \"TWO\", \"THREE\"]\n"
         + "}";
@@ -167,7 +167,10 @@ public class CelExecutorTest {
   private Schema createUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
         + "\"name\": \"User\","
-        + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}, "
+        + "\"fields\": ["
+        + "{\"name\": \"name\", \"type\": \"string\"}, "
+        + "{\"name\": \"lastName\", \"type\": [\"null\", \"string\"]}, "
+        + "{\"name\": \"fullName\", \"type\": [\"null\", \"string\"]}, "
         + "{\"name\": \"kind\",\n"
         + "  \"type\": {\n"
         + "    \"name\": \"Kind\",\n"
@@ -193,6 +196,8 @@ public class CelExecutorTest {
   private Schema createWidgetSchema() {
     String userSchema = "{\"type\":\"record\",\"name\":\"OldWidget\",\"namespace\":\"io.confluent.kafka.schemaregistry.rules.cel.CelExecutorTest\",\"fields\":\n"
         + "[{\"name\": \"name\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]},\n"
+        + "{\"name\": \"lastName\", \"type\": \"string\"},\n"
+        + "{\"name\": \"fullName\", \"type\": \"string\"},\n"
         + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"},\"confluent:tags\": [\"PII\"]},\n"
         + "{\"name\": \"piiArray\", \"type\": { \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\":\"OldPii\", \"fields\":\n"
         + "[{\"name\": \"pii\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]}]}}},\n"
@@ -207,6 +212,8 @@ public class CelExecutorTest {
   private Schema createWidgetSchemaNoTags() {
     String userSchema = "{\"type\":\"record\",\"name\":\"OldWidget\",\"namespace\":\"io.confluent.kafka.schemaregistry.rules.cel.CelExecutorTest\",\"fields\":\n"
         + "[{\"name\": \"name\", \"type\": \"string\"},\n"
+        + "{\"name\": \"lastName\", \"type\": \"string\"},\n"
+        + "{\"name\": \"fullName\", \"type\": \"string\"},\n"
         + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"}},\n"
         + "{\"name\": \"piiArray\", \"type\": { \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\":\"OldPii\", \"fields\":\n"
         + "[{\"name\": \"pii\", \"type\": \"string\"}]}}},\n"
@@ -219,6 +226,8 @@ public class CelExecutorTest {
   private Schema createWidgetSchemaWithGuard() {
     String userSchema = "{\"type\":\"record\",\"name\":\"OldWidget\",\"namespace\":\"io.confluent.kafka.schemaregistry.rules.cel.CelExecutorTest\",\"fields\":\n"
         + "[{\"name\": \"name\", \"type\": \"string\"},\n"
+        + "{\"name\": \"lastName\", \"type\": \"string\"},\n"
+        + "{\"name\": \"fullName\", \"type\": \"string\"},\n"
         + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"}},\n"
         + "{\"name\": \"piiArray\", \"type\": { \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\":\"OldPii\", \"fields\":\n"
         + "[{\"name\": \"pii\", \"type\": \"string\"}]}}},\n"
@@ -309,8 +318,9 @@ public class CelExecutorTest {
   public void testKafkaAvroSerializer() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
-    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.READ,
-        CelExecutor.TYPE, null, null, "message.name == \"testUser\" && message.kind == \"ONE\"",
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITEREAD,
+        CelExecutor.TYPE, null, null,
+        "message.name == \"testUser\" && size(message.name) == 8 && message.kind == \"ONE\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -334,6 +344,24 @@ public class CelExecutorTest {
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     GenericRecord obj = (GenericRecord) avroDeserializer.deserialize(topic, bytes);
     assertEquals("testUser-suffix", obj.get("name").toString());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerFieldTransformUsingMessage() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    ((GenericRecord) avroRecord).put("lastName", "smith");
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    GenericRecord obj = (GenericRecord) avroDeserializer.deserialize(topic, bytes);
+    assertEquals("testUser smith", obj.get("fullName").toString());
   }
 
   @Test
@@ -442,6 +470,8 @@ public class CelExecutorTest {
     Object obj;
 
     OldWidget widget = new OldWidget("alice");
+    widget.setLastName("");
+    widget.setFullName("");
     Schema schema = ReflectData.get().getSchema(widget.getClass());
     AvroSchema avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.READ,
@@ -467,6 +497,8 @@ public class CelExecutorTest {
     Object obj;
 
     OldWidget widget = new OldWidget("alice");
+    widget.setLastName("");
+    widget.setFullName("");
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
@@ -497,11 +529,51 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerReflectionFieldTransformUsingMessage() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    OldWidget widget = new OldWidget("alice");
+    widget.setLastName("smith");
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
+    Schema schema = createWidgetSchema();
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    bytes = reflectionAvroSerializer.serialize(topic, widget);
+
+    obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
+    assertTrue(
+        "Returned object should be a Widget",
+        OldWidget.class.isInstance(obj)
+    );
+    assertEquals(widget, obj);
+    assertEquals("alice", ((OldWidget)obj).getName());
+    assertEquals("alice smith", ((OldWidget)obj).getFullName());
+    assertEquals("123", ((OldWidget)obj).getSsn().get(0));
+    assertEquals("456", ((OldWidget)obj).getSsn().get(1));
+    assertEquals("789", ((OldWidget)obj).getPiiArray().get(0).getPii());
+    assertEquals("012", ((OldWidget)obj).getPiiArray().get(1).getPii());
+    assertEquals("345", ((OldWidget)obj).getPiiMap().get("key1").getPii());
+    assertEquals("678", ((OldWidget)obj).getPiiMap().get("key2").getPii());
+  }
+
+  @Test
   public void testKafkaAvroSerializerReflectionFieldTransformIgnoreGuardSeparator() throws Exception {
     byte[] bytes;
     Object obj;
 
     OldWidget widget = new OldWidget("alice");
+    widget.setLastName("");
+    widget.setFullName("");
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
@@ -538,6 +610,8 @@ public class CelExecutorTest {
     Object obj;
 
     OldWidget widget = new OldWidget("alice");
+    widget.setLastName("");
+    widget.setFullName("");
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
@@ -573,6 +647,8 @@ public class CelExecutorTest {
     Object obj;
 
     OldWidget widget = new OldWidget("alice");
+    widget.setLastName("");
+    widget.setFullName("");
     widget.setSize(123);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
@@ -610,6 +686,8 @@ public class CelExecutorTest {
     Object obj;
 
     OldWidget widget = new OldWidget("alice");
+    widget.setLastName("");
+    widget.setFullName("");
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
@@ -647,7 +725,8 @@ public class CelExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelExecutor.TYPE, null, null, "{'name': 'Bob', 'kind': 'TWO'}",
+        CelExecutor.TYPE, null, null,
+        "{'name': 'Bob', 'lastName': null, 'fullName': null, 'kind': 'TWO'}",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -656,6 +735,8 @@ public class CelExecutorTest {
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     GenericRecord obj = (GenericRecord) avroDeserializer.deserialize(topic, bytes);
     assertEquals("Bob", obj.get("name").toString());
+    assertNull(obj.get("lastName"));
+    assertNull(obj.get("fullName"));
     assertEquals("TWO", obj.get("kind").toString());
   }
 
@@ -701,6 +782,47 @@ public class CelExecutorTest {
     schemaRegistry.register(topic + "-value", avroSchema);
 
     avroSerializer.serialize(topic, avroRecord);
+  }
+
+  @Test
+  public void testKafkaProtobufSerializer() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    Widget widget = Widget.newBuilder()
+        .setName("alice")
+        .setKind(Kind.ONE)
+        .addSsn("123")
+        .addSsn("456")
+        .addPiiArray(Pii.newBuilder().setPii("789").build())
+        .addPiiArray(Pii.newBuilder().setPii("012").build())
+        .putPiiMap("key1", Pii.newBuilder().setPii("345").build())
+        .putPiiMap("key2", Pii.newBuilder().setPii("678").build())
+        .setSize(123)
+        .build();
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITEREAD,
+        CelExecutor.TYPE, null, null,
+        "message.name == \"alice\" && size(message.name) == 5 && message.kind == 1",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+
+    protobufSchema = protobufSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    bytes = protobufSerializer.serialize(topic, widget);
+    obj = protobufDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Widget",
+        DynamicMessage.class.isInstance(obj)
+    );
+    DynamicMessage dynamicMessage = (DynamicMessage) obj;
+    Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
+    );
   }
 
   @Test
@@ -768,6 +890,82 @@ public class CelExecutorTest {
     assertEquals(
         "Returned object should be a NewWidget",
         ImmutableList.of("345-suffix", "678-suffix"),
+        ssnMapValues
+    );
+  }
+
+  @Test
+  public void testKafkaProtobufSerializerFieldTransformUsingMessage() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    Widget widget = Widget.newBuilder()
+        .setName("alice")
+        .setLastName("smith")
+        .addSsn("123")
+        .addSsn("456")
+        .addPiiArray(Pii.newBuilder().setPii("789").build())
+        .addPiiArray(Pii.newBuilder().setPii("012").build())
+        .putPiiMap("key1", Pii.newBuilder().setPii("345").build())
+        .putPiiMap("key2", Pii.newBuilder().setPii("678").build())
+        .setSize(123)
+        .build();
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"fullName\" ; value == \"\" ? message.name + \" \" + message.lastName : value",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    protobufSchema = protobufSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    bytes = protobufSerializer.serialize(topic, widget);
+
+    obj = protobufDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Widget",
+        DynamicMessage.class.isInstance(obj)
+    );
+    DynamicMessage dynamicMessage = (DynamicMessage) obj;
+    Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice smith",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("fullName"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("123", "456"),
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("ssn"))
+    );
+    List<String> ssnArrayValues = ((List<?>)((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("pii_array")))
+        .stream()
+        .map(o -> {
+          DynamicMessage msg = (DynamicMessage) o;
+          return msg.getField(msg.getDescriptorForType().findFieldByName("pii")).toString();
+        })
+        .collect(Collectors.toList());
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("789", "012"),
+        ssnArrayValues
+    );
+    List<String> ssnMapValues = ((List<?>)((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("pii_map")))
+        .stream()
+        .map(o -> {
+          DynamicMessage msg = (DynamicMessage) o;
+          DynamicMessage msg2 = (DynamicMessage) msg.getField(msg.getDescriptorForType().findFieldByName("value"));
+          return msg2.getField(msg2.getDescriptorForType().findFieldByName("pii")).toString();
+        })
+        .collect(Collectors.toList());
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("345", "678"),
         ssnMapValues
     );
   }
@@ -954,6 +1152,54 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaJsonSchemaSerializer() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    OldWidget widget = new OldWidget("alice");
+    widget.setSize(123);
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
+        + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"size\":{\"type\":\"integer\"},"
+        + "\"version\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"size\",\"version\"],"
+        + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
+        + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]}}}}}";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    // Can't use WRITEREAD as JacksonRegistry doesn't handle ObjectNode
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelExecutor.TYPE, null, null,
+        "message.name == \"alice\" && size(message.name) == 5",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    bytes = jsonSchemaSerializer.serialize(topic, widget);
+
+    obj = jsonSchemaDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Widget",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice",
+        ((JsonNode)obj).get("name").textValue()
+    );
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializerFieldTransform() throws Exception {
     byte[] bytes;
     Object obj;
@@ -965,6 +1211,8 @@ public class CelExecutorTest {
     String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
         + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1018,6 +1266,79 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaJsonSchemaSerializerFieldTransformUsingMessage() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    OldWidget widget = new OldWidget("alice");
+    widget.setLastName("smith");
+    widget.setSize(123);
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
+        + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"size\":{\"type\":\"integer\"},"
+        + "\"version\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"size\",\"version\"],"
+        + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
+        + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]}}}}}";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    bytes = jsonSchemaSerializer.serialize(topic, widget);
+
+    obj = jsonSchemaDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Widget",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice",
+        ((JsonNode)obj).get("name").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice smith",
+        ((JsonNode)obj).get("fullName").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "123",
+        ((JsonNode)obj).get("ssn").get(0).textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "456",
+        ((JsonNode)obj).get("ssn").get(1).textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "789",
+        ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "012",
+        ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
+    );
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializerFieldTransformWithRef() throws Exception {
     byte[] bytes;
     Object obj;
@@ -1034,6 +1355,8 @@ public class CelExecutorTest {
     String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
         + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"OldPii.json\"}}]},"
@@ -1162,6 +1485,8 @@ public class CelExecutorTest {
     String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
         + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1194,8 +1519,56 @@ public class CelExecutorTest {
     );
   }
 
+  @Test
+  public void testKafkaJsonSchemaSerializerIdentityTransform() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    OldWidget widget = new OldWidget("alice");
+    widget.setSize(123);
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
+        + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"size\":{\"type\":\"integer\"},"
+        + "\"version\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"size\",\"version\"],"
+        + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
+        + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]}}}}}";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelExecutor.TYPE, null, null, "message",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    bytes = jsonSchemaSerializer.serialize(topic, widget);
+
+    obj = jsonSchemaDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Widget",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice",
+        ((JsonNode)obj).get("name").textValue()
+    );
+  }
+
   public static class OldWidget {
     private String name;
+    private String lastName;
+    private String fullName;
     private List<String> ssn = new ArrayList<>();
     private List<OldPii> piiArray = new ArrayList<>();
     private Map<String, OldPii> piiMap = new HashMap<>();
@@ -1213,6 +1586,22 @@ public class CelExecutorTest {
 
     public void setName(String name) {
       this.name = name;
+    }
+
+    public String getLastName() {
+      return lastName;
+    }
+
+    public void setLastName(String lastName) {
+      this.lastName = lastName;
+    }
+
+    public String getFullName() {
+      return fullName;
+    }
+
+    public void setFullName(String fullName) {
+      this.fullName = fullName;
     }
 
     public List<String> getSsn() {
