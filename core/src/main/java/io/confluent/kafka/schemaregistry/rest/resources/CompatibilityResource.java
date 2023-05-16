@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -148,7 +149,8 @@ public class CompatibilityResource {
       errorMessages = schemaRegistry.isCompatible(
           subject, schema,
           schemaForSpecifiedVersion != null
-              ? Collections.singletonList(schemaForSpecifiedVersion)
+              ? Collections.singletonList(
+                  new SchemaKey(subject, schemaForSpecifiedVersion.getVersion()))
               : Collections.emptyList(),
           normalize
       );
@@ -218,7 +220,7 @@ public class CompatibilityResource {
 
     // returns true if posted schema is compatible with the specified subject.
     List<String> errorMessages;
-    List<Schema> previousSchemas = new ArrayList<>();
+    List<SchemaKey> previousSchemas = new ArrayList<>();
     try {
       //Don't check compatibility against deleted schema
       schemaRegistry.getAllVersions(subject, LookupFilter.DEFAULT)

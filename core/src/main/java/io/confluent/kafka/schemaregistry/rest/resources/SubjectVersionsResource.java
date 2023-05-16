@@ -39,6 +39,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetExcep
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -293,7 +294,7 @@ public class SubjectVersionsResource {
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     // check if subject exists. If not, throw 404
-    Iterator<Schema> resultSchemas;
+    Iterator<SchemaKey> resultSchemas;
     List<Integer> allVersions = new ArrayList<>();
     String errorMessage = "Error while validating that subject "
                           + subject
@@ -324,7 +325,7 @@ public class SubjectVersionsResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     while (resultSchemas.hasNext()) {
-      Schema schema = resultSchemas.next();
+      SchemaKey schema = resultSchemas.next();
       allVersions.add(schema.getVersion());
     }
     return allVersions;

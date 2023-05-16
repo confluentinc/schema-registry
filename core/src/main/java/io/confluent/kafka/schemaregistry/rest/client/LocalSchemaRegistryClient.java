@@ -51,6 +51,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeExceptio
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.Mode;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -128,7 +129,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
-    Iterator<Schema> allSchemasForThisTopic = null;
+    Iterator<SchemaKey> resultSchemas = null;
     List<Integer> allVersions = new ArrayList<>();
     String errorMessage = "Error while validating that subject "
         + subject
@@ -145,14 +146,14 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     errorMessage = "Error while listing all versions for subject "
         + subject;
     try {
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject, LookupFilter.DEFAULT);
+      resultSchemas = schemaRegistry.getAllVersions(subject, LookupFilter.DEFAULT);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    while (allSchemasForThisTopic.hasNext()) {
-      Schema schema = allSchemasForThisTopic.next();
+    while (resultSchemas.hasNext()) {
+      SchemaKey schema = resultSchemas.next();
       allVersions.add(schema.getVersion());
     }
     return allVersions;

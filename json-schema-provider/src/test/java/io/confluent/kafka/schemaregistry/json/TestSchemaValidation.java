@@ -16,6 +16,8 @@
 package io.confluent.kafka.schemaregistry.json;
 
 
+import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
@@ -228,24 +230,24 @@ public class TestSchemaValidation {
       SchemaValidator validator = builder.canReadStrategy().validateAll();
       List<String> valid = validator.validate(
           new JsonSchema(reader),
-          Collections.singleton(new JsonSchema(writer))
+          Collections.singleton(new SimpleParsedSchemaHolder(new JsonSchema(writer)))
       );
       Assert.assertFalse(valid.isEmpty());
     }
   }
 
   private void testValidatorPasses(SchemaValidator validator, Schema schema, Schema... prev) {
-    ArrayList<JsonSchema> prior = new ArrayList<>();
+    ArrayList<ParsedSchemaHolder> prior = new ArrayList<>();
     for (int i = prev.length - 1; i >= 0; i--) {
-      prior.add(new JsonSchema(prev[i]));
+      prior.add(new SimpleParsedSchemaHolder(new JsonSchema(prev[i])));
     }
     validator.validate(new JsonSchema(schema), prior);
   }
 
   private void testValidatorFails(SchemaValidator validator, Schema schemaFails, Schema... prev) {
-    ArrayList<JsonSchema> prior = new ArrayList<>();
+    ArrayList<ParsedSchemaHolder> prior = new ArrayList<>();
     for (int i = prev.length - 1; i >= 0; i--) {
-      prior.add(new JsonSchema(prev[i]));
+      prior.add(new SimpleParsedSchemaHolder(new JsonSchema(prev[i])));
     }
     List<String> valid = validator.validate(new JsonSchema(schemaFails), prior);
     Assert.assertFalse(valid.isEmpty());
