@@ -166,6 +166,18 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_COMPATIBILITY_CONFIG = "schema.compatibility.level";
 
   /**
+   * <code>schema.cache.maximum.weight</code>
+   */
+  public static final String SCHEMA_CACHE_MAXIMUM_WEIGHT_CONFIG = "schema.cache.maximum.weight";
+  public static final int SCHEMA_CACHE_MAXIMUM_WEIGHT_DEFAULT = 1000000;
+
+  /**
+   * <code>schema.cache.use.weight</code>
+   */
+  public static final String SCHEMA_CACHE_USE_WEIGHT_CONFIG = "schema.cache.use.weight";
+  public static final boolean SCHEMA_CACHE_USE_WEIGHT_DEFAULT = false;
+
+  /**
    * <code>schema.cache.size</code>
    */
   public static final String SCHEMA_CACHE_SIZE_CONFIG = "schema.cache.size";
@@ -322,6 +334,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "The expiration in seconds for entries accessed in the cache.";
   protected static final String SCHEMA_CANONICALIZE_ON_CONSUME_DOC =
       "A list of schema types to canonicalize on consume, to be used if canonicalization changes.";
+  protected static final String SCHEMA_CACHE_MAXIMUM_WEIGHT_DOC =
+          "The maximum weight of the schema cache.";
+  protected static final String SCHEMA_CACHE_USE_WEIGHT_DOC =
+          "Whether to use weight or size based local schema cache.";
   protected static final String METADATA_ENCODER_SECRET_DOC =
       "The secret used to encrypt and decrypt encoder keysets. "
       + "Use a random string with high entropy.";
@@ -512,6 +528,14 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, SCHEMA_CANONICALIZE_ON_CONSUME_DOC
+    )
+    .define(SCHEMA_CACHE_MAXIMUM_WEIGHT_CONFIG,
+        ConfigDef.Type.INT, SCHEMA_CACHE_MAXIMUM_WEIGHT_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_CACHE_MAXIMUM_WEIGHT_DOC
+    )
+    .define(SCHEMA_CACHE_USE_WEIGHT_CONFIG,
+            ConfigDef.Type.BOOLEAN, SCHEMA_CACHE_USE_WEIGHT_DEFAULT,
+            ConfigDef.Importance.LOW, SCHEMA_CACHE_USE_WEIGHT_DOC
     )
     .define(METADATA_ENCODER_SECRET_CONFIG, ConfigDef.Type.PASSWORD, null,
         ConfigDef.Importance.HIGH, METADATA_ENCODER_SECRET_DOC

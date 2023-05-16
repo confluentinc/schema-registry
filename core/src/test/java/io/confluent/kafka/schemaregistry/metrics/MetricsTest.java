@@ -33,6 +33,9 @@ import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_DELETED_COUNT;
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_MASTER_SLAVE_ROLE;
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_REGISTERED_COUNT;
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_SCHEMA_CACHE_SIZE;
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_SCHEMA_CACHE_HIT;
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_SCHEMA_CACHE_MISS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -94,6 +97,45 @@ public class MetricsTest extends ClusterTestHarness {
     assertEquals((double) schemaCount, mBeanServer.getAttribute(avroCreated, METRIC_NAME_AVRO_SCHEMAS_CREATED));
     assertEquals((double) schemaCount, mBeanServer.getAttribute(schemasDeleted, METRIC_NAME_DELETED_COUNT));
     assertEquals((double) schemaCount, mBeanServer.getAttribute(avroDeleted, METRIC_NAME_AVRO_SCHEMAS_DELETED));
+  }
+
+  @Test
+  public void testLocalSchemaCacheMetrics() throws Exception {
+    MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+    ObjectName schemaCacheSize =
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_SCHEMA_CACHE_SIZE);
+    ObjectName schemaCacheHit =
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_SCHEMA_CACHE_HIT);
+    ObjectName schemaCacheMiss =
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_SCHEMA_CACHE_MISS);
+
+    RestService service = restApp.restClient;
+    String subject = "testTopic1";
+    int schemaCount = 3;
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(schemaCount);
+
+    // test registering and verifying new schemas in subject1
+    int schemaIdCounter = 1;
+    for (int i = 0; i < schemaCount; i++) {
+      String schema = schemas.get(i);
+      TestUtils.registerAndVerifySchema(service, schema, schemaIdCounter++, subject);
+    }
+
+    // Re-registering schemas should only increase cache hits.
+    for (int i = 0; i < schemaCount; i++) {
+      String schemaString = schemas.get(i);
+      service.registerSchema(schemaString, subject);
+    }
+
+    // Deleting schemas should only increase cache hits.
+    for (Integer i = 1; i < schemaIdCounter; i++) {
+      assertEquals(i, service.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+              subject, i.toString()));
+    }
+
+    assertEquals((double) schemaCount, mBeanServer.getAttribute(schemaCacheSize, METRIC_NAME_REGISTERED_COUNT));
+    assertEquals((double) schemaCount, mBeanServer.getAttribute(schemaCacheMiss, METRIC_NAME_AVRO_SCHEMAS_CREATED));
+    assertEquals((double) schemaCount * 3, mBeanServer.getAttribute(schemaCacheHit, METRIC_NAME_DELETED_COUNT));
   }
 
   @Test
