@@ -2289,10 +2289,10 @@ public class ProtobufSchema implements ParsedSchema {
 
   private Object toTransformedMessage(
       RuleContext ctx, Descriptor desc, Object message, FieldTransform transform) {
-    if (desc == null || message == null) {
+    FieldContext fieldCtx = ctx.currentField();
+    if (desc == null) {
       return message;
     }
-    FieldContext fieldCtx = ctx.currentField();
     if (message instanceof List) {
       return ((List<?>) message).stream()
           .map(it -> toTransformedMessage(ctx, desc, it, transform))
@@ -2300,16 +2300,11 @@ public class ProtobufSchema implements ParsedSchema {
     } else if (message instanceof Map) {
       return message;
     } else if (message instanceof Message) {
-      Message.Builder copy;
-      if (message instanceof Message.Builder) {
-        copy = (Message.Builder) message;
-      } else {
-        copy = ((Message) message).toBuilder();
-      }
+      Message.Builder copy = ((Message) message).toBuilder();
       for (FieldDescriptor fd : copy.getDescriptorForType().getFields()) {
         FieldDescriptor schemaFd = desc.findFieldByName(fd.getName());
         try (FieldContext fc = ctx.enterField(
-            ctx, copy, fd.getFullName(), fd.getName(), getType(fd),
+            ctx, message, fd.getFullName(), fd.getName(), getType(fd),
             getInlineTags(schemaFd)) // use schema-based fd which has the tags
         ) {
           Object value = copy.getField(fd); // we can't use the schema-based fd
