@@ -525,10 +525,10 @@ public class AvroSchema implements ParsedSchema {
 
   private Object toTransformedMessage(
       RuleContext ctx, Schema schema, Object message, FieldTransform transform) {
-    if (schema == null || message == null) {
+    FieldContext fieldCtx = ctx.currentField();
+    if (schema == null) {
       return message;
     }
-    FieldContext fieldCtx = ctx.currentField();
     if (fieldCtx != null) {
       fieldCtx.setType(getType(schema));
     }
@@ -558,6 +558,9 @@ public class AvroSchema implements ParsedSchema {
                 e -> toTransformedMessage(ctx, schema.getValueType(), e.getValue(), transform),
                 (e1, e2) -> e1));
       case RECORD:
+        if (message == null) {
+          return message;
+        }
         data = getData(message);
         for (Schema.Field f : schema.getFields()) {
           String fullName = schema.getFullName() + "." + f.name();
@@ -704,7 +707,7 @@ public class AvroSchema implements ParsedSchema {
     } else if (message instanceof GenericRecord) {
       return GenericData.get();
     } else {
-      return  ReflectData.get();
+      return ReflectData.get();
     }
   }
 

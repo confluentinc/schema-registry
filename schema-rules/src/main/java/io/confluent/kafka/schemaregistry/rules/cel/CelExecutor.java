@@ -27,6 +27,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
 import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
+import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
@@ -54,6 +55,11 @@ public class CelExecutor implements RuleExecutor {
   public static final String IGNORE_GUARD_SEPARATOR = "ignore.guard.separator";
 
   private static final ObjectMapper mapper = new ObjectMapper();
+
+  static {
+    // Register ProtobufModule to convert CEL objects (such as NullValue) to JSON
+    mapper.registerModule(new ProtobufModule());
+  }
 
   @Override
   public String type() {
@@ -110,16 +116,20 @@ public class CelExecutor implements RuleExecutor {
   private static Object execute(String rule, Object obj, Map<String, Object> args)
       throws RuleException {
     try {
+      Object msg = args.get("message");
+      if (msg == null) {
+        msg = obj;
+      }
       boolean isAvro = false;
       boolean isProto = false;
-      if (obj instanceof GenericContainer) {
+      if (msg instanceof GenericContainer) {
         isAvro = true;
-      } else if (obj instanceof Message) {
+      } else if (msg instanceof Message) {
         isProto = true;
-      } else if (obj instanceof List<?>) {
+      } else if (msg instanceof List<?>) {
         // list not supported
         return obj;
-      } else if (obj instanceof Map<?, ?>) {
+      } else if (msg instanceof Map<?, ?>) {
         // map not supported
         return obj;
       }
@@ -136,12 +146,12 @@ public class CelExecutor implements RuleExecutor {
       ScriptBuilder scriptBuilder = scriptHost.buildScript(rule).withDeclarations(toDecls(args));
       if (isAvro) {
         // Register our Avro type
-        scriptBuilder = scriptBuilder.withTypes(((GenericContainer) obj).getSchema());
+        scriptBuilder = scriptBuilder.withTypes(((GenericContainer) msg).getSchema());
       } else if (!isProto) {
         // Register our Jackson object message type
-        scriptBuilder = scriptBuilder.withTypes(obj.getClass());
+        scriptBuilder = scriptBuilder.withTypes(msg.getClass());
       } else {
-        scriptBuilder = scriptBuilder.withTypes(obj);
+        scriptBuilder = scriptBuilder.withTypes(msg);
       }
       Script script = scriptBuilder.build();
 
@@ -158,8 +168,12 @@ public class CelExecutor implements RuleExecutor {
   }
 
   private static Type findType(Object arg) {
-    if (arg instanceof GenericContainer) {
+    if (arg == null) {
+      return Checked.checkedNull;
+    } else if (arg instanceof GenericContainer) {
       return findTypeForAvroType(((GenericContainer) arg).getSchema());
+    } else if (arg instanceof Message) {
+      return Decls.newObjectType(((Message) arg).getDescriptorForType().getFullName());
     } else {
       return findTypeForClass(arg.getClass());
     }
