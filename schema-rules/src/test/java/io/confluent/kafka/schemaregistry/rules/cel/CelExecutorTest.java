@@ -351,7 +351,8 @@ public class CelExecutorTest {
     ((GenericRecord) avroRecord).put("lastName", "smith");
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelFieldExecutor.TYPE, null, null, "name == \"fullName\" ; message.name + \" \" + message.lastName",
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -831,7 +832,8 @@ public class CelExecutorTest {
         .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelFieldExecutor.TYPE, null, null, "name == \"fullName\" ; message.name + \" \" + message.lastName",
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"fullName\" ; value == \"\" ? message.name + \" \" + message.lastName : value",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     protobufSchema = protobufSchema.copy(null, ruleSet);
@@ -1202,7 +1204,8 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelFieldExecutor.TYPE, null, null, "name == \"fullName\" ; message.name + \" \" + message.lastName",
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     jsonSchema = jsonSchema.copy(null, ruleSet);
