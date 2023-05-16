@@ -30,6 +30,7 @@ import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -1421,7 +1422,8 @@ public class ProtobufSchemaTest {
     ProtobufSchema schema2 = new ProtobufSchema(desc);
 
     assertTrue(schema.isCompatible(
-        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
+        CompatibilityLevel.BACKWARD,
+        Collections.singletonList(new SimpleParsedSchemaHolder(schema2))).isEmpty());
     assertEquals(schema.canonicalString(), schema2.canonicalString());
   }
 
@@ -1444,7 +1446,8 @@ public class ProtobufSchemaTest {
     ProtobufSchema schema2 = new ProtobufSchema(desc);
 
     assertTrue(schema.isCompatible(
-            CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
+            CompatibilityLevel.BACKWARD,
+        Collections.singletonList(new SimpleParsedSchemaHolder(schema2))).isEmpty());
     assertEquals(schema.canonicalString(), schema2.canonicalString());
   }
 
@@ -1458,11 +1461,13 @@ public class ProtobufSchemaTest {
     String fileProto = schema.formattedString(Format.SERIALIZED.symbol());
     ProtobufSchema schema2 = new ProtobufSchema(fileProto);
     assertTrue(schema.isCompatible(
-        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
+        CompatibilityLevel.BACKWARD,
+        Collections.singletonList(new SimpleParsedSchemaHolder(schema2))).isEmpty());
     fileProto = schema2.formattedString(Format.SERIALIZED.symbol());
     ProtobufSchema schema3 = new ProtobufSchema(fileProto);
     assertTrue(schema2.isCompatible(
-        CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)).isEmpty());
+        CompatibilityLevel.BACKWARD,
+        Collections.singletonList(new SimpleParsedSchemaHolder(schema3))).isEmpty());
     assertEquals(schema2, schema3);
 
     original = resourceLoader.readObj("NestedTestProto.proto");
@@ -1470,11 +1475,13 @@ public class ProtobufSchemaTest {
     fileProto = schema.formattedString(Format.SERIALIZED.symbol());
     schema2 = new ProtobufSchema(fileProto);
     assertTrue(schema.isCompatible(
-        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
+        CompatibilityLevel.BACKWARD,
+        Collections.singletonList(new SimpleParsedSchemaHolder(schema2))).isEmpty());
     fileProto = schema2.formattedString(Format.SERIALIZED.symbol());
     schema3 = new ProtobufSchema(fileProto);
     assertTrue(schema2.isCompatible(
-        CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)).isEmpty());
+        CompatibilityLevel.BACKWARD,
+        Collections.singletonList(new SimpleParsedSchemaHolder(schema3))).isEmpty());
     assertEquals(schema2, schema3);
   }
 

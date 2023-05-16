@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -512,11 +514,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       return false;
     }
 
-    List<ParsedSchema> schemaHistory = new ArrayList<>();
+    List<ParsedSchemaHolder> schemaHistory = new ArrayList<>();
     for (int version : allVersions(subject)) {
       SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
-      schemaHistory.add(getSchemaBySubjectAndIdFromRegistry(subject,
-          schemaMetadata.getId()));
+      schemaHistory.add(new SimpleParsedSchemaHolder(getSchemaBySubjectAndIdFromRegistry(subject,
+          schemaMetadata.getId())));
     }
 
     return newSchema.isCompatible(compatibilityLevel, schemaHistory).isEmpty();
@@ -622,11 +624,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       return Collections.singletonList("Compatibility level not specified.");
     }
 
-    List<ParsedSchema> schemaHistory = new ArrayList<>();
+    List<ParsedSchemaHolder> schemaHistory = new ArrayList<>();
     for (int version : allVersions(subject)) {
       SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
-      schemaHistory.add(getSchemaBySubjectAndIdFromRegistry(subject,
-          schemaMetadata.getId()));
+      schemaHistory.add(new SimpleParsedSchemaHolder(getSchemaBySubjectAndIdFromRegistry(subject,
+          schemaMetadata.getId())));
     }
 
     return newSchema.isCompatible(compatibilityLevel, schemaHistory);

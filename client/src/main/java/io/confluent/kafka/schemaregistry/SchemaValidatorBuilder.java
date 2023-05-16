@@ -20,6 +20,7 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import com.google.common.collect.Lists;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,11 +34,13 @@ import java.util.List;
  * </p>
  */
 public final class SchemaValidatorBuilder {
+  private static final Logger log = LoggerFactory.getLogger(SchemaValidatorBuilder.class);
+
   private SchemaValidationStrategy strategy;
   private static final String NEW_PREFIX = "new";
   private static final String OLD_PREFIX = "old";
   private static int MAX_SCHEMA_SIZE_FOR_LOGGING = 10 * 1024;
-  private static final Logger log = LoggerFactory.getLogger(SchemaValidatorBuilder.class);
+  private static String DIFFERENT_SCHEMA_TYPE = "Incompatible because of different schema type";
 
   /**
    * Use a strategy that validates that a schema can be used to read existing
@@ -80,10 +83,18 @@ public final class SchemaValidatorBuilder {
   public SchemaValidator validateLatest() {
     valid();
     return (toValidate, schemasInOrder) -> {
-      Iterator<? extends ParsedSchema> schemas = schemasInOrder.iterator();
+      Iterator<ParsedSchemaHolder> schemas = schemasInOrder.iterator();
       if (schemas.hasNext()) {
-        ParsedSchema existing = schemas.next();
-        return strategy.validate(toValidate, existing);
+        ParsedSchemaHolder existing = schemas.next();
+        ParsedSchema existingSchema = existing.schema();
+        List<String> errorMessages;
+        if (toValidate.schemaType().equals(existingSchema.schemaType())) {
+          errorMessages = strategy.validate(toValidate, existingSchema);
+        } else {
+          errorMessages = Lists.newArrayList(DIFFERENT_SCHEMA_TYPE);
+        }
+        existing.clear();
+        return errorMessages;
       }
       return new ArrayList<>();
     };
@@ -92,8 +103,15 @@ public final class SchemaValidatorBuilder {
   public SchemaValidator validateAll() {
     valid();
     return (toValidate, schemasInOrder) -> {
-      for (ParsedSchema existing : schemasInOrder) {
-        List<String> errorMessages = strategy.validate(toValidate, existing);
+      for (ParsedSchemaHolder existing : schemasInOrder) {
+        ParsedSchema existingSchema = existing.schema();
+        List<String> errorMessages;
+        if (toValidate.schemaType().equals(existingSchema.schemaType())) {
+          errorMessages = strategy.validate(toValidate, existingSchema);
+        } else {
+          errorMessages = Lists.newArrayList(DIFFERENT_SCHEMA_TYPE);
+        }
+        existing.clear();
         if (!errorMessages.isEmpty()) {
           return errorMessages;
         }
