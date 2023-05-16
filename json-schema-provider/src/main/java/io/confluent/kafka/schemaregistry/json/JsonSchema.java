@@ -730,6 +730,8 @@ public class JsonSchema implements ParsedSchema {
             objectNode.put(propertyName, (Byte) value);
           } else if (value instanceof byte[]) {
             objectNode.put(propertyName, (byte[]) value);
+          } else if (value == null) {
+            objectNode.putNull(propertyName);
           } else {
             objectNode.put(propertyName, value.toString());
           }
