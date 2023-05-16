@@ -319,7 +319,8 @@ public class CelExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITEREAD,
-        CelExecutor.TYPE, null, null, "message.name == \"testUser\" && message.kind == \"ONE\"",
+        CelExecutor.TYPE, null, null,
+        "message.name == \"testUser\" && size(message.name) == 8 && message.kind == \"ONE\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -801,7 +802,8 @@ public class CelExecutorTest {
         .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITEREAD,
-        CelExecutor.TYPE, null, null, "message.name == \"alice\" && message.kind == 1",
+        CelExecutor.TYPE, null, null,
+        "message.name == \"alice\" && size(message.name) == 5 && message.kind == 1",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
 
@@ -1176,7 +1178,8 @@ public class CelExecutorTest {
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     // Can't use WRITEREAD as JacksonRegistry doesn't handle ObjectNode
     Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
-        CelExecutor.TYPE, null, null, "message.name == \"alice\"",
+        CelExecutor.TYPE, null, null,
+        "message.name == \"alice\" && size(message.name) == 5",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     jsonSchema = jsonSchema.copy(null, ruleSet);
