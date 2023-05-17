@@ -30,17 +30,17 @@ pkg_files(
 pkg_files(
     name = "notices",
     srcs = glob(["notices/**/*"]),
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
 )
 
 pkg_files(
     name = "licenses",
     srcs = glob(["licenses/**/*"]),
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
 )
 
 pkg_files(
     name = "config",
     srcs = glob(["config/**/*"]),
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
 )

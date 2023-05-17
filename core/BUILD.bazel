@@ -177,6 +177,12 @@ java_library(
 )
 
 java_binary(
+    name = "deploy_package",
+    create_executable = False,
+    runtime_deps = [":core"]
+)
+
+java_binary(
     name = "Main",
     main_class = "io.confluent.kafka.schemaregistry.rest.Main",
     visibility = ["//visibility:public"],

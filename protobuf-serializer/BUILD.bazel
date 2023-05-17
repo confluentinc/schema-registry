@@ -15,7 +15,7 @@ java_library(
         "src/main/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializerConfig.java",
         "src/main/java/io/confluent/kafka/serializers/protobuf/ProtobufSchemaAndValue.java",
     ],
-    visibility = ["//:__subpackages__"],
+    visibility = ["//visibility:public"],
     exports = [
         "//protobuf-provider",
         "//schema-serializer",
