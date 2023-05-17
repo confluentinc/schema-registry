@@ -98,6 +98,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
 
   public abstract String getKeyUrlPrefix();
 
+  @Override
   public void configure(Map<String, ?> configs) {
     String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
     // Key id is not mandatory for decryption
