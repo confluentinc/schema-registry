@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rules.cel;
 
 import static io.confluent.kafka.schemaregistry.rules.cel.avro.AvroTypeDescription.NULL_AVRO_SCHEMA;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.api.expr.v1alpha1.Decl;
@@ -68,7 +69,13 @@ public class CelExecutor implements RuleExecutor {
 
   @Override
   public Object transform(RuleContext ctx, Object message) throws RuleException {
-    Object result = execute(ctx, message, ImmutableMap.of("message", message));
+    Object input;
+    if (message instanceof JsonNode) {
+      input = mapper.convertValue(message, new TypeReference<Map<String, Object>>(){});
+    } else {
+      input = message;
+    }
+    Object result = execute(ctx, input, ImmutableMap.of("message", input));
     if (ctx.rule().getKind() == RuleKind.CONDITION) {
       if (Boolean.TRUE.equals(result)) {
         return message;
@@ -128,9 +135,6 @@ public class CelExecutor implements RuleExecutor {
         isProto = true;
       } else if (msg instanceof List<?>) {
         // list not supported
-        return obj;
-      } else if (msg instanceof Map<?, ?>) {
-        // map not supported
         return obj;
       }
 

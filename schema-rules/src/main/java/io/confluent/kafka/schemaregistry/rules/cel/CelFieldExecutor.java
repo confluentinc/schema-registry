@@ -16,15 +16,21 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 
 public class CelFieldExecutor implements FieldRuleExecutor {
 
   public static final String TYPE = "CEL_FIELD";
+
+  private static final ObjectMapper mapper = new ObjectMapper();
 
   public String type() {
     return TYPE;
@@ -32,17 +38,25 @@ public class CelFieldExecutor implements FieldRuleExecutor {
 
   @Override
   public FieldTransform newTransform(RuleContext ruleContext) {
-    return (ctx, fieldCtx, fieldValue) ->
-        CelExecutor.execute(ctx, fieldValue, new HashMap<String, Object>() {
-              {
-                put("value", fieldValue);  // fieldValue may be null
-                put("fullName", fieldCtx.getFullName());
-                put("name", fieldCtx.getName());
-                put("typeName", fieldCtx.getType().name());
-                put("tags", new ArrayList<>(fieldCtx.getTags()));
-                put("message", fieldCtx.getContainingMessage());
-              }
+    return (ctx, fieldCtx, fieldValue) -> {
+      Object message = fieldCtx.getContainingMessage();
+      Object inputMessage;
+      if (message instanceof JsonNode) {
+        inputMessage = mapper.convertValue(message, new TypeReference<Map<String, Object>>(){});
+      } else {
+        inputMessage = message;
+      }
+      return CelExecutor.execute(ctx, fieldValue, new HashMap<String, Object>() {
+            {
+              put("value", fieldValue);  // fieldValue may be null
+              put("fullName", fieldCtx.getFullName());
+              put("name", fieldCtx.getName());
+              put("typeName", fieldCtx.getType().name());
+              put("tags", new ArrayList<>(fieldCtx.getTags()));
+              put("message", inputMessage);
             }
-        );
+          }
+      );
+    };
   }
 }
