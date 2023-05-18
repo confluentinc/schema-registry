@@ -679,7 +679,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       if (header != null) {
         String ruleName = new String(header.value(), StandardCharsets.UTF_8);
         if (rule.getName().equals(ruleName)) {
-          // Don't rerun failed rule
+          // If the rule name exists as a header, then we are deserializing from a DLQ.
+          // In that case, we don't want deserialization to fail again,
+          // so we ignore the rule that previously failed.
           return true;
         }
       }
