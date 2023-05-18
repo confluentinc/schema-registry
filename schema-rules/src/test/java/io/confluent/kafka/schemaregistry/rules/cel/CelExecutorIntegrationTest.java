@@ -71,7 +71,9 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
 
   private static final String TOPIC = "customer";
 
-  private static final String DLQ_TOPIC = "DLQ";
+  private static final String DLQ_TOPIC1 = "DLQ1";
+  private static final String DLQ_TOPIC2 = "DLQ2";
+  private static final String DLQ_TOPIC3 = "DLQ3";
 
   public CelExecutorIntegrationTest() {
     super(1, true);
@@ -172,7 +174,7 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
     producer.send(record).get();
   }
 
-  private static Object createPayload(String mode) {
+  private static Object createPayload(boolean isActive, String mode) {
     Customer value = new Customer();
     value.setSsn("123456789"); // rule: size = 9 digits
     value.setAddress("#10 abc, CA 94402"); // rule: matches regex
@@ -180,8 +182,7 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
     value.setUserId("uid_23434"); // rule: starts with uid_
     value.setAge(45); // rule: > 18
     value.setIBAN("GB33BUKB20201555555555"); // rule: matches regex
-    //value.setActive(true); // rule: is true
-    value.setActive(true); // rule: is true
+    value.setActive(isActive); // rule: is true
     value.setBalance(new Float(10.0).floatValue()); // rule: >= 0.0
     value.setMode(mode);
     return value;
@@ -190,7 +191,7 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
   @Test
   public void testAvroProducerFailWrite() throws Exception {
     registerSchema(restApp.restConnect);
-    Object payload = createPayload("fail_write");
+    Object payload = createPayload(true, "fail_write");
     Properties producerProps = createProducerProps(brokerList, restApp.restConnect);
     try (Producer producer = createProducer(producerProps)) {
       produce(producer, TOPIC, "key", payload);
@@ -201,7 +202,7 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
     Properties consumerProps = createDlqConsumerProps(
         brokerList, restApp.restConnect, StringDeserializer.class);
     try (Consumer<String, Object> consumer = createConsumer(consumerProps)) {
-      List<Map.Entry<String, Object>> recordList = consume(consumer, DLQ_TOPIC, 1);
+      List<Map.Entry<String, Object>> recordList = consume(consumer, DLQ_TOPIC2, 1);
       Map.Entry<String, Object> entry = recordList.get(0);
       String record = (String) entry.getValue();
       Customer avroRecord = (Customer) AvroSchemaUtils.toObject(
@@ -214,7 +215,7 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
   @Test
   public void testAvroProducerFailRead() throws Exception {
     registerSchema(restApp.restConnect);
-    Object payload = createPayload("fail_read");
+    Object payload = createPayload(true, "fail_read");
     Properties producerProps = createProducerProps(brokerList, restApp.restConnect);
     try (Producer producer = createProducer(producerProps)) {
       produce(producer, TOPIC, "key", payload);
@@ -234,7 +235,7 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
     Properties dlqConsumerProps = createDlqConsumerProps(
         brokerList, restApp.restConnect, KafkaAvroDeserializer.class);
     try (Consumer<String, Object> consumer = createConsumer(dlqConsumerProps)) {
-      List<Map.Entry<String, Object>> recordList = consume(consumer, DLQ_TOPIC, 1);
+      List<Map.Entry<String, Object>> recordList = consume(consumer, DLQ_TOPIC3, 1);
       Map.Entry<String, Object> entry = recordList.get(0);
       Object record = entry.getValue();
       assertEquals("key", entry.getKey());
@@ -245,7 +246,7 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
   @Test
   public void testAvroProducerSuccess() throws Exception {
     registerSchema(restApp.restConnect);
-    Object payload = createPayload("success");
+    Object payload = createPayload(true, "success");
     Properties producerProps = createProducerProps(brokerList, restApp.restConnect);
     try (Producer producer = createProducer(producerProps)) {
       produce(producer, TOPIC, "key", payload);
@@ -263,13 +264,54 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
     }
   }
 
+  @Test
+  public void testAvroProducerDoubleDlq() throws Exception {
+    registerSchema(restApp.restConnect);
+    Object payload1 = createPayload(false, "success");
+    Object payload2 = createPayload(true, "fail_write");
+    Properties producerProps = createProducerProps(brokerList, restApp.restConnect);
+    try (Producer producer = createProducer(producerProps)) {
+      try {
+        produce(producer, TOPIC, "key1", payload1);
+      } catch (Exception e) {
+        // ignore
+      }
+      try {
+        produce(producer, TOPIC, "key2", payload2);
+      } catch (Exception e) {
+        // ignore
+      }
+    }
+
+    Properties consumerProps = createDlqConsumerProps(
+        brokerList, restApp.restConnect, StringDeserializer.class);
+    try (Consumer<String, Object> consumer = createConsumer(consumerProps)) {
+      List<Map.Entry<String, Object>> recordList = consume(consumer, DLQ_TOPIC1, 1);
+      Map.Entry<String, Object> entry = recordList.get(0);
+      String record = (String) entry.getValue();
+      Customer avroRecord = (Customer) AvroSchemaUtils.toObject(
+          record, new AvroSchema(Customer.SCHEMA$), new SpecificDatumReader<>(Customer.SCHEMA$));
+      assertEquals("key1", entry.getKey());
+      assertEquals(payload1, avroRecord);
+    }
+    try (Consumer<String, Object> consumer = createConsumer(consumerProps)) {
+      List<Map.Entry<String, Object>> recordList = consume(consumer, DLQ_TOPIC2, 1);
+      Map.Entry<String, Object> entry = recordList.get(0);
+      String record = (String) entry.getValue();
+      Customer avroRecord = (Customer) AvroSchemaUtils.toObject(
+          record, new AvroSchema(Customer.SCHEMA$), new SpecificDatumReader<>(Customer.SCHEMA$));
+      assertEquals("key2", entry.getKey());
+      assertEquals(payload2, avroRecord);
+    }
+  }
+
   // For manual testing
   /*
   public static void main(final String[] args) throws Exception {
     registerSchema("http://localhost:8081");
     Properties props = createProducerProps("localhost:9092", "http://localhost:8081");
     try (Producer producer = createProducer(props)) {
-      produce(producer, TOPIC, "key", createPayload("fail_write"));
+      produce(producer, TOPIC, "key", createPayload(true, "fail_write"));
     }
   }
   */

@@ -62,7 +62,7 @@
         "kind": "CONDITION",
         "mode": "WRITE",
         "type": "CEL",
-        "params": { "dlq.topic": "DLQ" },
+        "params": { "dlq.topic": "DLQ1" },
         "expr": "message.active",
         "onFailure": "DLQ",
         "disabled": false
@@ -88,7 +88,7 @@
         "kind": "CONDITION",
         "mode": "WRITE",
         "type": "CEL",
-        "params": { "dlq.topic": "DLQ" },
+        "params": { "dlq.topic": "DLQ2" },
         "expr": "message.mode != 'fail_write'",
         "onFailure": "DLQ",
         "disabled": false
@@ -98,7 +98,7 @@
         "kind": "CONDITION",
         "mode": "READ",
         "type": "CEL",
-        "params": { "dlq.topic": "DLQ" },
+        "params": { "dlq.topic": "DLQ3" },
         "expr": "message.mode != 'fail_read'",
         "onFailure": "DLQ",
         "disabled": false
