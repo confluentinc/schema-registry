@@ -68,7 +68,6 @@ public class DlqAction implements RuleAction {
     this.producer = (KafkaProducer<byte[], byte[]>) configs.get(PRODUCER);
   }
 
-
   public String type() {
     return TYPE;
   }
