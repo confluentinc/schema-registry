@@ -120,7 +120,7 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
     props.put("heartbeat.interval.ms", "2000");
     props.put("auto.commit.interval.ms", "1000");
     props.put("auto.offset.reset", "earliest");
-    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, WrapperKeyDeserializer.class);
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer);
     props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
     props.put("wrapped.key.deserializer", StringDeserializer.class);

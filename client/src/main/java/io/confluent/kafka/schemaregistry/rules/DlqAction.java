@@ -23,11 +23,13 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -130,12 +132,18 @@ public class DlqAction implements RuleAction {
       byte[] bytes = new byte[buffer.remaining()];
       buffer.get(bytes);
       return bytes;
-    } else if (message instanceof String) {
-      return ((String) message).getBytes(StandardCharsets.UTF_8);
+    } else if (message instanceof Bytes) {
+      return ((Bytes) message).get();
+    } else if (message instanceof Number || message instanceof String || message instanceof UUID) {
+      return message.toString().getBytes(StandardCharsets.UTF_8);
     } else {
-      JsonNode json = ctx.target().toJson(message);
-      return JacksonMapper.INSTANCE.writeValueAsBytes(json);
+      return convertToJsonBytes(ctx, message);
     }
+  }
+
+  private byte[] convertToJsonBytes(RuleContext ctx, Object message) throws IOException {
+    JsonNode json = ctx.target().toJson(message);
+    return JacksonMapper.INSTANCE.writeValueAsBytes(json);
   }
 
   private void populateHeaders(

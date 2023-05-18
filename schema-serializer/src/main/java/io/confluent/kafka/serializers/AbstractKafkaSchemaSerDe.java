@@ -674,12 +674,14 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     if (rule.isDisabled()) {
       return true;
     }
-    Header header = headers.lastHeader(DlqAction.RULE_NAME);
-    if (header != null) {
-      String ruleName = new String(header.value(), StandardCharsets.UTF_8);
-      if (rule.getName().equals(ruleName)) {
-        // Don't rerun failed rule
-        return true;
+    if (headers != null) {
+      Header header = headers.lastHeader(DlqAction.RULE_NAME);
+      if (header != null) {
+        String ruleName = new String(header.value(), StandardCharsets.UTF_8);
+        if (rule.getName().equals(ruleName)) {
+          // Don't rerun failed rule
+          return true;
+        }
       }
     }
     return false;
