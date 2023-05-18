@@ -21,6 +21,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.google.common.base.Charsets;
+import com.google.common.io.CharStreams;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
@@ -32,6 +34,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
+import java.io.InputStreamReader;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -283,12 +286,15 @@ public class RestService implements Configurable {
         ErrorMessage errorMessage;
         try (InputStream es = connection.getErrorStream()) {
           if (es != null) {
-            errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
+            String errorString = CharStreams.toString(new InputStreamReader(es, Charsets.UTF_8));
+            try {
+              errorMessage = jsonDeserializer.readValue(errorString, ErrorMessage.class);
+            } catch (JsonProcessingException e) {
+              errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, errorString);
+            }
           } else {
             errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
           }
-        } catch (JsonProcessingException e) {
-          errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, e.getMessage());
         }
         throw new RestClientException(errorMessage.getMessage(), responseCode,
                                       errorMessage.getErrorCode());
