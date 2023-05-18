@@ -29,6 +29,11 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.DoubleSerializer;
+import org.apache.kafka.common.serialization.FloatSerializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.ShortSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,9 +53,14 @@ public class DlqAction implements RuleAction {
   public static final String RULE_TOPIC = HEADER_PREFIX + "topic";
   public static final String RULE_EXCEPTION = HEADER_PREFIX + "exception";
 
-
   public static final String TOPIC = "topic";
   public static final String PRODUCER = "producer";  // for testing
+
+  private static final LongSerializer LONG_SERIALIZER = new LongSerializer();
+  private static final IntegerSerializer INT_SERIALIZER = new IntegerSerializer();
+  private static final ShortSerializer SHORT_SERIALIZER = new ShortSerializer();
+  private static final DoubleSerializer DOUBLE_SERIALIZER = new DoubleSerializer();
+  private static final FloatSerializer FLOAT_SERIALIZER = new FloatSerializer();
 
   private Map<String, ?> configs;
   private String topic;
@@ -134,8 +144,18 @@ public class DlqAction implements RuleAction {
       return bytes;
     } else if (message instanceof Bytes) {
       return ((Bytes) message).get();
-    } else if (message instanceof Number || message instanceof String || message instanceof UUID) {
+    } else if (message instanceof String || message instanceof UUID) {
       return message.toString().getBytes(StandardCharsets.UTF_8);
+    } else if (message instanceof Long) {
+      return LONG_SERIALIZER.serialize(ctx.topic(), (Long)message);
+    } else if (message instanceof Integer) {
+      return INT_SERIALIZER.serialize(ctx.topic(), (Integer) message);
+    } else if (message instanceof Short) {
+      return SHORT_SERIALIZER.serialize(ctx.topic(), (Short) message);
+    } else if (message instanceof Double) {
+      return DOUBLE_SERIALIZER.serialize(ctx.topic(), (Double) message);
+    } else if (message instanceof Float) {
+      return FLOAT_SERIALIZER.serialize(ctx.topic(), (Float) message);
     } else {
       return convertToJsonBytes(ctx, message);
     }
