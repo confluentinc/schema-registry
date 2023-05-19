@@ -24,6 +24,13 @@ import org.apache.kafka.common.Configurable;
  */
 public interface RuleBase extends AutoCloseable, Configurable {
 
+
+  public static final String DEFAULT_NAME = "__default";
+
+  default boolean addOriginalConfigs() {
+    return false;
+  }
+
   default void configure(Map<String, ?> configs) {
   }
 
