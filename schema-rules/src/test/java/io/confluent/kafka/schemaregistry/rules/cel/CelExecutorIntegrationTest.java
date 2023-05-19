@@ -28,10 +28,15 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.Customer;
 import io.confluent.kafka.schemaregistry.rules.ResourceLoader;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
@@ -57,6 +62,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,6 +83,24 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
 
   public CelExecutorIntegrationTest() {
     super(1, true);
+  }
+
+  @Before
+  public void setUp() throws Exception {
+    super.setUp();
+    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
+      public void handle(String subject, ConfigUpdateRequest request) {
+      }
+
+      public void handle(String subject, boolean normalize, RegisterSchemaRequest request) {
+      }
+
+      public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
+        return ruleSet != null
+            ? new io.confluent.kafka.schemaregistry.storage.RuleSet(ruleSet)
+            : null;
+      }
+    });
   }
 
   private static void registerSchema(String schemaRegistryUrl) throws Exception {
