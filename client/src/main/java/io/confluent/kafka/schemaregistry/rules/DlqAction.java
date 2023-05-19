@@ -19,12 +19,22 @@ package io.confluent.kafka.schemaregistry.rules;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.DoubleSerializer;
+import org.apache.kafka.common.serialization.FloatSerializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.ShortSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,50 +44,87 @@ public class DlqAction implements RuleAction {
 
   public static final String TYPE = "DLQ";
 
+  public static final String DLQ_TOPIC = "dlq.topic";
+
+  public static final String HEADER_PREFIX = "__rule.";
+  public static final String RULE_NAME = HEADER_PREFIX + "name";
+  public static final String RULE_MODE = HEADER_PREFIX + "mode";
+  public static final String RULE_SUBJECT = HEADER_PREFIX + "subject";
+  public static final String RULE_TOPIC = HEADER_PREFIX + "topic";
+  public static final String RULE_EXCEPTION = HEADER_PREFIX + "exception";
+
   public static final String TOPIC = "topic";
   public static final String PRODUCER = "producer";  // for testing
 
-  private String topic;
-  private KafkaProducer<byte[], byte[]> producer;
+  private static final LongSerializer LONG_SERIALIZER = new LongSerializer();
+  private static final IntegerSerializer INT_SERIALIZER = new IntegerSerializer();
+  private static final ShortSerializer SHORT_SERIALIZER = new ShortSerializer();
+  private static final DoubleSerializer DOUBLE_SERIALIZER = new DoubleSerializer();
+  private static final FloatSerializer FLOAT_SERIALIZER = new FloatSerializer();
 
+  private Map<String, ?> configs;
+  private String topic;
+  private volatile KafkaProducer<byte[], byte[]> producer;
+
+  @Override
+  public boolean addOriginalConfigs() {
+    return true;
+  }
+
+  @Override
   @SuppressWarnings("unchecked")
   public void configure(Map<String, ?> configs) {
-    topic = (String) configs.get(TOPIC);
-    if (topic == null || topic.isEmpty()) {
-      log.warn("DLQ topic is missing");
-    }
-    KafkaProducer<byte[], byte[]> producer = (KafkaProducer<byte[], byte[]>) configs.get(PRODUCER);
-    if (producer == null) {
-      Map<String, Object> producerConfigs = baseProducerConfigs();
-      producerConfigs.putAll(configs);
-      producer = new KafkaProducer<>(producerConfigs);
-    }
-    this.producer = producer;
+    this.configs = configs;
+    this.topic = (String) configs.get(TOPIC);
+    // used by tests
+    this.producer = (KafkaProducer<byte[], byte[]>) configs.get(PRODUCER);
   }
 
   public String type() {
     return TYPE;
   }
 
-  public void run(RuleContext ctx, Object message, RuleException ex) throws RuleException {
-    if (topic == null || topic.isEmpty()) {
-      return;
-    }
+  public String topic() {
+    return topic;
+  }
 
+  private KafkaProducer<byte[], byte[]> producer() {
+    if (producer == null) {
+      Map<String, Object> producerConfigs = baseProducerConfigs();
+      producerConfigs.putAll(configs);
+      synchronized (this) {
+        if (producer == null) {
+          producer = new KafkaProducer<>(producerConfigs);
+        }
+      }
+    }
+    return producer;
+  }
+
+  public void run(RuleContext ctx, Object message, RuleException ex) throws RuleException {
+    String topic = topic();
+    if (topic == null || topic.isEmpty()) {
+      topic = ctx.getParameter(DLQ_TOPIC);
+    }
+    if (topic == null || topic.isEmpty()) {
+      throw new SerializationException("Could not send to DLQ as no topic is configured");
+    }
+    final String dlqTopic = topic;
     try {
       byte[] keyBytes = convertToBytes(ctx, ctx.originalKey());
       byte[] valueBytes = convertToBytes(ctx, ctx.originalValue());
       ProducerRecord<byte[], byte[]> producerRecord =
-          new ProducerRecord<>(topic, null, keyBytes, valueBytes, ctx.headers());
-      producer.send(producerRecord, (metadata, exception) -> {
+          new ProducerRecord<>(dlqTopic, null, keyBytes, valueBytes, ctx.headers());
+      populateHeaders(ctx, producerRecord, ex);
+      producer().send(producerRecord, (metadata, exception) -> {
         if (exception != null) {
-          log.error("Could not produce message to dlq topic " + topic, exception);
+          log.error("Could not produce message to DLQ topic " + dlqTopic, exception);
         } else {
-          log.info("Sent message to dlq topic " + topic);
+          log.info("Sent message to DLQ topic " + dlqTopic);
         }
       });
     } catch (IOException e) {
-      log.error("Could not produce message to dlq topic " + topic, e);
+      log.error("Could not produce message to DLQ topic " + dlqTopic, e);
     }
 
     String msg = "Rule failed: " + ctx.rule().getName();
@@ -90,9 +137,52 @@ public class DlqAction implements RuleAction {
       return null;
     } else if (message instanceof byte[]) {
       return (byte[]) message;
+    } else if (message instanceof ByteBuffer) {
+      ByteBuffer buffer = (ByteBuffer) message;
+      byte[] bytes = new byte[buffer.remaining()];
+      buffer.get(bytes);
+      return bytes;
+    } else if (message instanceof Bytes) {
+      return ((Bytes) message).get();
+    } else if (message instanceof String || message instanceof UUID) {
+      return message.toString().getBytes(StandardCharsets.UTF_8);
+    } else if (message instanceof Long) {
+      return LONG_SERIALIZER.serialize(ctx.topic(), (Long)message);
+    } else if (message instanceof Integer) {
+      return INT_SERIALIZER.serialize(ctx.topic(), (Integer) message);
+    } else if (message instanceof Short) {
+      return SHORT_SERIALIZER.serialize(ctx.topic(), (Short) message);
+    } else if (message instanceof Double) {
+      return DOUBLE_SERIALIZER.serialize(ctx.topic(), (Double) message);
+    } else if (message instanceof Float) {
+      return FLOAT_SERIALIZER.serialize(ctx.topic(), (Float) message);
     } else {
-      JsonNode json = ctx.target().toJson(message);
-      return JacksonMapper.INSTANCE.writeValueAsBytes(json);
+      return convertToJsonBytes(ctx, message);
+    }
+  }
+
+  private byte[] convertToJsonBytes(RuleContext ctx, Object message) throws IOException {
+    JsonNode json = ctx.target().toJson(message);
+    return JacksonMapper.INSTANCE.writeValueAsBytes(json);
+  }
+
+  private void populateHeaders(
+      RuleContext ctx, ProducerRecord<byte[], byte[]> producerRecord, RuleException ex) {
+    Headers headers = producerRecord.headers();
+    headers.add(RULE_NAME, toBytes(ctx.rule().getName()));
+    headers.add(RULE_MODE, toBytes(ctx.ruleMode().name()));
+    headers.add(RULE_SUBJECT, toBytes(ctx.subject()));
+    headers.add(RULE_TOPIC, toBytes(ctx.topic()));
+    if (ex != null) {
+      headers.add(RULE_EXCEPTION, toBytes(ex.getMessage()));
+    }
+  }
+
+  private byte[] toBytes(String value) {
+    if (value != null) {
+      return value.getBytes(StandardCharsets.UTF_8);
+    } else {
+      return null;
     }
   }
 
@@ -114,6 +204,8 @@ public class DlqAction implements RuleAction {
 
   @Override
   public void close() {
-    producer.close();
+    if (producer != null) {
+      producer.close();
+    }
   }
 }

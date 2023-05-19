@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.rules.DlqAction;
 import io.confluent.kafka.schemaregistry.rules.ErrorAction;
 import io.confluent.kafka.schemaregistry.rules.NoneAction;
 import io.confluent.kafka.schemaregistry.rules.RuleAction;
@@ -42,6 +43,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleBase;
 import java.io.Closeable;
+import java.nio.charset.StandardCharsets;
 import java.util.AbstractMap;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
@@ -56,11 +58,13 @@ import java.util.Optional;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.serializers.context.NullContextNameStrategy;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import java.util.ServiceLoader;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -78,6 +82,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -175,8 +180,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       MapPropertyParser parser = new MapPropertyParser();
       metadata = parser.parse(config.getLatestWithMetadataSpec());
     }
-    ruleExecutors = initRuleObjects(config, RULE_EXECUTORS);
-    ruleActions = initRuleObjects(config, RULE_ACTIONS);
+    ruleExecutors = initRuleObjects(config, RULE_EXECUTORS, RuleExecutor.class);
+    ruleActions = initRuleObjects(config, RULE_ACTIONS, RuleAction.class);
   }
 
   protected void postOp(Object payload) {
@@ -188,9 +193,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   private Map<String, Map<String, RuleBase>> initRuleObjects(
-      AbstractKafkaSchemaSerDeConfig config, String configName) {
+      AbstractKafkaSchemaSerDeConfig config, String configName, Class<? extends RuleBase> cls) {
     List<String> names = config.getList(configName);
-    return names.stream()
+    Map<String, Map<String, RuleBase>> ruleObjects = names.stream()
         .flatMap(n -> initRuleObject(n, config, configName)
             .map(r -> new AbstractMap.SimpleEntry<>(n, r)))
         .collect(Collectors.groupingBy(e -> e.getValue().type(),
@@ -202,6 +207,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
               );
               return e.getValue();
             }, (e1, e2) -> e1, LinkedHashMap::new)));
+    addRuleObjectsFromServiceLoader(ruleObjects, config, configName, cls);
+    return ruleObjects;
   }
 
   private Stream<RuleBase> initRuleObject(
@@ -212,16 +219,42 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       return Stream.empty();
     }
     String className = propertyValue.toString();
-    String prefix = configName + "." + name + ".param.";
-    Map<String, Object> params = config.originalsWithPrefix(prefix);
     try {
       RuleBase ruleObject = Utils.newInstance(className, RuleBase.class);
-      ruleObject.configure(params);
+      configureRuleObject(ruleObject, name, config, configName);
       return Stream.of(ruleObject);
     } catch (ClassNotFoundException e) {
       log.error("Could not load rule object class " + name, e);
       throw new ConfigException("Could not load rule object class " + name);
     }
+  }
+
+  private void addRuleObjectsFromServiceLoader(
+      Map<String, Map<String, RuleBase>> ruleObjects,
+      AbstractKafkaSchemaSerDeConfig config, String configName, Class<? extends RuleBase> cls) {
+    ServiceLoader<? extends RuleBase> serviceLoader = ServiceLoader.load(cls, cls.getClassLoader());
+
+    String name = RuleBase.DEFAULT_NAME;
+    for (RuleBase ruleObject : serviceLoader) {
+      configureRuleObject(ruleObject, name, config, configName);
+      Map<String, RuleBase> rules = ruleObjects.computeIfAbsent(
+          ruleObject.type(), k -> new LinkedHashMap<>());
+      rules.put(name, ruleObject);
+    }
+  }
+
+  private void configureRuleObject(
+      RuleBase ruleObject, String name, AbstractKafkaSchemaSerDeConfig config, String configName) {
+    String prefix = configName + "." + name + ".param.";
+    Map<String, Object> params = new HashMap<>();
+    if (ruleObject.addOriginalConfigs()) {
+      params.putAll(config.originals());
+      // Don't propagate serializers
+      params.remove(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
+      params.remove(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
+    }
+    params.putAll(config.originalsWithPrefix(prefix));
+    ruleObject.configure(params);
   }
 
   // Visible for testing
@@ -231,6 +264,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   private RuleExecutor getRuleExecutor(RuleContext ctx) {
     return (RuleExecutor) getRuleObject(ctx, ruleExecutors, ctx.rule().getType());
+  }
+
+  // Visible for testing
+  public Map<String, Map<String, RuleBase>> getRuleActions() {
+    return ruleActions;
   }
 
   private RuleAction getRuleAction(RuleContext ctx, String actionName) {
@@ -593,7 +631,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     }
     for (int i = 0; i < rules.size(); i++) {
       Rule rule = rules.get(i);
-      if (rule.isDisabled()) {
+      if (skipRule(rule, headers)) {
         continue;
       }
       if (rule.getMode() == RuleMode.WRITEREAD) {
@@ -630,6 +668,25 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       }
     }
     return message;
+  }
+
+  private boolean skipRule(Rule rule, Headers headers) {
+    if (rule.isDisabled()) {
+      return true;
+    }
+    if (headers != null) {
+      Header header = headers.lastHeader(DlqAction.RULE_NAME);
+      if (header != null) {
+        String ruleName = new String(header.value(), StandardCharsets.UTF_8);
+        if (rule.getName().equals(ruleName)) {
+          // If the rule name exists as a header, then we are deserializing from a DLQ.
+          // In that case, we don't want deserialization to fail again,
+          // so we ignore the rule that previously failed.
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private void runAction(RuleContext ctx, RuleMode ruleMode, Rule rule, String action,

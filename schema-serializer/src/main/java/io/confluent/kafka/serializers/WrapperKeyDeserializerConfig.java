@@ -22,7 +22,7 @@ import org.apache.kafka.common.config.ConfigDef;
 
 public class WrapperKeyDeserializerConfig extends AbstractConfig {
 
-  public static final String WRAPPED_KEY_DESERIALIZER = "wrapper.key.deserializer";
+  public static final String WRAPPED_KEY_DESERIALIZER = "wrapped.key.deserializer";
   public static final String WRAPPED_KEY_DESERIALIZER_DOC =
       "Deserializer class to which calls will be delegated";
 

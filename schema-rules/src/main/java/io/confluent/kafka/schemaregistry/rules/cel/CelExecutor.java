@@ -80,7 +80,7 @@ public class CelExecutor implements RuleExecutor {
       if (Boolean.TRUE.equals(result)) {
         return message;
       } else {
-        throw new RuleException("Expr '" + ctx.rule().getExpr() + "' failed");
+        throw new RuleException("Expr failed: '" + ctx.rule().getExpr() + "'");
       }
     } else {
       if (result instanceof Map) {
