@@ -24,11 +24,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.apache.kafka</groupId>
-            <artifactId>kafka_${kafka.scala.version}</artifactId>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
@@ -116,11 +111,6 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-reload4j</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
