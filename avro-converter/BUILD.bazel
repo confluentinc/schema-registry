@@ -27,6 +27,7 @@ java_test_suite(
         "src/test/java/io/confluent/connect/avro/AvroConverterTest.java",
         "src/test/java/io/confluent/connect/avro/DeprecatedTestTopicNameStrategy.java",
     ],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":avro-converter",
         "//avro-serializer",
@@ -40,5 +41,4 @@ java_test_suite(
         "@maven//:org_hamcrest_hamcrest_core",
         "@maven//:org_powermock_powermock_reflect",
     ],
-    tags = ["no-java-spotbugs"],
 )

@@ -35,6 +35,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/serializers/KafkaJsonDeserializerTest.java",
         "src/test/java/io/confluent/kafka/serializers/KafkaJsonSerializerTest.java",
     ],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":json-serializer",
         "//avro-serializer",
@@ -44,5 +45,4 @@ java_test_suite(
         "@maven//:org_apache_kafka_kafka_2_13",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
-    tags = ["no-java-spotbugs"],
 )

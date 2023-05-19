@@ -336,6 +336,7 @@ http_archive(
     strip_prefix = "confluent-bazel-rules-0.0.5",
     url = "https://github.com/confluentinc/confluent-bazel-rules/archive/refs/tags/0.0.5.tar.gz",
 )
+
 load("@confluent_rules//java/swagger-core-bazel:deps.bzl", "swagger_deps")
 
 swagger_deps(swagger_core_version = SWAGGER_CORE_VERSION)

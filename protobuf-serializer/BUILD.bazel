@@ -1,7 +1,9 @@
 load("@contrib_rules_jvm//java:defs.bzl", "java_binary", "java_library", "java_test_suite")
+load("@rules_jvm_external//:defs.bzl", "java_export")
+load("//:variables.bzl", "SCHEMA_REGISTRY_VERSION")
 # gazelle:java_module_granularity module
 
-java_library(
+java_export(
     name = "protobuf-serializer",
     srcs = [
         "src/main/java/io/confluent/kafka/formatter/protobuf/ProtobufMessageFormatter.java",
@@ -15,6 +17,7 @@ java_library(
         "src/main/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializerConfig.java",
         "src/main/java/io/confluent/kafka/serializers/protobuf/ProtobufSchemaAndValue.java",
     ],
+    maven_coordinates = "io.confluent:kafka-protobuf-serializer:" + SCHEMA_REGISTRY_VERSION,
     visibility = ["//:__subpackages__"],
     exports = [
         "//protobuf-provider",
@@ -49,6 +52,7 @@ java_library(
         "src/test/java/io/confluent/kafka/schemaregistry/protobuf/rest/RestApiSerializerTest.java",
         "src/test/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializerTest.java",
     ],
+    tags = ["no-java-spotbugs"],
     visibility = ["//visibility:public"],
     exports = ["//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library"],
     deps = [
@@ -68,7 +72,6 @@ java_library(
         "@maven//:junit_junit",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
-    tags = ["no-java-spotbugs"],
 )
 
 java_test_suite(
@@ -78,6 +81,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/protobuf/rest/RestApiSerializerTest.java",
         "src/test/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializerTest.java",
     ],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":protobuf-serializer",
         ":test-utils",
@@ -95,5 +99,4 @@ java_test_suite(
         "@maven//:junit_junit",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
-    tags = ["no-java-spotbugs"],
 )

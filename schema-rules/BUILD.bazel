@@ -57,6 +57,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroScriptHostTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/rules/jsonata/JsonataExecutorTest.java",
     ],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":avro-resources",
         ":schema-rules",
@@ -85,5 +86,4 @@ java_test_suite(
         "@maven//:org_projectnessie_cel_cel_jackson",
         "@maven//:org_projectnessie_cel_cel_tools",
     ],
-    tags = ["no-java-spotbugs"],
 )

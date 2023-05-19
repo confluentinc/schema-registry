@@ -23,6 +23,7 @@ java_library(
         "src/main/java/io/confluent/kafka/serializers/subject/strategy/ReferenceSubjectNameStrategy.java",
         "src/main/java/io/confluent/kafka/serializers/subject/strategy/SubjectNameStrategy.java",
     ],
+    tags = ["no-java-spotbugs"],
     visibility = ["//:__subpackages__"],
     exports = [
         "//client",
@@ -41,5 +42,4 @@ java_library(
         "@maven//:org_apache_kafka_kafka_clients",
         "@maven//:org_slf4j_slf4j_api",
     ],
-    tags = ["no-java-spotbugs"],
 )

@@ -1,4 +1,4 @@
-load("@contrib_rules_jvm//java:defs.bzl", "spotbugs_config", "spotbugs_binary")
+load("@contrib_rules_jvm//java:defs.bzl", "spotbugs_binary", "spotbugs_config")
 
 spotbugs_binary(
     name = "spotbugs_cli",
@@ -11,6 +11,6 @@ spotbugs_binary(
 spotbugs_config(
     name = "spotbugs_config",
     exclude_filter = "findbugs-exclude.xml",
+    spotbugs_binary = ":spotbugs_cli",
     visibility = ["//visibility:public"],
-    spotbugs_binary = ":spotbugs_cli"
 )

@@ -26,6 +26,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionProperties.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/RestApiAzureFieldEncryptionTest.java",
     ],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":client-encryption-azure",
         "//avro-serializer",
@@ -38,5 +39,4 @@ java_test_suite(
         "@maven//:com_squareup_okio_okio_jvm",
         "@maven//:org_mockito_mockito_core",
     ],
-    tags = ["no-java-spotbugs"],
 )

@@ -1,7 +1,9 @@
 load("@contrib_rules_jvm//java:defs.bzl", "java_library", "java_test_suite")
+load("@rules_jvm_external//:defs.bzl", "java_export")
+load("//:variables.bzl", "SCHEMA_REGISTRY_VERSION")
 # gazelle:java_module_granularity module
 
-java_library(
+java_export(
     name = "json-schema-provider",
     srcs = [
         "src/main/java/io/confluent/kafka/schemaregistry/json/JsonNodeComparator.java",
@@ -30,6 +32,7 @@ java_library(
         "src/main/java/io/confluent/kafka/schemaregistry/json/utils/Edge.java",
         "src/main/java/io/confluent/kafka/schemaregistry/json/utils/MaximumCardinalityMatch.java",
     ],
+    maven_coordinates = "io.confluent:kafka-json-schema-provider:" + SCHEMA_REGISTRY_VERSION,
     visibility = ["//:__subpackages__"],
     exports = [
         "//client",
@@ -64,6 +67,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/json/utils/MaximumCardinalityMatchTest.java",
     ],
     resources = glob(["src/test/resources/**/*"]),
+    tags = ["no-java-spotbugs"],
     deps = [
         ":json-schema-provider",
         "//client",
@@ -77,5 +81,4 @@ java_test_suite(
         "@maven//:org_hamcrest_hamcrest_core",
         "@maven//:org_json_json",
     ],
-    tags = ["no-java-spotbugs"],
 )

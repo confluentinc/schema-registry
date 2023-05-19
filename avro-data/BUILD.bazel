@@ -60,6 +60,7 @@ java_test_suite(
         "src/test/java/io/confluent/connect/avro/AvroDataTest.java",
     ],
     data = [":avsc-srcs"],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":avro-data",
         ":avro-resources-1",
@@ -76,5 +77,4 @@ java_test_suite(
         "@maven//:org_powermock_powermock_reflect",
         "@maven//:uk_co_jemos_podam_podam",
     ],
-    tags = ["no-java-spotbugs"],
 )

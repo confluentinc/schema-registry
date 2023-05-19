@@ -1,5 +1,7 @@
 load("@contrib_rules_jvm//java:defs.bzl", "java_library", "java_test_suite")
 load("@io_bazel_rules_avro//avro:avro.bzl", "avro_gen", "avro_java_library")
+load("@rules_jvm_external//:defs.bzl", "java_export")
+load("//:variables.bzl", "SCHEMA_REGISTRY_VERSION")
 # gazelle:java_module_granularity module
 
 avro_java_library(
@@ -10,7 +12,7 @@ avro_java_library(
     visibility = ["//:__subpackages__"],
 )
 
-java_library(
+java_export(
     name = "avro-serializer",
     srcs = [
         "src/main/java/io/confluent/kafka/formatter/AvroMessageFormatter.java",
@@ -27,6 +29,7 @@ java_library(
         "src/main/java/io/confluent/kafka/serializers/KafkaAvroSerializerConfig.java",
         "src/main/java/io/confluent/kafka/serializers/NonRecordContainer.java",
     ],
+    maven_coordinates = "io.confluent:kafka-avro-serializer:" + SCHEMA_REGISTRY_VERSION,
     visibility = ["//:__subpackages__"],
     exports = [
         "//client",
@@ -61,6 +64,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/serializers/KafkaAvroSerializerTest.java",
     ],
     runner = "junit4",
+    tags = ["no-java-spotbugs"],
     deps = [
         ":avro-resources",
         ":avro-serializer",
@@ -75,5 +79,4 @@ java_test_suite(
         "@maven//:org_apache_kafka_kafka_clients",
         "@maven//:org_hamcrest_hamcrest_core",
     ],
-    tags = ["no-java-spotbugs"],
 )

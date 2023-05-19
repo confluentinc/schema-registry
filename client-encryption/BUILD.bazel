@@ -9,6 +9,7 @@ java_library(
         "src/main/java/io/confluent/kafka/schemaregistry/encryption/local/LocalFieldEncryptionExecutor.java",
         "src/main/java/io/confluent/kafka/schemaregistry/encryption/local/LocalKmsClient.java",
     ],
+    tags = ["no-java-spotbugs"],
     visibility = ["//:__subpackages__"],
     exports = ["@maven//:com_google_crypto_tink_tink"],
     deps = [
@@ -21,7 +22,6 @@ java_library(
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
-    tags = ["no-java-spotbugs"]
 )
 
 java_library(
@@ -32,6 +32,7 @@ java_library(
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/RestApiFieldEncryptionTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java",
     ],
+    tags = ["no-java-spotbugs"],
     visibility = ["//visibility:public"],
     deps = [
         ":client-encryption",
@@ -48,7 +49,6 @@ java_library(
         "@maven//:junit_junit",
         "@maven//:org_mockito_mockito_core",
     ],
-    tags = ["no-java-spotbugs"],
 )
 
 java_test_suite(
@@ -59,6 +59,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/local/LocalFieldEncryptionProperties.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/local/RestApiLocalFieldEncryptionTest.java",
     ],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":client-encryption",
         ":test-utils",
@@ -84,5 +85,4 @@ java_test_suite(
         "@maven//:org_mockito_mockito_core",
         "@maven//:org_slf4j_slf4j_reload4j",
     ],
-    tags = ["no-java-spotbugs"],
 )

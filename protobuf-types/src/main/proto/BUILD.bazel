@@ -24,8 +24,8 @@ java_library(
 
 filegroup(
     name = "proto_files",
-    visibility = ["//visibility:public"],
     srcs = [
         "confluent/meta.proto",
     ],
+    visibility = ["//visibility:public"],
 )
