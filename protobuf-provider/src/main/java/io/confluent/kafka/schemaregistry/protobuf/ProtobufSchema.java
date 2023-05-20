@@ -2347,24 +2347,6 @@ public class ProtobufSchema implements ParsedSchema {
     Object result = transform.transform(ctx, fieldCtx, message);
     if (result instanceof byte[]) {
       result = ByteString.copyFrom((byte[]) result);
-    } else if (result instanceof Number) {
-      Number num = (Number) result;
-      switch (fieldCtx.getType()) {
-        case INT:
-          result = num.intValue();
-          break;
-        case LONG:
-          result = num.longValue();
-          break;
-        case FLOAT:
-          result = num.floatValue();
-          break;
-        case DOUBLE:
-          result = num.doubleValue();
-          break;
-        default:
-          break;
-      }
     }
     return result;
   }

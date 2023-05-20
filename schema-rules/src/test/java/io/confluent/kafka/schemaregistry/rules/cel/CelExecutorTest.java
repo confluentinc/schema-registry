@@ -221,6 +221,11 @@ public class CelExecutorTest {
         + "[{\"name\": \"name\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]},\n"
         + "{\"name\": \"lastName\", \"type\": \"string\"},\n"
         + "{\"name\": \"fullName\", \"type\": \"string\"},\n"
+        + "{\"name\": \"myint\", \"type\": \"int\"}, "
+        + "{\"name\": \"mylong\", \"type\": \"long\"}, "
+        + "{\"name\": \"myfloat\", \"type\": \"float\"}, "
+        + "{\"name\": \"mydouble\", \"type\": \"double\"}, "
+        + "{\"name\": \"myboolean\", \"type\": \"boolean\"}, "
         + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"},\"confluent:tags\": [\"PII\"]},\n"
         + "{\"name\": \"piiArray\", \"type\": { \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\":\"OldPii\", \"fields\":\n"
         + "[{\"name\": \"pii\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]}]}}},\n"
@@ -560,6 +565,11 @@ public class CelExecutorTest {
     OldWidget widget = new OldWidget("alice");
     widget.setLastName("");
     widget.setFullName("");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
@@ -596,16 +606,53 @@ public class CelExecutorTest {
 
     OldWidget widget = new OldWidget("alice");
     widget.setLastName("smith");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
     Schema schema = createWidgetSchema();
     AvroSchema avroSchema = new AvroSchema(schema);
+    List<Rule> rules = new ArrayList<>();
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
         "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
         null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    rules.add(rule);
+    rule = new Rule("myRule2", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mybytes\" ; value == b\"\\x00\" ? b\"\\x01\" : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule3", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myint\" ; value == 1 ? 2 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule4", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mylong\" ; value == 2 ? 3 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule5", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myfloat\" ; value == 3.0 ? 4.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule6", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mydouble\" ; value == 4.0 ? 5.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule7", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myboolean\" ; value == true ? false : value",
+        null, null, false);
+    rules.add(rule);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), rules);
     avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
@@ -619,6 +666,11 @@ public class CelExecutorTest {
     assertEquals(widget, obj);
     assertEquals("alice", ((OldWidget)obj).getName());
     assertEquals("alice smith", ((OldWidget)obj).getFullName());
+    assertEquals(2, ((OldWidget)obj).getMyint());
+    assertEquals(3L, ((OldWidget)obj).getMylong());
+    assertEquals(4f, ((OldWidget)obj).getMyfloat(), 0.1);
+    assertEquals(5d, ((OldWidget)obj).getMydouble(), 0.1);
+    assertFalse(((OldWidget)obj).isMyboolean());
     assertEquals("123", ((OldWidget)obj).getSsn().get(0));
     assertEquals("456", ((OldWidget)obj).getSsn().get(1));
     assertEquals("789", ((OldWidget)obj).getPiiArray().get(0).getPii());
@@ -635,6 +687,11 @@ public class CelExecutorTest {
     OldWidget widget = new OldWidget("alice");
     widget.setLastName("");
     widget.setFullName("");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
@@ -749,6 +806,11 @@ public class CelExecutorTest {
     OldWidget widget = new OldWidget("alice");
     widget.setLastName("");
     widget.setFullName("");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
@@ -1037,6 +1099,37 @@ public class CelExecutorTest {
         "Returned object should be a NewWidget",
         "alice smith",
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("fullName"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ByteString.copyFrom(new byte[]{1}),
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("mybytes"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        2,
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("myint"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        3L,
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("mylong"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        4f,
+        (Float) ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("myfloat")),
+        0.1
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        5d,
+        (Double) ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("mydouble")),
+        0.1
+    );
+    assertFalse(
+        "Returned object should be a NewWidget",
+        (Boolean) ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("myboolean"))
     );
     assertEquals(
         "Returned object should be a NewWidget",
@@ -1381,6 +1474,11 @@ public class CelExecutorTest {
 
     OldWidget widget = new OldWidget("alice");
     widget.setLastName("smith");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
     widget.setSize(123);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
@@ -1456,6 +1554,32 @@ public class CelExecutorTest {
         "Returned object should be a NewWidget",
         "alice smith",
         ((JsonNode)obj).get("fullName").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        2,
+        ((JsonNode)obj).get("myint").intValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        3L,
+        ((JsonNode)obj).get("mylong").longValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        4f,
+        ((JsonNode)obj).get("myfloat").floatValue(),
+        0.1
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        5d,
+        ((JsonNode)obj).get("mydouble").doubleValue(),
+        0.1
+    );
+    assertFalse(
+        "Returned object should be a NewWidget",
+        ((JsonNode)obj).get("myboolean").booleanValue()
     );
     assertEquals(
         "Returned object should be a NewWidget",
@@ -1855,6 +1979,11 @@ public class CelExecutorTest {
 
     OldWidget widget = new OldWidget("alice");
     widget.setLastName("smith");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
     widget.setSize(123);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
@@ -1879,11 +2008,38 @@ public class CelExecutorTest {
         + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
         + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    List<Rule> rules = new ArrayList<>();
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
         "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
         null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    rules.add(rule);
+    rule = new Rule("myRule3", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myint\" ; value == 1 ? 2 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule4", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mylong\" ; value == 2 ? 3 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule5", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myfloat\" ; value == 3.0 ? 4.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule6", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mydouble\" ; value == 4.0 ? 5.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule7", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myboolean\" ; value == true ? false : value",
+        null, null, false);
+    rules.add(rule);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), rules);
     jsonSchema = jsonSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
@@ -1905,6 +2061,32 @@ public class CelExecutorTest {
         "Returned object should be a NewWidget",
         "alice smith",
         ((JsonNode)obj).get("fullName").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        2,
+        ((JsonNode)obj).get("myint").intValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        3L,
+        ((JsonNode)obj).get("mylong").longValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        4f,
+        ((JsonNode)obj).get("myfloat").floatValue(),
+        0.1
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        5d,
+        ((JsonNode)obj).get("mydouble").doubleValue(),
+        0.1
+    );
+    assertFalse(
+        "Returned object should be a NewWidget",
+        ((JsonNode)obj).get("myboolean").booleanValue()
     );
     assertEquals(
         "Returned object should be a NewWidget",

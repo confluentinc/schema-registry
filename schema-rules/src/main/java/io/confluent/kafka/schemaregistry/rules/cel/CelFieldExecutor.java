@@ -42,6 +42,10 @@ public class CelFieldExecutor implements FieldRuleExecutor {
   @Override
   public FieldTransform newTransform(RuleContext ruleContext) {
     return (ctx, fieldCtx, fieldValue) -> {
+      if (!fieldCtx.getType().isPrimitive()) {
+        // CEL field transforms only apply to primitive types
+        return fieldValue;
+      }
       Object message = fieldCtx.getContainingMessage();
       Object inputMessage;
       if (message instanceof JsonNode) {
@@ -62,6 +66,24 @@ public class CelFieldExecutor implements FieldRuleExecutor {
       );
       if (result instanceof ByteString) {
         result = ((ByteString) result).toByteArray();
+      } else if (result instanceof Number) {
+        Number num = (Number) result;
+        switch (fieldCtx.getType()) {
+          case INT:
+            result = num.intValue();
+            break;
+          case LONG:
+            result = num.longValue();
+            break;
+          case FLOAT:
+            result = num.floatValue();
+            break;
+          case DOUBLE:
+            result = num.doubleValue();
+            break;
+          default:
+            break;
+        }
       }
       return result;
     };

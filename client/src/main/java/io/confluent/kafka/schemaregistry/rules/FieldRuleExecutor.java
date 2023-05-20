@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.rules;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import java.util.Objects;
 
 /**
@@ -31,8 +32,8 @@ public interface FieldRuleExecutor extends RuleExecutor {
       case WRITE:
       case UPGRADE:
         for (int i = ctx.index() + 1; i < ctx.rules().size(); i++) {
-          if (ctx.rule().getTags().size() > 0 && haveSameTags(ctx.rule(), ctx.rules().get(i))) {
-            // ignore this rule if a later one has the same tags
+          if (areTransformsWithSameTags(ctx.rule(), ctx.rules().get(i))) {
+            // ignore this transform if a later one has the same tags
             return message;
           }
         }
@@ -40,8 +41,8 @@ public interface FieldRuleExecutor extends RuleExecutor {
       case READ:
       case DOWNGRADE:
         for (int i = 0; i < ctx.index(); i++) {
-          if (ctx.rule().getTags().size() > 0 && haveSameTags(ctx.rule(), ctx.rules().get(i))) {
-            // ignore this rule if an earlier one has the same tags
+          if (areTransformsWithSameTags(ctx.rule(), ctx.rules().get(i))) {
+            // ignore this transform if an earlier one has the same tags
             return message;
           }
         }
@@ -59,8 +60,10 @@ public interface FieldRuleExecutor extends RuleExecutor {
     }
   }
 
-  static boolean haveSameTags(Rule rule1, Rule rule2) {
-    return rule1.getKind() == rule2.getKind()
+  static boolean areTransformsWithSameTags(Rule rule1, Rule rule2) {
+    return rule1.getTags().size() > 0
+        && rule1.getKind() == RuleKind.TRANSFORM
+        && rule1.getKind() == rule2.getKind()
         && rule1.getMode() == rule2.getMode()
         && Objects.equals(rule1.getType(), rule2.getType())
         && Objects.equals(rule1.getTags(), rule2.getTags());
