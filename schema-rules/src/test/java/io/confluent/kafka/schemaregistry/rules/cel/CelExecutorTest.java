@@ -361,7 +361,7 @@ public class CelExecutorTest {
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
-        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
+        "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -550,7 +550,7 @@ public class CelExecutorTest {
     AvroSchema avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
-        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
+        "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -1300,7 +1300,7 @@ public class CelExecutorTest {
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
-        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
+        "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     jsonSchema = jsonSchema.copy(null, ruleSet);
@@ -1717,7 +1717,7 @@ public class CelExecutorTest {
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
-        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
+        "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     jsonSchema = jsonSchema.copy(null, ruleSet);
