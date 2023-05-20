@@ -188,6 +188,7 @@ public class CelExecutorTest {
         + "{\"name\": \"myfloat\", \"type\": \"float\"}, "
         + "{\"name\": \"mydouble\", \"type\": \"double\"}, "
         + "{\"name\": \"myboolean\", \"type\": \"boolean\"}, "
+        + "{\"name\": \"mynull\", \"type\": \"null\"}, "
         + "{\"name\": \"kind\",\n"
         + "  \"type\": {\n"
         + "    \"name\": \"Kind\",\n"
@@ -850,7 +851,8 @@ public class CelExecutorTest {
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelExecutor.TYPE, null, null,
         "{'name': 'Bob', 'lastName': null, 'fullName': null, 'mybytes': b\"\\x00\", "
-            + "'myint': 1, 'mylong': 2, 'myfloat': 3, 'mydouble': 4, 'myboolean': true, 'kind': 'TWO'}",
+            + "'myint': 1, 'mylong': 2, 'myfloat': 3, 'mydouble': 4, "
+            + "'myboolean': true, 'mynull': null, 'kind': 'TWO'}",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
