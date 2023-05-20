@@ -16,7 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -35,6 +37,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -179,6 +182,12 @@ public class CelExecutorTest {
         + "{\"name\": \"name\", \"type\": \"string\"}, "
         + "{\"name\": \"lastName\", \"type\": [\"null\", \"string\"]}, "
         + "{\"name\": \"fullName\", \"type\": [\"null\", \"string\"]}, "
+        + "{\"name\": \"mybytes\", \"type\": \"bytes\"}, "
+        + "{\"name\": \"myint\", \"type\": \"int\"}, "
+        + "{\"name\": \"mylong\", \"type\": \"long\"}, "
+        + "{\"name\": \"myfloat\", \"type\": \"float\"}, "
+        + "{\"name\": \"mydouble\", \"type\": \"double\"}, "
+        + "{\"name\": \"myboolean\", \"type\": \"boolean\"}, "
         + "{\"name\": \"kind\",\n"
         + "  \"type\": {\n"
         + "    \"name\": \"Kind\",\n"
@@ -197,6 +206,12 @@ public class CelExecutorTest {
     Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
+    avroRecord.put("mybytes", ByteBuffer.wrap(new byte[] { 0 }));
+    avroRecord.put("myint", 1);
+    avroRecord.put("mylong", 2L);
+    avroRecord.put("myfloat", 3.0f);
+    avroRecord.put("mydouble", 4.0d);
+    avroRecord.put("myboolean", true);
     avroRecord.put("kind", new GenericData.EnumSymbol(enumSchema, "ONE"));
     return avroRecord;
   }
@@ -359,17 +374,55 @@ public class CelExecutorTest {
     IndexedRecord avroRecord = createUserRecord();
     ((GenericRecord) avroRecord).put("lastName", "smith");
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    List<Rule> rules = new ArrayList<>();
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
         "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
         null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    rules.add(rule);
+    rule = new Rule("myRule2", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mybytes\" ; value == b\"\\x00\" ? b\"\\x01\" : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule3", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myint\" ; value == 1 ? 2 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule4", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mylong\" ; value == 2 ? 3 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule5", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myfloat\" ; value == 3.0 ? 4.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule6", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mydouble\" ; value == 4.0 ? 5.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule7", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myboolean\" ; value == true ? false : value",
+        null, null, false);
+    rules.add(rule);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), rules);
     avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     GenericRecord obj = (GenericRecord) avroDeserializer.deserialize(topic, bytes);
     assertEquals("testUser smith", obj.get("fullName").toString());
+    assertArrayEquals(new byte[] {1}, ((ByteBuffer)obj.get("mybytes")).array());
+    assertEquals(2, ((Integer)obj.get("myint")).intValue());
+    assertEquals(3L, ((Long)obj.get("mylong")).longValue());
+    assertEquals(4f, ((Float)obj.get("myfloat")).floatValue(), 0.1);
+    assertEquals(5d, ((Double)obj.get("mydouble")).doubleValue(), 0.1);
+    assertFalse(((Boolean)obj.get("myboolean")).booleanValue());
   }
 
   @Test
@@ -734,7 +787,8 @@ public class CelExecutorTest {
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelExecutor.TYPE, null, null,
-        "{'name': 'Bob', 'lastName': null, 'fullName': null, 'kind': 'TWO'}",
+        "{'name': 'Bob', 'lastName': null, 'fullName': null, 'mybytes': b\"\\x00\", "
+            + "'myint': 1, 'mylong': 2, 'myfloat': 3, 'mydouble': 4, 'myboolean': true, 'kind': 'TWO'}",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -910,6 +964,12 @@ public class CelExecutorTest {
     Widget widget = Widget.newBuilder()
         .setName("alice")
         .setLastName("smith")
+        .setMybytes(ByteString.copyFrom(new byte[]{0}))
+        .setMyint(1)
+        .setMylong(2)
+        .setMyfloat(3f)
+        .setMydouble(4d)
+        .setMyboolean(true)
         .addSsn("123")
         .addSsn("456")
         .addPiiArray(Pii.newBuilder().setPii("789").build())
@@ -919,11 +979,43 @@ public class CelExecutorTest {
         .setSize(123)
         .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    List<Rule> rules = new ArrayList<>();
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
         "name == \"fullName\" ; value == \"\" ? message.name + \" \" + message.lastName : value",
         null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    rules.add(rule);
+    rule = new Rule("myRule2", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mybytes\" ; value == b\"\\x00\" ? b\"\\x01\" : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule3", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myint\" ; value == 1 ? 2 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule4", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mylong\" ; value == 2 ? 3 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule5", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myfloat\" ; value == 3.0 ? 4.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule6", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mydouble\" ; value == 4.0 ? 5.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule7", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myboolean\" ; value == true ? false : value",
+        null, null, false);
+    rules.add(rule);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), rules);
     protobufSchema = protobufSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", protobufSchema);
 
@@ -1173,6 +1265,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1220,6 +1317,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1287,6 +1389,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1298,11 +1405,38 @@ public class CelExecutorTest {
         + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
         + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    List<Rule> rules = new ArrayList<>();
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
         "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
         null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    rules.add(rule);
+    rule = new Rule("myRule3", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myint\" ; value == 1 ? 2 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule4", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mylong\" ; value == 2 ? 3 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule5", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myfloat\" ; value == 3.0 ? 4.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule6", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mydouble\" ; value == 4.0 ? 5.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule7", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myboolean\" ; value == true ? false : value",
+        null, null, false);
+    rules.add(rule);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), rules);
     jsonSchema = jsonSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
@@ -1364,6 +1498,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"OldPii.json\"}}]},"
@@ -1494,6 +1633,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1540,6 +1684,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1586,6 +1735,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1635,6 +1789,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1704,6 +1863,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1768,6 +1932,11 @@ public class CelExecutorTest {
     private String name;
     private String lastName;
     private String fullName;
+    private int myint;
+    private long mylong;
+    private float myfloat;
+    private double mydouble;
+    private boolean myboolean;
     private List<String> ssn = new ArrayList<>();
     private List<OldPii> piiArray = new ArrayList<>();
     private Map<String, OldPii> piiMap = new HashMap<>();
@@ -1803,6 +1972,45 @@ public class CelExecutorTest {
       this.fullName = fullName;
     }
 
+    public int getMyint() {
+      return myint;
+    }
+
+    public void setMyint(int myint) {
+      this.myint = myint;
+    }
+
+    public long getMylong() {
+      return mylong;
+    }
+
+    public void setMylong(long mylong) {
+      this.mylong = mylong;
+    }
+
+    public float getMyfloat() {
+      return myfloat;
+    }
+
+    public void setMyfloat(float myfloat) {
+      this.myfloat = myfloat;
+    }
+
+    public double getMydouble() {
+      return mydouble;
+    }
+
+    public void setMydouble(double mydouble) {
+      this.mydouble = mydouble;
+    }
+
+    public boolean isMyboolean() {
+      return myboolean;
+    }
+
+    public void setMyboolean(boolean myboolean) {
+      this.myboolean = myboolean;
+    }
     public List<String> getSsn() {
       return ssn;
     }

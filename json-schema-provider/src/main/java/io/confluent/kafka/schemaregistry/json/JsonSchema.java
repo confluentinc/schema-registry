@@ -781,6 +781,25 @@ public class JsonSchema implements ParsedSchema {
         @Override
         public void setPropertyValue(Object value) {
           try {
+            if (value instanceof Number) {
+              // Ideally this conversion would happen after calling the field transformer,
+              // but JSON Schema can't represent all the Number subclasses.
+              Number num = (Number) value;
+              Class<?> cls = setter.getType().getRawClass();
+              if (cls == byte.class || cls == Byte.class) {
+                value = num.byteValue();
+              } else if (cls == short.class || cls == Short.class) {
+                value = num.shortValue();
+              } else if (cls == int.class || cls == Integer.class) {
+                value = num.intValue();
+              } else if (cls == long.class || cls == Long.class) {
+                value = num.longValue();
+              } else if (cls == float.class || cls == Float.class) {
+                value = num.floatValue();
+              } else if (cls == double.class || cls == Double.class) {
+                value = num.doubleValue();
+              }
+            }
             setter.set(message, value);
           } catch (IOException e) {
             throw new IllegalStateException("Could not set property " + propertyName, e);

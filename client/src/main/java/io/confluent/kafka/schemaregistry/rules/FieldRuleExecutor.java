@@ -31,7 +31,7 @@ public interface FieldRuleExecutor extends RuleExecutor {
       case WRITE:
       case UPGRADE:
         for (int i = ctx.index() + 1; i < ctx.rules().size(); i++) {
-          if (haveSameTags(ctx.rule(), ctx.rules().get(i))) {
+          if (ctx.rule().getTags().size() > 0 && haveSameTags(ctx.rule(), ctx.rules().get(i))) {
             // ignore this rule if a later one has the same tags
             return message;
           }
@@ -40,7 +40,7 @@ public interface FieldRuleExecutor extends RuleExecutor {
       case READ:
       case DOWNGRADE:
         for (int i = 0; i < ctx.index(); i++) {
-          if (haveSameTags(ctx.rule(), ctx.rules().get(i))) {
+          if (ctx.rule().getTags().size() > 0 && haveSameTags(ctx.rule(), ctx.rules().get(i))) {
             // ignore this rule if an earlier one has the same tags
             return message;
           }
