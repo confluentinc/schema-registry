@@ -130,7 +130,8 @@ public class JsonataExecutorTest {
     specificProtobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, specificProps2);
 
     jsonSchemaSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, defaultConfig);
-    jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, defaultConfig2);
+    jsonSchemaDeserializer =
+        new KafkaJsonSchemaDeserializer<>(schemaRegistry, defaultConfig2, JsonNode.class);
 
     specificJsonSchemaDeserializer =
         new KafkaJsonSchemaDeserializer<>(schemaRegistry, specificProps2, NewWidget.class);
