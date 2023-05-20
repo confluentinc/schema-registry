@@ -783,6 +783,7 @@ public class JsonSchema implements ParsedSchema {
           try {
             if (value instanceof Number) {
               // Ideally this conversion would happen after calling the field transformer,
+              // so that conversions would happen for these primitives when in arrays,
               // but JSON Schema can't represent all the Number subclasses.
               Number num = (Number) value;
               Class<?> cls = setter.getType().getRawClass();
