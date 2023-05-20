@@ -24,6 +24,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
+import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
+import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
@@ -271,7 +273,6 @@ public class JsonataExecutorTest {
   @Test
   public void testKafkaAvroSerializerFullyCompatible() throws Exception {
     byte[] bytes;
-    Object obj;
 
     String rule1To2 =
         "$merge([$sift($, function($v, $k) {$k != 'size'}), {'height': $.'size'}])";
@@ -525,6 +526,8 @@ public class JsonataExecutorTest {
     );
   }
 
+  @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
+      value= "io.confluent.kafka.schemaregistry.rules.jsonata.JsonataExecutorTest$OldWidget")})
   public static class OldWidget {
     private String name;
     private int size;
@@ -575,6 +578,8 @@ public class JsonataExecutorTest {
     }
   }
 
+  @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
+      value= "io.confluent.kafka.schemaregistry.rules.jsonata.JsonataExecutorTest$NewWidget")})
   public static class NewWidget {
     private String name;
     private int height;
@@ -625,6 +630,8 @@ public class JsonataExecutorTest {
     }
   }
 
+  @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
+      value= "io.confluent.kafka.schemaregistry.rules.jsonata.JsonataExecutorTest$NewerWidget")})
   public static class NewerWidget {
     private String name;
     private int length;
