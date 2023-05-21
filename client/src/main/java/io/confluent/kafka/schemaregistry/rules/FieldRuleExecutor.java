@@ -39,7 +39,7 @@ public interface FieldRuleExecutor extends RuleExecutor {
           Rule otherRule = ctx.rules().get(i);
           if (areTransformsWithSameTags(ctx.rule(), otherRule)) {
             // ignore this transform if a later one has the same tags
-            log.info("Ignoring rule '" + ctx.rule().getName() + "' during " + ctx.ruleMode()
+            log.debug("Ignoring rule '" + ctx.rule().getName() + "' during " + ctx.ruleMode()
                 + "' as rule '" + otherRule.getName() + "' has the same tag(s) and overrides it");
             return message;
           }
@@ -51,7 +51,7 @@ public interface FieldRuleExecutor extends RuleExecutor {
           Rule otherRule = ctx.rules().get(i);
           if (areTransformsWithSameTags(ctx.rule(), otherRule)) {
             // ignore this transform if an earlier one has the same tags
-            log.info("Ignoring rule '" + ctx.rule().getName() + "' during " + ctx.ruleMode()
+            log.debug("Ignoring rule '" + ctx.rule().getName() + "' during " + ctx.ruleMode()
                 + "' as rule '" + otherRule.getName() + "' has the same tag(s) and overrides it");
             return message;
           }
