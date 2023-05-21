@@ -19,11 +19,15 @@ package io.confluent.kafka.schemaregistry.rules;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A field-level rule executor.
  */
 public interface FieldRuleExecutor extends RuleExecutor {
+
+  Logger log = LoggerFactory.getLogger(FieldRuleExecutor.class);
 
   FieldTransform newTransform(RuleContext ctx) throws RuleException;
 
@@ -34,6 +38,8 @@ public interface FieldRuleExecutor extends RuleExecutor {
         for (int i = ctx.index() + 1; i < ctx.rules().size(); i++) {
           if (areTransformsWithSameTags(ctx.rule(), ctx.rules().get(i))) {
             // ignore this transform if a later one has the same tags
+            log.info("Ignoring rule '" + ctx.rule().getName() + "' during " + ctx.ruleMode()
+                + "' as a later transform with the same tag(s) overrides it");
             return message;
           }
         }
@@ -43,6 +49,8 @@ public interface FieldRuleExecutor extends RuleExecutor {
         for (int i = 0; i < ctx.index(); i++) {
           if (areTransformsWithSameTags(ctx.rule(), ctx.rules().get(i))) {
             // ignore this transform if an earlier one has the same tags
+            log.info("Ignoring rule '" + ctx.rule().getName() + "' during " + ctx.ruleMode()
+                + " as an earlier transform with the same tag(s) overrides it");
             return message;
           }
         }
