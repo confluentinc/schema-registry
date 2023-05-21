@@ -30,12 +30,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
@@ -44,6 +44,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -373,6 +374,25 @@ public class CelExecutorTest {
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     GenericRecord obj = (GenericRecord) avroDeserializer.deserialize(topic, bytes);
     assertEquals("testUser-suffix", obj.get("name").toString());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerFieldTransformExternalTag() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    ((GenericRecord)avroRecord).put("lastName", "smith");
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "name == \"lastName\" ; value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = new Metadata(Collections.singletonMap(
+        "example.avro.User.lastName", ImmutableSet.of("PII")), null, null);
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    GenericRecord obj = (GenericRecord) avroDeserializer.deserialize(topic, bytes);
+    assertEquals("smith-suffix", obj.get("lastName").toString());
   }
 
   @Test
@@ -1021,6 +1041,83 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaProtobufSerializerFieldTransformExternalTag() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    Widget widget = Widget.newBuilder()
+        .setName("alice")
+        .setLastName("smith")
+        .addSsn("123")
+        .addSsn("456")
+        .addPiiArray(Pii.newBuilder().setPii("789").build())
+        .addPiiArray(Pii.newBuilder().setPii("012").build())
+        .putPiiMap("key1", Pii.newBuilder().setPii("345").build())
+        .putPiiMap("key2", Pii.newBuilder().setPii("678").build())
+        .setSize(123)
+        .build();
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = new Metadata(Collections.singletonMap(
+        "io.confluent.kafka.schemaregistry.rules.Widget.lastName", ImmutableSet.of("PII")), null, null);
+    protobufSchema = protobufSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    bytes = protobufSerializer.serialize(topic, widget);
+
+    obj = protobufDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Widget",
+        DynamicMessage.class.isInstance(obj)
+    );
+    DynamicMessage dynamicMessage = (DynamicMessage) obj;
+    Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice-suffix",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "smith-suffix",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("lastName"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("123-suffix", "456-suffix"),
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("ssn"))
+    );
+    List<String> ssnArrayValues = ((List<?>)((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("pii_array")))
+        .stream()
+        .map(o -> {
+          DynamicMessage msg = (DynamicMessage) o;
+          return msg.getField(msg.getDescriptorForType().findFieldByName("pii")).toString();
+        })
+        .collect(Collectors.toList());
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("789-suffix", "012-suffix"),
+        ssnArrayValues
+    );
+    List<String> ssnMapValues = ((List<?>)((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("pii_map")))
+        .stream()
+        .map(o -> {
+          DynamicMessage msg = (DynamicMessage) o;
+          DynamicMessage msg2 = (DynamicMessage) msg.getField(msg.getDescriptorForType().findFieldByName("value"));
+          return msg2.getField(msg2.getDescriptorForType().findFieldByName("pii")).toString();
+        })
+        .collect(Collectors.toList());
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("345-suffix", "678-suffix"),
+        ssnMapValues
+    );
+  }
+
+  @Test
   public void testKafkaProtobufSerializerFieldTransformUsingMessage() throws Exception {
     byte[] bytes;
     Object obj;
@@ -1446,6 +1543,85 @@ public class CelExecutorTest {
         "Returned object should be a NewWidget",
         "alice-suffix",
         ((JsonNode)obj).get("name").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "123-suffix",
+        ((JsonNode)obj).get("ssn").get(0).textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "456-suffix",
+        ((JsonNode)obj).get("ssn").get(1).textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "789-suffix",
+        ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "012-suffix",
+        ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
+    );
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerFieldTransformExternalTag() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    OldWidget widget = new OldWidget("alice");
+    widget.setLastName("smith");
+    widget.setSize(123);
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
+        + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
+        + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"size\":{\"type\":\"integer\"},"
+        + "\"version\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"size\",\"version\"],"
+        + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
+        + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]}}}}}";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = new Metadata(Collections.singletonMap(
+        "$.lastName", ImmutableSet.of("PII")), null, null);
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    bytes = jsonSchemaSerializer.serialize(topic, widget);
+
+    obj = jsonSchemaDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Widget",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice-suffix",
+        ((JsonNode)obj).get("name").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "smith-suffix",
+        ((JsonNode)obj).get("lastName").textValue()
     );
     assertEquals(
         "Returned object should be a NewWidget",
