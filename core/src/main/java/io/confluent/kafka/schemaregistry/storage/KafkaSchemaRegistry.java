@@ -173,13 +173,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     NamedURI internalListener = getInterInstanceListener(config.getListeners(),
         interInstanceListenerNameConfig,
         config.interInstanceProtocol());
-    log.info("Found internal listener: " + internalListener.toString());
+    log.info("Found internal listener: {}", internalListener.toString());
     SchemeAndPort schemeAndPort = new SchemeAndPort(internalListener.getUri().getScheme(),
         internalListener.getUri().getPort());
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
         isEligibleForLeaderElector, schemeAndPort.scheme);
-    log.info("Setting my identity to " + myIdentity.toString());
+    log.info("Setting my identity to {}",  myIdentity);
 
     Map<String, Object> sslConfig = config.getOverriddenSslConfigs(internalListener);
     this.sslFactory =
@@ -442,7 +442,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public void setLeader(@Nullable SchemaRegistryIdentity newLeader)
       throws SchemaRegistryTimeoutException, SchemaRegistryStoreException, IdGenerationException {
-    log.debug("Setting the leader to " + newLeader);
+    log.debug("Setting the leader to {}", newLeader);
 
     // Only schema registry instances eligible for leader can be set to leader
     if (newLeader != null && !newLeader.getLeaderEligibility()) {
@@ -1710,7 +1710,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       ConfigValue oldConfig = (ConfigValue) kafkaStore.get(configKey);
       ConfigValue newConfig = new ConfigValue(subject, config, ruleSetHandler);
       kafkaStore.put(configKey, ConfigValue.update(oldConfig, newConfig));
-      log.debug("Wrote new config : " + config + " to the Kafka data store with key " + configKey);
+      log.debug("Wrote new config: {} to the Kafka data store with key {}", config, configKey);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store",
                                              e);
@@ -1937,8 +1937,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         kafkaStore.put(new ClearSubjectKey(subject), new ClearSubjectValue(subject));
       }
       kafkaStore.put(modeKey, new ModeValue(subject, mode));
-      log.debug("Wrote new mode: " + mode.name() + " to the"
-          + " Kafka data store with key " + modeKey.toString());
+      log.debug("Wrote new mode: {} to the Kafka data store with key {}", mode.name(), modeKey);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new mode to the store", e);
     }

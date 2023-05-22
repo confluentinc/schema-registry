@@ -103,7 +103,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     }
     SchemaProvider schemaProvider = providers.get(schemaType);
     if (schemaProvider == null) {
-      log.error("No provider found for schema type " + schemaType);
+      log.error("No provider found for schema type {}", schemaType);
       return Optional.empty();
     }
     return schemaProvider.parseSchema(schemaString, references);
@@ -117,7 +117,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     }
     SchemaProvider schemaProvider = providers.get(schemaType);
     if (schemaProvider == null) {
-      log.error("No provider found for schema type " + schemaType);
+      log.error("No provider found for schema type {}", schemaType);
       return Optional.empty();
     }
     return schemaProvider.parseSchema(schema, false);

@@ -408,8 +408,8 @@ public class ProtobufSchema implements ParsedSchema {
       this.metadata = metadata;
       this.ruleSet = ruleSet;
     } catch (IllegalStateException e) {
-      log.error("Could not parse Protobuf schema " + schemaString
-          + " with references " + references, e);
+      log.error("Could not parse Protobuf schema {} with references {}", schemaString,
+          references, e);
       throw e;
     }
   }
@@ -2323,20 +2323,12 @@ public class ProtobufSchema implements ParsedSchema {
         try {
           Set<String> ruleTags = ctx.rule().getTags();
           if (ruleTags.isEmpty()) {
-            Object result = transform.transform(ctx, fieldCtx, message);
-            if (result instanceof byte[]) {
-              result = ByteString.copyFrom((byte[]) result);
-            }
-            return result;
+            return fieldTransform(ctx, message, transform, fieldCtx);
           } else {
             Set<String> intersect = new HashSet<>(fieldCtx.getTags());
             intersect.retainAll(ruleTags);
             if (!intersect.isEmpty()) {
-              Object result = transform.transform(ctx, fieldCtx, message);
-              if (result instanceof byte[]) {
-                result = ByteString.copyFrom((byte[]) result);
-              }
-              return result;
+              return fieldTransform(ctx, message, transform, fieldCtx);
             }
           }
         } catch (RuleException e) {
@@ -2345,6 +2337,18 @@ public class ProtobufSchema implements ParsedSchema {
       }
       return message;
     }
+  }
+
+  private static Object fieldTransform(RuleContext ctx, Object message, FieldTransform transform,
+      FieldContext fieldCtx) throws RuleException {
+    if (message instanceof ByteString) {
+      message = ((ByteString)message).toByteArray();
+    }
+    Object result = transform.transform(ctx, fieldCtx, message);
+    if (result instanceof byte[]) {
+      result = ByteString.copyFrom((byte[]) result);
+    }
+    return result;
   }
 
   private RuleContext.Type getType(FieldDescriptor field) {

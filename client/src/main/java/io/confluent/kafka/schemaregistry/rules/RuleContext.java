@@ -244,19 +244,29 @@ public class RuleContext {
   }
 
   public enum Type {
-    RECORD,
-    ENUM,
-    ARRAY,
-    MAP,
-    COMBINED,
-    FIXED,
-    STRING,
-    BYTES,
-    INT,
-    LONG,
-    FLOAT,
-    DOUBLE,
-    BOOLEAN,
-    NULL
+    RECORD(false),
+    ENUM(false),
+    ARRAY(false),
+    MAP(false),
+    COMBINED(false),
+    FIXED(false),
+    STRING(true),
+    BYTES(true),
+    INT(true),
+    LONG(true),
+    FLOAT(true),
+    DOUBLE(true),
+    BOOLEAN(true),
+    NULL(true);
+
+    private boolean isPrimitive;
+
+    Type(boolean isPrimitive) {
+      this.isPrimitive = isPrimitive;
+    }
+
+    public boolean isPrimitive() {
+      return isPrimitive;
+    }
   }
 }

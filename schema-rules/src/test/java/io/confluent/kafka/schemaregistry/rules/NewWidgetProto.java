@@ -172,35 +172,71 @@ public final class NewWidgetProto {
         getFullNameBytes();
 
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+     * <code>bytes mybytes = 4;</code>
+     * @return The mybytes.
+     */
+    com.google.protobuf.ByteString getMybytes();
+
+    /**
+     * <code>int32 myint = 5;</code>
+     * @return The myint.
+     */
+    int getMyint();
+
+    /**
+     * <code>int64 mylong = 6;</code>
+     * @return The mylong.
+     */
+    long getMylong();
+
+    /**
+     * <code>float myfloat = 7;</code>
+     * @return The myfloat.
+     */
+    float getMyfloat();
+
+    /**
+     * <code>double mydouble = 8;</code>
+     * @return The mydouble.
+     */
+    double getMydouble();
+
+    /**
+     * <code>bool myboolean = 9;</code>
+     * @return The myboolean.
+     */
+    boolean getMyboolean();
+
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
      * @return The enum numeric value on the wire for kind.
      */
     int getKindValue();
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
      * @return The kind.
      */
     io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Kind getKind();
 
     /**
-     * <code>repeated string ssn = 5;</code>
+     * <code>repeated string ssn = 11;</code>
      * @return A list containing the ssn.
      */
     java.util.List<java.lang.String>
         getSsnList();
     /**
-     * <code>repeated string ssn = 5;</code>
+     * <code>repeated string ssn = 11;</code>
      * @return The count of ssn.
      */
     int getSsnCount();
     /**
-     * <code>repeated string ssn = 5;</code>
+     * <code>repeated string ssn = 11;</code>
      * @param index The index of the element to return.
      * @return The ssn at the given index.
      */
     java.lang.String getSsn(int index);
     /**
-     * <code>repeated string ssn = 5;</code>
+     * <code>repeated string ssn = 11;</code>
      * @param index The index of the value to return.
      * @return The bytes of the ssn at the given index.
      */
@@ -208,35 +244,35 @@ public final class NewWidgetProto {
         getSsnBytes(int index);
 
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
      */
     java.util.List<io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> 
         getPiiArrayList();
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
      */
     io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiArray(int index);
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
      */
     int getPiiArrayCount();
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
      */
     java.util.List<? extends io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder> 
         getPiiArrayOrBuilderList();
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
      */
     io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder getPiiArrayOrBuilder(
         int index);
 
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
      */
     int getPiiMapCount();
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
      */
     boolean containsPiiMap(
         java.lang.String key);
@@ -247,32 +283,32 @@ public final class NewWidgetProto {
     java.util.Map<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii>
     getPiiMap();
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
      */
     java.util.Map<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii>
     getPiiMapMap();
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
      */
 
     io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiMapOrDefault(
         java.lang.String key,
         io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue);
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
      */
 
     io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiMapOrThrow(
         java.lang.String key);
 
     /**
-     * <code>int32 height = 8;</code>
+     * <code>int32 height = 14;</code>
      * @return The height.
      */
     int getHeight();
 
     /**
-     * <code>int32 version = 9;</code>
+     * <code>int32 version = 15;</code>
      * @return The version.
      */
     int getVersion();
@@ -293,6 +329,7 @@ public final class NewWidgetProto {
       name_ = "";
       lastName_ = "";
       fullName_ = "";
+      mybytes_ = com.google.protobuf.ByteString.EMPTY;
       kind_ = 0;
       ssn_ = com.google.protobuf.LazyStringArrayList.EMPTY;
       piiArray_ = java.util.Collections.emptyList();
@@ -320,7 +357,7 @@ public final class NewWidgetProto {
     protected com.google.protobuf.MapField internalGetMapField(
         int number) {
       switch (number) {
-        case 7:
+        case 13:
           return internalGetPiiMap();
         default:
           throw new RuntimeException(
@@ -449,17 +486,83 @@ public final class NewWidgetProto {
       }
     }
 
-    public static final int KIND_FIELD_NUMBER = 4;
+    public static final int MYBYTES_FIELD_NUMBER = 4;
+    private com.google.protobuf.ByteString mybytes_;
+    /**
+     * <code>bytes mybytes = 4;</code>
+     * @return The mybytes.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getMybytes() {
+      return mybytes_;
+    }
+
+    public static final int MYINT_FIELD_NUMBER = 5;
+    private int myint_;
+    /**
+     * <code>int32 myint = 5;</code>
+     * @return The myint.
+     */
+    @java.lang.Override
+    public int getMyint() {
+      return myint_;
+    }
+
+    public static final int MYLONG_FIELD_NUMBER = 6;
+    private long mylong_;
+    /**
+     * <code>int64 mylong = 6;</code>
+     * @return The mylong.
+     */
+    @java.lang.Override
+    public long getMylong() {
+      return mylong_;
+    }
+
+    public static final int MYFLOAT_FIELD_NUMBER = 7;
+    private float myfloat_;
+    /**
+     * <code>float myfloat = 7;</code>
+     * @return The myfloat.
+     */
+    @java.lang.Override
+    public float getMyfloat() {
+      return myfloat_;
+    }
+
+    public static final int MYDOUBLE_FIELD_NUMBER = 8;
+    private double mydouble_;
+    /**
+     * <code>double mydouble = 8;</code>
+     * @return The mydouble.
+     */
+    @java.lang.Override
+    public double getMydouble() {
+      return mydouble_;
+    }
+
+    public static final int MYBOOLEAN_FIELD_NUMBER = 9;
+    private boolean myboolean_;
+    /**
+     * <code>bool myboolean = 9;</code>
+     * @return The myboolean.
+     */
+    @java.lang.Override
+    public boolean getMyboolean() {
+      return myboolean_;
+    }
+
+    public static final int KIND_FIELD_NUMBER = 10;
     private int kind_;
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
      * @return The enum numeric value on the wire for kind.
      */
     @java.lang.Override public int getKindValue() {
       return kind_;
     }
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
      * @return The kind.
      */
     @java.lang.Override public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Kind getKind() {
@@ -468,10 +571,10 @@ public final class NewWidgetProto {
       return result == null ? io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Kind.UNRECOGNIZED : result;
     }
 
-    public static final int SSN_FIELD_NUMBER = 5;
+    public static final int SSN_FIELD_NUMBER = 11;
     private com.google.protobuf.LazyStringList ssn_;
     /**
-     * <code>repeated string ssn = 5;</code>
+     * <code>repeated string ssn = 11;</code>
      * @return A list containing the ssn.
      */
     public com.google.protobuf.ProtocolStringList
@@ -479,14 +582,14 @@ public final class NewWidgetProto {
       return ssn_;
     }
     /**
-     * <code>repeated string ssn = 5;</code>
+     * <code>repeated string ssn = 11;</code>
      * @return The count of ssn.
      */
     public int getSsnCount() {
       return ssn_.size();
     }
     /**
-     * <code>repeated string ssn = 5;</code>
+     * <code>repeated string ssn = 11;</code>
      * @param index The index of the element to return.
      * @return The ssn at the given index.
      */
@@ -494,7 +597,7 @@ public final class NewWidgetProto {
       return ssn_.get(index);
     }
     /**
-     * <code>repeated string ssn = 5;</code>
+     * <code>repeated string ssn = 11;</code>
      * @param index The index of the value to return.
      * @return The bytes of the ssn at the given index.
      */
@@ -503,17 +606,17 @@ public final class NewWidgetProto {
       return ssn_.getByteString(index);
     }
 
-    public static final int PII_ARRAY_FIELD_NUMBER = 6;
+    public static final int PII_ARRAY_FIELD_NUMBER = 12;
     private java.util.List<io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> piiArray_;
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
      */
     @java.lang.Override
     public java.util.List<io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> getPiiArrayList() {
       return piiArray_;
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
      */
     @java.lang.Override
     public java.util.List<? extends io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder> 
@@ -521,21 +624,21 @@ public final class NewWidgetProto {
       return piiArray_;
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
      */
     @java.lang.Override
     public int getPiiArrayCount() {
       return piiArray_.size();
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
      */
     @java.lang.Override
     public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiArray(int index) {
       return piiArray_.get(index);
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
      */
     @java.lang.Override
     public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder getPiiArrayOrBuilder(
@@ -543,7 +646,7 @@ public final class NewWidgetProto {
       return piiArray_.get(index);
     }
 
-    public static final int PII_MAP_FIELD_NUMBER = 7;
+    public static final int PII_MAP_FIELD_NUMBER = 13;
     private static final class PiiMapDefaultEntryHolder {
       static final com.google.protobuf.MapEntry<
           java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> defaultEntry =
@@ -570,7 +673,7 @@ public final class NewWidgetProto {
       return internalGetPiiMap().getMap().size();
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
      */
 
     @java.lang.Override
@@ -588,7 +691,7 @@ public final class NewWidgetProto {
       return getPiiMapMap();
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
      */
     @java.lang.Override
 
@@ -596,7 +699,7 @@ public final class NewWidgetProto {
       return internalGetPiiMap().getMap();
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
      */
     @java.lang.Override
 
@@ -609,7 +712,7 @@ public final class NewWidgetProto {
       return map.containsKey(key) ? map.get(key) : defaultValue;
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
      */
     @java.lang.Override
 
@@ -624,10 +727,10 @@ public final class NewWidgetProto {
       return map.get(key);
     }
 
-    public static final int HEIGHT_FIELD_NUMBER = 8;
+    public static final int HEIGHT_FIELD_NUMBER = 14;
     private int height_;
     /**
-     * <code>int32 height = 8;</code>
+     * <code>int32 height = 14;</code>
      * @return The height.
      */
     @java.lang.Override
@@ -635,10 +738,10 @@ public final class NewWidgetProto {
       return height_;
     }
 
-    public static final int VERSION_FIELD_NUMBER = 9;
+    public static final int VERSION_FIELD_NUMBER = 15;
     private int version_;
     /**
-     * <code>int32 version = 9;</code>
+     * <code>int32 version = 15;</code>
      * @return The version.
      */
     @java.lang.Override
@@ -669,26 +772,44 @@ public final class NewWidgetProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(fullName_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 3, fullName_);
       }
+      if (!mybytes_.isEmpty()) {
+        output.writeBytes(4, mybytes_);
+      }
+      if (myint_ != 0) {
+        output.writeInt32(5, myint_);
+      }
+      if (mylong_ != 0L) {
+        output.writeInt64(6, mylong_);
+      }
+      if (java.lang.Float.floatToRawIntBits(myfloat_) != 0) {
+        output.writeFloat(7, myfloat_);
+      }
+      if (java.lang.Double.doubleToRawLongBits(mydouble_) != 0) {
+        output.writeDouble(8, mydouble_);
+      }
+      if (myboolean_ != false) {
+        output.writeBool(9, myboolean_);
+      }
       if (kind_ != io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Kind.ZERO.getNumber()) {
-        output.writeEnum(4, kind_);
+        output.writeEnum(10, kind_);
       }
       for (int i = 0; i < ssn_.size(); i++) {
-        com.google.protobuf.GeneratedMessageV3.writeString(output, 5, ssn_.getRaw(i));
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 11, ssn_.getRaw(i));
       }
       for (int i = 0; i < piiArray_.size(); i++) {
-        output.writeMessage(6, piiArray_.get(i));
+        output.writeMessage(12, piiArray_.get(i));
       }
       com.google.protobuf.GeneratedMessageV3
         .serializeStringMapTo(
           output,
           internalGetPiiMap(),
           PiiMapDefaultEntryHolder.defaultEntry,
-          7);
+          13);
       if (height_ != 0) {
-        output.writeInt32(8, height_);
+        output.writeInt32(14, height_);
       }
       if (version_ != 0) {
-        output.writeInt32(9, version_);
+        output.writeInt32(15, version_);
       }
       getUnknownFields().writeTo(output);
     }
@@ -708,9 +829,33 @@ public final class NewWidgetProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(fullName_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(3, fullName_);
       }
+      if (!mybytes_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(4, mybytes_);
+      }
+      if (myint_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(5, myint_);
+      }
+      if (mylong_ != 0L) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt64Size(6, mylong_);
+      }
+      if (java.lang.Float.floatToRawIntBits(myfloat_) != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeFloatSize(7, myfloat_);
+      }
+      if (java.lang.Double.doubleToRawLongBits(mydouble_) != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(8, mydouble_);
+      }
+      if (myboolean_ != false) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBoolSize(9, myboolean_);
+      }
       if (kind_ != io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Kind.ZERO.getNumber()) {
         size += com.google.protobuf.CodedOutputStream
-          .computeEnumSize(4, kind_);
+          .computeEnumSize(10, kind_);
       }
       {
         int dataSize = 0;
@@ -722,7 +867,7 @@ public final class NewWidgetProto {
       }
       for (int i = 0; i < piiArray_.size(); i++) {
         size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(6, piiArray_.get(i));
+          .computeMessageSize(12, piiArray_.get(i));
       }
       for (java.util.Map.Entry<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> entry
            : internalGetPiiMap().getMap().entrySet()) {
@@ -732,15 +877,15 @@ public final class NewWidgetProto {
             .setValue(entry.getValue())
             .build();
         size += com.google.protobuf.CodedOutputStream
-            .computeMessageSize(7, piiMap__);
+            .computeMessageSize(13, piiMap__);
       }
       if (height_ != 0) {
         size += com.google.protobuf.CodedOutputStream
-          .computeInt32Size(8, height_);
+          .computeInt32Size(14, height_);
       }
       if (version_ != 0) {
         size += com.google.protobuf.CodedOutputStream
-          .computeInt32Size(9, version_);
+          .computeInt32Size(15, version_);
       }
       size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
@@ -763,6 +908,20 @@ public final class NewWidgetProto {
           .equals(other.getLastName())) return false;
       if (!getFullName()
           .equals(other.getFullName())) return false;
+      if (!getMybytes()
+          .equals(other.getMybytes())) return false;
+      if (getMyint()
+          != other.getMyint()) return false;
+      if (getMylong()
+          != other.getMylong()) return false;
+      if (java.lang.Float.floatToIntBits(getMyfloat())
+          != java.lang.Float.floatToIntBits(
+              other.getMyfloat())) return false;
+      if (java.lang.Double.doubleToLongBits(getMydouble())
+          != java.lang.Double.doubleToLongBits(
+              other.getMydouble())) return false;
+      if (getMyboolean()
+          != other.getMyboolean()) return false;
       if (kind_ != other.kind_) return false;
       if (!getSsnList()
           .equals(other.getSsnList())) return false;
@@ -791,6 +950,22 @@ public final class NewWidgetProto {
       hash = (53 * hash) + getLastName().hashCode();
       hash = (37 * hash) + FULLNAME_FIELD_NUMBER;
       hash = (53 * hash) + getFullName().hashCode();
+      hash = (37 * hash) + MYBYTES_FIELD_NUMBER;
+      hash = (53 * hash) + getMybytes().hashCode();
+      hash = (37 * hash) + MYINT_FIELD_NUMBER;
+      hash = (53 * hash) + getMyint();
+      hash = (37 * hash) + MYLONG_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          getMylong());
+      hash = (37 * hash) + MYFLOAT_FIELD_NUMBER;
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
+          getMyfloat());
+      hash = (37 * hash) + MYDOUBLE_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getMydouble()));
+      hash = (37 * hash) + MYBOOLEAN_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+          getMyboolean());
       hash = (37 * hash) + KIND_FIELD_NUMBER;
       hash = (53 * hash) + kind_;
       if (getSsnCount() > 0) {
@@ -920,7 +1095,7 @@ public final class NewWidgetProto {
       protected com.google.protobuf.MapField internalGetMapField(
           int number) {
         switch (number) {
-          case 7:
+          case 13:
             return internalGetPiiMap();
           default:
             throw new RuntimeException(
@@ -931,7 +1106,7 @@ public final class NewWidgetProto {
       protected com.google.protobuf.MapField internalGetMutableMapField(
           int number) {
         switch (number) {
-          case 7:
+          case 13:
             return internalGetMutablePiiMap();
           default:
             throw new RuntimeException(
@@ -964,6 +1139,18 @@ public final class NewWidgetProto {
         lastName_ = "";
 
         fullName_ = "";
+
+        mybytes_ = com.google.protobuf.ByteString.EMPTY;
+
+        myint_ = 0;
+
+        mylong_ = 0L;
+
+        myfloat_ = 0F;
+
+        mydouble_ = 0D;
+
+        myboolean_ = false;
 
         kind_ = 0;
 
@@ -1011,6 +1198,12 @@ public final class NewWidgetProto {
         result.name_ = name_;
         result.lastName_ = lastName_;
         result.fullName_ = fullName_;
+        result.mybytes_ = mybytes_;
+        result.myint_ = myint_;
+        result.mylong_ = mylong_;
+        result.myfloat_ = myfloat_;
+        result.mydouble_ = mydouble_;
+        result.myboolean_ = myboolean_;
         result.kind_ = kind_;
         if (((bitField0_ & 0x00000001) != 0)) {
           ssn_ = ssn_.getUnmodifiableView();
@@ -1089,6 +1282,24 @@ public final class NewWidgetProto {
         if (!other.getFullName().isEmpty()) {
           fullName_ = other.fullName_;
           onChanged();
+        }
+        if (other.getMybytes() != com.google.protobuf.ByteString.EMPTY) {
+          setMybytes(other.getMybytes());
+        }
+        if (other.getMyint() != 0) {
+          setMyint(other.getMyint());
+        }
+        if (other.getMylong() != 0L) {
+          setMylong(other.getMylong());
+        }
+        if (other.getMyfloat() != 0F) {
+          setMyfloat(other.getMyfloat());
+        }
+        if (other.getMydouble() != 0D) {
+          setMydouble(other.getMydouble());
+        }
+        if (other.getMyboolean() != false) {
+          setMyboolean(other.getMyboolean());
         }
         if (other.kind_ != 0) {
           setKindValue(other.getKindValue());
@@ -1178,18 +1389,48 @@ public final class NewWidgetProto {
 
                 break;
               } // case 26
-              case 32: {
+              case 34: {
+                mybytes_ = input.readBytes();
+
+                break;
+              } // case 34
+              case 40: {
+                myint_ = input.readInt32();
+
+                break;
+              } // case 40
+              case 48: {
+                mylong_ = input.readInt64();
+
+                break;
+              } // case 48
+              case 61: {
+                myfloat_ = input.readFloat();
+
+                break;
+              } // case 61
+              case 65: {
+                mydouble_ = input.readDouble();
+
+                break;
+              } // case 65
+              case 72: {
+                myboolean_ = input.readBool();
+
+                break;
+              } // case 72
+              case 80: {
                 kind_ = input.readEnum();
 
                 break;
-              } // case 32
-              case 42: {
+              } // case 80
+              case 90: {
                 java.lang.String s = input.readStringRequireUtf8();
                 ensureSsnIsMutable();
                 ssn_.add(s);
                 break;
-              } // case 42
-              case 50: {
+              } // case 90
+              case 98: {
                 io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii m =
                     input.readMessage(
                         io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.parser(),
@@ -1201,25 +1442,25 @@ public final class NewWidgetProto {
                   piiArrayBuilder_.addMessage(m);
                 }
                 break;
-              } // case 50
-              case 58: {
+              } // case 98
+              case 106: {
                 com.google.protobuf.MapEntry<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii>
                 piiMap__ = input.readMessage(
                     PiiMapDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
                 internalGetMutablePiiMap().getMutableMap().put(
                     piiMap__.getKey(), piiMap__.getValue());
                 break;
-              } // case 58
-              case 64: {
+              } // case 106
+              case 112: {
                 height_ = input.readInt32();
 
                 break;
-              } // case 64
-              case 72: {
+              } // case 112
+              case 120: {
                 version_ = input.readInt32();
 
                 break;
-              } // case 72
+              } // case 120
               default: {
                 if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                   done = true; // was an endgroup tag
@@ -1465,16 +1706,205 @@ public final class NewWidgetProto {
         return this;
       }
 
+      private com.google.protobuf.ByteString mybytes_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <code>bytes mybytes = 4;</code>
+       * @return The mybytes.
+       */
+      @java.lang.Override
+      public com.google.protobuf.ByteString getMybytes() {
+        return mybytes_;
+      }
+      /**
+       * <code>bytes mybytes = 4;</code>
+       * @param value The mybytes to set.
+       * @return This builder for chaining.
+       */
+      public Builder setMybytes(com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        mybytes_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>bytes mybytes = 4;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearMybytes() {
+        
+        mybytes_ = getDefaultInstance().getMybytes();
+        onChanged();
+        return this;
+      }
+
+      private int myint_ ;
+      /**
+       * <code>int32 myint = 5;</code>
+       * @return The myint.
+       */
+      @java.lang.Override
+      public int getMyint() {
+        return myint_;
+      }
+      /**
+       * <code>int32 myint = 5;</code>
+       * @param value The myint to set.
+       * @return This builder for chaining.
+       */
+      public Builder setMyint(int value) {
+        
+        myint_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>int32 myint = 5;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearMyint() {
+        
+        myint_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private long mylong_ ;
+      /**
+       * <code>int64 mylong = 6;</code>
+       * @return The mylong.
+       */
+      @java.lang.Override
+      public long getMylong() {
+        return mylong_;
+      }
+      /**
+       * <code>int64 mylong = 6;</code>
+       * @param value The mylong to set.
+       * @return This builder for chaining.
+       */
+      public Builder setMylong(long value) {
+        
+        mylong_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>int64 mylong = 6;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearMylong() {
+        
+        mylong_ = 0L;
+        onChanged();
+        return this;
+      }
+
+      private float myfloat_ ;
+      /**
+       * <code>float myfloat = 7;</code>
+       * @return The myfloat.
+       */
+      @java.lang.Override
+      public float getMyfloat() {
+        return myfloat_;
+      }
+      /**
+       * <code>float myfloat = 7;</code>
+       * @param value The myfloat to set.
+       * @return This builder for chaining.
+       */
+      public Builder setMyfloat(float value) {
+        
+        myfloat_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>float myfloat = 7;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearMyfloat() {
+        
+        myfloat_ = 0F;
+        onChanged();
+        return this;
+      }
+
+      private double mydouble_ ;
+      /**
+       * <code>double mydouble = 8;</code>
+       * @return The mydouble.
+       */
+      @java.lang.Override
+      public double getMydouble() {
+        return mydouble_;
+      }
+      /**
+       * <code>double mydouble = 8;</code>
+       * @param value The mydouble to set.
+       * @return This builder for chaining.
+       */
+      public Builder setMydouble(double value) {
+        
+        mydouble_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>double mydouble = 8;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearMydouble() {
+        
+        mydouble_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private boolean myboolean_ ;
+      /**
+       * <code>bool myboolean = 9;</code>
+       * @return The myboolean.
+       */
+      @java.lang.Override
+      public boolean getMyboolean() {
+        return myboolean_;
+      }
+      /**
+       * <code>bool myboolean = 9;</code>
+       * @param value The myboolean to set.
+       * @return This builder for chaining.
+       */
+      public Builder setMyboolean(boolean value) {
+        
+        myboolean_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>bool myboolean = 9;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearMyboolean() {
+        
+        myboolean_ = false;
+        onChanged();
+        return this;
+      }
+
       private int kind_ = 0;
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
        * @return The enum numeric value on the wire for kind.
        */
       @java.lang.Override public int getKindValue() {
         return kind_;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
        * @param value The enum numeric value on the wire for kind to set.
        * @return This builder for chaining.
        */
@@ -1485,7 +1915,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
        * @return The kind.
        */
       @java.lang.Override
@@ -1495,7 +1925,7 @@ public final class NewWidgetProto {
         return result == null ? io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Kind.UNRECOGNIZED : result;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
        * @param value The kind to set.
        * @return This builder for chaining.
        */
@@ -1509,7 +1939,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
        * @return This builder for chaining.
        */
       public Builder clearKind() {
@@ -1527,7 +1957,7 @@ public final class NewWidgetProto {
          }
       }
       /**
-       * <code>repeated string ssn = 5;</code>
+       * <code>repeated string ssn = 11;</code>
        * @return A list containing the ssn.
        */
       public com.google.protobuf.ProtocolStringList
@@ -1535,14 +1965,14 @@ public final class NewWidgetProto {
         return ssn_.getUnmodifiableView();
       }
       /**
-       * <code>repeated string ssn = 5;</code>
+       * <code>repeated string ssn = 11;</code>
        * @return The count of ssn.
        */
       public int getSsnCount() {
         return ssn_.size();
       }
       /**
-       * <code>repeated string ssn = 5;</code>
+       * <code>repeated string ssn = 11;</code>
        * @param index The index of the element to return.
        * @return The ssn at the given index.
        */
@@ -1550,7 +1980,7 @@ public final class NewWidgetProto {
         return ssn_.get(index);
       }
       /**
-       * <code>repeated string ssn = 5;</code>
+       * <code>repeated string ssn = 11;</code>
        * @param index The index of the value to return.
        * @return The bytes of the ssn at the given index.
        */
@@ -1559,7 +1989,7 @@ public final class NewWidgetProto {
         return ssn_.getByteString(index);
       }
       /**
-       * <code>repeated string ssn = 5;</code>
+       * <code>repeated string ssn = 11;</code>
        * @param index The index to set the value at.
        * @param value The ssn to set.
        * @return This builder for chaining.
@@ -1575,7 +2005,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated string ssn = 5;</code>
+       * <code>repeated string ssn = 11;</code>
        * @param value The ssn to add.
        * @return This builder for chaining.
        */
@@ -1590,7 +2020,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated string ssn = 5;</code>
+       * <code>repeated string ssn = 11;</code>
        * @param values The ssn to add.
        * @return This builder for chaining.
        */
@@ -1603,7 +2033,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated string ssn = 5;</code>
+       * <code>repeated string ssn = 11;</code>
        * @return This builder for chaining.
        */
       public Builder clearSsn() {
@@ -1613,7 +2043,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated string ssn = 5;</code>
+       * <code>repeated string ssn = 11;</code>
        * @param value The bytes of the ssn to add.
        * @return This builder for chaining.
        */
@@ -1642,7 +2072,7 @@ public final class NewWidgetProto {
           io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder> piiArrayBuilder_;
 
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public java.util.List<io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> getPiiArrayList() {
         if (piiArrayBuilder_ == null) {
@@ -1652,7 +2082,7 @@ public final class NewWidgetProto {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public int getPiiArrayCount() {
         if (piiArrayBuilder_ == null) {
@@ -1662,7 +2092,7 @@ public final class NewWidgetProto {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiArray(int index) {
         if (piiArrayBuilder_ == null) {
@@ -1672,7 +2102,7 @@ public final class NewWidgetProto {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public Builder setPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii value) {
@@ -1689,7 +2119,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public Builder setPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder builderForValue) {
@@ -1703,7 +2133,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public Builder addPiiArray(io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii value) {
         if (piiArrayBuilder_ == null) {
@@ -1719,7 +2149,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public Builder addPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii value) {
@@ -1736,7 +2166,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public Builder addPiiArray(
           io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder builderForValue) {
@@ -1750,7 +2180,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public Builder addPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder builderForValue) {
@@ -1764,7 +2194,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public Builder addAllPiiArray(
           java.lang.Iterable<? extends io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> values) {
@@ -1779,7 +2209,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public Builder clearPiiArray() {
         if (piiArrayBuilder_ == null) {
@@ -1792,7 +2222,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public Builder removePiiArray(int index) {
         if (piiArrayBuilder_ == null) {
@@ -1805,14 +2235,14 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder getPiiArrayBuilder(
           int index) {
         return getPiiArrayFieldBuilder().getBuilder(index);
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder getPiiArrayOrBuilder(
           int index) {
@@ -1822,7 +2252,7 @@ public final class NewWidgetProto {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public java.util.List<? extends io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder> 
            getPiiArrayOrBuilderList() {
@@ -1833,14 +2263,14 @@ public final class NewWidgetProto {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder addPiiArrayBuilder() {
         return getPiiArrayFieldBuilder().addBuilder(
             io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.getDefaultInstance());
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder addPiiArrayBuilder(
           int index) {
@@ -1848,7 +2278,7 @@ public final class NewWidgetProto {
             index, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.getDefaultInstance());
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 6;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
        */
       public java.util.List<io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder> 
            getPiiArrayBuilderList() {
@@ -1896,7 +2326,7 @@ public final class NewWidgetProto {
         return internalGetPiiMap().getMap().size();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
        */
 
       @java.lang.Override
@@ -1914,7 +2344,7 @@ public final class NewWidgetProto {
         return getPiiMapMap();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
        */
       @java.lang.Override
 
@@ -1922,7 +2352,7 @@ public final class NewWidgetProto {
         return internalGetPiiMap().getMap();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
        */
       @java.lang.Override
 
@@ -1935,7 +2365,7 @@ public final class NewWidgetProto {
         return map.containsKey(key) ? map.get(key) : defaultValue;
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
        */
       @java.lang.Override
 
@@ -1956,7 +2386,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
        */
 
       public Builder removePiiMap(
@@ -1975,7 +2405,7 @@ public final class NewWidgetProto {
         return internalGetMutablePiiMap().getMutableMap();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
        */
       public Builder putPiiMap(
           java.lang.String key,
@@ -1990,7 +2420,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 7;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
        */
 
       public Builder putAllPiiMap(
@@ -2002,7 +2432,7 @@ public final class NewWidgetProto {
 
       private int height_ ;
       /**
-       * <code>int32 height = 8;</code>
+       * <code>int32 height = 14;</code>
        * @return The height.
        */
       @java.lang.Override
@@ -2010,7 +2440,7 @@ public final class NewWidgetProto {
         return height_;
       }
       /**
-       * <code>int32 height = 8;</code>
+       * <code>int32 height = 14;</code>
        * @param value The height to set.
        * @return This builder for chaining.
        */
@@ -2021,7 +2451,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>int32 height = 8;</code>
+       * <code>int32 height = 14;</code>
        * @return This builder for chaining.
        */
       public Builder clearHeight() {
@@ -2033,7 +2463,7 @@ public final class NewWidgetProto {
 
       private int version_ ;
       /**
-       * <code>int32 version = 9;</code>
+       * <code>int32 version = 15;</code>
        * @return The version.
        */
       @java.lang.Override
@@ -2041,7 +2471,7 @@ public final class NewWidgetProto {
         return version_;
       }
       /**
-       * <code>int32 version = 9;</code>
+       * <code>int32 version = 15;</code>
        * @param value The version to set.
        * @return This builder for chaining.
        */
@@ -2052,7 +2482,7 @@ public final class NewWidgetProto {
         return this;
       }
       /**
-       * <code>int32 version = 9;</code>
+       * <code>int32 version = 15;</code>
        * @return This builder for chaining.
        */
       public Builder clearVersion() {
@@ -2699,20 +3129,23 @@ public final class NewWidgetProto {
   static {
     java.lang.String[] descriptorData = {
       "\n\017NewWidget.proto\022\'io.confluent.kafka.sc" +
-      "hemaregistry.rules\"\227\003\n\tNewWidget\022\014\n\004name" +
+      "hemaregistry.rules\"\375\003\n\tNewWidget\022\014\n\004name" +
       "\030\001 \001(\t\022\020\n\010lastName\030\002 \001(\t\022\020\n\010fullName\030\003 \001" +
-      "(\t\022;\n\004kind\030\004 \001(\0162-.io.confluent.kafka.sc" +
-      "hemaregistry.rules.Kind\022\013\n\003ssn\030\005 \003(\t\022?\n\t" +
-      "pii_array\030\006 \003(\0132,.io.confluent.kafka.sch" +
-      "emaregistry.rules.Pii\022O\n\007pii_map\030\007 \003(\0132>" +
+      "(\t\022\017\n\007mybytes\030\004 \001(\014\022\r\n\005myint\030\005 \001(\005\022\016\n\006my" +
+      "long\030\006 \001(\003\022\017\n\007myfloat\030\007 \001(\002\022\020\n\010mydouble\030" +
+      "\010 \001(\001\022\021\n\tmyboolean\030\t \001(\010\022;\n\004kind\030\n \001(\0162-" +
       ".io.confluent.kafka.schemaregistry.rules" +
-      ".NewWidget.PiiMapEntry\022\016\n\006height\030\010 \001(\005\022\017" +
-      "\n\007version\030\t \001(\005\032[\n\013PiiMapEntry\022\013\n\003key\030\001 " +
-      "\001(\t\022;\n\005value\030\002 \001(\0132,.io.confluent.kafka." +
-      "schemaregistry.rules.Pii:\0028\001\"\022\n\003Pii\022\013\n\003p" +
-      "ii\030\001 \001(\t*\"\n\004Kind\022\010\n\004ZERO\020\000\022\007\n\003ONE\020\001\022\007\n\003T" +
-      "WO\020\002B;\n\'io.confluent.kafka.schemaregistr" +
-      "y.rulesB\016NewWidgetProtoP\000b\006proto3"
+      ".Kind\022\013\n\003ssn\030\013 \003(\t\022?\n\tpii_array\030\014 \003(\0132,." +
+      "io.confluent.kafka.schemaregistry.rules." +
+      "Pii\022O\n\007pii_map\030\r \003(\0132>.io.confluent.kafk" +
+      "a.schemaregistry.rules.NewWidget.PiiMapE" +
+      "ntry\022\016\n\006height\030\016 \001(\005\022\017\n\007version\030\017 \001(\005\032[\n" +
+      "\013PiiMapEntry\022\013\n\003key\030\001 \001(\t\022;\n\005value\030\002 \001(\013" +
+      "2,.io.confluent.kafka.schemaregistry.rul" +
+      "es.Pii:\0028\001\"\022\n\003Pii\022\013\n\003pii\030\001 \001(\t*\"\n\004Kind\022\010" +
+      "\n\004ZERO\020\000\022\007\n\003ONE\020\001\022\007\n\003TWO\020\002B;\n\'io.conflue" +
+      "nt.kafka.schemaregistry.rulesB\016NewWidget" +
+      "ProtoP\000b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -2723,7 +3156,7 @@ public final class NewWidgetProto {
     internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_descriptor,
-        new java.lang.String[] { "Name", "LastName", "FullName", "Kind", "Ssn", "PiiArray", "PiiMap", "Height", "Version", });
+        new java.lang.String[] { "Name", "LastName", "FullName", "Mybytes", "Myint", "Mylong", "Myfloat", "Mydouble", "Myboolean", "Kind", "Ssn", "PiiArray", "PiiMap", "Height", "Version", });
     internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_PiiMapEntry_descriptor =
       internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_descriptor.getNestedTypes().get(0);
     internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_PiiMapEntry_fieldAccessorTable = new

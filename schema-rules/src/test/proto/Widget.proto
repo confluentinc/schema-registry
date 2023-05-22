@@ -12,12 +12,18 @@ message Widget {
     string name = 1 [(.confluent.field_meta).tags = "PII", (.confluent.field_meta).tags = "PUBLIC"];
     string lastName = 2;
     string fullName = 3;
-    Kind kind = 4;
-    repeated string ssn = 5 [(.confluent.field_meta).tags = "PII", (.confluent.field_meta).tags = "PRIVATE"];
-    repeated Pii pii_array = 6;
-    map<string, Pii> pii_map = 7;
-    int32 size = 8;
-    int32 version = 9;
+    bytes mybytes = 4;
+    int32 myint = 5;
+    int64 mylong = 6;
+    float myfloat = 7;
+    double mydouble = 8;
+    bool myboolean = 9;
+    Kind kind = 10;
+    repeated string ssn = 11 [(.confluent.field_meta).tags = "PII", (.confluent.field_meta).tags = "PRIVATE"];
+    repeated Pii pii_array = 12;
+    map<string, Pii> pii_map = 13;
+    int32 size = 14;
+    int32 version = 15;
 }
 
 message Pii {

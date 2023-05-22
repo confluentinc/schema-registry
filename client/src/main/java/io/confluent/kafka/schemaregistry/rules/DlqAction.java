@@ -118,13 +118,13 @@ public class DlqAction implements RuleAction {
       populateHeaders(ctx, producerRecord, ex);
       producer().send(producerRecord, (metadata, exception) -> {
         if (exception != null) {
-          log.error("Could not produce message to DLQ topic " + dlqTopic, exception);
+          log.error("Could not produce message to DLQ topic {}", dlqTopic, exception);
         } else {
-          log.info("Sent message to DLQ topic " + dlqTopic);
+          log.info("Sent message to DLQ topic {}", dlqTopic);
         }
       });
     } catch (IOException e) {
-      log.error("Could not produce message to DLQ topic " + dlqTopic, e);
+      log.error("Could not produce message to DLQ topic {}", dlqTopic, e);
     }
 
     String msg = "Rule failed: " + ctx.rule().getName();

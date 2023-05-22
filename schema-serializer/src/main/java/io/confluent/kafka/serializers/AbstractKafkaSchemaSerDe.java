@@ -224,7 +224,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       configureRuleObject(ruleObject, name, config, configName);
       return Stream.of(ruleObject);
     } catch (ClassNotFoundException e) {
-      log.error("Could not load rule object class " + name, e);
+      log.error("Could not load rule object class {}", name, e);
       throw new ConfigException("Could not load rule object class " + name);
     }
   }
@@ -700,7 +700,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       try {
         ruleAction.run(ctx, message, ex);
       } catch (RuleException e) {
-        log.error("Could not run post-rule action " + action, e);
+        log.error("Could not run post-rule action {}", action, e);
       }
     }
   }

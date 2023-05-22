@@ -581,20 +581,12 @@ public class AvroSchema implements ParsedSchema {
           try {
             Set<String> ruleTags = ctx.rule().getTags();
             if (ruleTags.isEmpty()) {
-              Object result = transform.transform(ctx, fieldCtx, message);
-              if (result instanceof byte[]) {
-                result = ByteBuffer.wrap((byte[]) result);
-              }
-              return result;
+              return fieldTransform(ctx, message, transform, fieldCtx);
             } else {
               Set<String> intersect = new HashSet<>(fieldCtx.getTags());
               intersect.retainAll(ruleTags);
               if (!intersect.isEmpty()) {
-                Object result = transform.transform(ctx, fieldCtx, message);
-                if (result instanceof byte[]) {
-                  result = ByteBuffer.wrap((byte[]) result);
-                }
-                return result;
+                return fieldTransform(ctx, message, transform, fieldCtx);
               }
             }
           } catch (RuleException e) {
@@ -603,6 +595,21 @@ public class AvroSchema implements ParsedSchema {
         }
         return message;
     }
+  }
+
+  private static Object fieldTransform(RuleContext ctx, Object message, FieldTransform transform,
+      FieldContext fieldCtx) throws RuleException {
+    if (message instanceof ByteBuffer) {
+      ByteBuffer buffer = (ByteBuffer) message;
+      byte[] bytes = new byte[buffer.remaining()];
+      buffer.get(bytes);
+      message = bytes;
+    }
+    Object result = transform.transform(ctx, fieldCtx, message);
+    if (result instanceof byte[]) {
+      result = ByteBuffer.wrap((byte[]) result);
+    }
+    return result;
   }
 
   private RuleContext.Type getType(Schema schema) {

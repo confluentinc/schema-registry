@@ -16,9 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel;
 
+import static com.google.protobuf.NullValue.NULL_VALUE;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.protobuf.ByteString;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -39,6 +42,10 @@ public class CelFieldExecutor implements FieldRuleExecutor {
   @Override
   public FieldTransform newTransform(RuleContext ruleContext) {
     return (ctx, fieldCtx, fieldValue) -> {
+      if (!fieldCtx.getType().isPrimitive()) {
+        // CEL field transforms only apply to primitive types
+        return fieldValue;
+      }
       Object message = fieldCtx.getContainingMessage();
       Object inputMessage;
       if (message instanceof JsonNode) {
@@ -46,9 +53,9 @@ public class CelFieldExecutor implements FieldRuleExecutor {
       } else {
         inputMessage = message;
       }
-      return CelExecutor.execute(ctx, fieldValue, new HashMap<String, Object>() {
+      Object result = CelExecutor.execute(ctx, fieldValue, new HashMap<String, Object>() {
             {
-              put("value", fieldValue);  // fieldValue may be null
+              put("value", fieldValue != null ? fieldValue : NULL_VALUE);
               put("fullName", fieldCtx.getFullName());
               put("name", fieldCtx.getName());
               put("typeName", fieldCtx.getType().name());
@@ -57,6 +64,28 @@ public class CelFieldExecutor implements FieldRuleExecutor {
             }
           }
       );
+      if (result instanceof ByteString) {
+        result = ((ByteString) result).toByteArray();
+      } else if (result instanceof Number) {
+        Number num = (Number) result;
+        switch (fieldCtx.getType()) {
+          case INT:
+            result = num.intValue();
+            break;
+          case LONG:
+            result = num.longValue();
+            break;
+          case FLOAT:
+            result = num.floatValue();
+            break;
+          case DOUBLE:
+            result = num.doubleValue();
+            break;
+          default:
+            break;
+        }
+      }
+      return result;
     };
   }
 }
