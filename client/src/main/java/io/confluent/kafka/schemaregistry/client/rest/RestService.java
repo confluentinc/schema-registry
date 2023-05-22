@@ -289,7 +289,7 @@ public class RestService implements Configurable {
           os.write(requestBodyData);
           os.flush();
         } catch (IOException e) {
-          log.error("Failed to send HTTP request to endpoint: " + url, e);
+          log.error("Failed to send HTTP request to endpoint: {}", url, e);
           throw e;
         }
       }
