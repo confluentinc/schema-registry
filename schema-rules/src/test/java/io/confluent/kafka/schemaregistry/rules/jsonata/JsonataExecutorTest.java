@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -374,7 +375,11 @@ public class JsonataExecutorTest {
     String ruleString =
         "$merge([$sift($, function($v, $k) {$k != 'size'}), {'height': $.'size'}])";
 
-    Widget widget = WidgetProto.Widget.newBuilder().setName("alice").setSize(123).build();
+    Widget widget = WidgetProto.Widget.newBuilder()
+        .setName("alice")
+        .setMybytes(ByteString.EMPTY)
+        .setSize(123)
+        .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
@@ -414,7 +419,11 @@ public class JsonataExecutorTest {
     String ruleString =
         "$merge([$sift($, function($v, $k) {$k != 'size'}), {'height': $.'size'}])";
 
-    Widget widget = WidgetProto.Widget.newBuilder().setName("alice").setSize(123).build();
+    Widget widget = WidgetProto.Widget.newBuilder()
+        .setName("alice")
+        .setMybytes(ByteString.EMPTY)
+        .setSize(123)
+        .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());

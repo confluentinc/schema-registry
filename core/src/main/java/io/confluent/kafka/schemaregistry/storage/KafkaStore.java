@@ -107,7 +107,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.skipSchemaTopicValidation =
         config.getBoolean(SchemaRegistryConfig.KAFKASTORE_TOPIC_SKIP_VALIDATION_CONFIG);
 
-    log.info("Initializing KafkaStore with broker endpoints: " + this.bootstrapBrokers);
+    log.info("Initializing KafkaStore with broker endpoints: {}", this.bootstrapBrokers);
   }
 
   @Override
@@ -272,10 +272,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
     Config topicConfigs = configs.get(topicResource);
     String retentionPolicy = topicConfigs.get(TopicConfig.CLEANUP_POLICY_CONFIG).value();
     if (retentionPolicy == null || !TopicConfig.CLEANUP_POLICY_COMPACT.equals(retentionPolicy)) {
-      log.error("The retention policy of the schema topic " + topic + " is incorrect. "
+      log.error("The retention policy of the schema topic {} is incorrect. "
                 + "You must configure the topic to 'compact' cleanup policy to avoid Kafka "
                 + "deleting your schemas after a week. "
-                + "Refer to Kafka documentation for more details on cleanup policies");
+                + "Refer to Kafka documentation for more details on cleanup policies", topic);
 
       throw new StoreInitializationException("The retention policy of the schema topic " + topic
                                              + " is incorrect. Expected cleanup.policy to be "
@@ -347,11 +347,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     boolean knownSuccessfulWrite = false;
     try {
-      log.trace("Sending record to KafkaStore topic: " + producerRecord);
+      log.trace("Sending record to KafkaStore topic: {}", producerRecord);
       Future<RecordMetadata> ack = producer.send(producerRecord);
       RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
 
-      log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
+      log.trace("Waiting for the local store to catch up to offset {}", recordMetadata.offset());
       this.lastWrittenOffset = recordMetadata.offset();
       if (key instanceof SubjectKey) {
         setLastOffset(((SubjectKey) key).getSubject(), recordMetadata.offset());
@@ -484,7 +484,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       Future<RecordMetadata> ack = producer.send(producerRecord);
       RecordMetadata metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
       this.lastWrittenOffset = metadata.offset();
-      log.trace("Noop record's offset is " + this.lastWrittenOffset);
+      log.trace("Noop record's offset is {}", this.lastWrittenOffset);
       return this.lastWrittenOffset;
     } catch (Exception e) {
       throw new StoreException("Failed to write Noop record to kafka store.", e);

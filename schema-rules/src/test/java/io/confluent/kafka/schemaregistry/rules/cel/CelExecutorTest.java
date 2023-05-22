@@ -16,7 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -28,19 +30,21 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -179,6 +183,13 @@ public class CelExecutorTest {
         + "{\"name\": \"name\", \"type\": \"string\"}, "
         + "{\"name\": \"lastName\", \"type\": [\"null\", \"string\"]}, "
         + "{\"name\": \"fullName\", \"type\": [\"null\", \"string\"]}, "
+        + "{\"name\": \"mybytes\", \"type\": \"bytes\"}, "
+        + "{\"name\": \"myint\", \"type\": \"int\"}, "
+        + "{\"name\": \"mylong\", \"type\": \"long\"}, "
+        + "{\"name\": \"myfloat\", \"type\": \"float\"}, "
+        + "{\"name\": \"mydouble\", \"type\": \"double\"}, "
+        + "{\"name\": \"myboolean\", \"type\": \"boolean\"}, "
+        + "{\"name\": \"mynull\", \"type\": \"null\"}, "
         + "{\"name\": \"kind\",\n"
         + "  \"type\": {\n"
         + "    \"name\": \"Kind\",\n"
@@ -197,6 +208,12 @@ public class CelExecutorTest {
     Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
+    avroRecord.put("mybytes", ByteBuffer.wrap(new byte[] { 0 }));
+    avroRecord.put("myint", 1);
+    avroRecord.put("mylong", 2L);
+    avroRecord.put("myfloat", 3.0f);
+    avroRecord.put("mydouble", 4.0d);
+    avroRecord.put("myboolean", true);
     avroRecord.put("kind", new GenericData.EnumSymbol(enumSchema, "ONE"));
     return avroRecord;
   }
@@ -206,6 +223,11 @@ public class CelExecutorTest {
         + "[{\"name\": \"name\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]},\n"
         + "{\"name\": \"lastName\", \"type\": \"string\"},\n"
         + "{\"name\": \"fullName\", \"type\": \"string\"},\n"
+        + "{\"name\": \"myint\", \"type\": \"int\"}, "
+        + "{\"name\": \"mylong\", \"type\": \"long\"}, "
+        + "{\"name\": \"myfloat\", \"type\": \"float\"}, "
+        + "{\"name\": \"mydouble\", \"type\": \"double\"}, "
+        + "{\"name\": \"myboolean\", \"type\": \"boolean\"}, "
         + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"},\"confluent:tags\": [\"PII\"]},\n"
         + "{\"name\": \"piiArray\", \"type\": { \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\":\"OldPii\", \"fields\":\n"
         + "[{\"name\": \"pii\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]}]}}},\n"
@@ -355,21 +377,78 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerFieldTransformExternalTag() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    ((GenericRecord)avroRecord).put("lastName", "smith");
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "name == \"lastName\" ; value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = new Metadata(Collections.singletonMap(
+        "example.avro.User.lastName", ImmutableSet.of("PII")), null, null);
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    GenericRecord obj = (GenericRecord) avroDeserializer.deserialize(topic, bytes);
+    assertEquals("smith-suffix", obj.get("lastName").toString());
+  }
+
+  @Test
   public void testKafkaAvroSerializerFieldTransformUsingMessage() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     ((GenericRecord) avroRecord).put("lastName", "smith");
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    List<Rule> rules = new ArrayList<>();
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
-        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
+        "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
         null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    rules.add(rule);
+    rule = new Rule("myRule2", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mybytes\" ; value == b\"\\x00\" ? b\"\\x01\" : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule3", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myint\" ; value == 1 ? 2 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule4", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mylong\" ; value == 2 ? 3 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule5", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myfloat\" ; value == 3.0 ? 4.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule6", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mydouble\" ; value == 4.0 ? 5.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule7", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myboolean\" ; value == true ? false : value",
+        null, null, false);
+    rules.add(rule);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), rules);
     avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     GenericRecord obj = (GenericRecord) avroDeserializer.deserialize(topic, bytes);
     assertEquals("testUser smith", obj.get("fullName").toString());
+    assertArrayEquals(new byte[] {1}, ((ByteBuffer)obj.get("mybytes")).array());
+    assertEquals(2, ((Integer)obj.get("myint")).intValue());
+    assertEquals(3L, ((Long)obj.get("mylong")).longValue());
+    assertEquals(4f, ((Float)obj.get("myfloat")).floatValue(), 0.1);
+    assertEquals(5d, ((Double)obj.get("mydouble")).doubleValue(), 0.1);
+    assertFalse(((Boolean)obj.get("myboolean")).booleanValue());
   }
 
   @Test
@@ -507,6 +586,11 @@ public class CelExecutorTest {
     OldWidget widget = new OldWidget("alice");
     widget.setLastName("");
     widget.setFullName("");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
@@ -543,16 +627,53 @@ public class CelExecutorTest {
 
     OldWidget widget = new OldWidget("alice");
     widget.setLastName("smith");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
     Schema schema = createWidgetSchema();
     AvroSchema avroSchema = new AvroSchema(schema);
+    List<Rule> rules = new ArrayList<>();
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
-        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
+        "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
         null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    rules.add(rule);
+    rule = new Rule("myRule2", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mybytes\" ; value == b\"\\x00\" ? b\"\\x01\" : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule3", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myint\" ; value == 1 ? 2 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule4", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mylong\" ; value == 2 ? 3 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule5", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myfloat\" ; value == 3.0 ? 4.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule6", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mydouble\" ; value == 4.0 ? 5.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule7", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myboolean\" ; value == true ? false : value",
+        null, null, false);
+    rules.add(rule);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), rules);
     avroSchema = avroSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
@@ -566,6 +687,11 @@ public class CelExecutorTest {
     assertEquals(widget, obj);
     assertEquals("alice", ((OldWidget)obj).getName());
     assertEquals("alice smith", ((OldWidget)obj).getFullName());
+    assertEquals(2, ((OldWidget)obj).getMyint());
+    assertEquals(3L, ((OldWidget)obj).getMylong());
+    assertEquals(4f, ((OldWidget)obj).getMyfloat(), 0.1);
+    assertEquals(5d, ((OldWidget)obj).getMydouble(), 0.1);
+    assertFalse(((OldWidget)obj).isMyboolean());
     assertEquals("123", ((OldWidget)obj).getSsn().get(0));
     assertEquals("456", ((OldWidget)obj).getSsn().get(1));
     assertEquals("789", ((OldWidget)obj).getPiiArray().get(0).getPii());
@@ -582,6 +708,11 @@ public class CelExecutorTest {
     OldWidget widget = new OldWidget("alice");
     widget.setLastName("");
     widget.setFullName("");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
@@ -696,6 +827,11 @@ public class CelExecutorTest {
     OldWidget widget = new OldWidget("alice");
     widget.setLastName("");
     widget.setFullName("");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
@@ -734,7 +870,9 @@ public class CelExecutorTest {
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelExecutor.TYPE, null, null,
-        "{'name': 'Bob', 'lastName': null, 'fullName': null, 'kind': 'TWO'}",
+        "{'name': 'Bob', 'lastName': null, 'fullName': null, 'mybytes': b\"\\x00\", "
+            + "'myint': 1, 'mylong': 2, 'myfloat': 3, 'mydouble': 4, "
+            + "'myboolean': true, 'mynull': null, 'kind': 'TWO'}",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);
@@ -903,7 +1041,7 @@ public class CelExecutorTest {
   }
 
   @Test
-  public void testKafkaProtobufSerializerFieldTransformUsingMessage() throws Exception {
+  public void testKafkaProtobufSerializerFieldTransformExternalTag() throws Exception {
     byte[] bytes;
     Object obj;
 
@@ -920,10 +1058,125 @@ public class CelExecutorTest {
         .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = new Metadata(Collections.singletonMap(
+        "io.confluent.kafka.schemaregistry.rules.Widget.lastName", ImmutableSet.of("PII")), null, null);
+    protobufSchema = protobufSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    bytes = protobufSerializer.serialize(topic, widget);
+
+    obj = protobufDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Widget",
+        DynamicMessage.class.isInstance(obj)
+    );
+    DynamicMessage dynamicMessage = (DynamicMessage) obj;
+    Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice-suffix",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "smith-suffix",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("lastName"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("123-suffix", "456-suffix"),
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("ssn"))
+    );
+    List<String> ssnArrayValues = ((List<?>)((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("pii_array")))
+        .stream()
+        .map(o -> {
+          DynamicMessage msg = (DynamicMessage) o;
+          return msg.getField(msg.getDescriptorForType().findFieldByName("pii")).toString();
+        })
+        .collect(Collectors.toList());
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("789-suffix", "012-suffix"),
+        ssnArrayValues
+    );
+    List<String> ssnMapValues = ((List<?>)((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("pii_map")))
+        .stream()
+        .map(o -> {
+          DynamicMessage msg = (DynamicMessage) o;
+          DynamicMessage msg2 = (DynamicMessage) msg.getField(msg.getDescriptorForType().findFieldByName("value"));
+          return msg2.getField(msg2.getDescriptorForType().findFieldByName("pii")).toString();
+        })
+        .collect(Collectors.toList());
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("345-suffix", "678-suffix"),
+        ssnMapValues
+    );
+  }
+
+  @Test
+  public void testKafkaProtobufSerializerFieldTransformUsingMessage() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    Widget widget = Widget.newBuilder()
+        .setName("alice")
+        .setLastName("smith")
+        .setMybytes(ByteString.copyFrom(new byte[]{0}))
+        .setMyint(1)
+        .setMylong(2)
+        .setMyfloat(3f)
+        .setMydouble(4d)
+        .setMyboolean(true)
+        .addSsn("123")
+        .addSsn("456")
+        .addPiiArray(Pii.newBuilder().setPii("789").build())
+        .addPiiArray(Pii.newBuilder().setPii("012").build())
+        .putPiiMap("key1", Pii.newBuilder().setPii("345").build())
+        .putPiiMap("key2", Pii.newBuilder().setPii("678").build())
+        .setSize(123)
+        .build();
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    List<Rule> rules = new ArrayList<>();
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
         "name == \"fullName\" ; value == \"\" ? message.name + \" \" + message.lastName : value",
         null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    rules.add(rule);
+    rule = new Rule("myRule2", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mybytes\" ; value == b\"\\x00\" ? b\"\\x01\" : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule3", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myint\" ; value == 1 ? 2 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule4", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mylong\" ; value == 2 ? 3 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule5", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myfloat\" ; value == 3.0 ? 4.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule6", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mydouble\" ; value == 4.0 ? 5.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule7", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myboolean\" ; value == true ? false : value",
+        null, null, false);
+    rules.add(rule);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), rules);
     protobufSchema = protobufSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", protobufSchema);
 
@@ -945,6 +1198,37 @@ public class CelExecutorTest {
         "Returned object should be a NewWidget",
         "alice smith",
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("fullName"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ByteString.copyFrom(new byte[]{1}),
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("mybytes"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        2,
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("myint"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        3L,
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("mylong"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        4f,
+        (Float) ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("myfloat")),
+        0.1
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        5d,
+        (Double) ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("mydouble")),
+        0.1
+    );
+    assertFalse(
+        "Returned object should be a NewWidget",
+        (Boolean) ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("myboolean"))
     );
     assertEquals(
         "Returned object should be a NewWidget",
@@ -1173,6 +1457,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1220,6 +1509,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1273,7 +1567,7 @@ public class CelExecutorTest {
   }
 
   @Test
-  public void testKafkaJsonSchemaSerializerFieldTransformUsingMessage() throws Exception {
+  public void testKafkaJsonSchemaSerializerFieldTransformExternalTag() throws Exception {
     byte[] bytes;
     Object obj;
 
@@ -1287,6 +1581,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1299,10 +1598,121 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelFieldExecutor.TYPE, null, null,
-        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = new Metadata(Collections.singletonMap(
+        "$.lastName", ImmutableSet.of("PII")), null, null);
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    bytes = jsonSchemaSerializer.serialize(topic, widget);
+
+    obj = jsonSchemaDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Widget",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice-suffix",
+        ((JsonNode)obj).get("name").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "smith-suffix",
+        ((JsonNode)obj).get("lastName").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "123-suffix",
+        ((JsonNode)obj).get("ssn").get(0).textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "456-suffix",
+        ((JsonNode)obj).get("ssn").get(1).textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "789-suffix",
+        ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "012-suffix",
+        ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
+    );
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerFieldTransformUsingMessage() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    OldWidget widget = new OldWidget("alice");
+    widget.setLastName("smith");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
+    widget.setSize(123);
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
+        + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
+        + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"size\":{\"type\":\"integer\"},"
+        + "\"version\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"size\",\"version\"],"
+        + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
+        + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]}}}}}";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    List<Rule> rules = new ArrayList<>();
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule3", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myint\" ; value == 1 ? 2 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule4", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mylong\" ; value == 2 ? 3 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule5", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myfloat\" ; value == 3.0 ? 4.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule6", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mydouble\" ; value == 4.0 ? 5.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule7", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myboolean\" ; value == true ? false : value",
+        null, null, false);
+    rules.add(rule);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), rules);
     jsonSchema = jsonSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
@@ -1322,6 +1732,32 @@ public class CelExecutorTest {
         "Returned object should be a NewWidget",
         "alice smith",
         ((JsonNode)obj).get("fullName").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        2,
+        ((JsonNode)obj).get("myint").intValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        3L,
+        ((JsonNode)obj).get("mylong").longValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        4f,
+        ((JsonNode)obj).get("myfloat").floatValue(),
+        0.1
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        5d,
+        ((JsonNode)obj).get("mydouble").doubleValue(),
+        0.1
+    );
+    assertFalse(
+        "Returned object should be a NewWidget",
+        ((JsonNode)obj).get("myboolean").booleanValue()
     );
     assertEquals(
         "Returned object should be a NewWidget",
@@ -1364,6 +1800,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"OldPii.json\"}}]},"
@@ -1494,6 +1935,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1540,6 +1986,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1586,6 +2037,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1635,6 +2091,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1696,6 +2157,11 @@ public class CelExecutorTest {
 
     OldWidget widget = new OldWidget("alice");
     widget.setLastName("smith");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
     widget.setSize(123);
     widget.setSsn(ImmutableList.of("123", "456"));
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
@@ -1704,6 +2170,11 @@ public class CelExecutorTest {
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
         + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
@@ -1715,11 +2186,38 @@ public class CelExecutorTest {
         + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
         + "\"confluent:tags\": [ \"PII\" ]}}}}}";
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    List<Rule> rules = new ArrayList<>();
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, null, null,
-        "name == \"fullName\" ; type(message.fullName) == type(null) ? message.name + \" \" + message.lastName : message.fullName",
+        "name == \"fullName\" ; dyn(value) == null ? message.name + \" \" + message.lastName : dyn(value)",
         null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    rules.add(rule);
+    rule = new Rule("myRule3", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myint\" ; value == 1 ? 2 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule4", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mylong\" ; value == 2 ? 3 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule5", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myfloat\" ; value == 3.0 ? 4.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule6", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"mydouble\" ; value == 4.0 ? 5.0 : value",
+        null, null, false);
+    rules.add(rule);
+    rule = new Rule("myRule7", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == \"myboolean\" ; value == true ? false : value",
+        null, null, false);
+    rules.add(rule);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), rules);
     jsonSchema = jsonSchema.copy(null, ruleSet);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
@@ -1741,6 +2239,32 @@ public class CelExecutorTest {
         "Returned object should be a NewWidget",
         "alice smith",
         ((JsonNode)obj).get("fullName").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        2,
+        ((JsonNode)obj).get("myint").intValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        3L,
+        ((JsonNode)obj).get("mylong").longValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        4f,
+        ((JsonNode)obj).get("myfloat").floatValue(),
+        0.1
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        5d,
+        ((JsonNode)obj).get("mydouble").doubleValue(),
+        0.1
+    );
+    assertFalse(
+        "Returned object should be a NewWidget",
+        ((JsonNode)obj).get("myboolean").booleanValue()
     );
     assertEquals(
         "Returned object should be a NewWidget",
@@ -1768,6 +2292,11 @@ public class CelExecutorTest {
     private String name;
     private String lastName;
     private String fullName;
+    private int myint;
+    private long mylong;
+    private float myfloat;
+    private double mydouble;
+    private boolean myboolean;
     private List<String> ssn = new ArrayList<>();
     private List<OldPii> piiArray = new ArrayList<>();
     private Map<String, OldPii> piiMap = new HashMap<>();
@@ -1803,6 +2332,45 @@ public class CelExecutorTest {
       this.fullName = fullName;
     }
 
+    public int getMyint() {
+      return myint;
+    }
+
+    public void setMyint(int myint) {
+      this.myint = myint;
+    }
+
+    public long getMylong() {
+      return mylong;
+    }
+
+    public void setMylong(long mylong) {
+      this.mylong = mylong;
+    }
+
+    public float getMyfloat() {
+      return myfloat;
+    }
+
+    public void setMyfloat(float myfloat) {
+      this.myfloat = myfloat;
+    }
+
+    public double getMydouble() {
+      return mydouble;
+    }
+
+    public void setMydouble(double mydouble) {
+      this.mydouble = mydouble;
+    }
+
+    public boolean isMyboolean() {
+      return myboolean;
+    }
+
+    public void setMyboolean(boolean myboolean) {
+      this.myboolean = myboolean;
+    }
     public List<String> getSsn() {
       return ssn;
     }
