@@ -745,18 +745,29 @@ public class RestApiTest extends ClusterTestHarness {
 
   @Test
   public void testSchemaReferences() throws Exception {
+    testSchemaReferencesInContext("");
+  }
+
+  @Test
+  public void testSchemaReferencesContext() throws Exception {
+    testSchemaReferencesInContext(":.ctx:");
+  }
+
+  private void testSchemaReferencesInContext(String context) throws Exception {
     List<String> schemas = TestUtils.getAvroSchemaWithReferences();
-    String subject = "reference";
+    String unqualifiedSubject = "reference";
+    String subject = context + unqualifiedSubject;
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
 
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemas.get(1));
-    SchemaReference ref = new SchemaReference("otherns.Subrecord", "reference", 1);
+    SchemaReference ref = new SchemaReference("otherns.Subrecord", unqualifiedSubject, 1);
     request.setReferences(Collections.singletonList(ref));
-    int registeredId = restApp.restClient.registerSchema(request, "referrer", false);
+    String subject2 = context + "referrer";
+    int registeredId = restApp.restClient.registerSchema(request, subject2, false);
     assertEquals("Registering a new schema should succeed", 2, registeredId);
 
-    SchemaString schemaString = restApp.restClient.getId(2);
+    SchemaString schemaString = restApp.restClient.getId(2, subject2);
     // the newly registered schema should be immediately readable on the leader
     assertEquals("Registered schema should be found",
         schemas.get(1),
@@ -766,19 +777,19 @@ public class RestApiTest extends ClusterTestHarness {
         Collections.singletonList(ref),
         schemaString.getReferences());
 
-    List<Integer> refs = restApp.restClient.getReferencedBy("reference", 1);
+    List<Integer> refs = restApp.restClient.getReferencedBy(subject, 1);
     assertEquals(2, refs.get(0).intValue());
 
     ns.MyRecord myrecord = new ns.MyRecord();
     AvroSchema schema = new AvroSchema(AvroSchemaUtils.getSchema(myrecord));
     // Note that we pass an empty list of refs since SR will perform a deep equality check
     Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
-            AvroSchema.TYPE, Collections.emptyList(), "referrer", false);
+        AvroSchema.TYPE, Collections.emptyList(), subject2, false);
     assertEquals("Registered schema should be found", 2, registeredSchema.getId().intValue());
 
     try {
       restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
-          "reference",
+          subject,
           String.valueOf(1)
       );
       fail("Deleting reference should fail with " + Errors.REFERENCE_EXISTS_ERROR_CODE);
@@ -790,14 +801,14 @@ public class RestApiTest extends ClusterTestHarness {
 
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion
-            (RestService.DEFAULT_REQUEST_PROPERTIES, "referrer", "1"));
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
 
-    refs = restApp.restClient.getReferencedBy("reference", 1);
+    refs = restApp.restClient.getReferencedBy(subject, 1);
     assertTrue(refs.isEmpty());
 
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion
-            (RestService.DEFAULT_REQUEST_PROPERTIES, "reference", "1"));
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
   }
 
   @Test
