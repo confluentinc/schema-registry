@@ -40,7 +40,7 @@
               files="(SchemaRegistryConfig|ProtobufData|JsonSchemaData).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
-              files="(AvroData|ProtobufData).java"/>
+              files="(AvroData|ProtobufData|KafkaSchemaRegistry).java"/>
 
     <suppress checks="MemberName"
               files="(DynamicSchema|EnumDefinition|MessageDefinition|ServiceDefinition).java"/>
