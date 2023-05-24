@@ -487,7 +487,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       Mode mode = getModeInScope(subject);
       boolean isCompatible = true;
-      List<String> compatibilityErrorLogs = new ArrayList<>();
       if (mode != Mode.IMPORT) {
         isCompatible = isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions).isEmpty();
       }
