@@ -46,7 +46,7 @@ public class CustomBearerAuthCredentialProviderTest {
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, POOL_ID);
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_URL, tempFile.toString());
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS,
-        MyFileTokenProvider.class.getName());
+        "io.confluent.kafka.schemaregistry.client.security.bearerauth.Resources.MyFileTokenProvider");
 
     BearerAuthCredentialProvider provider = new CustomBearerAuthCredentialProvider();
     provider.configure(CONFIG_MAP);
