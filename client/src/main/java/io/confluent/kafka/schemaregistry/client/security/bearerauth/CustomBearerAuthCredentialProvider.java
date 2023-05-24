@@ -41,13 +41,15 @@ public class CustomBearerAuthCredentialProvider implements BearerAuthCredentialP
   @Override
   public String getTargetSchemaRegistry() {
     return this.customBearerAuthCredentialProvider.getTargetSchemaRegistry() != null
-        ? this.customBearerAuthCredentialProvider.getTargetSchemaRegistry() : this.targetSchemaRegistry;
+        ? this.customBearerAuthCredentialProvider.getTargetSchemaRegistry()
+        : this.targetSchemaRegistry;
   }
 
   @Override
   public String getTargetIdentityPoolId() {
     return this.customBearerAuthCredentialProvider.getTargetIdentityPoolId() != null
-        ? this.customBearerAuthCredentialProvider.getTargetIdentityPoolId() : this.targetIdentityPoolId;
+        ? this.customBearerAuthCredentialProvider.getTargetIdentityPoolId()
+        : this.targetIdentityPoolId;
   }
 
   @Override
@@ -57,7 +59,8 @@ public class CustomBearerAuthCredentialProvider implements BearerAuthCredentialP
         SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS);
 
     try {
-      this.customBearerAuthCredentialProvider = (BearerAuthCredentialProvider) Class.forName(className)
+      this.customBearerAuthCredentialProvider =
+          (BearerAuthCredentialProvider) Class.forName(className)
           .getDeclaredConstructor()
           .newInstance();
     } catch (Exception e) {
