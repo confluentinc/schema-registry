@@ -16,6 +16,10 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
+
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -41,18 +45,19 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
     return schemaVersionFetcher;
   }
 
-  protected Map<String, String> resolveReferences(List<SchemaReference> references) {
+  protected Map<String, String> resolveReferences(Schema schema) {
+    List<SchemaReference> references = schema.getReferences();
     if (references == null) {
       return Collections.emptyMap();
     }
     Map<String, String> result = new LinkedHashMap<>();
     Set<String> visited = new HashSet<>();
-    resolveReferences(references, result, visited);
+    resolveReferences(schema, result, visited);
     return result;
   }
 
-  private void resolveReferences(
-      List<SchemaReference> references, Map<String, String> schemas, Set<String> visited) {
+  private void resolveReferences(Schema schema, Map<String, String> schemas, Set<String> visited) {
+    List<SchemaReference> references = schema.getReferences();
     for (SchemaReference reference : references) {
       if (reference.getName() == null
           || reference.getSubject() == null
@@ -64,22 +69,40 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       } else {
         visited.add(reference.getName());
       }
-      String subject = reference.getSubject();
       if (!schemas.containsKey(reference.getName())) {
-        Schema schema = schemaVersionFetcher().getByVersion(subject, reference.getVersion(), true);
-        if (schema == null) {
+        String refSubject = getReferenceSubject(schema.getSubject(), reference);
+        Schema s = schemaVersionFetcher().getByVersion(refSubject, reference.getVersion(), true);
+        if (s == null) {
           throw new IllegalStateException("No schema reference found for subject \""
-              + subject
+              + refSubject
               + "\" and version "
               + reference.getVersion());
         }
         if (reference.getVersion() == -1) {
           // Update the version with the latest
-          reference.setVersion(schema.getVersion());
+          reference.setVersion(s.getVersion());
         }
-        resolveReferences(schema.getReferences(), schemas, visited);
-        schemas.put(reference.getName(), schema.getSchema());
+        resolveReferences(s, schemas, visited);
+        schemas.put(reference.getName(), s.getSchema());
       }
     }
+  }
+
+  private String getReferenceSubject(String subject, SchemaReference reference) {
+    String refSubject = reference.getSubject();
+    QualifiedSubject qualifiedRefSubject =
+        QualifiedSubject.create(DEFAULT_TENANT, reference.getSubject());
+    boolean isRefQualified = qualifiedRefSubject != null
+        && !DEFAULT_CONTEXT.equals(qualifiedRefSubject.getContext());
+    if (!isRefQualified) {
+      QualifiedSubject qualifiedSubject = QualifiedSubject.create(DEFAULT_TENANT, subject);
+      boolean isSchemaQualified = qualifiedSubject != null
+          && !DEFAULT_CONTEXT.equals(qualifiedSubject.getContext());
+      if (isSchemaQualified) {
+        refSubject = new QualifiedSubject(
+            DEFAULT_TENANT, qualifiedSubject.getContext(), refSubject).toQualifiedSubject();
+      }
+    }
+    return refSubject;
   }
 }

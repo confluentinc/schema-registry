@@ -173,7 +173,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     // compaction when the previous non-deleted schemaValue will not get registered
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
-      SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
+      String refSubject = getReferenceSubject(schemaKey.getSubject(), ref);
+      SchemaKey refKey = new SchemaKey(refSubject, ref.getVersion());
       Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
           referencedBy.getOrDefault(tenant(), Collections.emptyMap());
       Map<SchemaKey, Set<Integer>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
@@ -222,7 +223,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
-      SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
+      String refSubject = getReferenceSubject(schemaKey.getSubject(), ref);
+      SchemaKey refKey = new SchemaKey(refSubject, ref.getVersion());
       Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
           referencedBy.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
       Map<SchemaKey, Set<Integer>> refBy =
@@ -240,6 +242,24 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
         hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<MD5, Integer> hashes = ctxHashes.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
     hashes.put(md5, schemaValue.getId());
+  }
+
+  private String getReferenceSubject(String subject, SchemaReference reference) {
+    String refSubject = reference.getSubject();
+    QualifiedSubject qualifiedRefSubject =
+        QualifiedSubject.create(tenant(), reference.getSubject());
+    boolean isRefQualified = qualifiedRefSubject != null
+        && !DEFAULT_CONTEXT.equals(qualifiedRefSubject.getContext());
+    if (!isRefQualified) {
+      QualifiedSubject qualifiedSubject = QualifiedSubject.create(tenant(), subject);
+      boolean isSchemaQualified = qualifiedSubject != null
+          && !DEFAULT_CONTEXT.equals(qualifiedSubject.getContext());
+      if (isSchemaQualified) {
+        refSubject = new QualifiedSubject(
+            tenant(), qualifiedSubject.getContext(), refSubject).toQualifiedSubject();
+      }
+    }
+    return refSubject;
   }
 
   @Override

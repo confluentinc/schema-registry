@@ -50,7 +50,7 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
       return new AvroSchema(
           schema.getSchema(),
           schema.getReferences(),
-          resolveReferences(schema.getReferences()),
+          resolveReferences(schema),
           null,
           (validateDefaults || normalize) && isNew
       );
