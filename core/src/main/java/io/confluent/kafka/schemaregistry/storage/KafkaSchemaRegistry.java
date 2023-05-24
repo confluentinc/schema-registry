@@ -475,7 +475,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           ParsedSchema undeletedSchema = parseSchema(getSchemaEntityFromSchemaValue(schemaValue));
           if (parsedSchema.references().isEmpty()
               && !undeletedSchema.references().isEmpty()
-              && parsedSchema.deepEquals(undeletedSchema)) {
+              && parsedSchema.deepEquals(undeletedSchema)
+              && (schemaId < 0 || schemaId == schemaValue.getId())) {
             // This handles the case where a schema is sent with all references resolved
             return schemaValue.getId();
           }
@@ -484,8 +485,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
       Collections.reverse(undeletedVersions);
 
-      final boolean isCompatible =
-              isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions).isEmpty();
+      Mode mode = getModeInScope(subject);
+      boolean isCompatible = true;
+      List<String> compatibilityErrorLogs = new ArrayList<>();
+      if (mode != Mode.IMPORT) {
+        isCompatible = isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions).isEmpty();
+      }
+
       try {
         if (normalize) {
           parsedSchema = parsedSchema.normalize();
@@ -499,7 +505,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       schema.setSchema(parsedSchema.canonicalString());
       schema.setReferences(parsedSchema.references());
 
-      if (isCompatible || getModeInScope(subject) == Mode.IMPORT) {
+      if (isCompatible || mode == Mode.IMPORT) {
         // save the context key
         QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
         if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
