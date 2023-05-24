@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry;
 
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -70,7 +69,8 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
         visited.add(reference.getName());
       }
       if (!schemas.containsKey(reference.getName())) {
-        String refSubject = getReferenceSubject(schema.getSubject(), reference);
+        String refSubject = QualifiedSubject.qualifySubjectWithParent(
+            DEFAULT_TENANT, schema.getSubject(), reference.getSubject());
         Schema s = schemaVersionFetcher().getByVersion(refSubject, reference.getVersion(), true);
         if (s == null) {
           throw new IllegalStateException("No schema reference found for subject \""
@@ -86,23 +86,5 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
         schemas.put(reference.getName(), s.getSchema());
       }
     }
-  }
-
-  private String getReferenceSubject(String subject, SchemaReference reference) {
-    String refSubject = reference.getSubject();
-    QualifiedSubject qualifiedRefSubject =
-        QualifiedSubject.create(DEFAULT_TENANT, reference.getSubject());
-    boolean isRefQualified = qualifiedRefSubject != null
-        && !DEFAULT_CONTEXT.equals(qualifiedRefSubject.getContext());
-    if (!isRefQualified) {
-      QualifiedSubject qualifiedSubject = QualifiedSubject.create(DEFAULT_TENANT, subject);
-      boolean isSchemaQualified = qualifiedSubject != null
-          && !DEFAULT_CONTEXT.equals(qualifiedSubject.getContext());
-      if (isSchemaQualified) {
-        refSubject = new QualifiedSubject(
-            DEFAULT_TENANT, qualifiedSubject.getContext(), refSubject).toQualifiedSubject();
-      }
-    }
-    return refSubject;
   }
 }
