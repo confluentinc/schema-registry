@@ -24,7 +24,7 @@ import org.apache.kafka.common.security.oauthbearer.secured.ConfigurationUtils;
 
 public class CustomBearerAuthCredentialProvider implements BearerAuthCredentialProvider {
 
-  BearerAuthCredentialProvider customTokenCredentialProvider;
+  BearerAuthCredentialProvider customBearerAuthCredentialProvider;
   private String targetSchemaRegistry;
   private String targetIdentityPoolId;
 
@@ -35,19 +35,19 @@ public class CustomBearerAuthCredentialProvider implements BearerAuthCredentialP
 
   @Override
   public String getBearerToken(URL url) {
-    return this.customTokenCredentialProvider.getBearerToken(url);
+    return this.customBearerAuthCredentialProvider.getBearerToken(url);
   }
 
   @Override
   public String getTargetSchemaRegistry() {
-    return this.customTokenCredentialProvider.getTargetSchemaRegistry() != null
-        ? this.customTokenCredentialProvider.getTargetSchemaRegistry() : this.targetSchemaRegistry;
+    return this.customBearerAuthCredentialProvider.getTargetSchemaRegistry() != null
+        ? this.customBearerAuthCredentialProvider.getTargetSchemaRegistry() : this.targetSchemaRegistry;
   }
 
   @Override
   public String getTargetIdentityPoolId() {
-    return this.customTokenCredentialProvider.getTargetIdentityPoolId() != null
-        ? this.customTokenCredentialProvider.getTargetIdentityPoolId() : this.targetIdentityPoolId;
+    return this.customBearerAuthCredentialProvider.getTargetIdentityPoolId() != null
+        ? this.customBearerAuthCredentialProvider.getTargetIdentityPoolId() : this.targetIdentityPoolId;
   }
 
   @Override
@@ -57,7 +57,7 @@ public class CustomBearerAuthCredentialProvider implements BearerAuthCredentialP
         SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS);
 
     try {
-      this.customTokenCredentialProvider = (BearerAuthCredentialProvider) Class.forName(className)
+      this.customBearerAuthCredentialProvider = (BearerAuthCredentialProvider) Class.forName(className)
           .getDeclaredConstructor()
           .newInstance();
     } catch (Exception e) {
@@ -70,6 +70,6 @@ public class CustomBearerAuthCredentialProvider implements BearerAuthCredentialP
         SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, false);
     targetIdentityPoolId = cu.validateString(
         SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, false);
-    this.customTokenCredentialProvider.configure(map);
+    this.customBearerAuthCredentialProvider.configure(map);
   }
 }
