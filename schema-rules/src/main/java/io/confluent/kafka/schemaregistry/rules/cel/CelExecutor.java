@@ -65,10 +65,6 @@ public class CelExecutor implements RuleExecutor {
 
   private static final ObjectMapper mapper = new ObjectMapper();
 
-  private static final String AVRO = "AVRO";
-  private static final String JSON = "JSON";
-  private static final String PROTOBUF = "PROTOBUF";
-
   static {
     // Register ProtobufModule to convert CEL objects (such as NullValue) to JSON
     mapper.registerModule(new ProtobufModule());
@@ -86,25 +82,33 @@ public class CelExecutor implements RuleExecutor {
           public Script load(RuleWithArgs ruleWithArgs) throws Exception {
             // Build the script factory
             ScriptHost.Builder scriptHostBuilder = ScriptHost.newBuilder();
-            if (ruleWithArgs.getType().equals(AVRO)) {
-              scriptHostBuilder = scriptHostBuilder.registry(AvroRegistry.newRegistry());
-            } else if (!ruleWithArgs.getType().equals(PROTOBUF)) {
-              scriptHostBuilder = scriptHostBuilder.registry(JacksonRegistry.newRegistry());
+            switch (ruleWithArgs.getType()) {
+              case AVRO:
+                scriptHostBuilder = scriptHostBuilder.registry(AvroRegistry.newRegistry());
+                break;
+              case JSON:
+                scriptHostBuilder = scriptHostBuilder.registry(JacksonRegistry.newRegistry());
+                break;
+              case PROTOBUF:
+                break;
             }
             ScriptHost scriptHost = scriptHostBuilder.build();
 
             ScriptBuilder scriptBuilder = scriptHost
                 .buildScript(ruleWithArgs.getRule())
                 .withDeclarations(ruleWithArgs.getDecls());
-            if (ruleWithArgs.getType().equals(AVRO)) {
-              // Register our Avro type
-              scriptBuilder = scriptBuilder.withTypes(ruleWithArgs.getAvroSchema());
-            } else if (!ruleWithArgs.getType().equals(PROTOBUF)) {
-              // Register our Jackson object message type
-              scriptBuilder = scriptBuilder.withTypes(ruleWithArgs.getJsonClass());
-            } else {
-              scriptBuilder = scriptBuilder.withTypes(
-                  DynamicMessage.newBuilder(ruleWithArgs.getProtobufDesc()).build());
+            switch (ruleWithArgs.getType()) {
+              case AVRO:
+                // Register our Avro type
+                scriptBuilder = scriptBuilder.withTypes(ruleWithArgs.getAvroSchema());
+                break;
+              case JSON:
+                // Register our Jackson object message type
+                scriptBuilder = scriptBuilder.withTypes(ruleWithArgs.getJsonClass());
+                break;
+              case PROTOBUF:
+                scriptBuilder = scriptBuilder.withTypes(
+                    DynamicMessage.newBuilder(ruleWithArgs.getProtobufDesc()).build());
             }
             return scriptBuilder.build();
           }
@@ -176,24 +180,29 @@ public class CelExecutor implements RuleExecutor {
       if (msg == null) {
         msg = obj;
       }
-      String type = JSON;
+      ScriptType type = ScriptType.JSON;
       if (msg instanceof GenericContainer) {
-        type = AVRO;
+        type = ScriptType.AVRO;
       } else if (msg instanceof Message) {
-        type = PROTOBUF;
+        type = ScriptType.PROTOBUF;
       } else if (msg instanceof List<?>) {
         // list not supported
         return obj;
       }
 
       List<Decl> decls = toDecls(args);
-      RuleWithArgs ruleWithArgs;
-      if (type.equals(AVRO)) {
-        ruleWithArgs = new RuleWithArgs(rule, type, decls, ((GenericContainer) msg).getSchema());
-      } else if (!type.equals(PROTOBUF)) {
-        ruleWithArgs = new RuleWithArgs(rule, type, decls, msg.getClass());
-      } else {
-        ruleWithArgs = new RuleWithArgs(rule, type, decls, ((Message) msg).getDescriptorForType());
+      RuleWithArgs ruleWithArgs = null;
+      switch (type) {
+        case AVRO:
+          ruleWithArgs = new RuleWithArgs(rule, type, decls, ((GenericContainer) msg).getSchema());
+          break;
+        case JSON:
+          ruleWithArgs = new RuleWithArgs(rule, type, decls, msg.getClass());
+          break;
+        case PROTOBUF:
+          ruleWithArgs = new RuleWithArgs(rule, type, decls,
+              ((Message) msg).getDescriptorForType());
+          break;
       }
       Script script = cache.get(ruleWithArgs);
 
@@ -305,29 +314,35 @@ public class CelExecutor implements RuleExecutor {
     }
   }
 
+  enum ScriptType {
+    AVRO,
+    JSON,
+    PROTOBUF
+  }
+
   static class RuleWithArgs {
     private final String rule;
-    private final String type;
+    private final ScriptType type;
     private final List<Decl> decls;
     private Schema avroSchema;
     private Class<?> jsonClass;
     private Descriptor protobufDesc;
 
-    public RuleWithArgs(String rule, String type, List<Decl> decls, Schema avroSchema) {
+    public RuleWithArgs(String rule, ScriptType type, List<Decl> decls, Schema avroSchema) {
       this.rule = rule;
       this.type = type;
       this.decls = decls;
       this.avroSchema = avroSchema;
     }
 
-    public RuleWithArgs(String rule, String type, List<Decl> decls, Class<?> jsonClass) {
+    public RuleWithArgs(String rule, ScriptType type, List<Decl> decls, Class<?> jsonClass) {
       this.rule = rule;
       this.type = type;
       this.decls = decls;
       this.jsonClass = jsonClass;
     }
 
-    public RuleWithArgs(String rule, String type, List<Decl> decls, Descriptor protobufDesc) {
+    public RuleWithArgs(String rule, ScriptType type, List<Decl> decls, Descriptor protobufDesc) {
       this.rule = rule;
       this.type = type;
       this.decls = decls;
@@ -338,7 +353,7 @@ public class CelExecutor implements RuleExecutor {
       return rule;
     }
 
-    public String getType() {
+    public ScriptType getType() {
       return type;
     }
 
@@ -368,7 +383,7 @@ public class CelExecutor implements RuleExecutor {
       }
       RuleWithArgs that = (RuleWithArgs) o;
       return Objects.equals(rule, that.rule)
-          && Objects.equals(type, that.type)
+          && type == that.type
           && Objects.equals(decls, that.decls)
           && Objects.equals(avroSchema, that.avroSchema)
           && Objects.equals(jsonClass, that.jsonClass)
