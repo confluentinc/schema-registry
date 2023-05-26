@@ -23,6 +23,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,7 +49,13 @@ public class TestCompatibilitySchemaRegistryMojo extends UploadSchemaRegistryMoj
       );
     }
 
-    List<String> errorMessages = this.client().testCompatibilityVerbose(subject, schema);
+    List<String> errorMessages;
+    if (verbose) {
+      errorMessages = this.client().testCompatibilityVerbose(subject, schema);
+    } else {
+      errorMessages = this.client().testCompatibility(subject, schema)
+        ? Collections.emptyList() : Collections.singletonList("Schemas are incompatible")
+    }
     boolean compatible = errorMessages.isEmpty();
 
     if (compatible) {
