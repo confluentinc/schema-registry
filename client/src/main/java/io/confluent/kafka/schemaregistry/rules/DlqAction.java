@@ -54,6 +54,7 @@ public class DlqAction implements RuleAction {
   public static final String RULE_EXCEPTION = HEADER_PREFIX + "exception";
 
   public static final String TOPIC = "topic";
+  public static final String AUTO_FLUSH = "auto.flush";
   public static final String PRODUCER = "producer";  // for testing
 
   private static final LongSerializer LONG_SERIALIZER = new LongSerializer();
@@ -64,6 +65,7 @@ public class DlqAction implements RuleAction {
 
   private Map<String, ?> configs;
   private String topic;
+  private boolean autoFlush;
   private volatile KafkaProducer<byte[], byte[]> producer;
 
   @Override
@@ -76,6 +78,10 @@ public class DlqAction implements RuleAction {
   public void configure(Map<String, ?> configs) {
     this.configs = configs;
     this.topic = (String) configs.get(TOPIC);
+    Object autoFlushConfig = configs.get(AUTO_FLUSH);
+    if (autoFlushConfig != null) {
+      this.autoFlush = Boolean.parseBoolean(autoFlushConfig.toString());
+    }
     // used by tests
     this.producer = (KafkaProducer<byte[], byte[]>) configs.get(PRODUCER);
   }
@@ -119,12 +125,17 @@ public class DlqAction implements RuleAction {
       producer().send(producerRecord, (metadata, exception) -> {
         if (exception != null) {
           log.error("Could not produce message to DLQ topic {}", dlqTopic, exception);
+          ex.printStackTrace();
         } else {
           log.info("Sent message to DLQ topic {}", dlqTopic);
         }
       });
+      if (autoFlush) {
+        producer.flush();
+      }
     } catch (IOException e) {
       log.error("Could not produce message to DLQ topic {}", dlqTopic, e);
+      e.printStackTrace();
     }
 
     String msg = "Rule failed: " + ctx.rule().getName();
