@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import io.confluent.kafka.schemaregistry.SchemaEntity;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
