@@ -125,7 +125,6 @@ public class DlqAction implements RuleAction {
       producer().send(producerRecord, (metadata, exception) -> {
         if (exception != null) {
           log.error("Could not produce message to DLQ topic {}", dlqTopic, exception);
-          ex.printStackTrace();
         } else {
           log.info("Sent message to DLQ topic {}", dlqTopic);
         }
@@ -135,7 +134,6 @@ public class DlqAction implements RuleAction {
       }
     } catch (IOException e) {
       log.error("Could not produce message to DLQ topic {}", dlqTopic, e);
-      e.printStackTrace();
     }
 
     String msg = "Rule failed: " + ctx.rule().getName();
