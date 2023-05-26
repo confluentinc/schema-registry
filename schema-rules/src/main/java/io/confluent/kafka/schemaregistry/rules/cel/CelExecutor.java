@@ -76,7 +76,7 @@ public class CelExecutor implements RuleExecutor {
 
   private static final int DEFAULT_CACHE_SIZE = 100;
 
-  private LoadingCache<RuleWithArgs, Script> cache;
+  private final LoadingCache<RuleWithArgs, Script> cache;
 
   public CelExecutor() {
     cache = CacheBuilder.newBuilder()
@@ -306,9 +306,9 @@ public class CelExecutor implements RuleExecutor {
   }
 
   static class RuleWithArgs {
-    private String rule;
-    private String type;
-    private List<Decl> decls;
+    private final String rule;
+    private final String type;
+    private final List<Decl> decls;
     private Schema avroSchema;
     private Class<?> jsonClass;
     private Descriptor protobufDesc;
@@ -338,48 +338,24 @@ public class CelExecutor implements RuleExecutor {
       return rule;
     }
 
-    public void setRule(String rule) {
-      this.rule = rule;
-    }
-
     public String getType() {
       return type;
-    }
-
-    public void setType(String type) {
-      this.type = type;
     }
 
     public List<Decl> getDecls() {
       return decls;
     }
 
-    public void setDecls(List<Decl> decls) {
-      this.decls = decls;
-    }
-
     public Schema getAvroSchema() {
       return avroSchema;
-    }
-
-    public void setAvroSchema(Schema avroSchema) {
-      this.avroSchema = avroSchema;
     }
 
     public Class<?> getJsonClass() {
       return jsonClass;
     }
 
-    public void setJsonClass(Class<?> jsonClass) {
-      this.jsonClass = jsonClass;
-    }
-
     public Descriptor getProtobufDesc() {
       return protobufDesc;
-    }
-
-    public void setProtobufDesc(Descriptor protobufDesc) {
-      this.protobufDesc = protobufDesc;
     }
 
     @Override

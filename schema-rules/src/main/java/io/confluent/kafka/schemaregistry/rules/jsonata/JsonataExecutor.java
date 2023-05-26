@@ -45,7 +45,7 @@ public class JsonataExecutor implements RuleExecutor {
 
   private static final int DEFAULT_CACHE_SIZE = 100;
 
-  private LoadingCache<String, Expressions> cache;
+  private final LoadingCache<String, Expressions> cache;
 
   public JsonataExecutor() {
     cache = CacheBuilder.newBuilder()
