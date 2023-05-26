@@ -35,6 +35,8 @@ public class CelFieldExecutor implements FieldRuleExecutor {
 
   private static final ObjectMapper mapper = new ObjectMapper();
 
+  private CelExecutor celExecutor = new CelExecutor();
+
   public String type() {
     return TYPE;
   }
@@ -53,7 +55,7 @@ public class CelFieldExecutor implements FieldRuleExecutor {
       } else {
         inputMessage = message;
       }
-      Object result = CelExecutor.execute(ctx, fieldValue, new HashMap<String, Object>() {
+      Object result = celExecutor.execute(ctx, fieldValue, new HashMap<String, Object>() {
             {
               put("value", fieldValue != null ? fieldValue : NULL_VALUE);
               put("fullName", fieldCtx.getFullName());

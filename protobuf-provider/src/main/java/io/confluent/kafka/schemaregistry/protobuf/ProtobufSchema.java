@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import com.google.protobuf.AnyProto;
 import com.google.protobuf.ApiProto;
 import com.google.protobuf.ByteString;
@@ -2325,9 +2326,7 @@ public class ProtobufSchema implements ParsedSchema {
           if (ruleTags.isEmpty()) {
             return fieldTransform(ctx, message, transform, fieldCtx);
           } else {
-            Set<String> intersect = new HashSet<>(fieldCtx.getTags());
-            intersect.retainAll(ruleTags);
-            if (!intersect.isEmpty()) {
+            if (!Collections.disjoint(fieldCtx.getTags(), ruleTags)) {
               return fieldTransform(ctx, message, transform, fieldCtx);
             }
           }
@@ -2436,12 +2435,11 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   private Set<String> getInlineTags(FieldDescriptor fd) {
-    Set<String> tags = new HashSet<>();
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
       Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
-      tags.addAll(meta.getTagsList());
+      return new HashSet<>(meta.getTagsList());
     }
-    return tags;
+    return Collections.emptySet();
   }
 
   private void modifySchemaTags(ProtoFileElement original, JsonNode node,

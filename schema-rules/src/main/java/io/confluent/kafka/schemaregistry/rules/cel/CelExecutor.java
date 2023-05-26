@@ -23,9 +23,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.api.expr.v1alpha1.Decl;
 import com.google.api.expr.v1alpha1.Type;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Duration;
+import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
@@ -39,6 +44,9 @@ import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.projectnessie.cel.checker.Decls;
@@ -57,9 +65,50 @@ public class CelExecutor implements RuleExecutor {
 
   private static final ObjectMapper mapper = new ObjectMapper();
 
+  private static final String AVRO = "AVRO";
+  private static final String JSON = "JSON";
+  private static final String PROTOBUF = "PROTOBUF";
+
   static {
     // Register ProtobufModule to convert CEL objects (such as NullValue) to JSON
     mapper.registerModule(new ProtobufModule());
+  }
+
+  private static final int DEFAULT_CACHE_SIZE = 100;
+
+  private LoadingCache<RuleWithArgs, Script> cache;
+
+  public CelExecutor() {
+    cache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_SIZE)
+        .build(new CacheLoader<RuleWithArgs, Script>() {
+          @Override
+          public Script load(RuleWithArgs ruleWithArgs) throws Exception {
+            // Build the script factory
+            ScriptHost.Builder scriptHostBuilder = ScriptHost.newBuilder();
+            if (ruleWithArgs.getType().equals(AVRO)) {
+              scriptHostBuilder = scriptHostBuilder.registry(AvroRegistry.newRegistry());
+            } else if (!ruleWithArgs.getType().equals(PROTOBUF)) {
+              scriptHostBuilder = scriptHostBuilder.registry(JacksonRegistry.newRegistry());
+            }
+            ScriptHost scriptHost = scriptHostBuilder.build();
+
+            ScriptBuilder scriptBuilder = scriptHost
+                .buildScript(ruleWithArgs.getRule())
+                .withDeclarations(ruleWithArgs.getDecls());
+            if (ruleWithArgs.getType().equals(AVRO)) {
+              // Register our Avro type
+              scriptBuilder = scriptBuilder.withTypes(ruleWithArgs.getAvroSchema());
+            } else if (!ruleWithArgs.getType().equals(PROTOBUF)) {
+              // Register our Jackson object message type
+              scriptBuilder = scriptBuilder.withTypes(ruleWithArgs.getJsonClass());
+            } else {
+              scriptBuilder = scriptBuilder.withTypes(
+                  DynamicMessage.newBuilder(ruleWithArgs.getProtobufDesc()).build());
+            }
+            return scriptBuilder.build();
+          }
+        });
   }
 
   @Override
@@ -96,7 +145,7 @@ public class CelExecutor implements RuleExecutor {
     }
   }
 
-  protected static Object execute(
+  protected Object execute(
       RuleContext ctx, Object obj, Map<String, Object> args)
       throws RuleException {
     String expr = ctx.rule().getExpr();
@@ -120,55 +169,50 @@ public class CelExecutor implements RuleExecutor {
     return execute(expr, obj, args);
   }
 
-  private static Object execute(String rule, Object obj, Map<String, Object> args)
+  private Object execute(String rule, Object obj, Map<String, Object> args)
       throws RuleException {
     try {
       Object msg = args.get("message");
       if (msg == null) {
         msg = obj;
       }
-      boolean isAvro = false;
-      boolean isProto = false;
+      String type = JSON;
       if (msg instanceof GenericContainer) {
-        isAvro = true;
+        type = AVRO;
       } else if (msg instanceof Message) {
-        isProto = true;
+        type = PROTOBUF;
       } else if (msg instanceof List<?>) {
         // list not supported
         return obj;
       }
 
-      // Build the script factory
-      ScriptHost.Builder scriptHostBuilder = ScriptHost.newBuilder();
-      if (isAvro) {
-        scriptHostBuilder = scriptHostBuilder.registry(AvroRegistry.newRegistry());
-      } else if (!isProto) {
-        scriptHostBuilder = scriptHostBuilder.registry(JacksonRegistry.newRegistry());
-      }
-      ScriptHost scriptHost = scriptHostBuilder.build();
-
-      ScriptBuilder scriptBuilder = scriptHost.buildScript(rule).withDeclarations(toDecls(args));
-      if (isAvro) {
-        // Register our Avro type
-        scriptBuilder = scriptBuilder.withTypes(((GenericContainer) msg).getSchema());
-      } else if (!isProto) {
-        // Register our Jackson object message type
-        scriptBuilder = scriptBuilder.withTypes(msg.getClass());
+      List<Decl> decls = toDecls(args);
+      RuleWithArgs ruleWithArgs;
+      if (type.equals(AVRO)) {
+        ruleWithArgs = new RuleWithArgs(rule, type, decls, ((GenericContainer) msg).getSchema());
+      } else if (!type.equals(PROTOBUF)) {
+        ruleWithArgs = new RuleWithArgs(rule, type, decls, msg.getClass());
       } else {
-        scriptBuilder = scriptBuilder.withTypes(msg);
+        ruleWithArgs = new RuleWithArgs(rule, type, decls, ((Message) msg).getDescriptorForType());
       }
-      Script script = scriptBuilder.build();
+      Script script = cache.get(ruleWithArgs);
 
       return script.execute(Object.class, args);
     } catch (ScriptException e) {
       throw new RuleException("Could not execute CEL script", e);
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof RuleException) {
+        throw (RuleException) e.getCause();
+      } else {
+        throw new RuleException("Could not get expression", e.getCause());
+      }
     }
   }
 
-  private static Decl[] toDecls(Map<String, Object> args) {
+  private static List<Decl> toDecls(Map<String, Object> args) {
     return args.entrySet().stream()
         .map(e -> Decls.newVar(e.getKey(), findType(e.getValue())))
-        .toArray(Decl[]::new);
+        .collect(Collectors.toList());
   }
 
   private static Type findType(Object arg) {
@@ -258,6 +302,106 @@ public class CelExecutor implements RuleExecutor {
       return Checked.checkedListDyn;
     } else {
       return Decls.newObjectType(rawClass.getName());
+    }
+  }
+
+  static class RuleWithArgs {
+    private String rule;
+    private String type;
+    private List<Decl> decls;
+    private Schema avroSchema;
+    private Class<?> jsonClass;
+    private Descriptor protobufDesc;
+
+    public RuleWithArgs(String rule, String type, List<Decl> decls, Schema avroSchema) {
+      this.rule = rule;
+      this.type = type;
+      this.decls = decls;
+      this.avroSchema = avroSchema;
+    }
+
+    public RuleWithArgs(String rule, String type, List<Decl> decls, Class<?> jsonClass) {
+      this.rule = rule;
+      this.type = type;
+      this.decls = decls;
+      this.jsonClass = jsonClass;
+    }
+
+    public RuleWithArgs(String rule, String type, List<Decl> decls, Descriptor protobufDesc) {
+      this.rule = rule;
+      this.type = type;
+      this.decls = decls;
+      this.protobufDesc = protobufDesc;
+    }
+
+    public String getRule() {
+      return rule;
+    }
+
+    public void setRule(String rule) {
+      this.rule = rule;
+    }
+
+    public String getType() {
+      return type;
+    }
+
+    public void setType(String type) {
+      this.type = type;
+    }
+
+    public List<Decl> getDecls() {
+      return decls;
+    }
+
+    public void setDecls(List<Decl> decls) {
+      this.decls = decls;
+    }
+
+    public Schema getAvroSchema() {
+      return avroSchema;
+    }
+
+    public void setAvroSchema(Schema avroSchema) {
+      this.avroSchema = avroSchema;
+    }
+
+    public Class<?> getJsonClass() {
+      return jsonClass;
+    }
+
+    public void setJsonClass(Class<?> jsonClass) {
+      this.jsonClass = jsonClass;
+    }
+
+    public Descriptor getProtobufDesc() {
+      return protobufDesc;
+    }
+
+    public void setProtobufDesc(Descriptor protobufDesc) {
+      this.protobufDesc = protobufDesc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      RuleWithArgs that = (RuleWithArgs) o;
+      return Objects.equals(rule, that.rule)
+          && Objects.equals(type, that.type)
+          && Objects.equals(decls, that.decls)
+          && Objects.equals(avroSchema, that.avroSchema)
+          && Objects.equals(jsonClass, that.jsonClass)
+          && Objects.equals(protobufDesc, that.protobufDesc);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(rule, type, decls, avroSchema, jsonClass, protobufDesc);
     }
   }
 }
