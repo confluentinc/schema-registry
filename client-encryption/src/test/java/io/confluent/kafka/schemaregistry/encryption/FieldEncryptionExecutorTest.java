@@ -45,6 +45,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.encryption.Cryptor.DekFormat;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -177,9 +178,9 @@ public abstract class FieldEncryptionExecutorTest {
     if (executorsByType != null && !executorsByType.isEmpty()) {
       executor = (FieldEncryptionExecutor) executorsByType.entrySet().iterator().next().getValue();
     }
-    Cryptor spy = spy(new Cryptor(Cryptor.RANDOM_KEY_FORMAT));
+    Cryptor spy = spy(new Cryptor(DekFormat.AES128_GCM));
     if (executor != null) {
-      executor.setCryptor(Cryptor.RANDOM_KEY_FORMAT, spy);
+      executor.setCryptor(DekFormat.AES128_GCM, spy);
     }
     return spy;
   }
@@ -191,9 +192,9 @@ public abstract class FieldEncryptionExecutorTest {
     if (executorsByType != null && !executorsByType.isEmpty()) {
       executor = (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).get(name);
     }
-    Cryptor spy = spy(new Cryptor(Cryptor.RANDOM_KEY_FORMAT));
+    Cryptor spy = spy(new Cryptor(DekFormat.AES128_GCM));
     if (executor != null) {
-      executor.setCryptor(Cryptor.RANDOM_KEY_FORMAT, spy);
+      executor.setCryptor(DekFormat.AES128_GCM, spy);
     }
     return spy;
   }
@@ -203,11 +204,11 @@ public abstract class FieldEncryptionExecutorTest {
     FieldEncryptionExecutor executor =
         (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).entrySet()
             .iterator().next().getValue();
-    Cryptor spy = spy(new Cryptor(Cryptor.RANDOM_KEY_FORMAT));
+    Cryptor spy = spy(new Cryptor(DekFormat.AES128_GCM));
     doThrow(new GeneralSecurityException()).when(spy).encrypt(any(), any(), any());
     doThrow(new GeneralSecurityException()).when(spy).decrypt(any(), any(), any());
     if (executor != null) {
-      executor.setCryptor(Cryptor.RANDOM_KEY_FORMAT, spy);
+      executor.setCryptor(DekFormat.AES128_GCM, spy);
     }
     return spy;
   }

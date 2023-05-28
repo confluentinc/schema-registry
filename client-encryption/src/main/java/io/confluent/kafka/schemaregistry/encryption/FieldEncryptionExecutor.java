@@ -25,6 +25,7 @@ import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.daead.DeterministicAeadConfig;
 import com.google.protobuf.ByteString;
+import io.confluent.kafka.schemaregistry.encryption.Cryptor.DekFormat;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -38,6 +39,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -58,14 +60,13 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
 
   public static final String DEFAULT_KMS_KEY_ID = "default.kms.key.id";
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
+  public static final String ENCRYPT_DEK_ALGORITHM = "encrypt.dek.algorithm";
 
   private static final String ENCRYPT_PREFIX = "encrypt.";
 
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String CACHE_EXPIRY_SECS = "cache.expiry.secs";
   public static final String CACHE_SIZE = "cache.size";
-  public static final String KEY_DETERMINISTIC = "key.deterministic";
-  public static final String VALUE_DETERMINISTIC = "value.deterministic";
   public static final String TEST_CLIENT = "test.client";
 
   private static final byte VERSION = (byte) 0;
@@ -75,11 +76,9 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   private static final int LENGTH_DEK_FORMAT = 4;
 
   private String defaultKekId;
-  private Map<String, Cryptor> cryptors;
+  private Map<DekFormat, Cryptor> cryptors;
   private int cacheExpirySecs = 300;
   private int cacheSize = 1000;
-  private boolean keyDeterministic = false;
-  private boolean valueDeterministic = false;
   private Object testClient;  // for testing
   private LoadingCache<EncryptKey, Dek> dekEncryptCache;
   private LoadingCache<DecryptKey, Dek> dekDecryptCache;
@@ -96,7 +95,15 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   public FieldEncryptionExecutor() {
   }
 
+
   public abstract String getKeyUrlPrefix();
+
+  /**
+   * @return true if this client does support {@code keyUri}
+   */
+  public boolean doesSupport(String keyUri) {
+    return keyUri.toLowerCase(Locale.US).startsWith(getKeyUrlPrefix());
+  }
 
   @Override
   public void configure(Map<String, ?> configs) {
@@ -119,14 +126,6 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
         throw new ConfigException("Cannot parse " + CACHE_SIZE);
       }
     }
-    Object keyDeterministicConfig = configs.get(KEY_DETERMINISTIC);
-    if (keyDeterministicConfig != null) {
-      this.keyDeterministic = Boolean.parseBoolean(keyDeterministicConfig.toString());
-    }
-    Object valueDeterministicConfig = configs.get(VALUE_DETERMINISTIC);
-    if (valueDeterministicConfig != null) {
-      this.valueDeterministic = Boolean.parseBoolean(valueDeterministicConfig.toString());
-    }
     this.testClient = configs.get(TEST_CLIENT);
     this.dekEncryptCache = CacheBuilder.newBuilder()
         .expireAfterWrite(Duration.ofSeconds(cacheExpirySecs))
@@ -135,7 +134,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
           @Override
           public Dek load(EncryptKey encryptKey) throws Exception {
             String kekId = encryptKey.getKekId();
-            String dekFormat = encryptKey.getDekFormat();
+            DekFormat dekFormat = encryptKey.getDekFormat();
             // Generate new dek
             byte[] rawDek = getCryptor(dekFormat).generateKey();
             // Encrypt dek with kek
@@ -196,11 +195,13 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
     return transform;
   }
 
-  private Cryptor getCryptor(boolean isKey) {
-    return getCryptor(isKey ? getKeyFormat(keyDeterministic) : getKeyFormat(valueDeterministic));
+  private Cryptor getCryptor(RuleContext ctx) {
+    String algorithm = ctx.getParameter(ENCRYPT_DEK_ALGORITHM);
+    DekFormat dekFormat = algorithm != null ? DekFormat.valueOf(algorithm) : DekFormat.AES128_GCM;
+    return getCryptor(dekFormat);
   }
 
-  private Cryptor getCryptor(String dekFormat) {
+  private Cryptor getCryptor(DekFormat dekFormat) {
     return cryptors.computeIfAbsent(dekFormat, k -> {
       try {
         return new Cryptor(dekFormat);
@@ -211,7 +212,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   // Visible for testing
-  public void setCryptor(String dekFormat, Cryptor cryptor) {
+  public void setCryptor(DekFormat dekFormat, Cryptor cryptor) {
     cryptors.put(dekFormat, cryptor);
   }
 
@@ -275,7 +276,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
               return;
             }
             kekId = getKekId(ctx);
-            cryptor = getCryptor(ctx.isKey());
+            cryptor = getCryptor(ctx);
             dek = getDekForEncrypt(kekId, cryptor.getDekFormat());
             break;
           case READ:
@@ -303,7 +304,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
       return kekId;
     }
 
-    protected Dek getDekForEncrypt(String kekId, String dekFormat) {
+    protected Dek getDekForEncrypt(String kekId, DekFormat dekFormat) {
       EncryptKey key = new EncryptKey(kekId, dekFormat);
       try {
         return dekEncryptCache.get(key);
@@ -356,7 +357,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
       }
 
       this.kekId = new String(kekId, StandardCharsets.UTF_8);
-      this.cryptor = getCryptor(new String(dekFormat, StandardCharsets.UTF_8));
+      this.cryptor = getCryptor(DekFormat.valueOf(new String(dekFormat, StandardCharsets.UTF_8)));
       this.dek = getDekForDecrypt(this.kekId, encryptedDek);
     }
 
@@ -419,9 +420,9 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
       }
     }
 
-    private byte[] buildMetadata(String dekFormat, byte[] encryptedDek) {
+    private byte[] buildMetadata(DekFormat dekFormat, byte[] encryptedDek) {
       byte[] kekBytes = kekId.getBytes(StandardCharsets.UTF_8);
-      byte[] dekBytes = dekFormat.getBytes(StandardCharsets.UTF_8);
+      byte[] dekBytes = dekFormat.name().getBytes(StandardCharsets.UTF_8);
       return ByteBuffer.allocate(LENGTH_VERSION
               + LENGTH_KEK_ID + kekBytes.length
               + LENGTH_DEK_FORMAT + dekBytes.length
@@ -440,9 +441,9 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   static class EncryptKey {
 
     private final String kekId;
-    private final String dekFormat;
+    private final DekFormat dekFormat;
 
-    public EncryptKey(String kekId, String dekFormat) {
+    public EncryptKey(String kekId, DekFormat dekFormat) {
       this.kekId = kekId;
       this.dekFormat = dekFormat;
     }
@@ -451,7 +452,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
       return kekId;
     }
 
-    public String getDekFormat() {
+    public DekFormat getDekFormat() {
       return dekFormat;
     }
 
