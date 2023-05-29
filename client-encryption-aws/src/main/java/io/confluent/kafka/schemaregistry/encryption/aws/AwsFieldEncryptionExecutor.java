@@ -61,9 +61,7 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
       } else {
         credentials = new DefaultAWSCredentialsProviderChain();
       }
-      // register client w/o keyUri so it can be overridden
-      registerKmsClient(Optional.empty());
-    } catch (GeneralSecurityException | IOException e) {
+    } catch (IOException e) {
       throw new IllegalArgumentException(e);
     }
   }

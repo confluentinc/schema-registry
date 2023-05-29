@@ -171,10 +171,6 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   public abstract KmsClient registerKmsClient(Optional<String> kekId)
       throws GeneralSecurityException;
 
-  private static String getKeyFormat(boolean isDeterministic) {
-    return isDeterministic ? Cryptor.DETERMINISTIC_KEY_FORMAT : Cryptor.RANDOM_KEY_FORMAT;
-  }
-
   public String getDefaultKekId() {
     return defaultKekId;
   }
