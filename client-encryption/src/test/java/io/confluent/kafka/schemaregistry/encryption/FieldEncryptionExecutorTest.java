@@ -46,6 +46,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.encryption.Cryptor.DekFormat;
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.Dek;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -172,43 +173,55 @@ public abstract class FieldEncryptionExecutorTest {
   protected abstract FieldEncryptionProperties getFieldEncryptionProperties();
 
   private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
+    return addSpyToCryptor(serde, DekFormat.AES128_GCM);
+  }
+
+  private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, DekFormat dekFormat) throws Exception {
     Map<String, Map<String, RuleBase>> executors = serde.getRuleExecutors();
     Map<String, RuleBase> executorsByType = executors.get(FieldEncryptionExecutor.TYPE);
     FieldEncryptionExecutor executor = null;
     if (executorsByType != null && !executorsByType.isEmpty()) {
       executor = (FieldEncryptionExecutor) executorsByType.entrySet().iterator().next().getValue();
     }
-    Cryptor spy = spy(new Cryptor(DekFormat.AES128_GCM));
+    Cryptor spy = spy(new Cryptor(dekFormat));
     if (executor != null) {
-      executor.setCryptor(DekFormat.AES128_GCM, spy);
+      executor.setCryptor(dekFormat, spy);
     }
     return spy;
   }
 
   private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, String name) throws Exception {
+    return addSpyToCryptor(serde, name, DekFormat.AES128_GCM);
+  }
+
+  private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, String name, DekFormat dekFormat) throws Exception {
     Map<String, Map<String, RuleBase>> executors = serde.getRuleExecutors();
     Map<String, RuleBase> executorsByType = executors.get(FieldEncryptionExecutor.TYPE);
     FieldEncryptionExecutor executor = null;
     if (executorsByType != null && !executorsByType.isEmpty()) {
       executor = (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).get(name);
     }
-    Cryptor spy = spy(new Cryptor(DekFormat.AES128_GCM));
+    Cryptor spy = spy(new Cryptor(dekFormat));
     if (executor != null) {
-      executor.setCryptor(DekFormat.AES128_GCM, spy);
+      executor.setCryptor(dekFormat, spy);
     }
     return spy;
   }
 
   private Cryptor addBadSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
+    return addBadSpyToCryptor(serde, DekFormat.AES128_GCM);
+  }
+
+  private Cryptor addBadSpyToCryptor(AbstractKafkaSchemaSerDe serde, DekFormat dekFormat) throws Exception {
     Map<String, Map<String, RuleBase>> executors = serde.getRuleExecutors();
     FieldEncryptionExecutor executor =
         (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).entrySet()
             .iterator().next().getValue();
-    Cryptor spy = spy(new Cryptor(DekFormat.AES128_GCM));
+    Cryptor spy = spy(new Cryptor(dekFormat));
     doThrow(new GeneralSecurityException()).when(spy).encrypt(any(), any(), any());
     doThrow(new GeneralSecurityException()).when(spy).decrypt(any(), any(), any());
     if (executor != null) {
-      executor.setCryptor(DekFormat.AES128_GCM, spy);
+      executor.setCryptor(dekFormat, spy);
     }
     return spy;
   }
@@ -290,6 +303,30 @@ public abstract class FieldEncryptionExecutorTest {
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
     verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
     cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializer2() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("encrypt.dek.algorithm", "AES256_GCM"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = new Metadata(
+        Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer, DekFormat.AES256_GCM);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer, DekFormat.AES256_GCM);
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));

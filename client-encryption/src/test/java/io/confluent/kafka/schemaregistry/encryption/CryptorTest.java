@@ -51,6 +51,18 @@ public class CryptorTest {
   }
 
   @Test
+  public void testRandomCryptor2() throws Exception {
+    Cryptor cryptor = new Cryptor(DekFormat.AES256_GCM);
+    byte[] dek = cryptor.generateKey();
+    byte[] plaintext = "hello world".getBytes(StandardCharsets.UTF_8);
+    byte[] ciphertext = cryptor.encrypt(dek, plaintext, new byte[0]);
+    assertNotEquals(plaintext, ciphertext);
+
+    plaintext = cryptor.decrypt(dek, ciphertext, new byte[0]);
+    assertEquals("hello world", new String(plaintext, StandardCharsets.UTF_8));
+  }
+
+  @Test
   public void testDeterministicCryptor() throws Exception {
     Cryptor cryptor = new Cryptor(DekFormat.AES256_SIV);
     byte[] dek = cryptor.generateKey();
