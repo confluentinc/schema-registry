@@ -91,6 +91,8 @@ public class CelExecutor implements RuleExecutor {
                 break;
               case PROTOBUF:
                 break;
+              default:
+                throw new IllegalArgumentException("Unsupported type " + ruleWithArgs.getType());
             }
             ScriptHost scriptHost = scriptHostBuilder.build();
 
@@ -109,6 +111,9 @@ public class CelExecutor implements RuleExecutor {
               case PROTOBUF:
                 scriptBuilder = scriptBuilder.withTypes(
                     DynamicMessage.newBuilder(ruleWithArgs.getProtobufDesc()).build());
+                break;
+              default:
+                throw new IllegalArgumentException("Unsupported type " + ruleWithArgs.getType());
             }
             return scriptBuilder.build();
           }
@@ -203,6 +208,8 @@ public class CelExecutor implements RuleExecutor {
           ruleWithArgs = new RuleWithArgs(rule, type, decls,
               ((Message) msg).getDescriptorForType());
           break;
+        default:
+          throw new IllegalArgumentException("Unsupported type " + type);
       }
       Script script = cache.get(ruleWithArgs);
 
