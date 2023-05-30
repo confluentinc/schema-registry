@@ -1660,17 +1660,23 @@ public class ProtobufSchema implements ParsedSchema {
 
   @SuppressWarnings("unchecked")
   public static Map<String, String> findParams(Optional<OptionElement> meta) {
-    List<Map<String, String>> keyValues = (List<Map<String, String>>) findMeta(meta, PARAMS_FIELD);
-    if (keyValues == null) {
+    Object result = findMeta(meta, PARAMS_FIELD);
+    if (result == null) {
       return null;
+    } else if (result instanceof Map) {
+      return (Map<String, String>) result;
+    } else if (result instanceof List) {
+      List<Map<String, String>> keyValues = (List<Map<String, String>>) result;
+      Map<String, String> params = new LinkedHashMap<>();
+      for (Map<String, String> keyValue : keyValues) {
+        String key = keyValue.get(KEY_FIELD);
+        String value = keyValue.get(VALUE_FIELD);
+        params.put(key, value);
+      }
+      return params;
+    } else {
+      throw new IllegalStateException("Unrecognized params type " + result.getClass().getName());
     }
-    Map<String, String> params = new LinkedHashMap<>();
-    for (Map<String, String> keyValue : keyValues) {
-      String key = keyValue.get(KEY_FIELD);
-      String value = keyValue.get(VALUE_FIELD);
-      params.put(key, value);
-    }
-    return params;
   }
 
   @SuppressWarnings("unchecked")
