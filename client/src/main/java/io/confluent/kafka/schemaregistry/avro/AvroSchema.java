@@ -583,9 +583,7 @@ public class AvroSchema implements ParsedSchema {
             if (ruleTags.isEmpty()) {
               return fieldTransform(ctx, message, transform, fieldCtx);
             } else {
-              Set<String> intersect = new HashSet<>(fieldCtx.getTags());
-              intersect.retainAll(ruleTags);
-              if (!intersect.isEmpty()) {
+              if (!Collections.disjoint(fieldCtx.getTags(), ruleTags)) {
                 return fieldTransform(ctx, message, transform, fieldCtx);
               }
             }
@@ -664,12 +662,11 @@ public class AvroSchema implements ParsedSchema {
   }
 
   private Set<String> getInlineTags(Schema.Field field) {
-    Set<String> tags = new HashSet<>();
     Object prop = field.getObjectProp(TAGS);
     if (prop instanceof List) {
-      ((List<?>)prop).forEach(p -> tags.add(p.toString()));
+      return ((List<?>)prop).stream().map(Object::toString).collect(Collectors.toSet());
     }
-    return tags;
+    return Collections.emptySet();
   }
 
   private Set<String> getInlineTags(JsonNode tagNode) {
