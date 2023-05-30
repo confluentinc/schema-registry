@@ -1610,6 +1610,43 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testParams() {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package com.acme;\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "import \"google/protobuf/timestamp.proto\";\n"
+        + "message MyMessage {\n"
+        + " .google.protobuf.Timestamp MIT_DATE = 1;\n"
+        + " int64 MIT_LOC_ID = 2;\n"
+        + " int64 MIT_MI_ID = 3;\n"
+        + " int64 MIT_R_ID = 4;\n"
+        + " int32 MIT_COUNT = 5;\n"
+        + " .confluent.type.Decimal MIT_PRICE = 6 [(confluent.field_meta) = {\n"
+        + "  params: {\n"
+        + "   key: \"scale\",\n"
+        + "   value: \"2\"\n"
+        + "  }\n"
+        + " }];\n"
+        + " int64 MIT_PC_ID = 7;\n"
+        + " .google.protobuf.Timestamp MIT_CREATE_DATE = 8;\n"
+        + " int64 MIT_CREATE_BY_USER_ID = 9;\n"
+        + " .google.protobuf.Timestamp MIT_MODIFY_DATE = 10;\n"
+        + " int64 MIT_MODIFY_BY_USER_ID = 11;\n"
+        + " int64 MIT_CONCEPT_ID = 12;\n"
+        + " .confluent.type.Decimal MIT_ACTUAL_PRICE = 13 [(confluent.field_meta) = {\n"
+        + "  params: {\n"
+        + "   key: \"scale\",\n"
+        + "   value: \"2\"\n"
+        + "  }\n"
+        + " }];\n"
+        + "}";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    // Ensure we can process params when creating a dynamic schema
+    assertNotNull(schema.toDynamicSchema());
+  }
+
+
+  @Test
   public void testNormalization() {
     String schemaString = "syntax = \"proto3\";\n"
         + "package my.package;\n"
