@@ -22,11 +22,15 @@ import com.api.jsonata4java.expressions.Expressions;
 import com.api.jsonata4java.expressions.ParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.config.ConfigException;
 
 public class JsonataExecutor implements RuleExecutor {
@@ -38,6 +42,31 @@ public class JsonataExecutor implements RuleExecutor {
 
   private long timeoutMs = 60000;
   private int maxDepth = 1000;
+
+  private static final int DEFAULT_CACHE_SIZE = 100;
+
+  private final LoadingCache<String, Expressions> cache;
+
+  public JsonataExecutor() {
+    cache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_SIZE)
+        .build(new CacheLoader<String, Expressions>() {
+          @Override
+          public Expressions load(String expr) throws Exception {
+            try {
+              return Expressions.parse(expr);
+            } catch (ParseException e) {
+              throw new RuleException("Could not parse expression", e);
+            } catch (EvaluateRuntimeException ere) {
+              throw new RuleException("Could not evaluate expression", ere);
+            } catch (JsonProcessingException e) {
+              throw new RuleException("Could not parse message", e);
+            } catch (IOException e) {
+              throw new RuleException(e);
+            }
+          }
+        });
+  }
 
   @Override
   public void configure(Map<String, ?> configs) {
@@ -70,15 +99,13 @@ public class JsonataExecutor implements RuleExecutor {
     JsonNode jsonObj = (JsonNode) message;
     Expressions expr;
     try {
-      expr = Expressions.parse(ctx.rule().getExpr());
-    } catch (ParseException e) {
-      throw new RuleException("Could not parse expression", e);
-    } catch (EvaluateRuntimeException ere) {
-      throw new RuleException("Could not evaluate expression", ere);
-    } catch (JsonProcessingException e) {
-      throw new RuleException("Could not parse message", e);
-    } catch (IOException e) {
-      throw new RuleException(e);
+      expr = cache.get(ctx.rule().getExpr());
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof RuleException) {
+        throw (RuleException) e.getCause();
+      } else {
+        throw new RuleException("Could not get expression", e.getCause());
+      }
     }
     try {
       JsonNode result = expr.evaluate(jsonObj, timeoutMs, maxDepth);

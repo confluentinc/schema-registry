@@ -44,6 +44,7 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 
 /**
  * In envelope encryption, a user generates a data encryption key (DEK) locally, encrypts data with
@@ -247,11 +248,12 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   private static String getHeaderName(RuleContext ctx) {
-    return getEncryptPrefix(ctx) + (ctx.isKey() ? "key" : "value");
-  }
-
-  private static String getEncryptPrefix(RuleContext ctx) {
-    return ENCRYPT_PREFIX + ctx.rule().getName() + ".";
+    StringBuilder sb = new StringBuilder();
+    sb.append(ENCRYPT_PREFIX);
+    sb.append((ctx.rule().getName()));
+    sb.append(".");
+    sb.append(ctx.isKey() ? "key" : "value");
+    return sb.toString();
   }
 
   class FieldEncryptionExecutorTransform implements FieldTransform {
@@ -265,8 +267,12 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
     public void init(RuleContext ctx) throws RuleException {
       try {
         this.ctx = ctx;
-        String headerName = getHeaderName(ctx);
-        Header header = ctx.headers().lastHeader(headerName);
+        Headers headers = ctx.headers();
+        Header header = null;
+        if (headers.iterator().hasNext()) {
+          String headerName = getHeaderName(ctx);
+          header = ctx.headers().lastHeader(headerName);
+        }
         switch (ctx.ruleMode()) {
           case WRITE:
             if (header != null) {
