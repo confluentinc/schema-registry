@@ -23,6 +23,7 @@ import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.Optional;
@@ -39,7 +40,7 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
   }
 
   @Override
-  public String getKeyUrlPrefix() {
+  public String getKeyUrlPrefix(RuleContext ctx) {
     return AzureKmsClient.PREFIX;
   }
 

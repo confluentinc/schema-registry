@@ -109,6 +109,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
   protected Map<String, String> metadata;
+  protected boolean enableRuleServiceLoader;
   protected Map<String, Map<String, RuleBase>> ruleExecutors;
   protected Map<String, Map<String, RuleBase>> ruleActions;
   protected boolean isKey;
@@ -180,8 +181,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       MapPropertyParser parser = new MapPropertyParser();
       metadata = parser.parse(config.getLatestWithMetadataSpec());
     }
-    ruleExecutors = initRuleObjects(config, RULE_EXECUTORS, RuleExecutor.class);
-    ruleActions = initRuleObjects(config, RULE_ACTIONS, RuleAction.class);
+    enableRuleServiceLoader = config.enableRuleServiceLoader();
+    ruleExecutors = initRuleObjects(
+        config, RULE_EXECUTORS, RuleExecutor.class, enableRuleServiceLoader);
+    ruleActions = initRuleObjects(
+        config, RULE_ACTIONS, RuleAction.class, enableRuleServiceLoader);
   }
 
   protected void postOp(Object payload) {
@@ -193,7 +197,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   private Map<String, Map<String, RuleBase>> initRuleObjects(
-      AbstractKafkaSchemaSerDeConfig config, String configName, Class<? extends RuleBase> cls) {
+      AbstractKafkaSchemaSerDeConfig config, String configName,
+      Class<? extends RuleBase> cls, boolean enableRuleServiceLoader) {
     List<String> names = config.getList(configName);
     Map<String, Map<String, RuleBase>> ruleObjects = names.stream()
         .flatMap(n -> initRuleObject(n, config, configName)
@@ -207,7 +212,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
               );
               return e.getValue();
             }, (e1, e2) -> e1, LinkedHashMap::new)));
-    addRuleObjectsFromServiceLoader(ruleObjects, config, configName, cls);
+    if (enableRuleServiceLoader) {
+      addRuleObjectsFromServiceLoader(ruleObjects, config, configName, cls);
+    }
     return ruleObjects;
   }
 

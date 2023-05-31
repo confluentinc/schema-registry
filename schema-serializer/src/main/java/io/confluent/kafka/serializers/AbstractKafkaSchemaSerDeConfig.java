@@ -114,11 +114,15 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public static final String RULE_EXECUTORS = "rule.executors";
   public static final String RULE_EXECUTORS_DOCS =
-      " A comma-separated list of rule executor names.";
+      "A comma-separated list of rule executor names.";
 
   public static final String RULE_ACTIONS = "rule.actions";
   public static final String RULE_ACTIONS_DOCS =
-      " A comma-separated list of rule action names.";
+      "A comma-separated list of rule action names.";
+
+  public static final String RULE_SERVICE_LOADER_ENABLE = "rule.service.loader.enable";
+  public static final String RULE_SERVICE_LOADER_ENABLE_DOCS =
+      "Whether to enable the ServiceLoader for rule executors, defaults to true.";
 
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
@@ -277,6 +281,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, RULE_EXECUTORS_DOCS)
         .define(RULE_ACTIONS, Type.LIST, "",
                 Importance.LOW, RULE_ACTIONS_DOCS)
+        .define(RULE_SERVICE_LOADER_ENABLE, Type.BOOLEAN, true,
+            Importance.LOW, RULE_SERVICE_LOADER_ENABLE_DOCS)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
                 Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
@@ -378,6 +384,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public String getSchemaFormat() {
     return this.getString(SCHEMA_FORMAT);
+  }
+
+  public boolean enableRuleServiceLoader() {
+    return this.getBoolean(RULE_SERVICE_LOADER_ENABLE);
   }
 
   public ContextNameStrategy contextNameStrategy() {

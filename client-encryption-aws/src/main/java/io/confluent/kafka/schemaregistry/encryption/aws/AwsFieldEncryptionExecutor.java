@@ -25,6 +25,7 @@ import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.integration.awskms.AwsKmsClient;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -44,7 +45,7 @@ public class AwsFieldEncryptionExecutor extends FieldEncryptionExecutor {
   }
 
   @Override
-  public String getKeyUrlPrefix() {
+  public String getKeyUrlPrefix(RuleContext ctx) {
     return AwsKmsClient.PREFIX;
   }
 
