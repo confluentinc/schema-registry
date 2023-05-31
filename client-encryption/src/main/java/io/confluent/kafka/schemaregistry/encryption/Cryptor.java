@@ -30,21 +30,19 @@ public class Cryptor {
   public static final String RANDOM_KEY_FORMAT = "AES128_GCM";
   public static final String DETERMINISTIC_KEY_FORMAT = "AES256_SIV";
 
-  private final String dekFormat;
+  private final DekFormat dekFormat;
   private final KeyTemplate dekTemplate;
-  private final boolean isDeterministic;
 
-  public Cryptor(String dekFormat) throws GeneralSecurityException {
+  public Cryptor(DekFormat dekFormat) throws GeneralSecurityException {
     this.dekFormat = dekFormat;
-    com.google.crypto.tink.KeyTemplate keyTemplate = KeyTemplates.get(dekFormat);
+    com.google.crypto.tink.KeyTemplate keyTemplate = KeyTemplates.get(dekFormat.name());
     this.dekTemplate = com.google.crypto.tink.proto.KeyTemplate.newBuilder()
         .setTypeUrl(keyTemplate.getTypeUrl())
         .setValue(ByteString.copyFrom(keyTemplate.getValue()))
         .build();
-    this.isDeterministic = DETERMINISTIC_KEY_FORMAT.equals(dekFormat);
   }
 
-  public String getDekFormat() {
+  public DekFormat getDekFormat() {
     return dekFormat;
   }
 
@@ -56,7 +54,7 @@ public class Cryptor {
       throws GeneralSecurityException {
     // Use DEK to encrypt plaintext.
     byte[] ciphertext;
-    if (isDeterministic) {
+    if (dekFormat.isDeterministic()) {
       DeterministicAead aead = Registry.getPrimitive(
           dekTemplate.getTypeUrl(), dek, DeterministicAead.class);
       ciphertext = aead.encryptDeterministically(plaintext, associatedData);
@@ -71,7 +69,7 @@ public class Cryptor {
       throws GeneralSecurityException {
     try {
       // Use DEK to decrypt ciphertext.
-      if (isDeterministic) {
+      if (dekFormat.isDeterministic()) {
         DeterministicAead aead = Registry.getPrimitive(
             dekTemplate.getTypeUrl(), dek, DeterministicAead.class);
         return aead.decryptDeterministically(ciphertext, associatedData);
@@ -83,6 +81,22 @@ public class Cryptor {
              | BufferUnderflowException
              | NegativeArraySizeException e) {
       throw new GeneralSecurityException("invalid ciphertext", e);
+    }
+  }
+
+  public enum DekFormat {
+    AES128_GCM(false),
+    AES256_GCM(false),
+    AES256_SIV(true);
+
+    private boolean isDeterministic;
+
+    DekFormat(boolean isDeterministic) {
+      this.isDeterministic = isDeterministic;
+    }
+
+    public boolean isDeterministic() {
+      return isDeterministic;
     }
   }
 }
