@@ -40,16 +40,8 @@ public class HcVaultFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
   @Override
   public void configure(Map<String, ?> configs) {
-    try {
-      super.configure(configs);
-      this.tokenId = (String) configs.get(TOKEN_ID);
-      if (getDefaultKekId() != null) {
-        // HCVault client requires a keyUri
-        registerKmsClient(Optional.of(getDefaultKekId()));
-      }
-    } catch (GeneralSecurityException e) {
-      throw new IllegalArgumentException(e);
-    }
+    super.configure(configs);
+    this.tokenId = (String) configs.get(TOKEN_ID);
   }
 
   @Override

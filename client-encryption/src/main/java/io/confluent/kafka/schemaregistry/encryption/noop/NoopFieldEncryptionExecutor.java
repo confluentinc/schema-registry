@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Confluent Inc.
+ * Copyright 2023 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +14,22 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.encryption.local;
-
-import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS;
+package io.confluent.kafka.schemaregistry.encryption.noop;
 
 import com.google.crypto.tink.KmsClient;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.security.GeneralSecurityException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-public class LocalFieldEncryptionExecutor extends FieldEncryptionExecutor {
+public class NoopFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
-  public static final String LOCAL_SECRET = "secret";
-  public static final String LOCAL_OLD_SECRETS = "old.secrets";
-
-  private String secret;
-  private List<String> oldSecrets;
-
-  public LocalFieldEncryptionExecutor() {
+  public NoopFieldEncryptionExecutor() {
   }
 
   @Override
   public String getKeyUrlPrefix() {
-    return LocalKmsClient.PREFIX;
+    return NoopKmsClient.PREFIX;
   }
 
   @Override
@@ -49,22 +38,11 @@ public class LocalFieldEncryptionExecutor extends FieldEncryptionExecutor {
     // set the default kms id as empty
     ((Map<String, Object>) configs).put(FieldEncryptionExecutor.DEFAULT_KMS_KEY_ID, "");
     super.configure(configs);
-    secret = (String) configs.get(LOCAL_SECRET);
-    if (secret == null) {
-      throw new IllegalArgumentException("Missing property "
-          + RULE_EXECUTORS + ".<name>.param." + LOCAL_SECRET);
-    }
-    String oldSecretsStr = (String) configs.get(LOCAL_OLD_SECRETS);
-    if (oldSecretsStr != null) {
-      oldSecrets = Arrays.asList(oldSecretsStr.split(","));
-    } else {
-      oldSecrets = Collections.emptyList();
-    }
   }
 
   @Override
   public KmsClient registerKmsClient(Optional<String> kekId) throws GeneralSecurityException {
-    return LocalKmsClient.register(Optional.of(LocalKmsClient.PREFIX), secret, oldSecrets);
+    return NoopKmsClient.register(Optional.of(NoopKmsClient.PREFIX));
   }
 }
 

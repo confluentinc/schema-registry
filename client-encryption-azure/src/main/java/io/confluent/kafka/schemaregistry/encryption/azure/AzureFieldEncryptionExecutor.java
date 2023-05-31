@@ -45,24 +45,18 @@ public class AzureFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
   @Override
   public void configure(Map<String, ?> configs) {
-    try {
-      super.configure(configs);
-      String tenantId = (String) configs.get(TENANT_ID);
-      String clientId = (String) configs.get(CLIENT_ID);
-      String clientSecret = (String) configs.get(CLIENT_SECRET);
-      if (tenantId != null && clientId != null && clientSecret != null) {
-        credentials = new ClientSecretCredentialBuilder()
-            .tenantId(tenantId)
-            .clientId(clientId)
-            .clientSecret(clientSecret)
-            .build();
-      } else {
-        credentials = new DefaultAzureCredentialBuilder().build();
-      }
-      // register client w/o keyUri so it can be overridden
-      registerKmsClient(Optional.empty());
-    } catch (GeneralSecurityException e) {
-      throw new IllegalArgumentException(e);
+    super.configure(configs);
+    String tenantId = (String) configs.get(TENANT_ID);
+    String clientId = (String) configs.get(CLIENT_ID);
+    String clientSecret = (String) configs.get(CLIENT_SECRET);
+    if (tenantId != null && clientId != null && clientSecret != null) {
+      credentials = new ClientSecretCredentialBuilder()
+          .tenantId(tenantId)
+          .clientId(clientId)
+          .clientSecret(clientSecret)
+          .build();
+    } else {
+      credentials = new DefaultAzureCredentialBuilder().build();
     }
   }
 
