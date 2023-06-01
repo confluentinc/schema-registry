@@ -1,7 +1,6 @@
 package io.confluent.kafka.schemaregistry.client.security.bearerauth;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-import io.confluent.kafka.schemaregistry.client.security.bearerauth.Resources.MyFileTokenProvider;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -24,7 +23,7 @@ public class CustomBearerAuthCredentialProviderTest {
     Map<String, String> CONFIG_MAP = new HashMap<>();
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, LSRC_ID);
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, POOL_ID);
-    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS,
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_PROVIDER_CLASS,
         StaticTokenCredentialProvider.class.getName());
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_TOKEN_CONFIG, "custom-token");
 
@@ -45,7 +44,7 @@ public class CustomBearerAuthCredentialProviderTest {
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, LSRC_ID);
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, POOL_ID);
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_URL, tempFile.toString());
-    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS,
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_PROVIDER_CLASS,
         "io.confluent.kafka.schemaregistry.client.security.bearerauth.Resources.MyFileTokenProvider");
 
     BearerAuthCredentialProvider provider = new CustomBearerAuthCredentialProvider();

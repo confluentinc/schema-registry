@@ -56,8 +56,7 @@ public class CustomBearerAuthCredentialProvider implements BearerAuthCredentialP
   public void configure(Map<String, ?> map) {
     ConfigurationUtils cu = new ConfigurationUtils(map);
     String className = cu.validateString(
-        SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS);
-
+        SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_PROVIDER_CLASS);
     try {
       this.customBearerAuthCredentialProvider =
           (BearerAuthCredentialProvider) Class.forName(className)
@@ -66,7 +65,7 @@ public class CustomBearerAuthCredentialProvider implements BearerAuthCredentialP
     } catch (Exception e) {
       throw new ConfigException(String.format(
           "Unable to instantiate an object of class %s, failed with exception: ",
-          SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS
+          SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_PROVIDER_CLASS
       ) + e.getMessage());
     }
     targetSchemaRegistry = cu.validateString(

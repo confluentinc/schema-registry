@@ -65,9 +65,9 @@ public class SchemaRegistryClientConfig {
       "bearer.auth.cache.expiry.buffer.seconds";
   public static final short BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT = 300;
 
-  //Custom Token Related
-  public static final String BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS =
-      "bearer.auth.custom.token.provider.class";
+  //Custom bearer Auth related
+  public static final String BEARER_AUTH_CUSTOM_PROVIDER_CLASS =
+      "bearer.auth.custom.provider.class";
 
 
   public static void withClientSslSupport(ConfigDef configDef, String namespace) {

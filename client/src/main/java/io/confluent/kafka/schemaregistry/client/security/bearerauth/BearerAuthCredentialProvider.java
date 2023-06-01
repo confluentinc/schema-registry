@@ -22,8 +22,9 @@ import org.apache.kafka.common.Configurable;
 public interface BearerAuthCredentialProvider extends Configurable {
 
   /*
-  Making alias() default method as custom implementation loaded using CustomTokenProvider don't
-  need to Implement it.
+  Making alias() default method as custom implementation loaded using
+  CustomBearerAuthCredentialProvider via config bearer.auth.custom.provider.class don't need to
+  Implement it.
   */
   default String alias() {
     return null;

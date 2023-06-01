@@ -187,9 +187,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       + "if no value is specified. This value is ignored if it exceeds the remaining lifetime "
       + "of a token from the moment it is retrieved into schema registry.";
 
-  public static final String BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS = SchemaRegistryClientConfig
-      .BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS;
-  public static final String BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS_D0C =
+  public static final String BEARER_AUTH_CUSTOM_PROVIDER_CLASS = SchemaRegistryClientConfig
+      .BEARER_AUTH_CUSTOM_PROVIDER_CLASS;
+  public static final String BEARER_AUTH_CUSTOM_PROVIDER_CLASS_D0C =
       "Custom class which will provide the token credential. Needs to implement io.confluent.kafka"
           + ".schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider interface";
 
@@ -280,8 +280,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Type.SHORT, BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT, Range.between(0, 3600),
                 Importance.LOW,
                 BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DOC)
-        .define(BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS, Type.STRING,null, Importance.MEDIUM,
-            BEARER_AUTH_CUSTOM_TOKEN_PROVIDER_CLASS_D0C)
+        .define(BEARER_AUTH_CUSTOM_PROVIDER_CLASS, Type.STRING,null, Importance.MEDIUM,
+            BEARER_AUTH_CUSTOM_PROVIDER_CLASS_D0C)
         .define(CONTEXT_NAME_STRATEGY, Type.CLASS, CONTEXT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, CONTEXT_NAME_STRATEGY_DOC)
         .define(KEY_SUBJECT_NAME_STRATEGY, Type.CLASS, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
