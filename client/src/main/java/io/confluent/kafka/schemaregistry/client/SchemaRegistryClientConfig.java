@@ -28,11 +28,9 @@ public class SchemaRegistryClientConfig {
   public static final String SCHEMA_REGISTRY_USER_INFO_CONFIG =
       "schema.registry.basic.auth.user.info";
   public static final String USER_INFO_CONFIG = "basic.auth.user.info";
-  public static final String HTTP_CONNECT_TIMEOUT_MS =
-      "http.connect.timeout.ms";
+  public static final String HTTP_CONNECT_TIMEOUT_MS = "http.connect.timeout.ms";
   public static final int HTTP_CONNECT_TIMEOUT_MS_DEFAULT = 60000;
-  public static final String HTTP_READ_TIMEOUT_MS =
-      "http.read.timeout.ms";
+  public static final String HTTP_READ_TIMEOUT_MS = "http.read.timeout.ms";
   public static final int HTTP_READ_TIMEOUT_MS_DEFAULT = 60000;
 
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE = "bearer.auth.credentials.source";
@@ -66,15 +64,15 @@ public class SchemaRegistryClientConfig {
   }
 
   public static Integer getSchemaRegistryHttpConnectTimeoutMs(Map<String, ?> configs) {
-    return configs != null && configs.containsKey(SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS)
-        ? (Integer) configs.get(SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS)
-        : SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT;
+    return configs != null && configs.containsKey(HTTP_CONNECT_TIMEOUT_MS)
+        ? (Integer) configs.get(HTTP_CONNECT_TIMEOUT_MS)
+        : HTTP_CONNECT_TIMEOUT_MS_DEFAULT;
   }
 
   public static Integer getSchemaRegistryHttpReadTimeoutMs(Map<String, ?> configs) {
-    return configs != null && configs.containsKey(SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS)
-        ? (Integer) configs.get(SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS)
-        : SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT;
+    return configs != null && configs.containsKey(HTTP_READ_TIMEOUT_MS)
+        ? (Integer) configs.get(HTTP_READ_TIMEOUT_MS)
+        : HTTP_READ_TIMEOUT_MS_DEFAULT;
   }
 
 }
