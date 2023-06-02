@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.encryption.multikms;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.crypto.tink.KmsClient;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -28,8 +27,8 @@ import java.util.ServiceLoader;
 
 public class MultiKmsFieldEncryptionExecutor extends FieldEncryptionExecutor {
 
-  private Map<String, FieldEncryptionExecutor> executors;
-  private Map<String, Boolean> configured;
+  private final Map<String, FieldEncryptionExecutor> executors;
+  private final Map<String, Boolean> configured;
   private Map<String, ?> configs;
 
   public MultiKmsFieldEncryptionExecutor() {
@@ -44,11 +43,6 @@ public class MultiKmsFieldEncryptionExecutor extends FieldEncryptionExecutor {
     }
   }
 
-  @VisibleForTesting
-  public Map<String, FieldEncryptionExecutor> getExecutors() {
-    return executors;
-  }
-
   @Override
   public String getKeyUrlPrefix(RuleContext ctx) {
     String kmsType = ctx.getParameter(ENCRYPT_KMS_TYPE);
@@ -59,7 +53,6 @@ public class MultiKmsFieldEncryptionExecutor extends FieldEncryptionExecutor {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public void configure(Map<String, ?> configs) {
     this.configs = configs;
     super.configure(configs);
