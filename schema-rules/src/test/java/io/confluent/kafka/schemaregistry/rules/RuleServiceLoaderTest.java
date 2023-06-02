@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.rules;
 
 import static com.google.common.collect.ImmutableList.*;
 
-import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;

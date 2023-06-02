@@ -23,7 +23,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class AwsFieldEncryptionProperties implements FieldEncryptionProperties {
+public class AwsFieldEncryptionProperties extends FieldEncryptionProperties {
+
+  public AwsFieldEncryptionProperties(List<String> ruleNames) {
+    super(ruleNames);
+  }
 
   @Override
   public String getKeyId() {
@@ -31,8 +35,9 @@ public class AwsFieldEncryptionProperties implements FieldEncryptionProperties {
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey(List<String> ruleNames)
+  public Map<String, Object> getClientPropertiesWithoutKey()
       throws Exception {
+    List<String> ruleNames = getRuleNames();
     FakeAwsKms testClient = new FakeAwsKms(Collections.singletonList(getKeyId()));
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");

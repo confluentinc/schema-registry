@@ -28,7 +28,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class GcpFieldEncryptionProperties implements FieldEncryptionProperties {
+public class GcpFieldEncryptionProperties extends FieldEncryptionProperties {
+
+  public GcpFieldEncryptionProperties(List<String> ruleNames) {
+    super(ruleNames);
+  }
 
   @Override
   public String getKeyId() {
@@ -36,8 +40,9 @@ public class GcpFieldEncryptionProperties implements FieldEncryptionProperties {
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey(List<String> ruleNames)
+  public Map<String, Object> getClientPropertiesWithoutKey()
       throws Exception {
+    List<String> ruleNames = getRuleNames();
     // The following dummy values are borrowed from Google Tink tests
     String clientId = "111876397550362269561";
     String clientEmail = "unit-and-integration-testing@tink-test-infrastructure.iam.gserviceaccount.com";

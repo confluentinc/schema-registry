@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.encryption.aws;
 
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import java.util.List;
 
 public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
 
@@ -26,7 +27,7 @@ public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties() {
-    return new AwsFieldEncryptionProperties();
+  protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
+    return new AwsFieldEncryptionProperties(ruleNames);
   }
 }

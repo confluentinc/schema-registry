@@ -20,12 +20,23 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.List;
 import java.util.Map;
 
-public interface FieldEncryptionProperties {
+public abstract class FieldEncryptionProperties {
 
-  String getKeyId();
+  private List<String> ruleNames;
 
-  default Map<String, Object> getClientProperties(List<String> ruleNames) throws Exception {
-    Map<String, Object> props = getClientPropertiesWithoutKey(ruleNames);
+  public FieldEncryptionProperties(List<String> ruleNames) {
+    this.ruleNames = ruleNames;
+  }
+
+  public List<String> getRuleNames() {
+    return ruleNames;
+  }
+
+  public abstract String getKeyId();
+
+  public Map<String, Object> getClientProperties() throws Exception {
+    List<String> ruleNames = getRuleNames();
+    Map<String, Object> props = getClientPropertiesWithoutKey();
     for (String ruleName : ruleNames) {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
               + ".param." + DEFAULT_KMS_KEY_ID,
@@ -34,6 +45,6 @@ public interface FieldEncryptionProperties {
     return props;
   }
 
-  Map<String, Object> getClientPropertiesWithoutKey(List<String> ruleNames) throws Exception;
+  public abstract Map<String, Object> getClientPropertiesWithoutKey() throws Exception;
 }
 

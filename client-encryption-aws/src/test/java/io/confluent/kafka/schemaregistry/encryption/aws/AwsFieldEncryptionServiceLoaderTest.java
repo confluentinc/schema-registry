@@ -16,19 +16,30 @@
 
 package io.confluent.kafka.schemaregistry.encryption.aws;
 
+import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
+
+import com.google.common.collect.ImmutableList;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
-import io.confluent.kafka.schemaregistry.encryption.RestApiFieldEncryptionTest;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
-public class RestApiAwsFieldEncryptionTest extends RestApiFieldEncryptionTest {
+public class AwsFieldEncryptionServiceLoaderTest extends FieldEncryptionExecutorTest {
 
-  public RestApiAwsFieldEncryptionTest() throws Exception {
+  public AwsFieldEncryptionServiceLoaderTest() throws Exception {
     super();
   }
 
   @Override
   protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new AwsFieldEncryptionProperties(ruleNames);
+    return new AwsFieldEncryptionProperties(ImmutableList.of(DEFAULT_NAME));
+  }
+
+  @Override
+  protected Metadata getMetadata(Map<String, String> properties) {
+    properties.put("encrypt.kms.type", "aws");
+    return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 }
-
