@@ -39,7 +39,7 @@ public class AwsFieldEncryptionServiceLoaderTest extends FieldEncryptionExecutor
 
   @Override
   protected Metadata getMetadata(Map<String, String> properties) {
-    properties.put("encrypt.kms.type", "aws");
+    properties.put("encrypt.kms.type", "aws-kms");
     return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 }

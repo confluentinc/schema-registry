@@ -39,7 +39,7 @@ public class AzureFieldEncryptionServiceLoaderTest extends FieldEncryptionExecut
 
   @Override
   protected Metadata getMetadata(Map<String, String> properties) {
-    properties.put("encrypt.kms.type", "azure");
+    properties.put("encrypt.kms.type", "azure-kms");
     return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 }

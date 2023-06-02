@@ -39,7 +39,7 @@ public class LocalFieldEncryptionServiceLoaderTest extends FieldEncryptionExecut
 
   @Override
   protected Metadata getMetadata(Map<String, String> properties) {
-    properties.put("encrypt.kms.type", "local");
+    properties.put("encrypt.kms.type", "local-kms");
     return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 }
