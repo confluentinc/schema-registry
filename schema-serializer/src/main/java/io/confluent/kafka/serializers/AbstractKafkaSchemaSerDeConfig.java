@@ -76,12 +76,14 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       + " the Schema of the object to be serialized";
   public static final String SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS = SchemaRegistryClientConfig
       .SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS;
-  public static final int SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT = 60000;
+  public static final int SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT =
+      SchemaRegistryClientConfig.SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT;
   public static final String SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DOC = "http connection timeout"
       + " in milli seconds for schema registry client";
   public static final String SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS = SchemaRegistryClientConfig
       .SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS;
-  public static final int SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT = 60000;
+  public static final int SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT =
+      SchemaRegistryClientConfig.SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT;;
   public static final String SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DOC = "http read timeout"
       + " in milli seconds for schema registry client";
 

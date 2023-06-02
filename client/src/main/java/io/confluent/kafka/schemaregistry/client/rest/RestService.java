@@ -186,10 +186,10 @@ public class RestService implements Configurable {
         (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
     String bearerCredentialsSource =
         (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
-    this.httpConnectTimeoutMs = (Integer) configs.get(
-        SchemaRegistryClientConfig.SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS);
-    this.httpReadTimeoutMs = (Integer) configs.get(
-        SchemaRegistryClientConfig.SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS);
+    this.httpConnectTimeoutMs = SchemaRegistryClientConfig
+        .getSchemaRegistryHttpConnectTimeoutMs(configs);
+    this.httpReadTimeoutMs = SchemaRegistryClientConfig
+        .getSchemaRegistryHttpReadTimeoutMs(configs);
 
     if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
       throw new ConfigException(String.format(

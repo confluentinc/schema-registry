@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.swagger.models.auth.In;
+import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 
 public class SchemaRegistryClientConfig {
@@ -29,8 +31,10 @@ public class SchemaRegistryClientConfig {
   public static final String USER_INFO_CONFIG = "basic.auth.user.info";
   public static final String SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS =
       "srclient.http.connect.timeout.ms";
+  public static final int SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT = 60000;
   public static final String SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS =
       "srclient.http.read.timeout.ms";
+  public static final int SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT = 60000;
 
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE = "bearer.auth.credentials.source";
   public static final String BEARER_AUTH_TOKEN_CONFIG = "bearer.auth.token";
@@ -60,6 +64,18 @@ public class SchemaRegistryClientConfig {
   private static ConfigDef.Importance importanceFor(
       org.apache.kafka.common.config.ConfigDef.Importance importance) {
     return ConfigDef.Importance.valueOf(importance.name());
+  }
+
+  public static Integer getSchemaRegistryHttpConnectTimeoutMs(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS)
+        ? (Integer) configs.get(SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS)
+        : SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT;
+  }
+
+  public static Integer getSchemaRegistryHttpReadTimeoutMs(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS)
+        ? (Integer) configs.get(SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS)
+        : SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT;
   }
 
 }
