@@ -144,8 +144,7 @@ public class RestService implements Configurable {
       new TypeReference<ServerClusterId>() {
       };
 
-  private static final int HTTP_CONNECT_TIMEOUT_MS = 60000;
-  private static final int HTTP_READ_TIMEOUT_MS = 60000;
+
 
   private static final int JSON_PARSE_ERROR_CODE = 50005;
   private static ObjectMapper jsonDeserializer = JacksonMapper.INSTANCE;
@@ -161,6 +160,8 @@ public class RestService implements Configurable {
 
   private UrlList baseUrls;
   private SSLSocketFactory sslSocketFactory;
+  private int httpConnectTimeoutMs;
+  private int httpReadTimeoutMs;
   private HostnameVerifier hostnameVerifier;
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
   private BearerAuthCredentialProvider bearerAuthCredentialProvider;
@@ -185,6 +186,10 @@ public class RestService implements Configurable {
         (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
     String bearerCredentialsSource =
         (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
+    this.httpConnectTimeoutMs = (int)configs.get(
+        SchemaRegistryClientConfig.SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS);
+    this.httpReadTimeoutMs = (int) configs.get(
+        SchemaRegistryClientConfig.SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS);
 
     if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
       throw new ConfigException(String.format(
@@ -317,8 +322,8 @@ public class RestService implements Configurable {
       connection = (HttpURLConnection) url.openConnection(proxy);
     }
 
-    connection.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-    connection.setReadTimeout(HTTP_READ_TIMEOUT_MS);
+    connection.setConnectTimeout(this.httpConnectTimeoutMs);
+    connection.setReadTimeout(this.httpReadTimeoutMs);
 
     setupSsl(connection);
     connection.setRequestMethod(method);

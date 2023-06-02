@@ -74,6 +74,16 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String LATEST_COMPATIBILITY_STRICT_DOC =
       "Whether to check for backward compatibility between the latest subject version and "
       + " the Schema of the object to be serialized";
+  public static final String SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS = SchemaRegistryClientConfig
+      .SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS;
+  public static final int SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT = 60000;
+  public static final String SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DOC = "http connection timeout"
+      + " in milli seconds for schema registry client";
+  public static final String SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS = SchemaRegistryClientConfig
+      .SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS;
+  public static final int SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT = 60000;
+  public static final String SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DOC = "http read timeout"
+      + " in milli seconds for schema registry client";
 
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
@@ -167,7 +177,13 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .define(PROXY_HOST, Type.STRING, PROXY_HOST_DEFAULT,
                 Importance.LOW, PROXY_HOST_DOC)
         .define(PROXY_PORT, Type.INT, PROXY_PORT_DEFAULT,
-                Importance.LOW, PROXY_PORT_DOC);
+                Importance.LOW, PROXY_PORT_DOC)
+        .define(SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS, Type.INT,
+            SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT, Importance.LOW,
+            SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DOC)
+        .define(SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS, Type.INT,
+            SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT, Importance.LOW,
+            SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DOC);
     SchemaRegistryClientConfig.withClientSslSupport(
         configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
     return configDef;
