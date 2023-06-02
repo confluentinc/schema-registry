@@ -237,6 +237,34 @@ public class RestServiceTest {
   }
 
   @Test
+  public void testConfigureHttpConnection() throws Exception {
+    RestService restService = new RestService("http://localhost:8081");
+
+    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
+    InputStream inputStream = createNiceMock(InputStream.class);
+
+    Map<String, Object> configs = new HashMap<>();
+    configs.put("http.connect.timeout.ms", "10");
+    configs.put("http.read.timeout.ms", "10");
+    restService.configure(configs);
+
+    expect(url.openConnection()).andReturn(httpURLConnection);
+    expectNew(URL.class, anyString()).andReturn(url);
+    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
+    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
+    expect(inputStream.read(anyObject(), anyInt(), anyInt()))
+        .andDelegateTo(createInputStream("[\"abc\"]")).anyTimes();
+
+    replay(URL.class, url);
+    replay(HttpURLConnection.class, httpURLConnection);
+    replay(InputStream.class, inputStream);
+
+    restService.getAllSubjects();
+
+    verify(httpURLConnection);
+  }
+
+  @Test
   public void testSetProxy() throws Exception {
     RestService restService = new RestService("http://localhost:8081");
 

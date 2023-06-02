@@ -182,14 +182,13 @@ public class RestService implements Configurable {
 
   @Override
   public void configure(Map<String, ?> configs) {
+    setHttpConnectTimeoutMs(SchemaRegistryClientConfig.getHttpConnectTimeoutMs(configs));
+    setHttpReadTimeoutMs(SchemaRegistryClientConfig.getHttpReadTimeoutMs(configs));
+
     String basicCredentialsSource =
         (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
     String bearerCredentialsSource =
         (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
-    this.httpConnectTimeoutMs = SchemaRegistryClientConfig
-        .getSchemaRegistryHttpConnectTimeoutMs(configs);
-    this.httpReadTimeoutMs = SchemaRegistryClientConfig
-        .getSchemaRegistryHttpReadTimeoutMs(configs);
 
     if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
       throw new ConfigException(String.format(
@@ -236,6 +235,14 @@ public class RestService implements Configurable {
 
   public void setSslSocketFactory(SSLSocketFactory sslSocketFactory) {
     this.sslSocketFactory = sslSocketFactory;
+  }
+
+  public void setHttpConnectTimeoutMs(Integer httpConnectTimeoutMs) {
+    this.httpConnectTimeoutMs = httpConnectTimeoutMs;
+  }
+
+  public void setHttpReadTimeoutMs(Integer httpReadTimeoutMs) {
+    this.httpReadTimeoutMs = httpReadTimeoutMs;
   }
 
   public void setHostnameVerifier(HostnameVerifier hostnameVerifier) {

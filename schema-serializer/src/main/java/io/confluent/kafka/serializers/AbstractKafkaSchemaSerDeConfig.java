@@ -74,17 +74,17 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String LATEST_COMPATIBILITY_STRICT_DOC =
       "Whether to check for backward compatibility between the latest subject version and "
       + " the Schema of the object to be serialized";
-  public static final String SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS = SchemaRegistryClientConfig
-      .SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS;
-  public static final int SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT =
-      SchemaRegistryClientConfig.SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT;
-  public static final String SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DOC = "http connection timeout"
+  public static final String HTTP_CONNECT_TIMEOUT_MS = SchemaRegistryClientConfig
+      .HTTP_CONNECT_TIMEOUT_MS;
+  public static final int HTTP_CONNECT_TIMEOUT_MS_DEFAULT =
+      SchemaRegistryClientConfig.HTTP_CONNECT_TIMEOUT_MS_DEFAULT;
+  public static final String HTTP_CONNECT_TIMEOUT_MS_DOC = "http connection timeout"
       + " in milli seconds for schema registry client";
-  public static final String SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS = SchemaRegistryClientConfig
-      .SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS;
-  public static final int SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT =
-      SchemaRegistryClientConfig.SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT;
-  public static final String SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DOC = "http read timeout"
+  public static final String HTTP_READ_TIMEOUT_MS = SchemaRegistryClientConfig
+      .HTTP_READ_TIMEOUT_MS;
+  public static final int HTTP_READ_TIMEOUT_MS_DEFAULT =
+      SchemaRegistryClientConfig.HTTP_READ_TIMEOUT_MS_DEFAULT;
+  public static final String HTTP_READ_TIMEOUT_MS_DOC = "http read timeout"
       + " in milli seconds for schema registry client";
 
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
@@ -180,12 +180,12 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, PROXY_HOST_DOC)
         .define(PROXY_PORT, Type.INT, PROXY_PORT_DEFAULT,
                 Importance.LOW, PROXY_PORT_DOC)
-        .define(SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS, Type.INT,
-            SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT, Importance.LOW,
-            SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DOC)
-        .define(SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS, Type.INT,
-            SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT, Importance.LOW,
-            SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DOC);
+        .define(HTTP_CONNECT_TIMEOUT_MS, Type.INT,
+            HTTP_CONNECT_TIMEOUT_MS_DEFAULT, Importance.LOW,
+            HTTP_CONNECT_TIMEOUT_MS_DOC)
+        .define(HTTP_READ_TIMEOUT_MS, Type.INT,
+            HTTP_READ_TIMEOUT_MS_DEFAULT, Importance.LOW,
+            HTTP_READ_TIMEOUT_MS_DOC);
     SchemaRegistryClientConfig.withClientSslSupport(
         configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
     return configDef;

@@ -63,16 +63,27 @@ public class SchemaRegistryClientConfig {
     return ConfigDef.Importance.valueOf(importance.name());
   }
 
-  public static Integer getSchemaRegistryHttpConnectTimeoutMs(Map<String, ?> configs) {
-    return configs != null && configs.containsKey(HTTP_CONNECT_TIMEOUT_MS)
-        ? (Integer) configs.get(HTTP_CONNECT_TIMEOUT_MS)
-        : HTTP_CONNECT_TIMEOUT_MS_DEFAULT;
+  public static Integer getHttpConnectTimeoutMs(Map<String, ?> configs) {
+    if (configs != null && configs.containsKey(HTTP_CONNECT_TIMEOUT_MS)) {
+      Object httpConnectTimeoutMsVal
+          = configs.get(SchemaRegistryClientConfig.HTTP_CONNECT_TIMEOUT_MS);
+      return httpConnectTimeoutMsVal instanceof String
+          ? Integer.valueOf((String) httpConnectTimeoutMsVal)
+          : (Integer) httpConnectTimeoutMsVal;
+    } else {
+      return HTTP_CONNECT_TIMEOUT_MS_DEFAULT;
+    }
   }
 
-  public static Integer getSchemaRegistryHttpReadTimeoutMs(Map<String, ?> configs) {
-    return configs != null && configs.containsKey(HTTP_READ_TIMEOUT_MS)
-        ? (Integer) configs.get(HTTP_READ_TIMEOUT_MS)
-        : HTTP_READ_TIMEOUT_MS_DEFAULT;
+  public static Integer getHttpReadTimeoutMs(Map<String, ?> configs) {
+    if (configs != null && configs.containsKey(HTTP_READ_TIMEOUT_MS)) {
+      Object httpReadTimeoutMsVal
+          = configs.get(SchemaRegistryClientConfig.HTTP_READ_TIMEOUT_MS);
+      return httpReadTimeoutMsVal instanceof String
+          ? Integer.valueOf((String) httpReadTimeoutMsVal)
+          : (Integer) httpReadTimeoutMsVal;
+    } else {
+      return HTTP_READ_TIMEOUT_MS_DEFAULT;
+    }
   }
-
 }
