@@ -78,13 +78,13 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       .HTTP_CONNECT_TIMEOUT_MS;
   public static final int HTTP_CONNECT_TIMEOUT_MS_DEFAULT =
       SchemaRegistryClientConfig.HTTP_CONNECT_TIMEOUT_MS_DEFAULT;
-  public static final String HTTP_CONNECT_TIMEOUT_MS_DOC = "http connection timeout"
+  public static final String HTTP_CONNECT_TIMEOUT_MS_DOC = "Specify the http connection timeout"
       + " in milliseconds for schema registry client";
   public static final String HTTP_READ_TIMEOUT_MS = SchemaRegistryClientConfig
       .HTTP_READ_TIMEOUT_MS;
   public static final int HTTP_READ_TIMEOUT_MS_DEFAULT =
       SchemaRegistryClientConfig.HTTP_READ_TIMEOUT_MS_DEFAULT;
-  public static final String HTTP_READ_TIMEOUT_MS_DOC = "http read timeout"
+  public static final String HTTP_READ_TIMEOUT_MS_DOC = "Specify the http read timeout"
       + " in milliseconds for schema registry client";
 
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
