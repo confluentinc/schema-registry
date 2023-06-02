@@ -33,7 +33,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class AzureFieldEncryptionProperties implements FieldEncryptionProperties {
+public class AzureFieldEncryptionProperties extends FieldEncryptionProperties {
+
+  public AzureFieldEncryptionProperties(List<String> ruleNames) {
+    super(ruleNames);
+  }
 
   @Override
   public String getKeyId() {
@@ -41,8 +45,9 @@ public class AzureFieldEncryptionProperties implements FieldEncryptionProperties
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey(List<String> ruleNames)
+  public Map<String, Object> getClientPropertiesWithoutKey()
       throws Exception {
+    List<String> ruleNames = getRuleNames();
     CryptographyClient testClient = mockClient(getKeyId());
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");

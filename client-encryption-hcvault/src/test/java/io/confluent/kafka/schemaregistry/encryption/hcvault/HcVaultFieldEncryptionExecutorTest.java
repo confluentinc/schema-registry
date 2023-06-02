@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import java.util.List;
 
 public class HcVaultFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
 
@@ -26,8 +27,8 @@ public class HcVaultFieldEncryptionExecutorTest extends FieldEncryptionExecutorT
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties() {
-    return new HcVaultFieldEncryptionProperties();
+  protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
+    return new HcVaultFieldEncryptionProperties(ruleNames);
   }
 }
 

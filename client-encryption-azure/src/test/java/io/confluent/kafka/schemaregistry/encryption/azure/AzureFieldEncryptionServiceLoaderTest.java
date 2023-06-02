@@ -16,19 +16,30 @@
 
 package io.confluent.kafka.schemaregistry.encryption.azure;
 
+import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
+
+import com.google.common.collect.ImmutableList;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
-import io.confluent.kafka.schemaregistry.encryption.RestApiFieldEncryptionTest;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
-public class RestApiAzureFieldEncryptionTest extends RestApiFieldEncryptionTest {
+public class AzureFieldEncryptionServiceLoaderTest extends FieldEncryptionExecutorTest {
 
-  public RestApiAzureFieldEncryptionTest() throws Exception {
+  public AzureFieldEncryptionServiceLoaderTest() throws Exception {
     super();
   }
 
   @Override
   protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new AzureFieldEncryptionProperties(ruleNames);
+    return new AzureFieldEncryptionProperties(ImmutableList.of(DEFAULT_NAME));
+  }
+
+  @Override
+  protected Metadata getMetadata(Map<String, String> properties) {
+    properties.put("encrypt.kms.type", "azure");
+    return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 }
-

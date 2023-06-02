@@ -59,7 +59,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     super(1, true);
   }
 
-  protected abstract FieldEncryptionProperties getFieldEncryptionProperties();
+  protected abstract FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames);
 
   @Before
   public void setUp() throws Exception {
@@ -82,9 +82,9 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
   @Test
   public void testFieldEncryption() throws Exception {
     String topic = "test";
-    FieldEncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties();
     List<String> ruleNames = ImmutableList.of("myRule");
-    Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties(ruleNames);
+    FieldEncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
+    Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties();
     FakeTicker fakeTicker = new FakeTicker();
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(
         restApp.restClient,

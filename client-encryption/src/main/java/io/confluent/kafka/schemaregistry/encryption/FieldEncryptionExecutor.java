@@ -61,14 +61,16 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
 
   public static final String DEFAULT_KMS_KEY_ID = "default.kms.key.id";
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
+  public static final String ENCRYPT_KMS_TYPE = "encrypt.kms.type";
   public static final String ENCRYPT_DEK_ALGORITHM = "encrypt.dek.algorithm";
 
-  private static final String ENCRYPT_PREFIX = "encrypt.";
-
+  public static final String KMS_TYPE_SUFFIX = "-kms://";
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String CACHE_EXPIRY_SECS = "cache.expiry.secs";
   public static final String CACHE_SIZE = "cache.size";
   public static final String TEST_CLIENT = "test.client";
+
+  private static final String ENCRYPT_PREFIX = "encrypt.";
 
   private static final byte VERSION = (byte) 0;
   private static final int LENGTH_VERSION = 1;
@@ -204,8 +206,8 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   // Visible for testing
-  public void setCryptor(DekFormat dekFormat, Cryptor cryptor) {
-    cryptors.put(dekFormat, cryptor);
+  public Map<DekFormat, Cryptor> getCryptors() {
+    return cryptors;
   }
 
   private static byte[] toBytes(FieldContext fieldCtx, Object obj) {
@@ -287,7 +289,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
           default:
             throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
         }
-      } catch (GeneralSecurityException e) {
+      } catch (GeneralSecurityException | RuntimeException e) {
         throw new RuleException(e);
       }
     }

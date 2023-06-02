@@ -23,7 +23,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class LocalFieldEncryptionProperties implements FieldEncryptionProperties {
+public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
+
+  public LocalFieldEncryptionProperties(List<String> ruleNames) {
+    super(ruleNames);
+  }
 
   @Override
   public String getKeyId() {
@@ -31,8 +35,9 @@ public class LocalFieldEncryptionProperties implements FieldEncryptionProperties
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey(List<String> ruleNames)
+  public Map<String, Object> getClientPropertiesWithoutKey()
       throws Exception {
+    List<String> ruleNames = getRuleNames();
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");

@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.encryption.local;
 
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import java.util.List;
 
 public class LocalFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
 
@@ -26,8 +27,8 @@ public class LocalFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties() {
-    return new LocalFieldEncryptionProperties();
+  protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
+    return new LocalFieldEncryptionProperties(ruleNames);
   }
 }
 
