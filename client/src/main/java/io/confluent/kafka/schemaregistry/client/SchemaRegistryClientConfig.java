@@ -28,12 +28,12 @@ public class SchemaRegistryClientConfig {
   public static final String SCHEMA_REGISTRY_USER_INFO_CONFIG =
       "schema.registry.basic.auth.user.info";
   public static final String USER_INFO_CONFIG = "basic.auth.user.info";
-  public static final String SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS =
-      "srclient.http.connect.timeout.ms";
-  public static final int SCHEMA_REGISTRY_HTTP_CONNECT_TIMEOUT_MS_DEFAULT = 60000;
-  public static final String SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS =
-      "srclient.http.read.timeout.ms";
-  public static final int SCHEMA_REGISTRY_HTTP_READ_TIMEOUT_MS_DEFAULT = 60000;
+  public static final String HTTP_CONNECT_TIMEOUT_MS =
+      "http.connect.timeout.ms";
+  public static final int HTTP_CONNECT_TIMEOUT_MS_DEFAULT = 60000;
+  public static final String HTTP_READ_TIMEOUT_MS =
+      "http.read.timeout.ms";
+  public static final int HTTP_READ_TIMEOUT_MS_DEFAULT = 60000;
 
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE = "bearer.auth.credentials.source";
   public static final String BEARER_AUTH_TOKEN_CONFIG = "bearer.auth.token";
