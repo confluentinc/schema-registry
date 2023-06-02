@@ -64,7 +64,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   public static final String ENCRYPT_KMS_TYPE = "encrypt.kms.type";
   public static final String ENCRYPT_DEK_ALGORITHM = "encrypt.dek.algorithm";
 
-  public static final String KMS_TYPE_SUFFIX = "-kms://";
+  public static final String KMS_TYPE_SUFFIX = "://";
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String CACHE_EXPIRY_SECS = "cache.expiry.secs";
   public static final String CACHE_SIZE = "cache.size";

@@ -39,7 +39,7 @@ public class GcpFieldEncryptionServiceLoaderTest extends FieldEncryptionExecutor
 
   @Override
   protected Metadata getMetadata(Map<String, String> properties) {
-    properties.put("encrypt.kms.type", "gcp");
+    properties.put("encrypt.kms.type", "gcp-kms");
     return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 }
