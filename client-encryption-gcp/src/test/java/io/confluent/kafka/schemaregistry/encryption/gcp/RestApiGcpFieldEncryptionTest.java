@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.encryption.gcp;
 
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.schemaregistry.encryption.RestApiFieldEncryptionTest;
+import java.util.List;
 
 public class RestApiGcpFieldEncryptionTest extends RestApiFieldEncryptionTest {
 
@@ -26,8 +27,8 @@ public class RestApiGcpFieldEncryptionTest extends RestApiFieldEncryptionTest {
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties() {
-    return new GcpFieldEncryptionProperties();
+  protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
+    return new GcpFieldEncryptionProperties(ruleNames);
   }
 }
 

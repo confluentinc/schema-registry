@@ -20,6 +20,7 @@ import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE
 
 import com.google.crypto.tink.KmsClient;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -39,7 +40,7 @@ public class LocalFieldEncryptionExecutor extends FieldEncryptionExecutor {
   }
 
   @Override
-  public String getKeyUrlPrefix() {
+  public String getKeyUrlPrefix(RuleContext ctx) {
     return LocalKmsClient.PREFIX;
   }
 

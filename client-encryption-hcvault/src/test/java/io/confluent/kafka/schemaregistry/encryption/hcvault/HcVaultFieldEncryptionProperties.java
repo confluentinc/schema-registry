@@ -34,7 +34,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class HcVaultFieldEncryptionProperties implements FieldEncryptionProperties {
+public class HcVaultFieldEncryptionProperties extends FieldEncryptionProperties {
+
+  public HcVaultFieldEncryptionProperties(List<String> ruleNames) {
+    super(ruleNames);
+  }
 
   @Override
   public String getKeyId() {
@@ -42,7 +46,8 @@ public class HcVaultFieldEncryptionProperties implements FieldEncryptionProperti
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey(List<String> ruleNames) throws Exception {
+  public Map<String, Object> getClientPropertiesWithoutKey() throws Exception {
+    List<String> ruleNames = getRuleNames();
     Vault testClient = mockClient(getKeyId());
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");

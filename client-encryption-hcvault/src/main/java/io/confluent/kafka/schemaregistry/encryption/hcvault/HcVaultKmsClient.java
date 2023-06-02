@@ -33,7 +33,7 @@ import java.security.GeneralSecurityException;
  */
 public class HcVaultKmsClient implements KmsClient {
 
-  public static final String PREFIX = "hcvault://";
+  public static final String PREFIX = "hcvault-kms://";
 
   private String keyUri;
   private Vault vault;

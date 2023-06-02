@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Confluent Inc.
+ * Copyright 2023 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,30 @@
 
 package io.confluent.kafka.schemaregistry.encryption.local;
 
+import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
+
+import com.google.common.collect.ImmutableList;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
-import io.confluent.kafka.schemaregistry.encryption.RestApiFieldEncryptionTest;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
-public class RestApiLocalFieldEncryptionTest extends RestApiFieldEncryptionTest {
+public class LocalFieldEncryptionServiceLoaderTest extends FieldEncryptionExecutorTest {
 
-  public RestApiLocalFieldEncryptionTest() throws Exception {
+  public LocalFieldEncryptionServiceLoaderTest() throws Exception {
     super();
   }
 
   @Override
   protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new LocalFieldEncryptionProperties(ruleNames);
+    return new LocalFieldEncryptionProperties(ImmutableList.of(DEFAULT_NAME));
+  }
+
+  @Override
+  protected Metadata getMetadata(Map<String, String> properties) {
+    properties.put("encrypt.kms.type", "local");
+    return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 }
-

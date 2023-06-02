@@ -61,14 +61,16 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
 
   public static final String DEFAULT_KMS_KEY_ID = "default.kms.key.id";
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
+  public static final String ENCRYPT_KMS_TYPE = "encrypt.kms.type";
   public static final String ENCRYPT_DEK_ALGORITHM = "encrypt.dek.algorithm";
 
-  private static final String ENCRYPT_PREFIX = "encrypt.";
-
+  public static final String KMS_TYPE_SUFFIX = "-kms://";
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String CACHE_EXPIRY_SECS = "cache.expiry.secs";
   public static final String CACHE_SIZE = "cache.size";
   public static final String TEST_CLIENT = "test.client";
+
+  private static final String ENCRYPT_PREFIX = "encrypt.";
 
   private static final byte VERSION = (byte) 0;
   private static final int LENGTH_VERSION = 1;
@@ -76,7 +78,7 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   private static final int LENGTH_KEK_ID = 4;
   private static final int LENGTH_DEK_FORMAT = 4;
 
-  private String defaultKekId;
+  private String defaultKeyId;
   private Map<DekFormat, Cryptor> cryptors;
   private int cacheExpirySecs = 300;
   private int cacheSize = 1000;
@@ -97,20 +99,19 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
 
-  public abstract String getKeyUrlPrefix();
+  public abstract String getKeyUrlPrefix(RuleContext ctx);
 
   /**
    * @return true if this client does support {@code keyUri}
    */
   public boolean doesSupport(String keyUri) {
-    return keyUri.toLowerCase(Locale.US).startsWith(getKeyUrlPrefix());
+    return keyUri.toLowerCase(Locale.US).startsWith(getKeyUrlPrefix(null));
   }
 
   @Override
   public void configure(Map<String, ?> configs) {
-    String keyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
     // Key id is not mandatory for decryption
-    this.defaultKekId = keyId != null ? getKeyUrlPrefix() + keyId : null;
+    this.defaultKeyId = (String) configs.get(DEFAULT_KMS_KEY_ID);
     Object cacheExpirySecsConfig = configs.get(CACHE_EXPIRY_SECS);
     if (cacheExpirySecsConfig != null) {
       try {
@@ -172,10 +173,6 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   public abstract KmsClient registerKmsClient(Optional<String> kekId)
       throws GeneralSecurityException;
 
-  public String getDefaultKekId() {
-    return defaultKekId;
-  }
-
   public Object getTestClient() {
     return testClient;
   }
@@ -209,8 +206,8 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   // Visible for testing
-  public void setCryptor(DekFormat dekFormat, Cryptor cryptor) {
-    cryptors.put(dekFormat, cryptor);
+  public Map<DekFormat, Cryptor> getCryptors() {
+    return cryptors;
   }
 
   private static byte[] toBytes(FieldContext fieldCtx, Object obj) {
@@ -292,18 +289,20 @@ public abstract class FieldEncryptionExecutor implements FieldRuleExecutor {
           default:
             throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
         }
-      } catch (GeneralSecurityException e) {
+      } catch (GeneralSecurityException | RuntimeException e) {
         throw new RuleException(e);
       }
     }
 
     protected String getKekId(RuleContext ctx) {
       String keyId = ctx.getParameter(ENCRYPT_KMS_KEY_ID);
-      String kekId = keyId != null ? getKeyUrlPrefix() + keyId : defaultKekId;
-      if (kekId == null) {
+      if (keyId == null) {
+        keyId = defaultKeyId;
+      }
+      if (keyId == null) {
         throw new IllegalArgumentException("No key id found");
       }
-      return kekId;
+      return getKeyUrlPrefix(ctx) + keyId;
     }
 
     protected Dek getDekForEncrypt(String kekId, DekFormat dekFormat) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Confluent Inc.
+ * Copyright 2023 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,32 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.encryption.azure;
+package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
+import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
+
+import com.google.common.collect.ImmutableList;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
-public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
+public class HcVaultFieldEncryptionServiceLoaderTest extends FieldEncryptionExecutorTest {
 
-  public AzureFieldEncryptionExecutorTest() throws Exception {
+  public HcVaultFieldEncryptionServiceLoaderTest() throws Exception {
     super();
   }
 
   @Override
   protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new AzureFieldEncryptionProperties(ruleNames);
+    return new HcVaultFieldEncryptionProperties(ImmutableList.of(DEFAULT_NAME));
+  }
+
+  @Override
+  protected Metadata getMetadata(Map<String, String> properties) {
+    properties.put("encrypt.kms.type", "hcvault");
+    return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 }
-
