@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
-import io.swagger.models.auth.In;
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 
