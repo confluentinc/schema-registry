@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.utils;
 
+import com.google.common.base.CharMatcher;
 import java.util.Objects;
 
 public class QualifiedSubject implements Comparable<QualifiedSubject> {
@@ -35,6 +36,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   public static final String WILDCARD = "*";
 
   public static final String CONTEXT_WILDCARD = CONTEXT_DELIMITER + WILDCARD + CONTEXT_DELIMITER;
+
+  // Subject name under which global permissions are stored.
+  public static final String GLOBAL_SUBJECT_NAME = "__GLOBAL";
 
   private final String tenant;
   private final String context;  // assumed to start with CONTEXT_SEPARATOR
@@ -155,6 +159,22 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return qs != null ? qs.toQualifiedContext() : "";
   }
 
+  public static String qualifySubjectWithParent(String tenant, String parent, String subject) {
+    QualifiedSubject qualifiedSubject = QualifiedSubject.create(tenant, subject);
+    boolean isQualified = qualifiedSubject != null
+        && !DEFAULT_CONTEXT.equals(qualifiedSubject.getContext());
+    if (!isQualified) {
+      QualifiedSubject qualifiedParent = QualifiedSubject.create(tenant, parent);
+      boolean isParentQualified = qualifiedParent != null
+          && !DEFAULT_CONTEXT.equals(qualifiedParent.getContext());
+      if (isParentQualified) {
+        subject = new QualifiedSubject(tenant, qualifiedParent.getContext(), subject)
+            .toQualifiedSubject();
+      }
+    }
+    return subject;
+  }
+
   /**
    * Normalizes the given qualified subject name.
    *
@@ -184,6 +204,18 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
       context = CONTEXT_SEPARATOR + context;
     }
     return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
+  }
+
+  public static boolean isValidSubject(String tenant, String qualifiedSubject) {
+    if (qualifiedSubject == null || CharMatcher.javaIsoControl().matchesAnyOf(qualifiedSubject)) {
+      return false;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
+    // For backward compatibility, we allow an empty subject
+    if (qs == null || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)) {
+      return false;
+    }
+    return true;
   }
 
   @Override
