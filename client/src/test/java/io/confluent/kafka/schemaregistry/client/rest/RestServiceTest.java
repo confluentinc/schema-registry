@@ -244,8 +244,8 @@ public class RestServiceTest {
     InputStream inputStream = createNiceMock(InputStream.class);
 
     Map<String, Object> configs = new HashMap<>();
-    configs.put("http.connect.timeout.ms", "10");
-    configs.put("http.read.timeout.ms", "10");
+    configs.put("http.connect.timeout.ms", 10);
+    configs.put("http.read.timeout.ms", 10);
     restService.configure(configs);
 
     expect(url.openConnection()).andReturn(httpURLConnection);
