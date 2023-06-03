@@ -16,10 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
-
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
+
 
 public class SchemaRegistryClientConfig {
 
