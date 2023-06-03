@@ -152,8 +152,7 @@ public class RestService implements Configurable {
           new TypeReference<SchemaRegistryServerVersion>() {
           };
 
-  private static final int HTTP_CONNECT_TIMEOUT_MS = 60000;
-  private static final int HTTP_READ_TIMEOUT_MS = 60000;
+
 
   private static final int JSON_PARSE_ERROR_CODE = 50005;
   private static ObjectMapper jsonDeserializer = JacksonMapper.INSTANCE;
@@ -171,6 +170,8 @@ public class RestService implements Configurable {
 
   private UrlList baseUrls;
   private SSLSocketFactory sslSocketFactory;
+  private int httpConnectTimeoutMs;
+  private int httpReadTimeoutMs;
   private HostnameVerifier hostnameVerifier;
   private int httpConnectTimeoutMs = HTTP_CONNECT_TIMEOUT_MS;
   private int httpReadTimeoutMs = HTTP_READ_TIMEOUT_MS;
@@ -193,6 +194,9 @@ public class RestService implements Configurable {
 
   @Override
   public void configure(Map<String, ?> configs) {
+    setHttpConnectTimeoutMs(SchemaRegistryClientConfig.getHttpConnectTimeoutMs(configs));
+    setHttpReadTimeoutMs(SchemaRegistryClientConfig.getHttpReadTimeoutMs(configs));
+
     String basicCredentialsSource =
         (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
     String bearerCredentialsSource =
@@ -243,6 +247,14 @@ public class RestService implements Configurable {
 
   public void setSslSocketFactory(SSLSocketFactory sslSocketFactory) {
     this.sslSocketFactory = sslSocketFactory;
+  }
+
+  public void setHttpConnectTimeoutMs(Integer httpConnectTimeoutMs) {
+    this.httpConnectTimeoutMs = httpConnectTimeoutMs;
+  }
+
+  public void setHttpReadTimeoutMs(Integer httpReadTimeoutMs) {
+    this.httpReadTimeoutMs = httpReadTimeoutMs;
   }
 
   public void setHostnameVerifier(HostnameVerifier hostnameVerifier) {
@@ -337,8 +349,8 @@ public class RestService implements Configurable {
       connection = (HttpURLConnection) url.openConnection(proxy);
     }
 
-    connection.setConnectTimeout(httpConnectTimeoutMs);
-    connection.setReadTimeout(httpReadTimeoutMs);
+    connection.setConnectTimeout(this.httpConnectTimeoutMs);
+    connection.setReadTimeout(this.httpReadTimeoutMs);
 
     setupSsl(connection);
     connection.setRequestMethod(method);
