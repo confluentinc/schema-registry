@@ -121,6 +121,7 @@ public class SchemaRegistryClientConfig {
     } else {
       return HTTP_READ_TIMEOUT_MS_DEFAULT;
     }
+  }
 
   public static long getMissingIdTTL(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_ID_CACHE_TTL_CONFIG)
