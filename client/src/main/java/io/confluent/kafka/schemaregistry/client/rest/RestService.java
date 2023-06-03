@@ -247,14 +247,6 @@ public class RestService implements Configurable {
     this.sslSocketFactory = sslSocketFactory;
   }
 
-  public void setHttpConnectTimeoutMs(Integer httpConnectTimeoutMs) {
-    this.httpConnectTimeoutMs = httpConnectTimeoutMs;
-  }
-
-  public void setHttpReadTimeoutMs(Integer httpReadTimeoutMs) {
-    this.httpReadTimeoutMs = httpReadTimeoutMs;
-  }
-
   public void setHostnameVerifier(HostnameVerifier hostnameVerifier) {
     this.hostnameVerifier = hostnameVerifier;
   }
