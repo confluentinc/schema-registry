@@ -495,20 +495,24 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     final Map<Integer, Schema> versionSchemaMap = versionToSchemaCache.computeIfAbsent(
         subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
 
-    Schema cachedSchema = versionSchemaMap.get(version);
+    // The cache is only used when lookupDeletedSchema is true
+    Schema cachedSchema = lookupDeletedSchema ? versionSchemaMap.get(version) : null;
     if (cachedSchema != null) {
       return cachedSchema;
     }
 
     synchronized (this) {
-      cachedSchema = versionSchemaMap.get(version);
+      cachedSchema = lookupDeletedSchema ? versionSchemaMap.get(version) : null;
       if (cachedSchema != null) {
         return cachedSchema;
       }
 
       final Schema retrievedSchema = getSchemaByVersionFromRegistry(
           subject, version, lookupDeletedSchema);
-      versionSchemaMap.put(version, retrievedSchema);
+      // The cache is only used when lookupDeletedSchema is true
+      if (lookupDeletedSchema) {
+        versionSchemaMap.put(version, retrievedSchema);
+      }
       return retrievedSchema;
     }
   }
@@ -526,7 +530,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     try {
       restSchema = restService.getVersion(subject, version, lookupDeletedSchema);
     } catch (RestClientException rce) {
-      if (isVersionNotFoundException(rce)) {
+      if (lookupDeletedSchema && isVersionNotFoundException(rce)) {
         missingVersionCache.put(new SubjectAndInt(subject, version), System.currentTimeMillis());
       }
       throw rce;
@@ -652,7 +656,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     Objects.requireNonNull(subject, "subject");
     schemaToVersionCache.remove(subject);
-    versionToSchemaCache.remove(subject);
+    if (isPermanent) {
+      versionToSchemaCache.remove(subject);
+    }
     idToSchemaCache.remove(subject);
     schemaToIdCache.remove(subject);
     return restService.deleteSubject(requestProperties, subject, isPermanent);
@@ -675,9 +681,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         .getOrDefault(subject, Collections.emptyMap())
         .values()
         .remove(Integer.valueOf(version));
-    versionToSchemaCache
-        .getOrDefault(subject, Collections.emptyMap())
-        .remove(Integer.valueOf(version));
+    if (isPermanent) {
+      versionToSchemaCache
+          .getOrDefault(subject, Collections.emptyMap())
+          .remove(Integer.valueOf(version));
+    }
     return restService.deleteSchemaVersion(requestProperties, subject, version, isPermanent);
   }
 
