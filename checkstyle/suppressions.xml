@@ -10,10 +10,10 @@
               files="ErrorMessage.java"/>
 
     <suppress checks="ParameterNumber"
-              files="(AbstractKafkaProtobufSerializer|MessageDefinition|SchemaRegistryCoordinator).java"/>
+              files="(AbstractKafkaProtobufSerializer|DynamicSchema|MessageDefinition|SchemaRegistryCoordinator).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|RestService|Errors|SchemaRegistryRestApplication|Context|KafkaSchemaRegistry|KafkaStore|AvroConverter|AvroData|AvroSchemaUtils|KafkaGroupLeaderElector|ProtobufSchema|ProtobufData|JsonSchemaData|InMemoryCache|SchemaMessageReader|Jackson|JsonSchemaConverter|MetricsContainer).java"/>
+              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|CachedSchemaRegistryClient|RestService|Errors|SchemaRegistryRestApplication|Context|KafkaSchemaRegistry|KafkaStore|AvroConverter|AvroData|AvroSchemaUtils|KafkaGroupLeaderElector|ProtobufSchema|ProtobufData|JsonSchemaData|InMemoryCache|SchemaMessageReader|Jackson|JsonSchemaConverter|MetricsContainer|ProtobufSchema|ProtobufSchemaUtils).java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(RestService|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|AvroData|KafkaGroupLeaderElector).java"/>
@@ -31,7 +31,7 @@
               files="(AbstractKafkaAvroSerializer|AvroData|AvroSchemaUtils|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema|ProtobufSchemaUtils).java"/>
 
     <suppress checks="MethodLength"
-              files="AvroData.java"/>
+              files="(AvroData|ProtobufSchema|ProtobufSchemaUtils).java"/>
 
     <suppress checks="AbbreviationAsWordInName"
               files="(.*SchemaRegistryClient|JSON.*).java"/>

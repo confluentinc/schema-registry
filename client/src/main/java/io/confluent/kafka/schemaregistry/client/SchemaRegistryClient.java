@@ -31,10 +31,14 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 
 public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
-  public Optional<ParsedSchema> parseSchema(
+  Optional<ParsedSchema> parseSchema(
       String schemaType,
       String schemaString,
       List<SchemaReference> references);
+
+  default Optional<ParsedSchema> parseSchema(Schema schema) {
+    return parseSchema(schema.getSchemaType(), schema.getSchema(), schema.getReferences());
+  }
 
   /**
    * @deprecated use {@link #register(String, ParsedSchema)} instead;
@@ -173,6 +177,12 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   default List<String> testCompatibilityVerbose(String subject, ParsedSchema schema)
           throws IOException, RestClientException {
+    return testCompatibilityVerbose(subject, schema, false);
+  }
+
+  default List<String> testCompatibilityVerbose(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 

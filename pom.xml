@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[7.2.6-0, 7.2.7-0)</version>
+        <version>[7.3.4-0, 7.3.5-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>7.2.6-0</version>
+    <version>7.3.4-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -83,10 +83,11 @@
         <proto-google-common-protos.version>2.5.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <okio.version>3.0.0</okio.version>
-        <wire.version>4.3.0</wire.version>
+        <wire.version>4.4.3</wire.version>
         <swagger.version>2.1.10</swagger.version>
-        <io.confluent.schema-registry.version>7.2.6-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>7.3.4-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
+        <commons.lang3.version>3.12.0</commons.lang3.version>
     </properties>
 
     <repositories>
@@ -117,6 +118,11 @@
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-compress</artifactId>
                 <version>${commons.compress.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>${commons.lang3.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.guava</groupId>
@@ -445,4 +451,35 @@
         </plugins>
 
     </build>
+
+    <profiles>
+        <profile>
+            <id>surefire-failsafe</id>
+            <activation>
+                <jdk>(1.8,)</jdk>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <argLine>
+                                --add-opens java.base/java.lang=ALL-UNNAMED
+                            </argLine>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <configuration>
+                            <argLine>
+                                --add-opens java.security.jgss/sun.security.krb5=ALL-UNNAMED
+                            </argLine>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

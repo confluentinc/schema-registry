@@ -27,7 +27,10 @@ import com.google.protobuf.DynamicMessage;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import java.util.ArrayList;
@@ -619,6 +622,384 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testNestedCustomOptions() {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package acme.events;\n"
+        + "import \"google/protobuf/wrappers.proto\";\n"
+        + "import \"google/protobuf/timestamp.proto\";\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "message ValidationSettings {\n"
+        + "  bool is_optional = 1;\n"
+        + "}\n"
+        + "message EventMetadata {\n"
+        + "  google.protobuf.StringValue owner = 1;\n"
+        + "  google.protobuf.StringValue description = 2;\n"
+        + "  RetentionPolicies retention_policy = 4;\n"
+        + "}\n"
+        + "\n"
+        + "extend google.protobuf.FieldOptions {\n"
+        + "  ValidationSettings validation_settings = 10000;\n"
+        + "  EventMetadata event_metadata = 10001;\n"
+        + "}\n"
+        + "\n"
+        + "enum RetentionPolicies {\n"
+        + "  DEFAULT = 0; // Default value, allows enforcement to implement default strategy\n"
+        + "  SEVEN_DAYS = 1;\n"
+        + "  THIRTY_DAYS = 2;\n"
+        + "  NINETY_DAYS = 3;\n"
+        + "  ONE_YEAR = 4;\n"
+        + "  TWO_YEARS = 5;\n"
+        + "  SEVEN_YEARS = 6;\n"
+        + "  ALL_TIME = 7;\n"
+        + "}\n"
+        + "\n"
+        + "message EventHeader {\n"
+        + "  google.protobuf.StringValue event_source = 1;\n"
+        + "  google.protobuf.StringValue event_id = 2;\n"
+        + "  google.protobuf.Timestamp event_timestamp = 3;\n"
+        + "  google.protobuf.StringValue event_name = 4;\n"
+        + "}\n"
+        + "\n"
+        + "message Event {\n"
+        + "  EventHeader header = 1;\n"
+        + "  oneof only_one_event_limiter {\n"
+        + "    SearchEvent requested_search = 2 [\n"
+        + "      (event_metadata).description.value = \"Fires when a user submits a search request.\",\n"
+        + "      (event_metadata).owner.value = \"DISCO\"\n"
+        + "    ];\n"
+        + "  }\n"
+        + "}\n"
+        + "message SearchEvent {\n"
+        + "  google.protobuf.Int32Value user_id = 1 [(validation_settings).is_optional = true];\n"
+        + "}\n";
+    String canonicalString = "syntax = \"proto3\";\n"
+        + "package acme.events;\n"
+        + "\n"
+        + "import \"google/protobuf/wrappers.proto\";\n"
+        + "import \"google/protobuf/timestamp.proto\";\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "message ValidationSettings {\n"
+        + "  bool is_optional = 1;\n"
+        + "}\n"
+        + "message EventMetadata {\n"
+        + "  google.protobuf.StringValue owner = 1;\n"
+        + "  google.protobuf.StringValue description = 2;\n"
+        + "  RetentionPolicies retention_policy = 4;\n"
+        + "}\n"
+        + "message EventHeader {\n"
+        + "  google.protobuf.StringValue event_source = 1;\n"
+        + "  google.protobuf.StringValue event_id = 2;\n"
+        + "  google.protobuf.Timestamp event_timestamp = 3;\n"
+        + "  google.protobuf.StringValue event_name = 4;\n"
+        + "}\n"
+        + "message Event {\n"
+        + "  EventHeader header = 1;\n"
+        + "\n"
+        + "  oneof only_one_event_limiter {\n"
+        + "    SearchEvent requested_search = 2 [\n"
+        + "      (event_metadata).description.value = \"Fires when a user submits a search request.\",\n"
+        + "      (event_metadata).owner.value = \"DISCO\"\n"
+        + "    ];\n"
+        + "  }\n"
+        + "}\n"
+        + "message SearchEvent {\n"
+        + "  google.protobuf.Int32Value user_id = 1 [(validation_settings).is_optional = true];\n"
+        + "}\n"
+        + "enum RetentionPolicies {\n"
+        + "  DEFAULT = 0;\n"
+        + "  SEVEN_DAYS = 1;\n"
+        + "  THIRTY_DAYS = 2;\n"
+        + "  NINETY_DAYS = 3;\n"
+        + "  ONE_YEAR = 4;\n"
+        + "  TWO_YEARS = 5;\n"
+        + "  SEVEN_YEARS = 6;\n"
+        + "  ALL_TIME = 7;\n"
+        + "}\n"
+        + "\n"
+        + "extend google.protobuf.FieldOptions {\n"
+        + "  ValidationSettings validation_settings = 10000;\n"
+        + "  EventMetadata event_metadata = 10001;\n"
+        + "}\n";
+    String normalized = "syntax = \"proto3\";\n"
+        + "package acme.events;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "import \"google/protobuf/timestamp.proto\";\n"
+        + "import \"google/protobuf/wrappers.proto\";\n"
+        + "\n"
+        + "message ValidationSettings {\n"
+        + "  bool is_optional = 1;\n"
+        + "}\n"
+        + "message EventMetadata {\n"
+        + "  .google.protobuf.StringValue owner = 1;\n"
+        + "  .google.protobuf.StringValue description = 2;\n"
+        + "  .acme.events.RetentionPolicies retention_policy = 4;\n"
+        + "}\n"
+        + "message EventHeader {\n"
+        + "  .google.protobuf.StringValue event_source = 1;\n"
+        + "  .google.protobuf.StringValue event_id = 2;\n"
+        + "  .google.protobuf.Timestamp event_timestamp = 3;\n"
+        + "  .google.protobuf.StringValue event_name = 4;\n"
+        + "}\n"
+        + "message Event {\n"
+        + "  .acme.events.EventHeader header = 1;\n"
+        + "\n"
+        + "  oneof only_one_event_limiter {\n"
+        + "    .acme.events.SearchEvent requested_search = 2 [(acme.events.event_metadata) = {\n"
+        + "      description: {\n"
+        + "        value: \"Fires when a user submits a search request.\"\n"
+        + "      },\n"
+        + "      owner: {\n"
+        + "        value: \"DISCO\"\n"
+        + "      }\n"
+        + "    }];\n"
+        + "  }\n"
+        + "}\n"
+        + "message SearchEvent {\n"
+        + "  .google.protobuf.Int32Value user_id = 1 [(acme.events.validation_settings) = {\n"
+        + "    is_optional: true\n"
+        + "  }];\n"
+        + "}\n"
+        + "enum RetentionPolicies {\n"
+        + "  DEFAULT = 0;\n"
+        + "  SEVEN_DAYS = 1;\n"
+        + "  THIRTY_DAYS = 2;\n"
+        + "  NINETY_DAYS = 3;\n"
+        + "  ONE_YEAR = 4;\n"
+        + "  TWO_YEARS = 5;\n"
+        + "  SEVEN_YEARS = 6;\n"
+        + "  ALL_TIME = 7;\n"
+        + "}\n"
+        + "\n"
+        + "extend .google.protobuf.FieldOptions {\n"
+        + "  .acme.events.ValidationSettings validation_settings = 10000;\n"
+        + "  .acme.events.EventMetadata event_metadata = 10001;\n"
+        + "}\n";
+
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    assertEquals(canonicalString, schema.canonicalString());
+    ProtobufSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+  }
+
+
+  @Test
+  public void testRanges() throws Exception {
+    String schemaString = "\nmessage Money {\n"
+        + "  reserved 5000 to 6000;\n"
+        + "  reserved 10000 to 10001;\n"
+        + "  reserved 20000 to 20000;\n"
+        + "\n"
+        + "  optional int64 cents = 1;\n"
+        + "\n"
+        + "  extensions 100 to 200;\n"
+        + "  extensions 1000 to 1001;\n"
+        + "  extensions 2000 to 2000;\n"
+        + "\n"
+        + "  enum MoneyEnum {\n"
+        + "    reserved 100 to 200;\n"
+        + "    reserved 1000 to 1001;\n"
+        + "    reserved 2000 to 2000;\n"
+        + "    NONE = 0;\n"
+        + "    CENTS = 1;\n"
+        + "    DOLLARS = 2;\n"
+        + "  }\n"
+        + "}\n";
+    String canonicalString = "\nmessage Money {\n"
+        + "  reserved 5000 to 6000;\n"
+        + "  reserved 10000 to 10001;\n"
+        + "  reserved 20000 to 20000;\n"
+        + "\n"
+        + "  optional int64 cents = 1;\n"
+        + "\n"
+        + "  extensions 100 to 200;\n"
+        + "  extensions 1000 to 1001;\n"
+        + "  extensions 2000 to 2000;\n"
+        + "\n"
+        + "  enum MoneyEnum {\n"
+        + "    reserved 100 to 200;\n"
+        + "    reserved 1000 to 1001;\n"
+        + "    reserved 2000 to 2000;\n"
+        + "    NONE = 0;\n"
+        + "    CENTS = 1;\n"
+        + "    DOLLARS = 2;\n"
+        + "  }\n"
+        + "}\n";
+    String normalized = "\nmessage Money {\n"
+        + "  reserved 5000 to 6000;\n"
+        + "  reserved 10000 to 10001;\n"
+        + "  reserved 20000;\n"
+        + "\n"
+        + "  optional int64 cents = 1;\n"
+        + "\n"
+        + "  extensions 100 to 200;\n"
+        + "  extensions 1000 to 1001;\n"
+        + "  extensions 2000;\n"
+        + "\n"
+        + "  enum MoneyEnum {\n"
+        + "    reserved 100 to 200;\n"
+        + "    reserved 1000 to 1001;\n"
+        + "    reserved 2000;\n"
+        + "    NONE = 0;\n"
+        + "    CENTS = 1;\n"
+        + "    DOLLARS = 2;\n"
+        + "  }\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    assertEquals(canonicalString, schema.canonicalString());
+    ProtobufSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+  }
+
+  @Test
+  public void testComplexEnum() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package acme.api.items;\n"
+        + "\n"
+        + "option java_package = \"com.acme.api.items\";\n"
+        + "\n"
+        + "extend google.protobuf.EnumValueOptions {\n"
+        + "  optional VisibleTypeEnumValueOption visible_types = 24000;\n"
+        + "}\n"
+        + "\n"
+        + "message VisibleTypeEnumValueOption {\n"
+        + "  repeated ObjectType type = 1;\n"
+        + "}\n"
+        + "\n"
+        + "message ObjectType {\n"
+        + "}\n"
+        + "\n"
+        + "message VisibleTypeSet {\n"
+        + "}\n"
+        + "\n"
+        + "enum Type {\n"
+        + "  reserved 13,15;\n"
+        + "  reserved \"MARKET_ITEM_SETTINGS\",\"PROMO\";\n"
+        + "  ITEM = 0;\n"
+        + "  PAGE = 1;\n"
+        + "  ITEM_IMAGE = 2;\n"
+        + "}\n"
+        + "\n"
+        + "\n"
+        + "\n"
+        + "enum ItemsVisibleTypeSet {\n"
+        + "  // This is for all clients before register 4.1.2.  The items service will set this to clients where it is not set already\n"
+        + "  // When native clients need to support more objects, create a new enum value\n"
+        + "  LEGACY = 1 [\n"
+        + "    (acme.api.items.visible_types) = {\n"
+        + "      type: {[type]: ITEM},\n"
+        + "      type: {[type]: PAGE},\n"
+        + "      type: {[type]: ITEM_IMAGE}\n"
+        + "    }\n"
+        + "  ];\n"
+        + "}\n"
+        + "\n"
+        + "extend VisibleTypeSet {\n"
+        + "  optional ItemsVisibleTypeSet items_visible_type_set = 10;\n"
+        + "}\n"
+        + "\n"
+        + "extend ObjectType {\n"
+        + "  optional Type type = 101;\n"
+        + "}\n"
+        + "\n"
+        + "\n";
+    String canonicalString = "syntax = \"proto3\";\n"
+        + "package acme.api.items;\n"
+        + "\n"
+        + "option java_package = \"com.acme.api.items\";\n"
+        + "\n"
+        + "message VisibleTypeEnumValueOption {\n"
+        + "  repeated ObjectType type = 1;\n"
+        + "}\n"
+        + "message ObjectType {}\n"
+        + "message VisibleTypeSet {}\n"
+        + "enum Type {\n"
+        + "  reserved 13, 15;\n"
+        + "  reserved \"MARKET_ITEM_SETTINGS\", \"PROMO\";\n"
+        + "  ITEM = 0;\n"
+        + "  PAGE = 1;\n"
+        + "  ITEM_IMAGE = 2;\n"
+        + "}\n"
+        + "enum ItemsVisibleTypeSet {\n"
+        + "  LEGACY = 1 [(acme.api.items.visible_types) = {\n"
+        + "    type: [\n"
+        + "      {\n"
+        + "        [type]: ITEM\n"
+        + "      },\n"
+        + "      {\n"
+        + "        [type]: PAGE\n"
+        + "      },\n"
+        + "      {\n"
+        + "        [type]: ITEM_IMAGE\n"
+        + "      }\n"
+        + "    ]\n"
+        + "  }];\n"
+        + "}\n"
+        + "\n"
+        + "extend google.protobuf.EnumValueOptions {\n"
+        + "  optional VisibleTypeEnumValueOption visible_types = 24000;\n"
+        + "}\n"
+        + "extend VisibleTypeSet {\n"
+        + "  optional ItemsVisibleTypeSet items_visible_type_set = 10;\n"
+        + "}\n"
+        + "extend ObjectType {\n"
+        + "  optional Type type = 101;\n"
+        + "}\n";
+    String normalized = "syntax = \"proto3\";\n"
+        + "package acme.api.items;\n"
+        + "\n"
+        + "option java_package = \"com.acme.api.items\";\n"
+        + "\n"
+        + "message VisibleTypeEnumValueOption {\n"
+        + "  repeated .acme.api.items.ObjectType type = 1;\n"
+        + "}\n"
+        + "message ObjectType {}\n"
+        + "message VisibleTypeSet {}\n"
+        + "enum Type {\n"
+        + "  reserved 13;\n"
+        + "  reserved 15;\n"
+        + "  reserved \"MARKET_ITEM_SETTINGS\";\n"
+        + "  reserved \"PROMO\";\n"
+        + "  ITEM = 0;\n"
+        + "  PAGE = 1;\n"
+        + "  ITEM_IMAGE = 2;\n"
+        + "}\n"
+        + "enum ItemsVisibleTypeSet {\n"
+        + "  LEGACY = 1 [(acme.api.items.visible_types) = {\n"
+        + "    type: [\n"
+        + "      {\n"
+        + "        [acme.api.items.type]: ITEM\n"
+        + "      },\n"
+        + "      {\n"
+        + "        [acme.api.items.type]: PAGE\n"
+        + "      },\n"
+        + "      {\n"
+        + "        [acme.api.items.type]: ITEM_IMAGE\n"
+        + "      }\n"
+        + "    ]\n"
+        + "  }];\n"
+        + "}\n"
+        + "\n"
+        + "extend .google.protobuf.EnumValueOptions {\n"
+        + "  optional .acme.api.items.VisibleTypeEnumValueOption visible_types = 24000;\n"
+        + "}\n"
+        + "extend .acme.api.items.VisibleTypeSet {\n"
+        + "  optional .acme.api.items.ItemsVisibleTypeSet items_visible_type_set = 10;\n"
+        + "}\n"
+        + "extend .acme.api.items.ObjectType {\n"
+        + "  optional .acme.api.items.Type type = 101;\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    assertEquals(canonicalString, schema.canonicalString());
+    ProtobufSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+    normalizedSchema = normalizedSchema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+  }
+
+  @Test
   public void testRecordToJson() throws Exception {
     DynamicMessage.Builder builder = recordSchema.newMessageBuilder();
     Descriptor desc = builder.getDescriptorForType();
@@ -803,11 +1184,11 @@ public class ProtobufSchemaTest {
 
     ProtoFileElement original = resourceLoader.readObj("TestProto.proto");
     ProtobufSchema schema = new ProtobufSchema(original.toSchema());
-    String fileProto = schema.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
+    String fileProto = schema.formattedString(Format.SERIALIZED.symbol());
     ProtobufSchema schema2 = new ProtobufSchema(fileProto);
     assertTrue(schema.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
-    fileProto = schema2.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
+    fileProto = schema2.formattedString(Format.SERIALIZED.symbol());
     ProtobufSchema schema3 = new ProtobufSchema(fileProto);
     assertTrue(schema2.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)).isEmpty());
@@ -815,11 +1196,11 @@ public class ProtobufSchemaTest {
 
     original = resourceLoader.readObj("NestedTestProto.proto");
     schema = new ProtobufSchema(original.toSchema());
-    fileProto = schema.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
+    fileProto = schema.formattedString(Format.SERIALIZED.symbol());
     schema2 = new ProtobufSchema(fileProto);
     assertTrue(schema.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
-    fileProto = schema2.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
+    fileProto = schema2.formattedString(Format.SERIALIZED.symbol());
     schema3 = new ProtobufSchema(fileProto);
     assertTrue(schema2.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)).isEmpty());
@@ -1207,6 +1588,494 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testNormalizationWithExtensions() {
+    String schemaString = "package my.package;\n"
+        + "\n"
+        + "message ExtendedDummy {\n"
+        + "    // just to namespace the extensions\n"
+        + "    extend Extended {\n"
+        + "        optional string extension_normal2 = 101;\n"
+        + "        optional string extension_normal = 100;\n"
+        + "    }\n"
+        + "\n"
+        + "    message Nested {\n"
+        + "        // but these are to test insane but legit definitions\n"
+        + "        extend package.Extended {\n"
+        + "            optional string extension_identifier2 = 103;\n"
+        + "            optional string extension_identifier = 102;\n"
+        + "        }\n"
+        + "        message Oh {\n"
+        + "            extend my.package.Extended {\n"
+        + "                optional string extension_vault_replace2 = 105;\n"
+        + "                optional string extension_vault_replace = 104;\n"
+        + "            }\n"
+        + "            message My {\n"
+        + "                extend .my.package.Extended {\n"
+        + "                    optional string extension_fidelius_token2 = 107;\n"
+        + "                    optional string extension_fidelius_token = 106;\n"
+        + "                }\n"
+        + "                message God {\n"
+        + "                    extend Extended.NestedExtended {\n"
+        + "                        optional string extension_nested_entity2 = 109;\n"
+        + "                        optional string extension_nested_entity = 108;\n"
+        + "                    }\n"
+        + "                    extend my.package.Extended.NestedExtended {\n"
+        + "                        optional string extension_nested_again2 = 111;\n"
+        + "                        optional string extension_nested_again = 110;\n"
+        + "                    }\n"
+        + "                }\n"
+        + "            }\n"
+        + "        }\n"
+        + "    }\n"
+        + "}\n"
+        + "\n"
+        + "message Extended {\n"
+        + "    optional string vaulted_data = 1;\n"
+        + "    optional string field_normal = 2;\n"
+        + "    extensions 100 to 199;\n"
+        + "\n"
+        + "    message NestedExtended {\n"
+        + "        optional string vaulted_data = 1;\n"
+        + "        optional string field_normal = 2;\n"
+        + "        optional string field_vault_replace = 3;\n"
+        + "        extensions 100 to 199;\n"
+        + "        extend NestedExtended {\n"
+        + "            optional string extension_nested_trouble2 = 113;\n"
+        + "            optional string extension_nested_trouble = 112;\n"
+        + "        }\n"
+        + "    }\n"
+        + "}\n";
+
+    String canonical = "package my.package;\n"
+        + "\n"
+        + "message ExtendedDummy {\n"
+        + "  extend Extended {\n"
+        + "    optional string extension_normal2 = 101;\n"
+        + "    optional string extension_normal = 100;\n"
+        + "  }\n"
+        + "\n"
+        + "  message Nested {\n"
+        + "    extend package.Extended {\n"
+        + "      optional string extension_identifier2 = 103;\n"
+        + "      optional string extension_identifier = 102;\n"
+        + "    }\n"
+        + "  \n"
+        + "    message Oh {\n"
+        + "      extend my.package.Extended {\n"
+        + "        optional string extension_vault_replace2 = 105;\n"
+        + "        optional string extension_vault_replace = 104;\n"
+        + "      }\n"
+        + "    \n"
+        + "      message My {\n"
+        + "        extend .my.package.Extended {\n"
+        + "          optional string extension_fidelius_token2 = 107;\n"
+        + "          optional string extension_fidelius_token = 106;\n"
+        + "        }\n"
+        + "      \n"
+        + "        message God {\n"
+        + "          extend Extended.NestedExtended {\n"
+        + "            optional string extension_nested_entity2 = 109;\n"
+        + "            optional string extension_nested_entity = 108;\n"
+        + "          }\n"
+        + "          extend my.package.Extended.NestedExtended {\n"
+        + "            optional string extension_nested_again2 = 111;\n"
+        + "            optional string extension_nested_again = 110;\n"
+        + "          }\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n"
+        + "message Extended {\n"
+        + "  optional string vaulted_data = 1;\n"
+        + "  optional string field_normal = 2;\n"
+        + "\n"
+        + "  extensions 100 to 199;\n"
+        + "\n"
+        + "  message NestedExtended {\n"
+        + "    optional string vaulted_data = 1;\n"
+        + "    optional string field_normal = 2;\n"
+        + "    optional string field_vault_replace = 3;\n"
+        + "  \n"
+        + "    extensions 100 to 199;\n"
+        + "  \n"
+        + "    extend NestedExtended {\n"
+        + "      optional string extension_nested_trouble2 = 113;\n"
+        + "      optional string extension_nested_trouble = 112;\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n";
+
+    String normalized = "package my.package;\n"
+        + "\n"
+        + "message ExtendedDummy {\n"
+        + "  extend .my.package.Extended {\n"
+        + "    optional string extension_normal = 100;\n"
+        + "    optional string extension_normal2 = 101;\n"
+        + "  }\n"
+        + "\n"
+        + "  message Nested {\n"
+        + "    extend .my.package.Extended {\n"
+        + "      optional string extension_identifier = 102;\n"
+        + "      optional string extension_identifier2 = 103;\n"
+        + "    }\n"
+        + "  \n"
+        + "    message Oh {\n"
+        + "      extend .my.package.Extended {\n"
+        + "        optional string extension_vault_replace = 104;\n"
+        + "        optional string extension_vault_replace2 = 105;\n"
+        + "      }\n"
+        + "    \n"
+        + "      message My {\n"
+        + "        extend .my.package.Extended {\n"
+        + "          optional string extension_fidelius_token = 106;\n"
+        + "          optional string extension_fidelius_token2 = 107;\n"
+        + "        }\n"
+        + "      \n"
+        + "        message God {\n"
+        + "          extend .my.package.Extended.NestedExtended {\n"
+        + "            optional string extension_nested_entity = 108;\n"
+        + "            optional string extension_nested_entity2 = 109;\n"
+        + "            optional string extension_nested_again = 110;\n"
+        + "            optional string extension_nested_again2 = 111;\n"
+        + "          }\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n"
+        + "message Extended {\n"
+        + "  optional string vaulted_data = 1;\n"
+        + "  optional string field_normal = 2;\n"
+        + "\n"
+        + "  extensions 100 to 199;\n"
+        + "\n"
+        + "  message NestedExtended {\n"
+        + "    optional string vaulted_data = 1;\n"
+        + "    optional string field_normal = 2;\n"
+        + "    optional string field_vault_replace = 3;\n"
+        + "  \n"
+        + "    extensions 100 to 199;\n"
+        + "  \n"
+        + "    extend .my.package.Extended.NestedExtended {\n"
+        + "      optional string extension_nested_trouble = 112;\n"
+        + "      optional string extension_nested_trouble2 = 113;\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n";
+
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    assertEquals(canonical, schema.canonicalString());
+    Descriptor descriptor = schema.toDescriptor();
+    assertNotNull(descriptor);
+    ProtobufSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+    descriptor = normalizedSchema.toDescriptor();
+    assertNotNull(descriptor);
+    normalizedSchema = new ProtobufSchema(descriptor).normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+
+    String expected = "package my.package;\n"
+        + "\n"
+        + "message ExtendedDummy {\n"
+        + "  message Nested {\n"
+        + "    message Oh {\n"
+        + "      message My {\n"
+        + "        message God {}\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n"
+        + "message Extended {\n"
+        + "  optional string vaulted_data = 1;\n"
+        + "  optional string field_normal = 2;\n"
+        + "\n"
+        + "  message NestedExtended {\n"
+        + "    optional string vaulted_data = 1;\n"
+        + "    optional string field_normal = 2;\n"
+        + "    optional string field_vault_replace = 3;\n"
+        + "  }\n"
+        + "}\n";
+    String noExtSchema = normalizedSchema.formattedString(Format.IGNORE_EXTENSIONS.symbol());
+    assertEquals(expected, noExtSchema);
+  }
+
+  @Test
+  public void testNormalizationWithExtensions2() {
+    // Same as CustomOptions2.proto
+    String schemaString = "syntax = \"proto2\";\n"
+        + "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message FooBar {\n"
+        + "  extensions 100 to 200;\n"
+        + "\n"
+        + "  optional int32 foo = 1;\n"
+        + "  optional string bar = 2;\n"
+        + "  repeated FooBar nested = 3;\n"
+        + "\n"
+        + "  message More {\n"
+        + "    repeated int32 serial = 1;\n"
+        + "\n"
+        + "    extend FooBar {\n"
+        + "      optional string more_string = 150;\n"
+        + "    }\n"
+        + "\n"
+        + "    option (my_message_option) = {[FooBar.More2.more2_string]: \"foobar\", [rep]: []};\n"
+        + "  }\n"
+        + "\n"
+        + "  extend google.protobuf.EnumOptions {\n"
+        + "    optional string foobar_string = 71001;\n"
+        + "  }\n"
+        + "\n"
+        + "  enum FooBarBazEnum {\n"
+        + "    option (FooBar.foobar_string) = \"foobar\";\n"
+        + "\n"
+        + "    FOO = 1;\n"
+        + "    BAR = 2;\n"
+        + "    BAZ = 3;\n"
+        + "  }\n"
+        + "}\n"
+        + "\n"
+        + "extend google.protobuf.MessageOptions {\n"
+        + "  optional FooBar my_message_option = 50001;\n"
+        + "}\n"
+        + "\n"
+        + "extend FooBar {\n"
+        + "  optional FooBar.FooBarBazEnum ext = 101;\n"
+        + "  repeated FooBar.FooBarBazEnum rep = 102;\n"
+        + "}";
+
+    String canonical = "syntax = \"proto2\";\n"
+        + "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message FooBar {\n"
+        + "  optional int32 foo = 1;\n"
+        + "  optional string bar = 2;\n"
+        + "  repeated FooBar nested = 3;\n"
+        + "\n"
+        + "  extensions 100 to 200;\n"
+        + "\n"
+        + "  extend google.protobuf.EnumOptions {\n"
+        + "    optional string foobar_string = 71001;\n"
+        + "  }\n"
+        + "\n"
+        + ""
+        + "  message More {\n"
+        + "    option (my_message_option) = {\n"
+        + "      [FooBar.More2.more2_string]: \"foobar\",\n"
+        + "      [rep]: [\n"
+        + "      ]\n"
+        + "    };\n"
+        + "  \n"
+        + "    repeated int32 serial = 1;\n"
+        + "  \n"
+        + "    extend FooBar {\n"
+        + "      optional string more_string = 150;\n"
+        + "    }\n"
+        + "  }\n"
+        + "  enum FooBarBazEnum {\n"
+        + "    option (FooBar.foobar_string) = \"foobar\";\n"
+        + "    FOO = 1;\n"
+        + "    BAR = 2;\n"
+        + "    BAZ = 3;\n"
+        + "  }\n"
+        + "}\n"
+        + "\n"
+        + "extend google.protobuf.MessageOptions {\n"
+        + "  optional FooBar my_message_option = 50001;\n"
+        + "}\n"
+        + "extend FooBar {\n"
+        + "  optional FooBar.FooBarBazEnum ext = 101;\n"
+        + "  repeated FooBar.FooBarBazEnum rep = 102;\n"
+        + "}\n";
+
+    String normalized = "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message FooBar {\n"
+        + "  optional int32 foo = 1;\n"
+        + "  optional string bar = 2;\n"
+        + "  repeated .io.confluent.kafka.serializers.protobuf.test.FooBar nested = 3;\n"
+        + "\n"
+        + "  extensions 100 to 200;\n"
+        + "\n"
+        + "  extend .google.protobuf.EnumOptions {\n"
+        + "    optional string foobar_string = 71001;\n"
+        + "  }\n"
+        + "\n"
+        + "  message More {\n"
+        + "    option (io.confluent.kafka.serializers.protobuf.test.my_message_option) = {\n"
+        + "      [FooBar.More2.more2_string]: \"foobar\"\n"
+        + "    };\n"
+        + "  \n"
+        + "    repeated int32 serial = 1;\n"
+        + "  \n"
+        + "    extend .io.confluent.kafka.serializers.protobuf.test.FooBar {\n"
+        + "      optional string more_string = 150;\n"
+        + "    }\n"
+        + "  }\n"
+        + "  enum FooBarBazEnum {\n"
+        + "    option (io.confluent.kafka.serializers.protobuf.test.FooBar.foobar_string) = \"foobar\";\n"
+        + "    FOO = 1;\n"
+        + "    BAR = 2;\n"
+        + "    BAZ = 3;\n"
+        + "  }\n"
+        + "}\n"
+        + "\n"
+        + "extend .google.protobuf.MessageOptions {\n"
+        + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar my_message_option = 50001;\n"
+        + "}\n"
+        + "extend .io.confluent.kafka.serializers.protobuf.test.FooBar {\n"
+        + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar.FooBarBazEnum ext = 101;\n"
+        + "  repeated .io.confluent.kafka.serializers.protobuf.test.FooBar.FooBarBazEnum rep = 102;\n"
+        + "}\n";
+
+    String normalizedWithoutCustomOptions = "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message FooBar {\n"
+        + "  optional int32 foo = 1;\n"
+        + "  optional string bar = 2;\n"
+        + "  repeated .io.confluent.kafka.serializers.protobuf.test.FooBar nested = 3;\n"
+        + "\n"
+        + "  extensions 100 to 200;\n"
+        + "\n"
+        + "  extend .google.protobuf.EnumOptions {\n"
+        + "    optional string foobar_string = 71001;\n"
+        + "  }\n"
+        + "\n"
+        + "  message More {\n"
+        + "    repeated int32 serial = 1;\n"
+        + "  \n"
+        + "    extend .io.confluent.kafka.serializers.protobuf.test.FooBar {\n"
+        + "      optional string more_string = 150;\n"
+        + "    }\n"
+        + "  }\n"
+        + "  enum FooBarBazEnum {\n"
+        + "    FOO = 1;\n"
+        + "    BAR = 2;\n"
+        + "    BAZ = 3;\n"
+        + "  }\n"
+        + "}\n"
+        + "\n"
+        + "extend .google.protobuf.MessageOptions {\n"
+        + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar my_message_option = 50001;\n"
+        + "}\n"
+        + "extend .io.confluent.kafka.serializers.protobuf.test.FooBar {\n"
+        + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar.FooBarBazEnum ext = 101;\n"
+        + "  repeated .io.confluent.kafka.serializers.protobuf.test.FooBar.FooBarBazEnum rep = 102;\n"
+        + "}\n";
+
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    assertEquals(canonical, schema.canonicalString());
+    Descriptor descriptor = schema.toDescriptor();
+    assertNotNull(descriptor);
+    ProtobufSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+    descriptor = normalizedSchema.toDescriptor();
+    assertNotNull(descriptor);
+    normalizedSchema = new ProtobufSchema(descriptor).normalize();
+    assertEquals(normalizedWithoutCustomOptions, normalizedSchema.canonicalString());
+
+    String expected = "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message FooBar {\n"
+        + "  optional int32 foo = 1;\n"
+        + "  optional string bar = 2;\n"
+        + "  repeated .io.confluent.kafka.serializers.protobuf.test.FooBar nested = 3;\n"
+        + "\n"
+        + "  message More {\n"
+        + "    repeated int32 serial = 1;\n"
+        + "  }\n"
+        + "  enum FooBarBazEnum {\n"
+        + "    FOO = 1;\n"
+        + "    BAR = 2;\n"
+        + "    BAZ = 3;\n"
+        + "  }\n"
+        + "}\n";
+    String noExtSchema = normalizedSchema.formattedString(Format.IGNORE_EXTENSIONS.symbol());
+    assertEquals(expected, noExtSchema);
+  }
+
+  @Test
+  public void testNormalizationWithComplexCustomOptions() {
+    String schemaString = "package acme.common;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_outer_classname = \"ExternalMetadata\";\n"
+        + "option java_package = \"com.acme.protos.common\";\n"
+        + "\n"
+        + "message ExternalMetadata {\n"
+        + "  /** The content type of the blob contained in metadata **/\n"
+        + "  optional string content_type = 1;\n"
+        + "  /** The arbitrary encoding of bytes **/\n"
+        + "  optional bytes metadata = 2 [\n"
+        + "    default = 0, (length).min = 1.0, (length).max = 1024.0];\n"
+        + "}\n"
+        + "\n"
+        + "/** Field level validation options */\n"
+        + "extend google.protobuf.FieldOptions {\n"
+        + "  optional Range length = 22301;\n"
+        + "}\n"
+        + "\n"
+        + "/** A range of numeric values */\n"
+        + "message Range {\n"
+        + "  /** The minimum allowable value */\n"
+        + "  optional double min = 1 [default = -inf];\n;\n"
+        + "\n"
+        + "  /** The maximum allowable value */\n"
+        + "  optional double max = 2 [default = nan];\n;\n"
+        + "}\n";
+    String normalized = "package acme.common;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_outer_classname = \"ExternalMetadata\";\n"
+        + "option java_package = \"com.acme.protos.common\";\n"
+        + "\n"
+        + "message ExternalMetadata {\n"
+        + "  optional string content_type = 1;\n"
+        + "  optional bytes metadata = 2 [\n"
+        + "    (acme.common.length) = {\n"
+        + "      max: 1024,\n"
+        + "      min: 1\n"
+        + "    },\n"
+        + "    default = 0\n"
+        + "  ];\n"
+        + "}\n"
+        + "message Range {\n"
+        + "  optional double min = 1 [default = -inf];\n"
+        + "  optional double max = 2 [default = nan];\n"
+        + "}\n"
+        + "\n"
+        + "extend .google.protobuf.FieldOptions {\n"
+        + "  optional .acme.common.Range length = 22301;\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    ProtobufSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+  }
+
+  @Test
   public void testNormalizationWithPackagePrefix() {
     String schemaString = "syntax = \"proto3\";\n"
         + "package confluent.package;\n"
@@ -1248,10 +2117,10 @@ public class ProtobufSchemaTest {
   @Test
   public void testParseSchema() {
     SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
-    ParsedSchema parsedSchema = protobufSchemaProvider.parseSchemaOrElseThrow(recordSchemaString,
-            new ArrayList<>(), false);
+    ParsedSchema parsedSchema = protobufSchemaProvider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, ProtobufSchema.TYPE, new ArrayList<>(), recordSchemaString), false, false);
     Optional<ParsedSchema> parsedSchemaOptional = protobufSchemaProvider.parseSchema(recordSchemaString,
-            new ArrayList<>(), false);
+            new ArrayList<>(), false, false);
 
     assertNotNull(parsedSchema);
     assertTrue(parsedSchemaOptional.isPresent());
@@ -1260,15 +2129,15 @@ public class ProtobufSchemaTest {
   @Test(expected = IllegalArgumentException.class)
   public void testParseSchemaThrowException() {
     SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
-    protobufSchemaProvider.parseSchemaOrElseThrow(invalidSchemaString,
-            new ArrayList<>(), false);
+    protobufSchemaProvider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, ProtobufSchema.TYPE, new ArrayList<>(), invalidSchemaString), false, false);
   }
 
   @Test
   public void testParseSchemaSuppressException() {
     SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
     Optional<ParsedSchema> parsedSchema = protobufSchemaProvider.parseSchema(invalidSchemaString,
-            new ArrayList<>(), false);
+            new ArrayList<>(), false, false);
     assertFalse(parsedSchema.isPresent());
   }
 
@@ -1278,6 +2147,34 @@ public class ProtobufSchemaTest {
     ProtobufSchema enumSchema2 = new ProtobufSchema(enumDescriptor);
     EnumDescriptor enumDescriptor2 = enumSchema2.getEnumDescriptor("TestEnum.Suit");
     assertEquals(enumDescriptor.getFullName(), enumDescriptor2.getFullName());
+  }
+
+  @Test
+  public void testNumberFormats() throws Exception {
+    FormatContext ctx = new FormatContext(false, true);
+    checkNumber(ctx, "123", "123");
+    checkNumber(ctx, "0123", "83"); // octal
+    checkNumber(ctx, "0x123", "291"); // hex
+    checkNumber(ctx, "0123.0", "123");
+    checkNumber(ctx, "123.", "123");
+    checkNumber(ctx, "123.0", "123");
+    checkNumber(ctx, "123.00", "123");
+    checkNumber(ctx, "123e1", "1230");
+    checkNumber(ctx, "123E1", "1230");
+    checkNumber(ctx, "123E+1", "1230");
+    checkNumber(ctx, "123E-1", "12.3");
+    checkNumber(ctx, ".123E+3", "123");
+    checkNumber(ctx, "1.23E+3", "1230");
+    checkNumber(ctx, "12.3E+3", "12300");
+    checkNumber(ctx, "123.E+3", "123000");
+    checkNumber(ctx, "123.4E+3", "123400");
+    checkNumber(ctx, "123.45E+3", "123450");
+    checkNumber(ctx, "123.456E+3", "123456");
+    checkNumber(ctx, "123.4567E+2", "12345.67");
+  }
+
+  private void checkNumber(FormatContext ctx, String in, String out) {
+    assertEquals(out, ctx.formatNumber(ctx.parseNumber(in)));
   }
 
   private static JsonNode jsonTree(String jsonData) {

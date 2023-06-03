@@ -1,0 +1,57 @@
+syntax = "proto2";
+package io.confluent.kafka.serializers.protobuf.test;
+
+import "google/protobuf/descriptor.proto";
+
+option java_package = "io.confluent.kafka.serializers.protobuf.test";
+
+message FooBar {
+  extensions 100 to 200;
+
+  optional int32 foo = 1;
+  optional string bar = 2;
+  repeated FooBar nested = 3;
+
+  message More {
+    repeated int32 serial = 1;
+
+    extend FooBar {
+      optional string more_string = 150;
+    }
+
+    option (my_message_option).(More.more_string) = "foobar";
+    option (my_message_option).(rep) = FOO;
+    option (my_message_option).(rep) = BAR;
+  }
+
+  message More2 {
+    repeated int32 serial = 1;
+
+    extend FooBar {
+      optional string more2_string = 151;
+    }
+
+    option (my_message_option) = {foo: 123, [FooBar.More2.more2_string]: "foobar", [rep]: []};
+  }
+
+  extend google.protobuf.EnumOptions {
+    optional string foobar_string = 71001;
+  }
+
+  enum FooBarBazEnum {
+    option (FooBar.foobar_string) = "foobar";
+
+    FOO = 1;
+    BAR = 2;
+    BAZ = 3;
+  }
+}
+
+extend google.protobuf.MessageOptions {
+  optional FooBar my_message_option = 50001;
+}
+
+extend FooBar {
+  optional FooBar.FooBarBazEnum ext = 101;
+  repeated FooBar.FooBarBazEnum rep = 102;
+}

@@ -16,19 +16,13 @@
 
 package io.confluent.connect.protobuf;
 
+import io.confluent.connect.schema.AbstractDataConfig;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 
-public class ProtobufDataConfig extends AbstractConfig {
-
-  public static final String GENERALIZED_SUM_TYPE_SUPPORT_CONFIG = "generalized.sum.type.support";
-  public static final boolean GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT = false;
-  public static final String GENERALIZED_SUM_TYPE_SUPPORT_DOC =
-      "Toggle for enabling/disabling generalized sum type support: interoperability of enum/union "
-          + "with other schema formats";
+public class ProtobufDataConfig extends AbstractDataConfig {
 
   public static final String ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG =
       "enhanced.protobuf.schema.support";
@@ -65,17 +59,18 @@ public class ProtobufDataConfig extends AbstractConfig {
   public static final String WRAPPER_FOR_RAW_PRIMITIVES_DOC = "Whether a wrapper message "
       + "should be interpreted as a raw primitive at the root level";
 
-  public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.config";
-  public static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
-  public static final String SCHEMAS_CACHE_SIZE_DOC = "Size of the converted schemas cache";
+  public static final String GENERATE_STRUCT_FOR_NULLS_CONFIG = "generate.struct.for.nulls";
+  public static final boolean GENERATE_STRUCT_FOR_NULLS_DEFAULT = false;
+  public static final String GENERATE_STRUCT_FOR_NULLS_DOC = "Whether to generate a default struct "
+      + "for null messages";
+
+  public static final String GENERATE_INDEX_FOR_UNIONS_CONFIG = "generate.index.for.unions";
+  public static final boolean GENERATE_INDEX_FOR_UNIONS_DEFAULT = true;
+  public static final String GENERATE_INDEX_FOR_UNIONS_DOC = "Whether to suffix union"
+      + "names with an underscore followed by an index";
 
   public static ConfigDef baseConfigDef() {
-    return new ConfigDef()
-        .define(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG,
-            ConfigDef.Type.BOOLEAN,
-            GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT,
-            ConfigDef.Importance.MEDIUM,
-            GENERALIZED_SUM_TYPE_SUPPORT_DOC)
+    return AbstractDataConfig.baseConfigDef()
         .define(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG,
             ConfigDef.Type.BOOLEAN,
             ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DEFAULT,
@@ -108,20 +103,21 @@ public class ProtobufDataConfig extends AbstractConfig {
             WRAPPER_FOR_RAW_PRIMITIVES_DEFAULT,
             ConfigDef.Importance.MEDIUM,
             WRAPPER_FOR_RAW_PRIMITIVES_DOC)
-        .define(SCHEMAS_CACHE_SIZE_CONFIG,
-            ConfigDef.Type.INT,
-            SCHEMAS_CACHE_SIZE_DEFAULT,
+        .define(GENERATE_STRUCT_FOR_NULLS_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            GENERATE_STRUCT_FOR_NULLS_DEFAULT,
+            ConfigDef.Importance.MEDIUM,
+            GENERATE_STRUCT_FOR_NULLS_DOC)
+        .define(GENERATE_INDEX_FOR_UNIONS_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            GENERATE_INDEX_FOR_UNIONS_DEFAULT,
             ConfigDef.Importance.LOW,
-            SCHEMAS_CACHE_SIZE_DOC
+            GENERATE_INDEX_FOR_UNIONS_DOC
         );
   }
 
   public ProtobufDataConfig(Map<?, ?> props) {
     super(baseConfigDef(), props);
-  }
-
-  public boolean isGeneralizedSumTypeSupportDefault() {
-    return this.getBoolean(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG);
   }
 
   public boolean isEnhancedProtobufSchemaSupport() {
@@ -152,8 +148,12 @@ public class ProtobufDataConfig extends AbstractConfig {
     return this.getBoolean(WRAPPER_FOR_RAW_PRIMITIVES_CONFIG);
   }
 
-  public int schemaCacheSize() {
-    return Math.max(1, this.getInt(SCHEMAS_CACHE_SIZE_CONFIG));
+  public boolean generateStructForNulls() {
+    return this.getBoolean(GENERATE_STRUCT_FOR_NULLS_CONFIG);
+  }
+
+  public boolean generateIndexForUnions() {
+    return this.getBoolean(GENERATE_INDEX_FOR_UNIONS_CONFIG);
   }
 
   public static class Builder {

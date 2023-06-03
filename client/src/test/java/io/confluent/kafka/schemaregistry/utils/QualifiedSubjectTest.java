@@ -1,9 +1,10 @@
 package io.confluent.kafka.schemaregistry.utils;
 
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -186,5 +187,15 @@ public class QualifiedSubjectTest {
   public void testToStringQualifiedContext() {
     QualifiedSubject qs = new QualifiedSubject("tenant1", ".ctx1", null);
     assertEquals("tenant1_:.ctx1:", qs.toString());
+  }
+
+  @Test
+  public void testSubjectValidation() {
+    assertTrue(QualifiedSubject.isValidSubject("default", "foo"));
+    assertFalse(QualifiedSubject.isValidSubject("default", null));
+    assertTrue(QualifiedSubject.isValidSubject("default", ""));
+    assertFalse(QualifiedSubject.isValidSubject("default", String.valueOf((char) 31)));
+    assertTrue(QualifiedSubject.isValidSubject("default", "  "));
+    assertFalse(QualifiedSubject.isValidSubject("default", "__GLOBAL"));
   }
 }

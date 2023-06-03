@@ -26,6 +26,7 @@ import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Range;
 import  org.apache.kafka.common.config.ConfigDef.Type;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
@@ -105,6 +106,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String HTTP_READ_TIMEOUT_MS_DOC = "Specify the http read timeout"
       + " in milliseconds for schema registry client";
 
+  public static final String SCHEMA_FORMAT = "schema.format";
+  public static final String SCHEMA_FORMAT_DOC =
+      "The schema format to use when registering or looking up schemas.";
+
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT = "URL";
@@ -137,6 +142,69 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String BEARER_AUTH_TOKEN_DEFAULT = "";
   public static final String BEARER_AUTH_TOKEN_DOC =
       "Specify the Bearer token to be used for authentication";
+  public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL = SchemaRegistryClientConfig
+      .BEARER_AUTH_ISSUER_ENDPOINT_URL;
+  public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL_DOC = "The HTTP(S)-based URL for the "
+      + "OAuth/OIDC identity provider which issues access token";
+  public static final String BEARER_AUTH_CLIENT_ID = SchemaRegistryClientConfig
+      .BEARER_AUTH_CLIENT_ID;
+  public static final String BEARER_AUTH_CLIENT_ID_DOC = "Client Id used to obtain Client "
+      + "Credentials Grant from OAuth/OIDC identity provider"
+      + " <a href=\"rfc-editor.org/rfc/rfc6749.html#section-4.4\"> ";
+  public static final String BEARER_AUTH_CLIENT_SECRET = SchemaRegistryClientConfig
+      .BEARER_AUTH_CLIENT_SECRET;
+  public static final String BEARER_AUTH_CLIENT_SECRET_DOC = "Client secret used to obtain Client "
+      + "Credentials Grant from OAuth/OIDC identity provider "
+      + "<a href=\"rfc-editor.org/rfc/rfc6749.html#section-4.4\"> ";
+  public static final String BEARER_AUTH_SCOPE = SchemaRegistryClientConfig.BEARER_AUTH_SCOPE;
+  public static final String BEARER_AUTH_SCOPE_DOC = "Access Token Scope used to obtain Client "
+      + "Credentials Grant OAuth/OIDC identity provider "
+      + "<a href=\"rfc-editor.org/rfc/rfc6749.html#section-3.3\"> ";
+  public static final String BEARER_AUTH_SCOPE_CLAIM_NAME =
+      SchemaRegistryClientConfig.BEARER_AUTH_SCOPE_CLAIM_NAME;
+  public static final String DEFAULT_BEARER_AUTH_SCOPE_CLAIM_NAME =
+      SchemaRegistryClientConfig.BEARER_AUTH_SCOPE_CLAIM_NAME_DEFAULT;
+  public static final String BEARER_AUTH_SCOPE_CLAIM_NAME_DOC = "The OAuth claim for the scope "
+      + "is often named \"" + DEFAULT_BEARER_AUTH_SCOPE_CLAIM_NAME + "\", but this (optional)"
+      + " setting can provide a different name to use for the scope included in the JWT payload's"
+      + " claims if the OAuth/OIDC provider uses a different"
+      + " name for that claim.";
+  public static final String BEARER_AUTH_SUB_CLAIM_NAME =
+      SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME;
+  public static final String DEFAULT_BEARER_AUTH_SUB_CLAIM_NAME =
+      SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME_DEFAULT;
+  public static final String BEARER_AUTH_SUB_CLAIM_NAME_DOC = "The OAuth claim for the subject is "
+      + "often named \"" + DEFAULT_BEARER_AUTH_SUB_CLAIM_NAME + "\", but this (optional)"
+      + " setting can provide a different name to use for the subject included in the JWT payload's"
+      + " claims if the OAuth/OIDC provider uses a different name for that claim.";
+
+
+  public static final String BEARER_AUTH_LOGICAL_CLUSTER = SchemaRegistryClientConfig
+      .BEARER_AUTH_LOGICAL_CLUSTER;
+  public static final String BEARER_AUTH_LOGICAL_CLUSTER_DOC = "Additional property which "
+      + "can added in Request header to Schema Registry";
+  public static final String BEARER_AUTH_IDENTITY_POOL_ID = SchemaRegistryClientConfig
+      .BEARER_AUTH_IDENTITY_POOL_ID;
+  public static final String BEARER_AUTH_IDENTITY_POOL_ID_DOC = "Additional property which "
+      + "can added in Request header to Schema Registry. This maybe used as Principal Id for "
+      + "Authorization";
+
+  public static final String BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS =
+      SchemaRegistryClientConfig.BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS;
+  public static final Short BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT =
+      SchemaRegistryClientConfig.BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT;
+  public static final String BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DOC = "The amount of buffer "
+      + "time between expiration times of the OAuth Token and corresponding cache which hold the "
+      + "token. Ideally we would want to get a new token before the current one expires. Legal "
+      + "values are between 0 and 3600 (1 hour); a default value of  300 (5 minutes) is used "
+      + "if no value is specified. This value is ignored if it exceeds the remaining lifetime "
+      + "of a token from the moment it is retrieved into schema registry.";
+
+  public static final String BEARER_AUTH_CUSTOM_PROVIDER_CLASS = SchemaRegistryClientConfig
+      .BEARER_AUTH_CUSTOM_PROVIDER_CLASS;
+  public static final String BEARER_AUTH_CUSTOM_PROVIDER_CLASS_D0C =
+      "Custom class which will provide the token credential. Needs to implement io.confluent.kafka"
+          + ".schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider interface";
 
   public static final String CONTEXT_NAME_STRATEGY = "context.name.strategy";
   public static final String CONTEXT_NAME_STRATEGY_DEFAULT =
@@ -193,6 +261,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, USE_LATEST_VERSION_DOC)
         .define(LATEST_COMPATIBILITY_STRICT, Type.BOOLEAN, LATEST_COMPATIBILITY_STRICT_DEFAULT,
                 Importance.LOW, LATEST_COMPATIBILITY_STRICT_DOC)
+        .define(SCHEMA_FORMAT, Type.STRING, null,
+                Importance.LOW, SCHEMA_FORMAT_DOC)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
                 Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
@@ -203,6 +273,28 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
         .define(BEARER_AUTH_TOKEN_CONFIG, Type.PASSWORD, BEARER_AUTH_TOKEN_DEFAULT,
                 Importance.MEDIUM, BEARER_AUTH_TOKEN_DOC)
+        .define(BEARER_AUTH_ISSUER_ENDPOINT_URL, Type.STRING,null, Importance.MEDIUM,
+                BEARER_AUTH_ISSUER_ENDPOINT_URL_DOC)
+        .define(BEARER_AUTH_CLIENT_ID, Type.STRING,null, Importance.MEDIUM,
+                BEARER_AUTH_CLIENT_ID_DOC)
+        .define(BEARER_AUTH_CLIENT_SECRET, Type.STRING, null, Importance.MEDIUM,
+                BEARER_AUTH_CLIENT_SECRET_DOC)
+        .define(BEARER_AUTH_SCOPE, Type.STRING,null, Importance.MEDIUM ,
+                BEARER_AUTH_SCOPE_DOC)
+        .define(BEARER_AUTH_SCOPE_CLAIM_NAME, Type.STRING, DEFAULT_BEARER_AUTH_SCOPE_CLAIM_NAME,
+                Importance.LOW, BEARER_AUTH_SCOPE_CLAIM_NAME_DOC)
+        .define(BEARER_AUTH_SUB_CLAIM_NAME, Type.STRING, DEFAULT_BEARER_AUTH_SUB_CLAIM_NAME,
+                Importance.LOW, BEARER_AUTH_SUB_CLAIM_NAME_DOC)
+        .define(BEARER_AUTH_IDENTITY_POOL_ID, Type.STRING,null, Importance.MEDIUM,
+                BEARER_AUTH_IDENTITY_POOL_ID_DOC)
+        .define(BEARER_AUTH_LOGICAL_CLUSTER, Type.STRING,null, Importance.MEDIUM,
+                BEARER_AUTH_LOGICAL_CLUSTER_DOC)
+        .define(BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS,
+                Type.SHORT, BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT, Range.between(0, 3600),
+                Importance.LOW,
+                BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DOC)
+        .define(BEARER_AUTH_CUSTOM_PROVIDER_CLASS, Type.STRING,null, Importance.MEDIUM,
+            BEARER_AUTH_CUSTOM_PROVIDER_CLASS_D0C)
         .define(CONTEXT_NAME_STRATEGY, Type.CLASS, CONTEXT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, CONTEXT_NAME_STRATEGY_DOC)
         .define(KEY_SUBJECT_NAME_STRATEGY, Type.CLASS, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
@@ -264,6 +356,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean getLatestCompatibilityStrict() {
     return this.getBoolean(LATEST_COMPATIBILITY_STRICT);
+  }
+
+  public String getSchemaFormat() {
+    return this.getString(SCHEMA_FORMAT);
   }
 
   public ContextNameStrategy contextNameStrategy() {

@@ -40,7 +40,8 @@ public class ModeUpdateRequest {
   }
 
   @Schema(description = Mode.MODE_DESC,
-          allowableValues = "READWRITE, READONLY, READONLY_OVERRIDE, IMPORT")
+          allowableValues = {"READWRITE", "READONLY", "READONLY_OVERRIDE", "IMPORT"},
+          example = "READWRITE")
   @JsonProperty("mode")
   public String getMode() {
     return this.mode;

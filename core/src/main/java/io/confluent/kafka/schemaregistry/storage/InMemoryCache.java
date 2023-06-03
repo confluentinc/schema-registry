@@ -27,7 +27,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -107,11 +106,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   @Override
   public SchemaIdAndSubjects schemaIdAndSubjects(Schema schema) throws StoreException {
     String ctx = QualifiedSubject.contextFor(tenant(), schema.getSubject());
-    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
-        = schema.getReferences();
-    MD5 md5 = MD5.ofString(schema.getSchema(), refs == null ? null : refs.stream()
-        .map(ref -> new SchemaReference(ref.getName(), ref.getSubject(), ref.getVersion()))
-        .collect(Collectors.toList()));
+    MD5 md5 = MD5.ofSchema(schema);
     Map<String, Map<MD5, Integer>> ctxHashes =
         hashToGuid.getOrDefault(tenant(), Collections.emptyMap());
     Map<MD5, Integer> hashes = ctxHashes.getOrDefault(ctx, Collections.emptyMap());
@@ -178,7 +173,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     // compaction when the previous non-deleted schemaValue will not get registered
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
-      SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
+      String refSubject = QualifiedSubject.qualifySubjectWithParent(
+          tenant(), schemaKey.getSubject(), ref.getSubject());
+      SchemaKey refKey = new SchemaKey(refSubject, ref.getVersion());
       Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
           referencedBy.getOrDefault(tenant(), Collections.emptyMap());
       Map<SchemaKey, Set<Integer>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
@@ -227,7 +224,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
-      SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
+      String refSubject = QualifiedSubject.qualifySubjectWithParent(
+          tenant(), schemaKey.getSubject(), ref.getSubject());
+      SchemaKey refKey = new SchemaKey(refSubject, ref.getVersion());
       Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
           referencedBy.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
       Map<SchemaKey, Set<Integer>> refBy =
@@ -240,7 +239,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
-    MD5 md5 = MD5.ofString(schemaValue.getSchema(), schemaValue.getReferences());
+    MD5 md5 = MD5.ofSchema(schemaValue.toSchemaEntity());
     Map<String, Map<MD5, Integer>> ctxHashes =
         hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<MD5, Integer> hashes = ctxHashes.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());

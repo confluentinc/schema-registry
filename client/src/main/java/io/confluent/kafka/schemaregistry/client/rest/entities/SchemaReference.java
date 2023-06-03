@@ -42,7 +42,7 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.version = version;
   }
 
-  @Schema(description = "Reference name")
+  @Schema(description = "Reference name", example = "io.confluent.kafka.example.User")
   @JsonProperty("name")
   public String getName() {
     return name;
@@ -53,7 +53,8 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.name = name;
   }
 
-  @Schema(description = "Name of the referenced subject")
+  @Schema(description = "Name of the referenced subject",
+          example = io.confluent.kafka.schemaregistry.client.rest.entities.Schema.SUBJECT_EXAMPLE)
   @JsonProperty("subject")
   public String getSubject() {
     return subject;
@@ -64,7 +65,8 @@ public class SchemaReference implements Comparable<SchemaReference> {
     this.subject = subject;
   }
 
-  @Schema(description = "Version number of the referenced subject")
+  @Schema(description = "Version number of the referenced subject",
+          example = io.confluent.kafka.schemaregistry.client.rest.entities.Schema.VERSION_EXAMPLE)
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
