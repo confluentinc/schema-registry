@@ -19,8 +19,6 @@ package io.confluent.kafka.schemaregistry.client;
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 
-import java.util.Map;
-
 public class SchemaRegistryClientConfig {
 
   public static final String CLIENT_NAMESPACE = "schema.registry.";
