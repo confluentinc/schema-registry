@@ -173,8 +173,6 @@ public class RestService implements Configurable {
   private int httpConnectTimeoutMs;
   private int httpReadTimeoutMs;
   private HostnameVerifier hostnameVerifier;
-  private int httpConnectTimeoutMs = HTTP_CONNECT_TIMEOUT_MS;
-  private int httpReadTimeoutMs = HTTP_READ_TIMEOUT_MS;
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
   private BearerAuthCredentialProvider bearerAuthCredentialProvider;
   private Map<String, String> httpHeaders;
