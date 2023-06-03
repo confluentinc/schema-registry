@@ -62,6 +62,8 @@ public class Errors {
   public static final int OPERATION_NOT_PERMITTED_ERROR_CODE = 42205;
   public static final int REFERENCE_EXISTS_ERROR_CODE = 42206;
   public static final int ID_DOES_NOT_MATCH_ERROR_CODE = 42207;
+  public static final int INVALID_SUBJECT_ERROR_CODE = 42208;
+  public static final int SCHEMA_TOO_LARGE_ERROR_CODE = 42209;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -145,12 +147,20 @@ public class Errors {
     return new RestInvalidVersionException(version);
   }
 
+  public static RestInvalidSubjectException invalidSubjectException(String subject) {
+    return new RestInvalidSubjectException(subject);
+  }
+
   public static RestException schemaRegistryException(String message, Throwable cause) {
     return new RestSchemaRegistryException(message, cause);
   }
 
   public static RestException storeException(String message, Throwable cause) {
     return new RestSchemaRegistryStoreException(message, cause);
+  }
+
+  public static RestSchemaTooLargeException schemaTooLargeException(String message) {
+    return new RestSchemaTooLargeException(message);
   }
 
   public static RestException operationTimeoutException(String message, Throwable cause) {

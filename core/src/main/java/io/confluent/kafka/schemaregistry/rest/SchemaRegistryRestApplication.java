@@ -17,9 +17,11 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
+import io.confluent.kafka.schemaregistry.rest.filters.ContextFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.RestCallMetricFilter;
 import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ConfigResource;
+import io.confluent.kafka.schemaregistry.rest.resources.ContextsResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ModeResource;
 import io.confluent.kafka.schemaregistry.rest.resources.RootResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SchemasResource;
@@ -97,12 +99,14 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
     config.register(RootResource.class);
     config.register(new ConfigResource(schemaRegistry));
+    config.register(new ContextsResource(schemaRegistry));
     config.register(new SubjectsResource(schemaRegistry));
     config.register(new SchemasResource(schemaRegistry));
     config.register(new SubjectVersionsResource(schemaRegistry));
     config.register(new CompatibilityResource(schemaRegistry));
     config.register(new ModeResource(schemaRegistry));
-    config.register(new ServerMetadataResource(schemaRegistry, schemaRegistryConfig));
+    config.register(new ServerMetadataResource(schemaRegistry));
+    config.register(new ContextFilter());
     config.register(new RestCallMetricFilter(
             schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
             schemaRegistry.getMetricsContainer().getApiCallsFailure()));

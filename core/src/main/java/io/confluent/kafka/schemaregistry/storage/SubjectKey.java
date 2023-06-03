@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -48,25 +49,12 @@ public abstract class SubjectKey extends SchemaRegistryKey {
     }
 
     SubjectKey that = (SubjectKey) o;
-    if (this.subject != null && that.subject != null) {
-      if (!subject.equals(that.subject)) {
-        return false;
-      }
-    } else if (this.subject == null && that.subject == null) {
-      return true;
-    } else {
-      return false;
-    }
-    return true;
+    return Objects.equals(subject, that.subject);
   }
 
   @Override
   public int hashCode() {
-    int result = super.hashCode();
-    if (this.subject != null) {
-      result = 31 * result + subject.hashCode();
-    }
-    return result;
+    return Objects.hashCode(subject);
   }
 
   @Override

@@ -20,33 +20,19 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import javax.validation.constraints.NotEmpty;
-
 import javax.validation.constraints.Min;
 
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class DeleteSubjectValue implements SchemaRegistryValue {
+public class DeleteSubjectValue extends SubjectValue {
 
-  @NotEmpty
-  private String subject;
   @Min(1)
   private Integer version;
 
   public DeleteSubjectValue(@JsonProperty("subject") String subject,
                             @JsonProperty("version") Integer version) {
-    this.subject = subject;
+    super(subject);
     this.version = version;
-  }
-
-  @JsonProperty("subject")
-  public String getSubject() {
-    return subject;
-  }
-
-  @JsonProperty("subject")
-  public void setSubject(String subject) {
-    this.subject = subject;
   }
 
   @JsonProperty("version")
@@ -67,18 +53,18 @@ public class DeleteSubjectValue implements SchemaRegistryValue {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
+    if (!super.equals(o)) {
+      return false;
+    }
 
     DeleteSubjectValue that = (DeleteSubjectValue) o;
 
-    if (!subject.equals(that.subject)) {
-      return false;
-    }
     return version.equals(that.version);
   }
 
   @Override
   public int hashCode() {
-    int result = subject.hashCode();
+    int result = super.hashCode();
     result = 31 * result + version.hashCode();
     return result;
   }
@@ -86,8 +72,13 @@ public class DeleteSubjectValue implements SchemaRegistryValue {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("{subject=" + this.subject + ",");
+    sb.append("{subject=" + this.getSubject() + ",");
     sb.append("version=" + this.version + "}");
     return sb.toString();
+  }
+
+  @Override
+  public DeleteSubjectKey toKey() {
+    return new DeleteSubjectKey(getSubject());
   }
 }

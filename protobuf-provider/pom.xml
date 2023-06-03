@@ -6,7 +6,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>6.2.11-0</version>
+        <version>7.0.10-0</version>
     </parent>
 
     <licenses>
@@ -34,7 +34,15 @@
         </dependency>
         <dependency>
             <groupId>com.squareup.wire</groupId>
-            <artifactId>wire-schema</artifactId>
+            <artifactId>wire-schema-jvm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.squareup.wire</groupId>
+            <artifactId>wire-runtime-jvm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.squareup.okio</groupId>
+            <artifactId>okio-jvm</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
@@ -51,7 +59,6 @@
         <dependency>
             <groupId>com.google.api.grpc</groupId>
             <artifactId>proto-google-common-protos</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>

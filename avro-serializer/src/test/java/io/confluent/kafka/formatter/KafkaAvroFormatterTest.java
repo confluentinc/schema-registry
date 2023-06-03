@@ -89,7 +89,7 @@ public class KafkaAvroFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
         new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
-            true, false);
+            false, true, false);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
     byte[] serializedValue = message.value();
@@ -114,7 +114,7 @@ public class KafkaAvroFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
         new AvroMessageReader(schemaRegistry, intSchema, recordSchema, "topic1", true, reader,
-            true, false);
+            false, true, false);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
     byte[] serializedKey = message.key();
@@ -145,7 +145,7 @@ public class KafkaAvroFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
         new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
-            true, false);
+            false, true, false);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
     byte[] serializedValue = message.value();
@@ -167,7 +167,7 @@ public class KafkaAvroFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
         new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
-            true, false);
+            false, true, false);
     try {
       avroReader.readMessage();
       fail("Registering an invalid schema should fail");
@@ -189,7 +189,7 @@ public class KafkaAvroFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
         new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
-            true, false);
+            false, true, false);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
     byte[] serializedKey = "TestKey".getBytes();
@@ -222,7 +222,7 @@ public class KafkaAvroFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
         new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
-            true, false);
+            false, true, false);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
     byte[] serializedKey = "TestKey".getBytes();
@@ -249,7 +249,7 @@ public class KafkaAvroFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
         new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
-            false, true);
+            false, false, true);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
     byte[] serializedValue = message.value();

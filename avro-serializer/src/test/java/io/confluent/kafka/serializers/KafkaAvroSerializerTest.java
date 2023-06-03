@@ -35,6 +35,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.util.Utf8;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -173,9 +174,13 @@ public class KafkaAvroSerializerTest {
   }
 
   private IndexedRecord createAccountRecord() {
+    return createAccountRecord("0123456789");
+  }
+
+  private IndexedRecord createAccountRecord(String accountNumber) {
     Schema schema = createAccountSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
-    avroRecord.put("accountNumber", "0123456789");
+    avroRecord.put("accountNumber", accountNumber);
     return avroRecord;
   }
 
@@ -332,6 +337,20 @@ public class KafkaAvroSerializerTest {
     avroSerializer.serialize(topic, avroRecord);
   }
 
+  @Test(expected = InvalidConfigurationException.class)
+  public void testKafkaAvroSerializerWithoutConfigure() {
+    KafkaAvroSerializer unconfiguredSerializer = new KafkaAvroSerializer();
+    IndexedRecord avroRecord = createUserRecord();
+    unconfiguredSerializer.serialize(topic, avroRecord);
+  }
+
+  @Test(expected = InvalidConfigurationException.class)
+  public void testKafkaAvroDeserializerWithoutConfigure() {
+    KafkaAvroDeserializer unconfiguredSerializer = new KafkaAvroDeserializer();
+    byte[] randomBytes = "foo".getBytes();
+    unconfiguredSerializer.deserialize(topic, randomBytes);
+  }
+
   @Test
   public void testKafkaAvroSerializerWithPreRegistered() throws IOException, RestClientException {
     Map configs = ImmutableMap.of(
@@ -349,6 +368,72 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerWithPreRegisteredUseSchemaId()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_SCHEMA_ID,
+        1
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
+    IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaAvroSerializerWithPreRegisteredUseSchemaIdIncompatibleError()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_SCHEMA_ID,
+        2
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
+    schemaRegistry.register(topic + "-value", new AvroSchema(createAccountSchema()));
+    IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithPreRegisteredUseSchemaIdIncompatibleNoError()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_SCHEMA_ID,
+        2,
+        KafkaAvroSerializerConfig.ID_COMPATIBILITY_STRICT,
+        false
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
+    schemaRegistry.register(topic + "-value", new AvroSchema(createAccountSchema()));
+    IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
+    // User gets deserialized as an account!
+    IndexedRecord badRecord = createAccountRecord("testUser");
+    assertEquals(badRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(badRecord, avroDecoder.fromBytes(bytes));
+  }
+
+  @Test
   public void testKafkaAvroSerializerWithPreRegisteredUseLatest()
       throws IOException, RestClientException {
     Map configs = ImmutableMap.of(
@@ -357,6 +442,28 @@ public class KafkaAvroSerializerTest {
         KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
         false,
         KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
+    IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithPreRegisteredUseLatestAndNormalize()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaAvroSerializerConfig.NORMALIZE_SCHEMAS,
         true
     );
     avroSerializer.configure(configs, false);
