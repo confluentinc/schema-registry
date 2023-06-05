@@ -792,6 +792,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     versionToSchemaCache.clear();
     missingSchemaCache.invalidateAll();
     missingIdCache.invalidateAll();
+    missingVersionCache.invalidateAll();
   }
 
   private void checkMissingSchemaCache(String subject, ParsedSchema schema, boolean normalize)
