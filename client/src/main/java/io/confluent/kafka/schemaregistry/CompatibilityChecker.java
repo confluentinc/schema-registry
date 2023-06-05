@@ -82,7 +82,7 @@ public class CompatibilityChecker {
   ) {
     return isCompatibleWithHolders(newSchema, previousSchemas.stream()
         .map(SimpleParsedSchemaHolder::new)
-        .collect(Collectors.toList()));
+        .collect(Collectors.toCollection(ArrayList::new)));
   }
 
   public List<String> isCompatibleWithHolders(
