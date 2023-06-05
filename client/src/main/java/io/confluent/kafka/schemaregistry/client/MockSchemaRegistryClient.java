@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
@@ -621,7 +622,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(config.getCompatibilityLevel());
     if (compatibilityLevel == null) {
-      return Collections.singletonList("Compatibility level not specified.");
+      return Lists.newArrayList("Compatibility level not specified.");
     }
 
     List<ParsedSchemaHolder> schemaHistory = new ArrayList<>();

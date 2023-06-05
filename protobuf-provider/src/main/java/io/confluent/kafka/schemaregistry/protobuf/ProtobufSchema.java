@@ -2017,7 +2017,7 @@ public class ProtobufSchema implements ParsedSchema {
       }
       return errorMessages;
     } else {
-      return Collections.emptyList();
+      return new ArrayList<>();
     }
   }
 
