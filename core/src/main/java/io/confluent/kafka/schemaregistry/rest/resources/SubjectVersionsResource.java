@@ -404,6 +404,9 @@ public class SubjectVersionsResource {
     Schema schema = new Schema(subjectName, request);
     int id;
     try {
+      if (!normalize) {
+        normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
+      }
       id = schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);

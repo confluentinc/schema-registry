@@ -23,10 +23,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
@@ -642,4 +644,93 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     }
   }
 
+  @Test
+  public void testRegisterBadDefaultWithNormalizeConfig() throws Exception {
+    String subject = "testSubject";
+
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"default\":null,\"name\":"
+        + "\"f" + "\"}]}";
+    String schema = AvroUtils.parseSchema(schemaString).canonicalString();
+
+    List<String> errors = restApp.restClient.testCompatibility(schema, subject, "latest");
+    assertTrue(errors.isEmpty());
+
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setNormalize(true);
+    // set normalize config
+    assertEquals("Setting normalize config should succeed",
+        config,
+        restApp.restClient.updateConfig(config, null));
+
+    try {
+      restApp.restClient.testCompatibility(schema, subject, "latest");
+      fail("Testing compatibility for schema with invalid default should fail with "
+          + Errors.INVALID_SCHEMA_ERROR_CODE
+          + " (invalid schema)");
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+
+    try {
+      restApp.restClient.registerSchema(schema, subject);
+      fail("Registering schema with invalid default should fail with "
+          + Errors.INVALID_SCHEMA_ERROR_CODE
+          + " (invalid schema)");
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+  }
+
+  @Test
+  public void testSubjectAlias() throws Exception {
+    String subject = "testSubject";
+
+    // register a valid avro
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(schemaString1, subject));
+
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setAlias("testSubject");
+    // set alias config
+    assertEquals("Setting alias config should succeed",
+        config,
+        restApp.restClient.updateConfig(config, "testAlias"));
+
+    Schema schema = restApp.restClient.getVersion("testAlias", 1);
+    assertEquals(schemaString1, schema.getSchema());
+  }
+
+  @Test
+  public void testGlobalAliasNotUsed() throws Exception {
+    String subject = "testSubject";
+
+    // register a valid avro
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(schemaString1, subject));
+
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setAlias("badSubject");
+    // set global alias config
+    assertEquals("Setting alias config should succeed",
+        config,
+        restApp.restClient.updateConfig(config, null));
+
+    Schema schema = restApp.restClient.getVersion("testSubject", 1);
+    assertEquals(schemaString1, schema.getSchema());
+  }
 }

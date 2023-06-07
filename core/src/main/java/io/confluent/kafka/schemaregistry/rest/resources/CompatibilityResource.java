@@ -146,6 +146,9 @@ public class CompatibilityResource {
     }
     Schema schema = new Schema(subject, request);
     try {
+      if (!normalize) {
+        normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());
+      }
       errorMessages = schemaRegistry.isCompatible(
           subject, schema,
           schemaForSpecifiedVersion != null
@@ -231,6 +234,9 @@ public class CompatibilityResource {
     }
     Schema schema = new Schema(subject, request);
     try {
+      if (!normalize) {
+        normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());
+      }
       errorMessages = schemaRegistry.isCompatible(subject, schema, previousSchemas, normalize);
     } catch (InvalidSchemaException e) {
       if (verbose) {
