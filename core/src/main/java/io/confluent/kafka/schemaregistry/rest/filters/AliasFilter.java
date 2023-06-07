@@ -27,14 +27,10 @@ import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.container.PreMatching;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.UriBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @PreMatching
 @Priority(Priorities.ENTITY_CODER + 100) // ensure runs after ContextFilter
 public class AliasFilter implements ContainerRequestFilter {
-  private static final Logger log = LoggerFactory.getLogger(AliasFilter.class);
-
   private final KafkaSchemaRegistry schemaRegistry;
 
   public AliasFilter(KafkaSchemaRegistry schemaRegistry) {
@@ -70,7 +66,6 @@ public class AliasFilter implements ContainerRequestFilter {
   String modifyUriPath(String path) {
     boolean subjectPathFound = false;
     StringBuilder modifiedPath = new StringBuilder();
-    boolean isFirst = true;
     for (String uriPathStr : path.split("/")) {
 
       String modifiedUriPathStr = uriPathStr;
@@ -85,9 +80,6 @@ public class AliasFilter implements ContainerRequestFilter {
       }
 
       modifiedPath.append(modifiedUriPathStr).append("/");
-      if (isFirst && !uriPathStr.isEmpty()) {
-        isFirst = false;
-      }
     }
 
     return modifiedPath.toString();

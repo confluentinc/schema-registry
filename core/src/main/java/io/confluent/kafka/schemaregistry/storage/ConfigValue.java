@@ -249,7 +249,7 @@ public class ConfigValue extends SubjectValue {
               ? newConfig.getSubject() : oldConfig.getSubject(),
           newConfig.getAlias() != null
               ? newConfig.getAlias() : oldConfig.getAlias(),
-          newConfig.isNormalize()
+          newConfig.isNormalize() != null
               ? newConfig.isNormalize() : oldConfig.isNormalize(),
           newConfig.getCompatibilityLevel() != null
               ? newConfig.getCompatibilityLevel() : oldConfig.getCompatibilityLevel(),

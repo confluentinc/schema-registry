@@ -34,7 +34,7 @@ public class AliasFilterTest {
   }
 
   @Test
-  public void testRoot() throws Exception {
+  public void testRoot() {
     String path = "/";
     Assert.assertEquals(
         "URI must not change",
