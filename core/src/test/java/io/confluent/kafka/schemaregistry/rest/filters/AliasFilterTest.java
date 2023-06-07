@@ -37,7 +37,7 @@ public class AliasFilterTest {
   public void testRoot() throws Exception {
     String path = "/";
     Assert.assertEquals(
-        "URI most not change",
+        "URI must not change",
         "",
         aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
