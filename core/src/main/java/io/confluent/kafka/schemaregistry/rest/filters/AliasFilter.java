@@ -31,7 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @PreMatching
-@Priority(Priorities.ENTITY_CODER)
+@Priority(Priorities.ENTITY_CODER + 100) // ensure runs after ContextFilter
 public class AliasFilter implements ContainerRequestFilter {
   private static final Logger log = LoggerFactory.getLogger(AliasFilter.class);
 

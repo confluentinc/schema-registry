@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -711,7 +712,8 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
   @Test
   public void testSubjectAliasWithContext() throws Exception {
-    String subject = ":.mycontext:testSubject";
+    RestService restClient1 = new RestService(restApp.restConnect + "/contexts/.mycontext");
+    RestService restClient2 = new RestService(restApp.restConnect + "/contexts/.mycontext2");
 
     // register a valid avro
     String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -721,7 +723,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(schemaString1, subject));
+        restClient1.registerSchema(schemaString1, "testSubject"));
 
     ConfigUpdateRequest config = new ConfigUpdateRequest();
     config.setAlias(":.mycontext:testSubject");
@@ -730,7 +732,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         config,
         restApp.restClient.updateConfig(config, ":.mycontext2:testAlias"));
 
-    Schema schema = restApp.restClient.getVersion(":.mycontext2:testAlias", 1);
+    Schema schema = restClient2.getVersion("testAlias", 1);
     assertEquals(schemaString1, schema.getSchema());
   }
 
