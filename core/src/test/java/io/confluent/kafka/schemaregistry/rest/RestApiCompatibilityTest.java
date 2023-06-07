@@ -710,6 +710,31 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testSubjectAliasWithContext() throws Exception {
+    String subject = ":.mycontext:testSubject";
+
+    // register a valid avro
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(schemaString1, subject));
+
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setAlias(":.mycontext:testSubject");
+    // set alias config
+    assertEquals("Setting alias config should succeed",
+        config,
+        restApp.restClient.updateConfig(config, ":.mycontext2:testAlias"));
+
+    Schema schema = restApp.restClient.getVersion(":.mycontext2:testAlias", 1);
+    assertEquals(schemaString1, schema.getSchema());
+  }
+
+  @Test
   public void testGlobalAliasNotUsed() throws Exception {
     String subject = "testSubject";
 
