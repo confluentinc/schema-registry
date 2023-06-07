@@ -61,7 +61,7 @@ public class AliasFilter implements ContainerRequestFilter {
   }
 
   /**
-   * This method looks for subject in the path param and and checks if it is an alias.
+   * This method looks for subject in the path param and checks if it is an alias.
    * If so, it replaces the alias with the actual subject.
    * @param path The original request URI
    * @return The modified request URI
