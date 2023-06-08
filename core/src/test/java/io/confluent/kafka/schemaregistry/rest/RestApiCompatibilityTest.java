@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -186,8 +187,8 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
             restApp.restClient.registerSchema(schemaString1, subject));
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
-            CompatibilityLevel.BACKWARD.name,
-            restApp.restClient.getConfig(null).getCompatibilityLevel());
+            new Config(CompatibilityLevel.BACKWARD.name),
+            restApp.restClient.getConfig(null));
     // change it to forward
     assertEquals("Changing compatibility level should succeed",
             CompatibilityLevel.FORWARD.name,
@@ -197,8 +198,8 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     // verify that new compatibility level is forward
     assertEquals("New compatibility level should be forward",
-            CompatibilityLevel.FORWARD.name,
-            restApp.restClient.getConfig(null).getCompatibilityLevel());
+            new Config(CompatibilityLevel.FORWARD.name),
+            restApp.restClient.getConfig(null));
 
     // register schema that is forward compatible with schemaString1
     String schemaString2 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -219,8 +220,8 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     // verify that new compatibility level is backward
     assertEquals("Updated compatibility level should be backward",
-            CompatibilityLevel.BACKWARD.name,
-            restApp.restClient.getConfig(null).getCompatibilityLevel());
+            new Config(CompatibilityLevel.BACKWARD.name),
+            restApp.restClient.getConfig(null));
 
             // register forward compatible schema, which should fail
             String schemaString3 = AvroUtils.parseSchema("{\"type\":\"record\","

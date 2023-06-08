@@ -39,7 +39,7 @@ public class ConfigValue extends SubjectValue {
 
   public ConfigValue(@JsonProperty("subject") String subject,
                      @JsonProperty("alias") String alias,
-                     @JsonProperty("normalize") boolean normalize,
+                     @JsonProperty("normalize") Boolean normalize,
                      @JsonProperty("compatibilityLevel") CompatibilityLevel compatibilityLevel,
                      @JsonProperty("compatibilityGroup") String compatibilityGroup,
                      @JsonProperty("defaultMetadata") Metadata defaultMetadata,
