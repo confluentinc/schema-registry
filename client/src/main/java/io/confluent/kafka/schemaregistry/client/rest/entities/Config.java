@@ -29,6 +29,8 @@ import java.util.Objects;
 @Schema(description = "Config")
 public class Config {
 
+  private String alias;
+  private Boolean normalize;
   private String compatibilityLevel;
   private String compatibilityGroup;
   private Metadata defaultMetadata;
@@ -37,12 +39,16 @@ public class Config {
   private RuleSet overrideRuleSet;
 
   @JsonCreator
-  public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel,
+  public Config(@JsonProperty("alias") String alias,
+                @JsonProperty("normalize") Boolean normalize,
+                @JsonProperty("compatibilityLevel") String compatibilityLevel,
                 @JsonProperty("compatibilityGroup") String compatibilityGroup,
                 @JsonProperty("defaultMetadata") Metadata defaultMetadata,
                 @JsonProperty("overrideMetadata") Metadata overrideMetadata,
                 @JsonProperty("defaultRuleSet") RuleSet defaultRuleSet,
                 @JsonProperty("overrideRuleSet") RuleSet overrideRuleSet) {
+    this.alias = alias;
+    this.normalize = normalize;
     this.compatibilityLevel = compatibilityLevel;
     this.compatibilityGroup = compatibilityGroup;
     this.defaultMetadata = defaultMetadata;
@@ -59,12 +65,34 @@ public class Config {
   }
 
   public Config(ConfigUpdateRequest request) {
+    this.alias = request.getAlias();
+    this.normalize = request.isNormalize();
     this.compatibilityLevel = request.getCompatibilityLevel();
     this.compatibilityGroup = request.getCompatibilityGroup();
     this.defaultMetadata = request.getDefaultMetadata();
     this.overrideMetadata = request.getDefaultMetadata();
     this.defaultRuleSet = request.getDefaultRuleSet();
     this.overrideRuleSet = request.getOverrideRuleSet();
+  }
+
+  @JsonProperty("alias")
+  public String getAlias() {
+    return alias;
+  }
+
+  @JsonProperty("alias")
+  public void setAlias(String alias) {
+    this.alias = alias;
+  }
+
+  @JsonProperty("normalize")
+  public Boolean isNormalize() {
+    return normalize;
+  }
+
+  @JsonProperty("normalize")
+  public void setNormalize(Boolean normalize) {
+    this.normalize = normalize;
   }
 
   @Schema(description = "Compatibility Level",
@@ -140,7 +168,9 @@ public class Config {
       return false;
     }
     Config config = (Config) o;
-    return Objects.equals(compatibilityLevel, config.compatibilityLevel)
+    return Objects.equals(alias, config.alias)
+        && Objects.equals(normalize, config.normalize)
+        && Objects.equals(compatibilityLevel, config.compatibilityLevel)
         && Objects.equals(compatibilityGroup, config.compatibilityGroup)
         && Objects.equals(defaultMetadata, config.defaultMetadata)
         && Objects.equals(overrideMetadata, config.overrideMetadata)
@@ -150,14 +180,16 @@ public class Config {
 
   @Override
   public int hashCode() {
-    return Objects.hash(compatibilityLevel, compatibilityGroup,
+    return Objects.hash(alias, normalize, compatibilityLevel, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
 
   @Override
   public String toString() {
     return "Config{"
-        + "compatibilityLevel='" + compatibilityLevel + '\''
+        + "alias='" + alias + '\''
+        + ", normalize=" + normalize
+        + ", compatibilityLevel='" + compatibilityLevel + '\''
         + ", compatibilityGroup='" + compatibilityGroup + '\''
         + ", defaultMetadata=" + defaultMetadata
         + ", overrideMetadata=" + overrideMetadata

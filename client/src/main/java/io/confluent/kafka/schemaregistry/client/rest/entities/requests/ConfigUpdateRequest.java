@@ -33,6 +33,8 @@ import java.util.Objects;
 @Schema(description = "Config update request")
 public class ConfigUpdateRequest {
 
+  private String alias;
+  private Boolean normalize;
   private String compatibilityLevel;
   private String compatibilityGroup;
   private Metadata defaultMetadata;
@@ -44,6 +46,8 @@ public class ConfigUpdateRequest {
   }
 
   public ConfigUpdateRequest(Config config) {
+    this.alias = config.getAlias();
+    this.normalize = config.isNormalize();
     this.compatibilityLevel = config.getCompatibilityLevel();
     this.compatibilityGroup = config.getCompatibilityGroup();
     this.defaultMetadata = config.getDefaultMetadata();
@@ -54,6 +58,26 @@ public class ConfigUpdateRequest {
 
   public static ConfigUpdateRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, ConfigUpdateRequest.class);
+  }
+
+  @JsonProperty("alias")
+  public String getAlias() {
+    return this.alias;
+  }
+
+  @JsonProperty("alias")
+  public void setAlias(String alias) {
+    this.alias = alias;
+  }
+
+  @JsonProperty("normalize")
+  public Boolean isNormalize() {
+    return this.normalize;
+  }
+
+  @JsonProperty("normalize")
+  public void setNormalize(Boolean normalize) {
+    this.normalize = normalize;
   }
 
   @Schema(description = "Compatibility Level",
@@ -133,7 +157,9 @@ public class ConfigUpdateRequest {
       return false;
     }
     ConfigUpdateRequest that = (ConfigUpdateRequest) o;
-    return Objects.equals(compatibilityLevel, that.compatibilityLevel)
+    return Objects.equals(alias, that.alias)
+        && Objects.equals(normalize, that.normalize)
+        && Objects.equals(compatibilityLevel, that.compatibilityLevel)
         && Objects.equals(compatibilityGroup, that.compatibilityGroup)
         && Objects.equals(defaultMetadata, that.defaultMetadata)
         && Objects.equals(overrideMetadata, that.overrideMetadata)
@@ -143,7 +169,7 @@ public class ConfigUpdateRequest {
 
   @Override
   public int hashCode() {
-    return Objects.hash(compatibilityLevel, compatibilityGroup,
+    return Objects.hash(alias, normalize, compatibilityLevel, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
 }
