@@ -67,6 +67,10 @@ public class AliasFilter implements ContainerRequestFilter {
     boolean subjectPathFound = false;
     StringBuilder modifiedPath = new StringBuilder();
     for (String uriPathStr : path.split("/")) {
+      if (uriPathStr.isEmpty()) {
+        continue;
+      }
+      modifiedPath.append("/");
 
       String modifiedUriPathStr = uriPathStr;
 
@@ -79,7 +83,10 @@ public class AliasFilter implements ContainerRequestFilter {
         subjectPathFound = true;
       }
 
-      modifiedPath.append(modifiedUriPathStr).append("/");
+      modifiedPath.append(modifiedUriPathStr);
+    }
+    if (path.endsWith("/")) {
+      modifiedPath.append("/");
     }
 
     return modifiedPath.toString();

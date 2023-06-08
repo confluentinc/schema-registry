@@ -38,7 +38,7 @@ public class AliasFilterTest {
     String path = "/";
     Assert.assertEquals(
         "URI must not change",
-        "",
+        "/",
         aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
@@ -48,7 +48,7 @@ public class AliasFilterTest {
     String path = "/subjects/myAlias/versions";
     Assert.assertEquals(
         "Subject must be replaced",
-        "/subjects/mySubject/versions/",
+        "/subjects/mySubject/versions",
         aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
@@ -58,7 +58,7 @@ public class AliasFilterTest {
     String path = "/subjects";
     Assert.assertEquals(
         "Subject must not change",
-        "/subjects/",
+        "/subjects",
         aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
@@ -75,11 +75,11 @@ public class AliasFilterTest {
 
   @Test
   public void testUriWithIds() {
-    String path = "/schemas/ids/1/";
+    String path = "/schemas/ids/1";
     URI uri = aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>());
     Assert.assertEquals(
         "URI must not change",
-        "/schemas/ids/1/",
+        "/schemas/ids/1",
         uri.getPath()
     );
     Assert.assertEquals(
@@ -114,7 +114,7 @@ public class AliasFilterTest {
     String path = "/config/myAlias";
     Assert.assertEquals(
         "Subject must not change",
-        "/config/myAlias/",
+        "/config/myAlias",
         aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
@@ -124,7 +124,7 @@ public class AliasFilterTest {
     String path = "/chc/live";
     Assert.assertEquals(
         "URI must not change",
-        "/chc/live/",
+        "/chc/live",
         aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
@@ -134,7 +134,7 @@ public class AliasFilterTest {
     String path = "/mode/myAlias";
     Assert.assertEquals(
         "Subject must not change",
-        "/mode/myAlias/",
+        "/mode/myAlias",
         aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
