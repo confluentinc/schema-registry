@@ -220,7 +220,7 @@ public final class Root {
     @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      if (!getRootIdBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(rootId_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, rootId_);
       }
       if (ref_ != null) {
@@ -235,7 +235,7 @@ public final class Root {
       if (size != -1) return size;
 
       size = 0;
-      if (!getRootIdBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(rootId_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, rootId_);
       }
       if (ref_ != null) {

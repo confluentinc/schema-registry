@@ -25,6 +25,12 @@ import java.util.Map;
 
 public class AvroDataConfig extends AbstractConfig {
 
+  public static final String GENERALIZED_SUM_TYPE_SUPPORT_CONFIG = "generalized.sum.type.support";
+  public static final boolean GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT = false;
+  public static final String GENERALIZED_SUM_TYPE_SUPPORT_DOC =
+      "Toggle for enabling/disabling generalized sum type support: interoperability of enum/union "
+      + "with other schema formats";
+
   public static final String ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG = "enhanced.avro.schema.support";
   public static final boolean ENHANCED_AVRO_SCHEMA_SUPPORT_DEFAULT = false;
   public static final String ENHANCED_AVRO_SCHEMA_SUPPORT_DOC =
@@ -61,6 +67,11 @@ public class AvroDataConfig extends AbstractConfig {
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
+        .define(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG,
+                ConfigDef.Type.BOOLEAN,
+                GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT,
+                ConfigDef.Importance.MEDIUM,
+                GENERALIZED_SUM_TYPE_SUPPORT_DOC)
         .define(ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG,
                 ConfigDef.Type.BOOLEAN,
                 ENHANCED_AVRO_SCHEMA_SUPPORT_DEFAULT,
@@ -86,6 +97,10 @@ public class AvroDataConfig extends AbstractConfig {
 
   public AvroDataConfig(Map<?, ?> props) {
     super(baseConfigDef(), props);
+  }
+
+  public boolean isGeneralizedSumTypeSupport() {
+    return this.getBoolean(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG);
   }
 
   public boolean isEnhancedAvroSchemaSupport() {

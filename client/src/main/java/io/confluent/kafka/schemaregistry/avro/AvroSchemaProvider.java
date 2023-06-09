@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.avro;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -47,16 +46,15 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
   }
 
   @Override
-  public Optional<ParsedSchema> parseSchema(String schemaString,
-                                            List<SchemaReference> references,
-                                            boolean isNew) {
+  public ParsedSchema parseSchemaOrElseThrow(String schemaString,
+                                             List<SchemaReference> references,
+                                             boolean isNew) {
     try {
-      return Optional.of(
-          new AvroSchema(schemaString, references, resolveReferences(references), null,
-              validateDefaults && isNew));
+      return new AvroSchema(schemaString, references, resolveReferences(references), null,
+                      validateDefaults && isNew);
     } catch (Exception e) {
       log.error("Could not parse Avro schema", e);
-      return Optional.empty();
+      throw e;
     }
   }
 }

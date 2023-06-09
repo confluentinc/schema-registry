@@ -24,6 +24,12 @@ import org.apache.kafka.common.config.ConfigDef;
 
 public class ProtobufDataConfig extends AbstractConfig {
 
+  public static final String GENERALIZED_SUM_TYPE_SUPPORT_CONFIG = "generalized.sum.type.support";
+  public static final boolean GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT = false;
+  public static final String GENERALIZED_SUM_TYPE_SUPPORT_DOC =
+      "Toggle for enabling/disabling generalized sum type support: interoperability of enum/union "
+          + "with other schema formats";
+
   public static final String ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG =
       "enhanced.protobuf.schema.support";
   public static final boolean ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DEFAULT = false;
@@ -35,6 +41,10 @@ public class ProtobufDataConfig extends AbstractConfig {
   public static final boolean SCRUB_INVALID_NAMES_DEFAULT = false;
   public static final String SCRUB_INVALID_NAMES_DOC =
       "Whether to scrub invalid names by replacing invalid characters with valid ones";
+
+  public static final String INT_FOR_ENUMS_CONFIG = "int.for.enums";
+  public static final boolean INT_FOR_ENUMS_DEFAULT = false;
+  public static final String INT_FOR_ENUMS_DOC = "Whether to represent enums as integers";
 
   public static final String OPTIONAL_FOR_NULLABLES_CONFIG = "optional.for.nullables";
   public static final boolean OPTIONAL_FOR_NULLABLES_DEFAULT = false;
@@ -61,6 +71,11 @@ public class ProtobufDataConfig extends AbstractConfig {
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
+        .define(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT,
+            ConfigDef.Importance.MEDIUM,
+            GENERALIZED_SUM_TYPE_SUPPORT_DOC)
         .define(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG,
             ConfigDef.Type.BOOLEAN,
             ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DEFAULT,
@@ -68,6 +83,11 @@ public class ProtobufDataConfig extends AbstractConfig {
             ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DOC)
         .define(SCRUB_INVALID_NAMES_CONFIG, ConfigDef.Type.BOOLEAN, SCRUB_INVALID_NAMES_DEFAULT,
             ConfigDef.Importance.MEDIUM, SCRUB_INVALID_NAMES_DOC)
+        .define(INT_FOR_ENUMS_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            INT_FOR_ENUMS_DEFAULT,
+            ConfigDef.Importance.MEDIUM,
+            INT_FOR_ENUMS_DOC)
         .define(OPTIONAL_FOR_NULLABLES_CONFIG,
             ConfigDef.Type.BOOLEAN,
             OPTIONAL_FOR_NULLABLES_DEFAULT,
@@ -100,12 +120,20 @@ public class ProtobufDataConfig extends AbstractConfig {
     super(baseConfigDef(), props);
   }
 
+  public boolean isGeneralizedSumTypeSupportDefault() {
+    return this.getBoolean(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG);
+  }
+
   public boolean isEnhancedProtobufSchemaSupport() {
     return this.getBoolean(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG);
   }
 
   public boolean isScrubInvalidNames() {
     return this.getBoolean(SCRUB_INVALID_NAMES_CONFIG);
+  }
+
+  public boolean useIntForEnums() {
+    return this.getBoolean(INT_FOR_ENUMS_CONFIG);
   }
 
   public boolean useOptionalForNullables() {

@@ -24,6 +24,7 @@ import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
 import com.google.protobuf.DescriptorProtos.FileOptions;
 import com.google.protobuf.DescriptorProtos.FileOptions.OptimizeMode;
+import com.google.protobuf.DescriptorProtos.ServiceDescriptorProto;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.DescriptorValidationException;
 import com.google.protobuf.Descriptors.EnumDescriptor;
@@ -424,6 +425,16 @@ public class DynamicSchema {
     public Builder addEnumDefinition(EnumDefinition enumDef) {
       mFileDescProtoBuilder.addEnumType(enumDef.getEnumType());
       return this;
+    }
+
+    public boolean containsService(String name) {
+      List<ServiceDescriptorProto> services = mFileDescProtoBuilder.getServiceList();
+      for (ServiceDescriptorProto service : services) {
+        if (service.getName().equals(name)) {
+          return true;
+        }
+      }
+      return false;
     }
 
     public Builder addServiceDefinition(ServiceDefinition serviceDef) {

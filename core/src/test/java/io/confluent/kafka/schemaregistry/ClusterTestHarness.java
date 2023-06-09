@@ -130,17 +130,13 @@ public abstract class ClusterTestHarness {
       servers.add(server);
     }
 
-    brokerList =
-        TestUtils.getBrokerListStrFromServers(
-            JavaConverters.asScalaBuffer(servers),
-            getSecurityProtocol()
-        );
+    ListenerName listenerType = ListenerName.forSecurityProtocol(getSecurityProtocol());
+    brokerList = TestUtils.bootstrapServers(JavaConverters.asScalaBuffer(servers), listenerType);
 
     // Initialize the rest app ourselves so we can ensure we don't pass any info about the Kafka
     // zookeeper. The format for this config includes the security protocol scheme in the URLs so
     // we can't use the pre-generated server list.
     String[] serverUrls = new String[servers.size()];
-    ListenerName listenerType = ListenerName.forSecurityProtocol(getSecurityProtocol());
     for(int i = 0; i < servers.size(); i++) {
       serverUrls[i] = getSecurityProtocol() + "://" +
                       Utils.formatAddress(

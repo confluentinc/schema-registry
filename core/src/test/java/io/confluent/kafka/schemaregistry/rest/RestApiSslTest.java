@@ -119,11 +119,17 @@ public class RestApiSslTest extends ClusterTestHarness {
         SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_KEYSTORE_PASSWORD_CONFIG,
         props.get(SchemaRegistryConfig.SSL_KEYSTORE_PASSWORD_CONFIG));
     clientsslConfigs.put(
+        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_KEYSTORE_TYPE_CONFIG,
+        props.get(SchemaRegistryConfig.SSL_KEYSTORE_TYPE_CONFIG));
+    clientsslConfigs.put(
         SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_TRUSTSTORE_LOCATION_CONFIG,
         props.get(SchemaRegistryConfig.SSL_TRUSTSTORE_LOCATION_CONFIG));
     clientsslConfigs.put(
         SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG,
         props.get(SchemaRegistryConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+    clientsslConfigs.put(
+        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_TRUSTSTORE_TYPE_CONFIG,
+        props.get(SchemaRegistryConfig.SSL_TRUSTSTORE_TYPE_CONFIG));
     CachedSchemaRegistryClient schemaRegistryClient = new CachedSchemaRegistryClient(restApp.restClient, 10, clientsslConfigs);
 
     assertEquals(

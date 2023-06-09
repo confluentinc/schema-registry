@@ -32,6 +32,12 @@ import org.apache.kafka.common.config.ConfigException;
 
 public class JsonSchemaDataConfig extends AbstractConfig {
 
+  public static final String GENERALIZED_SUM_TYPE_SUPPORT_CONFIG = "generalized.sum.type.support";
+  public static final boolean GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT = false;
+  public static final String GENERALIZED_SUM_TYPE_SUPPORT_DOC =
+      "Toggle for enabling/disabling generalized sum type support: interoperability of enum/union "
+      + "with other schema formats";
+
   public static final String OBJECT_ADDITIONAL_PROPERTIES_CONFIG = "object.additional.properties";
   public static final boolean OBJECT_ADDITIONAL_PROPERTIES_DEFAULT = true;
   public static final String OBJECT_ADDITIONAL_PROPERTIES_DOC =
@@ -54,6 +60,12 @@ public class JsonSchemaDataConfig extends AbstractConfig {
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef().define(
+        GENERALIZED_SUM_TYPE_SUPPORT_CONFIG,
+        ConfigDef.Type.BOOLEAN,
+        GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT,
+        ConfigDef.Importance.MEDIUM,
+        GENERALIZED_SUM_TYPE_SUPPORT_DOC
+    ).define(
         OBJECT_ADDITIONAL_PROPERTIES_CONFIG,
         ConfigDef.Type.BOOLEAN,
         OBJECT_ADDITIONAL_PROPERTIES_DEFAULT,
@@ -84,6 +96,10 @@ public class JsonSchemaDataConfig extends AbstractConfig {
 
   public JsonSchemaDataConfig(Map<?, ?> props) {
     super(baseConfigDef(), props);
+  }
+
+  public boolean isGeneralizedSumTypeSupport() {
+    return this.getBoolean(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG);
   }
 
   public boolean allowAdditionalProperties() {

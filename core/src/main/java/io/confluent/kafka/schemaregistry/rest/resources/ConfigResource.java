@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOBAL_RESOURCE_NAME;
+
 import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
@@ -95,9 +97,12 @@ public class ConfigResource {
       throw new RestInvalidCompatibilityException();
     }
 
-    if (subject != null && CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
+    if (subject != null && (CharMatcher.javaIsoControl().matchesAnyOf(subject)
+        || QualifiedSubject.create(this.schemaRegistry.tenant(), subject).getSubject()
+            .equals(GLOBAL_RESOURCE_NAME))) {
       throw Errors.invalidSubjectException(subject);
     }
+
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     try {
@@ -214,6 +219,39 @@ public class ConfigResource {
   }
 
   @DELETE
+  @Operation(summary = "Deletes the Global-level compatibility level config and "
+      + "revert to the global default.", responses = {
+        @ApiResponse(content = @Content(
+            schema = @Schema(implementation = CompatibilityLevel.class))),
+        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+          + "datastore")
+      })
+  public void deleteTopLevelConfig(
+      final @Suspended AsyncResponse asyncResponse,
+      @Context HttpHeaders headers) {
+    log.info("Deleting Global compatibility setting and reverting back to default");
+
+    Config deletedConfig;
+    try {
+      CompatibilityLevel currentCompatibility = schemaRegistry.getCompatibilityLevel(null);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+          headers, schemaRegistry.config().whitelistHeaders());
+      schemaRegistry.deleteCompatibilityConfigOrForward(null, headerProperties);
+      deletedConfig = new Config(currentCompatibility.name);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Failed to delete compatibility level", e);
+    } catch (UnknownLeaderException e) {
+      throw Errors.unknownLeaderException("Failed to delete compatibility level", e);
+    } catch (SchemaRegistryRequestForwardingException e) {
+      throw Errors.requestForwardingFailedException("Error while forwarding delete config request"
+          + " to the leader", e);
+    }
+    asyncResponse.resume(deletedConfig);
+  }
+
+  @DELETE
   @Path("/{subject}")
   @Operation(summary = "Delete subject compatibility level",
       description = "Deletes the specified subject-level compatibility level config and "
@@ -243,7 +281,7 @@ public class ConfigResource {
 
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteSubjectCompatibilityConfigOrForward(subject, headerProperties);
+      schemaRegistry.deleteCompatibilityConfigOrForward(subject, headerProperties);
       deletedConfig = new Config(currentCompatibility.name);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());

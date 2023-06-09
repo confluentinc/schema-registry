@@ -65,6 +65,10 @@ public class KafkaJsonDeserializer<T> implements Deserializer<T> {
     }
   }
 
+  public ObjectMapper objectMapper() {
+    return objectMapper;
+  }
+
   @Override
   public T deserialize(String ignored, byte[] bytes) {
     if (bytes == null || bytes.length == 0) {
