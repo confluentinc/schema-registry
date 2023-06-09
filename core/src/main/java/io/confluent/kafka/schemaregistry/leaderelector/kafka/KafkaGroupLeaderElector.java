@@ -24,7 +24,6 @@ import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LeaderElector;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
@@ -143,8 +142,6 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           clientConfig.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
               10000L ,
               127000L ,
-          ClientDnsLookup.forConfig(
-          clientConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
           time,
           true,
           new ApiVersions(),

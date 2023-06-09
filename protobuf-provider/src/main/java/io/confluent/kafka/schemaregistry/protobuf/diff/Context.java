@@ -20,8 +20,10 @@ import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 
+import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -31,7 +33,9 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class Context {
   private final Set<Difference.Type> compatibleChanges;
@@ -43,6 +47,10 @@ public class Context {
   private final Deque<String> fullPath;
   private final Deque<String> fullName;  // subset of path used for fully-qualified names
   private final List<Difference> diffs;
+
+  public Context() {
+    this(Collections.emptySet());
+  }
 
   public Context(Set<Difference.Type> compatibleChanges) {
     this.compatibleChanges = compatibleChanges;
@@ -66,43 +74,92 @@ public class Context {
     return ctx;
   }
 
-  public SchemaScope enterSchema(final MessageElement schema) {
-    return !schemas.contains(schema) ? new SchemaScope(schema) : null;
+  public void collectTypeInfo(ProtobufSchema schema, boolean isOriginal) {
+    Map<String, SchemaReference> references = schema.references().stream()
+        .collect(Collectors.toMap(
+            SchemaReference::getName,
+            r -> r,
+            (existing, replacement) -> replacement));
+    Map<String, ProtoFileElement> dependencies = schema.dependenciesWithLogicalTypes();
+    for (Map.Entry<String, ProtoFileElement> entry : dependencies.entrySet()) {
+      String refName = entry.getKey();
+      ProtoFileElement protoFile = entry.getValue();
+      SchemaReference ref = references.get(refName);
+      collectTypeInfo(ref, protoFile, isOriginal);
+    }
+    SchemaReference dummyRef = new SchemaReference("", "", -1);
+    collectTypeInfo(dummyRef, schema.rawSchema(), isOriginal);
   }
 
-  public class SchemaScope implements AutoCloseable {
-    private final MessageElement schema;
+  private void collectTypeInfo(
+      final SchemaReference ref,
+      final ProtoFileElement protoFile,
+      boolean isOriginal
+  ) {
+    setPackageName(protoFile.getPackageName(), isOriginal);
+    collectTypeInfo(ref, protoFile.getTypes(), isOriginal);
+  }
 
-    public SchemaScope(final MessageElement schema) {
-      this.schema = schema;
-      schemas.add(schema);
-    }
-
-    public void close() {
-      schemas.remove(schema);
+  private void collectTypeInfo(
+      final SchemaReference ref,
+      final List<TypeElement> types,
+      boolean isOriginal
+  ) {
+    for (TypeElement typeElement : types) {
+      try (Context.NamedScope namedScope = enterName(typeElement.getName())) {
+        boolean isMap = false;
+        Optional<FieldElement> key = Optional.empty();
+        Optional<FieldElement> value = Optional.empty();
+        if (typeElement instanceof MessageElement) {
+          MessageElement messageElement = (MessageElement) typeElement;
+          isMap = ProtobufSchema.findOption("map_entry", messageElement.getOptions())
+              .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(false);
+          if (isMap) {
+            key = findField(ProtobufSchema.KEY_FIELD,
+                messageElement.getFields());
+            value = findField(ProtobufSchema.VALUE_FIELD,
+                messageElement.getFields());
+          }
+        }
+        addType(ref, typeElement, isMap, key.orElse(null), value.orElse(null), isOriginal);
+        collectTypeInfo(ref, typeElement.getNestedTypes(), isOriginal);
+      }
     }
   }
 
-  public void addType(final String name, final String packageName, final SchemaReference ref,
-      final TypeElement type, final boolean isMap, final FieldElement key, final FieldElement value,
-      final boolean isOriginal) {
+  private void addType(final SchemaReference ref, final TypeElement type, final boolean isMap,
+      final FieldElement key, final FieldElement value, final boolean isOriginal) {
+    String name = String.join(".", fullPath);
+    String packageName = isOriginal ? originalPackageName : updatePackageName;
+    if (!packageName.isEmpty()) {
+      name = packageName + "." + name;
+    }
+    TypeElementInfo typeInfo = new TypeElementInfo(packageName, ref, type, isMap, key, value);
     if (isOriginal) {
-      originalTypes.put(name, new TypeElementInfo(packageName, ref, type, isMap, key, value));
+      originalTypes.put(name, typeInfo);
     } else {
-      updateTypes.put(name, new TypeElementInfo(packageName, ref, type, isMap, key, value));
+      updateTypes.put(name, typeInfo);
     }
+  }
+
+  private static Optional<FieldElement> findField(String name, List<FieldElement> options) {
+    return options.stream().filter(o -> o.getName().equals(name)).findFirst();
   }
 
   public TypeElementInfo getType(final String name, final boolean isOriginal) {
     String fullName = resolve(name, isOriginal);
-    return getTypeForFullName(fullName, isOriginal);
+    return fullName != null ? getTypeForFullName(fullName, isOriginal) : null;
   }
 
   public void setPackageName(final String packageName, final boolean isOriginal) {
+    String name = packageName;
+    if (name == null) {
+      name = "";
+    }
     if (isOriginal) {
-      originalPackageName = packageName;
+      originalPackageName = name;
     } else {
-      updatePackageName = packageName;
+      updatePackageName = name;
     }
   }
 
@@ -122,6 +179,10 @@ public class Context {
     return new NamedScope(name);
   }
 
+  public SchemaScope enterSchema(final MessageElement schema) {
+    return !schemas.contains(schema) ? new SchemaScope(schema) : null;
+  }
+
   public String resolve(String name, boolean isOriginal) {
     if (name.startsWith(".")) {
       String n = name.substring(1);
@@ -130,16 +191,19 @@ public class Context {
         return n;
       }
     } else {
-      Deque<String> prefix = new ArrayDeque<>(fullName);
+      Deque<String> prefix = new ArrayDeque<>();
       if (isOriginal) {
         if (!originalPackageName.isEmpty()) {
-          prefix.addFirst(originalPackageName);
+          String[] parts = originalPackageName.split("\\.");
+          prefix.addAll(Arrays.asList(parts));
         }
       } else {
         if (!updatePackageName.isEmpty()) {
-          prefix.addFirst(updatePackageName);
+          String[] parts = updatePackageName.split("\\.");
+          prefix.addAll(Arrays.asList(parts));
         }
       }
+      prefix.addAll(fullName);
       while (!prefix.isEmpty()) {
         String n = String.join(".", prefix) + "." + name;
         TypeElementInfo type = getTypeForFullName(n, isOriginal);
@@ -156,33 +220,15 @@ public class Context {
     return null;
   }
 
-  private TypeElementInfo getTypeForFullName(final String fullName, final boolean isOriginal) {
+  public TypeElementInfo getTypeForFullName(final String fullName, final boolean isOriginal) {
+    String name = fullName;
+    if (name.startsWith(".")) {
+      name = name.substring(1);
+    }
     if (isOriginal) {
-      return originalTypes.get(fullName);
+      return originalTypes.get(name);
     } else {
-      return updateTypes.get(fullName);
-    }
-  }
-
-  public class PathScope implements AutoCloseable {
-    public PathScope(final String path) {
-      fullPath.addLast(path);
-    }
-
-    public void close() {
-      fullPath.removeLast();
-    }
-  }
-
-  public class NamedScope extends PathScope {
-    public NamedScope(final String name) {
-      super(name);
-      fullName.addLast(name);
-    }
-
-    public void close() {
-      fullName.removeLast();
-      super.close();
+      return updateTypes.get(name);
     }
   }
 
@@ -215,7 +261,42 @@ public class Context {
     return "#/" + String.join("/", fullPath);
   }
 
-  static class TypeElementInfo {
+  public class PathScope implements AutoCloseable {
+    public PathScope(final String path) {
+      fullPath.addLast(path);
+    }
+
+    public void close() {
+      fullPath.removeLast();
+    }
+  }
+
+  public class NamedScope extends PathScope {
+    public NamedScope(final String name) {
+      super(name);
+      fullName.addLast(name);
+    }
+
+    public void close() {
+      fullName.removeLast();
+      super.close();
+    }
+  }
+
+  public class SchemaScope implements AutoCloseable {
+    private final MessageElement schema;
+
+    public SchemaScope(final MessageElement schema) {
+      this.schema = schema;
+      schemas.add(schema);
+    }
+
+    public void close() {
+      schemas.remove(schema);
+    }
+  }
+
+  public static class TypeElementInfo {
     private final String packageName;
     private final SchemaReference ref;
     private final TypeElement type;

@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import com.google.common.base.CharMatcher;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
@@ -26,12 +28,15 @@ import java.util.Map;
 
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.container.AsyncResponse;
+import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 
@@ -84,6 +89,12 @@ public class ConfigResource {
     if (compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
     }
+
+    if (subject != null && CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
+      throw Errors.invalidSubjectException(subject);
+    }
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
@@ -111,6 +122,9 @@ public class ConfigResource {
   public Config getSubjectLevelConfig(
       @PathParam("subject") String subject,
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     Config config = null;
     try {
       CompatibilityLevel compatibilityLevel =
@@ -177,5 +191,46 @@ public class ConfigResource {
       throw Errors.storeException("Failed to get compatibility level", e);
     }
     return config;
+  }
+
+  @DELETE
+  @Path("/{subject}")
+  @ApiOperation(value = "Deletes the specified subject-level compatibility level config and "
+      + "revert to the global default.", response = CompatibilityLevel.class)
+  @ApiResponses(value = {
+      @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")
+  })
+  public void deleteSubjectConfig(
+      final @Suspended AsyncResponse asyncResponse,
+      @Context HttpHeaders headers,
+      @ApiParam(value = "the name of the subject", required = true)
+      @PathParam("subject") String subject) {
+    log.info("Deleting compatibility setting for subject {}", subject);
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
+    Config deletedConfig;
+    try {
+      CompatibilityLevel currentCompatibility = schemaRegistry.getCompatibilityLevel(subject);
+      if (currentCompatibility == null) {
+        throw Errors.subjectNotFoundException(subject);
+      }
+
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+          headers, schemaRegistry.config().whitelistHeaders());
+      schemaRegistry.deleteSubjectCompatibilityConfigOrForward(subject, headerProperties);
+      deletedConfig = new Config(currentCompatibility.name);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Failed to delete compatibility level", e);
+    } catch (UnknownLeaderException e) {
+      throw Errors.unknownLeaderException("Failed to delete compatibility level", e);
+    } catch (SchemaRegistryRequestForwardingException e) {
+      throw Errors.requestForwardingFailedException("Error while forwarding delete config request"
+          + " to the leader", e);
+    }
+    asyncResponse.resume(deletedConfig);
   }
 }

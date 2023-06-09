@@ -48,6 +48,60 @@ paths:
             type: "object"
             additionalProperties:
               type: "string"
+  /compatibility/subjects/{subject}/versions:
+    post:
+      summary: "Test input schema against a subject's schemas for compatibility, based\
+        \ on the compatibility level of the subject configured. In other word, it\
+        \ will perform the same compatibility check as register for that subject"
+      description: "the compatibility level applied for the check is the configured\
+        \ compatibility level for the subject (http:get:: /config/(string: subject)).\
+        \ If this subject's compatibility level was never changed, then the global\
+        \ compatibility level applies (http:get:: /config)."
+      operationId: "testCompatibilityForSubject"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters:
+      - name: "Content-Type"
+        in: "header"
+        required: false
+        type: "string"
+      - name: "Accept"
+        in: "header"
+        required: false
+        type: "string"
+      - name: "subject"
+        in: "path"
+        description: "Subject of the schema version against which compatibility is\
+          \ to be tested"
+        required: true
+        type: "string"
+      - in: "body"
+        name: "body"
+        description: "Schema"
+        required: true
+        schema:
+          $ref: "#/definitions/RegisterSchemaRequest"
+      - name: "verbose"
+        in: "query"
+        required: false
+        type: "boolean"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            $ref: "#/definitions/CompatibilityCheckResponse"
+        422:
+          description: "Error code 42201 -- Invalid schema or schema type\nError code\
+            \ 42202 -- Invalid version"
+        500:
+          description: "Error code 50001 -- Error in the backend data store"
   /compatibility/subjects/{subject}/versions/{version}:
     post:
       summary: "Test input schema against a particular version of a subject's schema\
@@ -232,6 +286,67 @@ paths:
         500:
           description: "Error code 50001 -- Error in the backend data store\nError\
             \ code 50003 -- Error while forwarding the request to the primary"
+    delete:
+      summary: "Deletes the specified subject-level compatibility level config and\
+        \ revert to the global default."
+      description: ""
+      operationId: "deleteSubjectConfig"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters:
+      - name: "subject"
+        in: "path"
+        description: "the name of the subject"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "string"
+            enum:
+            - "NONE"
+            - "BACKWARD"
+            - "BACKWARD_TRANSITIVE"
+            - "FORWARD"
+            - "FORWARD_TRANSITIVE"
+            - "FULL"
+            - "FULL_TRANSITIVE"
+        404:
+          description: "Error code 40401 -- Subject not found"
+        500:
+          description: "Error code 50001 -- Error in the backend datastore"
+  /contexts:
+    get:
+      summary: "Get a list of contexts."
+      description: ""
+      operationId: "listContexts"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters: []
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              type: "string"
+        500:
+          description: "Error code 50001 -- Error in the backend datastore"
   /mode:
     get:
       summary: "Get global mode."
@@ -251,7 +366,7 @@ paths:
         200:
           description: "successful operation"
           schema:
-            $ref: "#/definitions/ModeGetResponse"
+            $ref: "#/definitions/Mode"
         500:
           description: "Error code 50001 -- Error in the backend data store"
     put:
@@ -274,6 +389,10 @@ paths:
         required: true
         schema:
           $ref: "#/definitions/ModeUpdateRequest"
+      - name: "force"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -306,11 +425,15 @@ paths:
         description: "Name of the Subject"
         required: true
         type: "string"
+      - name: "defaultToGlobal"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
           schema:
-            $ref: "#/definitions/ModeGetResponse"
+            $ref: "#/definitions/Mode"
         404:
           description: "Subject not found"
         500:
@@ -340,6 +463,10 @@ paths:
         required: true
         schema:
           $ref: "#/definitions/ModeUpdateRequest"
+      - name: "force"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -352,6 +479,40 @@ paths:
           description: "Error code 50001 -- Error in the backend data store\nError\
             \ code 50003 -- Error while forwarding the request to the primary\nError\
             \ code 50004 -- Unknown leader"
+    delete:
+      summary: "Deletes the specified subject-level mode and revert to the global\
+        \ default."
+      description: ""
+      operationId: "deleteSubjectMode"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters:
+      - name: "subject"
+        in: "path"
+        description: "the name of the subject"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "string"
+            enum:
+            - "READWRITE"
+            - "READONLY"
+            - "READONLY_OVERRIDE"
+            - "IMPORT"
+        404:
+          description: "Error code 40401 -- Subject not found"
+        500:
+          description: "Error code 50001 -- Error in the backend datastore"
   /schemas:
     get:
       summary: "Get the schemas."
@@ -423,6 +584,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "subject"
+        in: "query"
+        required: false
+        type: "string"
       - name: "format"
         in: "query"
         required: false
@@ -462,6 +627,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "subject"
+        in: "query"
+        required: false
+        type: "string"
       - name: "deleted"
         in: "query"
         required: false
@@ -499,6 +668,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "subject"
+        in: "query"
+        required: false
+        type: "string"
       - name: "deleted"
         in: "query"
         required: false
@@ -554,6 +727,10 @@ paths:
       - "application/vnd.schemaregistry+json; qs=0.9"
       - "application/json; qs=0.5"
       parameters:
+      - name: "subjectPrefix"
+        in: "query"
+        required: false
+        type: "string"
       - name: "deleted"
         in: "query"
         required: false
@@ -590,6 +767,10 @@ paths:
         description: "Subject under which the schema will be registered"
         required: true
         type: "string"
+      - name: "normalize"
+        in: "query"
+        required: false
+        type: "boolean"
       - name: "deleted"
         in: "query"
         required: false
@@ -714,6 +895,10 @@ paths:
         description: "Name of the Subject"
         required: true
         type: "string"
+      - name: "normalize"
+        in: "query"
+        required: false
+        type: "boolean"
       - in: "body"
         name: "body"
         description: "Schema"
@@ -978,7 +1163,7 @@ definitions:
         - "FULL"
         - "FULL_TRANSITIVE"
         - "NONE"
-  ModeGetResponse:
+  Mode:
     type: "object"
     properties:
       mode:

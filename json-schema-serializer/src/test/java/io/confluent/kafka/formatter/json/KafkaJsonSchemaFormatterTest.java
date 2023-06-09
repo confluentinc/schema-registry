@@ -71,7 +71,7 @@ public class KafkaJsonSchemaFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     JsonSchemaMessageReader jsonSchemaReader =
         new JsonSchemaMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
-            true, false);
+            false, true, false);
     ProducerRecord<byte[], byte[]> message = jsonSchemaReader.readMessage();
 
     byte[] serializedValue = message.value();
@@ -98,7 +98,7 @@ public class KafkaJsonSchemaFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     JsonSchemaMessageReader jsonSchemaReader =
         new JsonSchemaMessageReader(schemaRegistry, keySchema, recordSchema, "topic1", true, reader,
-            true, false);
+            false, true, false);
     ProducerRecord<byte[], byte[]> message = jsonSchemaReader.readMessage();
 
     byte[] serializedKey = message.key();
@@ -123,7 +123,7 @@ public class KafkaJsonSchemaFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     JsonSchemaMessageReader jsonSchemaReader =
         new JsonSchemaMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
-            true, false);
+            false, true, false);
     try {
       jsonSchemaReader.readMessage();
       fail("Registering an invalid schema should fail");

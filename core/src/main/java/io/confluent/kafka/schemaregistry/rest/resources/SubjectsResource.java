@@ -19,10 +19,12 @@ import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
+import javax.ws.rs.DefaultValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,11 +90,15 @@ public class SubjectsResource {
       final @Suspended AsyncResponse asyncResponse,
       @ApiParam(value = "Subject under which the schema will be registered", required = true)
         @PathParam("subject") String subject,
+      @QueryParam("normalize") boolean normalize,
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     log.info("Schema lookup under subject {}, deleted {}, type {}",
              subject, lookupDeletedSchema, request.getSchemaType());
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     // returns version if the schema exists. Otherwise returns 404
     Schema schema = new Schema(
         subject,
@@ -104,19 +110,20 @@ public class SubjectsResource {
     );
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema = null;
     try {
-      if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
-        throw Errors.subjectNotFoundException(subject);
+      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
+          subject, schema, normalize, lookupDeletedSchema);
+      if (matchingSchema == null) {
+        if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
+          throw Errors.subjectNotFoundException(subject);
+        } else {
+          throw Errors.schemaNotFoundException();
+        }
       }
-      matchingSchema =
-          schemaRegistry.lookUpSchemaUnderSubject(subject, schema, lookupDeletedSchema);
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);
-    }
-    if (matchingSchema == null) {
-      throw Errors.schemaNotFoundException();
     }
     asyncResponse.resume(matchingSchema);
   }
@@ -128,10 +135,14 @@ public class SubjectsResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")})
   @PerformanceMetric("subjects.list")
   public Set<String> list(
+          @DefaultValue(QualifiedSubject.CONTEXT_WILDCARD)
+          @QueryParam("subjectPrefix") String subjectPrefix,
           @QueryParam("deleted") boolean lookupDeletedSubjects
   ) {
     try {
-      return schemaRegistry.listSubjects(lookupDeletedSubjects);
+      return schemaRegistry.listSubjectsWithPrefix(
+          subjectPrefix != null ? subjectPrefix : QualifiedSubject.CONTEXT_WILDCARD,
+          lookupDeletedSubjects);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {
@@ -156,6 +167,9 @@ public class SubjectsResource {
       @PathParam("subject") String subject,
       @QueryParam("permanent") boolean permanentDelete) {
     log.info("Deleting subject {}", subject);
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     List<Integer> deletedVersions;
     try {
       if (!schemaRegistry.hasSubjects(subject, true)) {

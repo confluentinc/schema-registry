@@ -20,9 +20,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
+import java.io.InterruptedIOException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.everit.json.schema.ValidationException;
 
 import java.io.ByteArrayOutputStream;
@@ -38,7 +40,10 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
 public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafkaSchemaSerDe {
 
+  protected boolean normalizeSchema;
   protected boolean autoRegisterSchema;
+  protected int useSchemaId = -1;
+  protected boolean idCompatStrict;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
@@ -49,7 +54,10 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
 
   protected void configure(KafkaJsonSchemaSerializerConfig config) {
     configureClientProperties(config, new JsonSchemaProvider());
+    this.normalizeSchema = config.normalizeSchema();
     this.autoRegisterSchema = config.autoRegisterSchema();
+    this.useSchemaId = config.useSchemaId();
+    this.idCompatStrict = config.getIdCompatibilityStrict();
     this.useLatestVersion = config.useLatestVersion();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
     boolean prettyPrint = config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_INDENT_OUTPUT);
@@ -79,6 +87,11 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       T object,
       JsonSchema schema
   ) throws SerializationException, InvalidConfigurationException {
+    if (schemaRegistry == null) {
+      throw new InvalidConfigurationException(
+          "SchemaRegistryClient not found. You need to configure the serializer "
+              + "or use serializer constructor with SchemaRegistryClient.");
+    }
     // null needs to treated specially since the client most likely just wants to send
     // an individual null value instead of making the subject a null type. Also, null in
     // Kafka has a special meaning for deletion in a topic with the compact retention policy.
@@ -92,14 +105,19 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering JSON schema: ";
-        id = schemaRegistry.register(subject, schema);
+        id = schemaRegistry.register(subject, schema, normalizeSchema);
+      } else if (useSchemaId >= 0) {
+        restClientErrorMsg = "Error retrieving schema ID";
+        schema = (JsonSchema)
+            lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
+        id = schemaRegistry.getId(subject, schema);
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
         schema = (JsonSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
         id = schemaRegistry.getId(subject, schema);
       } else {
         restClientErrorMsg = "Error retrieving JSON schema: ";
-        id = schemaRegistry.getId(subject, schema);
+        id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
       if (validate) {
         try {
@@ -119,6 +137,8 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       byte[] bytes = out.toByteArray();
       out.close();
       return bytes;
+    } catch (InterruptedIOException e) {
+      throw new TimeoutException("Error serializing JSON message", e);
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error serializing JSON message", e);
     } catch (RestClientException e) {

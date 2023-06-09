@@ -72,7 +72,7 @@ public final class MetaProto {
   /**
    * Protobuf type {@code confluent.Meta}
    */
-  public  static final class Meta extends
+  public static final class Meta extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:confluent.Meta)
       MetaOrBuilder {
@@ -185,6 +185,7 @@ public final class MetaProto {
      * <code>string doc = 1;</code>
      * @return The doc.
      */
+    @java.lang.Override
     public java.lang.String getDoc() {
       java.lang.Object ref = doc_;
       if (ref instanceof java.lang.String) {
@@ -201,6 +202,7 @@ public final class MetaProto {
      * <code>string doc = 1;</code>
      * @return The bytes for doc.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString
         getDocBytes() {
       java.lang.Object ref = doc_;
@@ -245,6 +247,7 @@ public final class MetaProto {
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
 
+    @java.lang.Override
     public boolean containsParams(
         java.lang.String key) {
       if (key == null) { throw new java.lang.NullPointerException(); }
@@ -253,6 +256,7 @@ public final class MetaProto {
     /**
      * Use {@link #getParamsMap()} instead.
      */
+    @java.lang.Override
     @java.lang.Deprecated
     public java.util.Map<java.lang.String, java.lang.String> getParams() {
       return getParamsMap();
@@ -260,6 +264,7 @@ public final class MetaProto {
     /**
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
+    @java.lang.Override
 
     public java.util.Map<java.lang.String, java.lang.String> getParamsMap() {
       return internalGetParams().getMap();
@@ -267,6 +272,7 @@ public final class MetaProto {
     /**
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
+    @java.lang.Override
 
     public java.lang.String getParamsOrDefault(
         java.lang.String key,
@@ -279,6 +285,7 @@ public final class MetaProto {
     /**
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
+    @java.lang.Override
 
     public java.lang.String getParamsOrThrow(
         java.lang.String key) {
@@ -750,6 +757,7 @@ public final class MetaProto {
        * <code>map&lt;string, string&gt; params = 2;</code>
        */
 
+      @java.lang.Override
       public boolean containsParams(
           java.lang.String key) {
         if (key == null) { throw new java.lang.NullPointerException(); }
@@ -758,6 +766,7 @@ public final class MetaProto {
       /**
        * Use {@link #getParamsMap()} instead.
        */
+      @java.lang.Override
       @java.lang.Deprecated
       public java.util.Map<java.lang.String, java.lang.String> getParams() {
         return getParamsMap();
@@ -765,6 +774,7 @@ public final class MetaProto {
       /**
        * <code>map&lt;string, string&gt; params = 2;</code>
        */
+      @java.lang.Override
 
       public java.util.Map<java.lang.String, java.lang.String> getParamsMap() {
         return internalGetParams().getMap();
@@ -772,6 +782,7 @@ public final class MetaProto {
       /**
        * <code>map&lt;string, string&gt; params = 2;</code>
        */
+      @java.lang.Override
 
       public java.lang.String getParamsOrDefault(
           java.lang.String key,
@@ -784,6 +795,7 @@ public final class MetaProto {
       /**
        * <code>map&lt;string, string&gt; params = 2;</code>
        */
+      @java.lang.Override
 
       public java.lang.String getParamsOrThrow(
           java.lang.String key) {

@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import org.junit.Test;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
@@ -131,11 +132,33 @@ public class SchemaValuesTest {
   }
 
   @Test
-  public void testSchemaValueNormalize() {
+  public void testSchemaValueDeserializeForOffsetTimestamp() throws SerializationException {
+    String subject = "test";
+    int version = 1;
+    SchemaKey key = new SchemaKey(subject, version);
+    key.setMagicByte(1);
+    Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer = new SchemaRegistrySerializer();
+
+    String
+        schemaValueJson = "{\"subject\":\"test\",\"version\":1,\"id\":1,"
+        + "\"schema\":\"{\\\"type\\\":\\\"record\\\","
+        + "\\\"name\\\":\\\"myrecord\\\","
+        + "\\\"fields\\\":[{\\\"name\\\":\\\"f1067572235\\\","
+        + "\\\"type\\\":\\\"string\\\"}]}\",\"deleted\":true,\"offset\":1,\"ts\":123}";
+
+    SchemaValue schemaValue =
+        (SchemaValue) serializer.deserializeValue(key, schemaValueJson.getBytes());
+
+    assertEquals(1L, schemaValue.getOffset().longValue());
+    assertEquals(123L, schemaValue.getTimestamp().longValue());
+  }
+
+  @Test
+  public void testSchemaValueCanonicalize() {
     String oldSchema = "syntax = \"proto3\";\npackage com.mycorp.mynamespace;\n\n// Test Comment.\r\nmessage value {\n  int32 myField1 = 1;\n}\n";
     String newSchema = "syntax = \"proto3\";\npackage com.mycorp.mynamespace;\n\nmessage value {\n  int32 myField1 = 1;\n}\n";
     SchemaValue schemaValue = new SchemaValue("sub", 1, 0, ProtobufSchema.TYPE, null, oldSchema, false);
-    KafkaStoreMessageHandler.normalize(schemaValue);
+    KafkaStoreMessageHandler.canonicalize(new ProtobufSchemaProvider(), schemaValue);
     assertEquals(newSchema, schemaValue.getSchema());
   }
 

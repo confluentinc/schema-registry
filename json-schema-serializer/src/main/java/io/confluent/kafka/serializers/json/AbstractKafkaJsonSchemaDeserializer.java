@@ -20,10 +20,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import kafka.utils.VerifiableProperties;
+import java.io.InterruptedIOException;
+import java.util.Properties;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
@@ -43,6 +45,7 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
 public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKafkaSchemaSerDe {
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
+  protected boolean isKey;
   protected Class<T> type;
   protected String typeProperty;
   protected boolean validate;
@@ -74,8 +77,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     }
   }
 
-  protected KafkaJsonSchemaDeserializerConfig deserializerConfig(VerifiableProperties props) {
-    return new KafkaJsonSchemaDeserializerConfig(props.props());
+  protected KafkaJsonSchemaDeserializerConfig deserializerConfig(Properties props) {
+    return new KafkaJsonSchemaDeserializerConfig(props);
   }
 
   /**
@@ -89,7 +92,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
    */
   protected T deserialize(byte[] payload)
       throws SerializationException, InvalidConfigurationException {
-    return (T) deserialize(false, null, null, payload);
+    return (T) deserialize(false, null, isKey, payload);
   }
 
   // The Object return type is a bit messy, but this is the simplest way to have
@@ -97,7 +100,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected Object deserialize(
       boolean includeSchemaAndVersion, String topic, Boolean isKey, byte[] payload
   ) throws SerializationException, InvalidConfigurationException {
-
+    if (schemaRegistry == null) {
+      throw new InvalidConfigurationException(
+          "SchemaRegistryClient not found. You need to configure the deserializer "
+              + "or use deserializer constructor with SchemaRegistryClient.");
+    }
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
     if (payload == null) {
@@ -108,8 +115,9 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     try {
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
-      JsonSchema schema = ((JsonSchema) schemaRegistry.getSchemaById(id));
-      String subject = null;
+      String subject = isKey == null || strategyUsesSchema(isKey)
+          ? getContextName(topic) : subjectName(topic, isKey, null);
+      JsonSchema schema = ((JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id));
       if (includeSchemaAndVersion) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(id, schema, subject, isKey);
@@ -178,6 +186,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       }
 
       return value;
+    } catch (InterruptedIOException e) {
+      throw new TimeoutException("Error deserializing JSON message for id " + id, e);
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error deserializing JSON message for id " + id, e);
     } catch (RestClientException e) {
@@ -226,28 +236,25 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   private Integer schemaVersion(
-      String topic, Boolean isKey, int id, String subject, JsonSchema schema, Object value
+      String topic, boolean isKey, int id, String subject, JsonSchema schema, Object value
   ) throws IOException, RestClientException {
     Integer version;
     if (isDeprecatedSubjectNameStrategy(isKey)) {
       subject = getSubjectName(topic, isKey, value, schema);
-      JsonSchema subjectSchema = (JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
-      version = schemaRegistry.getVersion(subject, subjectSchema);
-    } else {
-      //we already got the subject name
-      version = schemaRegistry.getVersion(subject, schema);
     }
+    JsonSchema subjectSchema = (JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+    version = schemaRegistry.getVersion(subject, subjectSchema);
     return version;
   }
 
-  private String subjectName(String topic, Boolean isKey, JsonSchema schemaFromRegistry) {
+  private String subjectName(String topic, boolean isKey, JsonSchema schemaFromRegistry) {
     return isDeprecatedSubjectNameStrategy(isKey)
            ? null
            : getSubjectName(topic, isKey, null, schemaFromRegistry);
   }
 
   private JsonSchema schemaForDeserialize(
-      int id, JsonSchema schemaFromRegistry, String subject, Boolean isKey
+      int id, JsonSchema schemaFromRegistry, String subject, boolean isKey
   ) throws IOException, RestClientException {
     return isDeprecatedSubjectNameStrategy(isKey)
            ? JsonSchemaUtils.copyOf(schemaFromRegistry)

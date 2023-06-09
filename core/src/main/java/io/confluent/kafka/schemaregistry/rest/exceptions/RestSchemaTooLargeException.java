@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Confluent Inc.
+ * Copyright 2022 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -15,17 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-import io.confluent.rest.exceptions.RestException;
+import io.confluent.rest.exceptions.RestConstraintViolationException;
 
-public class InvalidCompatibilityException extends RestException {
+public class RestSchemaTooLargeException extends RestConstraintViolationException {
 
-  private static final int UNPROCESSABLE_ENTITY_STATUS_CODE = 422;
+  private static final int ERROR_CODE = Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
 
-  public InvalidCompatibilityException() {
-    super("Invalid compatibility level. Valid values are none, backward, forward, full, "
-                    + "backward_transitive, forward_transitive, and full_transitive",
-          UNPROCESSABLE_ENTITY_STATUS_CODE,
-          UNPROCESSABLE_ENTITY_STATUS_CODE);
+  public RestSchemaTooLargeException(String message) {
+    super(message, ERROR_CODE);
   }
-
 }

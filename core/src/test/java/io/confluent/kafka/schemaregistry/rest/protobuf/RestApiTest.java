@@ -154,7 +154,7 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaReference meta = new SchemaReference("confluent/meta.proto", "confluent/meta.proto", 1);
     List<SchemaReference> refs = Arrays.asList(ref, meta);
     request.setReferences(refs);
-    int registeredId = restApp.restClient.registerSchema(request, "referrer");
+    int registeredId = restApp.restClient.registerSchema(request, "referrer", false);
     assertEquals("Registering a new schema should succeed", 3, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(3);
@@ -211,9 +211,9 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchema(msg2);
     request.setSchemaType(ProtobufSchema.TYPE);
     SchemaReference meta = new SchemaReference("pkg1/msg1.proto", "pkg1/msg1.proto", 1);
-    List<SchemaReference> refs = Arrays.asList( meta);
+    List<SchemaReference> refs = Arrays.asList(meta);
     request.setReferences(refs);
-    int registeredId = restApp.restClient.registerSchema(request, subject);
+    int registeredId = restApp.restClient.registerSchema(request, subject, false);
     assertEquals("Registering a new schema should succeed", 2, registeredId);
   }
 
@@ -225,7 +225,94 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchema(schemas.get("root.proto"));
     request.setSchemaType(ProtobufSchema.TYPE);
     request.setReferences(Collections.emptyList());
-    restApp.restClient.registerSchema(request, "referrer");
+    restApp.restClient.registerSchema(request, "referrer", false);
+  }
+
+  @Test
+  public void testSchemaNormalization() throws Exception {
+    String subject1 = "testSubject1";
+
+    String msg1 = "syntax = \"proto3\";\n" +
+        "package pkg1;\n" +
+        "\n" +
+        "option go_package = \"pkg1pb\";\n" +
+        "option java_multiple_files = true;\n" +
+        "option java_outer_classname = \"Msg1Proto\";\n" +
+        "option java_package = \"com.pkg1\";\n" +
+        "\n" +
+        "message Message1 {\n" +
+        "  string s = 1;\n" +
+        "}\n";
+    String subject = "pkg1/msg1.proto";
+    registerAndVerifySchema(restApp.restClient, msg1, 1, subject);
+    String msg2 = "syntax = \"proto3\";\n" +
+        "package pkg2;\n" +
+        "\n" +
+        "option go_package = \"pkg2pb\";\n" +
+        "option java_multiple_files = true;\n" +
+        "option java_outer_classname = \"Msg2Proto\";\n" +
+        "option java_package = \"com.pkg2\";\n" +
+        "\n" +
+        "message Message2 {\n" +
+        "  string s = 1;\n" +
+        "}\n";
+    subject = "pkg2/msg2.proto";
+    registerAndVerifySchema(restApp.restClient, msg2, 2, subject);
+
+    String msg3 = "syntax = \"proto3\";\n" +
+        "package pkg3;\n" +
+        "\n" +
+        "option go_package = \"pkg3pb\";\n" +
+        "option java_multiple_files = true;\n" +
+        "option java_outer_classname = \"Msg3Proto\";\n" +
+        "option java_package = \"com.pkg3\";\n" +
+        "\n" +
+        "import \"pkg1/msg1.proto\";\n" +
+        "import \"pkg2/msg2.proto\";\n" +
+        "\n" +
+        "message Message3 {\n" +
+        "  map<string, pkg1.Message1> map = 1;\n" +
+        "  pkg1.Message1 f1 = 2;\n" +
+        "  pkg2.Message2 f2 = 3;\n" +
+        "}\n";
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(msg3);
+    request.setSchemaType(ProtobufSchema.TYPE);
+    SchemaReference ref1 = new SchemaReference("pkg1/msg1.proto", "pkg1/msg1.proto", 1);
+    SchemaReference ref2 = new SchemaReference("pkg2/msg2.proto", "pkg2/msg2.proto", 1);
+    List<SchemaReference> refs = Arrays.asList(ref1, ref2);
+    request.setReferences(refs);
+    int registeredId = restApp.restClient.registerSchema(request, subject1, true);
+    assertEquals("Registering a new schema should succeed", 3, registeredId);
+
+    // Alternate version of same schema
+    msg3 = "syntax = \"proto3\";\n" +
+        "package pkg3;\n" +
+        "\n" +
+        "option java_package = \"com.pkg3\";\n" +
+        "option java_outer_classname = \"Msg3Proto\";\n" +
+        "option java_multiple_files = true;\n" +
+        "option go_package = \"pkg3pb\";\n" +
+        "\n" +
+        "import \"pkg2/msg2.proto\";\n" +
+        "import \"pkg1/msg1.proto\";\n" +
+        "\n" +
+        "message Message3 {\n" +
+        "  pkg2.Message2 f2 = 3;\n" +
+        "  pkg1.Message1 f1 = 2;\n" +
+        "  map<string, pkg1.Message1> map = 1;\n" +
+        "}\n";
+
+    RegisterSchemaRequest lookUpRequest = new RegisterSchemaRequest();
+    lookUpRequest.setSchema(msg3);
+    lookUpRequest.setSchemaType(ProtobufSchema.TYPE);
+    lookUpRequest.setReferences(Arrays.asList(ref2, ref1));
+    int versionOfRegisteredSchema1Subject1 =
+        restApp.restClient.lookUpSubjectVersion(lookUpRequest, subject1, true, false).getVersion();
+    assertEquals("1st schema under subject1 should have version 1", 1,
+        versionOfRegisteredSchema1Subject1);
+    assertEquals("1st schema registered globally should have id 3", 3,
+        registeredId);
   }
 
   @Test
