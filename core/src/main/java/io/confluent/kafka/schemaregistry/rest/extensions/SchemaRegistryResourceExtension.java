@@ -31,4 +31,8 @@ public interface SchemaRegistryResourceExtension extends Closeable {
       SchemaRegistry schemaRegistry
   ) throws SchemaRegistryException;
 
+
+  default boolean initialized() {
+    return true;
+  }
 }

@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -26,8 +27,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements Serializer<Object> {
 
-  private boolean isKey;
-
   /**
    * Constructor used by Kafka producer.
    */
@@ -36,11 +35,13 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
   }
 
   public KafkaAvroSerializer(SchemaRegistryClient client) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
   }
 
   public KafkaAvroSerializer(SchemaRegistryClient client, Map<String, ?> props) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
     configure(serializerConfig(props));
   }
 
@@ -51,19 +52,24 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
   }
 
   @Override
-  public byte[] serialize(String topic, Object record) {
+  public byte[] serialize(String topic, Object data) {
+    return this.serialize(topic, null, data);
+  }
+
+  @Override
+  public byte[] serialize(String topic, Headers headers, Object record) {
     if (record == null) {
       return null;
     }
     AvroSchema schema = new AvroSchema(
         AvroSchemaUtils.getSchema(record, useSchemaReflection,
             avroReflectionAllowNull, removeJavaProperties));
-    return serializeImpl(getSubjectName(topic, isKey, record, schema),
-        record, schema);
+    return serializeImpl(
+        getSubjectName(topic, isKey, record, schema), topic, headers, record, schema);
   }
 
   @Override
   public void close() {
-
+    super.close();
   }
 }

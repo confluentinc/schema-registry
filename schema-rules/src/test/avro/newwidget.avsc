@@ -1,0 +1,19 @@
+{
+  "namespace": "io.confluent.kafka.schemaregistry.rules",
+  "type": "record",
+  "name": "NewSpecificWidget",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string"
+    },
+    {
+      "name": "height",
+      "type": "int"
+    },
+    {
+      "name": "version",
+      "type": "int"
+    }
+  ]
+}

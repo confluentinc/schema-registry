@@ -35,8 +35,11 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedE
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -291,7 +294,7 @@ public class SubjectVersionsResource {
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     // check if subject exists. If not, throw 404
-    Iterator<Schema> resultSchemas;
+    Iterator<SchemaKey> resultSchemas;
     List<Integer> allVersions = new ArrayList<>();
     String errorMessage = "Error while validating that subject "
                           + subject
@@ -322,7 +325,7 @@ public class SubjectVersionsResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     while (resultSchemas.hasNext()) {
-      Schema schema = resultSchemas.next();
+      SchemaKey schema = resultSchemas.next();
       allVersions.add(schema.getVersion());
     }
     return allVersions;
@@ -379,6 +382,15 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
+    schemaRegistry.getRuleSetHandler().handle(subjectName, normalize, request);
+
+    if (request.getRuleSet() != null) {
+      try {
+        request.getRuleSet().validate();
+      } catch (RuleException e) {
+        throw new RestInvalidRuleSetException(e.getMessage());
+      }
+    }
     if (subjectName != null
         && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subjectName)) {
       throw Errors.invalidSubjectException(subjectName);
@@ -392,6 +404,9 @@ public class SubjectVersionsResource {
     Schema schema = new Schema(subjectName, request);
     int id;
     try {
+      if (!normalize) {
+        normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
+      }
       id = schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);

@@ -59,7 +59,6 @@ import kafka.utils.VerifiableProperties;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -925,6 +924,32 @@ public class KafkaAvroSerializerTest {
     obj = specificAvroDeserializer.deserialize(topic, bytes, User.getClassSchema());
     assertTrue(
         "Projection object should be a io.confluent.kafka.example.User",
+        User.class.isInstance(obj)
+    );
+    assertEquals("testUser", ((User) obj).getName().toString());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerSpecificRecordWithValueTypeConfig() {
+    HashMap<String, String> specificDeserializerProps = new HashMap<String, String>();
+    // Intentionally invalid schema registry URL to satisfy the config class's requirement that
+    // it be set.
+    specificDeserializerProps.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    specificDeserializerProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    specificDeserializerProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG,
+        User.class.getName()
+    );
+
+    final KafkaAvroDeserializer specificAvroDeserializerWithReaderSchema = new KafkaAvroDeserializer(
+      schemaRegistry, specificDeserializerProps
+    );
+
+    IndexedRecord avroRecord = createExtendedSpecificAvroRecord();
+    final byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+
+    final Object obj = specificAvroDeserializerWithReaderSchema.deserialize(topic, bytes);
+    assertTrue(
+        "Full object should be a io.confluent.kafka.example.User",
         User.class.isInstance(obj)
     );
     assertEquals("testUser", ((User) obj).getName().toString());

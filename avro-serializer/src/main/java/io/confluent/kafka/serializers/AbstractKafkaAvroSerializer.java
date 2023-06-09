@@ -20,6 +20,8 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -30,16 +32,13 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
-import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.reflect.ReflectDatumWriter;
-import org.apache.avro.specific.SpecificDatumWriter;
-import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Headers;
 
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSerDe {
 
@@ -49,7 +48,6 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean removeJavaProperties;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
-  protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
@@ -72,7 +70,6 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
     useSchemaId = config.useSchemaId();
     idCompatStrict = config.getIdCompatibilityStrict();
-    useLatestVersion = config.useLatestVersion();
     latestCompatStrict = config.getLatestCompatibilityStrict();
     avroReflectionAllowNull = config
         .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
@@ -88,22 +85,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     return new KafkaAvroSerializerConfig(props);
   }
 
-  protected DatumWriter<?> getDatumWriter(Object value, Schema schema) {
-    if (value instanceof SpecificRecord) {
-      return new SpecificDatumWriter<>(schema);
-    } else if (useSchemaReflection) {
-      return new ReflectDatumWriter<>(schema);
-    } else {
-      if (avroUseLogicalTypeConverters) {
-        return new GenericDatumWriter<>(schema, AvroData.getGenericData());
-      } else {
-        return new GenericDatumWriter<>(schema);
-      }
-    }
+  protected byte[] serializeImpl(String subject, Object object, AvroSchema schema)
+      throws SerializationException, InvalidConfigurationException {
+    return serializeImpl(subject, null, null, object, schema);
   }
 
   protected byte[] serializeImpl(
-      String subject, Object object, AvroSchema schema)
+      String subject, String topic, Headers headers, Object object, AvroSchema schema)
       throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       StringBuilder userFriendlyMsgBuilder = new StringBuilder();
@@ -130,6 +118,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         schema = (AvroSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
         id = schemaRegistry.getId(subject, schema);
+      } else if (metadata != null) {
+        restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
+        schema = (AvroSchema) getLatestWithMetadata(subject);
+        id = schemaRegistry.getId(subject, schema);
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version of Avro schema";
         schema = (AvroSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
@@ -138,6 +130,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         restClientErrorMsg = "Error retrieving Avro schema";
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
+      object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());
@@ -170,16 +163,20 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       throw new SerializationException("Error serializing Avro message", e);
     } catch (RestClientException e) {
       throw toKafkaException(e, restClientErrorMsg + schema);
+    } finally {
+      postOp(object);
     }
   }
 
+  @SuppressWarnings("unchecked")
   private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
           throws ExecutionException, IOException {
     BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
 
     DatumWriter<Object> writer;
     writer = datumWriterCache.get(rawSchema,
-        () -> (DatumWriter<Object>) getDatumWriter(value, rawSchema)
+        () -> (DatumWriter<Object>) AvroSchemaUtils.getDatumWriter(
+            value, rawSchema, avroUseLogicalTypeConverters)
     );
     writer.write(value, encoder);
     encoder.flush();
