@@ -522,10 +522,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throws SchemaRegistryException {
     try {
       checkRegisterMode(subject, schema);
-
       // Ensure cache is up-to-date before any potential writes
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-
       int schemaId = schema.getId();
       ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
 
@@ -548,7 +546,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       // determine the latest version of the schema in the subject
       List<SchemaValue> allVersions = getAllSchemaValues(subject);
       Collections.reverse(allVersions);
-
       List<SchemaValue> deletedVersions = new ArrayList<>();
       List<ParsedSchema> undeletedVersions = new ArrayList<>();
       int newVersion = MIN_VERSION;
@@ -569,7 +566,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           undeletedVersions.add(undeletedSchema);
         }
       }
-
       Config config = getConfigInScope(subject);
       if (schemaId < 0) {
         parsedSchema = maybePopulateFromPrevious(config, schema, parsedSchema, undeletedVersions);
