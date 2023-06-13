@@ -460,7 +460,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (leaderIdentity == null) {
         leaderRestService = null;
       } else {
-        leaderRestService = new RestService(leaderIdentity.getUrl());
+        leaderRestService = new RestService(leaderIdentity.getUrl(), true);
         leaderRestService.setHttpConnectTimeoutMs(leaderConnectTimeoutMs);
         leaderRestService.setHttpReadTimeoutMs(leaderReadTimeoutMs);
         if (sslFactory != null && sslFactory.sslContext() != null) {
