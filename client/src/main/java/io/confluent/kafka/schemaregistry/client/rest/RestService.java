@@ -160,6 +160,7 @@ public class RestService implements Configurable {
   private static final String AUTHORIZATION_HEADER = "Authorization";
   private static final String TARGET_SR_CLUSTER = "target-sr-cluster";
   private static final String TARGET_IDENTITY_POOL_ID = "Confluent-Identity-Pool-Id";
+  public static final String X_FORWARD_HEADER = "X-Forward";
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
@@ -177,9 +178,10 @@ public class RestService implements Configurable {
   private BearerAuthCredentialProvider bearerAuthCredentialProvider;
   private Map<String, String> httpHeaders;
   private Proxy proxy;
+  private boolean isForward;
 
   public RestService(UrlList baseUrls) {
-    this.baseUrls = baseUrls;
+    this(baseUrls, false);
   }
 
   public RestService(List<String> baseUrls) {
@@ -188,6 +190,15 @@ public class RestService implements Configurable {
 
   public RestService(String baseUrlConfig) {
     this(parseBaseUrl(baseUrlConfig));
+  }
+
+  public RestService(String baseUrlConfig, boolean isForward) {
+    this(new UrlList(parseBaseUrl(baseUrlConfig)), isForward);
+  }
+
+  public RestService(UrlList baseUrls, boolean isForward) {
+    this.baseUrls = baseUrls;
+    this.isForward = isForward;
   }
 
   @Override
@@ -282,7 +293,7 @@ public class RestService implements Configurable {
     HttpURLConnection connection = null;
     try {
       URL url = url(requestUrl);
-      
+
       connection = buildConnection(url, method, requestProperties);
 
       if (requestBodyData != null) {
@@ -385,6 +396,9 @@ public class RestService implements Configurable {
                            Map<String, String> requestProperties,
                            TypeReference<T> responseFormat)
       throws IOException, RestClientException {
+    if (isForward) {
+      requestProperties.put(X_FORWARD_HEADER, "true");
+    }
     for (int i = 0, n = baseUrls.size(); i < n; i++) {
       String baseUrl = baseUrls.current();
       String requestUrl = buildRequestUrl(baseUrl, path);
