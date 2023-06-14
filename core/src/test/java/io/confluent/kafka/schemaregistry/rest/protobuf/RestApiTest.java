@@ -100,7 +100,7 @@ public class RestApiTest extends ClusterTestHarness {
           ProtobufSchema.TYPE,
           Collections.emptyList(),
           subject1
-      );
+      ).getId();
       assertEquals("Re-registering an existing schema should return the existing version",
           expectedId,
           foundId
@@ -151,7 +151,7 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaReference meta = new SchemaReference("confluent/meta.proto", "confluent/meta.proto", 1);
     List<SchemaReference> refs = Arrays.asList(ref, meta);
     request.setReferences(refs);
-    int registeredId = restApp.restClient.registerSchema(request, "referrer", false);
+    int registeredId = restApp.restClient.registerSchema(request, "referrer", false).getId();
     assertEquals("Registering a new schema should succeed", 3, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(3);
@@ -210,7 +210,7 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaReference meta = new SchemaReference("pkg1/msg1.proto", "pkg1/msg1.proto", 1);
     List<SchemaReference> refs = Arrays.asList(meta);
     request.setReferences(refs);
-    int registeredId = restApp.restClient.registerSchema(request, subject, false);
+    int registeredId = restApp.restClient.registerSchema(request, subject, false).getId();
     assertEquals("Registering a new schema should succeed", 2, registeredId);
   }
 
@@ -256,7 +256,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test that compatibility check for incompatible schema returns false and the appropriate
     // error response from Avro
-    int idOfRegisteredSchema1Subject1 = restApp.restClient.registerSchema(registerRequest, subject, true);
+    int idOfRegisteredSchema1Subject1 = restApp.restClient.registerSchema(registerRequest, subject, true).getId();
 
     try {
       registerRequest.setSchema(schema2String);
@@ -336,7 +336,7 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaReference ref2 = new SchemaReference("pkg2/msg2.proto", "pkg2/msg2.proto", 1);
     List<SchemaReference> refs = Arrays.asList(ref1, ref2);
     request.setReferences(refs);
-    int registeredId = restApp.restClient.registerSchema(request, subject1, true);
+    int registeredId = restApp.restClient.registerSchema(request, subject1, true).getId();
     assertEquals("Registering a new schema should succeed", 3, registeredId);
 
     // Alternate version of same schema
@@ -462,7 +462,7 @@ public class RestApiTest extends ClusterTestHarness {
         ProtobufSchema.TYPE,
         references,
         subject
-    );
+    ).getId();
     Assert.assertEquals(
         "Registering a new schema should succeed",
         (long) expectedId,

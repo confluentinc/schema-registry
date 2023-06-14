@@ -20,6 +20,7 @@ import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import org.apache.kafka.common.config.SslConfigs;
 import org.slf4j.Logger;
@@ -301,13 +302,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return providers;
   }
 
-  private int registerAndGetId(String subject, ParsedSchema schema, boolean normalize)
+  private RegisterSchemaResponse registerAndGetId(
+      String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
     return restService.registerSchema(request, subject, normalize);
   }
 
-  private int registerAndGetId(
+  private RegisterSchemaResponse registerAndGetId(
       String subject, ParsedSchema schema, int version, int id, boolean normalize)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
@@ -410,8 +412,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       }
 
       final int retrievedId = id >= 0
-          ? registerAndGetId(subject, schema, version, id, normalize)
-          : registerAndGetId(subject, schema, normalize);
+          ? registerAndGetId(subject, schema, version, id, normalize).getId()
+          : registerAndGetId(subject, schema, normalize).getId();
       schemaIdMap.put(schema, retrievedId);
       String context = toQualifiedContext(subject);
       final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(

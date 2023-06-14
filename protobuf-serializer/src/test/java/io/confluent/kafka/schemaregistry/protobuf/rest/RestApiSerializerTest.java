@@ -442,7 +442,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
         references,
         subject,
         normalize
-    );
+    ).getId();
     assertEquals(
         "Registering a new schema should succeed",
         (long) expectedId,

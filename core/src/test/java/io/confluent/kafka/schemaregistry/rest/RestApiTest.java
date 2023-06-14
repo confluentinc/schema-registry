@@ -262,14 +262,14 @@ public class RestApiTest extends ClusterTestHarness {
     boolean isCompatible = restApp.restClient.testCompatibility(jsonSchema, "JSON", null, subject, "latest", false).isEmpty();
     assertTrue("Different schema type is allowed when compatibility is NONE", isCompatible);
 
-    int id2 = restApp.restClient.registerSchema(jsonSchema, "JSON", null, subject);
+    int id2 = restApp.restClient.registerSchema(jsonSchema, "JSON", null, subject).getId();
     assertEquals("2nd schema registered globally should have id 2", 2,
         id2);
 
     isCompatible = restApp.restClient.testCompatibility(protobufSchema, "PROTOBUF", null, subject, "latest", false).isEmpty();
     assertTrue("Different schema type is allowed when compatibility is NONE", isCompatible);
 
-    int id3 = restApp.restClient.registerSchema(protobufSchema, "PROTOBUF", null, subject);
+    int id3 = restApp.restClient.registerSchema(protobufSchema, "PROTOBUF", null, subject).getId();
     assertEquals("3rd schema registered globally should have id 3", 3,
         id3);
   }
@@ -778,7 +778,7 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaReference ref = new SchemaReference("otherns.Subrecord", unqualifiedSubject, 1);
     request.setReferences(Collections.singletonList(ref));
     String subject2 = context + "referrer";
-    int registeredId = restApp.restClient.registerSchema(request, subject2, false);
+    int registeredId = restApp.restClient.registerSchema(request, subject2, false).getId();
     assertEquals("Registering a new schema should succeed", 2, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(2, subject2);
@@ -879,14 +879,14 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchema(ref1);
     SchemaReference ref = new SchemaReference("myavro.currencies.Currency", "shared", 1);
     request.setReferences(Collections.singletonList(ref));
-    int registeredId = restApp.restClient.registerSchema(request, "ref1", false);
+    int registeredId = restApp.restClient.registerSchema(request, "ref1", false).getId();
     assertEquals("Registering a new schema should succeed", 2, registeredId);
 
     request = new RegisterSchemaRequest();
     request.setSchema(ref2);
     ref = new SchemaReference("myavro.currencies.Currency", "shared", 1);
     request.setReferences(Collections.singletonList(ref));
-    registeredId = restApp.restClient.registerSchema(request, "ref2", false);
+    registeredId = restApp.restClient.registerSchema(request, "ref2", false).getId();
     assertEquals("Registering a new schema should succeed", 3, registeredId);
 
     request = new RegisterSchemaRequest();
@@ -894,7 +894,7 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaReference r1 = new SchemaReference("myavro.BudgetDecreased", "ref1", 1);
     SchemaReference r2 = new SchemaReference("myavro.BudgetUpdated", "ref2", 1);
     request.setReferences(Arrays.asList(r1, r2));
-    registeredId = restApp.restClient.registerSchema(request, "root", false);
+    registeredId = restApp.restClient.registerSchema(request, "root", false).getId();
     assertEquals("Registering a new schema should succeed", 4, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(4);
@@ -962,7 +962,7 @@ public class RestApiTest extends ClusterTestHarness {
     registerRequest.setSchema(schemaString1);
     registerRequest.setReferences(Arrays.asList(ref1, ref2));
     int idOfRegisteredSchema1Subject1 =
-        restApp.restClient.registerSchema(registerRequest, subject1, true);
+        restApp.restClient.registerSchema(registerRequest, subject1, true).getId();
     RegisterSchemaRequest lookUpRequest = new RegisterSchemaRequest();
     lookUpRequest.setSchema(schemaString2);
     lookUpRequest.setReferences(Arrays.asList(ref2, ref1));
@@ -1974,10 +1974,10 @@ public class RestApiTest extends ClusterTestHarness {
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setMetadata(metadata);
 
-    int id = restApp.restClient.registerSchema(request1, subject, false);
+    int id = restApp.restClient.registerSchema(request1, subject, false).getId();
 
     RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema1);
-    int id2 = restApp.restClient.registerSchema(request2, subject, false);
+    int id2 = restApp.restClient.registerSchema(request2, subject, false).getId();
     assertEquals(id, id2);
   }
 

@@ -402,12 +402,13 @@ public class SubjectVersionsResource {
         headers, schemaRegistry.config().whitelistHeaders());
 
     Schema schema = new Schema(subjectName, request);
-    int id;
+    RegisterSchemaResponse registerSchemaResponse;
     try {
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
       }
-      id = schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
+      registerSchemaResponse =
+          schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
@@ -433,8 +434,6 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while registering schema", e);
     }
-    RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
-    registerSchemaResponse.setId(id);
     asyncResponse.resume(registerSchemaResponse);
   }
 
