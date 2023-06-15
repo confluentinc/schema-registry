@@ -604,15 +604,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
 
-      Config config = getConfigInScope(subject);
-      if (schemaId < 0) {
-        parsedSchema = maybePopulateFromPrevious(config, schema, parsedSchema, undeletedVersions);
-      }
-
       Mode mode = getModeInScope(subject);
       boolean isCompatible = true;
       List<String> compatibilityErrorLogs = new ArrayList<>();
       if (mode != Mode.IMPORT) {
+        Config config = getConfigInScope(subject);
+        if (schemaId < 0) {
+          parsedSchema = maybePopulateFromPrevious(config, schema, parsedSchema, undeletedVersions);
+        }
+
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
         compatibilityErrorLogs = isCompatibleWithPrevious(
