@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
@@ -605,13 +606,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
 
+      boolean populatedMetadataRuleSet = false;
       Mode mode = getModeInScope(subject);
       boolean isCompatible = true;
       List<String> compatibilityErrorLogs = new ArrayList<>();
       if (mode != Mode.IMPORT) {
         Config config = getConfigInScope(subject);
         if (schemaId < 0) {
-          parsedSchema = maybePopulateFromPrevious(config, schema, parsedSchema, undeletedVersions);
+          ParsedSchemaHolder parsedSchemaHolder = new SimpleParsedSchemaHolder(parsedSchema);
+          populatedMetadataRuleSet = maybePopulateFromPrevious(
+              config, schema, parsedSchemaHolder, undeletedVersions);
+          parsedSchema = parsedSchemaHolder.schema();
         }
 
         // sort undeleted in ascending
@@ -693,7 +698,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           }
         }
 
-        return new RegisterSchemaResponse(schema.getId());
+        return populatedMetadataRuleSet
+            ? new RegisterSchemaResponse(schema)
+            : new RegisterSchemaResponse(schema.getId());
       } else {
         throw new IncompatibleSchemaException(compatibilityErrorLogs.toString());
       }
@@ -732,24 +739,28 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
   }
 
-  private ParsedSchema maybePopulateFromPrevious(
-      Config config, Schema schema, ParsedSchema parsedSchema,
+  private boolean maybePopulateFromPrevious(
+      Config config, Schema schema, ParsedSchemaHolder parsedSchemaHolder,
       List<ParsedSchemaHolder> undeletedVersions)
       throws InvalidSchemaException {
+    ParsedSchema parsedSchema = parsedSchemaHolder.schema();
     ParsedSchema previousSchema =
         undeletedVersions.size() > 0 ? undeletedVersions.get(0).schema() : null;
     if (parsedSchema == null) {
       if (previousSchema != null) {
         parsedSchema = previousSchema.copy(schema.getMetadata(), schema.getRuleSet());
+        ((SimpleParsedSchemaHolder) parsedSchemaHolder).setSchema(parsedSchema);
       } else {
         throw new InvalidSchemaException("Empty schema");
       }
     }
-    return maybeSetMetadataRuleSet(config, schema, parsedSchema, previousSchema);
+    return maybeSetMetadataRuleSet(config, schema, parsedSchemaHolder, previousSchema);
   }
 
-  private ParsedSchema maybeSetMetadataRuleSet(
-      Config config, Schema schema, ParsedSchema parsedSchema, ParsedSchema previousSchema) {
+  private boolean maybeSetMetadataRuleSet(
+      Config config, Schema schema, ParsedSchemaHolder parsedSchemaHolder,
+      ParsedSchema previousSchema) {
+    ParsedSchema parsedSchema = parsedSchemaHolder.schema();
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata specificMetadata = null;
     if (parsedSchema.metadata() != null) {
       specificMetadata = parsedSchema.metadata();
@@ -777,10 +788,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     mergedRuleSet = mergeRuleSets(mergeRuleSets(defaultRuleSet, specificRuleSet), overrideRuleSet);
     if (mergedMetadata != null || mergedRuleSet != null) {
       parsedSchema = parsedSchema.copy(mergedMetadata, mergedRuleSet);
+      ((SimpleParsedSchemaHolder) parsedSchemaHolder).setSchema(parsedSchema);
       schema.setMetadata(parsedSchema.metadata());
       schema.setRuleSet(parsedSchema.ruleSet());
+      return true;
     }
-    return parsedSchema;
+    return false;
   }
 
   public RegisterSchemaResponse registerOrForward(String subject,

@@ -38,6 +38,10 @@ public class SimpleParsedSchemaHolder implements ParsedSchemaHolder {
     return schema;
   }
 
+  public void setSchema(ParsedSchema schema) {
+    this.schema = schema;
+  }
+
   /**
    * Clears the schema if it can be lazily retrieved in the future.
    */

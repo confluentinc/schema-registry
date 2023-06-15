@@ -169,8 +169,8 @@ public class CachedSchemaRegistryClientTest {
 
     replay(restService);
 
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(SUBJECT_0, AVRO_SCHEMA_0));
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(SUBJECT_0, AVRO_SCHEMA_0)); // hit the cache
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0)); // hit the cache
 
     verify(restService);
   }
@@ -185,8 +185,8 @@ public class CachedSchemaRegistryClientTest {
 
     replay(restService);
 
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25));
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25)); // hit the cache
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25));
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25)); // hit the cache
 
     verify(restService);
   }
@@ -204,7 +204,7 @@ public class CachedSchemaRegistryClientTest {
 
     replay(restService);
 
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(SUBJECT_0, SCHEMA_WITH_DECIMAL, VERSION_1, ID_25));
+    assertEquals(ID_25, client.register(SUBJECT_0, SCHEMA_WITH_DECIMAL, VERSION_1, ID_25));
     assertEquals(ID_50, client.register(SUBJECT_0, SCHEMA_WITH_DECIMAL2, VERSION_2, ID_50));
 
     verify(restService);
@@ -218,7 +218,8 @@ public class CachedSchemaRegistryClientTest {
         .andReturn(new RegisterSchemaResponse(26))
         .andReturn(new RegisterSchemaResponse(27))
         .andReturn(new RegisterSchemaResponse(28))
-        .andReturn(new RegisterSchemaResponse(29));
+        .andReturn(new RegisterSchemaResponse(29))
+        .andReturn(new RegisterSchemaResponse(30));
 
     replay(restService);
 
@@ -245,7 +246,7 @@ public class CachedSchemaRegistryClientTest {
 
     replay(restService);
 
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
     assertEquals(
         AVRO_SCHEMA_0.rawSchema(),
         ((AvroSchema) client.getSchemaBySubjectAndId(SUBJECT_0, ID_25)).rawSchema()
@@ -276,7 +277,7 @@ public class CachedSchemaRegistryClientTest {
 
     replay(restService);
 
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
     assertEquals(version, client.getVersion(SUBJECT_0, AVRO_SCHEMA_0));
     assertEquals(version, client.getVersion(SUBJECT_0, AVRO_SCHEMA_0)); // hit the cache
 
@@ -306,8 +307,8 @@ public class CachedSchemaRegistryClientTest {
     replay(restService);
 
     // Make sure they still get the same ID
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(subjectOne, AVRO_SCHEMA_0));
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(subjectTwo, AVRO_SCHEMA_0));
+    assertEquals(ID_25, client.register(subjectOne, AVRO_SCHEMA_0));
+    assertEquals(ID_25, client.register(subjectTwo, AVRO_SCHEMA_0));
     // Neither of these two schemas should be cached yet
     assertEquals(
         AVRO_SCHEMA_0.rawSchema(),
@@ -345,8 +346,8 @@ public class CachedSchemaRegistryClientTest {
 
     replay(restService);
 
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(SUBJECT_0, AVRO_SCHEMA_0));
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(SUBJECT_0, AVRO_SCHEMA_0)); // hit the cache
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0)); // hit the cache
 
     assertEquals(Arrays.asList(0), client.deleteSubject(SUBJECT_0));
     assertEquals(Arrays.asList(1), client.deleteSubject(SUBJECT_0, true));
@@ -379,7 +380,7 @@ public class CachedSchemaRegistryClientTest {
 
     replay(restService);
 
-    assertEquals(new RegisterSchemaResponse(ID_25), client.register(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
     assertEquals(version, client.getVersion(SUBJECT_0, AVRO_SCHEMA_0));
     assertEquals(version, client.getVersion(SUBJECT_0, AVRO_SCHEMA_0)); // hit the cache
 
