@@ -1998,7 +1998,7 @@ public class RestApiTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false));
+        restApp.restClient.registerSchema(request1, subject, false).getId());
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1, subject);
     assertNull(schemaString.getRuleSet());

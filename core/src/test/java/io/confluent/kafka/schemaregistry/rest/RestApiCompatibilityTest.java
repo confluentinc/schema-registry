@@ -277,7 +277,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false));
+        restApp.restClient.registerSchema(request1, subject, false).getId());
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
         CompatibilityLevel.BACKWARD.name,
@@ -308,7 +308,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        restApp.restClient.registerSchema(request2, subject, false).getId());
   }
 
   @Test
@@ -338,7 +338,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false));
+        restApp.restClient.registerSchema(request1, subject, false).getId());
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
         CompatibilityLevel.BACKWARD.name,
@@ -366,7 +366,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        restApp.restClient.registerSchema(request2, subject, false).getId());
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
     Metadata metadata2 = schemaString.getMetadata();
@@ -388,7 +388,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema3 = 3;
     assertEquals("Registering should succeed",
         expectedIdSchema3,
-        restApp.restClient.registerSchema(request3, subject, false));
+        restApp.restClient.registerSchema(request3, subject, false).getId());
 
     schemaString = restApp.restClient.getId(expectedIdSchema3, subject);
     metadata3 = schemaString.getMetadata();
@@ -424,7 +424,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false));
+        restApp.restClient.registerSchema(request1, subject, false).getId());
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
         CompatibilityLevel.BACKWARD.name,
@@ -452,7 +452,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        restApp.restClient.registerSchema(request2, subject, false).getId());
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
     RuleSet ruleSet2 = schemaString.getRuleSet();
@@ -474,7 +474,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema3 = 3;
     assertEquals("Registering should succeed",
         expectedIdSchema3,
-        restApp.restClient.registerSchema(request3, subject, false));
+        restApp.restClient.registerSchema(request3, subject, false).getId());
 
     schemaString = restApp.restClient.getId(expectedIdSchema3, subject);
     RuleSet ruleSet3 = schemaString.getRuleSet();
@@ -495,7 +495,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false));
+        restApp.restClient.registerSchema(request1, subject, false).getId());
 
     // register just metadata, schema should be inherited from version 1
     RegisterSchemaRequest request2 = new RegisterSchemaRequest();
@@ -506,7 +506,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        restApp.restClient.registerSchema(request2, subject, false).getId());
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
     assertEquals(schema1.canonicalString(), schemaString.getSchemaString());
@@ -526,7 +526,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false));
+        restApp.restClient.registerSchema(request1, subject, false).getId());
 
     // register just ruleSet, schema should be inherited from version 1
     RegisterSchemaRequest request2 = new RegisterSchemaRequest();
@@ -537,7 +537,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        restApp.restClient.registerSchema(request2, subject, false).getId());
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
     assertEquals(schema1.canonicalString(), schemaString.getSchemaString());
@@ -581,7 +581,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        restApp.restClient.registerSchema(request2, subject, false).getId());
   }
 
   @Test
