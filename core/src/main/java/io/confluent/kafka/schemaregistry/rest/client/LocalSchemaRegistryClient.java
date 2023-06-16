@@ -193,7 +193,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     }
     Schema s = new Schema(subject, version, id, schema);
     try {
-      return schemaRegistry.register(subject, s, normalize);
+      return new RegisterSchemaResponse(schemaRegistry.register(subject, s, normalize));
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {

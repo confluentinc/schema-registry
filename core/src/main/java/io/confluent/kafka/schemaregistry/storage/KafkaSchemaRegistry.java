@@ -545,9 +545,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   @Override
-  public RegisterSchemaResponse register(String subject,
-                                         Schema schema,
-                                         boolean normalize)
+  public Schema register(String subject,
+                         Schema schema,
+                         boolean normalize)
       throws SchemaRegistryException {
     try {
       checkRegisterMode(subject, schema);
@@ -566,7 +566,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           if (schemaIdAndSubjects.hasSubject(subject)
               && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
             // return only if the schema was previously registered under the input subject
-            return new RegisterSchemaResponse(schemaIdAndSubjects.getSchemaId());
+            return new Schema(subject, schemaIdAndSubjects.getSchemaId());
           } else {
             // need to register schema under the input subject
             schemaId = schemaIdAndSubjects.getSchemaId();
@@ -596,7 +596,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
               && parsedSchema.deepEquals(undeletedSchema)
               && (schemaId < 0 || schemaId == schemaValue.getId())) {
             // This handles the case where a schema is sent with all references resolved
-            return new RegisterSchemaResponse(schemaValue.getId());
+            return new Schema(subject, schemaValue.getId());
           }
           if (!undeletedVersions.isEmpty()) {
             // minor optimization: clear the holder if it is not the latest
@@ -635,7 +635,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         if (schemaIdAndSubjects.hasSubject(subject)
             && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
           // return only if the schema was previously registered under the input subject
-          return new RegisterSchemaResponse(schemaIdAndSubjects.getSchemaId());
+          return new Schema(subject, schemaIdAndSubjects.getSchemaId());
         } else {
           // need to register schema under the input subject
           schemaId = schemaIdAndSubjects.getSchemaId();
@@ -699,8 +699,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
 
         return populatedMetadataRuleSet
-            ? new RegisterSchemaResponse(schema)
-            : new RegisterSchemaResponse(schema.getId());
+            ? schema
+            : new Schema(subject, schema.getId());
       } else {
         throw new IncompatibleSchemaException(compatibilityErrorLogs.toString());
       }
@@ -796,10 +796,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return false;
   }
 
-  public RegisterSchemaResponse registerOrForward(String subject,
-                                                  Schema schema,
-                                                  boolean normalize,
-                                                  Map<String, String> headerProperties)
+  public Schema registerOrForward(String subject,
+                                  Schema schema,
+                                  boolean normalize,
+                                  Map<String, String> headerProperties)
       throws SchemaRegistryException {
     Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
     if (existingSchema != null) {
@@ -807,7 +807,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           || schema.getId() < 0
           || schema.getId().equals(existingSchema.getId())
       ) {
-        return new RegisterSchemaResponse(existingSchema.getId());
+        return new Schema(subject, existingSchema.getId());
       }
     }
 
@@ -1088,7 +1088,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private RegisterSchemaResponse forwardRegisterRequestToLeader(
+  private Schema forwardRegisterRequestToLeader(
       String subject, Schema schema, boolean normalize, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
@@ -1098,7 +1098,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try {
       RegisterSchemaResponse response = leaderRestService.registerSchema(
           headerProperties, registerSchemaRequest, subject, normalize);
-      return response;
+      return new Schema(subject, response);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the registering schema request to %s",

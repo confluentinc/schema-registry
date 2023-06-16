@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -36,12 +35,12 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   Set<String> schemaTypes();
 
-  default RegisterSchemaResponse register(String subject, Schema schema)
+  default Schema register(String subject, Schema schema)
       throws SchemaRegistryException {
     return register(subject, schema, false);
   }
 
-  RegisterSchemaResponse register(String subject, Schema schema, boolean normalize)
+  Schema register(String subject, Schema schema, boolean normalize)
       throws SchemaRegistryException;
 
   default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {

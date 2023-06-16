@@ -407,8 +407,9 @@ public class SubjectVersionsResource {
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
       }
-      registerSchemaResponse =
+      Schema result =
           schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
+      registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
