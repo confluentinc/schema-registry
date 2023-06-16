@@ -70,7 +70,7 @@ public class Config {
     this.compatibilityLevel = request.getCompatibilityLevel();
     this.compatibilityGroup = request.getCompatibilityGroup();
     this.defaultMetadata = request.getDefaultMetadata();
-    this.overrideMetadata = request.getDefaultMetadata();
+    this.overrideMetadata = request.getOverrideMetadata();
     this.defaultRuleSet = request.getDefaultRuleSet();
     this.overrideRuleSet = request.getOverrideRuleSet();
   }
