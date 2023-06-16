@@ -140,6 +140,12 @@ public class Schema implements Comparable<Schema> {
     this.schema = schema.canonicalString();
   }
 
+  public Schema(String subject, Integer version, Integer id) {
+    this.subject = subject;
+    this.version = version;
+    this.id = id;
+  }
+
   public Schema(String subject, Integer id) {
     this.subject = subject;
     this.id = id;
