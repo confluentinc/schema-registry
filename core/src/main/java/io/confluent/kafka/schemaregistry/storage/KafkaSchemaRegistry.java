@@ -580,9 +580,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Config config = getConfigInScope(subject);
       Mode mode = getModeInScope(subject);
 
-      boolean populatedMetadataRuleSet = false;
+      boolean modifiedSchema = false;
       if (mode != Mode.IMPORT) {
-        populatedMetadataRuleSet = maybePopulateFromPrevious(config, schema, undeletedVersions);
+        modifiedSchema = maybePopulateFromPrevious(config, schema, undeletedVersions);
       }
 
       int schemaId = schema.getId();
@@ -596,7 +596,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           if (schemaIdAndSubjects.hasSubject(subject)
               && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
             // return only if the schema was previously registered under the input subject
-            return new Schema(subject, schemaIdAndSubjects.getSchemaId());
+            return modifiedSchema
+                ? schema.copy(
+                    schemaIdAndSubjects.getVersion(subject), schemaIdAndSubjects.getSchemaId())
+                : new Schema(subject, schemaIdAndSubjects.getSchemaId());
           } else {
             // need to register schema under the input subject
             schemaId = schemaIdAndSubjects.getSchemaId();
@@ -616,7 +619,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             && parsedSchema.deepEquals(undeletedSchema)
             && (schemaId < 0 || schemaId == schemaValue.getId())) {
           // This handles the case where a schema is sent with all references resolved
-          return new Schema(subject, schemaValue.getId());
+          return modifiedSchema
+              ? schema.copy(schemaValue.getVersion(), schemaValue.getId())
+              : new Schema(subject, schemaValue.getId());
         }
       }
 
@@ -625,8 +630,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (mode != Mode.IMPORT) {
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
-        compatibilityErrorLogs = isCompatibleWithPrevious(
-            config, parsedSchema, undeletedVersions);
+        compatibilityErrorLogs = isCompatibleWithPrevious(config, parsedSchema, undeletedVersions);
         isCompatible = compatibilityErrorLogs.isEmpty();
       }
 
@@ -686,7 +690,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           }
         }
 
-        return populatedMetadataRuleSet
+        return modifiedSchema
             ? schema
             : new Schema(subject, schema.getId());
       } else {
@@ -730,6 +734,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private boolean maybePopulateFromPrevious(
       Config config, Schema schema, List<ParsedSchemaHolder> undeletedVersions)
       throws SchemaRegistryException {
+    boolean populatedSchema = false;
     SchemaValue previousSchemaValue = undeletedVersions.size() > 0
         ? ((LazyParsedSchemaHolder) undeletedVersions.get(0)).schemaValue()
         : null;
@@ -743,11 +748,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         schema.setSchema(previousSchema.getSchema());
         schema.setSchemaType(previousSchema.getSchemaType());
         schema.setReferences(previousSchema.getReferences());
+        populatedSchema = true;
       } else {
         throw new InvalidSchemaException("Empty schema");
       }
     }
-    return maybeSetMetadataRuleSet(config, schema, previousSchema);
+    boolean populatedMetadataRuleSet = maybeSetMetadataRuleSet(config, schema, previousSchema);
+    return populatedSchema || populatedMetadataRuleSet;
   }
 
   private boolean maybeSetMetadataRuleSet(Config config, Schema schema, Schema previousSchema) {
