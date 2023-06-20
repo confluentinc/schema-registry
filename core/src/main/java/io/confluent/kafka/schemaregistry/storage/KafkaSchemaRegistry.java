@@ -559,12 +559,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       // sort versions in descending
       Collections.reverse(allVersions);
 
+      int newVersion = MIN_VERSION;
       List<Schema> deletedVersions = new ArrayList<>();
       List<ParsedSchemaHolder> undeletedVersions = new ArrayList<>();
       // iterate from the latest to first
       for (SchemaKey schemaKey : allVersions) {
         LazyParsedSchemaHolder schemaHolder = new LazyParsedSchemaHolder(this, schemaKey);
         SchemaValue schemaValue = schemaHolder.schemaValue();
+        newVersion = Math.max(newVersion, schemaValue.getVersion() + 1);
         if (schemaValue.isDeleted()) {
           deletedVersions.add(
               new Schema(schemaValue.getSubject(), schemaValue.getVersion(), schemaValue.getId()));
@@ -607,11 +609,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
 
-      int newVersion = MIN_VERSION;
       // iterate from the latest to first
       for (ParsedSchemaHolder schemaHolder : undeletedVersions) {
         SchemaValue schemaValue = ((LazyParsedSchemaHolder) schemaHolder).schemaValue();
-        newVersion = Math.max(newVersion, schemaValue.getVersion() + 1);
         ParsedSchema undeletedSchema = schemaHolder.schema();
         if (parsedSchema != null
             && parsedSchema.references().isEmpty()
