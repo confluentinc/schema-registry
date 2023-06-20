@@ -559,9 +559,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       // sort versions in descending
       Collections.reverse(allVersions);
 
-      int newVersion = MIN_VERSION;
       List<Schema> deletedVersions = new ArrayList<>();
       List<ParsedSchemaHolder> undeletedVersions = new ArrayList<>();
+      int newVersion = MIN_VERSION;
       // iterate from the latest to first
       for (SchemaKey schemaKey : allVersions) {
         LazyParsedSchemaHolder schemaHolder = new LazyParsedSchemaHolder(this, schemaKey);
