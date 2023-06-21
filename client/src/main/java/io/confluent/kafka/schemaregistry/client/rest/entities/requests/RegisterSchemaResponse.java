@@ -177,10 +177,10 @@ public class RegisterSchemaResponse {
       buf.append("version=").append(version).append(", ");
     }
     buf.append("id=").append(id).append(", ");
-    buf.append("schemaType=").append(this.schemaType).append(",");
-    buf.append("references=").append(this.references).append(",");
-    buf.append("metadata=").append(this.metadata).append(",");
-    buf.append("ruleSet=").append(this.ruleSet).append(",");
+    buf.append("schemaType=").append(this.schemaType).append(", ");
+    buf.append("references=").append(this.references).append(", ");
+    buf.append("metadata=").append(this.metadata).append("," );
+    buf.append("ruleSet=").append(this.ruleSet).append(", ");
     buf.append("schema=").append(schema).append("}");
     return buf.toString();
   }

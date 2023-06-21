@@ -543,6 +543,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return limit;
   }
 
+  /**
+   * Register the given schema under the given subject.
+   *
+   * If the schema already exists, it is returned.  During registration, the metadata and ruleSet
+   * may be populated by the config that is in scope.
+   *
+   * @param subject The subject
+   * @param schema The schema
+   * @param normalize Whether to normalize the schema before registration
+   * @return A schema containing the id.  If the schema is different from the input parameter,
+   * it is set in the return object.
+   */
   @Override
   public Schema register(String subject,
                          Schema schema,

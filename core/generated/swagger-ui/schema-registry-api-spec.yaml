@@ -2207,6 +2207,10 @@ components:
           - FULL
           - FULL_TRANSITIVE
           - NONE
+        alias:
+          type: string
+        normalize:
+          type: boolean
         compatibilityGroup:
           type: string
         defaultMetadata:
@@ -2221,6 +2225,10 @@ components:
     ConfigUpdateRequest:
       type: object
       properties:
+        alias:
+          type: string
+        normalize:
+          type: boolean
         compatibility:
           type: string
           description: Compatibility Level
@@ -2363,6 +2371,25 @@ components:
           description: Globally unique identifier of the schema
           format: int32
           example: 100001
+        version:
+          type: integer
+          description: Version number
+          format: int32
+        schemaType:
+          type: string
+          description: Schema type
+        references:
+          type: array
+          description: References to other schemas
+          items:
+            $ref: '#/components/schemas/SchemaReference'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        ruleSet:
+          $ref: '#/components/schemas/RuleSet'
+        schema:
+          type: string
+          description: Schema definition string
       description: Schema register response
     ErrorMessage:
       type: object
