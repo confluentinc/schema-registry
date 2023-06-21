@@ -553,7 +553,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    * @param schema The schema
    * @param normalize Whether to normalize the schema before registration
    * @return A schema containing the id.  If the schema is different from the input parameter,
-   *    it is set in the return object.
+   *     it is set in the return object.
    */
   @Override
   public Schema register(String subject,
