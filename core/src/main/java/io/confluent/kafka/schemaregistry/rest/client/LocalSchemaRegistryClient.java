@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
@@ -168,24 +169,31 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized int register(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    return register(subject, schema, 0, -1, normalize);
+    return registerWithResponse(subject, schema, 0, -1, normalize).getId();
   }
 
   @Override
   public synchronized int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
-    return register(subject, schema, version, id, false);
+    return registerWithResponse(subject, schema, version, id, false).getId();
   }
 
-  private synchronized int register(String subject, ParsedSchema schema,
-      int version, int id, boolean normalize)
+  @Override
+  public synchronized RegisterSchemaResponse registerWithResponse(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    return registerWithResponse(subject, schema, 0, -1, normalize);
+  }
+
+  private synchronized RegisterSchemaResponse registerWithResponse(
+      String subject, ParsedSchema schema, int version, int id, boolean normalize)
       throws IOException, RestClientException {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
     Schema s = new Schema(subject, version, id, schema);
     try {
-      return schemaRegistry.register(subject, s, normalize);
+      return new RegisterSchemaResponse(schemaRegistry.register(subject, s, normalize));
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {

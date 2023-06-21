@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -70,7 +71,7 @@ public class Config {
     this.compatibilityLevel = request.getCompatibilityLevel();
     this.compatibilityGroup = request.getCompatibilityGroup();
     this.defaultMetadata = request.getDefaultMetadata();
-    this.overrideMetadata = request.getDefaultMetadata();
+    this.overrideMetadata = request.getOverrideMetadata();
     this.defaultRuleSet = request.getDefaultRuleSet();
     this.overrideRuleSet = request.getOverrideRuleSet();
   }
@@ -157,6 +158,14 @@ public class Config {
   @JsonProperty("overrideRuleSet")
   public void setOverrideRuleSet(RuleSet overrideRuleSet) {
     this.overrideRuleSet = overrideRuleSet;
+  }
+
+  @JsonIgnore
+  public boolean hasDefaultsOrOverrides() {
+    return defaultMetadata != null
+        || overrideMetadata != null
+        || defaultRuleSet != null
+        || overrideRuleSet != null;
   }
 
   @Override

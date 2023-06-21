@@ -20,7 +20,9 @@ import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.io.InterruptedIOException;
+import java.util.Optional;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -115,7 +117,16 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           String formatted = schema.formattedString(schemaFormat);
           schema = schema.copyWithSchema(formatted);
         }
-        id = schemaRegistry.register(subject, schema, normalizeSchema);
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+            registerWithResponse(subject, schema, normalizeSchema);
+        if (s.getSchema() != null) {
+          Optional<ParsedSchema> optSchema = schemaRegistry.parseSchema(s);
+          if (optSchema.isPresent()) {
+            schema = (ProtobufSchema) optSchema.get();
+            schema = schema.copy(s.getVersion());
+          }
+        }
+        id = s.getId();
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         if (schemaFormat != null) {
@@ -355,7 +366,17 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     String subject = name != null ? strategy.subjectName(name, topic, isKey, schema) : null;
     if (subject != null) {
       if (autoRegisterSchema) {
-        id = schemaRegistry.register(subject, schema, normalizeSchema);
+        RegisterSchemaResponse response =
+            schemaRegistry.registerWithResponse(subject, schema, normalizeSchema);
+        if (response.getSchema() != null) {
+          Optional<ParsedSchema> optSchema =
+              schemaRegistry.parseSchema(new Schema(subject, response));
+          if (optSchema.isPresent()) {
+            schema = (ProtobufSchema) optSchema.get();
+            schema = schema.copy(response.getVersion());
+          }
+        }
+        id = response.getId();
         version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
       } else if (useLatestVersion) {
         schema = (ProtobufSchema) lookupLatestVersion(

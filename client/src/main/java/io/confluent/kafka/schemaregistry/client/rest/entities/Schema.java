@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Collections;
@@ -139,6 +140,17 @@ public class Schema implements Comparable<Schema> {
     this.schema = schema.canonicalString();
   }
 
+  public Schema(String subject, Integer version, Integer id) {
+    this.subject = subject;
+    this.version = version;
+    this.id = id;
+  }
+
+  public Schema(String subject, Integer id) {
+    this.subject = subject;
+    this.id = id;
+  }
+
   public Schema(String subject, RegisterSchemaRequest request) {
     this.subject = subject;
     this.version = request.getVersion() != null ? request.getVersion() : 0;
@@ -152,7 +164,24 @@ public class Schema implements Comparable<Schema> {
     this.schema = request.getSchema();
   }
 
+  public Schema(String subject, RegisterSchemaResponse response) {
+    this.subject = subject;
+    this.version = response.getVersion() != null ? response.getVersion() : 0;
+    this.id = response.getId();
+    this.schemaType = response.getSchemaType() != null
+        ? response.getSchemaType() : AvroSchema.TYPE;
+    this.references = response.getReferences() != null
+        ? response.getReferences() : Collections.emptyList();
+    this.metadata = response.getMetadata();
+    this.ruleSet = response.getRuleSet();
+    this.schema = response.getSchema();
+  }
+
   public Schema copy() {
+    return new Schema(subject, version, id, schemaType, references, metadata, ruleSet, schema);
+  }
+
+  public Schema copy(Integer version, Integer id) {
     return new Schema(subject, version, id, schemaType, references, metadata, ruleSet, schema);
   }
 
