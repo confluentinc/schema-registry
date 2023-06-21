@@ -55,7 +55,7 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering without id should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request, subject, false));
+        restApp.restClient.registerSchema(request, subject, false).getId());
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1);
     assertEquals(properties, schemaString.getMetadata().getProperties());

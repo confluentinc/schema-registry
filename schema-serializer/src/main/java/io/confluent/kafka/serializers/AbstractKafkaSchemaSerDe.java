@@ -34,6 +34,8 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.rules.DlqAction;
 import io.confluent.kafka.schemaregistry.rules.ErrorAction;
 import io.confluent.kafka.schemaregistry.rules.NoneAction;
@@ -62,7 +64,6 @@ import java.util.ServiceLoader;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
@@ -485,7 +486,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   @Deprecated
-  public int register(String subject, Schema schema) throws IOException, RestClientException {
+  public int register(String subject, org.apache.avro.Schema schema)
+      throws IOException, RestClientException {
     return schemaRegistry.register(subject, schema);
   }
 
@@ -498,8 +500,15 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return schemaRegistry.register(subject, schema, normalize);
   }
 
+  protected Schema registerWithResponse(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    RegisterSchemaResponse response =
+        schemaRegistry.registerWithResponse(subject, schema, normalize);
+    return new Schema(subject, response);
+  }
+
   @Deprecated
-  public Schema getById(int id) throws IOException, RestClientException {
+  public org.apache.avro.Schema getById(int id) throws IOException, RestClientException {
     return schemaRegistry.getById(id);
   }
 
@@ -508,7 +517,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   @Deprecated
-  public Schema getBySubjectAndId(String subject, int id)
+  public org.apache.avro.Schema getBySubjectAndId(String subject, int id)
       throws IOException, RestClientException {
     return schemaRegistry.getBySubjectAndId(subject, id);
   }
