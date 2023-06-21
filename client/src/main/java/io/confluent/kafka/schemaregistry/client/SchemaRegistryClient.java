@@ -20,6 +20,7 @@ import com.google.common.base.Ticker;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
@@ -76,6 +77,7 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public int register(String subject, ParsedSchema schema) throws IOException, RestClientException;
 
+
   default int register(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
@@ -95,6 +97,12 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public int register(String subject, ParsedSchema schema, int version, int id) throws IOException,
       RestClientException;
+
+  default RegisterSchemaResponse registerWithResponse(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   /**
    * @deprecated use {@link #getSchemaById(int)} instead

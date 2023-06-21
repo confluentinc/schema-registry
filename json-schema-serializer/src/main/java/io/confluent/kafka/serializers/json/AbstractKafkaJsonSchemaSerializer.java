@@ -19,9 +19,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
 import java.io.InterruptedIOException;
+import java.util.Optional;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -120,7 +122,16 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering JSON schema: ";
-        id = schemaRegistry.register(subject, schema, normalizeSchema);
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+            registerWithResponse(subject, schema, normalizeSchema);
+        if (s.getSchema() != null) {
+          Optional<ParsedSchema> optSchema = schemaRegistry.parseSchema(s);
+          if (optSchema.isPresent()) {
+            schema = (JsonSchema) optSchema.get();
+            schema = schema.copy(s.getVersion());
+          }
+        }
+        id = s.getId();
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (JsonSchema)

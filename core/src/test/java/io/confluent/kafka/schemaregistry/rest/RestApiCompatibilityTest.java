@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
@@ -277,7 +278,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false));
+        restApp.restClient.registerSchema(request1, subject, false).getId());
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
         CompatibilityLevel.BACKWARD.name,
@@ -308,7 +309,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        restApp.restClient.registerSchema(request2, subject, false).getId());
   }
 
   @Test
@@ -336,9 +337,20 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setMetadata(metadata1);
     int expectedIdSchema1 = 1;
+    RegisterSchemaResponse response = restApp.restClient.registerSchema(request1, subject, false);
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false));
+        response.getId());
+    Metadata metadata2 = response.getMetadata();
+    assertEquals("configValue", metadata2.getProperties().get("configKey"));
+    assertEquals("subjectValue", metadata2.getProperties().get("subjectKey"));
+
+    assertEquals("Version should match",
+        response.getVersion(),
+        restApp.restClient.lookUpSubjectVersion(
+            new RegisterSchemaRequest(
+                new Schema(subject, response)), subject, false, false).getVersion());
+
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
         CompatibilityLevel.BACKWARD.name,
@@ -364,12 +376,31 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + " {\"type\":\"string\",\"name\":\"f2\"}]}");
     RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema2);
     int expectedIdSchema2 = 2;
+    response = restApp.restClient.registerSchema(request2, subject, false);
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        response.getId());
+    metadata2 = response.getMetadata();
+    assertEquals("configValue", metadata2.getProperties().get("configKey"));
+    assertEquals("subjectValue", metadata2.getProperties().get("subjectKey"));
+
+    assertEquals("Version should match",
+        response.getVersion(),
+        restApp.restClient.lookUpSubjectVersion(
+            new RegisterSchemaRequest(
+                new Schema(subject, response)), subject, false, false).getVersion());
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
-    Metadata metadata2 = schemaString.getMetadata();
+    metadata2 = schemaString.getMetadata();
+    assertEquals("configValue", metadata2.getProperties().get("configKey"));
+    assertEquals("subjectValue", metadata2.getProperties().get("subjectKey"));
+
+    // re-register
+    response = restApp.restClient.registerSchema(request2, subject, false);
+    assertEquals("Registering should succeed",
+        expectedIdSchema2,
+        response.getId());
+    metadata2 = response.getMetadata();
     assertEquals("configValue", metadata2.getProperties().get("configKey"));
     assertEquals("subjectValue", metadata2.getProperties().get("subjectKey"));
 
@@ -386,15 +417,26 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     RegisterSchemaRequest request3 = new RegisterSchemaRequest(schema3);
     request3.setMetadata(metadata3);
     int expectedIdSchema3 = 3;
+    response = restApp.restClient.registerSchema(request3, subject, false);
     assertEquals("Registering should succeed",
         expectedIdSchema3,
-        restApp.restClient.registerSchema(request3, subject, false));
+        response.getId());
+    Metadata metadata4 = response.getMetadata();
+    assertEquals("configValue", metadata4.getProperties().get("configKey"));
+    assertEquals(null, metadata4.getProperties().get("subjectKey"));
+    assertEquals("newSubjectValue", metadata4.getProperties().get("newSubjectKey"));
+
+    assertEquals("Version should match",
+        response.getVersion(),
+        restApp.restClient.lookUpSubjectVersion(
+            new RegisterSchemaRequest(
+                new Schema(subject, response)), subject, false, false).getVersion());
 
     schemaString = restApp.restClient.getId(expectedIdSchema3, subject);
-    metadata3 = schemaString.getMetadata();
-    assertEquals("configValue", metadata3.getProperties().get("configKey"));
-    assertEquals(null, metadata3.getProperties().get("subjectKey"));
-    assertEquals("newSubjectValue", metadata3.getProperties().get("newSubjectKey"));
+    metadata4 = schemaString.getMetadata();
+    assertEquals("configValue", metadata4.getProperties().get("configKey"));
+    assertEquals(null, metadata4.getProperties().get("subjectKey"));
+    assertEquals("newSubjectValue", metadata4.getProperties().get("newSubjectKey"));
   }
 
   @Test
@@ -422,9 +464,20 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setRuleSet(ruleSet);
     int expectedIdSchema1 = 1;
+    RegisterSchemaResponse response = restApp.restClient.registerSchema(request1, subject, false);
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false));
+        response.getId());
+    RuleSet ruleSet2 = response.getRuleSet();
+    assertEquals("foo", ruleSet2.getMigrationRules().get(0).getName());
+    assertEquals("bar", ruleSet2.getMigrationRules().get(1).getName());
+
+    assertEquals("Version should match",
+        response.getVersion(),
+        restApp.restClient.lookUpSubjectVersion(
+            new RegisterSchemaRequest(
+                new Schema(subject, response)), subject, false, false).getVersion());
+
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
         CompatibilityLevel.BACKWARD.name,
@@ -450,12 +503,31 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + " {\"type\":\"string\",\"name\":\"f2\"}]}");
     RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema2);
     int expectedIdSchema2 = 2;
+    response = restApp.restClient.registerSchema(request2, subject, false);
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        response.getId());
+    ruleSet2 = response.getRuleSet();
+    assertEquals("foo", ruleSet2.getMigrationRules().get(0).getName());
+    assertEquals("bar", ruleSet2.getMigrationRules().get(1).getName());
+
+    assertEquals("Version should match",
+        response.getVersion(),
+        restApp.restClient.lookUpSubjectVersion(
+            new RegisterSchemaRequest(
+                new Schema(subject, response)), subject, false, false).getVersion());
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
-    RuleSet ruleSet2 = schemaString.getRuleSet();
+    ruleSet2 = schemaString.getRuleSet();
+    assertEquals("foo", ruleSet2.getMigrationRules().get(0).getName());
+    assertEquals("bar", ruleSet2.getMigrationRules().get(1).getName());
+
+    // re-register
+    response = restApp.restClient.registerSchema(request2, subject, false);
+    assertEquals("Registering should succeed",
+        expectedIdSchema2,
+        response.getId());
+    ruleSet2 = schemaString.getRuleSet();
     assertEquals("foo", ruleSet2.getMigrationRules().get(0).getName());
     assertEquals("bar", ruleSet2.getMigrationRules().get(1).getName());
 
@@ -472,12 +544,22 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     RegisterSchemaRequest request3 = new RegisterSchemaRequest(schema3);
     request3.setRuleSet(ruleSet);
     int expectedIdSchema3 = 3;
+    response = restApp.restClient.registerSchema(request3, subject, false);
     assertEquals("Registering should succeed",
         expectedIdSchema3,
-        restApp.restClient.registerSchema(request3, subject, false));
+        response.getId());
+    RuleSet ruleSet3 = response.getRuleSet();
+    assertEquals("foo", ruleSet3.getMigrationRules().get(0).getName());
+    assertEquals("zap", ruleSet3.getMigrationRules().get(1).getName());
+
+    assertEquals("Version should match",
+        response.getVersion(),
+        restApp.restClient.lookUpSubjectVersion(
+            new RegisterSchemaRequest(
+                new Schema(subject, response)), subject, false, false).getVersion());
 
     schemaString = restApp.restClient.getId(expectedIdSchema3, subject);
-    RuleSet ruleSet3 = schemaString.getRuleSet();
+    ruleSet3 = schemaString.getRuleSet();
     assertEquals("foo", ruleSet3.getMigrationRules().get(0).getName());
     assertEquals("zap", ruleSet3.getMigrationRules().get(1).getName());
   }
@@ -495,7 +577,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false));
+        restApp.restClient.registerSchema(request1, subject, false).getId());
 
     // register just metadata, schema should be inherited from version 1
     RegisterSchemaRequest request2 = new RegisterSchemaRequest();
@@ -506,7 +588,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        restApp.restClient.registerSchema(request2, subject, false).getId());
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
     assertEquals(schema1.canonicalString(), schemaString.getSchemaString());
@@ -526,7 +608,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false));
+        restApp.restClient.registerSchema(request1, subject, false).getId());
 
     // register just ruleSet, schema should be inherited from version 1
     RegisterSchemaRequest request2 = new RegisterSchemaRequest();
@@ -537,7 +619,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        restApp.restClient.registerSchema(request2, subject, false).getId());
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema2, subject);
     assertEquals(schema1.canonicalString(), schemaString.getSchemaString());
@@ -581,7 +663,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
         expectedIdSchema2,
-        restApp.restClient.registerSchema(request2, subject, false));
+        restApp.restClient.registerSchema(request2, subject, false).getId());
   }
 
   @Test

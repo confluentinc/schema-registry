@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.LinkedHashSet;
 import java.util.SortedMap;
@@ -218,16 +219,24 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int register(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    return register(subject, schema, 0, -1, normalize);
+    return registerWithResponse(subject, schema, 0, -1, normalize).getId();
   }
 
   @Override
   public int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
-    return register(subject, schema, version, id, false);
+    return registerWithResponse(subject, schema, version, id, false).getId();
   }
 
-  private int register(String subject, ParsedSchema schema, int version, int id, boolean normalize)
+  @Override
+  public RegisterSchemaResponse registerWithResponse(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    return registerWithResponse(subject, schema, 0, -1, normalize);
+  }
+
+  private RegisterSchemaResponse registerWithResponse(
+      String subject, ParsedSchema schema, int version, int id, boolean normalize)
       throws IOException, RestClientException {
     if (normalize) {
       schema = schema.normalize();
@@ -237,13 +246,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
     Integer schemaId = schemaIdMap.get(schema);
     if (schemaId != null && (id < 0 || id == schemaId)) {
-      return schemaId;
+      return new RegisterSchemaResponse(schemaId);
     }
 
     synchronized (this) {
       schemaId = schemaIdMap.get(schema);
       if (schemaId != null && (id < 0 || id == schemaId)) {
-        return schemaId;
+        return new RegisterSchemaResponse(schemaId);
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, true, id);
@@ -252,7 +261,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schema);
-      return retrievedId;
+      return new RegisterSchemaResponse(retrievedId);
     }
   }
 

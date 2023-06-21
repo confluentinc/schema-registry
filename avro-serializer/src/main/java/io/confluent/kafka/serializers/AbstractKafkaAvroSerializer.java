@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
@@ -28,6 +29,7 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
@@ -112,7 +114,16 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema";
-        id = schemaRegistry.register(subject, schema, normalizeSchema);
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+            registerWithResponse(subject, schema, normalizeSchema);
+        if (s.getSchema() != null) {
+          Optional<ParsedSchema> optSchema = schemaRegistry.parseSchema(s);
+          if (optSchema.isPresent()) {
+            schema = (AvroSchema) optSchema.get();
+            schema = schema.copy(s.getVersion());
+          }
+        }
+        id = s.getId();
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (AvroSchema)
