@@ -1023,14 +1023,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try {
       // Pass a copy of the schema so the original is not modified during normalization
       // to ensure that invalid defaults are not dropped since default validation is disabled
-      ParsedSchema parsedSchema = canonicalizeSchema(schema.copy(), false, normalize);
+      Schema newSchema = schema.copy();
+      ParsedSchema parsedSchema = canonicalizeSchema(newSchema, false, normalize);
       if (parsedSchema != null) {
-        SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
+        SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(newSchema);
         if (schemaIdAndSubjects != null) {
           if (schemaIdAndSubjects.hasSubject(subject)
               && (lookupDeletedSchema || !isSubjectVersionDeleted(subject, schemaIdAndSubjects
               .getVersion(subject)))) {
-            Schema matchingSchema = schema.copy();
+            Schema matchingSchema = newSchema.copy();
             matchingSchema.setSubject(subject);
             matchingSchema.setVersion(schemaIdAndSubjects.getVersion(subject));
             matchingSchema.setId(schemaIdAndSubjects.getSchemaId());
