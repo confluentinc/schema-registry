@@ -31,6 +31,9 @@ public class AliasFilterTest {
     Config config = new Config();
     config.setAlias("mySubject");
     when(schemaRegistry.getConfig("myAlias")).thenReturn(config);
+    Config config2 = new Config();
+    config2.setAlias("mySubject2");
+    when(schemaRegistry.getConfig("slash/in/middle")).thenReturn(config2);
   }
 
   @Test
@@ -106,6 +109,16 @@ public class AliasFilterTest {
         "Query param must match",
         "subject=mySubject",
         uri.getQuery()
+    );
+  }
+
+  @Test
+  public void testUriWithEncodedSlash() {
+    String path = "/subjects/slash%2Fin%2Fmiddle/";
+    Assert.assertEquals(
+        "Subject must be replaced",
+        "/subjects/mySubject2/",
+        aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
 
