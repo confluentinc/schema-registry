@@ -1021,14 +1021,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     try {
-      ParsedSchema parsedSchema = canonicalizeSchema(schema, false, normalize);
+      // Pass a copy of the schema so the original is not modified during normalization
+      // to ensure that invalid defaults are not dropped since default validation is disabled
+      Schema newSchema = schema != null ? schema.copy() : null;
+      ParsedSchema parsedSchema = canonicalizeSchema(newSchema, false, normalize);
       if (parsedSchema != null) {
-        SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
+        SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(newSchema);
         if (schemaIdAndSubjects != null) {
           if (schemaIdAndSubjects.hasSubject(subject)
               && (lookupDeletedSchema || !isSubjectVersionDeleted(subject, schemaIdAndSubjects
               .getVersion(subject)))) {
-            Schema matchingSchema = schema.copy();
+            Schema matchingSchema = newSchema.copy();
             matchingSchema.setSubject(subject);
             matchingSchema.setVersion(schemaIdAndSubjects.getVersion(subject));
             matchingSchema.setId(schemaIdAndSubjects.getSchemaId());
