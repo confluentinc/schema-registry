@@ -735,7 +735,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     String schemaString = "{\"type\":\"record\","
         + "\"name\":\"myrecord\","
         + "\"fields\":"
-        + "[{\"type\":\"string\",\"default\":null,\"name\":"
+        + "[{\"type\":\"int\",\"default\":\"foo\",\"name\":"
         + "\"f" + "\"}]}";
     String schema = AvroUtils.parseSchema(schemaString).canonicalString();
 
@@ -790,6 +790,31 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         restApp.restClient.updateConfig(config, "testAlias"));
 
     Schema schema = restApp.restClient.getVersion("testAlias", 1);
+    assertEquals(schemaString1, schema.getSchema());
+  }
+
+  @Test
+  public void testSubjectAliasWithSlash() throws Exception {
+    String subject = "testSubject";
+
+    // register a valid avro
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(schemaString1, subject));
+
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setAlias("testSubject");
+    // set alias config
+    assertEquals("Setting alias config should succeed",
+        config,
+        restApp.restClient.updateConfig(config, "test/Alias"));
+
+    Schema schema = restApp.restClient.getVersion("test/Alias", 1);
     assertEquals(schemaString1, schema.getSchema());
   }
 

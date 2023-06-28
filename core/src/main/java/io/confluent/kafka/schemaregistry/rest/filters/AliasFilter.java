@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLDecoder;
 import javax.annotation.Priority;
 import javax.ws.rs.Priorities;
 import javax.ws.rs.container.ContainerRequestContext;
@@ -118,7 +119,7 @@ public class AliasFilter implements ContainerRequestFilter {
     }
     Config config = null;
     try {
-      config = schemaRegistry.getConfig(subject);
+      config = schemaRegistry.getConfig(URLDecoder.decode(subject, "UTF-8"));
     } catch (Exception e) {
       // fall through
     }
