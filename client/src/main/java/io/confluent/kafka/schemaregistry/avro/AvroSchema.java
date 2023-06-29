@@ -648,7 +648,11 @@ public class AvroSchema implements ParsedSchema {
   public Set<String> inlineTags() {
     try {
       Set<String> tags = new LinkedHashSet<>();
-      JsonNode jsonNode = jsonMapper.readTree(canonicalString());
+      String canonicalString = canonicalString();
+      if (canonicalString == null) {
+        return tags;
+      }
+      JsonNode jsonNode = jsonMapper.readTree(canonicalString);
       getInlineTagsRecursively(tags, jsonNode);
       return tags;
     } catch (IOException e) {
