@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
+
 import com.google.common.base.Ticker;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -35,6 +37,10 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public interface SchemaRegistryClient extends SchemaVersionFetcher {
+
+  default String tenant() {
+    return DEFAULT_TENANT;
+  }
 
   default Ticker ticker() {
     return Ticker.systemTicker();
