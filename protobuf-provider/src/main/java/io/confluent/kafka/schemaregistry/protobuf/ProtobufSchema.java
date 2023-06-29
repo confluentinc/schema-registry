@@ -2391,6 +2391,9 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public Set<String> inlineTags() {
     Set<String> tags = new LinkedHashSet<>();
+    if (schemaObj == null) {
+      return tags;
+    }
     ProtobufMeta meta = findMeta(CONFLUENT_FILE_META, schemaObj.getOptions());
     if (meta != null && meta.getTags() != null) {
       tags.addAll(meta.getTags());
