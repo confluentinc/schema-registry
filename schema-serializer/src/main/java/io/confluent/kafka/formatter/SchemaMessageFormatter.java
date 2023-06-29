@@ -165,7 +165,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
             int schemaId = schemaIdFor(consumerRecord.key());
             output.print(schemaId);
           } else {
-            output.write(nullLiteral);
+            output.write(NULL_BYTES);
           }
         }
         output.write(keySeparator);
