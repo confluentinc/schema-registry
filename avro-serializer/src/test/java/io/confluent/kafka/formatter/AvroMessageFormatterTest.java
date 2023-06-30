@@ -129,6 +129,11 @@ public class AvroMessageFormatterTest {
     PrintStream ps = new PrintStream(baos);
     formatter.writeTo(recordWithKeyAndValue, ps);
     assertEquals("\"" + KEY_STRING + "\"\t2\t\"" + A_STRING + "\"\t1\n", baos.toString());
+
+    baos = new ByteArrayOutputStream();
+    ps = new PrintStream(baos);
+    formatter.writeTo(recordWithValue, ps);
+    assertEquals("null\tnull\t\"" + A_STRING + "\"\t1\n", baos.toString());
   }
 
   @Test
