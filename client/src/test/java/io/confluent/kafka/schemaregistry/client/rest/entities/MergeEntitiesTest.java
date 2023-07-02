@@ -17,8 +17,10 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import static junit.framework.TestCase.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -75,5 +77,40 @@ public class MergeEntitiesTest {
 
     rs3 = RuleSet.mergeRuleSets(rs2, rs1);
     assertEquals(rs3.getMigrationRules(), rules1);
+  }
+
+  @Test
+  public void invalidRuleSets() throws Exception {
+    Rule r1 = new Rule(null, null, null, null, "DUMMY", null, null, null, null, null, false);
+    try {
+      r1.validate();
+      fail();
+    } catch (RuleException e) {
+      assertEquals("Missing rule name", e.getMessage());
+    }
+
+    Rule r2 = new Rule("", null, null, null, "DUMMY", null, null, null, null, null, false);
+    try {
+      r2.validate();
+      fail();
+    } catch (RuleException e) {
+      assertEquals("Empty rule name", e.getMessage());
+    }
+
+    Rule r3 = new Rule("0", null, null, null, "DUMMY", null, null, null, null, null, false);
+    try {
+      r3.validate();
+      fail();
+    } catch (RuleException e) {
+      assertTrue("Illegal ", e.getMessage().startsWith("Illegal initial character"));
+    }
+
+    Rule r4 = new Rule("With space", null, null, null, "DUMMY", null, null, null, null, null, false);
+    try {
+      r4.validate();
+      fail();
+    } catch (RuleException e) {
+      assertTrue("Illegal ", e.getMessage().startsWith("Illegal character"));
+    }
   }
 }
