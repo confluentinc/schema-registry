@@ -269,8 +269,9 @@ public class Rule {
       throw new RuleException("Empty rule name");
     }
     char first = name.charAt(0);
-    if (!(Character.isLetter(first) || first == '_'))
+    if (!(Character.isLetter(first) || first == '_')) {
       throw new RuleException("Illegal initial character in rule name: " + name);
+    }
     for (int i = 1; i < length; i++) {
       char c = name.charAt(i);
       if (!(Character.isLetterOrDigit(c) || c == '_')) {
