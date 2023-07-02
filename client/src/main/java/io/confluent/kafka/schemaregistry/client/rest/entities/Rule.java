@@ -254,11 +254,29 @@ public class Rule {
   }
 
   public void validate() throws RuleException {
+    validateName(name);
+    if (type == null) {
+      throw new RuleException("Missing rule type");
+    }
+  }
+
+  private static void validateName(String name) throws RuleException {
     if (name == null) {
       throw new RuleException("Missing rule name");
     }
-    if (type == null) {
-      throw new RuleException("Missing rule type");
+    int length = name.length();
+    if (length == 0) {
+      throw new RuleException("Empty rule name");
+    }
+    char first = name.charAt(0);
+    if (!(Character.isLetter(first) || first == '_')) {
+      throw new RuleException("Illegal initial character in rule name: " + name);
+    }
+    for (int i = 1; i < length; i++) {
+      char c = name.charAt(i);
+      if (!(Character.isLetterOrDigit(c) || c == '_')) {
+        throw new RuleException("Illegal character in rule name: " + name);
+      }
     }
   }
 }
