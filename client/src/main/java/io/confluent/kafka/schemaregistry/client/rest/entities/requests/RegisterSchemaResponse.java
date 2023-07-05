@@ -54,7 +54,9 @@ public class RegisterSchemaResponse {
   }
 
   public RegisterSchemaResponse(Schema schema) {
-    this.version = schema.getVersion();
+    this.version = schema.getVersion() != null && schema.getVersion() > 0
+        ? schema.getVersion()
+        : null;
     this.id = schema.getId();
     this.schemaType = schema.getSchemaType();
     this.references = schema.getReferences();
