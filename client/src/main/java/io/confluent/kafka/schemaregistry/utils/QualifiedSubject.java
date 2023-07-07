@@ -145,10 +145,6 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return toQualifiedContext() + subject;
   }
 
-  public String toQualifiedSubjectWithoutTenant() {
-    return toDelimitedContext() + subject;
-  }
-
   public static QualifiedSubject create(String tenant, String qualifiedSubject) {
     try {
       return qualifiedSubject != null ? new QualifiedSubject(tenant, qualifiedSubject) : null;
