@@ -745,15 +745,20 @@ public class RestApiTest extends ClusterTestHarness {
 
   @Test
   public void testSchemaReferences() throws Exception {
-    testSchemaReferencesInContext("");
+    testSchemaReferencesInContext("", "");
   }
 
   @Test
   public void testSchemaReferencesContext() throws Exception {
-    testSchemaReferencesInContext(":.ctx:");
+    testSchemaReferencesInContext(":.ctx:", "");
   }
 
-  private void testSchemaReferencesInContext(String context) throws Exception {
+  @Test
+  public void testSchemaReferencesRefContext() throws Exception {
+    testSchemaReferencesInContext(":.ctx:", ":.ctx:");
+  }
+
+  private void testSchemaReferencesInContext(String context, String refContext) throws Exception {
     List<String> schemas = TestUtils.getAvroSchemaWithReferences();
     String unqualifiedSubject = "reference";
     String subject = context + unqualifiedSubject;
@@ -761,7 +766,9 @@ public class RestApiTest extends ClusterTestHarness {
 
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemas.get(1));
-    SchemaReference ref = new SchemaReference("otherns.Subrecord", unqualifiedSubject, 1);
+    String unqualifiedRefSubject = "reference";
+    String refSubject = refContext + unqualifiedRefSubject;
+    SchemaReference ref = new SchemaReference("otherns.Subrecord", refSubject, 1);
     request.setReferences(Collections.singletonList(ref));
     String subject2 = context + "referrer";
     int registeredId = restApp.restClient.registerSchema(request, subject2, false);
