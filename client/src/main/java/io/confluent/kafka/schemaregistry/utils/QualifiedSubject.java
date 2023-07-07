@@ -172,9 +172,8 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
       }
       boolean isParentQualified = !DEFAULT_CONTEXT.equals(qualifiedParent.getContext());
       if (isParentQualified) {
-        QualifiedSubject qs = new QualifiedSubject(
-            tenant, qualifiedParent.getContext(), qualifiedSubject.getSubject());
-        subject = CONTEXT_DELIMITER + qs.getContext() + CONTEXT_DELIMITER + qs.getSubject();
+        return CONTEXT_DELIMITER + qualifiedParent.getContext() + CONTEXT_DELIMITER
+            + qualifiedSubject.getSubject();
       }
     }
     return subject;
