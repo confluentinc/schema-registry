@@ -785,7 +785,7 @@ public class RestApiTest extends ClusterTestHarness {
     request.setReferences(Collections.singletonList(ref));
     String subject2 = context + "my_referrer";
     int registeredId = restApp.restClient.registerSchema(request, subject2, false).getId();
-    assertEquals("Registering a new schema should succeed", 2, registeredId);
+    assertEquals("Registering a new schema should succeed", parentId, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(parentId, subject2);
     // the newly registered schema should be immediately readable on the leader
