@@ -159,20 +159,26 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return qs != null ? qs.toQualifiedContext() : "";
   }
 
-  public static String qualifySubjectWithParent(String tenant, String parent, String subject) {
-    QualifiedSubject qualifiedSubject = QualifiedSubject.create(tenant, subject);
-    boolean isQualified = qualifiedSubject != null
-        && !DEFAULT_CONTEXT.equals(qualifiedSubject.getContext());
+  public static QualifiedSubject qualifySubjectWithParent(
+      String tenant, String parent, String subjectWithoutTenant) {
+    // Since the subject has no tenant, pass the default tenant
+    QualifiedSubject qualifiedSubject =
+        QualifiedSubject.create(DEFAULT_TENANT, subjectWithoutTenant);
+    if (qualifiedSubject == null) {
+      return null;
+    }
+    boolean isQualified = !DEFAULT_CONTEXT.equals(qualifiedSubject.getContext());
     if (!isQualified) {
       QualifiedSubject qualifiedParent = QualifiedSubject.create(tenant, parent);
       boolean isParentQualified = qualifiedParent != null
           && !DEFAULT_CONTEXT.equals(qualifiedParent.getContext());
       if (isParentQualified) {
-        subject = new QualifiedSubject(tenant, qualifiedParent.getContext(), subject)
-            .toQualifiedSubject();
+        // Since the subject has no tenant, pass the default tenant
+        qualifiedSubject = new QualifiedSubject(
+            DEFAULT_TENANT, qualifiedParent.getContext(), subjectWithoutTenant);
       }
     }
-    return subject;
+    return qualifiedSubject;
   }
 
   /**
