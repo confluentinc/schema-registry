@@ -69,9 +69,10 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
         visited.add(reference.getName());
       }
       if (!schemas.containsKey(reference.getName())) {
-        String refSubject = QualifiedSubject.qualifySubjectWithParent(
+        QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
             DEFAULT_TENANT, schema.getSubject(), reference.getSubject());
-        Schema s = schemaVersionFetcher().getByVersion(refSubject, reference.getVersion(), true);
+        Schema s = schemaVersionFetcher().getByVersion(refSubject.toQualifiedSubject(),
+            reference.getVersion(), true);
         if (s == null) {
           throw new IllegalStateException("No schema reference found for subject \""
               + refSubject
