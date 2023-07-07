@@ -174,8 +174,8 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
           && !DEFAULT_CONTEXT.equals(qualifiedParent.getContext());
       if (isParentQualified) {
         // Since the subject has no tenant, pass the default tenant
-        qualifiedSubject =
-            new QualifiedSubject(DEFAULT_TENANT, qualifiedParent.getContext(), subjectWithoutTenant);
+        qualifiedSubject = new QualifiedSubject(
+            DEFAULT_TENANT, qualifiedParent.getContext(), subjectWithoutTenant);
       }
     }
     return qualifiedSubject;
