@@ -127,9 +127,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   public String toQualifiedContext() {
-    String qualifiedContext = DEFAULT_CONTEXT.equals(context)
-        ? ""
-        : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
+    String qualifiedContext = toDelimitedContext();
     if (DEFAULT_TENANT.equals(tenant)) {
       return qualifiedContext;
     } else {
@@ -137,8 +135,18 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     }
   }
 
+  private String toDelimitedContext() {
+    return DEFAULT_CONTEXT.equals(context)
+        ? ""
+        : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
+  }
+
   public String toQualifiedSubject() {
     return toQualifiedContext() + subject;
+  }
+
+  public String toQualifiedSubjectWithoutTenant() {
+    return toDelimitedContext() + subject;
   }
 
   public static QualifiedSubject create(String tenant, String qualifiedSubject) {
@@ -159,24 +167,26 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return qs != null ? qs.toQualifiedContext() : "";
   }
 
-  public static String qualifySubjectWithParent(String tenant, String parent, String subject) {
-    QualifiedSubject qualifiedSubject = QualifiedSubject.create(tenant, subject);
+  public static QualifiedSubject qualifySubjectWithParent(
+      String tenant, String parent, String subjectWithoutTenant) {
+    // Since the subject has no tenant, pass the default tenant
+    QualifiedSubject qualifiedSubject =
+        QualifiedSubject.create(DEFAULT_TENANT, subjectWithoutTenant);
     if (qualifiedSubject == null) {
-      return subject;
+      return null;
     }
-    boolean isQualified = !DEFAULT_CONTEXT.equals(qualifiedSubject.getContext());
+    boolean isQualified =!DEFAULT_CONTEXT.equals(qualifiedSubject.getContext());
     if (!isQualified) {
       QualifiedSubject qualifiedParent = QualifiedSubject.create(tenant, parent);
-      if (qualifiedParent == null) {
-        return subject;
-      }
-      boolean isParentQualified = !DEFAULT_CONTEXT.equals(qualifiedParent.getContext());
+      boolean isParentQualified = qualifiedParent != null
+          && !DEFAULT_CONTEXT.equals(qualifiedParent.getContext());
       if (isParentQualified) {
-        return CONTEXT_DELIMITER + qualifiedParent.getContext() + CONTEXT_DELIMITER
-            + qualifiedSubject.getSubject();
+        // Since the subject has no tenant, pass the default tenant
+        qualifiedSubject =
+            new QualifiedSubject(DEFAULT_TENANT, qualifiedParent.getContext(), subjectWithoutTenant);
       }
     }
-    return subject;
+    return qualifiedSubject;
   }
 
   /**
