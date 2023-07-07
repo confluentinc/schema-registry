@@ -127,7 +127,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   public String toQualifiedContext() {
-    String qualifiedContext = toDelimitedContext();
+    String qualifiedContext = DEFAULT_CONTEXT.equals(context)
+        ? ""
+        : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
     if (DEFAULT_TENANT.equals(tenant)) {
       return qualifiedContext;
     } else {
@@ -136,9 +138,6 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   private String toDelimitedContext() {
-    return DEFAULT_CONTEXT.equals(context)
-        ? ""
-        : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
   public String toQualifiedSubject() {
@@ -171,7 +170,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     if (qualifiedSubject == null) {
       return null;
     }
-    boolean isQualified =!DEFAULT_CONTEXT.equals(qualifiedSubject.getContext());
+    boolean isQualified = !DEFAULT_CONTEXT.equals(qualifiedSubject.getContext());
     if (!isQualified) {
       QualifiedSubject qualifiedParent = QualifiedSubject.create(tenant, parent);
       boolean isParentQualified = qualifiedParent != null
