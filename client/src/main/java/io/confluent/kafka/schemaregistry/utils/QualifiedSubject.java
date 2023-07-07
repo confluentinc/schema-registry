@@ -137,9 +137,6 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     }
   }
 
-  private String toDelimitedContext() {
-  }
-
   public String toQualifiedSubject() {
     return toQualifiedContext() + subject;
   }
