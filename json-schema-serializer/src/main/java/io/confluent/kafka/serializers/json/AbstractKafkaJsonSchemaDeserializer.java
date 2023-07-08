@@ -191,7 +191,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
             : objectMapper.readValue(buffer.array(), start, length, type);
       } else {
         String typeName;
-        if (schema.rawSchema() instanceof CombinedSchema) {
+        if (schema.has("oneOf") || schema.has("anyOf") || schema.has("allOf")) {
           if (jsonNode == null) {
             jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
           }
