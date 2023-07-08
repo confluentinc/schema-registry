@@ -224,6 +224,10 @@ public class JsonSchema implements ParsedSchema {
     return getString("title");
   }
 
+  public boolean has(String key) {
+    return jsonNode.has(key);
+  }
+
   public String getString(String key) {
     return jsonNode.has(key) ? jsonNode.get(key).asText() : null;
   }
