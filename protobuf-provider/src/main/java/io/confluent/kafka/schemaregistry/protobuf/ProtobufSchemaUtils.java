@@ -142,7 +142,8 @@ public class ProtobufSchemaUtils {
     return null;
   }
 
-  public static JsonNode findMatchingNode(JsonNode node, String[] identifiers, boolean isFieldPath) {
+  public static JsonNode findMatchingNode(JsonNode node, String[] identifiers,
+                                          boolean isFieldPath) {
     JsonNode nodePtr = null;
     // the idx of last message identifier (exclusive)
     int end = isFieldPath ? identifiers.length - 1 : identifiers.length;

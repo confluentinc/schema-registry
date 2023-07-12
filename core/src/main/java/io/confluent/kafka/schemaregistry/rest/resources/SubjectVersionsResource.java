@@ -558,28 +558,28 @@ public class SubjectVersionsResource {
   @DocumentedName("registerSchemaTags")
   @PerformanceMetric("subjects.versions.register.tags")
   @Operation(summary = "Create schema embedded tags for a subject version",
-      description = "Create new schema subject version with the provided field or record level " +
-          "schema tags embedded (or remove) in the schema string, as well as the given metadata " +
-          "and ruleset.",
+      description = "Create new schema subject version with the provided field or record level "
+          + "schema tags embedded (or remove) in the schema string, as well as the given metadata "
+          + "and ruleset.",
       responses = {
           @ApiResponse(responseCode = "200", description = "Schema tags successfully registered.",
-              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
-                  RegisterSchemaResponse.class))),
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = RegisterSchemaResponse.class))),
           @ApiResponse(responseCode = "409", description = "Conflict. Incompatible schema.",
-              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
-                  ErrorMessage.class))),
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
           @ApiResponse(responseCode = "422",
               description = "Unprocessable entity. "
                   + "Error code 42201 indicates an invalid schema or schema type. ",
-              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
-                  ErrorMessage.class))),
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
           @ApiResponse(responseCode = "500",
               description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store."
                   + "Error code 50002 indicates operation timed out. "
                   + "Error code 50003 indicates a failure forwarding the request to the primary.",
-              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
-                  ErrorMessage.class)))})
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   public void registerTags(
       final @Suspended AsyncResponse asyncResponse,
@@ -590,8 +590,8 @@ public class SubjectVersionsResource {
       @PathParam("version") String version,
       @Parameter(description = "Tag schema request", required = true)
       @NotNull TagSchemaRequest request) {
-    log.info("Registering schema tags: subject {}, version {}, newVersion {}, " +
-            "adding {} tags, removing {} tags",
+    log.info("Registering schema tags: subject {}, version {}, newVersion {}, "
+            + "adding {} tags, removing {} tags",
         subjectName, version, request.getNewVersion(),
         request.getTagsToAdd() == null ? 0 : request.getTagsToAdd().size(),
         request.getTagsToRemove() == null ? 0 : request.getTagsToRemove().size());
@@ -624,7 +624,8 @@ public class SubjectVersionsResource {
     RegisterSchemaResponse registerSchemaResponse;
     try {
       Schema result =
-          schemaRegistry.registerSchemaTagsOrForward(subjectName, versionId, request, headerProperties);
+          schemaRegistry.registerSchemaTagsOrForward(
+              subjectName, versionId, request, headerProperties);
       registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);

@@ -113,7 +113,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -2428,7 +2427,7 @@ public class ProtobufSchema implements ParsedSchema {
       }
     }
     for (OneOfElement oneOfElement: messageElem.getOneOfs()) {
-      for(FieldElement oneOfField : oneOfElement.getFields()) {
+      for (FieldElement oneOfField : oneOfElement.getFields()) {
         ProtobufMeta fieldMeta = findMeta(CONFLUENT_FIELD_META, oneOfField.getOptions());
         if (fieldMeta != null && fieldMeta.getTags() != null) {
           tags.addAll(fieldMeta.getTags());
