@@ -28,7 +28,7 @@ import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -59,6 +59,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -2810,6 +2811,87 @@ public class ProtobufSchemaTest {
     ParsedSchema schema = new ProtobufSchema(schemaString).copy(Collections.emptyMap(), tags);
     assertEquals(afterRemovedTag, schema.canonicalString());
     assertEquals(ImmutableSet.of("PII"), schema.inlineTags());
+  }
+
+  @Test
+  public void testOptionalOneOfFieldName() {
+    String schemaString = "syntax = \"proto3\";\n" +
+        "package com.example.mynamespace;\n" +
+        "\n" +
+        "message SampleRecord {\n" +
+        "  oneof test_oneof {\n" +
+        "    string f1 = 1;\n" +
+        "    int32 f2 = 2;\n" +
+        "  }\n" +
+        "}\n";
+
+    String expectedSchemaString = "syntax = \"proto3\";\n" +
+        "package com.example.mynamespace;\n" +
+        "\n" +
+        "message SampleRecord {\n" +
+        "  oneof test_oneof {\n" +
+        "    string f1 = 1 [(confluent.field_meta) = {\n" +
+        "      tags: [\n" +
+        "        \"TAG2\",\n" +
+        "        \"TAG1\"\n" +
+        "      ]\n" +
+        "    }];\n" +
+        "    int32 f2 = 2 [(confluent.field_meta) = {\n" +
+        "      tags: [\n" +
+        "        \"TAG3\",\n" +
+        "        \"TAG4\"\n" +
+        "      ]\n" +
+        "    }];\n" +
+        "  }\n" +
+        "}\n";
+
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity(".SampleRecord.f1",
+        SchemaEntity.EntityType.SR_FIELD), Collections.singleton("TAG1"));
+    tags.put(new SchemaEntity(".SampleRecord.test_oneof.f1",
+        SchemaEntity.EntityType.SR_FIELD), Collections.singleton("TAG2"));
+    tags.put(new SchemaEntity("SampleRecord.f2",
+        SchemaEntity.EntityType.SR_FIELD), Collections.singleton("TAG3"));
+    tags.put(new SchemaEntity("SampleRecord.test_oneof.f2",
+        SchemaEntity.EntityType.SR_FIELD), Collections.singleton("TAG4"));
+    ParsedSchema result = new ProtobufSchema(schemaString).copy(tags, Collections.emptyMap());
+    assertEquals(expectedSchemaString, result.canonicalString());
+    assertEquals(ImmutableSet.of("TAG1", "TAG2", "TAG3", "TAG4"), result.inlineTags());
+  }
+
+  @Test
+  public void testInvalidPath() {
+    String schemaString = "syntax = \"proto3\";\n" +
+        "package com.example.mynamespace;\n" +
+        "\n" +
+        "message SampleRecord {\n" +
+        "  oneof test_oneof {\n" +
+        "    string f1 = 1;\n" +
+        "    int32 test_oneof = 2;\n" +
+        "  }\n" +
+        "}\n";
+    ParsedSchema origin = new ProtobufSchema(schemaString);
+    Set<String> toAdd = Collections.singleton("TAG1");
+
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("SampleRecord", SchemaEntity.EntityType.SR_FIELD), toAdd);
+    assertThrows(IllegalArgumentException.class, () -> origin.copy(tags, Collections.emptyMap()));
+
+    Map<SchemaEntity, Set<String>> tags2 = new HashMap<>();
+    tags2.put(new SchemaEntity("SampleRecord.bad_oneof.f1", SchemaEntity.EntityType.SR_FIELD), toAdd);
+    assertThrows(IllegalArgumentException.class, () -> origin.copy(tags2, Collections.emptyMap()));
+
+    Map<SchemaEntity, Set<String>> tags3 = new HashMap<>();
+    tags3.put(new SchemaEntity("SampleRecord.f3", SchemaEntity.EntityType.SR_FIELD), toAdd);
+    assertThrows(IllegalArgumentException.class, () -> origin.copy(tags3, Collections.emptyMap()));
+
+    Map<SchemaEntity, Set<String>> tags4 = new HashMap<>();
+    tags4.put(new SchemaEntity("badRecord", SchemaEntity.EntityType.SR_RECORD), toAdd);
+    assertThrows(IllegalArgumentException.class, () -> origin.copy(tags4, Collections.emptyMap()));
+
+    Map<SchemaEntity, Set<String>> tags5 = new HashMap<>();
+    tags5.put(new SchemaEntity("..SampleRecord", SchemaEntity.EntityType.SR_RECORD), toAdd);
+    assertThrows(IllegalArgumentException.class, () -> origin.copy(tags5, Collections.emptyMap()));
   }
 
   @Test

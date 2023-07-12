@@ -26,19 +26,24 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
@@ -58,6 +63,7 @@ import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
 import io.confluent.kafka.schemaregistry.storage.exceptions.EntryTooLargeException;
@@ -70,6 +76,7 @@ import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.NamedURI;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
 import java.util.Arrays;
@@ -94,6 +101,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.HostnameVerifier;
+import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -114,6 +122,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    */
   public static final int MIN_VERSION = 1;
   public static final int MAX_VERSION = Integer.MAX_VALUE;
+  private static final String CONFLUENT_VERSION = "confluent:version";
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
   private final SchemaRegistryConfig config;
@@ -839,6 +848,76 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
+  public Schema registerSchemaTags(String subject, Schema schema, TagSchemaRequest request)
+      throws SchemaRegistryException {
+    ParsedSchema parsedSchema = parseSchema(schema);
+    int newVersion = request.getNewVersion() != null ? request.getNewVersion() : 0;
+
+    Metadata newMetadata = new Metadata(
+        Collections.emptyMap(),
+        Collections.singletonMap(CONFLUENT_VERSION, String.valueOf(newVersion)),
+        Collections.emptySet());
+    Metadata mergedMetadata = request.getMetadata() == null
+        ? Metadata.mergeMetadata(parsedSchema.metadata(), newMetadata)
+        : Metadata.mergeMetadata(request.getMetadata(), newMetadata);
+
+    try {
+      ParsedSchema newSchema = parsedSchema
+          .copy(schemaTagsListToMap(request.getTagsToAdd()),
+              schemaTagsListToMap(request.getTagsToRemove()))
+          .copy(mergedMetadata, request.getRuleSet())
+          .copy(newVersion);
+      return register(subject, new Schema(subject, newVersion, -1, newSchema), false);
+    } catch (IllegalArgumentException e) {
+      throw new InvalidSchemaException(e);
+    }
+  }
+
+  private Map<SchemaEntity, Set<String>> schemaTagsListToMap(List<SchemaTags> schemaTags) {
+    if (schemaTags == null || schemaTags.isEmpty()) {
+      return Collections.emptyMap();
+    }
+    return schemaTags
+        .stream()
+        .collect(Collectors.toMap(SchemaTags::getSchemaEntity,
+            entry -> new HashSet<>(entry.getTags()),
+            (v1, v2) -> {
+              v1.addAll(v2);
+              return v1;
+            }));
+  }
+
+  public Schema registerSchemaTagsOrForward(String subject,
+                                            VersionId versionId,
+                                            TagSchemaRequest request,
+                                            Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    Schema schema = getUsingContexts(subject, versionId.getVersionId(), false);
+    if (schema == null) {
+      if (!hasSubjects(subject, false)) {
+        throw Errors.subjectNotFoundException(subject);
+      } else {
+        throw Errors.versionNotFoundException(versionId.getVersionId());
+      }
+    }
+
+    kafkaStore.lockFor(subject).lock();
+    try {
+      if (isLeader()) {
+        return registerSchemaTags(subject, schema, request);
+      } else {
+        // forward registering request to the leader
+        if (leaderIdentity != null) {
+          return forwardRegisterSchemaTagsRequestToLeader(subject, schema, request, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Request failed since leader is unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
   @Override
   public void deleteSchemaVersion(String subject,
                                   Schema schema,
@@ -1115,6 +1194,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the registering schema request to %s",
+              baseUrl),
+          e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  public Schema forwardRegisterSchemaTagsRequestToLeader(
+      String subject, Schema schema, TagSchemaRequest request, Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+
+    final UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug(String.format("Forwarding register schema tags request to %s", baseUrl));
+    try {
+      RegisterSchemaResponse response = leaderRestService.registerSchemaTags(
+          headerProperties, request, subject, String.valueOf(schema.getVersion()));
+      return new Schema(subject, response);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format("Unexpected error while forwarding the register schema tags request to %s",
               baseUrl),
           e);
     } catch (RestClientException e) {

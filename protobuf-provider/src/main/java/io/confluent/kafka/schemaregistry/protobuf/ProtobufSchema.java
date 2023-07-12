@@ -95,7 +95,7 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
-import io.confluent.kafka.schemaregistry.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -113,6 +113,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -145,10 +146,10 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 
 import static com.google.common.base.CaseFormat.LOWER_UNDERSCORE;
 import static com.google.common.base.CaseFormat.UPPER_CAMEL;
-import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingFieldElement;
-import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingMessageElement;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingElement;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingNode;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.jsonToFile;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.removeLeadingDot;
 
 public class ProtobufSchema implements ParsedSchema {
 
@@ -2426,6 +2427,14 @@ public class ProtobufSchema implements ParsedSchema {
         getInlineTagsRecursively(tags, (EnumElement) type);
       }
     }
+    for (OneOfElement oneOfElement: messageElem.getOneOfs()) {
+      for(FieldElement oneOfField : oneOfElement.getFields()) {
+        ProtobufMeta fieldMeta = findMeta(CONFLUENT_FIELD_META, oneOfField.getOptions());
+        if (fieldMeta != null && fieldMeta.getTags() != null) {
+          tags.addAll(fieldMeta.getTags());
+        }
+      }
+    }
   }
 
   private void getInlineTagsRecursively(Set<String> tags, EnumElement enumElem) {
@@ -2454,26 +2463,38 @@ public class ProtobufSchema implements ParsedSchema {
                                 Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
     Set<SchemaEntity> entityToModify = new HashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
+    Map<Object, OptionElement> optionCache = new HashMap<>();
 
     for (SchemaEntity entity : entityToModify) {
-      String[] identifiers = entity.getEntityPath().split("\\.");
-      MessageElement messageElement;
-      List<OptionElement> allOptions;
+      String[] identifiers = removeLeadingDot(entity.getEntityPath()).split("\\.");
+      List<OptionElement> allOptions = new LinkedList<>();
       Map<String, OptionElement> mergedOptions;
       String metaName;
       JsonNode entityNode;
+      Object matchingElement;
 
       if (SchemaEntity.EntityType.SR_RECORD == entity.getEntityType()) {
-        messageElement = findMatchingMessageElement(original, identifiers, identifiers.length);
-        entityNode = findMatchingNode(node, identifiers, identifiers.length);
-        allOptions = new LinkedList<>(messageElement.getOptions());
         metaName = CONFLUENT_MESSAGE_META;
+        matchingElement = findMatchingElement(original, identifiers, false);
+        MessageElement messageElement = (MessageElement) matchingElement;
+        entityNode = findMatchingNode(node, identifiers, false);
+        OptionElement cachedOptionElement = optionCache.get(matchingElement);
+        if (cachedOptionElement != null) {
+          allOptions.add(cachedOptionElement);
+        } else {
+          allOptions.addAll(messageElement.getOptions());
+        }
       } else {
-        messageElement = findMatchingMessageElement(original, identifiers, identifiers.length - 1);
-        FieldElement fieldElement = findMatchingFieldElement(messageElement, identifiers);
-        entityNode = findMatchingNode(node, identifiers, identifiers.length - 1);
-        allOptions = new LinkedList<>(fieldElement.getOptions());
         metaName = CONFLUENT_FIELD_META;
+        matchingElement = findMatchingElement(original, identifiers, true);
+        FieldElement fieldElement = (FieldElement) matchingElement;
+        entityNode = findMatchingNode(node, identifiers, true);
+        OptionElement cachedOptionElement = optionCache.get(matchingElement);
+        if (cachedOptionElement != null) {
+          allOptions.add(cachedOptionElement);
+        } else {
+          allOptions.addAll(fieldElement.getOptions());
+        }
       }
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);
@@ -2516,6 +2537,7 @@ public class ProtobufSchema implements ParsedSchema {
           }
         }
       }
+      optionCache.put(matchingElement, mergedOptions.get(metaName));
       ((ObjectNode) entityNode).replace("options", jsonMapper.valueToTree(mergedOptions.values()));
     }
   }

@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +42,13 @@ public class RuleSetHandler {
   }
 
   public void handle(String subject, boolean normalize, RegisterSchemaRequest request) {
+    if (request.getRuleSet() != null) {
+      log.warn("RuleSets are only supported by Confluent Enterprise and Confluent Cloud");
+      request.setRuleSet(null);
+    }
+  }
+
+  public void handle(String subject, TagSchemaRequest request) {
     if (request.getRuleSet() != null) {
       log.warn("RuleSets are only supported by Confluent Enterprise and Confluent Cloud");
       request.setRuleSet(null);
