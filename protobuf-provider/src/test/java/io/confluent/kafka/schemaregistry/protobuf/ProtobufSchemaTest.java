@@ -2832,8 +2832,8 @@ public class ProtobufSchemaTest {
         "  oneof test_oneof {\n" +
         "    string f1 = 1 [(confluent.field_meta) = {\n" +
         "      tags: [\n" +
-        "        \"TAG2\",\n" +
-        "        \"TAG1\"\n" +
+        "        \"TAG1\",\n" +
+        "        \"TAG2\"\n" +
         "      ]\n" +
         "    }];\n" +
         "    int32 f2 = 2 [(confluent.field_meta) = {\n" +
