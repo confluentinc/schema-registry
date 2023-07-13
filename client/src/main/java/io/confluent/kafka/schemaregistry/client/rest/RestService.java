@@ -593,10 +593,10 @@ public class RestService implements Configurable {
     return response;
   }
 
-  public RegisterSchemaResponse registerSchemaTags(Map<String, String> requestProperties,
-                                                   TagSchemaRequest tagSchemaRequest,
-                                                   String subject,
-                                                   String version)
+  public RegisterSchemaResponse modifySchemaTags(Map<String, String> requestProperties,
+                                                 TagSchemaRequest tagSchemaRequest,
+                                                 String subject,
+                                                 String version)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/tags");
     String path = builder.build(subject, version).toString();

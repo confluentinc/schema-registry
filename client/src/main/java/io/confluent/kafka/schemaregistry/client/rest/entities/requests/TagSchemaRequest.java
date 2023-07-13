@@ -22,18 +22,27 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @io.swagger.v3.oas.annotations.media.Schema(description = "Schema tags register request")
 public class TagSchemaRequest {
 
+  private static final String newVersionDescription =
+      "The new version should be the latest version in the subject + 1."
+          + " If set, the new version will be encoded to the schema metadata.";
   private Integer newVersion;
   private List<SchemaTags> tagsToAdd;
   private List<SchemaTags> tagsToRemove;
@@ -43,7 +52,7 @@ public class TagSchemaRequest {
   public TagSchemaRequest() {
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = "The new version")
+  @io.swagger.v3.oas.annotations.media.Schema(description = newVersionDescription)
   @JsonProperty("newVersion")
   public Integer getNewVersion() {
     return newVersion;
@@ -122,5 +131,19 @@ public class TagSchemaRequest {
 
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+
+  public static Map<SchemaEntity, Set<String>> schemaTagsListToMap(List<SchemaTags> schemaTags) {
+    if (schemaTags == null || schemaTags.isEmpty()) {
+      return Collections.emptyMap();
+    }
+    return schemaTags
+        .stream()
+        .collect(Collectors.toMap(SchemaTags::getSchemaEntity,
+            entry -> new HashSet<>(entry.getTags()),
+            (v1, v2) -> {
+              v1.addAll(v2);
+              return v1;
+            }));
   }
 }

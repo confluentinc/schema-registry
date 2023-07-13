@@ -148,7 +148,6 @@ import static com.google.common.base.CaseFormat.UPPER_CAMEL;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingElement;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingNode;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.jsonToFile;
-import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.removeLeadingDot;
 
 public class ProtobufSchema implements ParsedSchema {
 
@@ -2465,7 +2464,7 @@ public class ProtobufSchema implements ParsedSchema {
     Map<Object, OptionElement> optionCache = new HashMap<>();
 
     for (SchemaEntity entity : entityToModify) {
-      String[] identifiers = removeLeadingDot(entity.getEntityPath()).split("\\.");
+      String[] identifiers = entity.getNormalizedPath().split("\\.");
       List<OptionElement> allOptions = new LinkedList<>();
       Map<String, OptionElement> mergedOptions;
       String metaName;

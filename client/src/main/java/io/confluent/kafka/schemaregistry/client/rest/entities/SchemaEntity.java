@@ -48,6 +48,14 @@ public class SchemaEntity {
     return entityType;
   }
 
+  public String getNormalizedPath() {
+    if (entityPath.startsWith(".")) {
+      return entityPath.substring(1);
+    } else {
+      return entityPath;
+    }
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -58,13 +66,13 @@ public class SchemaEntity {
     }
 
     SchemaEntity other = (SchemaEntity) o;
-    return Objects.equals(this.entityPath, other.getEntityPath())
+    return Objects.equals(this.getNormalizedPath(), other.getNormalizedPath())
       && Objects.equals(this.entityType, other.getEntityType());
   }
 
   @Override
   public int hashCode() {
-    int result = Objects.hashCode(entityPath);
+    int result = Objects.hashCode(getNormalizedPath());
     result = 31 * result + Objects.hashCode(entityType);
     return result;
   }

@@ -555,14 +555,14 @@ public class SubjectVersionsResource {
 
   @POST
   @Path("/{version}/tags")
-  @DocumentedName("registerSchemaTags")
-  @PerformanceMetric("subjects.versions.register.tags")
-  @Operation(summary = "Create schema embedded tags for a subject version",
+  @DocumentedName("modifySchemaTags")
+  @PerformanceMetric("subjects.versions.modify.tags")
+  @Operation(summary = "Create or remove schema embedded tags for a subject version",
       description = "Create new schema subject version with the provided field or record level "
           + "schema tags embedded (or remove) in the schema string, as well as the given metadata "
           + "and ruleset.",
       responses = {
-          @ApiResponse(responseCode = "200", description = "Schema tags successfully registered.",
+          @ApiResponse(responseCode = "200", description = "Schema successfully registered.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = RegisterSchemaResponse.class))),
           @ApiResponse(responseCode = "409", description = "Conflict. Incompatible schema.",
@@ -581,7 +581,7 @@ public class SubjectVersionsResource {
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
-  public void registerTags(
+  public void modifyTags(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
       @Parameter(description = "Name of the subject", required = true)
@@ -590,23 +590,14 @@ public class SubjectVersionsResource {
       @PathParam("version") String version,
       @Parameter(description = "Tag schema request", required = true)
       @NotNull TagSchemaRequest request) {
-    log.info("Registering schema tags: subject {}, version {}, newVersion {}, "
+    log.info("Modifying schema tags: subject {}, version {}, newVersion {}, "
             + "adding {} tags, removing {} tags",
         subjectName, version, request.getNewVersion(),
         request.getTagsToAdd() == null ? 0 : request.getTagsToAdd().size(),
         request.getTagsToRemove() == null ? 0 : request.getTagsToRemove().size());
 
-    schemaRegistry.getRuleSetHandler().handle(subjectName, request);
-
-    if (request.getRuleSet() != null) {
-      try {
-        request.getRuleSet().validate();
-      } catch (RuleException e) {
-        throw new RestInvalidRuleSetException(e.getMessage());
-      }
-    }
-    if (subjectName != null
-        && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subjectName)) {
+    // get schema by subject version
+    if (!QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subjectName)) {
       throw Errors.invalidSubjectException(subjectName);
     }
     VersionId versionId;
@@ -615,17 +606,38 @@ public class SubjectVersionsResource {
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     }
+    String subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subjectName);
+    Schema schema;
+    try {
+      schema = schemaRegistry.getUsingContexts(subject, versionId.getVersionId(), false);
+      if (schema == null) {
+        if (!schemaRegistry.hasSubjects(subject, false)) {
+          throw Errors.subjectNotFoundException(subjectName);
+        } else {
+          throw Errors.versionNotFoundException(versionId.getVersionId());
+        }
+      }
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(
+          String.format("Error while getting schema of subject %s version %s",
+              subjectName, version), e);
+    }
+    schemaRegistry.getRuleSetHandler().handle(schema, request);
 
-    subjectName = QualifiedSubject.normalize(schemaRegistry.tenant(), subjectName);
+    if (request.getRuleSet() != null) {
+      try {
+        request.getRuleSet().validate();
+      } catch (RuleException e) {
+        throw new RestInvalidRuleSetException(e.getMessage());
+      }
+    }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
-
     RegisterSchemaResponse registerSchemaResponse;
     try {
       Schema result =
-          schemaRegistry.registerSchemaTagsOrForward(
-              subjectName, versionId, request, headerProperties);
+          schemaRegistry.modifySchemaTagsOrForward(subject, schema, request, headerProperties);
       registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);

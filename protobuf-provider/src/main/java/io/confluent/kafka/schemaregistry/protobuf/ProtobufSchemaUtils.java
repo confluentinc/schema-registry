@@ -118,14 +118,6 @@ public class ProtobufSchemaUtils {
     return jsonString.getBytes(StandardCharsets.UTF_8);
   }
 
-  public static String removeLeadingDot(String path) {
-    if (path.startsWith(".")) {
-      return path.substring(1);
-    } else {
-      return path;
-    }
-  }
-
   public static ProtoFileElement jsonToFile(JsonNode node) throws JsonProcessingException {
     return mapperWithProtoFileDeserializer.convertValue(node, ProtoFileElement.class);
   }

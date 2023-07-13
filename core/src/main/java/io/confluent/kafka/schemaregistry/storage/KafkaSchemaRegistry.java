@@ -28,9 +28,7 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
@@ -62,7 +60,6 @@ import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
 import io.confluent.kafka.schemaregistry.storage.exceptions.EntryTooLargeException;
@@ -75,7 +72,6 @@ import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.NamedURI;
 
-import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
 import java.util.Arrays;
@@ -851,18 +847,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     ParsedSchema parsedSchema = parseSchema(schema);
     int newVersion = request.getNewVersion() != null ? request.getNewVersion() : 0;
 
-    Metadata newMetadata = new Metadata(
-        Collections.emptyMap(),
-        Collections.singletonMap(CONFLUENT_VERSION, String.valueOf(newVersion)),
-        Collections.emptySet());
-    Metadata mergedMetadata = request.getMetadata() == null
-        ? Metadata.mergeMetadata(parsedSchema.metadata(), newMetadata)
-        : Metadata.mergeMetadata(request.getMetadata(), newMetadata);
+    Metadata mergedMetadata = request.getMetadata() != null
+        ? request.getMetadata()
+        : parsedSchema.metadata();
+    if (request.getNewVersion() != null) {
+      Metadata newMetadata = new Metadata(
+          Collections.emptyMap(),
+          Collections.singletonMap(CONFLUENT_VERSION, String.valueOf(newVersion)),
+          Collections.emptySet());
+      mergedMetadata = Metadata.mergeMetadata(mergedMetadata, newMetadata);
+    }
 
     try {
       ParsedSchema newSchema = parsedSchema
-          .copy(schemaTagsListToMap(request.getTagsToAdd()),
-              schemaTagsListToMap(request.getTagsToRemove()))
+          .copy(TagSchemaRequest.schemaTagsListToMap(request.getTagsToAdd()),
+              TagSchemaRequest.schemaTagsListToMap(request.getTagsToRemove()))
           .copy(mergedMetadata, request.getRuleSet())
           .copy(newVersion);
       return register(subject, new Schema(subject, newVersion, -1, newSchema), false);
@@ -871,34 +870,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private Map<SchemaEntity, Set<String>> schemaTagsListToMap(List<SchemaTags> schemaTags) {
-    if (schemaTags == null || schemaTags.isEmpty()) {
-      return Collections.emptyMap();
-    }
-    return schemaTags
-        .stream()
-        .collect(Collectors.toMap(SchemaTags::getSchemaEntity,
-            entry -> new HashSet<>(entry.getTags()),
-            (v1, v2) -> {
-              v1.addAll(v2);
-              return v1;
-            }));
-  }
-
-  public Schema registerSchemaTagsOrForward(String subject,
-                                            VersionId versionId,
-                                            TagSchemaRequest request,
-                                            Map<String, String> headerProperties)
+  public Schema modifySchemaTagsOrForward(String subject,
+                                          Schema schema,
+                                          TagSchemaRequest request,
+                                          Map<String, String> headerProperties)
       throws SchemaRegistryException {
-    Schema schema = getUsingContexts(subject, versionId.getVersionId(), false);
-    if (schema == null) {
-      if (!hasSubjects(subject, false)) {
-        throw Errors.subjectNotFoundException(subject);
-      } else {
-        throw Errors.versionNotFoundException(versionId.getVersionId());
-      }
-    }
-
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
@@ -906,7 +882,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       } else {
         // forward registering request to the leader
         if (leaderIdentity != null) {
-          return forwardRegisterSchemaTagsRequestToLeader(
+          return forwardModifySchemaTagsRequestToLeader(
               subject, schema, request, headerProperties);
         } else {
           throw new UnknownLeaderException("Request failed since leader is unknown");
@@ -1200,7 +1176,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public Schema forwardRegisterSchemaTagsRequestToLeader(
+  public Schema forwardModifySchemaTagsRequestToLeader(
       String subject, Schema schema, TagSchemaRequest request, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
 
@@ -1208,7 +1184,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
     log.debug(String.format("Forwarding register schema tags request to %s", baseUrl));
     try {
-      RegisterSchemaResponse response = leaderRestService.registerSchemaTags(
+      RegisterSchemaResponse response = leaderRestService.modifySchemaTags(
           headerProperties, request, subject, String.valueOf(schema.getVersion()));
       return new Schema(subject, response);
     } catch (IOException e) {

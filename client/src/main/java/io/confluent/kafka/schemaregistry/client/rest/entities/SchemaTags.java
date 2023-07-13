@@ -25,6 +25,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.util.List;
+import java.util.Objects;
 
 import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE;
 import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.PUBLIC_ONLY;
@@ -67,5 +68,24 @@ public class SchemaTags {
 
   public String toJson() throws JsonProcessingException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    SchemaTags other = (SchemaTags) o;
+    return Objects.equals(this.schemaEntity, other.schemaEntity)
+        && Objects.equals(this.tags, other.tags);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(schemaEntity, tags);
   }
 }

@@ -2875,23 +2875,33 @@ public class ProtobufSchemaTest {
 
     Map<SchemaEntity, Set<String>> tags = new HashMap<>();
     tags.put(new SchemaEntity("SampleRecord", SchemaEntity.EntityType.SR_FIELD), toAdd);
-    assertThrows(IllegalArgumentException.class, () -> origin.copy(tags, Collections.emptyMap()));
+    assertThrows("Missing field", IllegalArgumentException.class,
+        () -> origin.copy(tags, Collections.emptyMap()));
 
     Map<SchemaEntity, Set<String>> tags2 = new HashMap<>();
     tags2.put(new SchemaEntity("SampleRecord.bad_oneof.f1", SchemaEntity.EntityType.SR_FIELD), toAdd);
-    assertThrows(IllegalArgumentException.class, () -> origin.copy(tags2, Collections.emptyMap()));
+    assertThrows("Bad oneOf fieldName", IllegalArgumentException.class,
+        () -> origin.copy(tags2, Collections.emptyMap()));
 
     Map<SchemaEntity, Set<String>> tags3 = new HashMap<>();
     tags3.put(new SchemaEntity("SampleRecord.f3", SchemaEntity.EntityType.SR_FIELD), toAdd);
-    assertThrows(IllegalArgumentException.class, () -> origin.copy(tags3, Collections.emptyMap()));
+    assertThrows("Non-existing field", IllegalArgumentException.class,
+        () -> origin.copy(tags3, Collections.emptyMap()));
 
     Map<SchemaEntity, Set<String>> tags4 = new HashMap<>();
     tags4.put(new SchemaEntity("badRecord", SchemaEntity.EntityType.SR_RECORD), toAdd);
-    assertThrows(IllegalArgumentException.class, () -> origin.copy(tags4, Collections.emptyMap()));
+    assertThrows("Non-existing message", IllegalArgumentException.class,
+        () -> origin.copy(tags4, Collections.emptyMap()));
 
     Map<SchemaEntity, Set<String>> tags5 = new HashMap<>();
     tags5.put(new SchemaEntity("..SampleRecord", SchemaEntity.EntityType.SR_RECORD), toAdd);
-    assertThrows(IllegalArgumentException.class, () -> origin.copy(tags5, Collections.emptyMap()));
+    assertThrows("Invalid path", IllegalArgumentException.class,
+        () -> origin.copy(tags5, Collections.emptyMap()));
+
+    Map<SchemaEntity, Set<String>> tags6 = new HashMap<>();
+    tags6.put(new SchemaEntity(".SampleRecord.f1", SchemaEntity.EntityType.SR_RECORD), toAdd);
+    assertThrows("Missing oneOf fieldName", IllegalArgumentException.class,
+        () -> origin.copy(tags6, Collections.emptyMap()));
   }
 
   @Test
