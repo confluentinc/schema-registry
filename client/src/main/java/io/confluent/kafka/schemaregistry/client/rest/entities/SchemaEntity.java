@@ -30,12 +30,18 @@ public class SchemaEntity {
 
   private final String entityPath;
   private final EntityType entityType;
+  private final String normalizedPath;
 
   @JsonCreator
   public SchemaEntity(@JsonProperty("entityPath") String entityPath,
                       @JsonProperty("entityType") EntityType entityType) {
     this.entityPath = entityPath;
     this.entityType = entityType;
+    if (this.entityPath.startsWith(".")) {
+      this.normalizedPath = entityPath.substring(1);
+    } else {
+      this.normalizedPath = this.entityPath;
+    }
   }
 
   @JsonProperty("entityPath")
@@ -49,11 +55,7 @@ public class SchemaEntity {
   }
 
   public String getNormalizedPath() {
-    if (entityPath.startsWith(".")) {
-      return entityPath.substring(1);
-    } else {
-      return entityPath;
-    }
+    return normalizedPath;
   }
 
   @Override

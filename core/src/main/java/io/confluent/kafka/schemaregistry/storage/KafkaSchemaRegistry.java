@@ -842,7 +842,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public Schema registerSchemaTags(String subject, Schema schema, TagSchemaRequest request)
+  public Schema modifySchemaTags(String subject, Schema schema, TagSchemaRequest request)
       throws SchemaRegistryException {
     ParsedSchema parsedSchema = parseSchema(schema);
     int newVersion = request.getNewVersion() != null ? request.getNewVersion() : 0;
@@ -878,7 +878,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        return registerSchemaTags(subject, schema, request);
+        return modifySchemaTags(subject, schema, request);
       } else {
         // forward registering request to the leader
         if (leaderIdentity != null) {

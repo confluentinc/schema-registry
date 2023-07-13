@@ -600,7 +600,6 @@ public class RestService implements Configurable {
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/tags");
     String path = builder.build(subject, version).toString();
-    System.out.println(path);
 
     RegisterSchemaResponse response = httpRequest(
         path, "POST",
