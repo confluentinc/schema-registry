@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -140,7 +141,7 @@ public class TagSchemaRequest {
     return schemaTags
         .stream()
         .collect(Collectors.toMap(SchemaTags::getSchemaEntity,
-            entry -> new HashSet<>(entry.getTags()),
+            entry -> new LinkedHashSet<>(entry.getTags()),
             (v1, v2) -> {
               v1.addAll(v2);
               return v1;
