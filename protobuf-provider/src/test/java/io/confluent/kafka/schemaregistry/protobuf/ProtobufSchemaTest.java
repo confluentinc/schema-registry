@@ -42,6 +42,7 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.Test;
 
@@ -2845,7 +2846,7 @@ public class ProtobufSchemaTest {
         "  }\n" +
         "}\n";
 
-    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    Map<SchemaEntity, Set<String>> tags = new LinkedHashMap<>();
     tags.put(new SchemaEntity(".SampleRecord.f1",
         SchemaEntity.EntityType.SR_FIELD), Collections.singleton("TAG1"));
     tags.put(new SchemaEntity(".SampleRecord.test_oneof.f1",

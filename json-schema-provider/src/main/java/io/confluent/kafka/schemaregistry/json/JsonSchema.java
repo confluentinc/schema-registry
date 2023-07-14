@@ -49,7 +49,6 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -869,7 +868,7 @@ public class JsonSchema implements ParsedSchema {
   private void modifySchemaTags(JsonNode node,
                                 Map<SchemaEntity, Set<String>> tagsToAddMap,
                                 Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
-    Set<SchemaEntity> entityToModify = new HashSet<>(tagsToAddMap.keySet());
+    Set<SchemaEntity> entityToModify = new LinkedHashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
     for (SchemaEntity entity : entityToModify) {

@@ -2451,7 +2451,7 @@ public class ProtobufSchema implements ParsedSchema {
   private Set<String> getInlineTags(FieldDescriptor fd) {
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
       Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
-      return new HashSet<>(meta.getTagsList());
+      return new LinkedHashSet<>(meta.getTagsList());
     }
     return Collections.emptySet();
   }
@@ -2459,7 +2459,7 @@ public class ProtobufSchema implements ParsedSchema {
   private void modifySchemaTags(ProtoFileElement original, JsonNode node,
                                 Map<SchemaEntity, Set<String>> tagsToAddMap,
                                 Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
-    Set<SchemaEntity> entityToModify = new HashSet<>(tagsToAddMap.keySet());
+    Set<SchemaEntity> entityToModify = new LinkedHashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
     Map<Object, OptionElement> optionCache = new HashMap<>();
 

@@ -25,7 +25,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Optional;
+
+import io.swagger.v3.oas.annotations.links.Link;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
@@ -1139,6 +1143,34 @@ public class AvroSchemaTest {
 
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+  }
+
+  @Test
+  public void testTagsInsertionOrder() {
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]"
+        + "}";
+
+    String addedTagSchema = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\",\"confluent:tags\":[\"tag1\",\"tag2\"]\n}]"
+        + "}";
+
+    AvroSchema schema = new AvroSchema(schemaString);
+    AvroSchema expectSchema = new AvroSchema(addedTagSchema);
+
+    Map<SchemaEntity, Set<String>> tags = new LinkedHashMap<>();
+    Set<String> tagNames = new LinkedHashSet<>();
+    tagNames.add("tag1");
+    tagNames.add("tag2");
+    tags.put(new SchemaEntity("myrecord.f1", SchemaEntity.EntityType.SR_FIELD), tagNames);
+
+    ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
+    assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {
