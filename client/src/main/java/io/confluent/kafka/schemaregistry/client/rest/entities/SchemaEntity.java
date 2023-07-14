@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -54,6 +55,7 @@ public class SchemaEntity {
     return entityType;
   }
 
+  @JsonIgnore
   public String getNormalizedPath() {
     return normalizedPath;
   }
