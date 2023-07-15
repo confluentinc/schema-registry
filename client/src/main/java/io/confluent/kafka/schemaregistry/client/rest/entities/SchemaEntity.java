@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry;
+package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -30,12 +31,18 @@ public class SchemaEntity {
 
   private final String entityPath;
   private final EntityType entityType;
+  private final String normalizedPath;
 
   @JsonCreator
   public SchemaEntity(@JsonProperty("entityPath") String entityPath,
                       @JsonProperty("entityType") EntityType entityType) {
     this.entityPath = entityPath;
     this.entityType = entityType;
+    if (this.entityPath.startsWith(".")) {
+      this.normalizedPath = entityPath.substring(1);
+    } else {
+      this.normalizedPath = this.entityPath;
+    }
   }
 
   @JsonProperty("entityPath")
@@ -48,6 +55,11 @@ public class SchemaEntity {
     return entityType;
   }
 
+  @JsonIgnore
+  public String getNormalizedPath() {
+    return normalizedPath;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -58,13 +70,13 @@ public class SchemaEntity {
     }
 
     SchemaEntity other = (SchemaEntity) o;
-    return Objects.equals(this.entityPath, other.getEntityPath())
+    return Objects.equals(this.getNormalizedPath(), other.getNormalizedPath())
       && Objects.equals(this.entityType, other.getEntityType());
   }
 
   @Override
   public int hashCode() {
-    int result = Objects.hashCode(entityPath);
+    int result = Objects.hashCode(getNormalizedPath());
     result = 31 * result + Objects.hashCode(entityType);
     return result;
   }
