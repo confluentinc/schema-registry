@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
@@ -586,6 +587,23 @@ public class RestService implements Configurable {
     RegisterSchemaResponse response = httpRequest(
         path, "POST",
         registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties,
+        REGISTER_RESPONSE_TYPE);
+
+    return response;
+  }
+
+  public RegisterSchemaResponse modifySchemaTags(Map<String, String> requestProperties,
+                                                 TagSchemaRequest tagSchemaRequest,
+                                                 String subject,
+                                                 String version)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/tags");
+    String path = builder.build(subject, version).toString();
+
+    RegisterSchemaResponse response = httpRequest(
+        path, "POST",
+        tagSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
         requestProperties,
         REGISTER_RESPONSE_TYPE);
 
