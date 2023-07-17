@@ -23,6 +23,7 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,5 +47,26 @@ public class TagSchemaRequestTest {
     assertTrue(result.containsKey(entity1));
     assertTrue(result.containsKey(entity2));
     assertEquals(ImmutableSet.of("tag1", "tag2"), result.get(entity1));
+  }
+
+  @Test
+  public void testMergeSchemaTagsOrder() {
+    SchemaEntity entity1 =
+        new SchemaEntity("com.example.SampleRecord.f1", SchemaEntity.EntityType.SR_FIELD);
+    SchemaEntity entity2 =
+        new SchemaEntity("SampleRecord.f1", SchemaEntity.EntityType.SR_FIELD);
+    SchemaEntity entity3 =
+        new SchemaEntity("SampleRecord.f2", SchemaEntity.EntityType.SR_FIELD);
+    SchemaTags tag1 = new SchemaTags(entity1, Collections.singletonList("tag1"));
+    SchemaTags tag2 = new SchemaTags(entity2, Collections.singletonList("tag2"));
+    SchemaTags tag3 = new SchemaTags(entity3, Collections.singletonList("tag3"));
+
+    Map<SchemaEntity, Set<String>> result =
+        TagSchemaRequest.schemaTagsListToMap(Arrays.asList(tag1, tag2, tag3));
+    assertEquals(3, result.size());
+    Iterator<SchemaEntity> mapIter = result.keySet().iterator();
+    assertEquals("com.example.SampleRecord.f1", mapIter.next().getEntityPath());
+    assertEquals("SampleRecord.f1", mapIter.next().getEntityPath());
+    assertEquals("SampleRecord.f2", mapIter.next().getEntityPath());
   }
 }
