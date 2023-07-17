@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -144,6 +145,7 @@ public class TagSchemaRequest {
             (v1, v2) -> {
               v1.addAll(v2);
               return v1;
-            }));
+            },
+            LinkedHashMap::new));
   }
 }
