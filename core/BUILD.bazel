@@ -1,7 +1,20 @@
 load("@rules_java//java:defs.bzl", "java_proto_library")
 load("@contrib_rules_jvm//java:defs.bzl", "java_binary", "java_library", "java_test_suite")
 load("@io_bazel_rules_avro//avro:avro.bzl", "avro_gen", "avro_java_library")
+load("@confluent_rules//java/swagger-core-bazel:gen.bzl", "generate_openapi_spec")
 # gazelle:java_module_granularity module
+
+generate_openapi_spec(
+    name = "schema-registry-api-spec",
+    additional_runtime_deps = [
+        "//core:core",
+    ],
+    config_file = "src/main/resources/openapi.yaml",
+    output_files = [
+        "generated/swagger-ui/schema-registry-api-spec.yaml",
+    ],
+    properties_file = "src/main/resources/swagger-core-bazel.properties",
+)
 
 java_library(
     name = "core",
@@ -247,6 +260,7 @@ java_library(
         "src/test/java/io/confluent/kafka/serializers/protobuf/test/Ref.java",
         "src/test/java/io/confluent/kafka/serializers/protobuf/test/Root.java",
     ],
+    tags = ["no-java-spotbugs"],
     visibility = ["//visibility:public"],
     deps = [
         ":core",
@@ -277,7 +291,6 @@ java_library(
         "@maven//:org_scala_lang_scala_library",
         "@maven//:org_slf4j_slf4j_api",
     ],
-    tags = ["no-java-spotbugs"],
 )
 
 java_test_suite(
@@ -314,6 +327,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/storage/encoder/MetadataEncoderServiceTest.java",
     ],
     data = glob(["test/resources/*"]),
+    tags = ["no-java-spotbugs"],
     runtime_deps = [
         "@maven//:org_slf4j_slf4j_reload4j",
     ],
@@ -357,5 +371,4 @@ java_test_suite(
         "@maven//:org_scala_lang_scala_library",
         "@maven//:org_slf4j_slf4j_api",
     ],
-    tags = ["no-java-spotbugs"],
 )

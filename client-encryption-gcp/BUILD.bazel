@@ -23,6 +23,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/GcpFieldEncryptionProperties.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/RestApiGcpFieldEncryptionTest.java",
     ],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":client-encryption-gcp",
         "//avro-serializer",
@@ -37,5 +38,4 @@ java_test_suite(
         "@maven//:com_squareup_okio_okio",
         "@maven//:com_squareup_okio_okio_jvm",
     ],
-    tags = ["no-java-spotbugs"],
 )

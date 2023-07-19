@@ -37,6 +37,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/streams/serdes/avro/ReflectionAvroSerdeSpecificTest.java",
         "src/test/java/io/confluent/kafka/streams/serdes/avro/SpecificAvroSerdeTest.java",
     ],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":avro-serde",
         "//avro-serializer",
@@ -47,5 +48,4 @@ java_test_suite(
         "@maven//:org_apache_avro_avro",
         "@maven//:org_hamcrest_hamcrest_core",
     ],
-    tags = ["no-java-spotbugs"],
 )

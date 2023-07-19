@@ -36,6 +36,7 @@ java_test_suite(
         "src/test/java/io/confluent/connect/protobuf/ProtobufDataTest.java",
     ],
     resources = glob(["src/test/resources/**/*"]),
+    tags = ["no-java-spotbugs"],
     deps = [
         ":protobuf-converter",
         "//avro-serializer",
@@ -58,5 +59,4 @@ java_test_suite(
         "@maven//:org_apache_kafka_connect_api",
         "@maven//:org_slf4j_slf4j_api",
     ],
-    tags = ["no-java-spotbugs"],
 )

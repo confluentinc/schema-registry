@@ -47,6 +47,7 @@ java_test_suite(
         "src/test/java/io/confluent/connect/json/ResourceLoader.java",
     ],
     resources = glob(["src/test/resources/**/*"]),
+    tags = ["no-java-spotbugs"],
     deps = [
         ":json-schema-converter",
         "//avro-serializer",
@@ -62,5 +63,4 @@ java_test_suite(
         "@maven//:org_apache_kafka_connect_json",
         "@maven//:org_json_json",
     ],
-    tags = ["no-java-spotbugs"],
 )

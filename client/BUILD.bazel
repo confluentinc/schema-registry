@@ -1,7 +1,9 @@
 load("@contrib_rules_jvm//java:defs.bzl", "java_library", "java_test_suite")
+load("@rules_jvm_external//:defs.bzl", "java_export")
+load("//:variables.bzl", "SCHEMA_REGISTRY_VERSION")
 # gazelle:java_module_granularity module
 
-java_library(
+java_export(
     name = "client",
     srcs = [
         "src/main/java/io/confluent/kafka/schemaregistry/AbstractSchemaProvider.java",
@@ -85,6 +87,7 @@ java_library(
         "src/main/java/io/confluent/kafka/schemaregistry/utils/QualifiedSubject.java",
         "src/main/java/io/confluent/kafka/schemaregistry/utils/WildcardMatcher.java",
     ],
+    maven_coordinates = "io.confluent:kafka-schema-registry-client:" + SCHEMA_REGISTRY_VERSION,
     resources = glob([
         "src/main/resources/**/*",
     ]),
@@ -132,6 +135,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/utils/QualifiedSubjectTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/utils/WildcardMatcherTest.java",
     ],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":client",
         "//core",
@@ -144,5 +148,4 @@ java_test_suite(
         "@maven//:org_mockito_mockito_core",
         "@maven//:org_mockito_mockito_inline",
     ],
-    tags = ["no-java-spotbugs"],
 )

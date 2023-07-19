@@ -25,6 +25,7 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/hcvault/HcVaultFieldEncryptionProperties.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/hcvault/RestApiHcVaultFieldEncryptionTest.java",
     ],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":client-encryption-hcvault",
         "//avro-serializer",
@@ -38,5 +39,4 @@ java_test_suite(
         "@maven//:com_squareup_okio_okio_jvm",
         "@maven//:org_mockito_mockito_core",
     ],
-    tags = ["no-java-spotbugs"],
 )

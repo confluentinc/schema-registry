@@ -53,11 +53,11 @@ jmh_java_benchmarks(
 java_test_suite(
     name = "benchmark-tests",
     srcs = ["src/test/java/io/confluent/schemaregistry/benchmark/SerdeBenchmarkTest.java"],
+    tags = ["no-java-spotbugs"],
     deps = [
         ":benchmark",
         "@maven//:com_google_guava_guava",
         "@maven//:junit_junit",
         "@maven//:org_hamcrest_hamcrest_core",
     ],
-    tags = ["no-java-spotbugs"],
 )
