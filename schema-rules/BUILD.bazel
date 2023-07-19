@@ -52,12 +52,12 @@ java_library(
 
 java_test_suite(
     name = "schema-rules-tests",
-    srcs = [
-        "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/CelExecutorTest.java",
-        "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroScriptHostTest.java",
-        "src/test/java/io/confluent/kafka/schemaregistry/rules/jsonata/JsonataExecutorTest.java",
-    ],
-    tags = ["no-java-spotbugs"],
+    srcs = glob(["src/test/**/*.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/CelExecutorTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroScriptHostTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/rules/jsonata/JsonataExecutorTest.java",
+#    ],
     deps = [
         ":avro-resources",
         ":schema-rules",
@@ -86,4 +86,5 @@ java_test_suite(
         "@maven//:org_projectnessie_cel_cel_jackson",
         "@maven//:org_projectnessie_cel_cel_tools",
     ],
+    tags = ["no-java-spotbugs"],
 )

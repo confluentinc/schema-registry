@@ -36,11 +36,11 @@ java_library(
 
 java_test_suite(
     name = "json-schema-serializer-tests",
-    srcs = [
-        "src/test/java/io/confluent/kafka/formatter/json/KafkaJsonSchemaFormatterTest.java",
-        "src/test/java/io/confluent/kafka/serializers/json/KafkaJsonSchemaSerializerTest.java",
-    ],
-    tags = ["no-java-spotbugs"],
+    srcs = glob(["src/test/**/*.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/kafka/formatter/json/KafkaJsonSchemaFormatterTest.java",
+#        "src/test/java/io/confluent/kafka/serializers/json/KafkaJsonSchemaSerializerTest.java",
+#    ],
     deps = [
         ":json-schema-serializer",
         "//client",
@@ -54,4 +54,5 @@ java_test_suite(
         "@maven//:junit_junit",
         "@maven//:org_apache_kafka_kafka_clients",
     ],
+    tags = ["no-java-spotbugs"],
 )

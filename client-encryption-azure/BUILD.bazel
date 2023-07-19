@@ -21,12 +21,12 @@ java_library(
 
 java_test_suite(
     name = "client-encryption-azure-tests",
-    srcs = [
-        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionExecutorTest.java",
-        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionProperties.java",
-        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/RestApiAzureFieldEncryptionTest.java",
-    ],
-    tags = ["no-java-spotbugs"],
+    srcs = glob(["src/test/**/*.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionExecutorTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionProperties.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/RestApiAzureFieldEncryptionTest.java",
+#    ],
     deps = [
         ":client-encryption-azure",
         "//avro-serializer",
@@ -39,4 +39,5 @@ java_test_suite(
         "@maven//:com_squareup_okio_okio_jvm",
         "@maven//:org_mockito_mockito_core",
     ],
+    tags = ["no-java-spotbugs"],
 )
