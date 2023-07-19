@@ -54,16 +54,17 @@ java_export(
 
 java_test_suite(
     name = "avro-serializer-tests",
-    srcs = [
-        "src/test/java/io/confluent/kafka/example/ExtendedWidget.java",
-        "src/test/java/io/confluent/kafka/example/Widget.java",
-        "src/test/java/io/confluent/kafka/formatter/AvroMessageFormatterTest.java",
-        "src/test/java/io/confluent/kafka/formatter/KafkaAvroFormatterTest.java",
-        "src/test/java/io/confluent/kafka/serializers/AbstractKafkaAvroDeserializerTest.java",
-        "src/test/java/io/confluent/kafka/serializers/AvroSchemaTest.java",
-        "src/test/java/io/confluent/kafka/serializers/ContextNameStrategyTest.java",
-        "src/test/java/io/confluent/kafka/serializers/KafkaAvroSerializerTest.java",
-    ],
+    srcs = glob(["src/test/**/*.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/kafka/example/ExtendedWidget.java",
+#        "src/test/java/io/confluent/kafka/example/Widget.java",
+#        "src/test/java/io/confluent/kafka/formatter/AvroMessageFormatterTest.java",
+#        "src/test/java/io/confluent/kafka/formatter/KafkaAvroFormatterTest.java",
+#        "src/test/java/io/confluent/kafka/serializers/AbstractKafkaAvroDeserializerTest.java",
+#        "src/test/java/io/confluent/kafka/serializers/AvroSchemaTest.java",
+#        "src/test/java/io/confluent/kafka/serializers/ContextNameStrategyTest.java",
+#        "src/test/java/io/confluent/kafka/serializers/KafkaAvroSerializerTest.java",
+#    ],
     runner = "junit4",
     tags = ["no-java-spotbugs"],
     deps = [

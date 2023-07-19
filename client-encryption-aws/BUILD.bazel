@@ -17,6 +17,7 @@ java_library(
 
 java_test_suite(
     name = "client-encryption-aws-tests",
+<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/AwsFieldEncryptionExecutorTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/AwsFieldEncryptionProperties.java",
@@ -24,6 +25,15 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/RestApiAwsFieldEncryptionTest.java",
     ],
     tags = ["no-java-spotbugs"],
+=======
+    srcs = glob(["src/test/**/*.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/AwsFieldEncryptionExecutorTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/AwsFieldEncryptionProperties.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/FakeAwsKms.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/RestApiAwsFieldEncryptionTest.java",
+#    ],
+>>>>>>> Stashed changes
     deps = [
         ":client-encryption-aws",
         "//avro-serializer",

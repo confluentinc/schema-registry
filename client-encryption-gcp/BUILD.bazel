@@ -17,6 +17,7 @@ java_library(
 
 java_test_suite(
     name = "client-encryption-gcp-tests",
+<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/FakeCloudKms.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/GcpFieldEncryptionExecutorTest.java",
@@ -24,6 +25,15 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/RestApiGcpFieldEncryptionTest.java",
     ],
     tags = ["no-java-spotbugs"],
+=======
+    srcs = glob(["src/test/**/*.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/FakeCloudKms.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/GcpFieldEncryptionExecutorTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/GcpFieldEncryptionProperties.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/RestApiGcpFieldEncryptionTest.java",
+#    ],
+>>>>>>> Stashed changes
     deps = [
         ":client-encryption-gcp",
         "//avro-serializer",

@@ -112,6 +112,7 @@ java_export(
 
 java_test_suite(
     name = "client-tests",
+<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/client/CachedSchemaRegistryClientTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/client/config/provider/SchemaRegistryConfigProviderTest.java",
@@ -136,6 +137,32 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/utils/WildcardMatcherTest.java",
     ],
     tags = ["no-java-spotbugs"],
+=======
+    srcs = glob(["src/test/**/*.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/CachedSchemaRegistryClientTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/config/provider/SchemaRegistryConfigProviderTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/rest/RestServiceTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/rest/ServerClusterIdTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/rest/UriBuilderTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/rest/entities/MergeEntitiesTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/rest/entities/requests/RegisterSchemaRequestTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/rest/utils/UrlListTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/security/SslFactoryTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/security/basicauth/BasicAuthCredentialProviderFactoryTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/security/basicauth/SaslBasicAuthCredentialProviderTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/security/basicauth/UrlBasicAuthCredentialProviderTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/security/basicauth/UserInfoCredentialProviderTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/security/bearerauth/BearerAuthCredentialProviderFactoryTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/security/bearerauth/StaticTokenCredentialProviderTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/security/bearerauth/oauth/CachedOauthTokenRetrieverTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/security/bearerauth/oauth/OauthCredentialProviderTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/security/bearerauth/oauth/OauthTokenCacheTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/client/security/bearerauth/oauth/SaslOauthCredentialProviderTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/utils/QualifiedSubjectTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/utils/WildcardMatcherTest.java",
+#    ],
+>>>>>>> Stashed changes
     deps = [
         ":client",
         "//core",

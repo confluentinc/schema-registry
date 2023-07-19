@@ -53,11 +53,12 @@ java_export(
 
 java_test_suite(
     name = "protobuf-provider-tests",
-    srcs = [
-        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/ProtobufSchemaTest.java",
-        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/diff/ResourceLoader.java",
-        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/diff/SchemaDiffTest.java",
-    ],
+    srcs = glob(["src/test/**/*.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/ProtobufSchemaTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/diff/ResourceLoader.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/diff/SchemaDiffTest.java",
+#    ],
     resources = glob(["src/test/resources/**/*"]),
     tags = ["no-java-spotbugs"],
     deps = [

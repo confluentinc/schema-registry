@@ -27,6 +27,7 @@ java_library(
 
 java_test_suite(
     name = "avro-serde-tests",
+<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/example/Widget.java",
         "src/test/java/io/confluent/kafka/streams/serdes/avro/AvroUtils.java",
@@ -38,6 +39,19 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/streams/serdes/avro/SpecificAvroSerdeTest.java",
     ],
     tags = ["no-java-spotbugs"],
+=======
+    srcs = glob(["src/test/**/*.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/kafka/example/Widget.java",
+#        "src/test/java/io/confluent/kafka/streams/serdes/avro/AvroUtils.java",
+#        "src/test/java/io/confluent/kafka/streams/serdes/avro/ConfigurationUtilsTest.java",
+#        "src/test/java/io/confluent/kafka/streams/serdes/avro/GenericAvroSerdeTest.java",
+#        "src/test/java/io/confluent/kafka/streams/serdes/avro/PrimitiveAvroSerdeTest.java",
+#        "src/test/java/io/confluent/kafka/streams/serdes/avro/ReflectionAvroSerdeGenericTest.java",
+#        "src/test/java/io/confluent/kafka/streams/serdes/avro/ReflectionAvroSerdeSpecificTest.java",
+#        "src/test/java/io/confluent/kafka/streams/serdes/avro/SpecificAvroSerdeTest.java",
+#    ],
+>>>>>>> Stashed changes
     deps = [
         ":avro-serde",
         "//avro-serializer",

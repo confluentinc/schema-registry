@@ -23,11 +23,19 @@ java_library(
 
 java_test_suite(
     name = "avro-converter-tests",
+<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/connect/avro/AvroConverterTest.java",
         "src/test/java/io/confluent/connect/avro/DeprecatedTestTopicNameStrategy.java",
     ],
     tags = ["no-java-spotbugs"],
+=======
+    srcs = glob(["src/test/**/*.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/connect/avro/AvroConverterTest.java",
+#        "src/test/java/io/confluent/connect/avro/DeprecatedTestTopicNameStrategy.java",
+#    ],
+>>>>>>> Stashed changes
     deps = [
         ":avro-converter",
         "//avro-serializer",

@@ -50,6 +50,7 @@ java_library(
 
 java_library(
     name = "test-utils",
+#    srcs = glob(["src/test/**/*.java"]),
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/maven/SchemaRegistryTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/maven/derive/schema/DeriveJsonSchemaTest.java",
@@ -67,6 +68,7 @@ java_library(
 
 java_test_suite(
     name = "maven-plugin-tests",
+<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/maven/DeriveSchemaMojoTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/maven/DownloadSchemaRegistryMojoTest.java",
@@ -82,6 +84,26 @@ java_test_suite(
         "src/test/java/io/confluent/kafka/schemaregistry/maven/derive/schema/DeriveSchemaUtilsTest.java",
     ],
     tags = ["no-java-spotbugs"],
+=======
+    srcs = glob(["src/test/**/*.java"],
+                exclude = [
+                    "src/test/java/io/confluent/kafka/schemaregistry/maven/SchemaRegistryTest.java",
+                    "src/test/java/io/confluent/kafka/schemaregistry/maven/derive/schema/DeriveSchemaTest.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/DeriveSchemaMojoTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/DownloadSchemaRegistryMojoTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/RegisterSchemaRegistryMojoTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/SchemasWithDependenciesTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/SetCompatibilityMojoTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/TestCompatibilitySchemaRegistryMojoTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/TestLocalCompatibilityMojoTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/ValidateSchemaRegistryMojoTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/derive/schema/DeriveAvroSchemaTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/derive/schema/DeriveJsonSchemaTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/derive/schema/DeriveProtoBufSchemaTest.java",
+#        "src/test/java/io/confluent/kafka/schemaregistry/maven/derive/schema/DeriveSchemaUtilsTest.java",
+#    ],
+>>>>>>> Stashed changes
     deps = [
         ":maven-plugin",
         ":test-utils",
