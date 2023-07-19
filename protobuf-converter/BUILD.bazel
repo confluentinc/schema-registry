@@ -31,10 +31,11 @@ java_library(
 
 java_test_suite(
     name = "protobuf-converter-tests",
-    srcs = [
-        "src/test/java/io/confluent/connect/protobuf/ProtobufConverterTest.java",
-        "src/test/java/io/confluent/connect/protobuf/ProtobufDataTest.java",
-    ],
+    srcs = glob(["src/test/**/*.java"]),
+#    srcs = [
+#        "src/test/java/io/confluent/connect/protobuf/ProtobufConverterTest.java",
+#        "src/test/java/io/confluent/connect/protobuf/ProtobufDataTest.java",
+#    ],
     resources = glob(["src/test/resources/**/*"]),
     tags = ["no-java-spotbugs"],
     deps = [
