@@ -52,13 +52,8 @@ jmh_java_benchmarks(
 
 java_test_suite(
     name = "benchmark-tests",
-<<<<<<< Updated upstream
     srcs = ["src/test/java/io/confluent/schemaregistry/benchmark/SerdeBenchmarkTest.java"],
     tags = ["no-java-spotbugs"],
-=======
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = ["src/test/java/io/confluent/schemaregistry/benchmark/SerdeBenchmarkTest.java"],
->>>>>>> Stashed changes
     deps = [
         ":benchmark",
         "@maven//:com_google_guava_guava",

@@ -52,21 +52,12 @@ java_library(
 
 java_test_suite(
     name = "schema-rules-tests",
-<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/CelExecutorTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroScriptHostTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/rules/jsonata/JsonataExecutorTest.java",
     ],
     tags = ["no-java-spotbugs"],
-=======
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = [
-#        "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/CelExecutorTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rules/cel/avro/AvroScriptHostTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rules/jsonata/JsonataExecutorTest.java",
-#    ],
->>>>>>> Stashed changes
     deps = [
         ":avro-resources",
         ":schema-rules",

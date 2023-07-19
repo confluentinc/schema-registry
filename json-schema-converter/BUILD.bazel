@@ -40,13 +40,12 @@ java_library(
 
 java_test_suite(
     name = "json-schema-converter-tests",
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = [
-#        "src/test/java/io/confluent/connect/json/AdditionalJsonSchemaDataTest.java",
-#        "src/test/java/io/confluent/connect/json/JsonSchemaConverterTest.java",
-#        "src/test/java/io/confluent/connect/json/JsonSchemaDataTest.java",
-#        "src/test/java/io/confluent/connect/json/ResourceLoader.java",
-#    ],
+    srcs = [
+        "src/test/java/io/confluent/connect/json/AdditionalJsonSchemaDataTest.java",
+        "src/test/java/io/confluent/connect/json/JsonSchemaConverterTest.java",
+        "src/test/java/io/confluent/connect/json/JsonSchemaDataTest.java",
+        "src/test/java/io/confluent/connect/json/ResourceLoader.java",
+    ],
     resources = glob(["src/test/resources/**/*"]),
     tags = ["no-java-spotbugs"],
     deps = [

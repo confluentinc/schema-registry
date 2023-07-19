@@ -47,21 +47,12 @@ java_binary(
 
 java_library(
     name = "test-utils",
-<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/formatter/protobuf/KafkaProtobufFormatterTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/protobuf/rest/RestApiSerializerTest.java",
         "src/test/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializerTest.java",
     ],
     tags = ["no-java-spotbugs"],
-=======
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = [
-#        "src/test/java/io/confluent/kafka/formatter/protobuf/KafkaProtobufFormatterTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/rest/RestApiSerializerTest.java",
-#        "src/test/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializerTest.java",
-#    ],
->>>>>>> Stashed changes
     visibility = ["//visibility:public"],
     exports = ["//protobuf-serializer/src/test/proto:io_confluent_kafka_schemaregistry_rules_java_library"],
     deps = [
@@ -85,21 +76,12 @@ java_library(
 
 java_test_suite(
     name = "protobuf-serializer-tests",
-<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/formatter/protobuf/KafkaProtobufFormatterTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/protobuf/rest/RestApiSerializerTest.java",
         "src/test/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializerTest.java",
     ],
     tags = ["no-java-spotbugs"],
-=======
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = [
-#        "src/test/java/io/confluent/kafka/formatter/protobuf/KafkaProtobufFormatterTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/protobuf/rest/RestApiSerializerTest.java",
-#        "src/test/java/io/confluent/kafka/serializers/protobuf/KafkaProtobufSerializerTest.java",
-#    ],
->>>>>>> Stashed changes
     deps = [
         ":protobuf-serializer",
         ":test-utils",

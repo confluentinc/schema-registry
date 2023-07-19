@@ -55,11 +55,10 @@ filegroup(
 
 java_test_suite(
     name = "avro-data-tests",
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = [
-#        "src/test/java/io/confluent/connect/avro/AdditionalAvroDataTest.java",
-#        "src/test/java/io/confluent/connect/avro/AvroDataTest.java",
-#    ],
+    srcs = [
+        "src/test/java/io/confluent/connect/avro/AdditionalAvroDataTest.java",
+        "src/test/java/io/confluent/connect/avro/AvroDataTest.java",
+    ],
     data = [":avsc-srcs"],
     tags = ["no-java-spotbugs"],
     deps = [

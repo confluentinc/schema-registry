@@ -21,21 +21,12 @@ java_library(
 
 java_test_suite(
     name = "client-encryption-azure-tests",
-<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionExecutorTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionProperties.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/RestApiAzureFieldEncryptionTest.java",
     ],
     tags = ["no-java-spotbugs"],
-=======
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = [
-#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionExecutorTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/AzureFieldEncryptionProperties.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/azure/RestApiAzureFieldEncryptionTest.java",
-#    ],
->>>>>>> Stashed changes
     deps = [
         ":client-encryption-azure",
         "//avro-serializer",

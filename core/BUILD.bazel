@@ -241,7 +241,6 @@ avro_java_library(
 
 java_library(
     name = "test-utils",
-#    srcs = glob(["src/test/**/*.java"]),
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/ClusterTestHarness.java",
         "src/test/java/io/confluent/kafka/schemaregistry/LeaderElectorTest.java",
@@ -296,7 +295,6 @@ java_library(
 
 java_test_suite(
     name = "core-tests",
-<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/avro/AvroCompatibilityTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/client/CachedSchemaRegistryClientTest.java",
@@ -330,42 +328,6 @@ java_test_suite(
     ],
     data = glob(["test/resources/*"]),
     tags = ["no-java-spotbugs"],
-=======
-    srcs = glob(["src/test/**/*.java"]),
-    timeout = "long",
-#    srcs = [
-#        "src/test/java/io/confluent/kafka/schemaregistry/avro/AvroCompatibilityTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/client/CachedSchemaRegistryClientTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/client/MockSchemaRegistryClientTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/leaderelector/kafka/SchemaRegistryCoordinatorTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/leaderelector/kafka/SchemaRegistryProtocolTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/metrics/CustomSchemaProviderMetricTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/metrics/MetricsTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/RequestHeaderBuilderTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/RestApiCompatibilityTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/RestApiContextTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/RestApiMetadataEncoderTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/RestApiModeTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/RestApiSchemaTooLargeTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/RestApiSslTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/RestApiTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/RestApiTransitiveCompatibilityTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/SchemaRegistryConfigTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/SchemaRegistryErrorHandlerTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/SchemaRegistryExtensionTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/filters/ContextFilterTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rest/protobuf/RestApiTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/storage/KafkaStoreReaderThreadTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/storage/KafkaStoreSASLTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/storage/KafkaStoreSSLNoAuthTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/storage/KafkaStoreTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/storage/OffsetCheckpointTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/storage/SchemaRegistryKeysTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/storage/SchemaValuesTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/storage/encoder/MetadataEncoderServiceTest.java",
-#    ],
-    resources = glob(["test/resources/*"]),
->>>>>>> Stashed changes
     runtime_deps = [
         "@maven//:org_slf4j_slf4j_reload4j",
     ],

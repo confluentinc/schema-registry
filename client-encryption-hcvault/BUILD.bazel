@@ -20,21 +20,12 @@ java_library(
 
 java_test_suite(
     name = "client-encryption-hcvault-tests",
-<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/hcvault/HcVaultFieldEncryptionExecutorTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/hcvault/HcVaultFieldEncryptionProperties.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/hcvault/RestApiHcVaultFieldEncryptionTest.java",
     ],
     tags = ["no-java-spotbugs"],
-=======
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = [
-#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/hcvault/HcVaultFieldEncryptionExecutorTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/hcvault/HcVaultFieldEncryptionProperties.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/hcvault/RestApiHcVaultFieldEncryptionTest.java",
-#    ],
->>>>>>> Stashed changes
     deps = [
         ":client-encryption-hcvault",
         "//avro-serializer",

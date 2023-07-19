@@ -14,13 +14,8 @@ java_library(
 
 java_test_suite(
     name = "json-schema-serde-tests",
-<<<<<<< Updated upstream
     srcs = ["src/test/java/io/confluent/kafka/streams/serdes/json/KafkaJsonSchemaSerdeTest.java"],
     tags = ["no-java-spotbugs"],
-=======
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = ["src/test/java/io/confluent/kafka/streams/serdes/json/KafkaJsonSchemaSerdeTest.java"],
->>>>>>> Stashed changes
     deps = [
         ":json-schema-serde",
         "//avro-serializer",

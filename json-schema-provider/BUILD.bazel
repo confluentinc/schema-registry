@@ -59,14 +59,13 @@ java_export(
 
 java_test_suite(
     name = "json-schema-provider-tests",
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = [
-#        "src/test/java/io/confluent/kafka/schemaregistry/json/JsonSchemaTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/json/TestSchemaValidation.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/json/TestSchemas.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/json/diff/SchemaDiffTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/json/utils/MaximumCardinalityMatchTest.java",
-#    ],
+    srcs = [
+        "src/test/java/io/confluent/kafka/schemaregistry/json/JsonSchemaTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/json/TestSchemaValidation.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/json/TestSchemas.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/json/diff/SchemaDiffTest.java",
+        "src/test/java/io/confluent/kafka/schemaregistry/json/utils/MaximumCardinalityMatchTest.java",
+    ],
     resources = glob(["src/test/resources/**/*"]),
     tags = ["no-java-spotbugs"],
     deps = [

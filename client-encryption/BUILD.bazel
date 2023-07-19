@@ -26,7 +26,6 @@ java_library(
 
 java_library(
     name = "test-utils",
-<<<<<<< Updated upstream
     srcs = [
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/FieldEncryptionExecutorTest.java",
         "src/test/java/io/confluent/kafka/schemaregistry/encryption/FieldEncryptionProperties.java",
@@ -34,15 +33,6 @@ java_library(
         "src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java",
     ],
     tags = ["no-java-spotbugs"],
-=======
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = [
-#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/FieldEncryptionExecutorTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/FieldEncryptionProperties.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/encryption/RestApiFieldEncryptionTest.java",
-#        "src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java",
-#    ],
->>>>>>> Stashed changes
     visibility = ["//visibility:public"],
     deps = [
         ":client-encryption",

@@ -14,13 +14,8 @@ java_library(
 
 java_test_suite(
     name = "protobuf-serde-tests",
-<<<<<<< Updated upstream
     srcs = ["src/test/java/io/confluent/kafka/streams/serde/protobuf/KafkaProtobufSerdeTest.java"],
     tags = ["no-java-spotbugs"],
-=======
-    srcs = glob(["src/test/**/*.java"]),
-#    srcs = ["src/test/java/io/confluent/kafka/streams/serde/protobuf/KafkaProtobufSerdeTest.java"],
->>>>>>> Stashed changes
     deps = [
         ":protobuf-serde",
         "//avro-serializer",
