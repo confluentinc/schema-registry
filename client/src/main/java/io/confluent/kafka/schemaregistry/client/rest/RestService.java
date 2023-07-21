@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
+import java.io.Closeable;
 import java.io.InputStreamReader;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
@@ -75,7 +76,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 /**
  * Rest access layer for sending requests to the schema registry.
  */
-public class RestService implements Configurable {
+public class RestService implements Configurable, Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(RestService.class);
   private static final TypeReference<RegisterSchemaResponse> REGISTER_RESPONSE_TYPE =
@@ -1320,5 +1321,12 @@ public class RestService implements Configurable {
    */
   URL url(String requestUrl) throws MalformedURLException {
     return new URL(requestUrl);
+  }
+
+  @Override
+  public void close() throws IOException {
+    if (bearerAuthCredentialProvider != null) {
+      bearerAuthCredentialProvider.close();
+    }
   }
 }

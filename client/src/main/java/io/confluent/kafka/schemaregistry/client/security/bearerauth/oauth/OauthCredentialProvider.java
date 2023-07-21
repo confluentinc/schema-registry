@@ -112,5 +112,4 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
     String subClaimName = SchemaRegistryClientConfig.getBearerAuthSubClaimName(configs);
     return new LoginAccessTokenValidator(scopeClaimName, subClaimName);
   }
-
 }

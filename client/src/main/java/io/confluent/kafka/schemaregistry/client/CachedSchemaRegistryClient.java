@@ -732,6 +732,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return qualifiedSubject != null ? qualifiedSubject.toQualifiedContext() : NO_SUBJECT;
   }
 
+  @Override
+  public void close() throws IOException {
+    if (restService != null) {
+      restService.close();
+    }
+  }
+
   static class SubjectAndSchema {
     private final String subject;
     private final ParsedSchema schema;
