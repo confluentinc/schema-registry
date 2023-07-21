@@ -490,8 +490,8 @@ public abstract class FieldEncryptionExecutorTest {
     avroSchema = avroSchema.copy(metadata, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
-    int expectedEncryptionsRule1 = 0;
-    int expectedEncryptionsRule2 = 1;
+    int expectedEncryptionsRule1 = 1;
+    int expectedEncryptionsRule2 = 0;
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(avroSerializer, "rule1");
     Cryptor cryptor2 = addSpyToCryptor(avroSerializer, "rule2");
