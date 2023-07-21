@@ -842,10 +842,10 @@ public class CelExecutorTest {
     Schema schema = createWidgetSchema();
     AvroSchema avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix2\"",
         null, null, false);
     Rule rule2 = new Rule("myRule2", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix2\"",
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule, rule2));
     avroSchema = avroSchema.copy(null, ruleSet);
