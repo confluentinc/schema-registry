@@ -35,24 +35,24 @@ public interface FieldRuleExecutor extends RuleExecutor {
     switch (ctx.ruleMode()) {
       case WRITE:
       case UPGRADE:
-        for (int i = ctx.index() + 1; i < ctx.rules().size(); i++) {
+        for (int i = 0; i < ctx.index(); i++) {
           Rule otherRule = ctx.rules().get(i);
           if (areTransformsWithSameTags(ctx.rule(), otherRule)) {
-            // ignore this transform if a later one has the same tags
-            log.debug("Ignoring rule '{}' during {} as rule '{}' has the same tag(s) and "
-                + "overrides it", ctx.rule().getName(), ctx.ruleMode(), otherRule.getName());
+            // ignore this transform if an earlier one has the same tags
+            log.debug("Ignoring rule '{}' during {} as rule '{}' has the same tag(s)",
+                ctx.rule().getName(), ctx.ruleMode(), otherRule.getName());
             return message;
           }
         }
         break;
       case READ:
       case DOWNGRADE:
-        for (int i = 0; i < ctx.index(); i++) {
+        for (int i = ctx.index() + 1; i < ctx.rules().size(); i++) {
           Rule otherRule = ctx.rules().get(i);
           if (areTransformsWithSameTags(ctx.rule(), otherRule)) {
-            // ignore this transform if an earlier one has the same tags
-            log.debug("Ignoring rule '{}' during {} as rule '{}' has the same tag(s) and "
-                + "overrides it", ctx.rule().getName(), ctx.ruleMode(), otherRule.getName());
+            // ignore this transform if a later one has the same tags
+            log.debug("Ignoring rule '{}' during {} as rule '{}' has the same tag(s)",
+                ctx.rule().getName(), ctx.ruleMode(), otherRule.getName());
             return message;
           }
         }
