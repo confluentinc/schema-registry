@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.3.5-0</version>
+        <version>7.3.5-9999-TRNGUYEN-SNAPSHOT</version>
     </parent>
 
     <licenses>
@@ -21,6 +21,7 @@
     <artifactId>kafka-avro-serializer</artifactId>
     <packaging>jar</packaging>
     <name>kafka-avro-serializer</name>
+    <version>7.3.5-9999-TRNGUYEN-SNAPSHOT</version>
 
     <dependencies>
         <dependency>
@@ -39,12 +40,12 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-serializer</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
+            <version>7.3.5-9999-TRNGUYEN-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
+            <version>7.3.5-9999-TRNGUYEN-SNAPSHOT</version>
         </dependency>
 
         <dependency>

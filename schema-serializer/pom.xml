@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.3.5-0</version>
+        <version>7.3.5-9999-TRNGUYEN-SNAPSHOT</version>
     </parent>
 
     <licenses>
@@ -21,6 +21,7 @@
     <artifactId>kafka-schema-serializer</artifactId>
     <packaging>jar</packaging>
     <name>kafka-schema-serializer</name>
+    <version>7.3.5-9999-TRNGUYEN-SNAPSHOT</version>
 
     <dependencies>
         <dependency>
@@ -31,7 +32,7 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
+            <version>7.3.5-9999-TRNGUYEN-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>

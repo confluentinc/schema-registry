@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import java.io.IOException;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -64,6 +65,12 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   @Override
   public void close() {
-
+    try {
+      if (schemaRegistry != null) {
+        schemaRegistry.close();
+      }
+    } catch (IOException e) {
+      //
+    }
   }
 }

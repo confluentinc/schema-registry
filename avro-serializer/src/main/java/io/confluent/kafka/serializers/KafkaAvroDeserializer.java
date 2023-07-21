@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import java.io.IOException;
 import org.apache.avro.Schema;
 import org.apache.kafka.common.serialization.Deserializer;
 
@@ -62,6 +63,12 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   @Override
   public void close() {
-
+    try {
+      if (schemaRegistry != null) {
+        schemaRegistry.close();
+      }
+    } catch (IOException e) {
+      //
+    }
   }
 }
