@@ -69,6 +69,11 @@ public class ProtobufDataConfig extends AbstractDataConfig {
   public static final String GENERATE_INDEX_FOR_UNIONS_DOC = "Whether to suffix union"
       + "names with an underscore followed by an index";
 
+  public static final String JSON_FIELD_NAMES_CONFIG = "json.field.names";
+  public static final boolean JSON_FIELD_NAMES_DEFAULT = false;
+  public static final String JSON_FIELD_NAMES_DOC = "Whether to convert protobuf field names "
+      + "to camelcase for internal data representation and vice-versa.";
+
   public static ConfigDef baseConfigDef() {
     return AbstractDataConfig.baseConfigDef()
         .define(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG,
@@ -112,7 +117,12 @@ public class ProtobufDataConfig extends AbstractDataConfig {
             ConfigDef.Type.BOOLEAN,
             GENERATE_INDEX_FOR_UNIONS_DEFAULT,
             ConfigDef.Importance.LOW,
-            GENERATE_INDEX_FOR_UNIONS_DOC
+            GENERATE_INDEX_FOR_UNIONS_DOC)
+        .define(JSON_FIELD_NAMES_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            JSON_FIELD_NAMES_DEFAULT,
+            ConfigDef.Importance.LOW,
+            JSON_FIELD_NAMES_DOC
         );
   }
 
@@ -154,6 +164,10 @@ public class ProtobufDataConfig extends AbstractDataConfig {
 
   public boolean generateIndexForUnions() {
     return this.getBoolean(GENERATE_INDEX_FOR_UNIONS_CONFIG);
+  }
+
+  public boolean useJsonFieldNames() {
+    return this.getBoolean(JSON_FIELD_NAMES_CONFIG);
   }
 
   public static class Builder {

@@ -306,6 +306,7 @@ public class ProtobufData {
   private boolean useWrapperForRawPrimitives;
   private boolean generateStructForNulls;
   private boolean generateIndexForUnions;
+  private boolean useJsonFieldNames;
 
   public ProtobufData() {
     this(new ProtobufDataConfig.Builder().with(
@@ -332,6 +333,7 @@ public class ProtobufData {
     this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
     this.generateStructForNulls = protobufDataConfig.generateStructForNulls();
     this.generateIndexForUnions = protobufDataConfig.generateIndexForUnions();
+    this.useJsonFieldNames = protobufDataConfig.useJsonFieldNames();
   }
 
   /**
@@ -519,10 +521,14 @@ public class ProtobufData {
               throw new DataException("Invalid message name: " + scopedStructName);
             }
             for (Field field : schema.fields()) {
-              String fieldName = scrubName(field.name());
-              Object fieldCtx = getFieldType(ctx, fieldName);
+              String fieldName = field.name();
+              if (useJsonFieldNames) {
+                fieldName = fromJsonCase(fieldName);
+              }
+              String scrubbedFieldName = scrubName(fieldName);
+              Object fieldCtx = getFieldType(ctx, scrubbedFieldName);
               Object connectFieldVal = ignoreDefaultForNullables
-                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
+                  ? struct.getWithoutDefault(fieldName) : struct.get(field);
               Object fieldValue = fromConnectData(
                   fieldCtx,
                   field.schema(),
@@ -539,10 +545,10 @@ public class ProtobufData {
                   fieldValue = union.getValue();
                 } else {
                   fieldDescriptor = messageBuilder.getDescriptorForType()
-                      .findFieldByName(fieldName);
+                      .findFieldByName(scrubbedFieldName);
                 }
                 if (fieldDescriptor == null) {
-                  throw new DataException("Cannot find field with name " + fieldName);
+                  throw new DataException("Cannot find field with name " + scrubbedFieldName);
                 }
                 if (fieldValue != null) {
                   messageBuilder.setField(fieldDescriptor, fieldValue);
@@ -727,12 +733,16 @@ public class ProtobufData {
       String fieldTag = fieldSchema.parameters() != null ? fieldSchema.parameters()
           .get(PROTOBUF_TYPE_TAG) : null;
       int tag = fieldTag != null ? Integer.parseInt(fieldTag) : index++;
+      String fieldName = field.name();
+      if (useJsonFieldNames) {
+        fieldName = fromJsonCase(fieldName);
+      }
       FieldDefinition fieldDef = fieldDefinitionFromConnectSchema(
           ctx,
           schema,
           message,
           fieldSchema,
-          scrubName(field.name()),
+          scrubName(fieldName),
           tag
       );
       if (fieldDef != null) {
@@ -763,6 +773,22 @@ public class ProtobufData {
     return message.build();
   }
 
+  private static String fromJsonCase(final String str) {
+    final StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < str.length(); i++) {
+      char c = str.charAt(i);
+      if (Character.isUpperCase(c)) {
+        if (i != 0) {
+          sb.append("_");
+        }
+        sb.append(Character.toLowerCase(c));
+      } else {
+        sb.append(c);
+      }
+    }
+    return sb.toString();
+  }
+
   private void oneofDefinitionFromConnectSchema(
       FromConnectContext ctx,
       DynamicSchema.Builder schema,
@@ -776,12 +802,17 @@ public class ProtobufData {
       String fieldTag = fieldSchema.parameters() != null ? fieldSchema.parameters()
           .get(PROTOBUF_TYPE_TAG) : null;
       int tag = fieldTag != null ? Integer.parseInt(fieldTag) : 0;
+      String fieldName = field.name();
+      if (useJsonFieldNames) {
+        fieldName = fromJsonCase(fieldName);
+      }
+      String scrubbedFieldName = scrubName(fieldName);
       FieldDefinition fieldDef = fieldDefinitionFromConnectSchema(
           ctx,
           schema,
           message,
           field.schema(),
-          scrubName(field.name()),
+          scrubbedFieldName,
           tag
       );
       if (fieldDef != null) {
@@ -1363,7 +1394,8 @@ public class ProtobufData {
       Struct result,
       FieldDescriptor fieldDescriptor
   ) {
-    final String fieldName = fieldDescriptor.getName();
+    final String fieldName = useJsonFieldNames
+            ? fieldDescriptor.getJsonName() : fieldDescriptor.getName();
     final Field field = schema.field(fieldName);
     if ((isPrimitiveOrRepeated(fieldDescriptor) && !isOptional(fieldDescriptor))
         || (generateStructForNulls || message.hasField(fieldDescriptor))) {
@@ -1425,7 +1457,9 @@ public class ProtobufData {
           // Already added field as oneof
           continue;
         }
-        builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
+        final String fieldName = useJsonFieldNames
+                ? fieldDescriptor.getJsonName() : fieldDescriptor.getName();
+        builder.field(fieldName, toConnectSchema(ctx, fieldDescriptor));
       }
     }
 
