@@ -156,6 +156,8 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String HOST_NAME_CONFIG = "host.name";
 
+  public static final String HOST_PORT_CONFIG = "host.port";
+
   public static final String SCHEMA_PROVIDERS_CONFIG = "schema.providers";
 
   /**
@@ -315,6 +317,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "The host name. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes. This name is also used in the endpoint for inter instance "
       + "communication";
+  protected static final String HOST_PORT_DOC =
+      "The host port. This port is used in the endpoint for inter instance communication";
   protected static final String SCHEMA_PROVIDERS_DOC =
       "  A list of classes to use as SchemaProvider. Implementing the interface "
           + "<code>SchemaProvider</code> allows you to add custom schema types to Schema Registry.";
@@ -510,6 +514,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
         ConfigDef.Importance.HIGH, HOST_DOC
+    )
+    .define(HOST_PORT_CONFIG, ConfigDef.Type.INT, SCHEMAREGISTRY_PORT_DEFAULT,
+        ConfigDef.Importance.MEDIUM, HOST_PORT_DOC
     )
     .define(SCHEMA_PROVIDERS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, SCHEMA_PROVIDERS_DOC
