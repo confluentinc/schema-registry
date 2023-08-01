@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -178,11 +179,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         interInstanceListenerNameConfig,
         config.interInstanceProtocol());
     log.info("Found internal listener: {}", internalListener.toString());
-    SchemeAndPort schemeAndPort = new SchemeAndPort(internalListener.getUri().getScheme(),
-        internalListener.getUri().getPort());
-    String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
-    this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
-        isEligibleForLeaderElector, schemeAndPort.scheme);
+
+    this.myIdentity = getMyIdentity(internalListener, isEligibleForLeaderElector, config);
     log.info("Setting my identity to {}",  myIdentity);
 
     Map<String, Object> sslConfig = config.getOverriddenSslConfigs(internalListener);
@@ -220,6 +218,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.kafkaStore = kafkaStore(config);
     this.metadataEncoder = new MetadataEncoderService(this);
     this.ruleSetHandler = new RuleSetHandler();
+  }
+
+  @VisibleForTesting
+  static SchemaRegistryIdentity getMyIdentity(NamedURI internalListener,
+      boolean isEligibleForLeaderElector, SchemaRegistryConfig config) {
+    SchemeAndPort schemeAndPort = new SchemeAndPort(internalListener.getUri().getScheme(),
+        // default value of 8081 is always set for `host.port`. only consider `host.port` if the
+        // original properties has it. otherwise, use the port from the listener.
+        config.originals().containsKey(SchemaRegistryConfig.HOST_PORT_CONFIG) ?
+            config.getInt(SchemaRegistryConfig.HOST_PORT_CONFIG) :
+            internalListener.getUri().getPort());
+    String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
+    return new SchemaRegistryIdentity(host, schemeAndPort.port, isEligibleForLeaderElector,
+        schemeAndPort.scheme);
   }
 
   private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
