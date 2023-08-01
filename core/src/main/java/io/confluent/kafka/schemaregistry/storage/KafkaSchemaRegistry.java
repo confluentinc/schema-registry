@@ -226,9 +226,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     SchemeAndPort schemeAndPort = new SchemeAndPort(internalListener.getUri().getScheme(),
         // default value of 8081 is always set for `host.port`. only consider `host.port` if the
         // original properties has it. otherwise, use the port from the listener.
-        config.originals().containsKey(SchemaRegistryConfig.HOST_PORT_CONFIG) ?
-            config.getInt(SchemaRegistryConfig.HOST_PORT_CONFIG) :
-            internalListener.getUri().getPort());
+        config.originals().containsKey(SchemaRegistryConfig.HOST_PORT_CONFIG)
+                ? config.getInt(SchemaRegistryConfig.HOST_PORT_CONFIG) :
+                internalListener.getUri().getPort());
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     return new SchemaRegistryIdentity(host, schemeAndPort.port, isEligibleForLeaderElector,
         schemeAndPort.scheme);
