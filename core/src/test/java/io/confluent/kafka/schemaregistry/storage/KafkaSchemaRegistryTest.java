@@ -102,4 +102,43 @@ public class KafkaSchemaRegistryTest {
     assertEquals("Expected internal listener's name to be returned", "bob", listener.getName());
     assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
+
+  @Test
+  public void testMyIdentityWithoutPortOverride() throws RestConfigException, SchemaRegistryException {
+    String listeners = "bob://localhost:123, http://localhost:456";
+    String listenerProtocolMap = "bob:https";
+    Properties props = new Properties();
+    props.setProperty(SchemaRegistryConfig.HOST_NAME_CONFIG, "schema.registry-0.example.com");
+    props.setProperty(RestConfig.LISTENERS_CONFIG, listeners);
+    props.setProperty(RestConfig.LISTENER_PROTOCOL_MAP_CONFIG, listenerProtocolMap);
+    props.setProperty(SchemaRegistryConfig.INTER_INSTANCE_LISTENER_NAME_CONFIG, "bob");
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    SchemaRegistryIdentity schemaRegistryIdentity = new
+        SchemaRegistryIdentity("schema.registry-0.example.com", 123, true, "https");
+    NamedURI internalListener = KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(),
+        config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
+
+    assertEquals(schemaRegistryIdentity,
+        KafkaSchemaRegistry.getMyIdentity(internalListener, true, config));
+  }
+
+  @Test
+  public void testMyIdentityWithPortOverride() throws RestConfigException, SchemaRegistryException {
+    String listeners = "bob://localhost:123, http://localhost:456";
+    String listenerProtocolMap = "bob:https";
+    Properties props = new Properties();
+    props.setProperty(SchemaRegistryConfig.HOST_NAME_CONFIG, "schema.registry-0.example.com");
+    props.setProperty(SchemaRegistryConfig.HOST_PORT_CONFIG, "443");
+    props.setProperty(RestConfig.LISTENERS_CONFIG, listeners);
+    props.setProperty(RestConfig.LISTENER_PROTOCOL_MAP_CONFIG, listenerProtocolMap);
+    props.setProperty(SchemaRegistryConfig.INTER_INSTANCE_LISTENER_NAME_CONFIG, "bob");
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    SchemaRegistryIdentity schemaRegistryIdentity = new
+        SchemaRegistryIdentity("schema.registry-0.example.com", 443, true, "https");
+    NamedURI internalListener = KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(),
+        config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
+
+    assertEquals(schemaRegistryIdentity,
+        KafkaSchemaRegistry.getMyIdentity(internalListener, true, config));
+  }
 }
