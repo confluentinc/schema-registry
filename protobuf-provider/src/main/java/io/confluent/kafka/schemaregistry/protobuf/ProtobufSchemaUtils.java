@@ -421,7 +421,7 @@ public class ProtobufSchemaUtils {
               List<FieldElement> fields = new ArrayList<>(o.getFields());
               fields.sort(Comparator.comparing(FieldElement::getTag));
               return new OneOfElement(o.getName(), o.getDocumentation(),
-                  fields, o.getGroups(), o.getOptions());
+                  fields, o.getGroups(), o.getOptions(), DEFAULT_LOCATION);
             })
             .collect(Collectors.toList());
         oneOfs.sort(Comparator.comparing(o -> o.getFields().get(0).getTag()));
