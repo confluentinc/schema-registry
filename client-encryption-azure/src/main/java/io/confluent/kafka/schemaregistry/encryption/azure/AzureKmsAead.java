@@ -40,7 +40,7 @@ public final class AzureKmsAead implements Aead {
   /**
    * Constructor
    *
-   * @param kmsClient -  kms client
+   * @param kmsClient -  tink client
    * @param algorithm - algorithm
    */
   public AzureKmsAead(CryptographyClient kmsClient, EncryptionAlgorithm algorithm) {

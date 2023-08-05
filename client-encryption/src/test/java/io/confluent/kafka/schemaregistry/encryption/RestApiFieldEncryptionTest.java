@@ -21,6 +21,11 @@ import static org.junit.Assert.assertNotNull;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.testing.FakeTicker;
+import com.google.crypto.tink.aead.AeadConfig;
+import io.confluent.dekregistry.DekRegistryResourceExtension;
+import io.confluent.dekregistry.client.DekRegistryClient;
+import io.confluent.dekregistry.client.CachedDekRegistryClient;
+import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -41,10 +46,12 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -55,11 +62,30 @@ import org.junit.Test;
 
 public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
 
+  static {
+    try {
+      AeadConfig.register();
+    } catch (GeneralSecurityException e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
+
   public RestApiFieldEncryptionTest() {
     super(1, true);
   }
 
   protected abstract FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames);
+
+  @Override
+  protected Properties getSchemaRegistryProperties() throws Exception {
+    Properties props = new Properties();
+    props.setProperty("resource.extension.class", DekRegistryResourceExtension.class.getName());
+    Object testClient = getFieldEncryptionProperties(null).getTestClient();
+    if (testClient != null) {
+      props.put("test.client", testClient);
+    }
+    return props;
+  }
 
   @Before
   public void setUp() throws Exception {
@@ -80,11 +106,44 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testFieldEncryption() throws Exception {
-    String topic = "test";
+  public void testPrivateKek() throws Exception {
     List<String> ruleNames = ImmutableList.of("myRule");
     FieldEncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
-    Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties();
+
+    DekRegistryClient dekRegistry = new CachedDekRegistryClient(
+        new DekRegistryRestService(restApp.restClient.getBaseUrls()),
+        1000,
+        600,
+        Collections.emptyMap(),
+        Collections.emptyMap()
+    );
+
+    testFieldEncryption(fieldEncryptionProps, dekRegistry);
+  }
+
+  @Test
+  public void testSharedKek() throws Exception {
+    List<String> ruleNames = ImmutableList.of("myRule");
+    FieldEncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
+
+    DekRegistryClient dekRegistry = new CachedDekRegistryClient(
+        new DekRegistryRestService(restApp.restClient.getBaseUrls()),
+        1000,
+        600,
+        Collections.emptyMap(),
+        Collections.emptyMap()
+    );
+    // Create shared kek
+    dekRegistry.createKek("kek1", fieldEncryptionProps.getKmsType(),
+        fieldEncryptionProps.getKmsKeyId(), fieldEncryptionProps.getKmsProps(), null, true);
+
+    testFieldEncryption(fieldEncryptionProps, dekRegistry);
+  }
+
+  private void testFieldEncryption(FieldEncryptionProperties fieldEncryptionProps, DekRegistryClient dekRegistry) throws Exception {
+    String topic = "test";
+    Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties(
+        restApp.restClient.getBaseUrls().toString());
     FakeTicker fakeTicker = new FakeTicker();
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(
         restApp.restClient,
@@ -116,8 +175,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     Rule rule = new Rule("myRule", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
-    Metadata metadata = new Metadata(
-        Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    Metadata metadata = getMetadata(fieldEncryptionProps, "kek1");
     AvroSchema ruleSchema = new AvroSchema(
         null, Collections.emptyList(), Collections.emptyMap(), metadata, ruleSet, null, true);
     registerAndVerifySchema(schemaRegistry, ruleSchema, 2, subject);
@@ -126,6 +184,10 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     bytes = avroSerializer.serialize(topic, headers, avroRecord);
     record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     assertEquals("testUser", record.get("name").toString());
+
+    dekRegistry.deleteDek("kek1", subject, false);
+    dekRegistry.deleteDek("kek1", subject, true);
+
     record = (GenericRecord) badDeserializer.deserialize(topic, headers, bytes);
     assertNotEquals("testUser", record.get("name").toString());  // still encrypted
   }
@@ -145,6 +207,14 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
     return avroRecord;
+  }
+
+  private Metadata getMetadata(FieldEncryptionProperties fieldEncryptionProps, String kekName) {
+    Map<String, String> properties = new HashMap<>();
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KEK_NAME, kekName);
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KMS_TYPE, fieldEncryptionProps.getKmsType());
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KMS_KEY_ID, fieldEncryptionProps.getKmsKeyId());
+    return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 
   static void registerAndVerifySchema(SchemaRegistryClient schemaRegistry, ParsedSchema schema,

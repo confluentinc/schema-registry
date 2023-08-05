@@ -1,0 +1,272 @@
+/*
+ * Copyright 2023 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.confluent.dekregistry.client;
+
+import com.google.common.base.Ticker;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import io.confluent.dekregistry.client.rest.DekRegistryRestService;
+import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
+import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
+import io.confluent.dekregistry.client.rest.entities.Dek;
+import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.dekregistry.client.rest.entities.Kek;
+import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+
+public class CachedDekRegistryClient extends CachedSchemaRegistryClient
+    implements DekRegistryClient {
+
+  private final DekRegistryRestService restService;
+  private final Cache<KekId, Kek> kekCache;
+  private final Cache<DekId, Dek> dekCache;
+
+  public CachedDekRegistryClient(
+      List<String> baseUrls,
+      int cacheCapacity,
+      int cacheExpirySecs,
+      Map<String, ?> configs,
+      Map<String, String> httpHeaders) {
+    this(new DekRegistryRestService(baseUrls),
+        cacheCapacity, cacheExpirySecs, configs, httpHeaders, Ticker.systemTicker());
+  }
+
+  public CachedDekRegistryClient(
+      DekRegistryRestService restService,
+      int cacheCapacity,
+      int cacheExpirySecs,
+      Map<String, ?> configs,
+      Map<String, String> httpHeaders) {
+    this(restService, cacheCapacity, cacheExpirySecs, configs, httpHeaders, Ticker.systemTicker());
+  }
+
+  public CachedDekRegistryClient(
+      DekRegistryRestService restService,
+      int cacheCapacity,
+      int cacheExpirySecs,
+      Map<String, ?> configs,
+      Map<String, String> httpHeaders,
+      Ticker ticker) {
+    super(restService, cacheCapacity, Collections.emptyList(), configs, httpHeaders, ticker);
+    this.restService = restService;
+    this.kekCache = CacheBuilder.newBuilder()
+        // Allow expiry in case shared flag changes
+        .expireAfterWrite(Duration.ofSeconds(cacheExpirySecs))
+        .maximumSize(cacheCapacity)
+        .build();
+    this.dekCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
+  }
+
+  public List<String> listKeks(boolean lookupDeleted)
+      throws IOException, RestClientException {
+    return restService.listKeks(lookupDeleted);
+  }
+
+  public Kek getKek(String name, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    try {
+      return kekCache.get(new KekId(name), () -> restService.getKek(name, lookupDeleted));
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof IOException) {
+        throw (IOException) e.getCause();
+      } else if (e.getCause() instanceof RestClientException) {
+        throw (RestClientException) e.getCause();
+      }
+      throw new RuntimeException(e.getCause());
+    }
+  }
+
+  public List<String> listDeks(String kekName, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    return restService.listDeks(kekName, lookupDeleted);
+  }
+
+  public Dek getDek(String name, String scope, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    return getDek(name, scope, null, lookupDeleted);
+  }
+
+  public Dek getDek(String name, String scope, DekFormat algorithm, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    try {
+      return dekCache.get(new DekId(name, scope, algorithm), () ->
+          restService.getDek(name, scope, algorithm, lookupDeleted));
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof IOException) {
+        throw (IOException) e.getCause();
+      } else if (e.getCause() instanceof RestClientException) {
+        throw (RestClientException) e.getCause();
+      }
+      throw new RuntimeException(e.getCause());
+    }
+  }
+
+  public Kek createKek(
+      String name,
+      String kmsType,
+      String kmsKeyId,
+      Map<String, String> kmsProps,
+      String doc,
+      boolean shared)
+      throws IOException, RestClientException {
+    CreateKekRequest request = new CreateKekRequest();
+    request.setName(name);
+    request.setKmsType(kmsType);
+    request.setKmsKeyid(kmsKeyId);
+    request.setKmsProps(kmsProps);
+    request.setDoc(doc);
+    request.setShared(shared);
+    Kek kek = restService.createKek(request);
+    kekCache.put(new KekId(name), kek);
+    return kek;
+  }
+
+  public Dek createDek(
+      String kekName,
+      String kmsType,
+      String kmsKeyId,
+      String scope,
+      DekFormat algorithm,
+      String encryptedKeyMaterial)
+      throws IOException, RestClientException {
+    CreateDekRequest request = new CreateDekRequest();
+    request.setKmsType(kmsType);
+    request.setKmsKeyid(kmsKeyId);
+    request.setScope(scope);
+    request.setAlgorithm(algorithm);
+    request.setEncryptedKeyMaterial(encryptedKeyMaterial);
+    Dek dek = restService.createDek(kekName, request);
+    dekCache.put(new DekId(kekName, scope, algorithm), dek);
+    return dek;
+  }
+
+  public Kek updateKek(
+      String name,
+      Map<String, String> kmsProps,
+      String doc,
+      Boolean shared)
+      throws IOException, RestClientException {
+    UpdateKekRequest request = new UpdateKekRequest();
+    request.setKmsProps(kmsProps);
+    request.setDoc(doc);
+    request.setShared(shared);
+    Kek kek = restService.updateKek(name, request);
+    kekCache.put(new KekId(name), kek);
+    return kek;
+  }
+
+  public void deleteKek(String name, boolean permanentDelete)
+      throws IOException, RestClientException {
+    restService.deleteKek(name, permanentDelete);
+    kekCache.invalidate(new KekId(name));
+  }
+
+  public void deleteDek(String name, String scope, boolean permanentDelete)
+      throws IOException, RestClientException {
+    deleteDek(name, scope, null, permanentDelete);
+  }
+
+  public void deleteDek(String name, String scope, DekFormat algorithm, boolean permanentDelete)
+      throws IOException, RestClientException {
+    restService.deleteDek(name, scope, algorithm, permanentDelete);
+    dekCache.invalidate(new DekId(name, scope, algorithm));
+  }
+
+  public static class KekId {
+
+    private final String name;
+
+    public KekId(String name) {
+      this.name = name;
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      KekId that = (KekId) o;
+      return Objects.equals(name, that.name);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(name);
+    }
+  }
+
+  public static class DekId {
+
+    private final String kekName;
+    private final String scope;
+    private final DekFormat dekFormat;
+
+    public DekId(String kekName, String scope, DekFormat dekFormat) {
+      this.kekName = kekName;
+      this.scope = scope;
+      this.dekFormat = dekFormat;
+    }
+
+    public String getKekName() {
+      return kekName;
+    }
+
+    public String getScope() {
+      return scope;
+    }
+
+    public DekFormat getDekFormat() {
+      return dekFormat;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      DekId that = (DekId) o;
+      return Objects.equals(kekName, that.kekName)
+          && Objects.equals(scope, that.scope)
+          && dekFormat == that.dekFormat;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(kekName, scope, dekFormat);
+    }
+  }
+}

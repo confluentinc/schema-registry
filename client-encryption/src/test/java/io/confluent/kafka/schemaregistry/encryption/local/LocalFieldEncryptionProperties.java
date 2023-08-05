@@ -14,11 +14,13 @@
  */
 package io.confluent.kafka.schemaregistry.encryption.local;
 
-import static io.confluent.kafka.schemaregistry.encryption.local.LocalFieldEncryptionExecutor.LOCAL_OLD_SECRETS;
-import static io.confluent.kafka.schemaregistry.encryption.local.LocalFieldEncryptionExecutor.LOCAL_SECRET;
+import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.LOCAL_OLD_SECRETS;
+import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.LOCAL_SECRET;
 
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,29 +32,44 @@ public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
   }
 
   @Override
-  public String getKeyId() {
-    return "";
+  public String getKmsType() {
+    return "local-kms";
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey()
+  public String getKmsKeyId() {
+    return "local1";
+  }
+
+  @Override
+  public Map<String, String> getKmsProps() {
+    return Collections.singletonMap(LOCAL_SECRET, "mysecret");
+  }
+
+  @Override
+  public Map<String, Object> getClientPropertiesWithoutKey(String baseUrls)
       throws Exception {
     List<String> ruleNames = getRuleNames();
     Map<String, Object> props = new HashMap<>();
-    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, baseUrls);
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL, "60");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, String.join(",", ruleNames));
     for (String ruleName : ruleNames) {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
-          LocalFieldEncryptionExecutor.class.getName());
+          FieldEncryptionExecutor.class.getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
           + ".param." + LOCAL_SECRET, "mysecret");
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
           + ".param." + LOCAL_OLD_SECRETS, "old1, old2");
     }
     return props;
+  }
+
+  @Override
+  public Object getTestClient() throws Exception {
+    return null;
   }
 }
 

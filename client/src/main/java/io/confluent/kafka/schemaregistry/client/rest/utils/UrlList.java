@@ -82,7 +82,7 @@ public class UrlList {
 
   @Override
   public String toString() {
-    return urls.toString();
+    return String.join(",", urls);
   }
 
 }

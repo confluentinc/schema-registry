@@ -1,0 +1,141 @@
+/*
+ * Copyright 2023 Confluent Inc.
+ */
+
+package io.confluent.dekregistry.client.rest.entities;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
+@JsonInclude(Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class CreateKekRequest {
+
+  private String name;
+  private String kmsType;
+  private String kmsKeyId;
+  @JsonPropertyOrder(alphabetic = true)
+  private SortedMap<String, String> kmsProps;
+  private String doc;
+  private boolean shared;
+
+  public static CreateKekRequest fromJson(String json) throws IOException {
+    return JacksonMapper.INSTANCE.readValue(json, CreateKekRequest.class);
+  }
+
+  @JsonProperty("name")
+  public String getName() {
+    return this.name;
+  }
+
+  @JsonProperty("name")
+  public void setName(String name) {
+    this.name = name;
+  }
+
+  @JsonProperty("kmsType")
+  public String getKmsType() {
+    return this.kmsType;
+  }
+
+  @JsonProperty("kmsType")
+  public void setKmsType(String kmsType) {
+    this.kmsType = kmsType;
+  }
+
+  @JsonProperty("kmsKeyId")
+  public String getKmsKeyId() {
+    return this.kmsKeyId;
+  }
+
+  @JsonProperty("kmsKeyid")
+  public void setKmsKeyid(String kmsKeyId) {
+    this.kmsKeyId = kmsKeyId;
+  }
+
+  @JsonProperty("kmsProps")
+  public SortedMap<String, String> getKmsProps() {
+    return this.kmsProps;
+  }
+
+  @JsonProperty("kmsProps")
+  public void setKmsProps(Map<String, String> kmsProps) {
+    SortedMap<String, String> sortedKmsProps = kmsProps != null
+        ? kmsProps.entrySet().stream()
+        .sorted(Map.Entry.comparingByKey())
+        .collect(Collectors.toMap(
+            Entry::getKey,
+            Entry::getValue,
+            (e1, e2) -> e1,
+            TreeMap::new))
+        : Collections.emptySortedMap();
+    this.kmsProps = Collections.unmodifiableSortedMap(sortedKmsProps);
+  }
+
+  @JsonProperty("doc")
+  public String getDoc() {
+    return this.doc;
+  }
+
+  @JsonProperty("doc")
+  public void setDoc(String doc) {
+    this.doc = doc;
+  }
+
+  @JsonProperty("shared")
+  public boolean isShared() {
+    return this.shared;
+  }
+
+  @JsonProperty("shared")
+  public void setShared(boolean shared) {
+    this.shared = shared;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    CreateKekRequest kek = (CreateKekRequest) o;
+    return shared == kek.shared
+        && Objects.equals(name, kek.name)
+        && Objects.equals(kmsType, kek.kmsType)
+        && Objects.equals(kmsKeyId, kek.kmsKeyId)
+        && Objects.equals(kmsProps, kek.kmsProps)
+        && Objects.equals(doc, kek.doc);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(name, kmsType, kmsKeyId, kmsProps, doc, shared);
+  }
+
+  @Override
+  public String toString() {
+    try {
+      return toJson();
+    } catch (IOException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  public String toJson() throws IOException {
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+}
