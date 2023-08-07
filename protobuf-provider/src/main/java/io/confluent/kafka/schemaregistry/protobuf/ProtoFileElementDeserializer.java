@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.DEFAULT_LOCATION;
+
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -183,7 +185,8 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
       node.get("documentation").asText(),
       fieldElementBuilder.build(),
       Collections.emptyList(),
-      optionElementBuilder.build()
+      optionElementBuilder.build(),
+      DEFAULT_LOCATION
     );
   }
 
