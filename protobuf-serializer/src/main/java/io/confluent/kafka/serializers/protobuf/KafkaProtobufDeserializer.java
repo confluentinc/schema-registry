@@ -78,6 +78,6 @@ public class KafkaProtobufDeserializer<T extends Message>
 
   @Override
   public void close() {
-
+    super.close();
   }
 }

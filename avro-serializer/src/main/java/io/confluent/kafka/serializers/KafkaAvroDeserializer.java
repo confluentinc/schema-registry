@@ -62,6 +62,6 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   @Override
   public void close() {
-
+    super.close();
   }
 }

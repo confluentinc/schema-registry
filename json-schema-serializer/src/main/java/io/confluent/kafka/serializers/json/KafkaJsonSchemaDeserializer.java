@@ -81,6 +81,6 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
 
   @Override
   public void close() {
-
+    super.close();
   }
 }

@@ -103,5 +103,6 @@ public class KafkaProtobufSerializer<T extends Message>
 
   @Override
   public void close() {
+    super.close();
   }
 }
