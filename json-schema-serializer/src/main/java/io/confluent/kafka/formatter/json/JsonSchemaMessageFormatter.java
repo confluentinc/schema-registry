@@ -129,5 +129,13 @@ public class JsonSchemaMessageFormatter extends SchemaMessageFormatter<JsonNode>
     public JsonNode deserialize(String topic, byte[] payload) throws SerializationException {
       return (JsonNode) super.deserialize(false, topic, isKey, payload);
     }
+
+    @Override
+    public void close() {
+      if (keyDeserializer != null) {
+        keyDeserializer.close();
+      }
+      super.close();
+    }
   }
 }

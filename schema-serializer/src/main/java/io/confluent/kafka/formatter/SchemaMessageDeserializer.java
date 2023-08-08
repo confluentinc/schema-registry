@@ -19,11 +19,16 @@ package io.confluent.kafka.formatter;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 
-public interface SchemaMessageDeserializer<T> {
+import java.io.Closeable;
+
+public interface SchemaMessageDeserializer<T> extends Closeable {
 
   Deserializer getKeyDeserializer();
 
   Object deserializeKey(String topic, byte[] payload);
 
   T deserialize(String topic, byte[] payload) throws SerializationException;
+
+  @Override
+  default void close() {}
 }

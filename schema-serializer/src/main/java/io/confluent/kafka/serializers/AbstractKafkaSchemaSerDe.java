@@ -18,6 +18,8 @@ package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+
+import java.io.Closeable;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -48,7 +50,7 @@ import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
  */
-public abstract class AbstractKafkaSchemaSerDe {
+public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
@@ -259,6 +261,13 @@ public abstract class AbstractKafkaSchemaSerDe {
       return new InvalidConfigurationException(e.getMessage());
     } else {
       return new SerializationException(errorMessage, e);
+    }
+  }
+
+  @Override
+  public void close() {
+    if (schemaRegistry != null) {
+      schemaRegistry.close();
     }
   }
 

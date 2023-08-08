@@ -20,7 +20,9 @@ import org.apache.kafka.common.serialization.Serializer;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 
-public interface SchemaMessageSerializer<T> {
+import java.io.Closeable;
+
+public interface SchemaMessageSerializer<T> extends Closeable {
 
   Serializer getKeySerializer();
 
@@ -33,4 +35,7 @@ public interface SchemaMessageSerializer<T> {
       T object,
       ParsedSchema schema
   );
+
+  @Override
+  default void close() {}
 }

@@ -153,6 +153,9 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
                                  + " registered successfully out of " + targetRegisteredSchemas
                                  + " attempted");
     }
+    if (restService != null) {
+      restService.close();
+    }
   }
 
   @Override

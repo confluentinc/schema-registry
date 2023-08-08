@@ -1522,6 +1522,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     if (leaderElector != null) {
       leaderElector.close();
     }
+    if (leaderRestService != null) {
+      leaderRestService.close();
+    }
   }
 
   public void updateCompatibilityLevel(String subject, CompatibilityLevel newCompatibilityLevel)

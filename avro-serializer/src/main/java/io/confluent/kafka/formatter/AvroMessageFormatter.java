@@ -132,5 +132,13 @@ public class AvroMessageFormatter extends SchemaMessageFormatter<Object> {
     public Object deserialize(String topic, byte[] payload) throws SerializationException {
       return super.deserialize(topic, isKey, payload, null);
     }
+
+    @Override
+    public void close() {
+      if (keyDeserializer != null) {
+        keyDeserializer.close();
+      }
+      super.close();
+    }
   }
 }
