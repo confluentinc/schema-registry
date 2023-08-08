@@ -294,8 +294,8 @@ public class JsonSchemaUtils {
     return entityNode;
   }
 
-  public static JsonNode findNodeFromNameBuilder(JsonNode node, LinkedList<String> identifiersList)
-  {
+  public static JsonNode findNodeFromNameBuilder(JsonNode node,
+                                                 LinkedList<String> identifiersList) {
     if (identifiersList.isEmpty() || node == null) {
       return null;
     }
