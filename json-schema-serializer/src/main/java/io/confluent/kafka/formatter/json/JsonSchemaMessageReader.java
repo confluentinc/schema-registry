@@ -165,5 +165,13 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
     ) {
       return super.serializeImpl(subject, object, (JsonSchema) schema);
     }
+
+    @Override
+    public void close() {
+      if (keySerializer != null) {
+        keySerializer.close();
+      }
+      super.close();
+    }
   }
 }

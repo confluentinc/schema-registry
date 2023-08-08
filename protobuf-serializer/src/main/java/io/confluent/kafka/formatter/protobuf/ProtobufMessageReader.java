@@ -153,5 +153,13 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
     ) {
       return super.serializeImpl(subject, topic, isKey, object, (ProtobufSchema) schema);
     }
+
+    @Override
+    public void close() {
+      if (keySerializer != null) {
+        keySerializer.close();
+      }
+      super.close();
+    }
   }
 }

@@ -167,5 +167,13 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
     ) {
       return super.serializeImpl(subject, object, (AvroSchema) schema);
     }
+
+    @Override
+    public void close() {
+      if (keySerializer != null) {
+        keySerializer.close();
+      }
+      super.close();
+    }
   }
 }

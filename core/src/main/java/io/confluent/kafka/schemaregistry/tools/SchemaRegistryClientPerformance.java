@@ -83,5 +83,13 @@ public class SchemaRegistryClientPerformance extends SchemaRegistryPerformance {
     registeredSchemas++;
     cb.onCompletion(1, 0);
   }
+
+  @Override
+  protected void close() {
+    if (client != null) {
+      client.close();
+    }
+    super.close();
+  }
 }
 

@@ -170,6 +170,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
         );
       }
     }
+    close();
   }
 
   private String getExtension(ParsedSchema parsedSchema) {
