@@ -294,6 +294,24 @@ public class JsonSchemaUtils {
     return entityNode;
   }
 
+  public static JsonNode findNodeFromNameBuilder(JsonNode node,
+                                                 LinkedList<String> identifiersList) {
+    if (identifiersList.isEmpty() || node == null) {
+      return null;
+    }
+    String word = identifiersList.poll();
+    StringBuilder fieldNameBuilder = new StringBuilder(word);
+    while (!node.has(fieldNameBuilder.toString()) && !identifiersList.isEmpty()) {
+      fieldNameBuilder.append(".");
+      word = identifiersList.poll();
+      if (word == null) {
+        return null;
+      }
+      fieldNameBuilder.append(word);
+    }
+    return node.get(fieldNameBuilder.toString());
+  }
+
   private static JsonNode findNodeHelper(JsonNode node,
                                          SchemaEntity.EntityType entityType,
                                          LinkedList<String> identifiersList) {
@@ -306,25 +324,22 @@ public class JsonSchemaUtils {
         if (SchemaEntity.EntityType.SR_RECORD == entityType && identifiersList.isEmpty()) {
           return node;
         }
-        JsonNode fields = node.get("properties");
-        String word = identifiersList.poll();
+
+        String word = identifiersList.peek();
         if (word == null) {
           return null;
         }
-        StringBuilder fieldNameBuilder = new StringBuilder(word);
-        while (!fields.has(fieldNameBuilder.toString()) && !identifiersList.isEmpty()) {
-          fieldNameBuilder.append(".");
-          word = identifiersList.poll();
-          if (word == null) {
-            return null;
-          }
-          fieldNameBuilder.append(word);
-        }
-        JsonNode fieldNode = fields.get(fieldNameBuilder.toString());
-        if (fieldNode == null || identifiersList.isEmpty()) {
-          return fieldNode;
+        JsonNode result;
+        if ("definitions".equals(word)) {
+          identifiersList.poll();
+          result = findNodeFromNameBuilder(node.get("definitions"), identifiersList);
         } else {
-          return findNodeHelper(fieldNode, entityType, identifiersList);
+          result = findNodeFromNameBuilder(node.get("properties"), identifiersList);
+        }
+        if (result == null || identifiersList.isEmpty()) {
+          return result;
+        } else {
+          return findNodeHelper(result, entityType, identifiersList);
         }
       case "array":
         return findNodeHelper(node.get("items"), entityType, identifiersList);

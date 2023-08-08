@@ -710,6 +710,131 @@ public class JsonSchemaTest {
     assertEquals(ImmutableSet.of("testRecursive", "PII"), resultSchema.inlineTags());
   }
 
+  @Test
+  public void testAddTagToCompositeField() {
+    String schema = "{\n" +
+        "    \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "    \"title\": \"Customer\",\n" +
+        "    \"type\": \"object\",\n" +
+        "    \"additionalProperties\": false,\n" +
+        "    \"properties\": {\n" +
+        "        \"cc_details\": {\n" +
+        "            \"oneOf\": [\n" +
+        "                {\n" +
+        "                    \"type\": \"null\",\n" +
+        "                    \"title\": \"Not included\"\n" +
+        "                },\n" +
+        "                {\n" +
+        "                    \"$ref\": \"#/definitions/CardDetails\"\n" +
+        "                }\n" +
+        "            ]\n" +
+        "        }\n" +
+        "    },\n" +
+        "    \"definitions\": {\n" +
+        "        \"Another.Details\": {\n" +
+        "            \"additionalProperties\": false,\n" +
+        "            \"properties\": {\n" +
+        "              \"additional.field1\": {\n" +
+        "                \"type\": \"string\"\n" +
+        "              },\n" +
+        "              \"field2\": {\n" +
+        "                \"type\": \"number\"\n" +
+        "              }\n" +
+        "            },\n" +
+        "            \"type\": \"object\"\n" +
+        "          },\n" +
+        "        \"CardDetails\": {\n" +
+        "            \"type\": \"object\",\n" +
+        "            \"additionalProperties\": false,\n" +
+        "            \"properties\": {\n" +
+        "                \"credit_card\": {\n" +
+        "                    \"oneOf\": [\n" +
+        "                        {\n" +
+        "                            \"type\": \"null\",\n" +
+        "                            \"title\": \"Not included\"\n" +
+        "                        },\n" +
+        "                        {\n" +
+        "                            \"type\": \"string\"\n" +
+        "                        }\n" +
+        "                    ]\n" +
+        "                }\n" +
+        "            }\n" +
+        "        }\n" +
+        "    }\n" +
+        "}";
+
+    String addedTagSchema = "{\n" +
+        "    \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "    \"title\": \"Customer\",\n" +
+        "    \"type\": \"object\",\n" +
+        "    \"additionalProperties\": false,\n" +
+        "    \"properties\": {\n" +
+        "        \"cc_details\": {\n" +
+        "            \"oneOf\": [\n" +
+        "                {\n" +
+        "                    \"type\": \"null\",\n" +
+        "                    \"title\": \"Not included\"\n" +
+        "                },\n" +
+        "                {\n" +
+        "                    \"$ref\": \"#/definitions/CardDetails\"\n" +
+        "                }\n" +
+        "            ]\n" +
+        "        }\n" +
+        "    },\n" +
+        "    \"definitions\": {\n" +
+        "        \"Another.Details\": {\n" +
+        "            \"additionalProperties\": false,\n" +
+        "            \"properties\": {\n" +
+        "              \"additional.field1\": {\n" +
+        "                \"type\": \"string\",\n" +
+        "                \"confluent:tags\": [ \"TEST2\" ]\n" +
+        "              },\n" +
+        "              \"field2\": {\n" +
+        "                \"type\": \"number\"\n" +
+        "              }\n" +
+        "            },\n" +
+        "            \"type\": \"object\"\n" +
+        "          },\n" +
+        "        \"CardDetails\": {\n" +
+        "            \"type\": \"object\",\n" +
+        "            \"additionalProperties\": false,\n" +
+        "            \"properties\": {\n" +
+        "                \"credit_card\": {\n" +
+        "                    \"oneOf\": [\n" +
+        "                        {\n" +
+        "                            \"type\": \"null\",\n" +
+        "                            \"title\": \"Not included\"\n" +
+        "                        },\n" +
+        "                        {\n" +
+        "                            \"type\": \"string\"\n" +
+        "                        }\n" +
+        "                    ],\n" +
+        "                    \"confluent:tags\": [ \"PII\" ]\n" +
+        "                }\n" +
+        "            },\n" +
+        "            \"confluent:tags\": [ \"TEST3\" ]\n" +
+        "        }\n" +
+        "    }\n" +
+        "}";
+
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchema expectSchema = new JsonSchema(addedTagSchema);
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("object.definitions.CardDetails.object.credit_card",
+            SchemaEntity.EntityType.SR_FIELD),
+        Collections.singleton("PII"));
+    tags.put(new SchemaEntity("object.definitions.Another.Details.object.additional.field1",
+            SchemaEntity.EntityType.SR_FIELD),
+        Collections.singleton("TEST2"));
+    tags.put(new SchemaEntity("object.definitions.CardDetails.object",
+            SchemaEntity.EntityType.SR_RECORD),
+        Collections.singleton("TEST3"));
+
+    ParsedSchema resultSchema = jsonSchema.copy(tags, Collections.emptyMap());
+    assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("PII", "TEST2", "TEST3"), resultSchema.inlineTags());
+  }
+
   private static Map<String, String> getJsonSchemaWithReferences() {
     Map<String, String> schemas = new HashMap<>();
     String reference = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
