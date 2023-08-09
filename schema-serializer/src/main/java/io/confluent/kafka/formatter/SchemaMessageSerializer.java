@@ -37,5 +37,5 @@ public interface SchemaMessageSerializer<T> extends Closeable {
   );
 
   @Override
-  default void close() {}
+  default void close() throws IOException {}
 }
