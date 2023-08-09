@@ -6,6 +6,7 @@ package io.confluent.dekregistry.metrics;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.confluent.dekregistry.client.rest.entities.KeyType;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import java.io.Closeable;
@@ -27,11 +28,13 @@ public class MetricsManager implements Closeable {
 
   public static final String KEY = "metricsManager";
 
-  static final String METRIC_GROUP = "exporter";
+  static final String METRIC_GROUP = "dek_registry";
 
   static final String TENANT_TAG = "tenant";
 
-  static final String NUM_EXPORTERS = "num_exporters";
+  static final String NUM_KEKS = "num_keks";
+
+  static final String NUM_DEKS = "num_deks";
 
   private final Map<String, TenantMetrics> tenantMetrics = new ConcurrentHashMap<>();
 
@@ -44,23 +47,34 @@ public class MetricsManager implements Closeable {
     schemaRegistry.properties().put(KEY, this);
   }
 
-  public long getExporterCount(String tenant) {
+  public long getKeyCount(String tenant, KeyType keyType) {
     TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
-    return tenantMetrics.getSensor(MetricDescriptor.NUM_EXPORTERS_MD, null, null).get();
+    return tenantMetrics.getSensor(getMetricDescriptor(keyType), null, null).get();
   }
 
-  public void incrementExporterCount(String tenant) {
+  public void incrementKeyCount(String tenant, KeyType keyType) {
     TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
-    tenantMetrics.getSensor(MetricDescriptor.NUM_EXPORTERS_MD, null, null).add(1);
+    tenantMetrics.getSensor(getMetricDescriptor(keyType), null, null).add(1);
   }
 
-  public void decrementExporterCount(String tenant) {
+  public void decrementKeyCount(String tenant, KeyType keyType) {
     TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
-    tenantMetrics.getSensor(MetricDescriptor.NUM_EXPORTERS_MD, null, null).add(-1);
+    tenantMetrics.getSensor(getMetricDescriptor(keyType), null, null).add(-1);
   }
 
   private TenantMetrics getOrCreateTenantMetrics(String tenant) {
     return tenantMetrics.computeIfAbsent(tenant, TenantMetrics::new);
+  }
+
+  private MetricDescriptor getMetricDescriptor(KeyType keyType) {
+    switch (keyType) {
+      case KEK:
+        return MetricDescriptor.NUM_KEKS_MD;
+      case DEK:
+        return MetricDescriptor.NUM_DEKS_MD;
+      default:
+        throw new IllegalArgumentException();
+    }
   }
 
   @Override
@@ -124,8 +138,10 @@ public class MetricsManager implements Closeable {
   }
 
   private enum MetricDescriptor {
-    NUM_EXPORTERS_MD(NUM_EXPORTERS, METRIC_GROUP,
-        "Number of exporters");
+    NUM_KEKS_MD(NUM_KEKS, METRIC_GROUP,
+        "Number of keks"),
+    NUM_DEKS_MD(NUM_DEKS, METRIC_GROUP,
+        "Number of deks");
 
     public final String metricName;
     public final String group;

@@ -29,8 +29,8 @@ import java.util.stream.Collectors;
 
 public class MockDekRegistryClient implements DekRegistryClient {
 
-  private Map<KekId, KekInfo> keks;
-  private Map<DekId, DekInfo> deks;
+  private final Map<KekId, KekInfo> keks;
+  private final Map<DekId, DekInfo> deks;
 
   public MockDekRegistryClient() {
     keks = new ConcurrentHashMap<>();
@@ -295,7 +295,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
 
   static class DekInfo extends Dek {
 
-    private boolean deleted;
+    private final boolean deleted;
 
     public DekInfo(String kekName, String scope, DekFormat algorithm,
         String encryptedKeyMaterial, String keyMaterial, boolean deleted) {

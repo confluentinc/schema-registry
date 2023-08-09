@@ -5,6 +5,7 @@
 package io.confluent.dekregistry.web.rest.resources;
 
 
+import com.google.common.base.CharMatcher;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.Dek;
@@ -99,6 +100,9 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @PathParam("name") String name,
       @Parameter(description = "Whether to include deleted keys")
       @QueryParam("deleted") boolean lookupDeleted) {
+
+    checkName(name);
+
     KeyEncryptionKey key = dekRegistry.getKek(name, lookupDeleted);
     if (key == null) {
       throw DekRegistryErrors.keyNotFoundException(name);
@@ -117,6 +121,9 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @PathParam("name") String name,
       @Parameter(description = "Whether to include deleted keys")
       @QueryParam("deleted") boolean lookupDeleted) {
+
+    checkName(name);
+
     KeyEncryptionKey key = dekRegistry.getKek(name, lookupDeleted);
     if (key == null) {
       throw DekRegistryErrors.keyNotFoundException(name);
@@ -142,6 +149,10 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @QueryParam("algorithm") DekFormat algorithm,
       @Parameter(description = "Whether to include deleted keys")
       @QueryParam("deleted") boolean lookupDeleted) {
+
+    checkName(name);
+    checkScope(scope);
+
     try {
       KeyEncryptionKey kek = dekRegistry.getKek(name, lookupDeleted);
       if (kek == null) {
@@ -151,7 +162,6 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (key == null) {
         throw DekRegistryErrors.keyNotFoundException(scope);
       }
-      // TODO keyMaterial
       return new Dek(key.getKekName(), key.getScope(), key.getAlgorithm(),
           key.getEncryptedKeyMaterial(), key.getKeyMaterial());
     } catch (SchemaRegistryException e) {
@@ -175,11 +185,9 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     log.debug("Creating kek {}", request.getName());
 
-    // TODO name validation
+    checkName(request.getName());
 
-    if (request.getName() == null || request.getName().isEmpty()) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo("name");
-    } else if (request.getKmsKeyId() == null || request.getKmsKeyId().isEmpty()) {
+    if (request.getKmsKeyId() == null || request.getKmsKeyId().isEmpty()) {
       throw DekRegistryErrors.invalidOrMissingKeyInfo("kmsKeyId");
     } else if (request.getKmsType() == null) {
       throw DekRegistryErrors.invalidOrMissingKeyInfo("kmsType");
@@ -220,11 +228,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     log.debug("Creating dek {} for kek {}", request.getScope(), name);
 
-    if (name == null || name.isEmpty()) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo("kekName");
-    } else if (request.getScope() == null || request.getScope().isEmpty()) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo("scope");
-    }
+    checkName(name);
+    checkScope(request.getScope());
 
     KeyEncryptionKey kek = dekRegistry.getKek(name, false);
     if (kek == null) {
@@ -267,6 +272,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     log.debug("Updating kek {}", name);
 
+    checkName(name);
+
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, getSchemaRegistry().config().whitelistHeaders());
 
@@ -300,6 +307,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @QueryParam("permanent") boolean permanentDelete) {
 
     log.debug("Deleting kek {}", name);
+
+    checkName(name);
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, getSchemaRegistry().config().whitelistHeaders());
@@ -338,6 +347,9 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     log.debug("Deleting dek {} for kek {}", scope, name);
 
+    checkName(name);
+    checkScope(scope);
+
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, getSchemaRegistry().config().whitelistHeaders());
 
@@ -348,6 +360,28 @@ public class DekRegistryResource extends SchemaRegistryResource {
       throw DekRegistryErrors.keyNotSoftDeletedException(e.getName());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting key", e);
+    }
+  }
+
+  private static void checkName(String name) {
+    if (name == null || name.length() == 0) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo("name");
+    }
+    char first = name.charAt(0);
+    if (!(Character.isLetter(first) || first == '_')) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo("name");
+    }
+    for (int i = 1; i < name.length(); i++) {
+      char c = name.charAt(i);
+      if (!(Character.isLetterOrDigit(c) || c == '_')) {
+        throw DekRegistryErrors.invalidOrMissingKeyInfo("name");
+      }
+    }
+  }
+
+  private static void checkScope(String scope) {
+    if (scope == null || CharMatcher.javaIsoControl().matchesAnyOf(scope)) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo("scope");
     }
   }
 }

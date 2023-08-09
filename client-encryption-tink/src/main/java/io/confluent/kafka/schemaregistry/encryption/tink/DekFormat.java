@@ -9,7 +9,7 @@ public enum DekFormat {
   AES256_GCM(false),
   AES256_SIV(true);
 
-  private boolean isDeterministic;
+  private final boolean isDeterministic;
 
   DekFormat(boolean isDeterministic) {
     this.isDeterministic = isDeterministic;

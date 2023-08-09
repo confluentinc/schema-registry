@@ -97,7 +97,7 @@ public class DekRegistry implements Closeable {
   private final DekRegistryConfig config;
   // visible for testing
   final Cache<EncryptionKeyId, EncryptionKey> keys;
-  private Map<DekFormat, Cryptor> cryptors;
+  private final Map<DekFormat, Cryptor> cryptors;
   private final Map<String, Lock> tenantToLock = new ConcurrentHashMap<>();
   private final AtomicBoolean initialized = new AtomicBoolean();
   private final CountDownLatch initLatch = new CountDownLatch(1);
@@ -109,11 +109,10 @@ public class DekRegistry implements Closeable {
   ) {
     try {
       this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
-      // TODO metrics
       this.metricsManager = metricsManager;
       this.config = new DekRegistryConfig(schemaRegistry.config().originalProperties());
       this.keys = createCache(new EncryptionKeyIdSerde(), new EncryptionKeySerde(),
-          config.topic(), null);
+          config.topic(), new DekRegistryCacheUpdateHandler(metricsManager));
       this.cryptors = new ConcurrentHashMap<>();
     } catch (RestConfigException e) {
       throw new IllegalArgumentException("Could not instantiate DekRegistry", e);
@@ -129,7 +128,6 @@ public class DekRegistry implements Closeable {
       Serde<V> valueSerde,
       String topic,
       CacheUpdateHandler<K, V> cacheUpdateHandler) throws CacheInitializationException {
-    // TODO pass cacheUpdateHandler
     Properties props = getKafkaCacheProperties(topic);
     KafkaCacheConfig config = new KafkaCacheConfig(props);
     Cache<K, V> kafkaCache = Caches.concurrentCache(
