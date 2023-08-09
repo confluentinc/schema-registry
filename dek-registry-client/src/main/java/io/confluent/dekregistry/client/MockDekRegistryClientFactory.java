@@ -59,10 +59,10 @@ public final class MockDekRegistryClientFactory {
    *              actual URL.
    * @return A client for the specified scope.
    */
-  public static DekRegistryClient getClientForScope(final String scope) {
+  public static DekRegistryClient getClientForScope(final String scope, Map<String, ?> configs) {
     synchronized (SCOPED_CLIENTS) {
       if (!SCOPED_CLIENTS.containsKey(scope)) {
-        SCOPED_CLIENTS.put(scope, new MockDekRegistryClient());
+        SCOPED_CLIENTS.put(scope, new MockDekRegistryClient(configs));
       }
     }
     return SCOPED_CLIENTS.get(scope);

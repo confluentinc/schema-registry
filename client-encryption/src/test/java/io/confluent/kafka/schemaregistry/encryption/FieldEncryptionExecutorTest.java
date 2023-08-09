@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -39,6 +40,8 @@ import com.google.crypto.tink.aead.AeadConfig;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
+import io.confluent.dekregistry.client.DekRegistryClient;
+import io.confluent.dekregistry.client.DekRegistryClientFactory;
 import io.confluent.dekregistry.client.MockDekRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
@@ -98,6 +101,7 @@ public abstract class FieldEncryptionExecutorTest {
 
   private final FieldEncryptionProperties fieldEncryptionProps;
   private final SchemaRegistryClient schemaRegistry;
+  private final DekRegistryClient dekRegistry;
   private final KafkaAvroSerializer avroSerializer;
   private final KafkaAvroDeserializer avroDeserializer;
   private final KafkaAvroSerializer avroKeySerializer;
@@ -129,6 +133,13 @@ public abstract class FieldEncryptionExecutorTest {
         ImmutableList.of(
             new AvroSchemaProvider(), new ProtobufSchemaProvider(), new JsonSchemaProvider()),
         null,
+        null
+    );
+    dekRegistry = DekRegistryClientFactory.newClient(Collections.singletonList(
+        "mock://"),
+        1000,
+        100000,
+        Collections.singletonMap(TEST_CLIENT, fieldEncryptionProps.getTestClient()),
         null
     );
 
@@ -556,6 +567,32 @@ public abstract class FieldEncryptionExecutorTest {
     verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record2.get("name").toString());
     assertEquals("testUser2", record2.get("name2").toString());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerSharedKek() throws Exception {
+    // Create shared kek
+    dekRegistry.createKek("kek1", fieldEncryptionProps.getKmsType(),
+        fieldEncryptionProps.getKmsKeyId(), fieldEncryptionProps.getKmsProps(), null, true);
+
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
   }
 
   @Test

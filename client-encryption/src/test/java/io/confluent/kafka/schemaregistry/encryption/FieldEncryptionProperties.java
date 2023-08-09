@@ -40,7 +40,7 @@ public abstract class FieldEncryptionProperties {
   public Map<String, Object> getClientProperties(String baseUrls) throws Exception {
     List<String> ruleNames = getRuleNames();
     Map<String, Object> props = getClientPropertiesWithoutKey(baseUrls);
-    // TODO
+    // TODO remove
     // Put local key in rule
     /*
     for (String ruleName : ruleNames) {

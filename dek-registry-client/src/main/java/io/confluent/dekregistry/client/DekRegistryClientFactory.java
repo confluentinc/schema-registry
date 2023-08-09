@@ -29,7 +29,7 @@ public class DekRegistryClientFactory {
       Map<String, String> httpHeaders) {
     String mockScope = MockDekRegistryClientFactory.validateAndMaybeGetMockScope(baseUrls);
     if (mockScope != null) {
-      return MockDekRegistryClientFactory.getClientForScope(mockScope);
+      return MockDekRegistryClientFactory.getClientForScope(mockScope, configs);
     } else {
       return new CachedDekRegistryClient(
           baseUrls,
