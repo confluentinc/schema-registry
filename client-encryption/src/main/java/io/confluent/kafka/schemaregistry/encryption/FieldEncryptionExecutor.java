@@ -355,7 +355,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
             ? (String) toObject(Type.STRING, Base64.getEncoder().encode(dekInfo.getEncryptedDek()))
             : null;
         Dek dek = client.createDek(
-            key.getKekName(), null, null, key.getScope(), key.getDekFormat(), encryptedDekStr);
+            key.getKekName(), key.getScope(), key.getDekFormat(), encryptedDekStr);
         byte[] rawDek = dek.getKeyMaterial() != null
             ? Base64.getDecoder().decode(toBytes(Type.STRING, dek.getKeyMaterial()))
             : null;

@@ -81,11 +81,13 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
         .build();
   }
 
+  @Override
   public List<String> listKeks(boolean lookupDeleted)
       throws IOException, RestClientException {
     return restService.listKeks(lookupDeleted);
   }
 
+  @Override
   public Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException {
     try {
@@ -100,16 +102,19 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     }
   }
 
+  @Override
   public List<String> listDeks(String kekName, boolean lookupDeleted)
       throws IOException, RestClientException {
     return restService.listDeks(kekName, lookupDeleted);
   }
 
+  @Override
   public Dek getDek(String name, String scope, boolean lookupDeleted)
       throws IOException, RestClientException {
     return getDek(name, scope, null, lookupDeleted);
   }
 
+  @Override
   public Dek getDek(String name, String scope, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     try {
@@ -125,6 +130,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     }
   }
 
+  @Override
   public Kek createKek(
       String name,
       String kmsType,
@@ -145,17 +151,14 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     return kek;
   }
 
+  @Override
   public Dek createDek(
       String kekName,
-      String kmsType,
-      String kmsKeyId,
       String scope,
       DekFormat algorithm,
       String encryptedKeyMaterial)
       throws IOException, RestClientException {
     CreateDekRequest request = new CreateDekRequest();
-    request.setKmsType(kmsType);
-    request.setKmsKeyid(kmsKeyId);
     request.setScope(scope);
     request.setAlgorithm(algorithm);
     request.setEncryptedKeyMaterial(encryptedKeyMaterial);
@@ -164,6 +167,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     return dek;
   }
 
+  @Override
   public Kek updateKek(
       String name,
       Map<String, String> kmsProps,
@@ -179,17 +183,20 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     return kek;
   }
 
+  @Override
   public void deleteKek(String name, boolean permanentDelete)
       throws IOException, RestClientException {
     restService.deleteKek(name, permanentDelete);
     kekCache.invalidate(new KekId(name));
   }
 
+  @Override
   public void deleteDek(String name, String scope, boolean permanentDelete)
       throws IOException, RestClientException {
     deleteDek(name, scope, null, permanentDelete);
   }
 
+  @Override
   public void deleteDek(String name, String scope, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException {
     restService.deleteDek(name, scope, algorithm, permanentDelete);

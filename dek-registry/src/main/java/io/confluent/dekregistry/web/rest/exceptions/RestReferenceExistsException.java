@@ -24,7 +24,7 @@ public class RestReferenceExistsException extends RestConstraintViolationExcepti
 
   public static final int ERROR_CODE = DekRegistryErrors.REFERENCE_EXISTS_ERROR_CODE;
   public static final String REFERENCE_EXISTS_MESSAGE_FORMAT = "One or more references exist "
-      + "to the key %s.";
+      + "to the key %s";
 
   public RestReferenceExistsException(String name) {
     super(String.format(REFERENCE_EXISTS_MESSAGE_FORMAT, name), ERROR_CODE);

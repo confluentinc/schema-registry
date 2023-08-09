@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.encryption.local;
+package io.confluent.dekregistry.testutil;
 
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeyManager;
@@ -40,23 +40,20 @@ import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
- * An implementation of local {@link KmsClient} for testing.
+ * An implementation of {@link KmsClient} for testing.
  */
-public final class LocalKmsClient implements KmsClient {
+public final class TestKmsClient implements KmsClient {
 
-  /**
-   * The prefix of all keys stored in Local KMS.
-   */
-  public static final String PREFIX = "local-kms://";
+  public static final String PREFIX = "test-kms://";
 
   @Nullable
   private String keyUri;
   private Aead aead;
 
-  private LocalKmsClient() {
+  private TestKmsClient() {
   }
 
-  private LocalKmsClient(String uri, String secret, List<String> oldSecrets)
+  private TestKmsClient(String uri, String secret)
       throws GeneralSecurityException {
     if (!uri.toLowerCase(Locale.US).startsWith(PREFIX)) {
       throw new IllegalArgumentException("key URI must start with " + PREFIX);
@@ -67,9 +64,6 @@ public final class LocalKmsClient implements KmsClient {
         "type.googleapis.com/google.crypto.tink.AesGcmKey", Aead.class);
     PrimitiveSet.Builder<Aead> builder = PrimitiveSet.newBuilder(Aead.class);
     builder.addPrimaryPrimitive(getPrimitive(keyManager, secret), getKey(secret));
-    for (String oldSecret : oldSecrets) {
-      builder.addPrimitive(getPrimitive(keyManager, oldSecret), getKey(oldSecret));
-    }
     this.aead = Registry.wrap(builder.build());
   }
 
@@ -104,7 +98,7 @@ public final class LocalKmsClient implements KmsClient {
 
   /**
    * @return true either if this client is a generic one and uri starts with
-   *     {@link LocalKmsClient#PREFIX}, or the client is a specific one that is bound to the key
+   *     {@link TestKmsClient#PREFIX}, or the client is a specific one that is bound to the key
    *     identified by {@code uri}.
    */
   @Override
@@ -149,15 +143,15 @@ public final class LocalKmsClient implements KmsClient {
   }
 
   /**
-   * Creates and registers a {@link #LocalKmsClient} with the Tink runtime.
+   * Creates and registers a {@link #TestKmsClient} with the Tink runtime.
    *
    * <p>If {@code keyUri} is present, it is the only key that the new client will support.
    * Otherwise
    * the new client supports all local KMS keys.
    */
-  public static KmsClient register(Optional<String> keyUri, String secret, List<String> oldSecrets)
+  public static KmsClient register(Optional<String> keyUri, String secret)
       throws GeneralSecurityException {
-    KmsClient client = new LocalKmsClient(keyUri.orElse(PREFIX), secret, oldSecrets);
+    KmsClient client = new TestKmsClient(keyUri.orElse(PREFIX), secret);
     KmsClients.add(client);
     return client;
   }

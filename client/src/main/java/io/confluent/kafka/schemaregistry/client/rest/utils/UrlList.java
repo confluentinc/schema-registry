@@ -48,6 +48,10 @@ public class UrlList {
     this(Arrays.asList(url));
   }
 
+  public List<String> urls() {
+    return urls;
+  }
+
   /**
    * Get the current url
    *

@@ -22,7 +22,7 @@ public class DekRegistryErrors {
 
   // HTTP 404
   public static final String KEY_NOT_FOUND_MESSAGE_FORMAT =
-      "Key '%s' not found.";
+      "Key '%s' not found";
   public static final int KEY_NOT_FOUND_ERROR_CODE = 40470;
 
   public static final String KEY_NOT_SOFT_DELETED_MESSAGE_FORMAT = "Key '%s' was not deleted "
@@ -31,11 +31,11 @@ public class DekRegistryErrors {
 
   // HTTP 409
   public static final String ALREADY_EXISTS_MESSAGE_FORMAT =
-      "Key '%s' already exists.";
+      "Key '%s' already exists";
   public static final int ALREADY_EXISTS_ERROR_CODE = 40971;
 
   public static final String TOO_MANY_KEYS_MESSAGE_FORMAT =
-      "A maximum of %d keys already exist.";
+      "A maximum of %d keys already exist";
   public static final int TOO_MANY_KEYS_ERROR_CODE = 40972;
 
   // HTTP 422

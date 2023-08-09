@@ -25,6 +25,9 @@ import java.util.Optional;
 
 public interface KmsDriver {
 
+  String KMS_TYPE_SUFFIX = "://";
+  String TEST_CLIENT = "test.client";
+
   String getKeyUrlPrefix();
 
   /**
@@ -40,8 +43,6 @@ public interface KmsDriver {
 
   KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException;
-
-  String TEST_CLIENT = "test.client";
 
   default Object getTestClient(Map<String, ?> configs) {
     return configs.get(TEST_CLIENT);

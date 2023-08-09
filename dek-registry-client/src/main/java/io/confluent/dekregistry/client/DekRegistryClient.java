@@ -53,8 +53,6 @@ public interface DekRegistryClient extends Closeable {
 
   Dek createDek(
       String kekName,
-      String kmsType,
-      String kmsKeyId,
       String scope,
       DekFormat algorithm,
       String encryptedKeyMaterial)

@@ -41,7 +41,6 @@ import java.util.stream.Collectors;
 public class MockDekRegistryClient implements DekRegistryClient {
 
   public static final byte[] EMPTY_AAD = new byte[0];
-  public static final String KMS_TYPE_SUFFIX = "://";
 
   private final Map<String, ?> configs;
   private final Map<KekId, KekInfo> keks;
@@ -65,6 +64,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     });
   }
 
+  @Override
   public List<String> listKeks(boolean lookupDeleted)
       throws IOException, RestClientException {
     return keks.entrySet().stream()
@@ -73,6 +73,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
         .collect(Collectors.toList());
   }
 
+  @Override
   public Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException {
     KekId keyId = new KekId(name);
@@ -84,6 +85,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     }
   }
 
+  @Override
   public List<String> listDeks(String kekName, boolean lookupDeleted)
       throws IOException, RestClientException {
     return deks.entrySet().stream()
@@ -92,11 +94,13 @@ public class MockDekRegistryClient implements DekRegistryClient {
         .collect(Collectors.toList());
   }
 
+  @Override
   public Dek getDek(String name, String scope, boolean lookupDeleted)
       throws IOException, RestClientException {
     return getDek(name, scope, null, lookupDeleted);
   }
 
+  @Override
   public Dek getDek(String name, String scope, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     if (algorithm == null) {
@@ -112,6 +116,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     }
   }
 
+  @Override
   public Kek createKek(
       String name,
       String kmsType,
@@ -129,10 +134,9 @@ public class MockDekRegistryClient implements DekRegistryClient {
     return key;
   }
 
+  @Override
   public Dek createDek(
       String kekName,
-      String kmsType,
-      String kmsKeyId,
       String scope,
       DekFormat algorithm,
       String encryptedKeyMaterial)
@@ -153,7 +157,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     try {
       if (key.getEncryptedKeyMaterial() == null) {
         Kek kek = getKek(key.getKekName(), true);
-        Aead aead = getAead(configs, kek);
+        Aead aead = kek.toAead(configs);
         // Generate new dek
         byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
         byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
@@ -174,7 +178,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
       Kek kek = getKek(key.getKekName(), true);
       if (kek.isShared()) {
         // Decrypt dek
-        Aead aead = getAead(configs, kek);
+        Aead aead = kek.toAead(configs);
         byte[] encryptedDek = Base64.getDecoder().decode(
             key.getEncryptedKeyMaterial().getBytes(StandardCharsets.UTF_8));
         byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
@@ -190,29 +194,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     }
   }
 
-  protected static Aead getAead(Map<String, ?> configs, Kek kek)
-      throws GeneralSecurityException {
-    String kekUrl = kek.getKmsType() + KMS_TYPE_SUFFIX + kek.getKmsKeyId();
-    Map<String, Object> props = new HashMap<>(kek.getKmsProps());
-    if (configs.containsKey(TEST_CLIENT)) {
-      props.put(TEST_CLIENT, configs.get(TEST_CLIENT));
-    }
-    KmsClient kmsClient = getKmsClient(props, kekUrl);
-    if (kmsClient == null) {
-      throw new GeneralSecurityException("No kms client found for " + kekUrl);
-    }
-    return kmsClient.getAead(kekUrl);
-  }
-
-  protected static KmsClient getKmsClient(Map<String, ?> configs, String kekUrl)
-      throws GeneralSecurityException {
-    try {
-      return KmsDriverManager.getDriver(kekUrl).getKmsClient(kekUrl);
-    } catch (GeneralSecurityException e) {
-      return KmsDriverManager.getDriver(kekUrl).registerKmsClient(configs, Optional.of(kekUrl));
-    }
-  }
-
+  @Override
   public Kek updateKek(
       String name,
       Map<String, String> kmsProps,
@@ -239,6 +221,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     return key;
   }
 
+  @Override
   public void deleteKek(String name, boolean permanentDelete)
       throws IOException, RestClientException {
     KekId keyId = new KekId(name);
@@ -255,12 +238,14 @@ public class MockDekRegistryClient implements DekRegistryClient {
     }
   }
 
+  @Override
   public void deleteDek(String name, String scope, boolean permanentDelete)
       throws IOException, RestClientException {
     deleteDek(name, scope, null, permanentDelete);
 
   }
 
+  @Override
   public void deleteDek(String name, String scope, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException {
     if (algorithm == null) {

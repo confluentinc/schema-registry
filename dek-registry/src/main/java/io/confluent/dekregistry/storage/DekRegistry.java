@@ -90,7 +90,6 @@ public class DekRegistry implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(DekRegistry.class);
 
   public static final byte[] EMPTY_AAD = new byte[0];
-  public static final String KMS_TYPE_SUFFIX = "://";
   public static final String X_FORWARD_HEADER = DekRegistryRestService.X_FORWARD_HEADER;
 
   private static final TypeReference<KeyEncryptionKey> KEY_ENCRYPTION_KEY_TYPE =
@@ -459,7 +458,7 @@ public class DekRegistry implements Closeable {
     try {
       if (key.getEncryptedKeyMaterial() == null) {
         KeyEncryptionKey kek = getKek(key.getKekName(), true);
-        Aead aead = getAead(config.originals(), kek);
+        Aead aead = kek.toAead(config.originals());
         // Generate new dek
         byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
         byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
@@ -480,7 +479,7 @@ public class DekRegistry implements Closeable {
       KeyEncryptionKey kek = getKek(key.getKekName(), true);
       if (kek.isShared()) {
         // Decrypt dek
-        Aead aead = getAead(config.originals(), kek);
+        Aead aead = kek.toAead(config.originals());
         byte[] encryptedDek = Base64.getDecoder().decode(
             key.getEncryptedKeyMaterial().getBytes(StandardCharsets.UTF_8));
         byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
@@ -494,29 +493,6 @@ public class DekRegistry implements Closeable {
       return key;
     } catch (GeneralSecurityException e) {
       throw new SchemaRegistryException(e);
-    }
-  }
-
-  protected static Aead getAead(Map<String, ?> configs, KeyEncryptionKey kek)
-      throws GeneralSecurityException {
-    String kekUrl = kek.getKmsType() + KMS_TYPE_SUFFIX + kek.getKmsKeyId();
-    Map<String, Object> props = new HashMap<>(kek.getKmsProps());
-    if (configs.containsKey(TEST_CLIENT)) {
-      props.put(TEST_CLIENT, configs.get(TEST_CLIENT));
-    }
-    KmsClient kmsClient = getKmsClient(props, kekUrl);
-    if (kmsClient == null) {
-      throw new GeneralSecurityException("No kms client found for " + kekUrl);
-    }
-    return kmsClient.getAead(kekUrl);
-  }
-
-  protected static KmsClient getKmsClient(Map<String, ?> configs, String kekUrl)
-      throws GeneralSecurityException {
-    try {
-      return KmsDriverManager.getDriver(kekUrl).getKmsClient(kekUrl);
-    } catch (GeneralSecurityException e) {
-      return KmsDriverManager.getDriver(kekUrl).registerKmsClient(configs, Optional.of(kekUrl));
     }
   }
 
@@ -634,7 +610,7 @@ public class DekRegistry implements Closeable {
     keys.sync();
 
     String tenant = schemaRegistry.tenant();
-    if (!getDeks(tenant, name).isEmpty()) {
+    if (getDeks(tenant, name).stream().anyMatch(dek -> permanentDelete || !dek.value.isDeleted())) {
       throw new KeyReferenceExistsException(name);
     }
     EncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, name);

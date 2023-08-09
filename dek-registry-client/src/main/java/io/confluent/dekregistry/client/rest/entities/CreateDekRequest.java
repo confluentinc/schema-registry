@@ -29,34 +29,12 @@ import java.util.Objects;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CreateDekRequest {
 
-  private String kmsType;
-  private String kmsKeyId;
   private String scope;
   private DekFormat algorithm;
   private String encryptedKeyMaterial;
 
   public static CreateDekRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, CreateDekRequest.class);
-  }
-
-  @JsonProperty("kmsType")
-  public String getKmsType() {
-    return this.kmsType;
-  }
-
-  @JsonProperty("kmsType")
-  public void setKmsType(String kmsType) {
-    this.kmsType = kmsType;
-  }
-
-  @JsonProperty("kmsKeyId")
-  public String getKmsKeyId() {
-    return this.kmsKeyId;
-  }
-
-  @JsonProperty("kmsKeyid")
-  public void setKmsKeyid(String kmsKeyId) {
-    this.kmsKeyId = kmsKeyId;
   }
 
   @JsonProperty("scope")
@@ -98,16 +76,14 @@ public class CreateDekRequest {
       return false;
     }
     CreateDekRequest dek = (CreateDekRequest) o;
-    return Objects.equals(kmsType, dek.kmsType)
-        && Objects.equals(kmsKeyId, dek.kmsKeyId)
-        && Objects.equals(scope, dek.scope)
+    return Objects.equals(scope, dek.scope)
         && Objects.equals(algorithm, dek.algorithm)
         && Objects.equals(encryptedKeyMaterial, dek.encryptedKeyMaterial);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(kmsType, kmsKeyId, scope, algorithm, encryptedKeyMaterial);
+    return Objects.hash(scope, algorithm, encryptedKeyMaterial);
   }
 
   @Override
