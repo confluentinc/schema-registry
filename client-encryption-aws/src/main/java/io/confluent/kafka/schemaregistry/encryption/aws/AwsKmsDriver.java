@@ -65,8 +65,11 @@ public class AwsKmsDriver implements KmsDriver {
   @Override
   public KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
-    return registerWithAwsKms(kekUrl, Optional.of(getCredentials(configs)),
-        (AWSKMS) getTestClient(configs));
+    AWSKMS testClient = (AWSKMS) getTestClient(configs);
+    Optional<AWSCredentialsProvider> creds = testClient != null
+        ? Optional.empty()
+        : Optional.of(getCredentials(configs));
+    return registerWithAwsKms(kekUrl, creds, testClient);
   }
 
   public static KmsClient registerWithAwsKms(

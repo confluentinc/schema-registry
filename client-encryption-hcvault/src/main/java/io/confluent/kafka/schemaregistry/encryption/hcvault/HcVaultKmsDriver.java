@@ -43,8 +43,11 @@ public class HcVaultKmsDriver implements KmsDriver {
   @Override
   public KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
-    return registerWithHcVaultKms(kekUrl, Optional.ofNullable(getToken(configs)),
-        (Vault) getTestClient(configs));
+    Vault testClient = (Vault) getTestClient(configs);
+    Optional<String> creds = testClient != null
+        ? Optional.empty()
+        : Optional.ofNullable(getToken(configs));
+    return registerWithHcVaultKms(kekUrl, creds, testClient);
   }
 
   public static KmsClient registerWithHcVaultKms(

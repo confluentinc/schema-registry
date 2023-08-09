@@ -59,8 +59,11 @@ public class AzureKmsDriver implements KmsDriver {
   @Override
   public KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
-    return registerWithAzureKms(kekUrl, Optional.of(getCredentials(configs)),
-        (CryptographyClient) getTestClient(configs));
+    CryptographyClient testClient = (CryptographyClient) getTestClient(configs);
+    Optional<TokenCredential> creds = testClient != null
+        ? Optional.empty()
+        : Optional.of(getCredentials(configs));
+    return registerWithAzureKms(kekUrl, creds, testClient);
   }
 
   public static KmsClient registerWithAzureKms(

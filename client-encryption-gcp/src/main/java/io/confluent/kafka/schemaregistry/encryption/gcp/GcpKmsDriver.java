@@ -75,8 +75,11 @@ public class GcpKmsDriver implements KmsDriver {
   @Override
   public KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
-    return registerWithCloudKms(kekUrl, Optional.ofNullable(getCredentials(configs)),
-        (CloudKMS) getTestClient(configs));
+    CloudKMS testClient = (CloudKMS) getTestClient(configs);
+    Optional<GoogleCredentials> creds = testClient != null
+        ? Optional.empty()
+        : Optional.ofNullable(getCredentials(configs));
+    return registerWithCloudKms(kekUrl, creds, testClient);
   }
 
   public static KmsClient registerWithCloudKms(
