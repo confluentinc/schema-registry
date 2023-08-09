@@ -237,14 +237,14 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
         if (kek == null) {
           throw new RuleException("No kek found for " + kekName + " during produce");
         }
-        if (!kmsType.equals(kek.getKmsType())) {
-          throw new RuleException("Found " + kekName + " with different kms type: "
-              + kek.getKmsType());
-        }
-        if (!kmsKeyId.equals(kek.getKmsKeyId())) {
-          throw new RuleException("Found " + kekName + " with different kms key id: "
-              + kek.getKmsKeyId());
-        }
+      }
+      if (kmsType != null && !kmsType.equals(kek.getKmsType())) {
+        throw new RuleException("Found " + kekName + " with different kms type: "
+            + kek.getKmsType());
+      }
+      if (kmsKeyId != null && !kmsKeyId.equals(kek.getKmsKeyId())) {
+        throw new RuleException("Found " + kekName + " with different kms key id: "
+            + kek.getKmsKeyId());
       }
       return kek;
     }

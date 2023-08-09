@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.encryption;
 
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -570,7 +569,35 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
-  public void testKafkaAvroSerializerSharedKek() throws Exception {
+  public void testKafkaAvroSerializerExistingKek() throws Exception {
+    // Create shared kek
+    dekRegistry.createKek("kek1", fieldEncryptionProps.getKmsType(),
+        fieldEncryptionProps.getKmsKeyId(), fieldEncryptionProps.getKmsProps(), null, false);
+
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Map<String, String> properties = new HashMap<>();
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KEK_NAME, "kek1");
+    Metadata metadata = getMetadata(properties);
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerExistingSharedKek() throws Exception {
     // Create shared kek
     dekRegistry.createKek("kek1", fieldEncryptionProps.getKmsType(),
         fieldEncryptionProps.getKmsKeyId(), fieldEncryptionProps.getKmsProps(), null, true);
@@ -593,6 +620,60 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWrongKmsType() throws Exception {
+    // Create shared kek
+    dekRegistry.createKek("kek1", fieldEncryptionProps.getKmsType(),
+        fieldEncryptionProps.getKmsKeyId(), fieldEncryptionProps.getKmsProps(), null, false);
+
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Map<String, String> properties = new HashMap<>();
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KEK_NAME, "kek1");
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KMS_TYPE, "wrong");
+    Metadata metadata = getMetadata(properties);
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    try {
+      avroSerializer.serialize(topic, headers, avroRecord);
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof SerializationException);
+    }
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWrongKmsKeyId() throws Exception {
+    // Create shared kek
+    dekRegistry.createKek("kek1", fieldEncryptionProps.getKmsType(),
+        fieldEncryptionProps.getKmsKeyId(), fieldEncryptionProps.getKmsProps(), null, false);
+
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Map<String, String> properties = new HashMap<>();
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KEK_NAME, "kek1");
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KMS_KEY_ID, "wrong");
+    Metadata metadata = getMetadata(properties);
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    try {
+      avroSerializer.serialize(topic, headers, avroRecord);
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof SerializationException);
+    }
   }
 
   @Test
