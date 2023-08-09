@@ -6,7 +6,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks:
     get:
       summary: Get a list of dek scopes.
-      operationId: getDekScopes_1
+      operationId: getDekScopes
       parameters:
       - name: name
         in: path
@@ -40,7 +40,7 @@ paths:
                   type: string
     post:
       summary: Create a dek.
-      operationId: createDek_1
+      operationId: createDek
       parameters:
       - name: name
         in: path
@@ -80,7 +80,7 @@ paths:
   /dek-registry/v1/keks:
     get:
       summary: Get a list of kek names.
-      operationId: getKekNames_1
+      operationId: getKekNames
       parameters:
       - name: deleted
         in: query
@@ -108,7 +108,7 @@ paths:
                   type: string
     post:
       summary: Create a kek.
-      operationId: createKek_1
+      operationId: createKek
       requestBody:
         description: The create request
         content:
@@ -141,7 +141,7 @@ paths:
   /dek-registry/v1/keks/{name}:
     get:
       summary: Get a kek by name.
-      operationId: getKek_1
+      operationId: getKek
       parameters:
       - name: name
         in: path
@@ -171,7 +171,7 @@ paths:
           description: Error code 40450 -- Key not found
     put:
       summary: Alters a kek.
-      operationId: putKek_1
+      operationId: putKek
       parameters:
       - name: name
         in: path
@@ -212,7 +212,7 @@ paths:
           description: Error code 40450 -- Key not found
     delete:
       summary: Delete a kek.
-      operationId: deleteKek_1
+      operationId: deleteKek
       parameters:
       - name: name
         in: path
@@ -233,7 +233,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks/{scope}:
     get:
       summary: Get a dek by scope.
-      operationId: getDek_1
+      operationId: getDek
       parameters:
       - name: name
         in: path
@@ -278,7 +278,7 @@ paths:
           description: Error code 40450 -- Key not found
     delete:
       summary: Delete a dek.
-      operationId: deleteDek_1
+      operationId: deleteDek
       parameters:
       - name: name
         in: path

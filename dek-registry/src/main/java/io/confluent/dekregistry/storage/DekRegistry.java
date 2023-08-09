@@ -371,8 +371,7 @@ public class DekRegistry implements Closeable {
     keys.sync();
 
     String tenant = schemaRegistry.tenant();
-    List<KeyValue<EncryptionKeyId, EncryptionKey>> encryptionKeys = getKeks(tenant);
-    if (encryptionKeys.size() >= config.maxKeys()) {
+    if (metricsManager.getKeyCount(tenant, KeyType.KEK) > config.maxKeys()) {
       throw new TooManyKeysException(KeyType.KEK.name());
     }
     KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, request.getName());
@@ -435,8 +434,7 @@ public class DekRegistry implements Closeable {
     keys.sync();
 
     String tenant = schemaRegistry.tenant();
-    List<KeyValue<EncryptionKeyId, EncryptionKey>> encryptionKeys = getDeks(tenant);
-    if (encryptionKeys.size() >= config.maxKeys()) {
+    if (metricsManager.getKeyCount(tenant, KeyType.DEK) > config.maxKeys()) {
       throw new TooManyKeysException(KeyType.DEK.name());
     }
     DekFormat algorithm = request.getAlgorithm() != null

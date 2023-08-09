@@ -91,12 +91,13 @@ public class GcpKmsDriver implements KmsDriver {
     } else {
       client = new GcpKmsClient();
     }
-    if (credentials.isPresent()) {
-      client.withCredentials(credentials.get());
+    if (cloudKms == null) {
+      if (credentials.isPresent()) {
+        client.withCredentials(credentials.get());
+      } else {
+        client.withDefaultCredentials();
+      }
     } else {
-      client.withDefaultCredentials();
-    }
-    if (cloudKms != null) {
       setCloudKms(client, cloudKms);
     }
     KmsClients.add(client);
