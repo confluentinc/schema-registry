@@ -110,25 +110,6 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     this.cryptors = new ConcurrentHashMap<>();
   }
 
-  private static Aead getAead(Map<String, ?> configs, KekInfo kek)
-      throws GeneralSecurityException, RuleException {
-    String kekUrl = kek.getKmsType() + KMS_TYPE_SUFFIX + kek.getKmsKeyId();
-    KmsClient kmsClient = getKmsClient(configs, kekUrl);
-    if (kmsClient == null) {
-      throw new RuleException("No tink client found for " + kekUrl);
-    }
-    return kmsClient.getAead(kekUrl);
-  }
-
-  private static KmsClient getKmsClient(Map<String, ?> configs, String kekUrl)
-      throws GeneralSecurityException {
-    try {
-      return KmsDriverManager.getDriver(kekUrl).getKmsClient(kekUrl);
-    } catch (GeneralSecurityException e) {
-      return KmsDriverManager.getDriver(kekUrl).registerKmsClient(configs, Optional.of(kekUrl));
-    }
-  }
-
   @Override
   public String type() {
     return TYPE;
@@ -414,6 +395,25 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     }
 
     public void close() {
+    }
+  }
+
+  private static Aead getAead(Map<String, ?> configs, KekInfo kek)
+      throws GeneralSecurityException, RuleException {
+    String kekUrl = kek.getKmsType() + KMS_TYPE_SUFFIX + kek.getKmsKeyId();
+    KmsClient kmsClient = getKmsClient(configs, kekUrl);
+    if (kmsClient == null) {
+      throw new RuleException("No tink client found for " + kekUrl);
+    }
+    return kmsClient.getAead(kekUrl);
+  }
+
+  private static KmsClient getKmsClient(Map<String, ?> configs, String kekUrl)
+      throws GeneralSecurityException {
+    try {
+      return KmsDriverManager.getDriver(kekUrl).getKmsClient(kekUrl);
+    } catch (GeneralSecurityException e) {
+      return KmsDriverManager.getDriver(kekUrl).registerKmsClient(configs, Optional.of(kekUrl));
     }
   }
 
