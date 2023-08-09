@@ -37,7 +37,7 @@ public class AwsFieldEncryptionProperties extends FieldEncryptionProperties {
 
   @Override
   public String getKmsKeyId() {
-    return "arn:aws:tink:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab";
+    return "arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab";
   }
 
   @Override

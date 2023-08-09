@@ -62,8 +62,8 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   public static final String TYPE = "ENCRYPT";
 
   public static final String ENCRYPT_KEK_NAME = "encrypt.kek.name";
-  public static final String ENCRYPT_KMS_KEY_ID = "encrypt.tink.key.id";
-  public static final String ENCRYPT_KMS_TYPE = "encrypt.tink.type";
+  public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
+  public static final String ENCRYPT_KMS_TYPE = "encrypt.kms.type";
   public static final String ENCRYPT_DEK_SCOPE = "encrypt.dek.scope";
   public static final String ENCRYPT_DEK_ALGORITHM = "encrypt.dek.algorithm";
 
@@ -223,10 +223,10 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
           throw new RuleException("No kek found for " + kekName + " during consume");
         }
         if (kmsType == null) {
-          throw new RuleException("No tink type found for " + kekName + " during produce");
+          throw new RuleException("No kms type found for " + kekName + " during produce");
         }
         if (kmsKeyId == null) {
-          throw new RuleException("No tink key id found for " + kekName + " during produce");
+          throw new RuleException("No kms key id found for " + kekName + " during produce");
         }
         kek = new KekInfo(kmsType, kmsKeyId, false);
         kek = storeKekToRegistry(ctx, kekId, kek);
@@ -238,11 +238,11 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
           throw new RuleException("No kek found for " + kekName + " during produce");
         }
         if (!kmsType.equals(kek.getKmsType())) {
-          throw new RuleException("Found " + kekName + " with different tink type: "
+          throw new RuleException("Found " + kekName + " with different kms type: "
               + kek.getKmsType());
         }
         if (!kmsKeyId.equals(kek.getKmsKeyId())) {
-          throw new RuleException("Found " + kekName + " with different tink key id: "
+          throw new RuleException("Found " + kekName + " with different kms key id: "
               + kek.getKmsKeyId());
         }
       }
@@ -415,7 +415,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     String kekUrl = kek.getKmsType() + KMS_TYPE_SUFFIX + kek.getKmsKeyId();
     KmsClient kmsClient = getKmsClient(configs, kekUrl);
     if (kmsClient == null) {
-      throw new RuleException("No tink client found for " + kekUrl);
+      throw new RuleException("No kms client found for " + kekUrl);
     }
     return kmsClient.getAead(kekUrl);
   }

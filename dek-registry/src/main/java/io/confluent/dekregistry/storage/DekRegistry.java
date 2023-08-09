@@ -506,7 +506,7 @@ public class DekRegistry implements Closeable {
     }
     KmsClient kmsClient = getKmsClient(props, kekUrl);
     if (kmsClient == null) {
-      throw new GeneralSecurityException("No tink client found for " + kekUrl);
+      throw new GeneralSecurityException("No kms client found for " + kekUrl);
     }
     return kmsClient.getAead(kekUrl);
   }
