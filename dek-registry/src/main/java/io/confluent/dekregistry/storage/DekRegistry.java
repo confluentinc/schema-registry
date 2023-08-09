@@ -173,7 +173,7 @@ public class DekRegistry implements Closeable {
     return config;
   }
 
-  private Cryptor getCryptor(DekFormat dekFormat) {
+  protected Cryptor getCryptor(DekFormat dekFormat) {
     return cryptors.computeIfAbsent(dekFormat, k -> {
       try {
         return new Cryptor(dekFormat);
@@ -447,7 +447,7 @@ public class DekRegistry implements Closeable {
     return key;
   }
 
-  private DataEncryptionKey maybeGenerateEncryptedDek(DataEncryptionKey key)
+  protected DataEncryptionKey maybeGenerateEncryptedDek(DataEncryptionKey key)
       throws SchemaRegistryException {
     try {
       if (key.getEncryptedKeyMaterial() == null) {
@@ -467,7 +467,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private DataEncryptionKey maybeGenerateRawDek(DataEncryptionKey key)
+  protected DataEncryptionKey maybeGenerateRawDek(DataEncryptionKey key)
       throws SchemaRegistryException {
     try {
       KeyEncryptionKey kek = getKek(key.getKekName(), true);
@@ -490,7 +490,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private static Aead getAead(Map<String, ?> configs, KeyEncryptionKey kek)
+  protected static Aead getAead(Map<String, ?> configs, KeyEncryptionKey kek)
       throws GeneralSecurityException {
     String kekUrl = kek.getKmsType() + KMS_TYPE_SUFFIX + kek.getKmsKeyId();
     Map<String, Object> props = new HashMap<>(kek.getKmsProps());
@@ -504,7 +504,7 @@ public class DekRegistry implements Closeable {
     return kmsClient.getAead(kekUrl);
   }
 
-  private static KmsClient getKmsClient(Map<String, ?> configs, String kekUrl)
+  protected static KmsClient getKmsClient(Map<String, ?> configs, String kekUrl)
       throws GeneralSecurityException {
     try {
       return KmsDriverManager.getDriver(kekUrl).getKmsClient(kekUrl);
