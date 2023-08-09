@@ -158,10 +158,6 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     KafkaAvroSerializer avroSerializer = new KafkaAvroSerializer(schemaRegistry, clientProps);
     KafkaAvroDeserializer avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, clientProps);
 
-    Map<String, Object> badClientProps = new HashMap<>(clientProps);
-    badClientProps.remove(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS);
-    KafkaAvroDeserializer badDeserializer = new KafkaAvroDeserializer(schemaRegistry, badClientProps);
-
     String subject = "test-value";
     AvroSchema schema = createUserSchema();
     registerAndVerifySchema(schemaRegistry, schema, 1, subject);
@@ -187,6 +183,10 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
 
     dekRegistry.deleteDek("kek1", subject, false);
     dekRegistry.deleteDek("kek1", subject, true);
+
+    Map<String, Object> badClientProps = new HashMap<>(clientProps);
+    badClientProps.remove(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS);
+    KafkaAvroDeserializer badDeserializer = new KafkaAvroDeserializer(schemaRegistry, badClientProps);
 
     record = (GenericRecord) badDeserializer.deserialize(topic, headers, bytes);
     assertNotEquals("testUser", record.get("name").toString());  // still encrypted
