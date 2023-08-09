@@ -164,5 +164,5 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   public void reset();
 
   @Override
-  default void close() {}
+  default void close() throws IOException {}
 }
