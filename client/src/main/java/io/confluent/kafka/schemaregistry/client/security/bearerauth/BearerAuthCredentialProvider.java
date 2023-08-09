@@ -27,5 +27,5 @@ public interface BearerAuthCredentialProvider extends Closeable, Configurable {
   String getBearerToken(URL url);
 
   @Override
-  default void close() {}
+  default void close() throws IOException {}
 }
