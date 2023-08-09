@@ -165,6 +165,7 @@ public class SchemaRegistryConfigProvider implements ConfigProvider {
     return new String[]{subject != null ? delimitedContext + subject : null, version};
   }
 
+  @Override
   public void close() {
     schemaRegistry.reset();
   }

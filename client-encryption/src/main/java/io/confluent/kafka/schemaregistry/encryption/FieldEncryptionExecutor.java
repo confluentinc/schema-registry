@@ -176,6 +176,17 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     }
   }
 
+  @Override
+  public void close() throws RuleException {
+    if (client != null) {
+      try {
+        client.close();
+      } catch (IOException e) {
+        throw new RuleException(e);
+      }
+    }
+  }
+
   class FieldEncryptionExecutorTransform implements FieldTransform {
     private Cryptor cryptor;
     private String kekName;
@@ -394,6 +405,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
       }
     }
 
+    @Override
     public void close() {
     }
   }

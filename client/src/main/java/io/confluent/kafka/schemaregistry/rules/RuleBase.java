@@ -36,6 +36,6 @@ public interface RuleBase extends AutoCloseable, Configurable {
 
   String type();
 
-  default void close() {
+  default void close() throws RuleException {
   }
 }

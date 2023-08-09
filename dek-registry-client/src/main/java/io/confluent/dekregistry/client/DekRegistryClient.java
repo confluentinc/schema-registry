@@ -20,11 +20,12 @@ import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-public interface DekRegistryClient {
+public interface DekRegistryClient extends Closeable {
 
   List<String> listKeks(boolean lookupDeleted)
       throws IOException, RestClientException;
@@ -74,4 +75,8 @@ public interface DekRegistryClient {
 
   void deleteDek(String name, String scope, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException;
+
+  @Override
+  default void close() throws IOException {
+  }
 }
