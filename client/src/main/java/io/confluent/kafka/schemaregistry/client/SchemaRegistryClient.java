@@ -30,7 +30,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
-public interface SchemaRegistryClient extends Closeable,SchemaVersionFetcher {
+public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   public Optional<ParsedSchema> parseSchema(
       String schemaType,
