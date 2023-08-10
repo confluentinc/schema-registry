@@ -21,6 +21,7 @@ import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -92,7 +93,7 @@ public abstract class SchemaRegistryMojo extends AbstractMojo implements Closeab
   }
 
   @Override
-  public void close() {
+  public void close() throws IOException {
     if (client != null) {
       client.close();
     }

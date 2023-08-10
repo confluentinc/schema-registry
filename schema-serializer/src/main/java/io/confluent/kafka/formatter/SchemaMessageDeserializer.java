@@ -20,6 +20,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.Closeable;
+import java.io.IOException;
 
 public interface SchemaMessageDeserializer<T> extends Closeable {
 

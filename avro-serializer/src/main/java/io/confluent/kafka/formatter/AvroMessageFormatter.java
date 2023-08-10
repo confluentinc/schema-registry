@@ -131,7 +131,7 @@ public class AvroMessageFormatter extends SchemaMessageFormatter<Object> {
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
       if (keyDeserializer != null) {
         keyDeserializer.close();
       }

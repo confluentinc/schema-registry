@@ -513,7 +513,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public void close() {
+  public void close() throws IOException {
     if (restService != null) {
       restService.close();
     }

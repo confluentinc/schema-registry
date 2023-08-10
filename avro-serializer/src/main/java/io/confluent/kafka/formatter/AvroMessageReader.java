@@ -169,7 +169,7 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
       if (keySerializer != null) {
         keySerializer.close();
       }

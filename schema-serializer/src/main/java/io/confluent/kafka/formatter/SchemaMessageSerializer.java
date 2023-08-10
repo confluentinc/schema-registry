@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 
 import java.io.Closeable;
+import java.io.IOException;
 
 public interface SchemaMessageSerializer<T> extends Closeable {
 

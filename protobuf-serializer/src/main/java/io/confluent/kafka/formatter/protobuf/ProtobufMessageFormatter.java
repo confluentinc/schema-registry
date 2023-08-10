@@ -146,7 +146,7 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
       if (keyDeserializer != null) {
         keyDeserializer.close();
       }

@@ -318,7 +318,11 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   @Override
   public void close() {
     if (serializer != null) {
-      serializer.close();
+      try {
+        serializer.close();
+      } catch (IOException e) {
+        throw new RuntimeException("Exception while closing serializer", e);
+      }
     }
   }
 }

@@ -143,7 +143,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
     cb.onCompletion(1, 0);
   }
 
-  protected void close() {
+  protected void close() throws IOException {
     // We can see some failures due to things like timeouts, but we want it to be obvious
     // if there are too many failures (indicating a real underlying problem). 1% is an arbitrarily
     // chosen limit.

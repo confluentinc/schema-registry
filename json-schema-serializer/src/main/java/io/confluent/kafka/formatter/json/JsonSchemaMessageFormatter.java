@@ -128,7 +128,7 @@ public class JsonSchemaMessageFormatter extends SchemaMessageFormatter<JsonNode>
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
       if (keyDeserializer != null) {
         keyDeserializer.close();
       }
