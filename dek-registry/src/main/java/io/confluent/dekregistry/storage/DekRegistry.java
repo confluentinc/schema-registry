@@ -60,11 +60,14 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -85,6 +88,10 @@ public class DekRegistry implements Closeable {
 
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String X_FORWARD_HEADER = DekRegistryRestService.X_FORWARD_HEADER;
+
+  private static final String AWS_KMS = "aws-kms";
+  private static final String AZURE_KMS = "azure-kms";
+  private static final String GCP_KMS = "gcp-kms";
 
   private static final TypeReference<KeyEncryptionKey> KEY_ENCRYPTION_KEY_TYPE =
       new TypeReference<KeyEncryptionKey>() {
@@ -372,10 +379,28 @@ public class DekRegistry implements Closeable {
       throw new AlreadyExistsException(request.getName());
     }
 
-    KeyEncryptionKey key = new KeyEncryptionKey(request.getName(), request.getKmsType(),
-        request.getKmsKeyId(), request.getKmsProps(), request.getDoc(), request.isShared(), false);
+    String kmsType = normalizeKmsType(request.getKmsType());
+
+    SortedMap<String, String> kmsProps = request.getKmsProps() != null
+        ? new TreeMap<>(request.getKmsProps())
+        : Collections.emptySortedMap();
+    KeyEncryptionKey key = new KeyEncryptionKey(request.getName(), kmsType,
+        request.getKmsKeyId(), kmsProps, request.getDoc(), request.isShared(), false);
     keys.put(keyId, key);
     return key;
+  }
+
+  private String normalizeKmsType(String kmsType) {
+    String type = kmsType.toLowerCase(Locale.ROOT);
+    if (type.startsWith("aws")) {
+      return AWS_KMS;
+    } else if (type.startsWith("azure")) {
+      return AZURE_KMS;
+    } else if (type.startsWith("gcp")) {
+      return GCP_KMS;
+    } else {
+      return kmsType;
+    }
   }
 
   public DataEncryptionKey createDekOrForward(String kekName, CreateDekRequest request,
@@ -545,8 +570,8 @@ public class DekRegistry implements Closeable {
       return null;
     }
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
-        ? request.getKmsProps()
-        : key.getKmsProps();
+        ? new TreeMap<>(request.getKmsProps())
+        : Collections.emptySortedMap();
     String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
     boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),

@@ -27,7 +27,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.SortedMap;
@@ -77,13 +76,7 @@ public class Rule {
         .collect(Collectors.toCollection(TreeSet::new))
         : Collections.emptySortedSet();
     SortedMap<String, String> sortedParams = params != null
-        ? params.entrySet().stream()
-        .sorted(Map.Entry.comparingByKey())
-        .collect(Collectors.toMap(
-            Entry::getKey,
-            Entry::getValue,
-            (e1, e2) -> e1,
-            TreeMap::new))
+        ? new TreeMap<>(params)
         : Collections.emptySortedMap();
     this.tags = Collections.unmodifiableSortedSet(sortedTags);
     this.params = Collections.unmodifiableSortedMap(sortedParams);

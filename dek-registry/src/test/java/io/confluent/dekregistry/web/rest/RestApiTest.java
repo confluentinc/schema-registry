@@ -94,6 +94,15 @@ public class RestApiTest extends ClusterTestHarness {
     List<String> keks = client.listKeks(false);
     assertEquals(Collections.singletonList(kekName), keks);
 
+    try {
+      client.deleteKek(kekName, true);
+      fail();
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.KEY_NOT_SOFT_DELETED_ERROR_CODE, e.getErrorCode());
+    }
+
+    client.deleteKek(kekName, false);
+
     // Delete kek
     client.deleteKek(kekName, false);
 
@@ -195,6 +204,13 @@ public class RestApiTest extends ClusterTestHarness {
       fail();
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
+    }
+
+    try {
+      client.deleteDek(kekName, scope, algorithm, true);
+      fail();
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.KEY_NOT_SOFT_DELETED_ERROR_CODE, e.getErrorCode());
     }
 
     client.deleteDek(kekName, scope, algorithm, false);

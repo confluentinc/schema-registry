@@ -35,12 +35,10 @@ import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.stream.Collectors;
 
 @JsonInclude(Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -67,13 +65,7 @@ public class Kek {
     this.kmsType = kmsType;
     this.kmsKeyId = kmsKeyId;
     SortedMap<String, String> sortedKmsProps = kmsProps != null
-        ? kmsProps.entrySet().stream()
-        .sorted(Map.Entry.comparingByKey())
-        .collect(Collectors.toMap(
-            Entry::getKey,
-            Entry::getValue,
-            (e1, e2) -> e1,
-            TreeMap::new))
+        ? new TreeMap<>(kmsProps)
         : Collections.emptySortedMap();
     this.kmsProps = Collections.unmodifiableSortedMap(sortedKmsProps);
     this.doc = doc;

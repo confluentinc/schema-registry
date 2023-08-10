@@ -19,23 +19,16 @@ package io.confluent.dekregistry.client.rest.entities;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
-import java.util.SortedMap;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class UpdateKekRequest {
 
-  @JsonPropertyOrder(alphabetic = true)
-  private SortedMap<String, String> kmsProps;
+  private Map<String, String> kmsProps;
   private String doc;
   private Boolean shared;
 
@@ -44,22 +37,13 @@ public class UpdateKekRequest {
   }
 
   @JsonProperty("kmsProps")
-  public SortedMap<String, String> getKmsProps() {
+  public Map<String, String> getKmsProps() {
     return this.kmsProps;
   }
 
   @JsonProperty("kmsProps")
   public void setKmsProps(Map<String, String> kmsProps) {
-    SortedMap<String, String> sortedKmsProps = kmsProps != null
-        ? kmsProps.entrySet().stream()
-        .sorted(Map.Entry.comparingByKey())
-        .collect(Collectors.toMap(
-            Entry::getKey,
-            Entry::getValue,
-            (e1, e2) -> e1,
-            TreeMap::new))
-        : Collections.emptySortedMap();
-    this.kmsProps = Collections.unmodifiableSortedMap(sortedKmsProps);
+    this.kmsProps = kmsProps;
   }
 
   @JsonProperty("doc")
