@@ -74,7 +74,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
 
   private Map<DekFormat, Cryptor> cryptors;
   private Map<String, ?> configs;
-  private int cacheExpirySecs = 3600;
+  private int cacheExpirySecs = -1;
   private int cacheSize = 10000;
   private DekRegistryClient client;
 

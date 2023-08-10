@@ -15,12 +15,9 @@
 
 package io.confluent.dekregistry.storage;
 
-import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.KmsClient;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.confluent.dekregistry.client.rest.DekRegistryRestService;
@@ -40,7 +37,6 @@ import io.confluent.dekregistry.storage.serialization.EncryptionKeyIdSerde;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
-import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriverManager;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
@@ -64,10 +60,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedMap;
@@ -458,7 +452,7 @@ public class DekRegistry implements Closeable {
     try {
       if (key.getEncryptedKeyMaterial() == null) {
         KeyEncryptionKey kek = getKek(key.getKekName(), true);
-        Aead aead = kek.toAead(config.originals());
+        Aead aead = kek.toKekEntity().toAead(config.originals());
         // Generate new dek
         byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
         byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
@@ -479,7 +473,7 @@ public class DekRegistry implements Closeable {
       KeyEncryptionKey kek = getKek(key.getKekName(), true);
       if (kek.isShared()) {
         // Decrypt dek
-        Aead aead = kek.toAead(config.originals());
+        Aead aead = kek.toKekEntity().toAead(config.originals());
         byte[] encryptedDek = Base64.getDecoder().decode(
             key.getEncryptedKeyMaterial().getBytes(StandardCharsets.UTF_8));
         byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
@@ -558,7 +552,7 @@ public class DekRegistry implements Closeable {
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
         key.getKmsKeyId(), kmsProps, doc, shared, false);
     keys.put(keyId, newKey);
-    return key;
+    return newKey;
   }
 
   public void deleteKekOrForward(String name, boolean permanentDelete,

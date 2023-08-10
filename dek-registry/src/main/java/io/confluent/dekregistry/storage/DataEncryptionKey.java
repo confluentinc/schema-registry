@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.KeyType;
 import java.util.Objects;
@@ -101,5 +102,9 @@ public class DataEncryptionKey extends EncryptionKey {
   @Override
   public int hashCode() {
     return Objects.hash(super.hashCode(), kekName, scope, algorithm, encryptedKeyMaterial);
+  }
+
+  public Dek toDekEntity() {
+    return new Dek(kekName, scope, algorithm, encryptedKeyMaterial, keyMaterial);
   }
 }

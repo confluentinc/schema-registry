@@ -16,25 +16,19 @@
 
 package io.confluent.dekregistry.client;
 
-import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
-
 import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.KmsClient;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriverManager;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -263,6 +257,13 @@ public class MockDekRegistryClient implements DekRegistryClient {
           key.getEncryptedKeyMaterial(), key.getKeyMaterial(), true);
       deks.put(keyId, newKey);
     }
+  }
+
+  @Override
+  public void reset() {
+    keks.clear();
+    deks.clear();
+    cryptors.clear();
   }
 
   static class KekId {

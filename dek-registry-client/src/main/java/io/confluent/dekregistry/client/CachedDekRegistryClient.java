@@ -71,14 +71,22 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       Ticker ticker) {
     super(restService, cacheCapacity, Collections.emptyList(), configs, httpHeaders, ticker);
     this.restService = restService;
-    this.kekCache = CacheBuilder.newBuilder()
-        // Allow expiry in case shared flag changes
-        .expireAfterWrite(Duration.ofSeconds(cacheExpirySecs))
+    CacheBuilder<Object, Object> cacheBuilder = CacheBuilder.newBuilder()
         .maximumSize(cacheCapacity)
-        .build();
-    this.dekCache = CacheBuilder.newBuilder()
+        .ticker(ticker);
+    if (cacheExpirySecs >= 0) {
+      // Allow expiry in case shared flag changes
+      cacheBuilder = cacheBuilder.expireAfterWrite(Duration.ofSeconds(cacheExpirySecs));
+    }
+    this.kekCache = cacheBuilder.build();
+    cacheBuilder = CacheBuilder.newBuilder()
         .maximumSize(cacheCapacity)
-        .build();
+        .ticker(ticker);
+    if (cacheExpirySecs >= 0) {
+      // Allow expiry in case shared flag changes
+      cacheBuilder = cacheBuilder.expireAfterWrite(Duration.ofSeconds(cacheExpirySecs));
+    }
+    this.dekCache = cacheBuilder.build();
   }
 
   @Override
@@ -201,6 +209,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       throws IOException, RestClientException {
     restService.deleteDek(name, scope, algorithm, permanentDelete);
     dekCache.invalidate(new DekId(name, scope, algorithm));
+  }
+
+  @Override
+  public void reset() {
+    kekCache.invalidateAll();
+    dekCache.invalidateAll();
   }
 
   public static class KekId {

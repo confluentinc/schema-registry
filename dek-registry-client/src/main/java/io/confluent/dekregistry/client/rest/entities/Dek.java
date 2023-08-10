@@ -22,6 +22,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.io.IOException;
 import java.util.Objects;
 
 @JsonInclude(Include.NON_NULL)
@@ -93,5 +95,18 @@ public class Dek {
   @Override
   public int hashCode() {
     return Objects.hash(kekName, scope, algorithm, encryptedKeyMaterial, keyMaterial);
+  }
+
+  @Override
+  public String toString() {
+    try {
+      return toJson();
+    } catch (IOException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  public String toJson() throws IOException {
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 }

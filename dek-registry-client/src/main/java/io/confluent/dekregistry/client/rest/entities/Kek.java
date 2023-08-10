@@ -29,6 +29,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriverManager;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -151,5 +153,18 @@ public class Kek {
   @Override
   public int hashCode() {
     return Objects.hash(name, kmsType, kmsKeyId, kmsProps, doc, shared);
+  }
+
+  @Override
+  public String toString() {
+    try {
+      return toJson();
+    } catch (IOException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  public String toJson() throws IOException {
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 }

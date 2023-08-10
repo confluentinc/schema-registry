@@ -117,8 +117,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     if (key == null) {
       throw DekRegistryErrors.keyNotFoundException(name);
     }
-    return new Kek(key.getName(), key.getKmsType(), key.getKmsKeyId(), key.getKmsProps(),
-        key.getDoc(), key.isShared());
+    return key.toKekEntity();
   }
 
   @GET
@@ -134,10 +133,6 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     checkName(name);
 
-    KeyEncryptionKey key = dekRegistry.getKek(name, lookupDeleted);
-    if (key == null) {
-      throw DekRegistryErrors.keyNotFoundException(name);
-    }
     return dekRegistry.getDekScopes(name, lookupDeleted);
   }
 
@@ -172,8 +167,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (key == null) {
         throw DekRegistryErrors.keyNotFoundException(scope);
       }
-      return new Dek(key.getKekName(), key.getScope(), key.getAlgorithm(),
-          key.getEncryptedKeyMaterial(), key.getKeyMaterial());
+      return key.toDekEntity();
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while retrieving key", e);
     }
@@ -208,8 +202,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     try {
       KeyEncryptionKey key = dekRegistry.createKekOrForward(request, headerProperties);
-      Kek kek = new Kek(key.getName(), key.getKmsType(), key.getKmsKeyId(), key.getKmsProps(),
-          key.getDoc(), key.isShared());
+      Kek kek = key.toKekEntity();
       asyncResponse.resume(kek);
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
@@ -251,8 +244,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     try {
       DataEncryptionKey key = dekRegistry.createDekOrForward(name, request, headerProperties);
-      Dek dek = new Dek(key.getKekName(), key.getScope(), key.getAlgorithm(),
-          key.getEncryptedKeyMaterial(), key.getKeyMaterial());
+      Dek dek = key.toDekEntity();
       asyncResponse.resume(dek);
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
@@ -292,8 +284,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (key == null) {
         throw DekRegistryErrors.keyNotFoundException(name);
       }
-      Kek kek = new Kek(key.getName(), key.getKmsType(), key.getKmsKeyId(), key.getKmsProps(),
-          key.getDoc(), key.isShared());
+      Kek kek = key.toKekEntity();
       asyncResponse.resume(kek);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while creating key", e);

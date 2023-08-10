@@ -16,6 +16,7 @@
 
 package io.confluent.dekregistry.client;
 
+import com.google.common.base.Ticker;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
@@ -26,6 +27,10 @@ import java.util.List;
 import java.util.Map;
 
 public interface DekRegistryClient extends Closeable {
+
+  default Ticker ticker() {
+    return Ticker.systemTicker();
+  }
 
   List<String> listKeks(boolean lookupDeleted)
       throws IOException, RestClientException;
@@ -73,6 +78,8 @@ public interface DekRegistryClient extends Closeable {
 
   void deleteDek(String name, String scope, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException;
+
+  void reset();
 
   @Override
   default void close() throws IOException {
