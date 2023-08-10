@@ -1255,7 +1255,7 @@ public class RestService implements Closeable, Configurable {
   }
 
   @Override
-  public void close() {
+  public void close() throws IOException {
     if (bearerAuthCredentialProvider != null) {
       bearerAuthCredentialProvider.close();
     }

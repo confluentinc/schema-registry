@@ -170,7 +170,7 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
       if (keySerializer != null) {
         keySerializer.close();
       }

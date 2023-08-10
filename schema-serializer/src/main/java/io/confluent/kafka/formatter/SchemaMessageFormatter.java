@@ -199,7 +199,11 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
   @Override
   public void close() {
     if (deserializer != null) {
-      deserializer.close();
+      try {
+        deserializer.close();
+      } catch (IOException e) {
+        throw new RuntimeException("Exception while closing deserializer", e);
+      }
     }
   }
 

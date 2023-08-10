@@ -265,7 +265,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   @Override
-  public void close() {
+  public void close() throws IOException {
     if (schemaRegistry != null) {
       schemaRegistry.close();
     }

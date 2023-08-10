@@ -85,7 +85,7 @@ public class SchemaRegistryClientPerformance extends SchemaRegistryPerformance {
   }
 
   @Override
-  protected void close() {
+  protected void close() throws IOException {
     if (client != null) {
       client.close();
     }

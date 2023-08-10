@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client.security.bearerauth;
 import org.apache.kafka.common.Configurable;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.net.URL;
 
 public interface BearerAuthCredentialProvider extends Closeable, Configurable {

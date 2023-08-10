@@ -19,6 +19,7 @@ package io.confluent.kafka.serializers;
 import org.apache.avro.Schema;
 import org.apache.kafka.common.serialization.Deserializer;
 
+import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -62,6 +63,10 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   @Override
   public void close() {
-    super.close();
+    try {
+      super.close();
+    } catch (IOException e) {
+      throw new RuntimeException("Exception while closing deserializer", e);
+    }
   }
 }
