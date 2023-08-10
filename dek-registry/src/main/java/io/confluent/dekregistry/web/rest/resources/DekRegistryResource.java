@@ -19,6 +19,7 @@ import com.google.common.base.CharMatcher;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.Dek;
+import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
@@ -250,6 +251,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (TooManyKeysException e) {
       throw DekRegistryErrors.tooManyKeysException(dekRegistry.config().maxKeys());
+    } catch (DekGenerationException e) {
+      throw DekRegistryErrors.dekGenerationException(request.getScope());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while creating key", e);
     }

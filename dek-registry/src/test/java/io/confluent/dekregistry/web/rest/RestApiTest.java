@@ -260,5 +260,66 @@ public class RestApiTest extends ClusterTestHarness {
 
     client.deleteKek(kekName, true);
   }
+
+  @Test
+  public void testUnknownKmsType() throws Exception {
+    String kekName = "kek1";
+    String kmsType = "unknown-kms";
+    String kmsKeyId = "myid";
+    String scope = "mysubject";
+    String scope2 = "mysubject2";
+    DekFormat algorithm = DekFormat.AES256_GCM;
+    Kek kek = new Kek(kekName, kmsType, kmsKeyId, null, null, false);
+
+    // Create kek
+    Kek newKek = client.createKek(kekName, kmsType, kmsKeyId, null, null, false);
+    assertEquals(kek, newKek);
+
+    newKek = client.getKek(kekName, false);
+    assertEquals(kek, newKek);
+
+    List<String> keks = client.listKeks(false);
+    assertEquals(Collections.singletonList(kekName), keks);
+
+    // Use the test-kms type to generate a dummy dek locally
+    Kek testKek = new Kek(kekName, "test-kms", kmsKeyId, null, null, false);
+    byte[] rawDek = new Cryptor(algorithm).generateKey();
+    Aead aead = testKek.toAead(Collections.emptyMap());
+    byte[] encryptedDek = aead.encrypt(rawDek, new byte[0]);
+    String encryptedDekStr =
+        new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
+    Dek dek = new Dek(kekName, scope, algorithm, encryptedDekStr, null);
+
+    // Create dek
+    Dek newDek = client.createDek(kekName, scope, algorithm, encryptedDekStr);
+    assertEquals(dek, newDek);
+
+    newDek = client.getDek(kekName, scope, algorithm, false);
+    assertEquals(dek, newDek);
+
+    // Create dek w/o key material, exception
+    try {
+      newDek = client.createDek(kekName, scope2, algorithm, null);
+      fail();
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.DEK_GENERATION_ERROR_CODE, e.getErrorCode());
+    }
+
+    Map<String, String> kmsProps = Collections.singletonMap("hi", "there");
+    String doc = "mydoc";
+    Kek kek2 = new Kek(kekName, kmsType, kmsKeyId, kmsProps, doc, true);
+
+    // Set shared flag to true
+    newKek = client.updateKek(kekName, kmsProps, doc, true);
+    assertEquals(kek2, newKek);
+
+    // Advance ticker
+    fakeTicker.advance(61, TimeUnit.SECONDS);
+
+    // Dek still does not have decrypted key material because kms type is unknown
+    Dek dek2 = new Dek(kekName, scope, algorithm, encryptedDekStr, null);
+    newDek = client.getDek(kekName, scope, algorithm, true);
+    assertEquals(dek2, newDek);
+  }
 }
 

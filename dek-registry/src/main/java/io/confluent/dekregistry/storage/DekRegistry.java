@@ -23,6 +23,7 @@ import com.google.inject.Singleton;
 import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
+import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.KeyType;
@@ -187,6 +188,7 @@ public class DekRegistry implements Closeable {
       try {
         return new Cryptor(dekFormat);
       } catch (GeneralSecurityException e) {
+        log.error("Invalid format {}", dekFormat);
         throw new IllegalArgumentException("Invalid format " + dekFormat, e);
       }
     });
@@ -467,13 +469,15 @@ public class DekRegistry implements Closeable {
     DataEncryptionKey key = new DataEncryptionKey(kekName, request.getScope(),
         request.getAlgorithm(), request.getEncryptedKeyMaterial(), false);
     key = maybeGenerateEncryptedDek(key);
+    if (key.getEncryptedKeyMaterial() == null) {
+      throw new DekGenerationException("Could not generate dek for " + request.getScope());
+    }
     keys.put(keyId, key);
     key = maybeGenerateRawDek(key);
     return key;
   }
 
-  protected DataEncryptionKey maybeGenerateEncryptedDek(DataEncryptionKey key)
-      throws SchemaRegistryException {
+  protected DataEncryptionKey maybeGenerateEncryptedDek(DataEncryptionKey key) {
     try {
       if (key.getEncryptedKeyMaterial() == null) {
         KeyEncryptionKey kek = getKek(key.getKekName(), true);
@@ -488,12 +492,12 @@ public class DekRegistry implements Closeable {
       }
       return key;
     } catch (GeneralSecurityException e) {
-      throw new SchemaRegistryException(e);
+      log.error("Could not generate dek", e);
+      return key;
     }
   }
 
-  protected DataEncryptionKey maybeGenerateRawDek(DataEncryptionKey key)
-      throws SchemaRegistryException {
+  protected DataEncryptionKey maybeGenerateRawDek(DataEncryptionKey key) {
     try {
       KeyEncryptionKey kek = getKek(key.getKekName(), true);
       if (kek.isShared()) {
@@ -511,7 +515,8 @@ public class DekRegistry implements Closeable {
       }
       return key;
     } catch (GeneralSecurityException e) {
-      throw new SchemaRegistryException(e);
+      log.error("Could not decrypt dek", e);
+      return key;
     }
   }
 

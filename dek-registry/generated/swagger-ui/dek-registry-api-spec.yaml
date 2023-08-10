@@ -333,10 +333,6 @@ components:
     CreateDekRequest:
       type: object
       properties:
-        kmsType:
-          type: string
-        kmsKeyId:
-          type: string
         scope:
           type: string
         algorithm:
@@ -347,9 +343,6 @@ components:
           - AES256_SIV
         encryptedKeyMaterial:
           type: string
-        kmsKeyid:
-          type: string
-          writeOnly: true
     Kek:
       type: object
       properties:

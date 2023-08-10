@@ -17,6 +17,7 @@ package io.confluent.dekregistry.web.rest.exceptions;
 
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.exceptions.RestNotFoundException;
+import io.confluent.rest.exceptions.RestServerErrorException;
 
 public class DekRegistryErrors {
 
@@ -41,6 +42,11 @@ public class DekRegistryErrors {
   // HTTP 422
   public static final int INVALID_KEY_ERROR_CODE = 42271;
   public static final int REFERENCE_EXISTS_ERROR_CODE = 42272;
+
+  // HTTP 500
+  public static final String DEK_GENERATION_MESSAGE_FORMAT =
+      "Could not generate dek for '%s'";
+  public static final int DEK_GENERATION_ERROR_CODE = 50070;
 
   public static RestException keyNotFoundException(String name) {
     return new RestNotFoundException(
@@ -70,5 +76,11 @@ public class DekRegistryErrors {
 
   public static RestReferenceExistsException referenceExistsException(String message) {
     return new RestReferenceExistsException(message);
+  }
+
+  public static RestServerErrorException dekGenerationException(String scope) {
+    return new RestServerErrorException (
+        String.format(DEK_GENERATION_MESSAGE_FORMAT, scope),
+        DEK_GENERATION_ERROR_CODE);
   }
 }
