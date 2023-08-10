@@ -142,7 +142,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     DekInfo key = new DekInfo(kekName, scope, algorithm, encryptedKeyMaterial, null, false);
     key = maybeGenerateEncryptedDek(key);
     if (key.getEncryptedKeyMaterial() == null) {
-      throw new RestClientException("Could not generate dek for " + scope, 500, 500);
+      throw new RestClientException("Could not generate dek for " + scope, 500, 50070);
     }
     deks.put(keyId, key);
     key = maybeGenerateRawDek(key);
