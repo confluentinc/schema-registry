@@ -53,11 +53,19 @@ public class KafkaJsonSchemaSerde<T> implements Serde<T> {
    * For testing purposes only.
    */
   public KafkaJsonSchemaSerde(final SchemaRegistryClient client) {
+    this(client, null);
+  }
+
+  /**
+   * For testing purposes only.
+   */
+  public KafkaJsonSchemaSerde(final SchemaRegistryClient client, final Class<T> specificClass) {
     if (client == null) {
       throw new IllegalArgumentException("schema registry client must not be null");
     }
+    this.specificClass = specificClass;
     inner = Serdes.serdeFrom(new KafkaJsonSchemaSerializer<>(client),
-        new KafkaJsonSchemaDeserializer<>(client));
+            new KafkaJsonSchemaDeserializer<>(client));
   }
 
   @Override

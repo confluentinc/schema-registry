@@ -23,19 +23,15 @@ import org.apache.maven.plugins.annotations.Parameter;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.SchemaProvider;
-import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 
 public abstract class SchemaRegistryMojo extends AbstractMojo implements Closeable {
 
@@ -77,7 +73,7 @@ public abstract class SchemaRegistryMojo extends AbstractMojo implements Closeab
       }
       List<SchemaProvider> providers = schemaProviders != null && !schemaProviders.isEmpty()
                                        ? schemaProviders()
-                                       : defaultSchemaProviders();
+                                       : MojoUtils.defaultSchemaProviders();
       this.client = new CachedSchemaRegistryClient(
           this.schemaRegistryUrls,
           1000,
@@ -97,12 +93,6 @@ public abstract class SchemaRegistryMojo extends AbstractMojo implements Closeab
         throw new RuntimeException(e);
       }
     }).collect(Collectors.toList());
-  }
-
-  private List<SchemaProvider> defaultSchemaProviders() {
-    return Arrays.asList(
-        new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
-    );
   }
 
   @Override

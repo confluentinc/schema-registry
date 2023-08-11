@@ -222,6 +222,35 @@ paths:
           description: |
             Error code 50001 -- Error in the backend data store
             Error code 50003 -- Error while forwarding the request to the primary
+    delete:
+      summary: "Deletes the Global compatibility level config and\
+              \ revert to the global default."
+      description: ""
+      operationId: "deleteTopLevelConfig"
+      consumes:
+        - "application/vnd.schemaregistry.v1+json"
+        - "application/vnd.schemaregistry+json"
+        - "application/json"
+        - "application/octet-stream"
+      produces:
+        - "application/vnd.schemaregistry.v1+json"
+        - "application/vnd.schemaregistry+json; qs=0.9"
+        - "application/json; qs=0.5"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "string"
+            enum:
+              - "NONE"
+              - "BACKWARD"
+              - "BACKWARD_TRANSITIVE"
+              - "FORWARD"
+              - "FORWARD_TRANSITIVE"
+              - "FULL"
+              - "FULL_TRANSITIVE"
+        500:
+          description: "Error code 50001 -- Error in the backend datastore"
   /config/{subject}:
     get:
       summary: Get compatibility level for a subject.

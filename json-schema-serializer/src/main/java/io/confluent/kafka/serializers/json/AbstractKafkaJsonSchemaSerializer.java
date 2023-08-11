@@ -82,6 +82,10 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     }
   }
 
+  public ObjectMapper objectMapper() {
+    return objectMapper;
+  }
+
   protected byte[] serializeImpl(
       String subject,
       T object,
