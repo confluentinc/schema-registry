@@ -16,10 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.client.security.bearerauth;
 
-import java.net.URL;
 import org.apache.kafka.common.Configurable;
 
-public interface BearerAuthCredentialProvider extends Configurable {
+import java.io.Closeable;
+import java.io.IOException;
+import java.net.URL;
+
+public interface BearerAuthCredentialProvider extends Closeable, Configurable {
 
   /*
   Making alias() default method as custom implementation loaded using
@@ -43,4 +46,7 @@ public interface BearerAuthCredentialProvider extends Configurable {
   default String getTargetIdentityPoolId() {
     return null;
   }
+
+  @Override
+  default void close() throws IOException {}
 }

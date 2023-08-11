@@ -742,9 +742,12 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   @Override
-  public void close() {
+  public void close() throws IOException {
     closeRuleObjects(ruleActions);
     closeRuleObjects(ruleExecutors);
+    if (schemaRegistry != null) {
+      schemaRegistry.close();
+    }
   }
 
   private void closeRuleObjects(Map<String, Map<String, RuleBase>> ruleBases) {

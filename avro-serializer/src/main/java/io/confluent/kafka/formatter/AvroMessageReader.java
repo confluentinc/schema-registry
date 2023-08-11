@@ -171,5 +171,13 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
     public SchemaRegistryClient getSchemaRegistryClient() {
       return schemaRegistry;
     }
+
+    @Override
+    public void close() throws IOException {
+      if (keySerializer != null) {
+        keySerializer.close();
+      }
+      super.close();
+    }
   }
 }

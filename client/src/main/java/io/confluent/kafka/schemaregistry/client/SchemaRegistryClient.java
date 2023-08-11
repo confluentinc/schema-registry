@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
@@ -36,7 +37,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
-public interface SchemaRegistryClient extends SchemaVersionFetcher {
+public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   default String tenant() {
     return DEFAULT_TENANT;
@@ -350,4 +351,7 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   }
 
   public void reset();
+
+  @Override
+  default void close() throws IOException {}
 }

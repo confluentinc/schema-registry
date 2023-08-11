@@ -19,6 +19,8 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerConfig;
 import java.util.Map;
+
+import java.io.IOException;
 import java.util.Properties;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
@@ -155,6 +157,14 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
     @Override
     public SchemaRegistryClient getSchemaRegistryClient() {
       return schemaRegistry;
+    }
+
+    @Override
+    public void close() throws IOException {
+      if (keySerializer != null) {
+        keySerializer.close();
+      }
+      super.close();
     }
   }
 }
