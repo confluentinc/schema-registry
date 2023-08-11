@@ -38,10 +38,10 @@ public class LocalKmsDriver implements KmsDriver {
     return LocalKmsClient.PREFIX;
   }
 
-  private String getSecret(Map<String, ?> configs) {
+  private String getSecret(Map<String, ?> configs) throws GeneralSecurityException {
     String secret = (String) configs.get(LOCAL_SECRET);
     if (secret == null) {
-      throw new IllegalArgumentException("Missing property "
+      throw new GeneralSecurityException("Missing property "
           + "rule.executors.<name>.param." + LOCAL_SECRET);
     }
     return secret;

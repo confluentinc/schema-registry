@@ -46,7 +46,8 @@ public class AwsKmsDriver implements KmsDriver {
     return AwsKmsClient.PREFIX;
   }
 
-  private AWSCredentialsProvider getCredentials(Map<String, ?> configs) {
+  private AWSCredentialsProvider getCredentials(Map<String, ?> configs)
+      throws GeneralSecurityException {
     try {
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
@@ -58,7 +59,7 @@ public class AwsKmsDriver implements KmsDriver {
         return new DefaultAWSCredentialsProviderChain();
       }
     } catch (IOException e) {
-      throw new IllegalArgumentException(e);
+      throw new GeneralSecurityException("cannot load credentials", e);
     }
   }
 

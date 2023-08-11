@@ -20,22 +20,10 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
-import com.google.crypto.tink.aead.AeadConfig;
-import com.google.crypto.tink.daead.DeterministicAeadConfig;
 import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
 import org.junit.Test;
 
 public class CryptorTest {
-
-  static {
-    try {
-      AeadConfig.register();
-      DeterministicAeadConfig.register();
-    } catch (GeneralSecurityException e) {
-      throw new IllegalArgumentException(e);
-    }
-  }
 
   @Test
   public void testRandomCryptor() throws Exception {

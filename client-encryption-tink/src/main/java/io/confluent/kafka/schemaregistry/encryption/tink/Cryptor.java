@@ -20,12 +20,23 @@ import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.DeterministicAead;
 import com.google.crypto.tink.KeyTemplates;
 import com.google.crypto.tink.Registry;
+import com.google.crypto.tink.aead.AeadConfig;
+import com.google.crypto.tink.daead.DeterministicAeadConfig;
 import com.google.crypto.tink.proto.KeyTemplate;
 import com.google.protobuf.ByteString;
 import java.nio.BufferUnderflowException;
 import java.security.GeneralSecurityException;
 
 public class Cryptor {
+
+  static {
+    try {
+      AeadConfig.register();
+      DeterministicAeadConfig.register();
+    } catch (GeneralSecurityException e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
 
   private final DekFormat dekFormat;
   private final KeyTemplate dekTemplate;

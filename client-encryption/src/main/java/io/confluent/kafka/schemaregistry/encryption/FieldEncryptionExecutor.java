@@ -204,10 +204,10 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
       }
     }
 
-    protected String getKekName(RuleContext ctx) {
+    protected String getKekName(RuleContext ctx) throws RuleException {
       String kekName = ctx.getParameter(ENCRYPT_KEK_NAME);
       if (kekName == null) {
-        throw new IllegalArgumentException("No kek name found");
+        throw new RuleException("No kek name found");
       }
       return kekName;
     }

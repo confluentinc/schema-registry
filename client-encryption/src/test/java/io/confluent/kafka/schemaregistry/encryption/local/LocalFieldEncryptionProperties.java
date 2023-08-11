@@ -38,7 +38,7 @@ public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
 
   @Override
   public String getKmsKeyId() {
-    return "local1";
+    return "mykey";
   }
 
   @Override

@@ -46,7 +46,8 @@ public class GcpKmsDriver implements KmsDriver {
     return GcpKmsClient.PREFIX;
   }
 
-  private GoogleCredentials getCredentials(Map<String, ?> configs) {
+  private GoogleCredentials getCredentials(Map<String, ?> configs)
+      throws GeneralSecurityException {
     try {
       String accountType = (String) configs.get(ACCOUNT_TYPE);
       if (accountType == null) {
@@ -68,7 +69,7 @@ public class GcpKmsDriver implements KmsDriver {
         return GoogleCredentials.getApplicationDefault();
       }
     } catch (IOException e) {
-      throw new IllegalArgumentException(e);
+      throw new GeneralSecurityException("cannot load credentials", e);
     }
   }
 
