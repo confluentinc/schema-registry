@@ -29,6 +29,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -174,6 +175,11 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
             ex
         );
       }
+    }
+    try {
+      close();
+    } catch (IOException e) {
+      throw new MojoExecutionException("Exception while closing schema registry client", e);
     }
   }
 
