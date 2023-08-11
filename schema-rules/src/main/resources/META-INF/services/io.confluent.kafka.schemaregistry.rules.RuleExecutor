@@ -1,0 +1,3 @@
+io.confluent.kafka.schemaregistry.rules.cel.CelExecutor
+io.confluent.kafka.schemaregistry.rules.cel.CelFieldExecutor
+io.confluent.kafka.schemaregistry.rules.jsonata.JsonataExecutor
