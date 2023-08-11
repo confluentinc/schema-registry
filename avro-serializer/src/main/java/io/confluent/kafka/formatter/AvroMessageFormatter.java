@@ -138,5 +138,13 @@ public class AvroMessageFormatter extends SchemaMessageFormatter<Object> {
     public SchemaRegistryClient getSchemaRegistryClient() {
       return schemaRegistry;
     }
+
+    @Override
+    public void close() throws IOException {
+      if (keyDeserializer != null) {
+        keyDeserializer.close();
+      }
+      super.close();
+    }
   }
 }

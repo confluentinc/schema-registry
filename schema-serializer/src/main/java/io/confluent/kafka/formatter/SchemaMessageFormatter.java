@@ -283,7 +283,13 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
 
   @Override
   public void close() {
-    // nothing to do
+    if (deserializer != null) {
+      try {
+        deserializer.close();
+      } catch (IOException e) {
+        throw new RuntimeException("Exception while closing deserializer", e);
+      }
+    }
   }
 
   private static final int MAGIC_BYTE = 0x0;

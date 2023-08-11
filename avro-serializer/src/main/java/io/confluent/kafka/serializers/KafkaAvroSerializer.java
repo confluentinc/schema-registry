@@ -19,6 +19,7 @@ package io.confluent.kafka.serializers;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -70,6 +71,10 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   @Override
   public void close() {
-    super.close();
+    try {
+      super.close();
+    } catch (IOException e) {
+      throw new RuntimeException("Exception while closing serializer", e);
+    }
   }
 }

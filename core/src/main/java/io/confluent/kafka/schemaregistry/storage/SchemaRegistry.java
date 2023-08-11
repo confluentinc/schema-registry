@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -97,7 +98,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
                             List<SchemaKey> previousSchemas,
                             boolean normalize) throws SchemaRegistryException;
 
-  void close();
+  void close() throws IOException;
 
   void deleteSchemaVersion(String subject, Schema schema,
                            boolean permanentDelete) throws SchemaRegistryException;

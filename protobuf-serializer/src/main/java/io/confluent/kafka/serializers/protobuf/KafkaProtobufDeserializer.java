@@ -21,6 +21,7 @@ import com.google.protobuf.Message;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
+import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -86,6 +87,10 @@ public class KafkaProtobufDeserializer<T extends Message>
 
   @Override
   public void close() {
-    super.close();
+    try {
+      super.close();
+    } catch (IOException e) {
+      throw new RuntimeException("Exception while closing deserializer", e);
+    }
   }
 }

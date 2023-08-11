@@ -23,7 +23,10 @@ import org.apache.kafka.common.serialization.Serializer;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 
-public interface SchemaMessageSerializer<T> {
+import java.io.Closeable;
+import java.io.IOException;
+
+public interface SchemaMessageSerializer<T> extends Closeable {
 
   void configure(Map<String, ?> configs, boolean isKey);
 
@@ -41,4 +44,7 @@ public interface SchemaMessageSerializer<T> {
   );
 
   SchemaRegistryClient getSchemaRegistryClient();
+
+  @Override
+  default void close() throws IOException {}
 }

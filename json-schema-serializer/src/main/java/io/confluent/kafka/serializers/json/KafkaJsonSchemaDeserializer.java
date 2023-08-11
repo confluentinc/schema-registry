@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
+import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -89,6 +90,10 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
 
   @Override
   public void close() {
-    super.close();
+    try {
+      super.close();
+    } catch (IOException e) {
+      throw new RuntimeException("Exception while closing deserializer", e);
+    }
   }
 }
