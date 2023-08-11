@@ -80,7 +80,10 @@ public class RestApp {
   }
 
   public void stop() throws Exception {
-    restClient = null;
+    if (restClient != null) {
+      restClient.close();
+      restClient = null;
+    }
     if (restServer != null) {
       restServer.stop();
       restServer.join();

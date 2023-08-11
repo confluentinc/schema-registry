@@ -150,7 +150,11 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   public void onShutdown() {
 
     if (schemaRegistry != null) {
-      schemaRegistry.close();
+      try {
+        schemaRegistry.close();
+      } catch (IOException e) {
+        log.error("Error closing schema registry", e);
+      }
     }
 
     if (schemaRegistryResourceExtensions != null) {
