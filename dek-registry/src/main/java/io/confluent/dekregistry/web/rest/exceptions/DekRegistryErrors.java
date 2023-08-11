@@ -79,7 +79,7 @@ public class DekRegistryErrors {
   }
 
   public static RestServerErrorException dekGenerationException(String scope) {
-    return new RestServerErrorException (
+    return new RestServerErrorException(
         String.format(DEK_GENERATION_MESSAGE_FORMAT, scope),
         DEK_GENERATION_ERROR_CODE);
   }

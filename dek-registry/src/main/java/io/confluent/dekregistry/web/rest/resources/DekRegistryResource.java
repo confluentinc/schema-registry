@@ -384,7 +384,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   private static void checkScope(String scope) {
-    if (scope == null || CharMatcher.javaIsoControl().matchesAnyOf(scope)) {
+    if (scope == null || scope.length() == 0 || CharMatcher.javaIsoControl().matchesAnyOf(scope)) {
       throw DekRegistryErrors.invalidOrMissingKeyInfo("scope");
     }
   }
