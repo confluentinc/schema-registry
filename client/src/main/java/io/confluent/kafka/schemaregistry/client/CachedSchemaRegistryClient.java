@@ -706,6 +706,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     missingIdCache.invalidateAll();
   }
 
+  @Override
+  public void close() throws IOException {
+    if (restService != null) {
+      restService.close();
+    }
+  }
+
   private void checkMissingSchemaCache(String subject, ParsedSchema schema, boolean normalize)
       throws RestClientException {
     if (missingSchemaCache.getIfPresent(

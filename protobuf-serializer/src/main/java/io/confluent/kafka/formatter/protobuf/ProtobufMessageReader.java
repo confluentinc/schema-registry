@@ -17,6 +17,8 @@ package io.confluent.kafka.formatter.protobuf;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
+
+import java.io.IOException;
 import java.util.Properties;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
@@ -155,6 +157,14 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
         ParsedSchema schema
     ) {
       return super.serializeImpl(subject, topic, isKey, object, (ProtobufSchema) schema);
+    }
+
+    @Override
+    public void close() throws IOException {
+      if (keySerializer != null) {
+        keySerializer.close();
+      }
+      super.close();
     }
   }
 }
