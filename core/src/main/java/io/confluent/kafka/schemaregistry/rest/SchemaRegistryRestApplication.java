@@ -152,7 +152,11 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
       return;
     }
 
-    schemaRegistry.close();
+    try {
+      schemaRegistry.close();
+    } catch (IOException e) {
+      log.error("Error closing schema registry", e);
+    }
 
     List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions =
         schemaRegistry.getResourceExtensions();

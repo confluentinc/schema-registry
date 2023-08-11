@@ -153,5 +153,13 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
     public SchemaRegistryClient getSchemaRegistryClient() {
       return schemaRegistry;
     }
+
+    @Override
+    public void close() throws IOException {
+      if (keyDeserializer != null) {
+        keyDeserializer.close();
+      }
+      super.close();
+    }
   }
 }
