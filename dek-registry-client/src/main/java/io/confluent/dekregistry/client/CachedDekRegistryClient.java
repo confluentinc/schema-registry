@@ -36,7 +36,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
-// TODO close this once PR#2718 is merged
 public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     implements DekRegistryClient {
 

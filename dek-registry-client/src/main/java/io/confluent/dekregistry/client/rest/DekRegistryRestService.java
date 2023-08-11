@@ -35,7 +35,6 @@ import org.apache.kafka.common.Configurable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-// TODO close this once PR#2718 is merged
 public class DekRegistryRestService extends RestService implements Configurable {
 
   private static final Logger LOG = LoggerFactory.getLogger(DekRegistryRestService.class);

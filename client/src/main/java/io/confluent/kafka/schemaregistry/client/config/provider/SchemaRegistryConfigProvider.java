@@ -166,7 +166,8 @@ public class SchemaRegistryConfigProvider implements ConfigProvider {
   }
 
   @Override
-  public void close() {
+  public void close() throws IOException {
     schemaRegistry.reset();
+    schemaRegistry.close();
   }
 }
