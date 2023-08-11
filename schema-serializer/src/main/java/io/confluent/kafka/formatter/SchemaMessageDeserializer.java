@@ -31,5 +31,5 @@ public interface SchemaMessageDeserializer<T> extends Closeable {
   T deserialize(byte[] payload) throws SerializationException;
 
   @Override
-  default void close() {}
+  default void close() throws IOException {}
 }
