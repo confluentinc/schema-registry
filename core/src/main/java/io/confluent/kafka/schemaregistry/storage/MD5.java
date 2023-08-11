@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -44,6 +45,24 @@ public class MD5 {
 
   public byte[] bytes() {
     return md5;
+  }
+
+  public static MD5 ofSchema(Schema schema) {
+    try {
+      MessageDigest md = MessageDigest.getInstance("MD5");
+      md.update(schema.getSchema().getBytes(StandardCharsets.UTF_8));
+      if (schema.getReferences() != null) {
+        for (io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference reference :
+            schema.getReferences()) {
+          md.update(reference.getName().getBytes(StandardCharsets.UTF_8));
+          md.update(reference.getSubject().getBytes(StandardCharsets.UTF_8));
+          md.update(ByteBuffer.allocate(4).putInt(reference.getVersion()).array());
+        }
+      }
+      return new MD5(md.digest());
+    } catch (NoSuchAlgorithmException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   /**

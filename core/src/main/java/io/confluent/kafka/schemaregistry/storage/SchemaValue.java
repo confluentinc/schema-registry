@@ -226,4 +226,18 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   public SchemaKey toKey() {
     return new SchemaKey(getSubject(), getVersion());
   }
+
+  public Schema toSchemaEntity() {
+    return new Schema(
+        getSubject(),
+        getVersion(),
+        getId(),
+        getSchemaType(),
+        getReferences() == null ? null : getReferences().stream()
+            .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
+                ref.getName(), ref.getSubject(), ref.getVersion()))
+            .collect(Collectors.toList()),
+        getSchema()
+    );
+  }
 }

@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -81,11 +82,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
                 Integer.parseInt(versionsToDownload.get(i)));
           }
         }
-        Optional<ParsedSchema> schema =
-            this.client().parseSchema(
-                schemaMetadata.getSchemaType(),
-                schemaMetadata.getSchema(),
-                schemaMetadata.getReferences());
+        Optional<ParsedSchema> schema = this.client().parseSchema(new Schema(null, schemaMetadata));
         if (schema.isPresent()) {
           results.put(subjects.get(i), schema.get());
         } else {

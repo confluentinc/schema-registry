@@ -160,9 +160,9 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           logContext,
           this.client,
           groupId,
-          300000, // Default MAX_POLL_INTERVAL_MS_CONFIG
-          10000, // Default SESSION_TIMEOUT_MS_CONFIG)
-          3000, // Default HEARTBEAT_INTERVAL_MS_CONFIG
+          config.getInt(SchemaRegistryConfig.KAFKAGROUP_REBALANCE_TIMEOUT_MS_CONFIG),
+          config.getInt(SchemaRegistryConfig.KAFKAGROUP_SESSION_TIMEOUT_MS_CONFIG),
+          config.getInt(SchemaRegistryConfig.KAFKAGROUP_HEARTBEAT_INTERVAL_MS_CONFIG),
           metrics,
           metricGrpPrefix,
           time,

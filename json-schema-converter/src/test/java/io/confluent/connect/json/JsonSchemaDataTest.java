@@ -69,7 +69,6 @@ import static io.confluent.connect.json.JsonSchemaData.CONNECT_TYPE_PROP;
 import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_ENUM;
 import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_UNION;
 import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_UNION_FIELD_PREFIX;
-import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_UNION_PREFIX;
 import static io.confluent.connect.json.JsonSchemaData.JSON_TYPE_ENUM;
 import static io.confluent.connect.json.JsonSchemaData.JSON_TYPE_ONE_OF;
 import static io.confluent.connect.json.JsonSchemaData.KEY_FIELD;
@@ -535,6 +534,42 @@ public class JsonSchemaDataTest {
     checkNonObjectConversion(schema, obj, actualSchema, struct);
   }
 
+  @Test
+  public void testFromConnectRecordIgnoreDefaultForNullables() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.IGNORE_DEFAULT_FOR_NULLABLES_CONFIG, "true")));
+    NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
+        .build();
+    StringSchema stringSchema = StringSchema.builder()
+        .defaultValue("default-string")
+        .build();
+    CombinedSchema oneof = CombinedSchema.oneOf(ImmutableList.of(NullSchema.INSTANCE,
+            stringSchema
+        ))
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+        .build();
+    ObjectSchema schema = ObjectSchema.builder()
+        .addPropertySchema("int8", numberSchema)
+        .addPropertySchema("string", oneof)
+        .title("Record")
+        .build();
+    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+    obj.set("int8", ShortNode.valueOf((short) 12));
+    obj.set("string", NullNode.getInstance());
+    Schema connectStringSchema = SchemaBuilder.string().optional().defaultValue("default-string").build();
+    // The string field is not set
+    Schema actualSchema = SchemaBuilder.struct()
+        .name("Record")
+        .field("int8", Schema.INT8_SCHEMA)
+        .field("string", connectStringSchema)
+        .build();
+    Struct struct = new Struct(actualSchema).put("int8", (byte) 12);
+    checkNonObjectConversion(schema, obj, actualSchema, struct);
+  }
+
   private void checkNonObjectConversion(
       org.everit.json.schema.Schema expectedSchema, Object expected, Schema schema, Object value
   ) {
@@ -672,6 +707,7 @@ public class JsonSchemaDataTest {
     Schema expectedSchema = Schema.STRING_SCHEMA;
     checkNonObjectConversion(expectedSchema, "teststring", schema, TextNode.valueOf("teststring"));
   }
+
 
   @Test
   public void testToConnectBytes() {
