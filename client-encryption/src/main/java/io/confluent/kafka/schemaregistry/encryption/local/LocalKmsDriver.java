@@ -27,8 +27,11 @@ import java.util.Optional;
 
 public class LocalKmsDriver implements KmsDriver {
 
-  public static final String LOCAL_SECRET = "secret";
-  public static final String LOCAL_OLD_SECRETS = "old.secrets";
+  public static final String SECRET = "secret";
+  public static final String OLD_SECRETS = "old.secrets";
+
+  public static final String LOCAL_SECRET = "LOCAL_SECRET";
+  public static final String LOCAL_OLD_SECRETS = "LOCAL_OLD_SECRETS";
 
   public LocalKmsDriver() {
   }
@@ -39,16 +42,21 @@ public class LocalKmsDriver implements KmsDriver {
   }
 
   private String getSecret(Map<String, ?> configs) throws GeneralSecurityException {
-    String secret = (String) configs.get(LOCAL_SECRET);
+    String secret = (String) configs.get(SECRET);
     if (secret == null) {
-      throw new GeneralSecurityException("Missing property "
-          + "rule.executors.<name>.param." + LOCAL_SECRET);
+      secret = System.getenv(LOCAL_SECRET);
+    }
+    if (secret == null) {
+      throw new GeneralSecurityException("cannot load secret");
     }
     return secret;
   }
 
   private List<String> getOldSecrets(Map<String, ?> configs) {
-    String oldSecretsStr = (String) configs.get(LOCAL_OLD_SECRETS);
+    String oldSecretsStr = (String) configs.get(OLD_SECRETS);
+    if (oldSecretsStr == null) {
+      oldSecretsStr = System.getenv(LOCAL_OLD_SECRETS);
+    }
     if (oldSecretsStr != null) {
       return Arrays.asList(oldSecretsStr.split(","));
     } else {

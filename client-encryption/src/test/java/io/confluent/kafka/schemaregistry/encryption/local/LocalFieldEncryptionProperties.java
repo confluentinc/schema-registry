@@ -14,8 +14,8 @@
  */
 package io.confluent.kafka.schemaregistry.encryption.local;
 
-import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.LOCAL_OLD_SECRETS;
-import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.LOCAL_SECRET;
+import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.OLD_SECRETS;
+import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.SECRET;
 
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
@@ -43,7 +43,7 @@ public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
 
   @Override
   public Map<String, String> getKmsProps() {
-    return Collections.singletonMap(LOCAL_SECRET, "mysecret");
+    return Collections.singletonMap(SECRET, "mysecret");
   }
 
   @Override
@@ -60,9 +60,9 @@ public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
           FieldEncryptionExecutor.class.getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
-          + ".param." + LOCAL_SECRET, "mysecret");
+          + ".param." + SECRET, "mysecret");
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
-          + ".param." + LOCAL_OLD_SECRETS, "old1, old2");
+          + ".param." + OLD_SECRETS, "old1, old2");
     }
     return props;
   }
