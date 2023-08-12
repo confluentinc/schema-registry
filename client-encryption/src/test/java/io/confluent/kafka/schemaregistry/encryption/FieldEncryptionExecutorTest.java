@@ -623,6 +623,33 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerBadKekName() throws Exception {
+    // Create shared kek
+    dekRegistry.createKek("kek1", fieldEncryptionProps.getKmsType(),
+        fieldEncryptionProps.getKmsKeyId(), fieldEncryptionProps.getKmsProps(), null, false);
+
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Map<String, String> properties = new HashMap<>();
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KEK_NAME, "$kek");
+    properties.put(FieldEncryptionExecutor.ENCRYPT_KMS_TYPE, "wrong");
+    Metadata metadata = getMetadata(properties);
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    try {
+      avroSerializer.serialize(topic, headers, avroRecord);
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof SerializationException);
+    }
+  }
+
+  @Test
   public void testKafkaAvroSerializerWrongKmsType() throws Exception {
     // Create shared kek
     dekRegistry.createKek("kek1", fieldEncryptionProps.getKmsType(),

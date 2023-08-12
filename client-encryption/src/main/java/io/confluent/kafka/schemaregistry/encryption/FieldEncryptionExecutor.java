@@ -205,11 +205,25 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     }
 
     protected String getKekName(RuleContext ctx) throws RuleException {
-      String kekName = ctx.getParameter(ENCRYPT_KEK_NAME);
-      if (kekName == null) {
+      String name = ctx.getParameter(ENCRYPT_KEK_NAME);
+      if (name == null) {
         throw new RuleException("No kek name found");
       }
-      return kekName;
+      int length = name.length();
+      if (length == 0) {
+        throw new RuleException("Empty kek name");
+      }
+      char first = name.charAt(0);
+      if (!(Character.isLetter(first) || first == '_')) {
+        throw new RuleException("Illegal initial character in kek name: " + name);
+      }
+      for (int i = 1; i < length; i++) {
+        char c = name.charAt(i);
+        if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) {
+          throw new RuleException("Illegal character in kek name: " + name);
+        }
+      }
+      return name;
     }
 
     protected KekInfo getKek(RuleContext ctx, String kekName) throws RuleException {
