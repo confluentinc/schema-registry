@@ -267,7 +267,7 @@ public class Rule {
     }
     for (int i = 1; i < length; i++) {
       char c = name.charAt(i);
-      if (!(Character.isLetterOrDigit(c) || c == '_')) {
+      if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) {
         throw new RuleException("Illegal character in rule name: " + name);
       }
     }

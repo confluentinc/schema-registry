@@ -377,7 +377,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     }
     for (int i = 1; i < name.length(); i++) {
       char c = name.charAt(i);
-      if (!(Character.isLetterOrDigit(c) || c == '_')) {
+      if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) {
         throw DekRegistryErrors.invalidOrMissingKeyInfo("name");
       }
     }
