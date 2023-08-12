@@ -64,7 +64,6 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   public static final String ENCRYPT_KEK_NAME = "encrypt.kek.name";
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
   public static final String ENCRYPT_KMS_TYPE = "encrypt.kms.type";
-  public static final String ENCRYPT_DEK_SCOPE = "encrypt.dek.scope";
   public static final String ENCRYPT_DEK_ALGORITHM = "encrypt.dek.algorithm";
 
   public static final String KMS_TYPE_SUFFIX = "://";
@@ -298,12 +297,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
 
     protected DekInfo getDek(RuleContext ctx, String kekName, KekInfo kek)
         throws RuleException, GeneralSecurityException {
-      String scope = ctx.getParameter(ENCRYPT_DEK_SCOPE);
-      if (scope == null) {
-        // Scope defaults to subject
-        scope = ctx.subject();
-      }
-      DekId dekId = new DekId(kekName, scope, cryptor.getDekFormat());
+      DekId dekId = new DekId(kekName, ctx.subject(), cryptor.getDekFormat());
 
       Aead aead = null;
       DekInfo dek = retrieveDekFromRegistry(ctx, dekId);
@@ -340,7 +334,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
 
     private DekInfo retrieveDekFromRegistry(RuleContext ctx, DekId key) throws RuleException {
       try {
-        Dek dek = client.getDek(key.getKekName(), key.getScope(), key
+        Dek dek = client.getDek(key.getKekName(), key.getSubject(), key
             .getDekFormat(), ctx.ruleMode() == RuleMode.READ);
         if (dek == null) {
           return null;
@@ -369,7 +363,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
             ? (String) toObject(Type.STRING, Base64.getEncoder().encode(dekInfo.getEncryptedDek()))
             : null;
         Dek dek = client.createDek(
-            key.getKekName(), key.getScope(), key.getDekFormat(), encryptedDekStr);
+            key.getKekName(), key.getSubject(), key.getDekFormat(), encryptedDekStr);
         byte[] rawDek = dek.getKeyMaterial() != null
             ? Base64.getDecoder().decode(toBytes(Type.STRING, dek.getKeyMaterial()))
             : null;

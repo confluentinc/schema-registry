@@ -36,6 +36,8 @@ public abstract class EncryptionKey {
 
   private final KeyType type;
   private final boolean deleted;
+  private Long offset;
+  private Long timestamp;
 
   @JsonCreator
   public EncryptionKey(
@@ -54,6 +56,26 @@ public abstract class EncryptionKey {
   @JsonProperty("deleted")
   public boolean isDeleted() {
     return this.deleted;
+  }
+
+  @JsonProperty("offset")
+  public Long getOffset() {
+    return this.offset;
+  }
+
+  @JsonProperty("offset")
+  public void setOffset(Long offset) {
+    this.offset = offset;
+  }
+
+  @JsonProperty("ts")
+  public Long getTimestamp() {
+    return this.timestamp;
+  }
+
+  @JsonProperty("ts")
+  public void setTimestamp(Long timestamp) {
+    this.timestamp = timestamp;
   }
 
   @Override

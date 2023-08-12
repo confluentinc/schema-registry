@@ -31,7 +31,7 @@ import java.util.Objects;
 public class DataEncryptionKey extends EncryptionKey {
 
   private final String kekName;
-  private final String scope;
+  private final String subject;
   private final DekFormat algorithm;
   private final String encryptedKeyMaterial;
   private String keyMaterial;
@@ -39,14 +39,14 @@ public class DataEncryptionKey extends EncryptionKey {
   @JsonCreator
   public DataEncryptionKey(
       @JsonProperty("kekName") String kekName,
-      @JsonProperty("scope") String scope,
+      @JsonProperty("subject") String subject,
       @JsonProperty("algorithm") DekFormat algorithm,
       @JsonProperty("encryptedKeyMaterial") String encryptedKeyMaterial,
       @JsonProperty("deleted") boolean deleted
   ) {
     super(KeyType.DEK, deleted);
     this.kekName = kekName;
-    this.scope = scope;
+    this.subject = subject;
     this.algorithm = algorithm;
     this.encryptedKeyMaterial = encryptedKeyMaterial;
   }
@@ -56,9 +56,9 @@ public class DataEncryptionKey extends EncryptionKey {
     return this.kekName;
   }
 
-  @JsonProperty("scope")
-  public String getScope() {
-    return this.scope;
+  @JsonProperty("subject")
+  public String getSubject() {
+    return this.subject;
   }
 
   @JsonProperty("algorithm")
@@ -94,17 +94,17 @@ public class DataEncryptionKey extends EncryptionKey {
     }
     DataEncryptionKey that = (DataEncryptionKey) o;
     return Objects.equals(kekName, that.kekName)
-        && Objects.equals(scope, that.scope)
+        && Objects.equals(subject, that.subject)
         && algorithm == that.algorithm
         && Objects.equals(encryptedKeyMaterial, that.encryptedKeyMaterial);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), kekName, scope, algorithm, encryptedKeyMaterial);
+    return Objects.hash(super.hashCode(), kekName, subject, algorithm, encryptedKeyMaterial);
   }
 
   public Dek toDekEntity() {
-    return new Dek(kekName, scope, algorithm, encryptedKeyMaterial, keyMaterial);
+    return new Dek(kekName, subject, algorithm, encryptedKeyMaterial, keyMaterial);
   }
 }

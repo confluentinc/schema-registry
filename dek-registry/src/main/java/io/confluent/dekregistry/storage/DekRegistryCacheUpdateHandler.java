@@ -33,6 +33,22 @@ public class DekRegistryCacheUpdateHandler
     this.metricsManager = metricsManager;
   }
 
+  @Override
+  public ValidationStatus validateUpdate(
+      EncryptionKeyId key,
+      EncryptionKey value,
+      TopicPartition tp,
+      long offset,
+      long timestamp) {
+    if (value != null) {
+      // Store the offset and timestamp in the cached value
+      value.setOffset(offset);
+      value.setTimestamp(timestamp);
+    }
+
+    return ValidationStatus.SUCCESS;
+  }
+
   /**
    * Invoked on every new schema written to the Kafka store
    *

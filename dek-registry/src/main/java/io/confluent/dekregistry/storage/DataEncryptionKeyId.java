@@ -29,19 +29,19 @@ import java.util.Objects;
 public class DataEncryptionKeyId extends EncryptionKeyId {
 
   private final String kekName;
-  private final String scope;
+  private final String subject;
   private final DekFormat algorithm;
 
   @JsonCreator
   public DataEncryptionKeyId(
       @JsonProperty("tenant") String tenant,
       @JsonProperty("kekName") String kekName,
-      @JsonProperty("scope") String scope,
+      @JsonProperty("subject") String subject,
       @JsonProperty("algorithm") DekFormat algorithm
   ) {
     super(tenant, KeyType.DEK);
     this.kekName = kekName;
-    this.scope = scope;
+    this.subject = subject;
     this.algorithm = algorithm;
   }
 
@@ -50,9 +50,9 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
     return this.kekName;
   }
 
-  @JsonProperty("scope")
-  public String getScope() {
-    return this.scope;
+  @JsonProperty("subject")
+  public String getSubject() {
+    return this.subject;
   }
 
   @JsonProperty("algorithm")
@@ -73,13 +73,13 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
     }
     DataEncryptionKeyId that = (DataEncryptionKeyId) o;
     return Objects.equals(kekName, that.kekName)
-        && Objects.equals(scope, that.scope)
+        && Objects.equals(subject, that.subject)
         && algorithm == that.algorithm;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), kekName, scope, algorithm);
+    return Objects.hash(super.hashCode(), kekName, subject, algorithm);
   }
 
   @Override
@@ -116,16 +116,16 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
       }
     }
 
-    if (this.getScope() == null && that.getScope() == null) {
+    if (this.getSubject() == null && that.getSubject() == null) {
       // pass
-    } else if (this.getScope() == null) {
+    } else if (this.getSubject() == null) {
       return -1;
-    } else if (that.getScope() == null) {
+    } else if (that.getSubject() == null) {
       return 1;
     } else {
-      int scopeComparison = this.getScope().compareTo(that.getScope());
-      if (scopeComparison != 0) {
-        return scopeComparison < 0 ? -1 : 1;
+      int subjectComparison = this.getSubject().compareTo(that.getSubject());
+      if (subjectComparison != 0) {
+        return subjectComparison < 0 ? -1 : 1;
       }
     }
 

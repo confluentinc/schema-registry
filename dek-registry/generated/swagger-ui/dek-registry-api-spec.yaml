@@ -5,8 +5,8 @@ info:
 paths:
   /dek-registry/v1/keks/{name}/deks:
     get:
-      summary: Get a list of dek scopes.
-      operationId: getDekScopes
+      summary: Get a list of dek subjects.
+      operationId: getDekSubjects
       parameters:
       - name: name
         in: path
@@ -230,9 +230,9 @@ paths:
           description: No Content
         "404":
           description: Error code 40450 -- Key not found
-  /dek-registry/v1/keks/{name}/deks/{scope}:
+  /dek-registry/v1/keks/{name}/deks/{subject}:
     get:
-      summary: Get a dek by scope.
+      summary: Get a dek by subject.
       operationId: getDek
       parameters:
       - name: name
@@ -241,9 +241,9 @@ paths:
         required: true
         schema:
           type: string
-      - name: scope
+      - name: subject
         in: path
-        description: Scope of the dek
+        description: Subject of the dek
         required: true
         schema:
           type: string
@@ -286,9 +286,9 @@ paths:
         required: true
         schema:
           type: string
-      - name: scope
+      - name: subject
         in: path
-        description: Scope of the dek
+        description: Subject of the dek
         required: true
         schema:
           type: string
@@ -318,7 +318,7 @@ components:
       properties:
         kekName:
           type: string
-        scope:
+        subject:
           type: string
         algorithm:
           type: string
@@ -333,7 +333,7 @@ components:
     CreateDekRequest:
       type: object
       properties:
-        scope:
+        subject:
           type: string
         algorithm:
           type: string

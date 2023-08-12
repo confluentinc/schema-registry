@@ -107,25 +107,25 @@ public class DekRegistryRestService extends RestService implements Configurable 
     return httpRequest(path, "GET", null, requestProperties, STRINGS_TYPE);
   }
 
-  public Dek getDek(String name, String scope, boolean lookupDeleted)
+  public Dek getDek(String name, String subject, boolean lookupDeleted)
       throws IOException, RestClientException {
-    return getDek(name, scope, null, lookupDeleted);
+    return getDek(name, subject, null, lookupDeleted);
   }
 
-  public Dek getDek(String name, String scope, DekFormat algorithm, boolean lookupDeleted)
+  public Dek getDek(String name, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
-    return getDek(DEFAULT_REQUEST_PROPERTIES, name, scope, algorithm, lookupDeleted);
+    return getDek(DEFAULT_REQUEST_PROPERTIES, name, subject, algorithm, lookupDeleted);
   }
 
   public Dek getDek(Map<String, String> requestProperties,
-      String kekName, String scope, DekFormat algorithm, boolean lookupDeleted)
+      String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{scope}")
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}")
         .queryParam("deleted", lookupDeleted);
     if (algorithm != null) {
       builder = builder.queryParam("algorithm", algorithm.name());
     }
-    String path = builder.build(kekName, scope).toString();
+    String path = builder.build(kekName, subject).toString();
 
     return httpRequest(path, "GET", null, requestProperties, DEK_TYPE);
   }
@@ -203,25 +203,25 @@ public class DekRegistryRestService extends RestService implements Configurable 
     httpRequest(path, "DELETE", null, requestProperties, VOID_TYPE);
   }
 
-  public void deleteDek(String name, String scope, boolean permanentDelete)
+  public void deleteDek(String name, String subject, boolean permanentDelete)
       throws IOException, RestClientException {
-    deleteDek(name, scope, null, permanentDelete);
+    deleteDek(name, subject, null, permanentDelete);
   }
 
-  public void deleteDek(String name, String scope, DekFormat algorithm, boolean permanentDelete)
+  public void deleteDek(String name, String subject, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException {
-    deleteDek(DEFAULT_REQUEST_PROPERTIES, name, scope, algorithm, permanentDelete);
+    deleteDek(DEFAULT_REQUEST_PROPERTIES, name, subject, algorithm, permanentDelete);
   }
 
-  public void deleteDek(Map<String, String> requestProperties, String name, String scope,
+  public void deleteDek(Map<String, String> requestProperties, String name, String subject,
       DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{scope}")
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}")
         .queryParam("permanent", permanentDelete);
     if (algorithm != null) {
       builder = builder.queryParam("algorithm", algorithm.name());
     }
-    String path = builder.build(name, scope).toString();
+    String path = builder.build(name, subject).toString();
 
     httpRequest(path, "DELETE", null, requestProperties, VOID_TYPE);
   }

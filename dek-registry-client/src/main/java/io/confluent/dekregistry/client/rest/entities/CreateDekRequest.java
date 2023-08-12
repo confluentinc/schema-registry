@@ -29,7 +29,7 @@ import java.util.Objects;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CreateDekRequest {
 
-  private String scope;
+  private String subject;
   private DekFormat algorithm;
   private String encryptedKeyMaterial;
 
@@ -37,14 +37,14 @@ public class CreateDekRequest {
     return JacksonMapper.INSTANCE.readValue(json, CreateDekRequest.class);
   }
 
-  @JsonProperty("scope")
-  public String getScope() {
-    return this.scope;
+  @JsonProperty("subject")
+  public String getSubject() {
+    return this.subject;
   }
 
-  @JsonProperty("scope")
-  public void setScope(String scope) {
-    this.scope = scope;
+  @JsonProperty("subject")
+  public void setSubject(String subject) {
+    this.subject = subject;
   }
 
   @JsonProperty("algorithm")
@@ -76,14 +76,14 @@ public class CreateDekRequest {
       return false;
     }
     CreateDekRequest dek = (CreateDekRequest) o;
-    return Objects.equals(scope, dek.scope)
+    return Objects.equals(subject, dek.subject)
         && Objects.equals(algorithm, dek.algorithm)
         && Objects.equals(encryptedKeyMaterial, dek.encryptedKeyMaterial);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(scope, algorithm, encryptedKeyMaterial);
+    return Objects.hash(subject, algorithm, encryptedKeyMaterial);
   }
 
   @Override

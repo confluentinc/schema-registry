@@ -268,11 +268,11 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public List<String> getDekScopes(String kekName, boolean lookupDeleted) {
+  public List<String> getDekSubjects(String kekName, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
     return getDeks(tenant, kekName).stream()
         .filter(kv -> !kv.value.isDeleted() || lookupDeleted)
-        .map(kv -> ((DataEncryptionKeyId) kv.key).getScope())
+        .map(kv -> ((DataEncryptionKeyId) kv.key).getSubject())
         .collect(Collectors.toList());
   }
 
@@ -308,13 +308,13 @@ public class DekRegistry implements Closeable {
     return result;
   }
 
-  public DataEncryptionKey getDek(String kekName, String scope, DekFormat algorithm,
+  public DataEncryptionKey getDek(String kekName, String subject, DekFormat algorithm,
       boolean lookupDeleted) throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
-    DataEncryptionKeyId keyId = new DataEncryptionKeyId(tenant, kekName, scope, algorithm);
+    DataEncryptionKeyId keyId = new DataEncryptionKeyId(tenant, kekName, subject, algorithm);
     DataEncryptionKey key = (DataEncryptionKey) keys.get(keyId);
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
       key = maybeGenerateRawDek(key);
@@ -461,16 +461,16 @@ public class DekRegistry implements Closeable {
         ? request.getAlgorithm()
         : DekFormat.AES256_GCM;
     DataEncryptionKeyId keyId = new DataEncryptionKeyId(
-        tenant, kekName, request.getScope(), algorithm);
+        tenant, kekName, request.getSubject(), algorithm);
     if (keys.containsKey(keyId)) {
-      throw new AlreadyExistsException(request.getScope());
+      throw new AlreadyExistsException(request.getSubject());
     }
 
-    DataEncryptionKey key = new DataEncryptionKey(kekName, request.getScope(),
+    DataEncryptionKey key = new DataEncryptionKey(kekName, request.getSubject(),
         request.getAlgorithm(), request.getEncryptedKeyMaterial(), false);
     key = maybeGenerateEncryptedDek(key);
     if (key.getEncryptedKeyMaterial() == null) {
-      throw new DekGenerationException("Could not generate dek for " + request.getScope());
+      throw new DekGenerationException("Could not generate dek for " + request.getSubject());
     }
     keys.put(keyId, key);
     key = maybeGenerateRawDek(key);
@@ -487,7 +487,7 @@ public class DekRegistry implements Closeable {
         byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
         String encryptedDekStr =
             new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
-        key = new DataEncryptionKey(key.getKekName(), key.getScope(), key.getAlgorithm(),
+        key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getAlgorithm(),
             encryptedDekStr, key.isDeleted());
       }
       return key;
@@ -509,7 +509,7 @@ public class DekRegistry implements Closeable {
         String rawDekStr =
             new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
         // Copy dek
-        key = new DataEncryptionKey(key.getKekName(), key.getScope(), key.getAlgorithm(),
+        key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getAlgorithm(),
             key.getEncryptedKeyMaterial(), key.isDeleted());
         key.setKeyMaterial(rawDekStr);
       }
@@ -654,18 +654,18 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public void deleteDekOrForward(String name, String scope, DekFormat algorithm,
+  public void deleteDekOrForward(String name, String subject, DekFormat algorithm,
       boolean permanentDelete, Map<String, String> headerProperties)
       throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     lock(tenant, headerProperties);
     try {
       if (isLeader(headerProperties)) {
-        deleteDek(name, scope, algorithm, permanentDelete);
+        deleteDek(name, subject, algorithm, permanentDelete);
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
-          forwardDeleteDekRequestToLeader(name, scope, algorithm,
+          forwardDeleteDekRequestToLeader(name, subject, algorithm,
               permanentDelete, headerProperties);
         } else {
           throw new UnknownLeaderException("Request failed since leader is unknown");
@@ -676,18 +676,18 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private void forwardDeleteDekRequestToLeader(String name, String scope, DekFormat algorithm,
+  private void forwardDeleteDekRequestToLeader(String name, String subject, DekFormat algorithm,
       boolean permanentDelete, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     RestService leaderRestService = schemaRegistry.leaderRestService();
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
-    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{scope}")
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}")
         .queryParam("permanent", permanentDelete);
     if (algorithm != null) {
       builder = builder.queryParam("algorithm", algorithm.name());
     }
-    String path = builder.build(name, scope).toString();
+    String path = builder.build(name, subject).toString();
 
     log.debug(String.format("Forwarding delete key request to %s", baseUrl));
     try {
@@ -703,7 +703,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private void deleteDek(String name, String scope, DekFormat algorithm, boolean permanentDelete)
+  private void deleteDek(String name, String subject, DekFormat algorithm, boolean permanentDelete)
       throws SchemaRegistryException {
     // Ensure cache is up-to-date
     keys.sync();
@@ -712,18 +712,18 @@ public class DekRegistry implements Closeable {
       algorithm = DekFormat.AES256_GCM;
     }
     String tenant = schemaRegistry.tenant();
-    DataEncryptionKeyId keyId = new DataEncryptionKeyId(tenant, name, scope, algorithm);
+    DataEncryptionKeyId keyId = new DataEncryptionKeyId(tenant, name, subject, algorithm);
     DataEncryptionKey key = (DataEncryptionKey) keys.get(keyId);
     if (key == null) {
       return;
     }
     if (permanentDelete) {
       if (!key.isDeleted()) {
-        throw new KeyNotSoftDeletedException(scope);
+        throw new KeyNotSoftDeletedException(subject);
       }
       keys.remove(keyId);
     } else {
-      DataEncryptionKey newKey = new DataEncryptionKey(name, key.getScope(),
+      DataEncryptionKey newKey = new DataEncryptionKey(name, key.getSubject(),
           key.getAlgorithm(), key.getEncryptedKeyMaterial(), true);
       keys.put(keyId, newKey);
     }

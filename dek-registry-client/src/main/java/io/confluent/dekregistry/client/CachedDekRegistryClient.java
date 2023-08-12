@@ -117,17 +117,17 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   }
 
   @Override
-  public Dek getDek(String name, String scope, boolean lookupDeleted)
+  public Dek getDek(String name, String subject, boolean lookupDeleted)
       throws IOException, RestClientException {
-    return getDek(name, scope, null, lookupDeleted);
+    return getDek(name, subject, null, lookupDeleted);
   }
 
   @Override
-  public Dek getDek(String name, String scope, DekFormat algorithm, boolean lookupDeleted)
+  public Dek getDek(String name, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     try {
-      return dekCache.get(new DekId(name, scope, algorithm), () ->
-          restService.getDek(name, scope, algorithm, lookupDeleted));
+      return dekCache.get(new DekId(name, subject, algorithm), () ->
+          restService.getDek(name, subject, algorithm, lookupDeleted));
     } catch (ExecutionException e) {
       if (e.getCause() instanceof IOException) {
         throw (IOException) e.getCause();
@@ -162,16 +162,16 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   @Override
   public Dek createDek(
       String kekName,
-      String scope,
+      String subject,
       DekFormat algorithm,
       String encryptedKeyMaterial)
       throws IOException, RestClientException {
     CreateDekRequest request = new CreateDekRequest();
-    request.setScope(scope);
+    request.setSubject(subject);
     request.setAlgorithm(algorithm);
     request.setEncryptedKeyMaterial(encryptedKeyMaterial);
     Dek dek = restService.createDek(kekName, request);
-    dekCache.put(new DekId(kekName, scope, algorithm), dek);
+    dekCache.put(new DekId(kekName, subject, algorithm), dek);
     return dek;
   }
 
@@ -199,16 +199,16 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   }
 
   @Override
-  public void deleteDek(String name, String scope, boolean permanentDelete)
+  public void deleteDek(String name, String subject, boolean permanentDelete)
       throws IOException, RestClientException {
-    deleteDek(name, scope, null, permanentDelete);
+    deleteDek(name, subject, null, permanentDelete);
   }
 
   @Override
-  public void deleteDek(String name, String scope, DekFormat algorithm, boolean permanentDelete)
+  public void deleteDek(String name, String subject, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException {
-    restService.deleteDek(name, scope, algorithm, permanentDelete);
-    dekCache.invalidate(new DekId(name, scope, algorithm));
+    restService.deleteDek(name, subject, algorithm, permanentDelete);
+    dekCache.invalidate(new DekId(name, subject, algorithm));
   }
 
   @Override
@@ -250,12 +250,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   public static class DekId {
 
     private final String kekName;
-    private final String scope;
+    private final String subject;
     private final DekFormat dekFormat;
 
-    public DekId(String kekName, String scope, DekFormat dekFormat) {
+    public DekId(String kekName, String subject, DekFormat dekFormat) {
       this.kekName = kekName;
-      this.scope = scope;
+      this.subject = subject;
       this.dekFormat = dekFormat;
     }
 
@@ -263,8 +263,8 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       return kekName;
     }
 
-    public String getScope() {
-      return scope;
+    public String getSubject() {
+      return subject;
     }
 
     public DekFormat getDekFormat() {
@@ -281,13 +281,13 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       }
       DekId that = (DekId) o;
       return Objects.equals(kekName, that.kekName)
-          && Objects.equals(scope, that.scope)
+          && Objects.equals(subject, that.subject)
           && dekFormat == that.dekFormat;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(kekName, scope, dekFormat);
+      return Objects.hash(kekName, subject, dekFormat);
     }
   }
 }

@@ -78,9 +78,9 @@ public class RestApiTest extends ClusterTestHarness {
     String kekName = "kek1";
     String kmsType = "test-kms";
     String kmsKeyId = "myid";
-    String scope = "mysubject";
-    String scope2 = "mysubject2";
-    String scope3 = "mysubject3";
+    String subject = "mysubject";
+    String subject2 = "mysubject2";
+    String subject3 = "mysubject3";
     DekFormat algorithm = DekFormat.AES256_GCM;
     Kek kek = new Kek(kekName, kmsType, kmsKeyId, null, null, false);
 
@@ -158,21 +158,21 @@ public class RestApiTest extends ClusterTestHarness {
     byte[] encryptedDek = aead.encrypt(rawDek, new byte[0]);
     String encryptedDekStr =
         new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
-    Dek dek = new Dek(kekName, scope, algorithm, encryptedDekStr, null);
+    Dek dek = new Dek(kekName, subject, algorithm, encryptedDekStr, null);
 
     // Create dek
-    Dek newDek = client.createDek(kekName, scope, algorithm, encryptedDekStr);
+    Dek newDek = client.createDek(kekName, subject, algorithm, encryptedDekStr);
     assertEquals(dek, newDek);
 
-    newDek = client.getDek(kekName, scope, algorithm, false);
+    newDek = client.getDek(kekName, subject, algorithm, false);
     assertEquals(dek, newDek);
 
     // Create dek w/o key material, receive encrypted key material
-    newDek = client.createDek(kekName, scope2, algorithm, null);
+    newDek = client.createDek(kekName, subject2, algorithm, null);
     assertNotNull(newDek.getEncryptedKeyMaterial());
     assertNull(newDek.getKeyMaterial());
 
-    newDek = client.getDek(kekName, scope, algorithm, false);
+    newDek = client.getDek(kekName, subject, algorithm, false);
     assertEquals(dek, newDek);
 
     Map<String, String> kmsProps = Collections.singletonMap("hi", "there");
@@ -187,17 +187,17 @@ public class RestApiTest extends ClusterTestHarness {
     fakeTicker.advance(61, TimeUnit.SECONDS);
 
     // Dek now has decrypted key material
-    Dek dek2 = new Dek(kekName, scope, algorithm, encryptedDekStr, rawDekStr);
-    newDek = client.getDek(kekName, scope, algorithm, true);
+    Dek dek2 = new Dek(kekName, subject, algorithm, encryptedDekStr, rawDekStr);
+    newDek = client.getDek(kekName, subject, algorithm, true);
     assertEquals(dek2, newDek);
 
     // Create dek w/o key material, receive both encrypted and decrypted key material
-    newDek = client.createDek(kekName, scope3, algorithm, null);
+    newDek = client.createDek(kekName, subject3, algorithm, null);
     assertNotNull(newDek.getEncryptedKeyMaterial());
     assertNotNull(newDek.getKeyMaterial());
 
     List<String> deks = client.listDeks(kekName, false);
-    assertEquals(ImmutableList.of(scope, scope2, scope3), deks);
+    assertEquals(ImmutableList.of(subject, subject2, subject3), deks);
 
     try {
       client.deleteKek(kekName, false);
@@ -207,39 +207,39 @@ public class RestApiTest extends ClusterTestHarness {
     }
 
     try {
-      client.deleteDek(kekName, scope, algorithm, true);
+      client.deleteDek(kekName, subject, algorithm, true);
       fail();
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.KEY_NOT_SOFT_DELETED_ERROR_CODE, e.getErrorCode());
     }
 
-    client.deleteDek(kekName, scope, algorithm, false);
+    client.deleteDek(kekName, subject, algorithm, false);
 
     try {
-      client.getDek(kekName, scope, algorithm, false);
+      client.getDek(kekName, subject, algorithm, false);
       fail();
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
     }
 
-    newDek = client.getDek(kekName, scope, algorithm, true);
+    newDek = client.getDek(kekName, subject, algorithm, true);
     assertEquals(dek2, newDek);
 
     deks = client.listDeks(kekName, false);
-    assertEquals(ImmutableList.of(scope2, scope3), deks);
+    assertEquals(ImmutableList.of(subject2, subject3), deks);
 
     deks = client.listDeks(kekName, true);
-    assertEquals(ImmutableList.of(scope, scope2, scope3), deks);
+    assertEquals(ImmutableList.of(subject, subject2, subject3), deks);
 
-    client.deleteDek(kekName, scope2, algorithm, false);
-    client.deleteDek(kekName, scope3, algorithm, false);
+    client.deleteDek(kekName, subject2, algorithm, false);
+    client.deleteDek(kekName, subject3, algorithm, false);
     client.deleteKek(kekName, false);
 
     deks = client.listDeks(kekName, false);
     assertEquals(Collections.emptyList(), deks);
 
     deks = client.listDeks(kekName, true);
-    assertEquals(ImmutableList.of(scope, scope2, scope3), deks);
+    assertEquals(ImmutableList.of(subject, subject2, subject3), deks);
 
     try {
       client.deleteKek(kekName, true);
@@ -248,9 +248,9 @@ public class RestApiTest extends ClusterTestHarness {
       assertEquals(DekRegistryErrors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
     }
 
-    client.deleteDek(kekName, scope, algorithm, true);
-    client.deleteDek(kekName, scope2, algorithm, true);
-    client.deleteDek(kekName, scope3, algorithm, true);
+    client.deleteDek(kekName, subject, algorithm, true);
+    client.deleteDek(kekName, subject2, algorithm, true);
+    client.deleteDek(kekName, subject3, algorithm, true);
 
     deks = client.listDeks(kekName, false);
     assertEquals(Collections.emptyList(), deks);
@@ -266,8 +266,8 @@ public class RestApiTest extends ClusterTestHarness {
     String kekName = "kek1";
     String kmsType = "unknown-kms";
     String kmsKeyId = "myid";
-    String scope = "mysubject";
-    String scope2 = "mysubject2";
+    String subject = "mysubject";
+    String subject2 = "mysubject2";
     DekFormat algorithm = DekFormat.AES256_GCM;
     Kek kek = new Kek(kekName, kmsType, kmsKeyId, null, null, false);
 
@@ -288,18 +288,18 @@ public class RestApiTest extends ClusterTestHarness {
     byte[] encryptedDek = aead.encrypt(rawDek, new byte[0]);
     String encryptedDekStr =
         new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
-    Dek dek = new Dek(kekName, scope, algorithm, encryptedDekStr, null);
+    Dek dek = new Dek(kekName, subject, algorithm, encryptedDekStr, null);
 
     // Create dek
-    Dek newDek = client.createDek(kekName, scope, algorithm, encryptedDekStr);
+    Dek newDek = client.createDek(kekName, subject, algorithm, encryptedDekStr);
     assertEquals(dek, newDek);
 
-    newDek = client.getDek(kekName, scope, algorithm, false);
+    newDek = client.getDek(kekName, subject, algorithm, false);
     assertEquals(dek, newDek);
 
     // Create dek w/o key material, exception
     try {
-      newDek = client.createDek(kekName, scope2, algorithm, null);
+      newDek = client.createDek(kekName, subject2, algorithm, null);
       fail();
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.DEK_GENERATION_ERROR_CODE, e.getErrorCode());
@@ -317,8 +317,8 @@ public class RestApiTest extends ClusterTestHarness {
     fakeTicker.advance(61, TimeUnit.SECONDS);
 
     // Dek still does not have decrypted key material because kms type is unknown
-    Dek dek2 = new Dek(kekName, scope, algorithm, encryptedDekStr, null);
-    newDek = client.getDek(kekName, scope, algorithm, true);
+    Dek dek2 = new Dek(kekName, subject, algorithm, encryptedDekStr, null);
+    newDek = client.getDek(kekName, subject, algorithm, true);
     assertEquals(dek2, newDek);
   }
 }

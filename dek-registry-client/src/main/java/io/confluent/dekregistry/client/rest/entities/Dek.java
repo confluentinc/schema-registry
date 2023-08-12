@@ -31,7 +31,7 @@ import java.util.Objects;
 public class Dek {
 
   private final String kekName;
-  private final String scope;
+  private final String subject;
   private final DekFormat algorithm;
   private final String encryptedKeyMaterial;
   private final String keyMaterial;
@@ -39,13 +39,13 @@ public class Dek {
   @JsonCreator
   public Dek(
       @JsonProperty("kekName") String kekName,
-      @JsonProperty("scope") String scope,
+      @JsonProperty("subject") String subject,
       @JsonProperty("algorithm") DekFormat algorithm,
       @JsonProperty("encryptedKeyMaterial") String encryptedKeyMaterial,
       @JsonProperty("keyMaterial") String keyMaterial
   ) {
     this.kekName = kekName;
-    this.scope = scope;
+    this.subject = subject;
     this.algorithm = algorithm;
     this.encryptedKeyMaterial = encryptedKeyMaterial;
     this.keyMaterial = keyMaterial;
@@ -56,9 +56,9 @@ public class Dek {
     return this.kekName;
   }
 
-  @JsonProperty("scope")
-  public String getScope() {
-    return this.scope;
+  @JsonProperty("subject")
+  public String getSubject() {
+    return this.subject;
   }
 
   @JsonProperty("algorithm")
@@ -86,7 +86,7 @@ public class Dek {
     }
     Dek dek = (Dek) o;
     return Objects.equals(kekName, dek.kekName)
-        && Objects.equals(scope, dek.scope)
+        && Objects.equals(subject, dek.subject)
         && Objects.equals(algorithm, dek.algorithm)
         && Objects.equals(encryptedKeyMaterial, dek.encryptedKeyMaterial)
         && Objects.equals(keyMaterial, dek.keyMaterial);
@@ -94,7 +94,7 @@ public class Dek {
 
   @Override
   public int hashCode() {
-    return Objects.hash(kekName, scope, algorithm, encryptedKeyMaterial, keyMaterial);
+    return Objects.hash(kekName, subject, algorithm, encryptedKeyMaterial, keyMaterial);
   }
 
   @Override

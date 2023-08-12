@@ -84,23 +84,23 @@ public class MockDekRegistryClient implements DekRegistryClient {
       throws IOException, RestClientException {
     return deks.entrySet().stream()
         .filter(kv -> !kv.getValue().isDeleted() || lookupDeleted)
-        .map(kv -> kv.getKey().getScope())
+        .map(kv -> kv.getKey().getSubject())
         .collect(Collectors.toList());
   }
 
   @Override
-  public Dek getDek(String name, String scope, boolean lookupDeleted)
+  public Dek getDek(String name, String subject, boolean lookupDeleted)
       throws IOException, RestClientException {
-    return getDek(name, scope, null, lookupDeleted);
+    return getDek(name, subject, null, lookupDeleted);
   }
 
   @Override
-  public Dek getDek(String name, String scope, DekFormat algorithm, boolean lookupDeleted)
+  public Dek getDek(String name, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
-    DekId keyId = new DekId(name, scope, algorithm);
+    DekId keyId = new DekId(name, subject, algorithm);
     DekInfo key = deks.get(keyId);
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
       key = maybeGenerateRawDek(key);
@@ -131,18 +131,18 @@ public class MockDekRegistryClient implements DekRegistryClient {
   @Override
   public Dek createDek(
       String kekName,
-      String scope,
+      String subject,
       DekFormat algorithm,
       String encryptedKeyMaterial)
       throws IOException, RestClientException {
-    DekId keyId = new DekId(kekName, scope, algorithm);
+    DekId keyId = new DekId(kekName, subject, algorithm);
     if (deks.containsKey(keyId)) {
-      throw new RestClientException("Key " + scope + " already exists", 409, 40972);
+      throw new RestClientException("Key " + subject + " already exists", 409, 40972);
     }
-    DekInfo key = new DekInfo(kekName, scope, algorithm, encryptedKeyMaterial, null, false);
+    DekInfo key = new DekInfo(kekName, subject, algorithm, encryptedKeyMaterial, null, false);
     key = maybeGenerateEncryptedDek(key);
     if (key.getEncryptedKeyMaterial() == null) {
-      throw new RestClientException("Could not generate dek for " + scope, 500, 50070);
+      throw new RestClientException("Could not generate dek for " + subject, 500, 50070);
     }
     deks.put(keyId, key);
     key = maybeGenerateRawDek(key);
@@ -160,7 +160,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
         byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
         String encryptedDekStr =
             new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
-        key = new DekInfo(key.getKekName(), key.getScope(), key.getAlgorithm(),
+        key = new DekInfo(key.getKekName(), key.getSubject(), key.getAlgorithm(),
             encryptedDekStr, null, key.isDeleted());
       }
       return key;
@@ -182,7 +182,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
         String rawDekStr =
             new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
         // Copy dek
-        key = new DekInfo(key.getKekName(), key.getScope(), key.getAlgorithm(),
+        key = new DekInfo(key.getKekName(), key.getSubject(), key.getAlgorithm(),
             key.getEncryptedKeyMaterial(), rawDekStr, key.isDeleted());
       }
       return key;
@@ -236,19 +236,19 @@ public class MockDekRegistryClient implements DekRegistryClient {
   }
 
   @Override
-  public void deleteDek(String name, String scope, boolean permanentDelete)
+  public void deleteDek(String name, String subject, boolean permanentDelete)
       throws IOException, RestClientException {
-    deleteDek(name, scope, null, permanentDelete);
+    deleteDek(name, subject, null, permanentDelete);
 
   }
 
   @Override
-  public void deleteDek(String name, String scope, DekFormat algorithm, boolean permanentDelete)
+  public void deleteDek(String name, String subject, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException {
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
-    DekId keyId = new DekId(name, scope, algorithm);
+    DekId keyId = new DekId(name, subject, algorithm);
     DekInfo key = deks.get(keyId);
     if (key == null) {
       return;
@@ -256,7 +256,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     if (permanentDelete) {
       deks.remove(keyId);
     } else {
-      DekInfo newKey = new DekInfo(name, key.getScope(), key.getAlgorithm(),
+      DekInfo newKey = new DekInfo(name, key.getSubject(), key.getAlgorithm(),
           key.getEncryptedKeyMaterial(), key.getKeyMaterial(), true);
       deks.put(keyId, newKey);
     }
@@ -302,12 +302,12 @@ public class MockDekRegistryClient implements DekRegistryClient {
   static class DekId {
 
     private final String kekName;
-    private final String scope;
+    private final String subject;
     private final DekFormat dekFormat;
 
-    public DekId(String kekName, String scope, DekFormat dekFormat) {
+    public DekId(String kekName, String subject, DekFormat dekFormat) {
       this.kekName = kekName;
-      this.scope = scope;
+      this.subject = subject;
       this.dekFormat = dekFormat;
     }
 
@@ -315,8 +315,8 @@ public class MockDekRegistryClient implements DekRegistryClient {
       return kekName;
     }
 
-    public String getScope() {
-      return scope;
+    public String getSubject() {
+      return subject;
     }
 
     public DekFormat getDekFormat() {
@@ -333,13 +333,13 @@ public class MockDekRegistryClient implements DekRegistryClient {
       }
       DekId that = (DekId) o;
       return Objects.equals(kekName, that.kekName)
-          && Objects.equals(scope, that.scope)
+          && Objects.equals(subject, that.subject)
           && dekFormat == that.dekFormat;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(kekName, scope, dekFormat);
+      return Objects.hash(kekName, subject, dekFormat);
     }
   }
 
@@ -382,9 +382,9 @@ public class MockDekRegistryClient implements DekRegistryClient {
 
     private final boolean deleted;
 
-    public DekInfo(String kekName, String scope, DekFormat algorithm,
+    public DekInfo(String kekName, String subject, DekFormat algorithm,
         String encryptedKeyMaterial, String keyMaterial, boolean deleted) {
-      super(kekName, scope, algorithm, encryptedKeyMaterial, keyMaterial);
+      super(kekName, subject, algorithm, encryptedKeyMaterial, keyMaterial);
       this.deleted = deleted;
     }
 
