@@ -15,22 +15,19 @@
 
 package io.confluent.dekregistry.storage;
 
-import io.confluent.dekregistry.metrics.MetricsManager;
-import io.kcache.CacheUpdateHandler;
 import java.io.IOException;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class DekRegistryCacheUpdateHandler
-    implements CacheUpdateHandler<EncryptionKeyId, EncryptionKey> {
+public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
 
-  private static final Logger log = LoggerFactory.getLogger(DekRegistryCacheUpdateHandler.class);
+  private static final Logger log = LoggerFactory.getLogger(DefaultDekCacheUpdateHandler.class);
 
-  private MetricsManager metricsManager;
+  private final DekRegistry dekRegistry;
 
-  public DekRegistryCacheUpdateHandler(MetricsManager metricsManager) {
-    this.metricsManager = metricsManager;
+  public DefaultDekCacheUpdateHandler(DekRegistry dekRegistry) {
+    this.dekRegistry = dekRegistry;
   }
 
   @Override
@@ -66,10 +63,10 @@ public class DekRegistryCacheUpdateHandler
     String tenant = key.getTenant();
     if (value == null) {
       if (oldValue != null) {
-        metricsManager.decrementKeyCount(tenant, key.getType());
+        dekRegistry.getMetricsManager().decrementKeyCount(tenant, key.getType());
       }
     } else if (oldValue == null) {
-      metricsManager.incrementKeyCount(tenant, key.getType());
+      dekRegistry.getMetricsManager().incrementKeyCount(tenant, key.getType());
     }
   }
 

@@ -24,6 +24,7 @@ import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
+import io.confluent.dekregistry.storage.utils.CompositeCacheUpdateHandler;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.KeyType;
@@ -124,7 +125,7 @@ public class DekRegistry implements Closeable {
       this.metricsManager = metricsManager;
       this.config = new DekRegistryConfig(schemaRegistry.config().originalProperties());
       this.keys = createCache(new EncryptionKeyIdSerde(), new EncryptionKeySerde(),
-          config.topic(), new DekRegistryCacheUpdateHandler(metricsManager));
+          config.topic(), getCacheUpdateHandler(config));
       this.cryptors = new ConcurrentHashMap<>();
     } catch (RestConfigException e) {
       throw new IllegalArgumentException("Could not instantiate DekRegistry", e);
@@ -133,6 +134,10 @@ public class DekRegistry implements Closeable {
 
   public KafkaSchemaRegistry getSchemaRegistry() {
     return schemaRegistry;
+  }
+
+  public MetricsManager getMetricsManager() {
+    return metricsManager;
   }
 
   protected <K, V> Cache<K, V> createCache(
@@ -173,6 +178,24 @@ public class DekRegistry implements Closeable {
     }
     props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
     return props;
+  }
+
+  private CacheUpdateHandler<EncryptionKeyId, EncryptionKey> getCacheUpdateHandler(
+      DekRegistryConfig config) {
+    Map<String, Object> handlerConfigs =
+        config.originalsWithPrefix(DekRegistryConfig.DEK_REGISTRY_UPDATE_HANDLERS_CONFIG + ".");
+    List<DekCacheUpdateHandler> customCacheHandlers =
+        config.getConfiguredInstances(DekRegistryConfig.DEK_REGISTRY_UPDATE_HANDLERS_CONFIG,
+        DekCacheUpdateHandler.class,
+        handlerConfigs);
+    DekCacheUpdateHandler cacheHandler = new DefaultDekCacheUpdateHandler(this);
+    for (DekCacheUpdateHandler customCacheHandler : customCacheHandlers) {
+      log.info("Registering custom cache handler: {}",
+          customCacheHandler.getClass().getName()
+      );
+    }
+    customCacheHandlers.add(cacheHandler);
+    return new CompositeCacheUpdateHandler<>(customCacheHandlers);
   }
 
   public Cache<EncryptionKeyId, EncryptionKey> keys() {

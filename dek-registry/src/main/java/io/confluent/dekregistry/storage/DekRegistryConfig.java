@@ -35,14 +35,18 @@ public class DekRegistryConfig extends SchemaRegistryConfig {
 
   public static final String DEK_REGISTRY_TOPIC_CONFIG = "dek.registry.topic";
   public static final String DEK_REGISTRY_MAX_KEYS_CONFIG = "dek.registry.max.keys";
+  public static final String DEK_REGISTRY_UPDATE_HANDLERS_CONFIG = "dek.registry.update.handlers";
 
   protected static final String DEK_REGISTRY_TOPIC_DEFAULT = "_dek_registry_keys";
-  protected static final int DEK_REGISTRY_MAX_KEYS_DEFAULT = 100000;
+  protected static final int DEK_REGISTRY_MAX_KEYS_DEFAULT = 10000;
 
   protected static final String DEK_REGISTRY_TOPIC_DOC =
       "The topic used to persist keys for the dek registry.";
   protected static final String DEK_REGISTRY_MAX_KEYS_DOC =
       "Maximum number of keys per tenant.";
+  protected static final String DEK_REGISTRY_UPDATE_HANDLERS_DOC =
+      "A list of classes to use as CacheUpdateHandler. Implementing the interface "
+          + "<code>CacheUpdateHandler</code> allows you to handle Kafka cache update events.";
 
   private static final ConfigDef serverConfig;
 
@@ -51,7 +55,9 @@ public class DekRegistryConfig extends SchemaRegistryConfig {
         .define(DEK_REGISTRY_TOPIC_CONFIG, STRING, DEK_REGISTRY_TOPIC_DEFAULT,
             HIGH, DEK_REGISTRY_TOPIC_DOC)
         .define(DEK_REGISTRY_MAX_KEYS_CONFIG, INT, DEK_REGISTRY_MAX_KEYS_DEFAULT,
-            LOW, DEK_REGISTRY_MAX_KEYS_DOC);
+            LOW, DEK_REGISTRY_MAX_KEYS_DOC)
+        .define(DEK_REGISTRY_UPDATE_HANDLERS_CONFIG, ConfigDef.Type.LIST, "",
+            LOW, DEK_REGISTRY_UPDATE_HANDLERS_DOC);
   }
 
   private static Properties getPropsFromFile(String propsFile) throws RestConfigException {
