@@ -144,5 +144,13 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
     public Message deserialize(byte[] payload) throws SerializationException {
       return super.deserialize(payload);
     }
+
+    @Override
+    public void close() throws IOException {
+      if (keyDeserializer != null) {
+        keyDeserializer.close();
+      }
+      super.close();
+    }
   }
 }
