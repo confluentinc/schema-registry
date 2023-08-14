@@ -520,4 +520,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     versionCache.clear();
     idCache.put(null, new HashMap<Integer, ParsedSchema>());
   }
+
+  @Override
+  public void close() throws IOException {
+    if (restService != null) {
+      restService.close();
+    }
+  }
 }

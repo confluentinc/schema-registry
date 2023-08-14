@@ -118,6 +118,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       if (!success) {
         failures++;
       }
+      close();
     } catch (Exception ex) {
       getLog().error("Exception thrown while processing " + key, ex);
       errors++;
