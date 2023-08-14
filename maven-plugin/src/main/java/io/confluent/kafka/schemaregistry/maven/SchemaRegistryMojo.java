@@ -20,6 +20,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.Parameter;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -35,7 +37,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 
-public abstract class SchemaRegistryMojo extends AbstractMojo {
+public abstract class SchemaRegistryMojo extends AbstractMojo implements Closeable {
 
   @Parameter(required = true)
   List<String> schemaRegistryUrls;
@@ -91,5 +93,12 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
     return Arrays.asList(
         new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
     );
+  }
+
+  @Override
+  public void close() throws IOException {
+    if (client != null) {
+      client.close();
+    }
   }
 }

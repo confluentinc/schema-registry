@@ -1270,11 +1270,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   @Override
-  public void close() {
+  public void close() throws IOException {
     log.info("Shutting down schema registry");
     kafkaStore.close();
     if (leaderElector != null) {
       leaderElector.close();
+    }
+    if (leaderRestService != null) {
+      leaderRestService.close();
     }
   }
 
