@@ -24,6 +24,9 @@ public class SchemaRegistryClientConfig {
   public static final String CLIENT_NAMESPACE = "schema.registry.";
 
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = "basic.auth.credentials.source";
+  /**
+   * @deprecated use {@link #USER_INFO_CONFIG} instead
+   */
   @Deprecated
   public static final String SCHEMA_REGISTRY_USER_INFO_CONFIG =
       "schema.registry.basic.auth.user.info";
@@ -38,6 +41,10 @@ public class SchemaRegistryClientConfig {
 
   public static final String PROXY_HOST = "proxy.host";
   public static final String PROXY_PORT = "proxy.port";
+
+  public static final String MISSING_CACHE_SIZE_CONFIG = "missing.cache.size";
+  public static final String MISSING_ID_CACHE_TTL_CONFIG = "missing.id.cache.ttl.sec";
+  public static final String MISSING_SCHEMA_CACHE_TTL_CONFIG = "missing.schema.cache.ttl.sec";
 
   public static void withClientSslSupport(ConfigDef configDef, String namespace) {
     org.apache.kafka.common.config.ConfigDef sslConfigDef = new org.apache.kafka.common.config
@@ -85,5 +92,23 @@ public class SchemaRegistryClientConfig {
     } else {
       return HTTP_READ_TIMEOUT_MS_DEFAULT;
     }
+  }
+
+  public static long getMissingIdTTL(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(MISSING_ID_CACHE_TTL_CONFIG)
+        ? (Long) configs.get(MISSING_ID_CACHE_TTL_CONFIG)
+        : 0L;
+  }
+
+  public static long getMissingSchemaTTL(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(MISSING_SCHEMA_CACHE_TTL_CONFIG)
+        ? (Long) configs.get(MISSING_SCHEMA_CACHE_TTL_CONFIG)
+        : 0L;
+  }
+
+  public static int getMaxMissingCacheSize(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(MISSING_CACHE_SIZE_CONFIG)
+        ? (Integer) configs.get(MISSING_CACHE_SIZE_CONFIG)
+        : 10000;
   }
 }

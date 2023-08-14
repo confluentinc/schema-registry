@@ -30,8 +30,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeserializer<T>
     implements Deserializer<T> {
 
-  private boolean isKey;
-
   /**
    * Constructor used by Kafka consumer.
    */
@@ -78,8 +76,8 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
   }
 
   @Override
-  public T deserialize(String ignored, byte[] bytes) {
-    return deserialize(bytes);
+  public T deserialize(String topic, byte[] bytes) {
+    return (T) deserialize(false, topic, isKey, bytes);
   }
 
   @Override

@@ -48,7 +48,7 @@ public final class Root {
   /**
    * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.ReferrerMessage}
    */
-  public  static final class ReferrerMessage extends
+  public static final class ReferrerMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.ReferrerMessage)
       ReferrerMessageOrBuilder {
@@ -148,6 +148,7 @@ public final class Root {
      * <code>string root_id = 1;</code>
      * @return The rootId.
      */
+    @java.lang.Override
     public java.lang.String getRootId() {
       java.lang.Object ref = rootId_;
       if (ref instanceof java.lang.String) {
@@ -164,6 +165,7 @@ public final class Root {
      * <code>string root_id = 1;</code>
      * @return The bytes for rootId.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString
         getRootIdBytes() {
       java.lang.Object ref = rootId_;
@@ -184,6 +186,7 @@ public final class Root {
      * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
      * @return Whether the ref field is set.
      */
+    @java.lang.Override
     public boolean hasRef() {
       return ref_ != null;
     }
@@ -191,12 +194,14 @@ public final class Root {
      * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
      * @return The ref.
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage getRef() {
       return ref_ == null ? io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage.getDefaultInstance() : ref_;
     }
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessageOrBuilder getRefOrBuilder() {
       return getRef();
     }

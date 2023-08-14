@@ -31,7 +31,7 @@ public final class Int16ValueOuterClass {
    *
    * Protobuf type {@code Int16Value}
    */
-  public  static final class Int16Value extends
+  public static final class Int16Value extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Int16Value)
       Int16ValueOrBuilder {
@@ -116,6 +116,7 @@ public final class Int16ValueOuterClass {
      * <code>int32 value = 1 [(.confluent.field_meta) = { ... }</code>
      * @return The value.
      */
+    @java.lang.Override
     public int getValue() {
       return value_;
     }
@@ -431,6 +432,7 @@ public final class Int16ValueOuterClass {
        * <code>int32 value = 1 [(.confluent.field_meta) = { ... }</code>
        * @return The value.
        */
+      @java.lang.Override
       public int getValue() {
         return value_;
       }

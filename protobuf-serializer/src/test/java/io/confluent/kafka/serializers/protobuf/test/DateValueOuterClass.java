@@ -52,7 +52,7 @@ public final class DateValueOuterClass {
    *
    * Protobuf type {@code DateValue}
    */
-  public  static final class DateValue extends
+  public static final class DateValue extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:DateValue)
       DateValueOrBuilder {
@@ -149,6 +149,7 @@ public final class DateValueOuterClass {
      * <code>.google.type.Date value = 1;</code>
      * @return Whether the value field is set.
      */
+    @java.lang.Override
     public boolean hasValue() {
       return value_ != null;
     }
@@ -160,6 +161,7 @@ public final class DateValueOuterClass {
      * <code>.google.type.Date value = 1;</code>
      * @return The value.
      */
+    @java.lang.Override
     public com.google.type.Date getValue() {
       return value_ == null ? com.google.type.Date.getDefaultInstance() : value_;
     }
@@ -170,6 +172,7 @@ public final class DateValueOuterClass {
      *
      * <code>.google.type.Date value = 1;</code>
      */
+    @java.lang.Override
     public com.google.type.DateOrBuilder getValueOrBuilder() {
       return getValue();
     }

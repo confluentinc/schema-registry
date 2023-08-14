@@ -45,7 +45,7 @@ import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
  * command.
  *
  * <p>Send Protobuf record as value.
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
+ * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic t1 \
  * --line-reader io.confluent.kafka.formatter.ProtobufMessageReader \
  * --property schema.registry.url=http://localhost:8081 \
  * --property value.schema='syntax = "proto3"; message MyRecord { string f1 = 1; }'
@@ -71,11 +71,12 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
       String topic,
       boolean parseKey,
       BufferedReader reader,
+      boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest
   ) {
     super(schemaRegistryClient, keySchema, valueSchema, topic,
-        parseKey, reader, autoRegister, useLatest);
+        parseKey, reader, normalizeSchema, autoRegister, useLatest);
   }
 
   @Override
@@ -94,12 +95,13 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
   @Override
   protected SchemaMessageSerializer<Message> createSerializer(
       SchemaRegistryClient schemaRegistryClient,
+      boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest,
       Serializer keySerializer
   ) {
     return new ProtobufMessageSerializer(
-        schemaRegistryClient, autoRegister, useLatest, keySerializer);
+        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, keySerializer);
   }
 
   @Override
@@ -127,9 +129,10 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
 
     ProtobufMessageSerializer(
         SchemaRegistryClient schemaRegistryClient,
-        boolean autoRegister, boolean useLatest, Serializer keySerializer
+        boolean normalizeSchema, boolean autoRegister, boolean useLatest, Serializer keySerializer
     ) {
       this.schemaRegistry = schemaRegistryClient;
+      this.normalizeSchema = normalizeSchema;
       this.autoRegisterSchema = autoRegister;
       this.useLatestVersion = useLatest;
       this.keySerializer = keySerializer;
