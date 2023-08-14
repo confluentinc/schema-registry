@@ -795,11 +795,4 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       return "SubjectAndId{" + "subject='" + subject + '\'' + ", id=" + id + '}';
     }
   }
-
-  @Override
-  public void close() throws IOException {
-    if (restService != null) {
-      restService.close();
-    }
-  }
 }
