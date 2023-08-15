@@ -52,7 +52,7 @@ public class HcVaultFieldEncryptionProperties extends FieldEncryptionProperties 
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey(String baseUrls) throws Exception {
+  public Map<String, Object> getClientProperties(String baseUrls) throws Exception {
     List<String> ruleNames = getRuleNames();
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, baseUrls);

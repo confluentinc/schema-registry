@@ -37,23 +37,7 @@ public abstract class FieldEncryptionProperties {
     return null;
   }
 
-  public Map<String, Object> getClientProperties(String baseUrls) throws Exception {
-    List<String> ruleNames = getRuleNames();
-    Map<String, Object> props = getClientPropertiesWithoutKey(baseUrls);
-    // TODO remove
-    // Put local key in rule
-    /*
-    for (String ruleName : ruleNames) {
-      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
-              + ".param." + DEFAULT_KMS_KEY_ID,
-          getKeyId());
-    }
-     */
-    return props;
-  }
-
-  public abstract Map<String, Object> getClientPropertiesWithoutKey(String baseUrls)
-      throws Exception;
+  public abstract Map<String, Object> getClientProperties(String baseUrls) throws Exception;
 
   public abstract Object getTestClient() throws Exception;
 }

@@ -45,7 +45,7 @@ public class GcpFieldEncryptionProperties extends FieldEncryptionProperties {
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey(String baseUrls)
+  public Map<String, Object> getClientProperties(String baseUrls)
       throws Exception {
     List<String> ruleNames = getRuleNames();
     // The following dummy values are borrowed from Google Tink tests

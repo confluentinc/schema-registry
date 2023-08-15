@@ -51,7 +51,7 @@ public class AzureFieldEncryptionProperties extends FieldEncryptionProperties {
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey(String baseUrls)
+  public Map<String, Object> getClientProperties(String baseUrls)
       throws Exception {
     List<String> ruleNames = getRuleNames();
     Map<String, Object> props = new HashMap<>();
