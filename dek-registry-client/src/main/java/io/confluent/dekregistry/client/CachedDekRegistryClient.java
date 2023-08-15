@@ -195,9 +195,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   public void deleteKek(String kekName, boolean permanentDelete)
       throws IOException, RestClientException {
     restService.deleteKek(kekName, permanentDelete);
-    if (permanentDelete) {
-      kekCache.invalidate(new KekId(kekName));
-    }
+    kekCache.invalidate(new KekId(kekName));
   }
 
   @Override
@@ -211,9 +209,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       String kekName, String subject, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException {
     restService.deleteDek(kekName, subject, algorithm, permanentDelete);
-    if (permanentDelete) {
-      dekCache.invalidate(new DekId(kekName, subject, algorithm));
-    }
+    dekCache.invalidate(new DekId(kekName, subject, algorithm));
   }
 
   @Override
