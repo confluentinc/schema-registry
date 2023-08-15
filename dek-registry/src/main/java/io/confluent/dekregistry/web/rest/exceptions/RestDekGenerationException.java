@@ -15,19 +15,14 @@
 
 package io.confluent.dekregistry.web.rest.exceptions;
 
-import io.confluent.rest.exceptions.RestException;
-import javax.ws.rs.core.Response;
+import io.confluent.rest.exceptions.RestServerErrorException;
 
-public class RestDekGenerationException extends RestException {
+public class RestDekGenerationException extends RestServerErrorException {
 
-  public static final int DEFAULT_ERROR_CODE =
-      Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
+  public static final int ERROR_CODE = DekRegistryErrors.DEK_GENERATION_ERROR_CODE;
+  public static final String DEK_GENERATION_MESSAGE_FORMAT = "Could not generate dek for '%s'";
 
-  public RestDekGenerationException(String message, int errorCode) {
-    this(message, errorCode, null);
-  }
-
-  public RestDekGenerationException(String message, int errorCode, Throwable cause) {
-    super(message, Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), errorCode, cause);
+  public RestDekGenerationException(String subject) {
+    super(String.format(DEK_GENERATION_MESSAGE_FORMAT, subject), ERROR_CODE);
   }
 }

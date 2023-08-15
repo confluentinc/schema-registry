@@ -168,7 +168,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Kek'
         "404":
-          description: Error code 40450 -- Key not found
+          description: Error code 40470 -- Key not found
     put:
       summary: Alters a kek.
       operationId: putKek
@@ -209,7 +209,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Kek'
         "404":
-          description: Error code 40450 -- Key not found
+          description: Error code 40470 -- Key not found
     delete:
       summary: Delete a kek.
       operationId: deleteKek
@@ -229,7 +229,7 @@ paths:
         "204":
           description: No Content
         "404":
-          description: Error code 40450 -- Key not found
+          description: Error code 40470 -- Key not found
   /dek-registry/v1/keks/{name}/deks/{subject}:
     get:
       summary: Get a dek by subject.
@@ -275,7 +275,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Dek'
         "404":
-          description: Error code 40450 -- Key not found
+          description: Error code 40470 -- Key not found
     delete:
       summary: Delete a dek.
       operationId: deleteDek
@@ -310,7 +310,7 @@ paths:
         "204":
           description: No Content
         "404":
-          description: Error code 40450 -- Key not found
+          description: Error code 40470 -- Key not found
 components:
   schemas:
     Dek:

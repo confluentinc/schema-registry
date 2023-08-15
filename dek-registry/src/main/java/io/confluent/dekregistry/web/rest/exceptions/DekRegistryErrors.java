@@ -44,8 +44,6 @@ public class DekRegistryErrors {
   public static final int REFERENCE_EXISTS_ERROR_CODE = 42272;
 
   // HTTP 500
-  public static final String DEK_GENERATION_MESSAGE_FORMAT =
-      "Could not generate dek for '%s'";
   public static final int DEK_GENERATION_ERROR_CODE = 50070;
 
   public static RestException keyNotFoundException(String name) {
@@ -79,8 +77,6 @@ public class DekRegistryErrors {
   }
 
   public static RestServerErrorException dekGenerationException(String subject) {
-    return new RestServerErrorException(
-        String.format(DEK_GENERATION_MESSAGE_FORMAT, subject),
-        DEK_GENERATION_ERROR_CODE);
+    return new RestDekGenerationException(subject);
   }
 }
