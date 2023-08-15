@@ -53,7 +53,7 @@ import org.apache.kafka.common.config.ConfigException;
 
 /**
  * In envelope encryption, a user generates a data encryption key (DEK) locally, encrypts data with
- * the DEK, sends the DEK to a KMS to be encrypted (with a key managed by KMS), and then stores the
+ * the DEK, sends the DEK to a KMS to be encrypted (with a key managed by KMS - KEK), and then stores the
  * encrypted DEK. At a later point, a user can retrieve the encrypted DEK for the encrypted data,
  * use the KMS to decrypt the DEK, and use the decrypted DEK to decrypt the data.
  */
