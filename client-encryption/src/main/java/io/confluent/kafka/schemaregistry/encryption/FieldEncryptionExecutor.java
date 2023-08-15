@@ -283,7 +283,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
         throws RuleException {
       try {
         Kek kek = client.createKek(
-            key.getName(), kekInfo.getKmsType(), kekInfo.getKmsKeyId(), null, null, false);
+            key.getName(), kekInfo.getKmsType(), kekInfo.getKmsKeyId(), null, null, kekInfo.isShared());
         return new KekInfo(kek.getKmsType(), kek.getKmsKeyId(), kek.isShared());
       } catch (RestClientException e) {
         if (e.getStatus() == 409) {
