@@ -89,18 +89,18 @@ public class MockDekRegistryClient implements DekRegistryClient {
   }
 
   @Override
-  public Dek getDek(String name, String subject, boolean lookupDeleted)
+  public Dek getDek(String kekName, String subject, boolean lookupDeleted)
       throws IOException, RestClientException {
-    return getDek(name, subject, null, lookupDeleted);
+    return getDek(kekName, subject, null, lookupDeleted);
   }
 
   @Override
-  public Dek getDek(String name, String subject, DekFormat algorithm, boolean lookupDeleted)
+  public Dek getDek(String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
-    DekId keyId = new DekId(name, subject, algorithm);
+    DekId keyId = new DekId(kekName, subject, algorithm);
     DekInfo key = deks.get(keyId);
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
       key = maybeGenerateRawDek(key);
@@ -219,9 +219,9 @@ public class MockDekRegistryClient implements DekRegistryClient {
   }
 
   @Override
-  public void deleteKek(String name, boolean permanentDelete)
+  public void deleteKek(String kekName, boolean permanentDelete)
       throws IOException, RestClientException {
-    KekId keyId = new KekId(name);
+    KekId keyId = new KekId(kekName);
     KekInfo key = keks.get(keyId);
     if (key == null) {
       return;
@@ -229,26 +229,27 @@ public class MockDekRegistryClient implements DekRegistryClient {
     if (permanentDelete) {
       keks.remove(keyId);
     } else {
-      KekInfo newKey = new KekInfo(name, key.getKmsType(),
+      KekInfo newKey = new KekInfo(kekName, key.getKmsType(),
           key.getKmsKeyId(), key.getKmsProps(), key.getDoc(), key.isShared(), true);
       keks.put(keyId, newKey);
     }
   }
 
   @Override
-  public void deleteDek(String name, String subject, boolean permanentDelete)
+  public void deleteDek(String kekName, String subject, boolean permanentDelete)
       throws IOException, RestClientException {
-    deleteDek(name, subject, null, permanentDelete);
+    deleteDek(kekName, subject, null, permanentDelete);
 
   }
 
   @Override
-  public void deleteDek(String name, String subject, DekFormat algorithm, boolean permanentDelete)
+  public void deleteDek(
+      String kekName, String subject, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException {
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
-    DekId keyId = new DekId(name, subject, algorithm);
+    DekId keyId = new DekId(kekName, subject, algorithm);
     DekInfo key = deks.get(keyId);
     if (key == null) {
       return;
@@ -256,7 +257,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     if (permanentDelete) {
       deks.remove(keyId);
     } else {
-      DekInfo newKey = new DekInfo(name, key.getSubject(), key.getAlgorithm(),
+      DekInfo newKey = new DekInfo(kekName, key.getSubject(), key.getAlgorithm(),
           key.getEncryptedKeyMaterial(), key.getKeyMaterial(), true);
       deks.put(keyId, newKey);
     }

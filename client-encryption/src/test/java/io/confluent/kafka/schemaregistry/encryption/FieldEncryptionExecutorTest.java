@@ -157,7 +157,7 @@ public abstract class FieldEncryptionExecutorTest {
     avroValueDeserializer = new KafkaAvroDeserializer();
     avroValueDeserializer.configure(qualifiedClientProps, false);
 
-    Map<String, Object> clientPropsWithoutKey = fieldEncryptionProps.getClientPropertiesWithoutKey("mock://");
+    Map<String, Object> clientPropsWithoutKey = fieldEncryptionProps.getClientProperties("mock://");
     avroSerializerWithoutKey = new KafkaAvroSerializer(schemaRegistry, clientPropsWithoutKey);
     avroDeserializerWithoutKey = new KafkaAvroDeserializer(schemaRegistry, clientPropsWithoutKey);
 

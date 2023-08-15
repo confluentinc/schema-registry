@@ -15,7 +15,6 @@
 
 package io.confluent.dekregistry.storage;
 
-import java.io.IOException;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +70,6 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
   }
 
   @Override
-  public void close() throws IOException {
+  public void close() {
   }
 }

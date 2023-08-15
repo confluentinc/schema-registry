@@ -41,10 +41,10 @@ public interface DekRegistryClient extends Closeable {
   List<String> listDeks(String kekName, boolean lookupDeleted)
       throws IOException, RestClientException;
 
-  Dek getDek(String name, String subject, boolean lookupDeleted)
+  Dek getDek(String kekName, String subject, boolean lookupDeleted)
       throws IOException, RestClientException;
 
-  Dek getDek(String name, String subject, DekFormat algorithm, boolean lookupDeleted)
+  Dek getDek(String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException;
 
   Kek createKek(
@@ -70,13 +70,13 @@ public interface DekRegistryClient extends Closeable {
       Boolean shared)
       throws IOException, RestClientException;
 
-  void deleteKek(String name, boolean permanentDelete)
+  void deleteKek(String kekName, boolean permanentDelete)
       throws IOException, RestClientException;
 
-  void deleteDek(String name, String subject, boolean permanentDelete)
+  void deleteDek(String kekName, String subject, boolean permanentDelete)
       throws IOException, RestClientException;
 
-  void deleteDek(String name, String subject, DekFormat algorithm, boolean permanentDelete)
+  void deleteDek(String kekName, String subject, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException;
 
   void reset();

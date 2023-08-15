@@ -31,6 +31,8 @@ import org.slf4j.LoggerFactory;
 public class DekRegistryResourceExtension implements SchemaRegistryResourceExtension {
   private static final Logger LOG = LoggerFactory.getLogger(DekRegistryResourceExtension.class);
 
+  private LifecycleInjector injector;
+
   @Override
   public void register(
       Configurable<?> configurable,
@@ -42,7 +44,7 @@ public class DekRegistryResourceExtension implements SchemaRegistryResourceExten
     // Alternative would be to use Guice.createInjector(new DekRegistryModule(schemaRegistry))
     // and call lifecycycle methods explicitly.
     LOG.debug("registering injector");
-    LifecycleInjector injector = InjectorBuilder.fromModules(new DekRegistryModule(schemaRegistry))
+    injector = InjectorBuilder.fromModules(new DekRegistryModule(schemaRegistry))
         .createInjector(new LifecycleInjectorCreator());
     LOG.debug("done registering injector");
 
@@ -53,5 +55,8 @@ public class DekRegistryResourceExtension implements SchemaRegistryResourceExten
 
   @Override
   public void close() throws IOException {
+    if (injector != null) {
+      injector.close();
+    }
   }
 }

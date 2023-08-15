@@ -117,17 +117,17 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   }
 
   @Override
-  public Dek getDek(String name, String subject, boolean lookupDeleted)
+  public Dek getDek(String kekName, String subject, boolean lookupDeleted)
       throws IOException, RestClientException {
-    return getDek(name, subject, null, lookupDeleted);
+    return getDek(kekName, subject, null, lookupDeleted);
   }
 
   @Override
-  public Dek getDek(String name, String subject, DekFormat algorithm, boolean lookupDeleted)
+  public Dek getDek(String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     try {
-      return dekCache.get(new DekId(name, subject, algorithm), () ->
-          restService.getDek(name, subject, algorithm, lookupDeleted));
+      return dekCache.get(new DekId(kekName, subject, algorithm), () ->
+          restService.getDek(kekName, subject, algorithm, lookupDeleted));
     } catch (ExecutionException e) {
       if (e.getCause() instanceof IOException) {
         throw (IOException) e.getCause();
@@ -192,23 +192,24 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   }
 
   @Override
-  public void deleteKek(String name, boolean permanentDelete)
+  public void deleteKek(String kekName, boolean permanentDelete)
       throws IOException, RestClientException {
-    restService.deleteKek(name, permanentDelete);
-    kekCache.invalidate(new KekId(name));
+    restService.deleteKek(kekName, permanentDelete);
+    kekCache.invalidate(new KekId(kekName));
   }
 
   @Override
-  public void deleteDek(String name, String subject, boolean permanentDelete)
+  public void deleteDek(String kekName, String subject, boolean permanentDelete)
       throws IOException, RestClientException {
-    deleteDek(name, subject, null, permanentDelete);
+    deleteDek(kekName, subject, null, permanentDelete);
   }
 
   @Override
-  public void deleteDek(String name, String subject, DekFormat algorithm, boolean permanentDelete)
+  public void deleteDek(
+      String kekName, String subject, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException {
-    restService.deleteDek(name, subject, algorithm, permanentDelete);
-    dekCache.invalidate(new DekId(name, subject, algorithm));
+    restService.deleteDek(kekName, subject, algorithm, permanentDelete);
+    dekCache.invalidate(new DekId(kekName, subject, algorithm));
   }
 
   @Override

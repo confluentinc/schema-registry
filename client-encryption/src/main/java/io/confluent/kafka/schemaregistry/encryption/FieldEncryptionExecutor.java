@@ -53,9 +53,10 @@ import org.apache.kafka.common.config.ConfigException;
 
 /**
  * In envelope encryption, a user generates a data encryption key (DEK) locally, encrypts data with
- * the DEK, sends the DEK to a KMS to be encrypted (with a key managed by KMS - KEK), and then stores the
- * encrypted DEK. At a later point, a user can retrieve the encrypted DEK for the encrypted data,
- * use the KEK from KMS to decrypt the DEK, and use the decrypted DEK to decrypt the data.
+ * the DEK, sends the DEK to a KMS to be encrypted (with a key managed by KMS - KEK), and then
+ * stores the encrypted DEK. At a later point, a user can retrieve the encrypted DEK for the
+ * encrypted data, use the KEK from KMS to decrypt the DEK, and use the decrypted DEK to decrypt
+ * the data.
  */
 public class FieldEncryptionExecutor implements FieldRuleExecutor {
 
@@ -283,7 +284,8 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
         throws RuleException {
       try {
         Kek kek = client.createKek(
-            key.getName(), kekInfo.getKmsType(), kekInfo.getKmsKeyId(), null, null, kekInfo.isShared());
+            key.getName(), kekInfo.getKmsType(), kekInfo.getKmsKeyId(),
+            null, null, kekInfo.isShared());
         return new KekInfo(kek.getKmsType(), kek.getKmsKeyId(), kek.isShared());
       } catch (RestClientException e) {
         if (e.getStatus() == 409) {
@@ -345,7 +347,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
         byte[] encryptedDek = dek.getEncryptedKeyMaterial() != null
             ? Base64.getDecoder().decode(toBytes(Type.STRING, dek.getEncryptedKeyMaterial()))
             : null;
-        return new DekInfo(rawDek, encryptedDek);
+        return encryptedDek != null ? new DekInfo(rawDek, encryptedDek) : null;
       } catch (RestClientException e) {
         if (e.getStatus() == 404) {
           return null;

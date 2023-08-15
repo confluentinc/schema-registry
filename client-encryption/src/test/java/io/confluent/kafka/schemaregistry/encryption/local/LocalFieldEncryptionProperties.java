@@ -47,8 +47,7 @@ public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
   }
 
   @Override
-  public Map<String, Object> getClientProperties(String baseUrls)
-      throws Exception {
+  public Map<String, Object> getClientProperties(String baseUrls) {
     List<String> ruleNames = getRuleNames();
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, baseUrls);
