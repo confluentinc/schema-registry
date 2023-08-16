@@ -65,7 +65,7 @@ import javax.ws.rs.core.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@Path("/dek-registry/v1")
+@Path("/dek-registry/v1/keks")
 @Singleton
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
     Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
@@ -87,7 +87,6 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   @GET
-  @Path("/keks")
   @Operation(summary = "Get a list of kek names.")
   @PerformanceMetric("keks.list")
   @DocumentedName("getKekNames")
@@ -98,7 +97,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   @GET
-  @Path("/keks/{name}")
+  @Path("/{name}")
   @Operation(summary = "Get a kek by name.", responses = {
       @ApiResponse(responseCode = "200", description = "The kek info",
           content = @Content(schema = @Schema(implementation = Kek.class))),
@@ -122,7 +121,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   @GET
-  @Path("/keks/{name}/deks")
+  @Path("/{name}/deks")
   @Operation(summary = "Get a list of dek subjects.")
   @PerformanceMetric("deks.list")
   @DocumentedName("getDekSubjects")
@@ -138,7 +137,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   @GET
-  @Path("/keks/{name}/deks/{subject}")
+  @Path("/{name}/deks/{subject}")
   @Operation(summary = "Get a dek by subject.", responses = {
       @ApiResponse(responseCode = "200", description = "The dek info",
           content = @Content(schema = @Schema(implementation = Dek.class))),
@@ -175,7 +174,6 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   @POST
-  @Path("/keks")
   @Operation(summary = "Create a kek.", responses = {
       @ApiResponse(responseCode = "200", description = "The create response",
           content = @Content(schema = @Schema(implementation = Kek.class))),
@@ -215,7 +213,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   @POST
-  @Path("/keks/{name}/deks")
+  @Path("/{name}/deks")
   @Operation(summary = "Create a dek.", responses = {
       @ApiResponse(responseCode = "200", description = "The create response",
           content = @Content(schema = @Schema(implementation = Dek.class))),
@@ -259,7 +257,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   @PUT
-  @Path("/keks/{name}")
+  @Path("/{name}")
   @Operation(summary = "Alters a kek.", responses = {
       @ApiResponse(responseCode = "200", description = "The update response",
           content = @Content(schema = @Schema(implementation = Kek.class))),
@@ -295,7 +293,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   @DELETE
-  @Path("/keks/{name}")
+  @Path("/{name}")
   @Operation(summary = "Delete a kek.", responses = {
       @ApiResponse(responseCode = "204", description = "No Content"),
       @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
@@ -330,7 +328,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   @DELETE
-  @Path("/keks/{name}/deks/{subject}")
+  @Path("/{name}/deks/{subject}")
   @Operation(summary = "Delete a dek.", responses = {
       @ApiResponse(responseCode = "204", description = "No Content"),
       @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
