@@ -227,7 +227,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     }
 
     protected KekInfo getKek(RuleContext ctx, String kekName) throws RuleException {
-      KekId kekId = new KekId(kekName);
+      KekId kekId = new KekId(kekName, ctx.ruleMode() == RuleMode.READ);
       String kmsType = ctx.getParameter(ENCRYPT_KMS_TYPE);
       String kmsKeyId = ctx.getParameter(ENCRYPT_KMS_KEY_ID);
 
@@ -265,7 +265,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
 
     private KekInfo retrieveKekFromRegistry(RuleContext ctx, KekId key) throws RuleException {
       try {
-        Kek kek = client.getKek(key.getName(), ctx.ruleMode() == RuleMode.READ);
+        Kek kek = client.getKek(key.getName(), key.isLookupDeleted());
         if (kek == null) {
           return null;
         }
@@ -299,7 +299,8 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
 
     protected DekInfo getDek(RuleContext ctx, String kekName, KekInfo kek)
         throws RuleException, GeneralSecurityException {
-      DekId dekId = new DekId(kekName, ctx.subject(), cryptor.getDekFormat());
+      DekId dekId = new DekId(
+          kekName, ctx.subject(), cryptor.getDekFormat(), ctx.ruleMode() == RuleMode.READ);
 
       Aead aead = null;
       DekInfo dek = retrieveDekFromRegistry(ctx, dekId);
@@ -336,8 +337,8 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
 
     private DekInfo retrieveDekFromRegistry(RuleContext ctx, DekId key) throws RuleException {
       try {
-        Dek dek = client.getDek(key.getKekName(), key.getSubject(), key
-            .getDekFormat(), ctx.ruleMode() == RuleMode.READ);
+        Dek dek = client.getDek(
+            key.getKekName(), key.getSubject(), key.getDekFormat(), key.isLookupDeleted());
         if (dek == null) {
           return null;
         }
