@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -102,6 +103,20 @@ public class KafkaJsonSchemaSerializerTest {
 
     bytes = serializer.serialize(topic, "abc");
     assertEquals("abc", deserializer.deserialize(topic, bytes));
+  }
+
+  @Test(expected = InvalidConfigurationException.class)
+  public void testKafkaJsonSchemaSerializerWithoutConfigure() {
+    KafkaJsonSchemaSerializer unconfiguredSerializer = new KafkaJsonSchemaSerializer();
+    User user = new User();
+    unconfiguredSerializer.serialize("foo", user);
+  }
+
+  @Test(expected = InvalidConfigurationException.class)
+  public void testKafkaJsonSchemaDeserializerWithoutConfigure() {
+    KafkaJsonSchemaDeserializer unconfiguredSerializer = new KafkaJsonSchemaDeserializer();
+    byte[] randomBytes = "foo".getBytes();
+    unconfiguredSerializer.deserialize("foo", randomBytes);
   }
 
   @Test

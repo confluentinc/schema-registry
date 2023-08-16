@@ -33,6 +33,7 @@ import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.util.Timestamps;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.utils.DecimalUtils;
@@ -46,9 +47,6 @@ import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
-import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
@@ -94,6 +92,7 @@ public class ProtobufData {
   public static final String PROTOBUF_TYPE_UNION = NAMESPACE + ".Union";
   public static final String PROTOBUF_TYPE_UNION_PREFIX = PROTOBUF_TYPE_UNION + ".";
   public static final String PROTOBUF_TYPE_TAG = NAMESPACE + ".Tag";
+  public static final String PROTOBUF_TYPE_PROP = NAMESPACE + ".Type";
 
   public static final String PROTOBUF_PRECISION_PROP = "precision";
   public static final String PROTOBUF_SCALE_PROP = "scale";
@@ -288,10 +287,12 @@ public class ProtobufData {
   private static Pattern NAME_START_CHAR = Pattern.compile("^[A-Za-z]");  // underscore not allowed
   private static Pattern NAME_INVALID_CHARS = Pattern.compile("[^A-Za-z0-9_]");
 
-  private final Cache<Schema, ProtobufSchema> fromConnectSchemaCache;
-  private final Cache<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
+  private final Map<Schema, ProtobufSchema> fromConnectSchemaCache;
+  private final Map<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
+  private boolean useOptionalForNullables;
+  private boolean supportOptionalForProto2;
   private boolean useWrapperForNullables;
   private boolean useWrapperForRawPrimitives;
 
@@ -307,12 +308,12 @@ public class ProtobufData {
   }
 
   public ProtobufData(ProtobufDataConfig protobufDataConfig) {
-    fromConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.schemaCacheSize()));
-    toConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.schemaCacheSize()));
+    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
+    toConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
     this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
+    this.useOptionalForNullables = protobufDataConfig.useOptionalForNullables();
+    this.supportOptionalForProto2 = protobufDataConfig.supportOptionalForProto2();
     this.useWrapperForNullables = protobufDataConfig.useWrapperForNullables();
     this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
   }
@@ -376,8 +377,15 @@ public class ProtobufData {
         }
 
         case INT64: {
-          final long longValue = ((Number) value).longValue(); // Check for correct type
-          return isWrapper ? Int64Value.newBuilder().setValue(longValue).build() : longValue;
+          String protobufType = schema.parameters() != null
+              ? schema.parameters().get(PROTOBUF_TYPE_PROP) : null;
+          if (Objects.equals(protobufType, "uint32") || Objects.equals(protobufType, "fixed32")) {
+            final int intValue = (int) ((Number) value).longValue(); // Check for correct type
+            return isWrapper ? Int32Value.newBuilder().setValue(intValue).build() : intValue;
+          } else {
+            final long longValue = ((Number) value).longValue(); // Check for correct type
+            return isWrapper ? Int64Value.newBuilder().setValue(longValue).build() : longValue;
+          }
         }
 
         case FLOAT32: {
@@ -702,14 +710,29 @@ public class ProtobufData {
           tag
       );
       if (fieldDef != null) {
-        message.addField(fieldDef.getLabel(),
-            fieldDef.getType(),
-            fieldDef.getName(),
-            fieldDef.getNum(),
-            fieldDef.getDefaultVal(),
-            fieldDef.getDoc(),
-            fieldDef.getParams()
-        );
+        boolean isProto3Optional = "optional".equals(fieldDef.getLabel());
+        if (isProto3Optional) {
+          MessageDefinition.OneofBuilder oneofBuilder = message.addOneof("_" + fieldDef.getName());
+          oneofBuilder.addField(
+              true,
+              fieldDef.getType(),
+              fieldDef.getName(),
+              fieldDef.getNum(),
+              fieldDef.getDefaultVal(),
+              fieldDef.getDoc(),
+              fieldDef.getParams()
+          );
+        } else {
+          message.addField(
+              fieldDef.getLabel(),
+              fieldDef.getType(),
+              fieldDef.getName(),
+              fieldDef.getNum(),
+              fieldDef.getDefaultVal(),
+              fieldDef.getDoc(),
+              fieldDef.getParams()
+          );
+        }
       }
     }
     return message.build();
@@ -763,6 +786,8 @@ public class ProtobufData {
       fieldSchema = fieldSchema.valueSchema();
     } else if (fieldSchema.type() == Schema.Type.MAP) {
       label = "repeated";
+    } else if (useOptionalForNullables && fieldSchema.isOptional()) {
+      label = "optional";
     }
     Map<String, String> params = new HashMap<>();
     String type = dataTypeFromConnectSchema(ctx, fieldSchema, name, params);
@@ -1008,6 +1033,7 @@ public class ProtobufData {
     } else if (isTimestampSchema(schema)) {
       return PROTOBUF_TIMESTAMP_TYPE;
     }
+    String defaultType;
     switch (schema.type()) {
       case INT8:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT8);
@@ -1018,11 +1044,32 @@ public class ProtobufData {
         return useWrapperForNullables && schema.isOptional()
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT32:
+        defaultType = FieldDescriptor.Type.INT32.toString().toLowerCase();
+        if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_PROP)) {
+          defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
+        }
         return useWrapperForNullables && schema.isOptional()
-            ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
+            ? PROTOBUF_INT32_WRAPPER_TYPE : defaultType;
       case INT64:
+        defaultType = FieldDescriptor.Type.INT64.toString().toLowerCase();
+        if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_PROP)) {
+          defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
+        }
+        String wrapperType;
+        switch (defaultType) {
+          case "uint32":
+          case "fixed32":
+            wrapperType = PROTOBUF_UINT32_WRAPPER_TYPE;
+            break;
+          case "uint64":
+          case "fixed64":
+            wrapperType = PROTOBUF_UINT64_WRAPPER_TYPE;
+            break;
+          default:
+            wrapperType = PROTOBUF_INT64_WRAPPER_TYPE;
+        }
         return useWrapperForNullables && schema.isOptional()
-            ? PROTOBUF_INT64_WRAPPER_TYPE : FieldDescriptor.Type.INT64.toString().toLowerCase();
+            ? wrapperType : defaultType;
       case FLOAT32:
         return useWrapperForNullables && schema.isOptional()
             ? PROTOBUF_FLOAT_WRAPPER_TYPE : FieldDescriptor.Type.FLOAT.toString().toLowerCase();
@@ -1207,7 +1254,7 @@ public class ProtobufData {
           final Struct struct = new Struct(schema.schema());
           final Descriptor descriptor = message.getDescriptorForType();
 
-          for (OneofDescriptor oneOfDescriptor : descriptor.getOneofs()) {
+          for (OneofDescriptor oneOfDescriptor : descriptor.getRealOneofs()) {
             if (message.hasOneof(oneOfDescriptor)) {
               FieldDescriptor fieldDescriptor = message.getOneofFieldDescriptor(oneOfDescriptor);
               Object obj = message.getField(fieldDescriptor);
@@ -1218,16 +1265,12 @@ public class ProtobufData {
           }
 
           for (FieldDescriptor fieldDescriptor : descriptor.getFields()) {
-            OneofDescriptor oneOfDescriptor = fieldDescriptor.getContainingOneof();
+            OneofDescriptor oneOfDescriptor = fieldDescriptor.getRealContainingOneof();
             if (oneOfDescriptor != null) {
               // Already added field as oneof
               continue;
             }
-            if (fieldDescriptor.getJavaType() != FieldDescriptor.JavaType.MESSAGE
-                || fieldDescriptor.isRepeated()
-                || message.hasField(fieldDescriptor)) {
-              setStructField(schema, message, struct, fieldDescriptor);
-            }
+            setStructField(schema, message, struct, fieldDescriptor);
           }
 
           converted = struct;
@@ -1276,8 +1319,25 @@ public class ProtobufData {
   ) {
     final String fieldName = fieldDescriptor.getName();
     final Field field = schema.field(fieldName);
-    Object obj = message.getField(fieldDescriptor);
-    result.put(fieldName, toConnectData(field.schema(), obj));
+    if ((isPrimitiveOrRepeated(fieldDescriptor) && !isOptional(fieldDescriptor))
+        || message.hasField(fieldDescriptor)) {
+      Object obj = message.getField(fieldDescriptor);
+      result.put(fieldName, toConnectData(field.schema(), obj));
+    }
+  }
+
+  private boolean isPrimitiveOrRepeated(FieldDescriptor fieldDescriptor) {
+    return fieldDescriptor.getType() != FieldDescriptor.Type.MESSAGE
+        || fieldDescriptor.isRepeated();
+  }
+
+  private boolean isOptional(FieldDescriptor fieldDescriptor) {
+    return fieldDescriptor.toProto().getProto3Optional()
+        || (supportOptionalForProto2 && fieldDescriptor.hasOptionalKeyword());
+  }
+
+  private boolean isProto3Optional(FieldDescriptor fieldDescriptor) {
+    return fieldDescriptor.toProto().getProto3Optional();
   }
 
   public Schema toConnectSchema(ProtobufSchema schema) {
@@ -1307,14 +1367,14 @@ public class ProtobufData {
       ctx.put(descriptor.getFullName(), builder);
       String name = enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName();
       builder.name(name);
-      List<OneofDescriptor> oneOfDescriptors = descriptor.getOneofs();
+      List<OneofDescriptor> oneOfDescriptors = descriptor.getRealOneofs();
       for (OneofDescriptor oneOfDescriptor : oneOfDescriptors) {
         String unionName = oneOfDescriptor.getName() + "_" + oneOfDescriptor.getIndex();
         builder.field(unionName, toConnectSchema(ctx, oneOfDescriptor));
       }
       List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
       for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
-        OneofDescriptor oneOfDescriptor = fieldDescriptor.getContainingOneof();
+        OneofDescriptor oneOfDescriptor = fieldDescriptor.getRealContainingOneof();
         if (oneOfDescriptor != null) {
           // Already added field as oneof
           continue;
@@ -1364,6 +1424,9 @@ public class ProtobufData {
           }
         }
         builder = SchemaBuilder.int32();
+        if (descriptor.getType() != FieldDescriptor.Type.INT32) {
+          builder.parameter(PROTOBUF_TYPE_PROP, descriptor.getType().toString().toLowerCase());
+        }
         break;
       }
 
@@ -1375,6 +1438,9 @@ public class ProtobufData {
       case FIXED64:
       case SFIXED64: {
         builder = SchemaBuilder.int64();
+        if (descriptor.getType() != FieldDescriptor.Type.INT64) {
+          builder.parameter(PROTOBUF_TYPE_PROP, descriptor.getType().toString().toLowerCase());
+        }
         break;
       }
 
@@ -1474,7 +1540,11 @@ public class ProtobufData {
       builder.optional();
     }
 
-    if (!useWrapperForNullables) {
+    if (useOptionalForNullables) {
+      if (descriptor.hasOptionalKeyword()) {
+        builder.optional();
+      }
+    } else if (!useWrapperForNullables) {
       builder.optional();
     }
     builder.parameter(PROTOBUF_TYPE_TAG, String.valueOf(descriptor.getNumber()));

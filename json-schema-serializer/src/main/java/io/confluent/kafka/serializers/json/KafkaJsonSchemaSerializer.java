@@ -16,9 +16,7 @@
 
 package io.confluent.kafka.serializers.json;
 
-import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.common.cache.SynchronizedCache;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -35,18 +33,18 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
   private boolean isKey;
-  private Cache<Class<?>, JsonSchema> schemaCache;
+  private Map<Class<?>, JsonSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaJsonSchemaSerializer() {
-    schemaCache = new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
+    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client) {
     schemaRegistry = client;
-    schemaCache = new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
+    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -57,7 +55,7 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
                                    int cacheCapacity) {
     schemaRegistry = client;
     configure(serializerConfig(props));
-    schemaCache = new SynchronizedCache<>(new LRUCache<>(cacheCapacity));
+    schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
   }
 
   @Override
@@ -75,11 +73,7 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     if (JsonSchemaUtils.isEnvelope(record)) {
       schema = getSchema(record);
     } else {
-      schema = schemaCache.get(record.getClass());
-      if (schema == null) {
-        schema = getSchema(record);
-        schemaCache.put(record.getClass(), schema);
-      }
+      schema = schemaCache.computeIfAbsent(record.getClass(), k -> getSchema(record));
     }
     Object value = JsonSchemaUtils.getValue(record);
     return serializeImpl(getSubjectName(topic, isKey, value, schema), (T) value, schema);

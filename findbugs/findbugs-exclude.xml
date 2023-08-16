@@ -22,6 +22,12 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
 -->
 <FindBugsFilter>
     <Match>
+        <Class name="io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema" />
+        <Method name="validate" />
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_INFERRED" />
+    </Match>
+
+    <Match>
         <Class name="io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId"/>
         <Bug pattern="SS_SHOULD_BE_STATIC"/>
     </Match>
@@ -99,6 +105,10 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     <Match>
         <Class name="io.confluent.kafka.schemaregistry.utils.AppInfoParser"/>
         <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap.*"/>
     </Match>
 
     <!-- exclude generated code -->

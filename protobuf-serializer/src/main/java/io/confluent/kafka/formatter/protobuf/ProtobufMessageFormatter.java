@@ -42,18 +42,21 @@ import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufDeserializer
  *
  * <p>1. To read only the value of the messages in JSON
  * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
- * --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.ProtobufMessageFormatter \
+ * --bootstrap-server localhost:9092
+ * --formatter io.confluent.kafka.formatter.ProtobufMessageFormatter \
  * --property schema.registry.url=http://localhost:8081
  *
  * <p>2. To read both the key and the value of the messages in JSON
  * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
- * --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.ProtobufMessageFormatter \
+ * --bootstrap-server localhost:9092
+ * --formatter io.confluent.kafka.formatter.ProtobufMessageFormatter \
  * --property schema.registry.url=http://localhost:8081 \
  * --property print.key=true
  *
  * <p>3. To read the key, value, and timestamp of the messages in JSON
  * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
- * --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.ProtobufMessageFormatter \
+ * --bootstrap-server localhost:9092
+ * --formatter io.confluent.kafka.formatter.ProtobufMessageFormatter \
  * --property schema.registry.url=http://localhost:8081 \
  * --property print.key=true \
  * --property print.timestamp=true
@@ -97,8 +100,8 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
   }
 
   @Override
-  protected void writeTo(byte[] data, PrintStream output) throws IOException {
-    Message object = deserializer.deserialize(data);
+  protected void writeTo(String topic, byte[] data, PrintStream output) throws IOException {
+    Message object = deserializer.deserialize(topic, data);
     try {
       JsonFormat.Printer printer = JsonFormat.printer()
               .includingDefaultValueFields()
@@ -141,8 +144,8 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
     }
 
     @Override
-    public Message deserialize(byte[] payload) throws SerializationException {
-      return super.deserialize(payload);
+    public Message deserialize(String topic, byte[] payload) throws SerializationException {
+      return (Message) super.deserialize(false, topic, isKey, payload);
     }
 
     @Override

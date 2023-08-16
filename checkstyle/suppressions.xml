@@ -13,7 +13,7 @@
               files="(AbstractKafkaProtobufSerializer|MessageDefinition|SchemaRegistryCoordinator).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroConverter|AvroData|KafkaGroupLeaderElector|ProtobufSchema|ProtobufData|JsonSchemaData|InMemoryCache|SchemaMessageReader|JsonSchemaConverter|MetricsContainer).java"/>
+              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|RestService|Errors|SchemaRegistryRestApplication|Context|KafkaSchemaRegistry|KafkaStore|AvroConverter|AvroData|AvroSchemaUtils|KafkaGroupLeaderElector|ProtobufSchema|ProtobufData|JsonSchemaData|InMemoryCache|SchemaMessageReader|Jackson|JsonSchemaConverter|MetricsContainer).java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(RestService|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|AvroData|KafkaGroupLeaderElector).java"/>
@@ -22,13 +22,13 @@
               files="(Errors|AvroMessageReader).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|AvroSchema|AvroSchemaUtils|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|MockSchemaRegistryClient|SchemaRegistrySerializer|SchemaValue|SubjectVersionsResource|ProtobufSchema|SchemaDiff|FieldSchemaDiff|MessageSchemaDiff|DynamicSchema|SchemaMessageFormatter|ProtobufData|JsonSchema|JSON.*|AbstractKafkaJsonSchemaDeserializer|JsonSchemaData|JsonSchemaUtils|ProtobufSchemaUtils|SchemaMessageReader).java"/>
+              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|AvroSchema|AvroSchemaUtils|CompatibilityResource|Context|ContextKey|KafkaSchemaRegistry|KafkaStore|KafkaStoreMessageHandler|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|MockSchemaRegistryClient|SchemaRegistrySerializer|SchemaValue|SubjectVersionsResource|ProtobufSchema|SchemaDiff|FieldSchemaDiff|MessageSchemaDiff|DynamicSchema|SchemaMessageFormatter|ProtobufData|JsonSchema|JSON.*|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaJsonSchemaSerializer|JsonSchemaData|JsonSchemaUtils|MessageDefinition|ProtobufSchemaUtils|SchemaMessageReader|AbstractKafkaProtobufSerializer|AbstractKafkaProtobufDeserializer|SubjectKeyComparator|ContextFilter|QualifiedSubject).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AvroData|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|KafkaStoreReaderThread|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|AbstractKafkaJsonSchemaDeserializer|ProtobufData|ProtobufSchemaUtils|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader|SubjectVersionsResource).java"/>
+              files="(AvroData|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|MessageDefinition|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaProtobufDeserializer|ProtobufData|ProtobufSchemaUtils|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader|ContextFilter|QualifiedSubject|SubjectVersionsResource).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AvroData|AbstractKafkaAvroSerializer|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema).java"/>
+              files="(AbstractKafkaAvroSerializer|AvroData|AvroSchemaUtils|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema|ProtobufSchemaUtils).java"/>
 
     <suppress checks="MethodLength"
               files="AvroData.java"/>
@@ -40,12 +40,12 @@
               files="(SchemaRegistryConfig|ProtobufData|JsonSchemaData).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
-              files="(AvroData|ProtobufData).java"/>
+              files="(AvroData|ProtobufData|KafkaSchemaRegistry).java"/>
 
     <suppress checks="MemberName"
-              files="(DynamicSchema|EnumDefinition|MessageDefinition).java"/>
+              files="(DynamicSchema|EnumDefinition|MessageDefinition|ServiceDefinition).java"/>
 
     <suppress checks="[a-zA-Z0-9]*"
-              files="(DecimalOrBuilder|DecimalProto|Decimal|MetaProto).java"/>
+              files="(BoundedConcurrentHashMap|DecimalOrBuilder|DecimalProto|Decimal|MetaProto).java"/>
 
 </suppressions>
