@@ -594,7 +594,7 @@ public class DekRegistry implements Closeable {
     String tenant = schemaRegistry.tenant();
     KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, name);
     KeyEncryptionKey key = (KeyEncryptionKey) keys.get(keyId);
-    if (key == null) {
+    if (key == null || key.isDeleted()) {
       return null;
     }
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
@@ -671,9 +671,11 @@ public class DekRegistry implements Closeable {
       }
       keys.remove(keyId);
     } else {
-      KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
-          key.getKmsKeyId(), key.getKmsProps(), key.getDoc(), key.isShared(), true);
-      keys.put(keyId, newKey);
+      if (!key.isDeleted()) {
+        KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
+            key.getKmsKeyId(), key.getKmsProps(), key.getDoc(), key.isShared(), true);
+        keys.put(keyId, newKey);
+      }
     }
   }
 
@@ -746,9 +748,11 @@ public class DekRegistry implements Closeable {
       }
       keys.remove(keyId);
     } else {
-      DataEncryptionKey newKey = new DataEncryptionKey(name, key.getSubject(),
-          key.getAlgorithm(), key.getEncryptedKeyMaterial(), true);
-      keys.put(keyId, newKey);
+      if (!key.isDeleted()) {
+        DataEncryptionKey newKey = new DataEncryptionKey(name, key.getSubject(),
+            key.getAlgorithm(), key.getEncryptedKeyMaterial(), true);
+        keys.put(keyId, newKey);
+      }
     }
   }
 

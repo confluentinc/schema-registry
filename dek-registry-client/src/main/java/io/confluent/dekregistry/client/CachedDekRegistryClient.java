@@ -99,7 +99,8 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   public Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException {
     try {
-      return kekCache.get(new KekId(name), () -> restService.getKek(name, lookupDeleted));
+      return kekCache.get(new KekId(name, lookupDeleted), () ->
+          restService.getKek(name, lookupDeleted));
     } catch (ExecutionException e) {
       if (e.getCause() instanceof IOException) {
         throw (IOException) e.getCause();
@@ -126,7 +127,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   public Dek getDek(String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     try {
-      return dekCache.get(new DekId(kekName, subject, algorithm), () ->
+      return dekCache.get(new DekId(kekName, subject, algorithm, lookupDeleted), () ->
           restService.getDek(kekName, subject, algorithm, lookupDeleted));
     } catch (ExecutionException e) {
       if (e.getCause() instanceof IOException) {
@@ -155,7 +156,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setDoc(doc);
     request.setShared(shared);
     Kek kek = restService.createKek(request);
-    kekCache.put(new KekId(name), kek);
+    kekCache.put(new KekId(name, false), kek);
     return kek;
   }
 
@@ -171,7 +172,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setAlgorithm(algorithm);
     request.setEncryptedKeyMaterial(encryptedKeyMaterial);
     Dek dek = restService.createDek(kekName, request);
-    dekCache.put(new DekId(kekName, subject, algorithm), dek);
+    dekCache.put(new DekId(kekName, subject, algorithm, false), dek);
     return dek;
   }
 
@@ -187,7 +188,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setDoc(doc);
     request.setShared(shared);
     Kek kek = restService.updateKek(name, request);
-    kekCache.put(new KekId(name), kek);
+    kekCache.put(new KekId(name, false), kek);
     return kek;
   }
 
@@ -195,7 +196,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   public void deleteKek(String kekName, boolean permanentDelete)
       throws IOException, RestClientException {
     restService.deleteKek(kekName, permanentDelete);
-    kekCache.invalidate(new KekId(kekName));
+    kekCache.invalidate(new KekId(kekName, permanentDelete));
   }
 
   @Override
@@ -209,7 +210,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       String kekName, String subject, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException {
     restService.deleteDek(kekName, subject, algorithm, permanentDelete);
-    dekCache.invalidate(new DekId(kekName, subject, algorithm));
+    dekCache.invalidate(new DekId(kekName, subject, algorithm, permanentDelete));
   }
 
   @Override
@@ -221,13 +222,19 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   public static class KekId {
 
     private final String name;
+    private final boolean lookupDeleted;
 
-    public KekId(String name) {
+    public KekId(String name, boolean lookupDeleted) {
       this.name = name;
+      this.lookupDeleted = lookupDeleted;
     }
 
     public String getName() {
       return name;
+    }
+
+    public boolean isLookupDeleted() {
+      return lookupDeleted;
     }
 
     @Override
@@ -238,13 +245,14 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      KekId that = (KekId) o;
-      return Objects.equals(name, that.name);
+      KekId kekId = (KekId) o;
+      return lookupDeleted == kekId.lookupDeleted
+          && Objects.equals(name, kekId.name);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(name);
+      return Objects.hash(name, lookupDeleted);
     }
   }
 
@@ -253,11 +261,13 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     private final String kekName;
     private final String subject;
     private final DekFormat dekFormat;
+    private final boolean lookupDeleted;
 
-    public DekId(String kekName, String subject, DekFormat dekFormat) {
+    public DekId(String kekName, String subject, DekFormat dekFormat, boolean lookupDeleted) {
       this.kekName = kekName;
       this.subject = subject;
       this.dekFormat = dekFormat;
+      this.lookupDeleted = lookupDeleted;
     }
 
     public String getKekName() {
@@ -272,6 +282,10 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       return dekFormat;
     }
 
+    public boolean isLookupDeleted() {
+      return lookupDeleted;
+    }
+
     @Override
     public boolean equals(Object o) {
       if (this == o) {
@@ -280,15 +294,16 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      DekId that = (DekId) o;
-      return Objects.equals(kekName, that.kekName)
-          && Objects.equals(subject, that.subject)
-          && dekFormat == that.dekFormat;
+      DekId dekId = (DekId) o;
+      return lookupDeleted == dekId.lookupDeleted
+          && Objects.equals(kekName, dekId.kekName)
+          && Objects.equals(subject, dekId.subject)
+          && dekFormat == dekId.dekFormat;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(kekName, subject, dekFormat);
+      return Objects.hash(kekName, subject, dekFormat, lookupDeleted);
     }
   }
 }

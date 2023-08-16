@@ -101,10 +101,17 @@ public class RestApiTest extends ClusterTestHarness {
       assertEquals(DekRegistryErrors.KEY_NOT_SOFT_DELETED_ERROR_CODE, e.getErrorCode());
     }
 
-    client.deleteKek(kekName, false);
-
     // Delete kek
     client.deleteKek(kekName, false);
+
+    Map<String, String> kmsProps = Collections.singletonMap("hi", "there");
+    String doc = "mydoc";
+    try {
+      client.updateKek(kekName, kmsProps, doc, true);
+      fail();
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    }
 
     keks = client.listKeks(false);
     assertEquals(Collections.emptyList(), keks);
@@ -175,8 +182,6 @@ public class RestApiTest extends ClusterTestHarness {
     newDek = client.getDek(kekName, subject, algorithm, false);
     assertEquals(dek, newDek);
 
-    Map<String, String> kmsProps = Collections.singletonMap("hi", "there");
-    String doc = "mydoc";
     Kek kek2 = new Kek(kekName, kmsType, kmsKeyId, kmsProps, doc, true);
 
     // Set shared flag to true
