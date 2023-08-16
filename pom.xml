@@ -127,14 +127,8 @@
             </dependency>
             <dependency>
                 <groupId>com.google.api.grpc</groupId>
-                <artifactId>googleapis-common-protos</artifactId>
-                <version>0.0.3</version>
-            </dependency>
-            <dependency>
-                <groupId>com.google.api.grpc</groupId>
                 <artifactId>proto-google-common-protos</artifactId>
-                <version>1.18.1</version>
-                <scope>test</scope>
+                <version>2.22.1</version>
             </dependency>
             <dependency>
                 <groupId>com.squareup.wire</groupId>
