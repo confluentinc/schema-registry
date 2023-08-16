@@ -57,6 +57,7 @@ public class DekRegistryResourceExtension implements SchemaRegistryResourceExten
   public void close() throws IOException {
     if (injector != null) {
       injector.close();
+      injector = null;
     }
   }
 }
