@@ -91,7 +91,7 @@
         <jsonata-version>2.4.1</jsonata-version>
         <json-schema.version>1.14.2</json-schema.version>
         <kcache.version>4.0.11</kcache.version>
-        <proto-google-common-protos.version>2.5.1</proto-google-common-protos.version>
+        <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <okio.version>3.0.0</okio.version>
         <tink.version>1.9.0</tink.version>
