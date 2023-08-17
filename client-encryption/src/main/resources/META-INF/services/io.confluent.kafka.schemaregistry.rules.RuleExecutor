@@ -1,1 +1,1 @@
-io.confluent.kafka.schemaregistry.encryption.multikms.MultiKmsFieldEncryptionExecutor
+io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor

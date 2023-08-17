@@ -14,9 +14,6 @@
  */
 package io.confluent.kafka.schemaregistry.encryption;
 
-import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.DEFAULT_KMS_KEY_ID;
-
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.List;
 import java.util.Map;
 
@@ -32,19 +29,16 @@ public abstract class FieldEncryptionProperties {
     return ruleNames;
   }
 
-  public abstract String getKeyId();
+  public abstract String getKmsType();
 
-  public Map<String, Object> getClientProperties() throws Exception {
-    List<String> ruleNames = getRuleNames();
-    Map<String, Object> props = getClientPropertiesWithoutKey();
-    for (String ruleName : ruleNames) {
-      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
-              + ".param." + DEFAULT_KMS_KEY_ID,
-          getKeyId());
-    }
-    return props;
+  public abstract String getKmsKeyId();
+
+  public Map<String, String> getKmsProps() {
+    return null;
   }
 
-  public abstract Map<String, Object> getClientPropertiesWithoutKey() throws Exception;
+  public abstract Map<String, Object> getClientProperties(String baseUrls) throws Exception;
+
+  public abstract Object getTestClient() throws Exception;
 }
 

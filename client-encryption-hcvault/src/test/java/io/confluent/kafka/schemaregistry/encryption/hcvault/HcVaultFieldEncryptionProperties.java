@@ -15,8 +15,8 @@
 package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.EMPTY_AAD;
-import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TEST_CLIENT;
-import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultFieldEncryptionExecutor.TOKEN_ID;
+import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultKmsDriver.TOKEN_ID;
+import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -27,6 +27,7 @@ import com.bettercloud.vault.response.LogicalResponse;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeyTemplates;
 import com.google.crypto.tink.KeysetHandle;
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Base64;
@@ -41,31 +42,40 @@ public class HcVaultFieldEncryptionProperties extends FieldEncryptionProperties 
   }
 
   @Override
-  public String getKeyId() {
+  public String getKmsType() {
+    return "hcvault";
+  }
+
+  @Override
+  public String getKmsKeyId() {
     return "http://127.0.0.1:8200/transit/keys/my-key";
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey() throws Exception {
+  public Map<String, Object> getClientProperties(String baseUrls) throws Exception {
     List<String> ruleNames = getRuleNames();
-    Vault testClient = mockClient(getKeyId());
     Map<String, Object> props = new HashMap<>();
-    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, baseUrls);
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL, "60");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, String.join(",", ruleNames));
     for (String ruleName : ruleNames) {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
-          HcVaultFieldEncryptionExecutor.class.getName());
+          FieldEncryptionExecutor.class.getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
               + ".param." + TOKEN_ID,
           "dev-only-token");
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
               + ".param." + TEST_CLIENT,
-          testClient);
+          getTestClient());
     }
     return props;
+  }
+
+  @Override
+  public Object getTestClient() throws Exception {
+    return mockClient(getKmsKeyId());
   }
 
   static Vault mockClient(String keyId) throws Exception {

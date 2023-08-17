@@ -151,4 +151,15 @@ public class AliasFilterTest {
         aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
+
+  @Test
+  public void testDekPartOfUri() {
+    String path = "/dek-registry/v1/keks/test-kek/deks/myAlias";
+    Assert.assertEquals(
+        "Subject must be replaced",
+        "/dek-registry/v1/keks/test-kek/deks/mySubject",
+        aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
 }

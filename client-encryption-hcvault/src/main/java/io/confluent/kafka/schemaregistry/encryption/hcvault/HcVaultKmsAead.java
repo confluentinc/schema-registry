@@ -105,7 +105,7 @@ public class HcVaultKmsAead implements Aead {
       }
       return ciphertext.getBytes(StandardCharsets.UTF_8);
     } catch (VaultException e) {
-      throw new GeneralSecurityException("vault error", e);
+      throw new GeneralSecurityException("encryption failed", e);
     }
   }
 
@@ -131,7 +131,7 @@ public class HcVaultKmsAead implements Aead {
       return Base64.getDecoder().decode(plaintext64);
 
     } catch (VaultException e) {
-      throw new GeneralSecurityException("vault error", e);
+      throw new GeneralSecurityException("decryption failed", e);
     }
   }
 }
