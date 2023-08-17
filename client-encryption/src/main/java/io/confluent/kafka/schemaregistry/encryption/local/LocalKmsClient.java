@@ -154,9 +154,6 @@ public final class LocalKmsClient implements KmsClient {
    * <p>If {@code keyUri} is present, it is the only key that the new client will support.
    * Otherwise
    * the new client supports all local KMS keys.
-   *
-   * <p>If {@code credentialPath} is present, load the credentials from that. Otherwise use the
-   * default credentials.
    */
   public static KmsClient register(Optional<String> keyUri, String secret, List<String> oldSecrets)
       throws GeneralSecurityException {

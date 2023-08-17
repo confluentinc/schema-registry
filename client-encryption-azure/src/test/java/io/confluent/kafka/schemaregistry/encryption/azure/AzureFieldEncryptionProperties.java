@@ -15,7 +15,7 @@
 package io.confluent.kafka.schemaregistry.encryption.azure;
 
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.EMPTY_AAD;
-import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TEST_CLIENT;
+import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -27,6 +27,7 @@ import com.azure.security.keyvault.keys.cryptography.models.EncryptionAlgorithm;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeyTemplates;
 import com.google.crypto.tink.KeysetHandle;
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.HashMap;
@@ -40,29 +41,38 @@ public class AzureFieldEncryptionProperties extends FieldEncryptionProperties {
   }
 
   @Override
-  public String getKeyId() {
+  public String getKmsType() {
+    return "azure-kms";
+  }
+
+  @Override
+  public String getKmsKeyId() {
     return "https://yokota1.vault.azure.net/keys/key1/1234567890";
   }
 
   @Override
-  public Map<String, Object> getClientPropertiesWithoutKey()
+  public Map<String, Object> getClientProperties(String baseUrls)
       throws Exception {
     List<String> ruleNames = getRuleNames();
-    CryptographyClient testClient = mockClient(getKeyId());
     Map<String, Object> props = new HashMap<>();
-    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, baseUrls);
     props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL, "60");
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, String.join(",", ruleNames));
     for (String ruleName : ruleNames) {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
-          AzureFieldEncryptionExecutor.class.getName());
+          FieldEncryptionExecutor.class.getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
               + ".param." + TEST_CLIENT,
-          testClient);
+          getTestClient());
     }
     return props;
+  }
+
+  @Override
+  public Object getTestClient() throws Exception {
+    return mockClient(getKmsKeyId());
   }
 
   static CryptographyClient mockClient(String keyId) throws Exception {

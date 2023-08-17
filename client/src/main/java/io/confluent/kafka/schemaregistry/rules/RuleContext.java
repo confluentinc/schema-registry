@@ -37,6 +37,7 @@ import org.apache.kafka.common.header.Headers;
  */
 public class RuleContext {
 
+  private final Map<String, ?> configs;
   private final ParsedSchema source;
   private final ParsedSchema target;
   private final String subject;
@@ -53,6 +54,7 @@ public class RuleContext {
   private final Deque<FieldContext> fieldContexts;
 
   public RuleContext(
+      Map<String, ?> configs,
       ParsedSchema source,
       ParsedSchema target,
       String subject,
@@ -65,6 +67,7 @@ public class RuleContext {
       Rule rule,
       int index,
       List<Rule> rules) {
+    this.configs = configs;
     this.source = source;
     this.target = target;
     this.subject = subject;
@@ -78,6 +81,10 @@ public class RuleContext {
     this.index = index;
     this.rules = rules;
     this.fieldContexts = new ArrayDeque<>();
+  }
+
+  public Map<String, ?> configs() {
+    return configs;
   }
 
   public ParsedSchema source() {

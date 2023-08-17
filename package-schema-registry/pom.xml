@@ -35,6 +35,11 @@
             <artifactId>kafka-schema-registry</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>dek-registry</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
         <!-- kafka -> zookeeper -> jline ends up including junit 3.8.1 here. Explicitly list the
              dependency and scope it to test to avoid pulling it in -->
         <dependency>

@@ -57,7 +57,6 @@ public class Metadata {
   ) {
     SortedMap<String, SortedSet<String>> sortedTags = tags != null
         ? tags.entrySet().stream()
-        .sorted(Map.Entry.comparingByKey())
         .collect(Collectors.toMap(
             Entry::getKey,
             e -> e.getValue().stream().sorted().collect(Collectors.toCollection(TreeSet::new)),
@@ -65,13 +64,7 @@ public class Metadata {
             TreeMap::new))
         : Collections.emptySortedMap();
     SortedMap<String, String> sortedProperties = properties != null
-        ? properties.entrySet().stream()
-        .sorted(Map.Entry.comparingByKey())
-        .collect(Collectors.toMap(
-            Entry::getKey,
-            Entry::getValue,
-            (e1, e2) -> e1,
-            TreeMap::new))
+        ? new TreeMap<>(properties)
         : Collections.emptySortedMap();
     SortedSet<String> sortedSensitive = sensitive != null
         ? sensitive.stream()

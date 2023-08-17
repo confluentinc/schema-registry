@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.encryption.azure;
 
+import com.azure.core.exception.AzureException;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.azure.security.keyvault.keys.cryptography.models.EncryptionAlgorithm;
 import com.google.crypto.tink.Aead;
@@ -51,12 +52,20 @@ public final class AzureKmsAead implements Aead {
   @Override
   public byte[] encrypt(final byte[] plaintext, final byte[] associatedData)
       throws GeneralSecurityException {
-    return kmsClient.encrypt(this.algorithm, plaintext).getCipherText();
+    try {
+      return kmsClient.encrypt(this.algorithm, plaintext).getCipherText();
+    } catch (AzureException e) {
+      throw new GeneralSecurityException("encryption failed", e);
+    }
   }
 
   @Override
   public byte[] decrypt(final byte[] ciphertext, final byte[] associatedData)
       throws GeneralSecurityException {
-    return kmsClient.decrypt(this.algorithm, ciphertext).getPlainText();
+    try {
+      return kmsClient.decrypt(this.algorithm, ciphertext).getPlainText();
+    } catch (AzureException e) {
+      throw new GeneralSecurityException("decryption failed", e);
+    }
   }
 }

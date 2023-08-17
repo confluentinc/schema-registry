@@ -29,6 +29,6 @@ public interface FieldTransform extends AutoCloseable {
   Object transform(RuleContext ctx, FieldContext fieldCtx, Object fieldValue)
       throws RuleException;
 
-  default void close() {
+  default void close() throws RuleException {
   }
 }
