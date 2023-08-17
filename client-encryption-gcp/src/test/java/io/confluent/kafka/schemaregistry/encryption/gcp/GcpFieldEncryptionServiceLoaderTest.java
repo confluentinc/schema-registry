@@ -19,12 +19,9 @@ package io.confluent.kafka.schemaregistry.encryption.gcp;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 
 import com.google.common.collect.ImmutableList;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 public class GcpFieldEncryptionServiceLoaderTest extends FieldEncryptionExecutorTest {
 
@@ -35,11 +32,5 @@ public class GcpFieldEncryptionServiceLoaderTest extends FieldEncryptionExecutor
   @Override
   protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
     return new GcpFieldEncryptionProperties(ImmutableList.of(DEFAULT_NAME));
-  }
-
-  @Override
-  protected Metadata getMetadata(Map<String, String> properties) {
-    properties.put("encrypt.kms.type", "gcp-kms");
-    return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 }

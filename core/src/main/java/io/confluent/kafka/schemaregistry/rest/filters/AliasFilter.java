@@ -80,7 +80,7 @@ public class AliasFilter implements ContainerRequestFilter {
         subjectPathFound = false;
       }
 
-      if (uriPathStr.equals("subjects")) {
+      if (uriPathStr.equals("subjects") || uriPathStr.equals("deks")) {
         subjectPathFound = true;
       }
 
