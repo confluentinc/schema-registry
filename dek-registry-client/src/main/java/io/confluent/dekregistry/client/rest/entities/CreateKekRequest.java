@@ -65,8 +65,8 @@ public class CreateKekRequest {
     return this.kmsKeyId;
   }
 
-  @JsonProperty("kmsKeyid")
-  public void setKmsKeyid(String kmsKeyId) {
+  @JsonProperty("kmsKeyId")
+  public void setKmsKeyId(String kmsKeyId) {
     this.kmsKeyId = kmsKeyId;
   }
 

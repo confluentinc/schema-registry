@@ -151,7 +151,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     CreateKekRequest request = new CreateKekRequest();
     request.setName(name);
     request.setKmsType(kmsType);
-    request.setKmsKeyid(kmsKeyId);
+    request.setKmsKeyId(kmsKeyId);
     request.setKmsProps(kmsProps);
     request.setDoc(doc);
     request.setShared(shared);
