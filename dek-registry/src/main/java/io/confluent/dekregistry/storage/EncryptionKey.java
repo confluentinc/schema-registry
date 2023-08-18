@@ -34,10 +34,10 @@ import java.util.Objects;
 })
 public abstract class EncryptionKey {
 
-  private final KeyType type;
-  private final boolean deleted;
-  private Long offset;
-  private Long timestamp;
+  protected final KeyType type;
+  protected final boolean deleted;
+  protected Long offset;
+  protected Long timestamp;
 
   @JsonCreator
   public EncryptionKey(

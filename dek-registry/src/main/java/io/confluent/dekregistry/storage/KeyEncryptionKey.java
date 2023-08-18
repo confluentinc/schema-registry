@@ -116,6 +116,6 @@ public class KeyEncryptionKey extends EncryptionKey {
   }
 
   public Kek toKekEntity() {
-    return new Kek(name, kmsType, kmsKeyId, kmsProps, doc, shared);
+    return new Kek(name, kmsType, kmsKeyId, kmsProps, doc, shared, timestamp);
   }
 }

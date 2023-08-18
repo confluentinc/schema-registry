@@ -32,23 +32,29 @@ public class Dek {
 
   private final String kekName;
   private final String subject;
+  private final int version;
   private final DekFormat algorithm;
   private final String encryptedKeyMaterial;
   private final String keyMaterial;
+  private final Long timestamp;
 
   @JsonCreator
   public Dek(
       @JsonProperty("kekName") String kekName,
       @JsonProperty("subject") String subject,
+      @JsonProperty("version") int version,
       @JsonProperty("algorithm") DekFormat algorithm,
       @JsonProperty("encryptedKeyMaterial") String encryptedKeyMaterial,
-      @JsonProperty("keyMaterial") String keyMaterial
+      @JsonProperty("keyMaterial") String keyMaterial,
+      @JsonProperty("ts") Long timestamp
   ) {
     this.kekName = kekName;
     this.subject = subject;
+    this.version = version;
     this.algorithm = algorithm;
     this.encryptedKeyMaterial = encryptedKeyMaterial;
     this.keyMaterial = keyMaterial;
+    this.timestamp = timestamp;
   }
 
   @JsonProperty("kekName")
@@ -59,6 +65,11 @@ public class Dek {
   @JsonProperty("subject")
   public String getSubject() {
     return this.subject;
+  }
+
+  @JsonProperty("version")
+  public int getVersion() {
+    return this.version;
   }
 
   @JsonProperty("algorithm")
@@ -76,6 +87,11 @@ public class Dek {
     return this.keyMaterial;
   }
 
+  @JsonProperty("ts")
+  public Long getTimestamp() {
+    return this.timestamp;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -85,16 +101,17 @@ public class Dek {
       return false;
     }
     Dek dek = (Dek) o;
-    return Objects.equals(kekName, dek.kekName)
+    return version == dek.version
+        && Objects.equals(kekName, dek.kekName)
         && Objects.equals(subject, dek.subject)
-        && Objects.equals(algorithm, dek.algorithm)
+        && algorithm == dek.algorithm
         && Objects.equals(encryptedKeyMaterial, dek.encryptedKeyMaterial)
         && Objects.equals(keyMaterial, dek.keyMaterial);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(kekName, subject, algorithm, encryptedKeyMaterial, keyMaterial);
+    return Objects.hash(kekName, subject, version, algorithm, encryptedKeyMaterial, keyMaterial);
   }
 
   @Override

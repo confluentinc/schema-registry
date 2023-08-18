@@ -123,7 +123,8 @@ public class MockDekRegistryClient implements DekRegistryClient {
     if (keks.containsKey(keyId)) {
       throw new RestClientException("Key " + name + " already exists", 409, 40972);
     }
-    KekInfo key = new KekInfo(name, kmsType, kmsKeyId, kmsProps, doc, shared, false);
+    KekInfo key = new KekInfo(name, kmsType, kmsKeyId,
+        kmsProps, doc, shared, System.currentTimeMillis(), false);
     keks.put(keyId, key);
     return key;
   }
@@ -139,7 +140,10 @@ public class MockDekRegistryClient implements DekRegistryClient {
     if (deks.containsKey(keyId)) {
       throw new RestClientException("Key " + subject + " already exists", 409, 40972);
     }
-    DekInfo key = new DekInfo(kekName, subject, algorithm, encryptedKeyMaterial, null, false);
+    // NOTE (version): in the future we may allow a version to be passed
+    int version = 1;
+    DekInfo key = new DekInfo(kekName, subject, version, algorithm,
+        encryptedKeyMaterial, null, System.currentTimeMillis(), false);
     key = maybeGenerateEncryptedDek(key);
     if (key.getEncryptedKeyMaterial() == null) {
       throw new RestClientException("Could not generate dek for " + subject, 500, 50070);
@@ -160,8 +164,8 @@ public class MockDekRegistryClient implements DekRegistryClient {
         byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
         String encryptedDekStr =
             new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
-        key = new DekInfo(key.getKekName(), key.getSubject(), key.getAlgorithm(),
-            encryptedDekStr, null, key.isDeleted());
+        key = new DekInfo(key.getKekName(), key.getSubject(), key.getVersion(), key.getAlgorithm(),
+            encryptedDekStr, null, key.getTimestamp(), key.isDeleted());
       }
       return key;
     } catch (GeneralSecurityException e) {
@@ -182,8 +186,8 @@ public class MockDekRegistryClient implements DekRegistryClient {
         String rawDekStr =
             new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
         // Copy dek
-        key = new DekInfo(key.getKekName(), key.getSubject(), key.getAlgorithm(),
-            key.getEncryptedKeyMaterial(), rawDekStr, key.isDeleted());
+        key = new DekInfo(key.getKekName(), key.getSubject(), key.getVersion(), key.getAlgorithm(),
+            key.getEncryptedKeyMaterial(), rawDekStr, key.getTimestamp(), key.isDeleted());
       }
       return key;
     } catch (GeneralSecurityException e) {
@@ -212,8 +216,8 @@ public class MockDekRegistryClient implements DekRegistryClient {
     if (shared == null) {
       shared = key.isShared();
     }
-    KekInfo newKey = new KekInfo(name, key.getKmsType(),
-        key.getKmsKeyId(), kmsProps, doc, shared, false);
+    KekInfo newKey = new KekInfo(name, key.getKmsType(), key.getKmsKeyId(),
+        kmsProps, doc, shared, System.currentTimeMillis(), false);
     keks.put(keyId, newKey);
     return key;
   }
@@ -229,8 +233,8 @@ public class MockDekRegistryClient implements DekRegistryClient {
     if (permanentDelete) {
       keks.remove(keyId);
     } else {
-      KekInfo newKey = new KekInfo(kekName, key.getKmsType(),
-          key.getKmsKeyId(), key.getKmsProps(), key.getDoc(), key.isShared(), true);
+      KekInfo newKey = new KekInfo(kekName, key.getKmsType(), key.getKmsKeyId(),
+          key.getKmsProps(), key.getDoc(), key.isShared(), System.currentTimeMillis(), true);
       keks.put(keyId, newKey);
     }
   }
@@ -257,8 +261,8 @@ public class MockDekRegistryClient implements DekRegistryClient {
     if (permanentDelete) {
       deks.remove(keyId);
     } else {
-      DekInfo newKey = new DekInfo(kekName, key.getSubject(), key.getAlgorithm(),
-          key.getEncryptedKeyMaterial(), key.getKeyMaterial(), true);
+      DekInfo newKey = new DekInfo(kekName, key.getSubject(), key.getVersion(), key.getAlgorithm(),
+          key.getEncryptedKeyMaterial(), key.getKeyMaterial(), System.currentTimeMillis(), true);
       deks.put(keyId, newKey);
     }
   }
@@ -349,8 +353,8 @@ public class MockDekRegistryClient implements DekRegistryClient {
     private final boolean deleted;
 
     public KekInfo(String name, String kmsType, String kmsKeyId, Map<String, String> kmsProps,
-          String doc, boolean shared, boolean deleted) {
-      super(name, kmsType, kmsKeyId, kmsProps, doc, shared);
+          String doc, boolean shared, Long timestamp, boolean deleted) {
+      super(name, kmsType, kmsKeyId, kmsProps, doc, shared, timestamp);
       this.deleted = deleted;
     }
 
@@ -383,9 +387,9 @@ public class MockDekRegistryClient implements DekRegistryClient {
 
     private final boolean deleted;
 
-    public DekInfo(String kekName, String subject, DekFormat algorithm,
-        String encryptedKeyMaterial, String keyMaterial, boolean deleted) {
-      super(kekName, subject, algorithm, encryptedKeyMaterial, keyMaterial);
+    public DekInfo(String kekName, String subject, int version, DekFormat algorithm,
+        String encryptedKeyMaterial, String keyMaterial, Long timestamp, boolean deleted) {
+      super(kekName, subject, version, algorithm, encryptedKeyMaterial, keyMaterial, timestamp);
       this.deleted = deleted;
     }
 

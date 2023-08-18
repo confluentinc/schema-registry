@@ -88,6 +88,7 @@ public class DekRegistry implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(DekRegistry.class);
 
+  public static final int MIN_VERSION = 1;
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String X_FORWARD_HEADER = DekRegistryRestService.X_FORWARD_HEADER;
 
@@ -303,10 +304,10 @@ public class DekRegistry implements Closeable {
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     DataEncryptionKeyId key1 = new DataEncryptionKeyId(
         tenant, String.valueOf(Character.MIN_VALUE),
-        String.valueOf(Character.MIN_VALUE), DekFormat.AES128_GCM);
+        String.valueOf(Character.MIN_VALUE), MIN_VERSION, DekFormat.AES128_GCM);
     DataEncryptionKeyId key2 = new DataEncryptionKeyId(
         tenant, String.valueOf(Character.MAX_VALUE),
-        String.valueOf(Character.MAX_VALUE), DekFormat.AES256_SIV);
+        String.valueOf(Character.MAX_VALUE), Integer.MAX_VALUE, DekFormat.AES256_SIV);
     try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
         keys().range(key1, true, key2, false)) {
       while (iter.hasNext()) {
@@ -319,9 +320,11 @@ public class DekRegistry implements Closeable {
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(String tenant, String kekName) {
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     DataEncryptionKeyId key1 = new DataEncryptionKeyId(
-        tenant, kekName, String.valueOf(Character.MIN_VALUE), DekFormat.AES128_GCM);
+        tenant, kekName, String.valueOf(Character.MIN_VALUE),
+        MIN_VERSION, DekFormat.AES128_GCM);
     DataEncryptionKeyId key2 = new DataEncryptionKeyId(
-        tenant, kekName, String.valueOf(Character.MAX_VALUE), DekFormat.AES256_SIV);
+        tenant, kekName, String.valueOf(Character.MAX_VALUE),
+        Integer.MAX_VALUE, DekFormat.AES256_SIV);
     try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
         keys().range(key1, true, key2, false)) {
       while (iter.hasNext()) {
@@ -337,7 +340,10 @@ public class DekRegistry implements Closeable {
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
-    DataEncryptionKeyId keyId = new DataEncryptionKeyId(tenant, kekName, subject, algorithm);
+    // NOTE (version): in the future we may allow a version to be passed
+    int version = MIN_VERSION;
+    DataEncryptionKeyId keyId = new DataEncryptionKeyId(
+        tenant, kekName, subject, version, algorithm);
     DataEncryptionKey key = (DataEncryptionKey) keys.get(keyId);
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
       key = maybeGenerateRawDek(key);
@@ -483,14 +489,16 @@ public class DekRegistry implements Closeable {
     DekFormat algorithm = request.getAlgorithm() != null
         ? request.getAlgorithm()
         : DekFormat.AES256_GCM;
+    // NOTE (version): in the future we may allow a version to be passed
+    int version = MIN_VERSION;
     DataEncryptionKeyId keyId = new DataEncryptionKeyId(
-        tenant, kekName, request.getSubject(), algorithm);
+        tenant, kekName, request.getSubject(), version, algorithm);
     if (keys.containsKey(keyId)) {
       throw new AlreadyExistsException(request.getSubject());
     }
 
     DataEncryptionKey key = new DataEncryptionKey(kekName, request.getSubject(),
-        request.getAlgorithm(), request.getEncryptedKeyMaterial(), false);
+        version, request.getAlgorithm(), request.getEncryptedKeyMaterial(), false);
     key = maybeGenerateEncryptedDek(key);
     if (key.getEncryptedKeyMaterial() == null) {
       throw new DekGenerationException("Could not generate dek for " + request.getSubject());
@@ -510,8 +518,8 @@ public class DekRegistry implements Closeable {
         byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
         String encryptedDekStr =
             new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
-        key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getAlgorithm(),
-            encryptedDekStr, key.isDeleted());
+        key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getVersion(),
+            key.getAlgorithm(), encryptedDekStr, key.isDeleted());
       }
       return key;
     } catch (GeneralSecurityException e) {
@@ -532,8 +540,8 @@ public class DekRegistry implements Closeable {
         String rawDekStr =
             new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
         // Copy dek
-        key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getAlgorithm(),
-            key.getEncryptedKeyMaterial(), key.isDeleted());
+        key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getVersion(),
+            key.getAlgorithm(), key.getEncryptedKeyMaterial(), key.isDeleted());
         key.setKeyMaterial(rawDekStr);
       }
       return key;
@@ -737,7 +745,9 @@ public class DekRegistry implements Closeable {
       algorithm = DekFormat.AES256_GCM;
     }
     String tenant = schemaRegistry.tenant();
-    DataEncryptionKeyId keyId = new DataEncryptionKeyId(tenant, name, subject, algorithm);
+    // NOTE (version): in the future we may allow a version to be passed
+    int version = MIN_VERSION;
+    DataEncryptionKeyId keyId = new DataEncryptionKeyId(tenant, name, subject, version, algorithm);
     DataEncryptionKey key = (DataEncryptionKey) keys.get(keyId);
     if (key == null) {
       return;
@@ -750,7 +760,7 @@ public class DekRegistry implements Closeable {
     } else {
       if (!key.isDeleted()) {
         DataEncryptionKey newKey = new DataEncryptionKey(name, key.getSubject(),
-            key.getAlgorithm(), key.getEncryptedKeyMaterial(), true);
+            key.getVersion(), key.getAlgorithm(), key.getEncryptedKeyMaterial(), true);
         keys.put(keyId, newKey);
       }
     }
