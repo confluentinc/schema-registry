@@ -191,17 +191,11 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     private Cryptor cryptor;
     private String kekName;
     private KekInfo kek;
-    private DekInfo dek;
 
     public void init(RuleContext ctx) throws RuleException {
-      try {
-        cryptor = getCryptor(ctx);
-        kekName = getKekName(ctx);
-        kek = getKek(ctx, kekName);
-        dek = getDek(ctx, kekName, kek);
-      } catch (GeneralSecurityException e) {
-        throw new RuleException(e);
-      }
+      cryptor = getCryptor(ctx);
+      kekName = getKekName(ctx);
+      kek = getKek(ctx, kekName);
     }
 
     protected String getKekName(RuleContext ctx) throws RuleException {
@@ -387,6 +381,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     public Object transform(RuleContext ctx, FieldContext fieldCtx, Object fieldValue)
         throws RuleException {
       try {
+        DekInfo dek = getDek(ctx, kekName, kek);
         byte[] plaintext;
         byte[] ciphertext;
         switch (ctx.ruleMode()) {
