@@ -51,6 +51,7 @@ public class Kek {
   private final SortedMap<String, String> kmsProps;
   private final String doc;
   private final boolean shared;
+  private final Long timestamp;
 
   @JsonCreator
   public Kek(
@@ -59,7 +60,8 @@ public class Kek {
       @JsonProperty("kmsKeyId") String kmsKeyId,
       @JsonProperty("kmsProps") Map<String, String> kmsProps,
       @JsonProperty("doc") String doc,
-      @JsonProperty("shared") boolean shared
+      @JsonProperty("shared") boolean shared,
+      @JsonProperty("ts") Long timestamp
   ) {
     this.name = name;
     this.kmsType = kmsType;
@@ -70,6 +72,7 @@ public class Kek {
     this.kmsProps = Collections.unmodifiableSortedMap(sortedKmsProps);
     this.doc = doc;
     this.shared = shared;
+    this.timestamp = timestamp;
   }
 
   @JsonProperty("name")
@@ -100,6 +103,11 @@ public class Kek {
   @JsonProperty("shared")
   public boolean isShared() {
     return this.shared;
+  }
+
+  @JsonProperty("ts")
+  public Long getTimestamp() {
+    return this.timestamp;
   }
 
   @JsonIgnore

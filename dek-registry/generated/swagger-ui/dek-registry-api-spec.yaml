@@ -320,6 +320,9 @@ components:
           type: string
         subject:
           type: string
+        version:
+          type: integer
+          format: int32
         algorithm:
           type: string
           enum:
@@ -330,6 +333,9 @@ components:
           type: string
         keyMaterial:
           type: string
+        ts:
+          type: integer
+          format: int64
     CreateDekRequest:
       type: object
       properties:
@@ -360,6 +366,9 @@ components:
           type: string
         shared:
           type: boolean
+        ts:
+          type: integer
+          format: int64
     CreateKekRequest:
       type: object
       properties:
@@ -377,9 +386,6 @@ components:
           type: string
         shared:
           type: boolean
-        kmsKeyid:
-          type: string
-          writeOnly: true
     UpdateKekRequest:
       type: object
       properties:

@@ -30,6 +30,7 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
 
   private final String kekName;
   private final String subject;
+  private final int version;
   private final DekFormat algorithm;
 
   @JsonCreator
@@ -37,11 +38,13 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
       @JsonProperty("tenant") String tenant,
       @JsonProperty("kekName") String kekName,
       @JsonProperty("subject") String subject,
+      @JsonProperty("version") int version,
       @JsonProperty("algorithm") DekFormat algorithm
   ) {
     super(tenant, KeyType.DEK);
     this.kekName = kekName;
     this.subject = subject;
+    this.version = version;
     this.algorithm = algorithm;
   }
 
@@ -53,6 +56,11 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
   @JsonProperty("subject")
   public String getSubject() {
     return this.subject;
+  }
+
+  @JsonProperty("version")
+  public int getVersion() {
+    return this.version;
   }
 
   @JsonProperty("algorithm")
@@ -72,14 +80,15 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
       return false;
     }
     DataEncryptionKeyId that = (DataEncryptionKeyId) o;
-    return Objects.equals(kekName, that.kekName)
+    return version == that.version
+        && Objects.equals(kekName, that.kekName)
         && Objects.equals(subject, that.subject)
         && algorithm == that.algorithm;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), kekName, subject, algorithm);
+    return Objects.hash(super.hashCode(), kekName, subject, version, algorithm);
   }
 
   @Override
@@ -97,22 +106,9 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
     } else if (that.getKekName() == null) {
       return 1;
     } else {
-      int kmsTypeComparison = this.getKekName().compareTo(that.getKekName());
-      if (kmsTypeComparison != 0) {
-        return kmsTypeComparison < 0 ? -1 : 1;
-      }
-    }
-
-    if (this.getKekName() == null && that.getKekName() == null) {
-      // pass
-    } else if (this.getKekName() == null) {
-      return -1;
-    } else if (that.getKekName() == null) {
-      return 1;
-    } else {
-      int kmsKeyIdComparison = this.getKekName().compareTo(that.getKekName());
-      if (kmsKeyIdComparison != 0) {
-        return kmsKeyIdComparison < 0 ? -1 : 1;
+      int kekNameComparison = this.getKekName().compareTo(that.getKekName());
+      if (kekNameComparison != 0) {
+        return kekNameComparison < 0 ? -1 : 1;
       }
     }
 
@@ -127,6 +123,10 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
       if (subjectComparison != 0) {
         return subjectComparison < 0 ? -1 : 1;
       }
+    }
+
+    if (this.getVersion() != that.getVersion()) {
+      return (this.getVersion() < that.getVersion() ? -1 : 1);
     }
 
     if (this.getAlgorithm() == null && that.getAlgorithm() == null) {
