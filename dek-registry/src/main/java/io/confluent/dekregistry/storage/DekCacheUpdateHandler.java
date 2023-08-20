@@ -18,4 +18,6 @@ package io.confluent.dekregistry.storage;
 import io.kcache.CacheUpdateHandler;
 
 public interface DekCacheUpdateHandler extends CacheUpdateHandler<EncryptionKeyId, EncryptionKey> {
+
+  String DEK_REGISTRY = "dekRegistry";
 }
