@@ -16,8 +16,15 @@
 package io.confluent.dekregistry.storage;
 
 import io.kcache.CacheUpdateHandler;
+import java.util.Map;
+import org.apache.kafka.common.Configurable;
 
-public interface DekCacheUpdateHandler extends CacheUpdateHandler<EncryptionKeyId, EncryptionKey> {
+public interface DekCacheUpdateHandler
+    extends CacheUpdateHandler<EncryptionKeyId, EncryptionKey>, Configurable {
 
   String DEK_REGISTRY = "dekRegistry";
+
+  @Override
+  default void configure(Map<String, ?> map) {
+  }
 }
