@@ -185,6 +185,7 @@ public class DekRegistry implements Closeable {
       DekRegistryConfig config) {
     Map<String, Object> handlerConfigs =
         config.originalsWithPrefix(DekRegistryConfig.DEK_REGISTRY_UPDATE_HANDLERS_CONFIG + ".");
+    handlerConfigs.put(DekCacheUpdateHandler.DEK_REGISTRY, this);
     List<DekCacheUpdateHandler> customCacheHandlers =
         config.getConfiguredInstances(DekRegistryConfig.DEK_REGISTRY_UPDATE_HANDLERS_CONFIG,
         DekCacheUpdateHandler.class,
