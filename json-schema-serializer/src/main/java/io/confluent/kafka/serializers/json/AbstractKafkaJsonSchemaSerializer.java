@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.serializers.json;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -71,6 +72,10 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.specVersion = SpecificationVersion.get(
         config.getString(KafkaJsonSchemaSerializerConfig.SCHEMA_SPEC_VERSION));
     this.oneofForNullables = config.getBoolean(KafkaJsonSchemaSerializerConfig.ONEOF_FOR_NULLABLES);
+    String inclusion = config.getString(KafkaJsonSchemaSerializerConfig.DEFAULT_PROPERTY_INCLUSION);
+    if (inclusion != null) {
+      this.objectMapper.setDefaultPropertyInclusion(JsonInclude.Include.valueOf(inclusion));
+    }
     this.failUnknownProperties =
         config.getBoolean(KafkaJsonSchemaDeserializerConfig.FAIL_UNKNOWN_PROPERTIES);
     this.validate = config.getBoolean(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA);
