@@ -133,6 +133,7 @@ public class Difference {
     return message;
   }
 
+  @SuppressWarnings("CyclomaticComplexity")
   private String propertyOrItemError() {
     if (type == Type.PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL
           || type == Type.ITEM_ADDED_TO_OPEN_CONTENT_MODEL) {
@@ -155,11 +156,11 @@ public class Difference {
       return "The %s schema has a property or item at path '" + jsonPath + "' which is "
                + "missing in the %s schema and is not covered by its partially open content model";
     } else if (type == Type.RESERVED_PROPERTY_REMOVED) {
-      return "The %s schema has one or more reserved property removed from its metadata which is present in the %s " +
-              "schema.";
+      return "The %s schema has one or more reserved property removed from its metadata which is "
+              + "present in the %s schema.";
     } else if (type == Type.RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY) {
-      return "The %s schema has properties that conflicts with the reserved properties which is missing in the %s " +
-              "schema.";
+      return "The %s schema has properties that conflicts with the reserved properties which is "
+              + "missing in the %s schema.";
     }
     return "";
   }

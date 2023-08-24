@@ -126,31 +126,6 @@ public class SchemaDiff {
     return differences;
   }
 
-  private static List<Difference> compareMetadata(Schema update,
-                                              Map<String, String> originalProperties,
-                                              Map<String, String> updatedProperties) {
-    List<Difference> differences = new ArrayList<>();
-    if (update instanceof ObjectSchema) {
-      ObjectSchema updatedObjectSchema = (ObjectSchema) update;
-      Set<String> originalReservedPropertyKeys = Sets.newHashSet(originalProperties.getOrDefault(JsonSchema.RESERVED, "")
-              .split(","));
-      Set<String> updatedPropertyKeys = updatedObjectSchema.getPropertySchemas().keySet();
-      Set<String> updatedReservedPropertyKeys = Sets.newHashSet(updatedProperties.getOrDefault(JsonSchema.RESERVED, "")
-              .split(","));
-      // backward compatibility check to ensure that original reserved properties are not removed in the updated version
-      if (!Sets.difference(originalReservedPropertyKeys, updatedReservedPropertyKeys).isEmpty()) {
-        differences.add(new Difference(Type.RESERVED_PROPERTY_REMOVED, ""));
-      }
-      // updated properties conflict with reserved properties
-      Sets.SetView<String> conflictingProperties = Sets.intersection(updatedPropertyKeys, updatedReservedPropertyKeys);
-      if (!conflictingProperties.isEmpty()) {
-        conflictingProperties.forEach(property -> differences.add(new Difference(Type.RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY,
-                String.format("#/properties/%s", property))));
-      }
-    }
-    return differences;
-  }
-
   @SuppressWarnings("ConstantConditions")
   static void compare(final Context ctx, Schema original, Schema update) {
     if (original == null && update == null) {
@@ -243,6 +218,34 @@ public class SchemaDiff {
         }
       }
     }
+  }
+
+  private static List<Difference> compareMetadata(Schema update,
+                                                  Map<String, String> originalProperties,
+                                                  Map<String, String> updatedProperties) {
+    List<Difference> differences = new ArrayList<>();
+    if (update instanceof ObjectSchema) {
+      ObjectSchema updatedObjectSchema = (ObjectSchema) update;
+      Set<String> originalReservedPropertyKeys =
+              Sets.newHashSet(originalProperties.getOrDefault(JsonSchema.RESERVED, "").split(","));
+      Set<String> updatedPropertyKeys = updatedObjectSchema.getPropertySchemas().keySet();
+      Set<String> updatedReservedPropertyKeys =
+              Sets.newHashSet(updatedProperties.getOrDefault(JsonSchema.RESERVED, "").split(","));
+      // backward compatibility check to ensure that original reserved properties are not removed in
+      // the updated version
+      if (!Sets.difference(originalReservedPropertyKeys, updatedReservedPropertyKeys).isEmpty()) {
+        differences.add(new Difference(Type.RESERVED_PROPERTY_REMOVED, ""));
+      }
+      // updated properties conflict with reserved properties
+      Sets.SetView<String> conflictingProperties = Sets.intersection(updatedPropertyKeys,
+              updatedReservedPropertyKeys);
+      if (!conflictingProperties.isEmpty()) {
+        conflictingProperties.forEach(property ->
+                differences.add(new Difference(Type.RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY,
+                        String.format("#/properties/%s", property))));
+      }
+    }
+    return differences;
   }
 
   private static Schema normalizeSchema(final Schema schema) {
