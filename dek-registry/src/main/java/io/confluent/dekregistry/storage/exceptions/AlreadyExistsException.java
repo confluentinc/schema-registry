@@ -19,12 +19,12 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 
 public class AlreadyExistsException extends SchemaRegistryException {
 
-  public AlreadyExistsException(String message, Throwable cause) {
-    super(message, cause);
+  public AlreadyExistsException(String name, Throwable cause) {
+    super(name, cause);
   }
 
-  public AlreadyExistsException(String message) {
-    super(message);
+  public AlreadyExistsException(String name) {
+    super(name);
   }
 
   public AlreadyExistsException(Throwable cause) {

@@ -168,6 +168,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
         throw DekRegistryErrors.keyNotFoundException(subject);
       }
       return key.toDekEntity();
+    } catch (DekGenerationException e) {
+      throw DekRegistryErrors.dekGenerationException(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while retrieving key", e);
     }
@@ -250,7 +252,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (TooManyKeysException e) {
       throw DekRegistryErrors.tooManyKeysException(dekRegistry.config().maxKeys());
     } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(request.getSubject());
+      throw DekRegistryErrors.dekGenerationException(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while creating key", e);
     }
