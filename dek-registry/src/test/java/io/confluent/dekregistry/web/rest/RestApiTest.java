@@ -323,8 +323,12 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Dek still does not have decrypted key material because kms type is unknown
     Dek dek2 = new Dek(kekName, subject, 1, algorithm, encryptedDekStr, null, null);
-    newDek = client.getDek(kekName, subject, algorithm, true);
-    assertEquals(dek2, newDek);
+    try {
+      newDek = client.getDek(kekName, subject, algorithm, true);
+      fail();
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.DEK_GENERATION_ERROR_CODE, e.getErrorCode());
+    }
   }
 }
 

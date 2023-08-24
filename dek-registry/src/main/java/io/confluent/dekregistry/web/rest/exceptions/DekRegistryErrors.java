@@ -68,15 +68,15 @@ public class DekRegistryErrors {
         TOO_MANY_KEYS_ERROR_CODE);
   }
 
-  public static RestInvalidKeyException invalidOrMissingKeyInfo(String message) {
-    return new RestInvalidKeyException(message);
+  public static RestInvalidKeyException invalidOrMissingKeyInfo(String field) {
+    return new RestInvalidKeyException(field);
   }
 
-  public static RestReferenceExistsException referenceExistsException(String message) {
-    return new RestReferenceExistsException(message);
+  public static RestReferenceExistsException referenceExistsException(String name) {
+    return new RestReferenceExistsException(name);
   }
 
-  public static RestServerErrorException dekGenerationException(String subject) {
-    return new RestDekGenerationException(subject);
+  public static RestServerErrorException dekGenerationException(String message) {
+    return new RestDekGenerationException(message);
   }
 }
