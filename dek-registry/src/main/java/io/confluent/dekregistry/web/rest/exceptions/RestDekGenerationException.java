@@ -20,9 +20,8 @@ import io.confluent.rest.exceptions.RestServerErrorException;
 public class RestDekGenerationException extends RestServerErrorException {
 
   public static final int ERROR_CODE = DekRegistryErrors.DEK_GENERATION_ERROR_CODE;
-  public static final String DEK_GENERATION_MESSAGE_FORMAT = "Could not generate dek for '%s'";
 
-  public RestDekGenerationException(String subject) {
-    super(String.format(DEK_GENERATION_MESSAGE_FORMAT, subject), ERROR_CODE);
+  public RestDekGenerationException(String message) {
+    super(message, ERROR_CODE);
   }
 }

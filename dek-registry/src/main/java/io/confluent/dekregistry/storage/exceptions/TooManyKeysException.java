@@ -19,12 +19,12 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 
 public class TooManyKeysException extends SchemaRegistryException {
 
-  public TooManyKeysException(String message, Throwable cause) {
-    super(message, cause);
+  public TooManyKeysException(String type, Throwable cause) {
+    super(type, cause);
   }
 
-  public TooManyKeysException(String message) {
-    super(message);
+  public TooManyKeysException(String type) {
+    super(type);
   }
 
   public TooManyKeysException(Throwable cause) {

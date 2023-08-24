@@ -22,12 +22,12 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
  */
 public class KeyReferenceExistsException extends SchemaRegistryException {
 
-  public KeyReferenceExistsException(String message, Throwable cause) {
-    super(message, cause);
+  public KeyReferenceExistsException(String name, Throwable cause) {
+    super(name, cause);
   }
 
-  public KeyReferenceExistsException(String message) {
-    super(message);
+  public KeyReferenceExistsException(String name) {
+    super(name);
   }
 
   public KeyReferenceExistsException(Throwable cause) {
