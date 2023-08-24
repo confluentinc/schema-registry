@@ -497,19 +497,16 @@ public class DekRegistry implements Closeable {
     if (keys.containsKey(keyId)) {
       throw new AlreadyExistsException(request.getSubject());
     }
-
     DataEncryptionKey key = new DataEncryptionKey(kekName, request.getSubject(),
         version, request.getAlgorithm(), request.getEncryptedKeyMaterial(), false);
     key = maybeGenerateEncryptedDek(key);
-    if (key.getEncryptedKeyMaterial() == null) {
-      throw new DekGenerationException("Could not generate dek for " + request.getSubject());
-    }
     keys.put(keyId, key);
     key = maybeGenerateRawDek(key);
     return key;
   }
 
-  protected DataEncryptionKey maybeGenerateEncryptedDek(DataEncryptionKey key) {
+  protected DataEncryptionKey maybeGenerateEncryptedDek(DataEncryptionKey key)
+      throws DekGenerationException {
     try {
       if (key.getEncryptedKeyMaterial() == null) {
         KeyEncryptionKey kek = getKek(key.getKekName(), true);
@@ -524,12 +521,12 @@ public class DekRegistry implements Closeable {
       }
       return key;
     } catch (GeneralSecurityException e) {
-      log.error("Could not generate dek", e);
-      return key;
+      throw new DekGenerationException("Could not generate encrypted dek for " + key.getSubject());
     }
   }
 
-  protected DataEncryptionKey maybeGenerateRawDek(DataEncryptionKey key) {
+  protected DataEncryptionKey maybeGenerateRawDek(DataEncryptionKey key)
+      throws DekGenerationException {
     try {
       KeyEncryptionKey kek = getKek(key.getKekName(), true);
       if (kek.isShared()) {
@@ -547,8 +544,7 @@ public class DekRegistry implements Closeable {
       }
       return key;
     } catch (GeneralSecurityException e) {
-      log.error("Could not decrypt dek", e);
-      return key;
+      throw new DekGenerationException("Could not generate raw dek for " + key.getSubject());
     }
   }
 
