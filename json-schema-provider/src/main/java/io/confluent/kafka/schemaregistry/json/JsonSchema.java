@@ -99,8 +99,6 @@ public class JsonSchema implements ParsedSchema {
 
   public static final String TAGS = "confluent:tags";
 
-  public static final String RESERVED = "confluent:reserved";
-
   private static final String SCHEMA_KEYWORD = "$schema";
 
   private static final Object NONE_MARKER = new Object();

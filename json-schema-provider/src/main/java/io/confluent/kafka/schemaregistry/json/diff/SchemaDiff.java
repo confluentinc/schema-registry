@@ -236,7 +236,7 @@ public class SchemaDiff {
       if (!Sets.difference(originalReservedPropertyKeys, updatedReservedPropertyKeys).isEmpty()) {
         differences.add(new Difference(Type.RESERVED_PROPERTY_REMOVED, ""));
       }
-      // updated properties conflict with reserved properties
+      // check if updated properties conflict with reserved properties
       Sets.SetView<String> conflictingProperties = Sets.intersection(updatedPropertyKeys,
               updatedReservedPropertyKeys);
       if (!conflictingProperties.isEmpty()) {

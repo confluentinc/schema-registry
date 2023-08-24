@@ -22,15 +22,45 @@ import org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType;
 public class Difference {
   private final Incompatibility incompatibility;
 
+  private final Type type;
+
+  private final String path;
+
+  public enum Type {
+    RESERVED_PROPERTY_REMOVED, RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY
+  }
+
   public Difference(final SchemaCompatibility.Incompatibility incompatibility) {
     this.incompatibility = incompatibility;
+    this.type = null;
+    this.path = null;
+  }
+
+  public Difference(final Type type, final String path) {
+    this.incompatibility = null;
+    this.type = type;
+    this.path = path;
   }
 
   public String error() {
+    String errorDescription = "";
+    if (type != null && path != null) {
+      switch (type) {
+        case RESERVED_PROPERTY_REMOVED:
+          errorDescription = "The %s schema has one or more reserved property removed from its metadata which is "
+                  + "present in the %s schema.";
+          break;
+        case RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY:
+          errorDescription = "The %s schema has properties at path " + path + " that conflicts with the reserved "
+                  + "properties which is missing in the %s schema.";
+          break;
+      }
+      return "{errorType:'" + type + '\''
+              + ", description:'" + errorDescription + "'}";
+    }
     SchemaIncompatibilityType errorType = incompatibility.getType();
     String path = incompatibility.getLocation();
 
-    String errorDescription = "";
     switch (errorType) {
       case FIXED_SIZE_MISMATCH:
         errorDescription = "The size of FIXED type field at path '" + path + "' in the %s "
