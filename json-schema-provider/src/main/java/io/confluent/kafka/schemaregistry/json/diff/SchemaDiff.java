@@ -15,6 +15,11 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
+
+import com.google.common.collect.Sets;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.EmptySchema;
@@ -27,13 +32,13 @@ import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-
-import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
 
 public class SchemaDiff {
   public static final Set<Difference.Type> COMPATIBLE_CHANGES;
@@ -108,10 +113,42 @@ public class SchemaDiff {
     COMPATIBLE_CHANGES = Collections.unmodifiableSet(changes);
   }
 
-  public static List<Difference> compare(final Schema original, final Schema update) {
+  public static List<Difference> compare(final Schema original,
+                                         final Schema update,
+                                         Metadata originalMetadata,
+                                         Metadata updatedMetadata) {
     final Context ctx = new Context(COMPATIBLE_CHANGES);
+    List<Difference> differences = compareMetadata(update,
+            originalMetadata.getProperties(),
+            updatedMetadata.getProperties());
     compare(ctx, original, update);
-    return ctx.getDifferences();
+    differences.addAll(ctx.getDifferences());
+    return differences;
+  }
+
+  private static List<Difference> compareMetadata(Schema update,
+                                              Map<String, String> originalProperties,
+                                              Map<String, String> updatedProperties) {
+    List<Difference> differences = new ArrayList<>();
+    if (update instanceof ObjectSchema) {
+      ObjectSchema updatedObjectSchema = (ObjectSchema) update;
+      Set<String> originalReservedPropertyKeys = Sets.newHashSet(originalProperties.getOrDefault(JsonSchema.RESERVED, "")
+              .split(","));
+      Set<String> updatedPropertyKeys = updatedObjectSchema.getPropertySchemas().keySet();
+      Set<String> updatedReservedPropertyKeys = Sets.newHashSet(updatedProperties.getOrDefault(JsonSchema.RESERVED, "")
+              .split(","));
+      // backward compatibility check to ensure that original reserved properties are not removed in the updated version
+      if (!Sets.difference(originalReservedPropertyKeys, updatedReservedPropertyKeys).isEmpty()) {
+        differences.add(new Difference(Type.RESERVED_PROPERTY_REMOVED, ""));
+      }
+      // updated properties conflict with reserved properties
+      Sets.SetView<String> conflictingProperties = Sets.intersection(updatedPropertyKeys, updatedReservedPropertyKeys);
+      if (!conflictingProperties.isEmpty()) {
+        conflictingProperties.forEach(property -> differences.add(new Difference(Type.RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY,
+                String.format("#/properties/%s", property))));
+      }
+    }
+    return differences;
   }
 
   @SuppressWarnings("ConstantConditions")
