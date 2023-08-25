@@ -93,9 +93,9 @@ public class DekRegistry implements Closeable {
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String X_FORWARD_HEADER = DekRegistryRestService.X_FORWARD_HEADER;
 
-  private static final String AWS_KMS = "aws-kms";
-  private static final String AZURE_KMS = "azure-kms";
-  private static final String GCP_KMS = "gcp-kms";
+  public static final String AWS_KMS = "aws-kms";
+  public static final String AZURE_KMS = "azure-kms";
+  public static final String GCP_KMS = "gcp-kms";
 
   private static final TypeReference<KeyEncryptionKey> KEY_ENCRYPTION_KEY_TYPE =
       new TypeReference<KeyEncryptionKey>() {
