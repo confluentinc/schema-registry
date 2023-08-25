@@ -498,7 +498,7 @@ public class DekRegistry implements Closeable {
       throw new AlreadyExistsException(request.getSubject());
     }
     DataEncryptionKey key = new DataEncryptionKey(kekName, request.getSubject(),
-        version, request.getAlgorithm(), request.getEncryptedKeyMaterial(), false);
+        version, algorithm, request.getEncryptedKeyMaterial(), false);
     key = maybeGenerateEncryptedDek(key);
     keys.put(keyId, key);
     key = maybeGenerateRawDek(key);
