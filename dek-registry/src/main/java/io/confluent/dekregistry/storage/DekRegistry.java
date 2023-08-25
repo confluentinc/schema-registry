@@ -350,7 +350,7 @@ public class DekRegistry implements Closeable {
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
       KeyEncryptionKey kek = getKek(key.getKekName(), true);
       if (kek.isShared()) {
-        key = generateRawDek(key);
+        key = generateRawDek(kek, key);
       }
       return key;
     } else {
@@ -506,55 +506,49 @@ public class DekRegistry implements Closeable {
     KeyEncryptionKey kek = getKek(key.getKekName(), true);
     if (key.getEncryptedKeyMaterial() == null) {
       if (kek.isShared()) {
-        key = generateEncryptedDek(key);
+        key = generateEncryptedDek(kek, key);
       } else {
         throw new InvalidKeyException("encryptedKeyMaterial");
       }
     }
     keys.put(keyId, key);
     if (kek.isShared()) {
-      key = generateRawDek(key);
+      key = generateRawDek(kek, key);
     }
     return key;
   }
 
-  protected DataEncryptionKey generateEncryptedDek(DataEncryptionKey key)
+  protected DataEncryptionKey generateEncryptedDek(KeyEncryptionKey kek, DataEncryptionKey key)
       throws DekGenerationException {
     try {
-      if (key.getEncryptedKeyMaterial() == null) {
-        KeyEncryptionKey kek = getKek(key.getKekName(), true);
-        Aead aead = kek.toKekEntity().toAead(config.originals());
-        // Generate new dek
-        byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
-        byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
-        String encryptedDekStr =
-            new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
-        key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getVersion(),
-            key.getAlgorithm(), encryptedDekStr, key.isDeleted());
-      }
+      Aead aead = kek.toKekEntity().toAead(config.originals());
+      // Generate new dek
+      byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
+      byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
+      String encryptedDekStr =
+          new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
+      key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getVersion(),
+          key.getAlgorithm(), encryptedDekStr, key.isDeleted());
       return key;
     } catch (GeneralSecurityException e) {
       throw new DekGenerationException("Could not generate encrypted dek for " + key.getSubject());
     }
   }
 
-  protected DataEncryptionKey generateRawDek(DataEncryptionKey key)
+  protected DataEncryptionKey generateRawDek(KeyEncryptionKey kek, DataEncryptionKey key)
       throws DekGenerationException {
     try {
-      KeyEncryptionKey kek = getKek(key.getKekName(), true);
-      if (kek.isShared()) {
-        // Decrypt dek
-        Aead aead = kek.toKekEntity().toAead(config.originals());
-        byte[] encryptedDek = Base64.getDecoder().decode(
-            key.getEncryptedKeyMaterial().getBytes(StandardCharsets.UTF_8));
-        byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
-        String rawDekStr =
-            new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
-        // Copy dek
-        key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getVersion(),
-            key.getAlgorithm(), key.getEncryptedKeyMaterial(), key.isDeleted());
-        key.setKeyMaterial(rawDekStr);
-      }
+      // Decrypt dek
+      Aead aead = kek.toKekEntity().toAead(config.originals());
+      byte[] encryptedDek = Base64.getDecoder().decode(
+          key.getEncryptedKeyMaterial().getBytes(StandardCharsets.UTF_8));
+      byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
+      String rawDekStr =
+          new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
+      // Copy dek
+      key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getVersion(),
+          key.getAlgorithm(), key.getEncryptedKeyMaterial(), key.isDeleted());
+      key.setKeyMaterial(rawDekStr);
       return key;
     } catch (GeneralSecurityException e) {
       throw new DekGenerationException("Could not generate raw dek for " + key.getSubject());
