@@ -24,6 +24,7 @@ import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
+import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.storage.utils.CompositeCacheUpdateHandler;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
@@ -347,7 +348,10 @@ public class DekRegistry implements Closeable {
         tenant, kekName, subject, version, algorithm);
     DataEncryptionKey key = (DataEncryptionKey) keys.get(keyId);
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
-      key = maybeGenerateRawDek(key);
+      KeyEncryptionKey kek = getKek(key.getKekName(), true);
+      if (kek.isShared()) {
+        key = generateRawDek(key);
+      }
       return key;
     } else {
       return null;
@@ -499,13 +503,22 @@ public class DekRegistry implements Closeable {
     }
     DataEncryptionKey key = new DataEncryptionKey(kekName, request.getSubject(),
         version, algorithm, request.getEncryptedKeyMaterial(), false);
-    key = maybeGenerateEncryptedDek(key);
+    KeyEncryptionKey kek = getKek(key.getKekName(), true);
+    if (key.getEncryptedKeyMaterial() == null) {
+      if (kek.isShared()) {
+        key = generateEncryptedDek(key);
+      } else {
+        throw new InvalidKeyException("encryptedKeyMaterial");
+      }
+    }
     keys.put(keyId, key);
-    key = maybeGenerateRawDek(key);
+    if (kek.isShared()) {
+      key = generateRawDek(key);
+    }
     return key;
   }
 
-  protected DataEncryptionKey maybeGenerateEncryptedDek(DataEncryptionKey key)
+  protected DataEncryptionKey generateEncryptedDek(DataEncryptionKey key)
       throws DekGenerationException {
     try {
       if (key.getEncryptedKeyMaterial() == null) {
@@ -525,7 +538,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  protected DataEncryptionKey maybeGenerateRawDek(DataEncryptionKey key)
+  protected DataEncryptionKey generateRawDek(DataEncryptionKey key)
       throws DekGenerationException {
     try {
       KeyEncryptionKey kek = getKek(key.getKekName(), true);
