@@ -15,17 +15,14 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import static java.util.stream.Collectors.toList;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.everit.json.schema.Schema;
-import org.everit.json.schema.loader.SchemaLoader;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import org.junit.Assert;
-import org.junit.Test;
-
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -33,11 +30,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-
-import static java.util.stream.Collectors.toList;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
+import org.everit.json.schema.Schema;
+import org.everit.json.schema.loader.SchemaLoader;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.junit.Assert;
+import org.junit.Test;
 
 public class SchemaDiffTest {
 
@@ -91,16 +89,19 @@ public class SchemaDiffTest {
           if (testCase.has("original_metadata")) {
             return mapper.readValue(testCase.getJSONObject("original_metadata").toString(), Metadata.class);
           }
+          break;
         case "update":
           if (testCase.has("update_metadata")) {
             return mapper.readValue(testCase.getJSONObject("update_metadata").toString(), Metadata.class);
           }
+          break;
         default:
-          return new Metadata(Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+          return null;
       }
     } catch (JsonProcessingException e) {
       return new Metadata(Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
     }
+    return null;
   }
 
   @Test

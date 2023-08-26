@@ -27,7 +27,7 @@ public class Difference {
   private final String path;
 
   public enum Type {
-    RESERVED_PROPERTY_REMOVED, RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY
+    RESERVED_FIELD_REMOVED, FIELD_CONFLICTS_WITH_RESERVED_FIELD
   }
 
   public Difference(final SchemaCompatibility.Incompatibility incompatibility) {
@@ -42,17 +42,21 @@ public class Difference {
     this.path = path;
   }
 
+  @SuppressWarnings("CyclomaticComplexity")
   public String error() {
-    String errorDescription = "";
+    String errorDescription;
     if (type != null && path != null) {
       switch (type) {
-        case RESERVED_PROPERTY_REMOVED:
-          errorDescription = "The %s schema has one or more reserved property removed from its metadata which is "
-                  + "present in the %s schema.";
+        case RESERVED_FIELD_REMOVED:
+          errorDescription = "The %s schema has reserved field " + path + " removed from its "
+                  + "metadata which is present in the %s schema's metadata.";
           break;
-        case RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY:
-          errorDescription = "The %s schema has properties at path " + path + " that conflicts with the reserved "
-                  + "properties which is missing in the %s schema.";
+        case FIELD_CONFLICTS_WITH_RESERVED_FIELD:
+          errorDescription = "The %s schema has field that conflicts with the reserved field "
+                  + path + " which is missing in the %s schema.";
+          break;
+        default:
+          errorDescription = "";
           break;
       }
       return "{errorType:'" + type + '\''

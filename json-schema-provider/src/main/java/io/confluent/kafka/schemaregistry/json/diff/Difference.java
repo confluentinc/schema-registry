@@ -156,11 +156,11 @@ public class Difference {
       return "The %s schema has a property or item at path '" + jsonPath + "' which is "
                + "missing in the %s schema and is not covered by its partially open content model";
     } else if (type == Type.RESERVED_PROPERTY_REMOVED) {
-      return "The %s schema has one or more reserved property removed from its metadata which is "
-              + "present in the %s schema.";
+      return "The %s schema has reserved property '" + jsonPath + "' removed from its metadata "
+              + "which is present in the %s schema.";
     } else if (type == Type.RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY) {
-      return "The %s schema has properties that conflicts with the reserved properties which is "
-              + "missing in the %s schema.";
+      return "The %s schema has property at path '" + jsonPath + "' that conflicts with the "
+              + "reserved properties which is missing in the %s schema.";
     }
     return "";
   }

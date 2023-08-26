@@ -38,6 +38,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -322,8 +323,8 @@ public class AvroSchema implements ParsedSchema {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
-    List<String> differences = getMetadataCompatibility(previousSchema);
     try {
+      List<String> differences = getMetadataCompatibility(previousSchema);
       SchemaCompatibility.SchemaPairCompatibility result =
           SchemaCompatibility.checkReaderWriterCompatibility(
               this.schemaObj,
@@ -342,28 +343,43 @@ public class AvroSchema implements ParsedSchema {
 
   private List<String> getMetadataCompatibility(ParsedSchema previousSchema) {
     List<String> differences = new ArrayList<>();
-    if (previousSchema.metadata() != null && metadata != null) {
-      Set<String> originalReservedFields = Sets.newHashSet(previousSchema.metadata()
-              .getProperties()
-              .getOrDefault(AvroSchema.RESERVED, "")
-              .split(","));
-      Set<String> updatedReservedFields = Sets.newHashSet(metadata.getProperties()
-              .getOrDefault(AvroSchema.RESERVED, "")
-              .split(","));
-      // backward compatibility check to ensure that original reserved fields are not removed in
-      // the updated version
-      if (!Sets.difference(originalReservedFields, updatedReservedFields).isEmpty()) {
-        differences.add(new Difference(Difference.Type.RESERVED_PROPERTY_REMOVED, "").error());
-      }
-      if (schemaObj.getType() == Schema.Type.RECORD) {
-        Set<String> updatedFields = schemaObj.getFields().stream().map(Schema.Field::name).collect(Collectors.toSet());
-        // check if updated fields conflict with reserved fields
-        Sets.SetView<String> conflictingFields = Sets.intersection(updatedFields, updatedReservedFields);
-        if (!conflictingFields.isEmpty()) {
-          conflictingFields.forEach(property ->
-                  differences.add(new Difference(Difference.Type.RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY,
-                          String.format("#/properties/%s", property)).error()));
-        }
+    Map<String, String> originalProperties = previousSchema.metadata() != null
+            ? previousSchema.metadata().getProperties()
+            : Collections.emptyMap();
+    Set<String> originalReservedFields =
+            Arrays.stream(originalProperties.getOrDefault(AvroSchema.RESERVED, "").split(","))
+                    .map(String::trim)
+                    .filter(field -> !field.isEmpty())
+                    .collect(Collectors.toSet());
+    Map<String, String> updatedProperties = metadata != null
+            ? metadata.getProperties()
+            : Collections.emptyMap();
+    Set<String> updatedReservedFields =
+            Arrays.stream(updatedProperties.getOrDefault(AvroSchema.RESERVED, "").split(","))
+                    .map(String::trim)
+                    .filter(field -> !field.isEmpty())
+                    .collect(Collectors.toSet());
+    // backward compatibility check to ensure that original reserved fields are not removed in
+    // the updated version
+    Sets.SetView<String> removedFields =
+            Sets.difference(originalReservedFields, updatedReservedFields);
+    if (!removedFields.isEmpty()) {
+      removedFields.forEach(field ->
+              differences.add(new Difference(Difference.Type.RESERVED_FIELD_REMOVED,
+                      field).error()));
+    }
+    if (schemaObj.getType() == Schema.Type.RECORD) {
+      Set<String> updatedFields = schemaObj.getFields()
+              .stream()
+              .map(Schema.Field::name)
+              .collect(Collectors.toSet());
+      // check if updated fields conflict with reserved fields
+      Sets.SetView<String> conflictingFields =
+              Sets.intersection(updatedFields, updatedReservedFields);
+      if (!conflictingFields.isEmpty()) {
+        conflictingFields.forEach(field ->
+                differences.add(new Difference(Difference.Type.FIELD_CONFLICTS_WITH_RESERVED_FIELD,
+                        field).error()));
       }
     }
     return differences;

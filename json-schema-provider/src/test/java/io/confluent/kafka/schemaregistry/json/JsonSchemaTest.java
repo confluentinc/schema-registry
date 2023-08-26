@@ -928,10 +928,11 @@ public class JsonSchemaTest {
             null);
     List<String> errorMessages = jsonSchema.isBackwardCompatible(previousSchema.copy());
     assertFalse(errorMessages.isEmpty());
-    assertEquals("{errorType:\"RESERVED_PROPERTY_REMOVED\", description:\"The %s schema has one or more " +
-            "reserved property removed from its metadata which is present in the %s schema.'}", errorMessages.get(0));
-    assertEquals("{errorType:\"RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY\", description:\"The %s schema has " +
-            "properties that conflicts with the reserved properties which is missing in the %s schema.'}",
+    assertEquals("{errorType:\"RESERVED_PROPERTY_REMOVED\", description:\"The %s schema has reserved " +
+            "property 'ts' removed from its metadata which is present in the %s schema.'}", errorMessages.get(0));
+    assertEquals("{errorType:\"RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY\", description:\"The %s schema has" +
+                    " property at path '#/properties/status' that conflicts with the reserved properties which is " +
+                    "missing in the %s schema.'}",
             errorMessages.get(1));
   }
 
