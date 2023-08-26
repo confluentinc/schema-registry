@@ -24,6 +24,7 @@ import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
+import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.storage.utils.CompositeCacheUpdateHandler;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
@@ -92,9 +93,9 @@ public class DekRegistry implements Closeable {
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String X_FORWARD_HEADER = DekRegistryRestService.X_FORWARD_HEADER;
 
-  private static final String AWS_KMS = "aws-kms";
-  private static final String AZURE_KMS = "azure-kms";
-  private static final String GCP_KMS = "gcp-kms";
+  public static final String AWS_KMS = "aws-kms";
+  public static final String AZURE_KMS = "azure-kms";
+  public static final String GCP_KMS = "gcp-kms";
 
   private static final TypeReference<KeyEncryptionKey> KEY_ENCRYPTION_KEY_TYPE =
       new TypeReference<KeyEncryptionKey>() {
@@ -347,7 +348,10 @@ public class DekRegistry implements Closeable {
         tenant, kekName, subject, version, algorithm);
     DataEncryptionKey key = (DataEncryptionKey) keys.get(keyId);
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
-      key = maybeGenerateRawDek(key);
+      KeyEncryptionKey kek = getKek(key.getKekName(), true);
+      if (kek.isShared()) {
+        key = generateRawDek(kek, key);
+      }
       return key;
     } else {
       return null;
@@ -499,49 +503,52 @@ public class DekRegistry implements Closeable {
     }
     DataEncryptionKey key = new DataEncryptionKey(kekName, request.getSubject(),
         version, algorithm, request.getEncryptedKeyMaterial(), false);
-    key = maybeGenerateEncryptedDek(key);
+    KeyEncryptionKey kek = getKek(key.getKekName(), true);
+    if (key.getEncryptedKeyMaterial() == null) {
+      if (kek.isShared()) {
+        key = generateEncryptedDek(kek, key);
+      } else {
+        throw new InvalidKeyException("encryptedKeyMaterial");
+      }
+    }
     keys.put(keyId, key);
-    key = maybeGenerateRawDek(key);
+    if (kek.isShared()) {
+      key = generateRawDek(kek, key);
+    }
     return key;
   }
 
-  protected DataEncryptionKey maybeGenerateEncryptedDek(DataEncryptionKey key)
+  protected DataEncryptionKey generateEncryptedDek(KeyEncryptionKey kek, DataEncryptionKey key)
       throws DekGenerationException {
     try {
-      if (key.getEncryptedKeyMaterial() == null) {
-        KeyEncryptionKey kek = getKek(key.getKekName(), true);
-        Aead aead = kek.toKekEntity().toAead(config.originals());
-        // Generate new dek
-        byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
-        byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
-        String encryptedDekStr =
-            new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
-        key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getVersion(),
-            key.getAlgorithm(), encryptedDekStr, key.isDeleted());
-      }
+      Aead aead = kek.toKekEntity().toAead(config.originals());
+      // Generate new dek
+      byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
+      byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
+      String encryptedDekStr =
+          new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
+      key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getVersion(),
+          key.getAlgorithm(), encryptedDekStr, key.isDeleted());
       return key;
     } catch (GeneralSecurityException e) {
       throw new DekGenerationException("Could not generate encrypted dek for " + key.getSubject());
     }
   }
 
-  protected DataEncryptionKey maybeGenerateRawDek(DataEncryptionKey key)
+  protected DataEncryptionKey generateRawDek(KeyEncryptionKey kek, DataEncryptionKey key)
       throws DekGenerationException {
     try {
-      KeyEncryptionKey kek = getKek(key.getKekName(), true);
-      if (kek.isShared()) {
-        // Decrypt dek
-        Aead aead = kek.toKekEntity().toAead(config.originals());
-        byte[] encryptedDek = Base64.getDecoder().decode(
-            key.getEncryptedKeyMaterial().getBytes(StandardCharsets.UTF_8));
-        byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
-        String rawDekStr =
-            new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
-        // Copy dek
-        key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getVersion(),
-            key.getAlgorithm(), key.getEncryptedKeyMaterial(), key.isDeleted());
-        key.setKeyMaterial(rawDekStr);
-      }
+      // Decrypt dek
+      Aead aead = kek.toKekEntity().toAead(config.originals());
+      byte[] encryptedDek = Base64.getDecoder().decode(
+          key.getEncryptedKeyMaterial().getBytes(StandardCharsets.UTF_8));
+      byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
+      String rawDekStr =
+          new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
+      // Copy dek
+      key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getVersion(),
+          key.getAlgorithm(), key.getEncryptedKeyMaterial(), key.isDeleted());
+      key.setKeyMaterial(rawDekStr);
       return key;
     } catch (GeneralSecurityException e) {
       throw new DekGenerationException("Could not generate raw dek for " + key.getSubject());
