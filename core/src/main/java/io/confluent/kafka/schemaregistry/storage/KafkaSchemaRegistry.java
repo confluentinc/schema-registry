@@ -1977,7 +1977,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     String compatibilityGroup = config.getCompatibilityGroup();
     if (compatibilityGroup != null) {
       String groupValue = getCompatibilityGroupValue(parsedSchema, compatibilityGroup);
-      // Only check compatibility against schemas with the same compatibility group value
+      // Only check compatibility against schemas with the same compatibility group value,
+      // which may be null.
       previousSchemas = previousSchemas.stream()
           .filter(s -> Objects.equals(groupValue,
               getCompatibilityGroupValue(s.schema(), compatibilityGroup)))
