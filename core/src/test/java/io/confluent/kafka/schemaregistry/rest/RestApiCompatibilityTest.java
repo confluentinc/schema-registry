@@ -312,6 +312,80 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         restApp.restClient.registerSchema(request2, subject, false).getId());
   }
 
+
+  @Test
+  public void testAddCompatibilityGroup() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    Map<String, String> properties = new HashMap<>();
+    Metadata metadata1 = new Metadata(null, properties, null);
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    request1.setMetadata(metadata1);
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request1, subject, false).getId());
+    // verify that default compatibility level is backward
+    assertEquals("Default compatibility level should be backward",
+        CompatibilityLevel.BACKWARD.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel());
+
+    // register forward compatible schema, which should fail
+    ParsedSchema schema2 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\"}]}");
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema2);
+    try {
+      restApp.restClient.registerSchema(request2, subject, false);
+      fail("Registering a forward compatible schema should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals("Should get a conflict status",
+          RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
+          e.getStatus());
+    }
+
+    // Add compatibility group after first schema already registered
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setCompatibilityGroup("application.version");
+    // add compatibility group
+    assertEquals("Adding compatibility group should succeed",
+        config,
+        restApp.restClient.updateConfig(config, null));
+
+    // now try registering a forward compatible schema in a different compatibility group
+    properties = new HashMap<>();
+    properties.put("application.version", "2");
+    Metadata metadata2 = new Metadata(null, properties, null);
+    request2.setMetadata(metadata2);
+    int expectedIdSchema2 = 2;
+    assertEquals("Registering should succeed",
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(request2, subject, false).getId());
+
+    ParsedSchema schema3 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":[\"null\", \"int\"],\"name\":\"f2\",\"default\":null}]}");
+
+    properties = new HashMap<>();
+    Metadata metadata3 = new Metadata(null, properties, null);
+    RegisterSchemaRequest request3 = new RegisterSchemaRequest(schema3);
+    request3.setMetadata(metadata3);
+    int expectedIdSchema3 = 3;
+    assertEquals("Registering should succeed",
+        expectedIdSchema3,
+        restApp.restClient.registerSchema(request3, subject, false).getId());
+  }
+
   @Test
   public void testConfigMetadata() throws Exception {
     String subject = "testSubject";
