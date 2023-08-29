@@ -531,7 +531,7 @@ public class DekRegistry implements Closeable {
           key.getAlgorithm(), encryptedDekStr, key.isDeleted());
       return key;
     } catch (GeneralSecurityException e) {
-      log.error("Error generating encrypted dek for " + key.getSubject(), e);
+      log.error("Could not generate encrypted dek for " + key.getSubject(), e);
       throw new DekGenerationException("Could not generate encrypted dek for " + key.getSubject());
     }
   }
