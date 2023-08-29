@@ -80,7 +80,11 @@ public class DekRegistryConfig extends SchemaRegistryConfig {
   }
 
   public DekRegistryConfig(Properties props) throws RestConfigException {
-    super(serverConfig, props);
+    this(serverConfig, props);
+  }
+
+  public DekRegistryConfig(ConfigDef configDef, Properties props) throws RestConfigException {
+    super(configDef, props);
   }
 
   public String topic() {
