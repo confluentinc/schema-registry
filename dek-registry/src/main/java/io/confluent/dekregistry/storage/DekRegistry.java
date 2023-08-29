@@ -552,7 +552,7 @@ public class DekRegistry implements Closeable {
       key.setKeyMaterial(rawDekStr);
       return key;
     } catch (GeneralSecurityException e) {
-      log.error("Error generating raw dek for " + key.getSubject(), e);
+      log.error("Could not generate raw dek for " + key.getSubject(), e);
       throw new DekGenerationException("Could not generate raw dek for " + key.getSubject());
     }
   }
