@@ -383,7 +383,7 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
-    schemaRegistry.getRuleSetHandler().handle(subjectName, normalize, request);
+    schemaRegistry.getCompositeUpdateRequestHandler().handle(subjectName, normalize, request);
 
     if (request.getRuleSet() != null) {
       try {
@@ -622,7 +622,7 @@ public class SubjectVersionsResource {
           String.format("Error while getting schema of subject %s version %s",
               subjectName, version), e);
     }
-    schemaRegistry.getRuleSetHandler().handle(schema, request);
+    schemaRegistry.getCompositeUpdateRequestHandler().handle(schema, request);
 
     if (request.getRuleSet() != null) {
       try {

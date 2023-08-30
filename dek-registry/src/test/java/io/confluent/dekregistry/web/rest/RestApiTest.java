@@ -30,12 +30,23 @@ import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -71,6 +82,19 @@ public class RestApiTest extends ClusterTestHarness {
         null,
         fakeTicker
     );
+    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
+      public void handle(String subject, ConfigUpdateRequest request) {
+      }
+
+      public void handle(String subject, boolean normalize, RegisterSchemaRequest request) {
+      }
+
+      public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
+        return ruleSet != null
+            ? new io.confluent.kafka.schemaregistry.storage.RuleSet(ruleSet)
+            : null;
+      }
+    });
   }
 
   @Test
@@ -330,6 +354,34 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.DEK_GENERATION_ERROR_CODE, e.getErrorCode());
     }
+  }
+
+  @Test
+  public void testRegisterCreatesKmsDefaults() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    Map<String, String> params = Collections.singletonMap("encrypt.kms.key.id",
+        "arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab");
+    Rule r1 = new Rule("foo", null, null, RuleMode.WRITEREAD, "ENCRYPT", null, params, null, null, null, false);
+    List<Rule> rules = Collections.singletonList(r1);
+    RuleSet ruleSet = new RuleSet(null, rules);
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    request1.setRuleSet(ruleSet);
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request1, subject, false).getId());
+
+    SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1, subject);
+    Map<String, String> newParams = schemaString.getRuleSet().getDomainRules().get(0).getParams();
+    assertEquals("aws-kms-us-west-2-111122223333-key-1234abcd-12ab-34cd-56ef-1234567890ab",
+        newParams.get("encrypt.kek.name"));
+    assertEquals("aws-kms", newParams.get("encrypt.kms.type"));
   }
 }
 

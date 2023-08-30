@@ -59,7 +59,9 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.leaderelector.kafka.KafkaGroupLeaderElector;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.rest.handlers.CompositeUpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
@@ -129,6 +131,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final MetadataEncoderService metadataEncoder;
   private RuleSetHandler ruleSetHandler;
+  private List<UpdateRequestHandler> updateRequestHandlers = new CopyOnWriteArrayList<>();
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
   private final CompatibilityLevel defaultCompatibilityLevel;
@@ -322,6 +325,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public void setRuleSetHandler(RuleSetHandler ruleSetHandler) {
     this.ruleSetHandler = ruleSetHandler;
+  }
+
+  public UpdateRequestHandler getCompositeUpdateRequestHandler() {
+    List<UpdateRequestHandler> handlers = new ArrayList<>();
+    handlers.add(ruleSetHandler);
+    handlers.addAll(updateRequestHandlers);
+    return new CompositeUpdateRequestHandler(handlers);
+  }
+
+  public void addUpdateRequestHandler(UpdateRequestHandler updateRequestHandler) {
+    updateRequestHandlers.add(updateRequestHandler);
   }
 
   protected IdGenerator identityGenerator(SchemaRegistryConfig config) {
