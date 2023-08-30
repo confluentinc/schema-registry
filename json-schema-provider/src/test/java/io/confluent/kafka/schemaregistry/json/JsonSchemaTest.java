@@ -336,7 +336,10 @@ public class JsonSchemaTest {
         + "  }\n"
         + "}";
     JsonSchema jsonSchema = new JsonSchema(schema);
-    List<Difference> diff = SchemaDiff.compare(jsonSchema.rawSchema(), jsonSchema.rawSchema());
+    List<Difference> diff = SchemaDiff.compare(jsonSchema.rawSchema(),
+            jsonSchema.rawSchema(),
+            jsonSchema.metadata(),
+            jsonSchema.metadata());
     assertEquals(0, diff.size());
   }
 
@@ -833,6 +836,104 @@ public class JsonSchemaTest {
     ParsedSchema resultSchema = jsonSchema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
     assertEquals(ImmutableSet.of("PII", "TEST2", "TEST3"), resultSchema.inlineTags());
+  }
+
+  @Test
+  public void testReservedPropertyRemoved() {
+    String schema = "{\n"
+            + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+            + "  \"$id\": \"task.schema.json\",\n"
+            + "  \"title\": \"Task\",\n"
+            + "  \"description\": \"A task\",\n"
+            + "  \"type\": \"object\",\n"
+            + "  \"properties\": {\n"
+            + "    \"id\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"title\": {\n"
+            + "        \"description\": \"Task title\",\n"
+            + "        \"type\": \"string\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+    Metadata metadata = new Metadata(Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+    JsonSchema jsonSchema = new JsonSchema(schema,
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            metadata,
+            null,
+            null);
+    Metadata previous = new Metadata(Collections.emptyMap(),
+            Collections.singletonMap(JsonSchema.RESERVED, "status"),
+            Collections.emptySet());
+    ParsedSchema previousSchema = jsonSchema.copy(previous, null);
+    List<String> errorMessages = jsonSchema.isBackwardCompatible(previousSchema);
+    assertFalse(errorMessages.isEmpty());
+  }
+
+  @Test
+  public void testPropertyConflictingWithReservedProperty() {
+    String schema = "{\n"
+            + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+            + "  \"$id\": \"task.schema.json\",\n"
+            + "  \"title\": \"Task\",\n"
+            + "  \"description\": \"A task\",\n"
+            + "  \"type\": \"object\",\n"
+            + "  \"properties\": {\n"
+            + "    \"id\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"title\": {\n"
+            + "        \"description\": \"Task title\",\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"status\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+    Metadata metadata = new Metadata(Collections.emptyMap(),
+            Collections.singletonMap(JsonSchema.RESERVED, "status"),
+            Collections.emptySet());
+    JsonSchema jsonSchema = new JsonSchema(schema,
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            metadata,
+            null,
+            null);
+    String previousString = "{\n"
+            + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+            + "  \"$id\": \"task.schema.json\",\n"
+            + "  \"title\": \"Task\",\n"
+            + "  \"description\": \"A task\",\n"
+            + "  \"type\": \"object\",\n"
+            + "  \"properties\": {\n"
+            + "    \"id\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"title\": {\n"
+            + "        \"description\": \"Task title\",\n"
+            + "        \"type\": \"string\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+    Metadata previous = new Metadata(Collections.emptyMap(),
+            Collections.singletonMap(JsonSchema.RESERVED, "status,ts"),
+            Collections.emptySet());
+    JsonSchema previousSchema = new JsonSchema(previousString,
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            previous,
+            null,
+            null);
+    List<String> errorMessages = jsonSchema.isBackwardCompatible(previousSchema.copy());
+    assertFalse(errorMessages.isEmpty());
+    assertEquals("{errorType:\"RESERVED_PROPERTY_REMOVED\", description:\"The %s schema has reserved " +
+            "property 'ts' removed from its metadata which is present in the %s schema.'}", errorMessages.get(0));
+    assertEquals("{errorType:\"RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY\", description:\"The %s schema has" +
+                    " property at path '#/properties/status' that conflicts with the reserved properties which is " +
+                    "missing in the %s schema.'}",
+            errorMessages.get(1));
   }
 
   private static Map<String, String> getJsonSchemaWithReferences() {

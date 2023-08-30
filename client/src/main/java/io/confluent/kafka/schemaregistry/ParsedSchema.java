@@ -41,6 +41,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
  */
 public interface ParsedSchema {
 
+  String RESERVED = "confluent:reserved";
+
   /**
    * Returns the schema type.
    *

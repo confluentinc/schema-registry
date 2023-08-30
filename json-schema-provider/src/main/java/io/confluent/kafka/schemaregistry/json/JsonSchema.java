@@ -453,10 +453,11 @@ public class JsonSchema implements ParsedSchema {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
-    final List<Difference> differences = SchemaDiff.compare(
-        ((JsonSchema) previousSchema).rawSchema(),
-        rawSchema()
-    );
+    final List<Difference> differences =
+            SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(),
+                    rawSchema(),
+                    previousSchema.metadata(),
+                    metadata());
     final List<Difference> incompatibleDiffs = differences.stream()
         .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
         .collect(Collectors.toList());
