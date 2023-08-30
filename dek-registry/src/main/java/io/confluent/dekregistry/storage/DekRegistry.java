@@ -26,6 +26,7 @@ import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
 import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.storage.utils.CompositeCacheUpdateHandler;
+import io.confluent.dekregistry.web.rest.handlers.EncryptionUpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.KeyType;
@@ -124,6 +125,7 @@ public class DekRegistry implements Closeable {
   ) {
     try {
       this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      this.schemaRegistry.addUpdateRequestHandler(new EncryptionUpdateRequestHandler());
       this.metricsManager = metricsManager;
       this.config = new DekRegistryConfig(schemaRegistry.config().originalProperties());
       this.keys = createCache(new EncryptionKeyIdSerde(), new EncryptionKeySerde(),
