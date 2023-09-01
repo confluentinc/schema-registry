@@ -82,6 +82,11 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   @Override
+  public boolean addOriginalConfigs() {
+    return true;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     this.configs = configs;
     Object cacheExpirySecsConfig = configs.get(CACHE_EXPIRY_SECS);
