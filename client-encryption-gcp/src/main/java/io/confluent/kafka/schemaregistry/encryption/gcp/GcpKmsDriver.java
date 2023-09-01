@@ -68,7 +68,7 @@ public class GcpKmsDriver implements KmsDriver {
       } else {
         return GoogleCredentials.getApplicationDefault();
       }
-    } catch (IOException e) {
+    } catch (Exception e) {
       throw new GeneralSecurityException("cannot load credentials", e);
     }
   }
