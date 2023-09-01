@@ -203,8 +203,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
-      KeyEncryptionKey key = dekRegistry.createKekOrForward(request, headerProperties);
-      Kek kek = key.toKekEntity();
+      Kek kek = dekRegistry.createKekOrForward(request, headerProperties);
       asyncResponse.resume(kek);
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
@@ -245,8 +244,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
-      DataEncryptionKey key = dekRegistry.createDekOrForward(kekName, request, headerProperties);
-      Dek dek = key.toDekEntity();
+      Dek dek = dekRegistry.createDekOrForward(kekName, request, headerProperties);
       asyncResponse.resume(dek);
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
@@ -286,11 +284,10 @@ public class DekRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
-      KeyEncryptionKey key = dekRegistry.putKekOrForward(name, request, headerProperties);
-      if (key == null) {
+      Kek kek = dekRegistry.putKekOrForward(name, request, headerProperties);
+      if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(name);
       }
-      Kek kek = key.toKekEntity();
       asyncResponse.resume(kek);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while creating key", e);

@@ -148,6 +148,18 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       String doc,
       boolean shared)
       throws IOException, RestClientException {
+    return createKek(DEFAULT_REQUEST_PROPERTIES, name, kmsType, kmsKeyId, kmsProps, doc, shared);
+  }
+
+  public Kek createKek(
+      Map<String, String> requestProperties,
+      String name,
+      String kmsType,
+      String kmsKeyId,
+      Map<String, String> kmsProps,
+      String doc,
+      boolean shared)
+      throws IOException, RestClientException {
     CreateKekRequest request = new CreateKekRequest();
     request.setName(name);
     request.setKmsType(kmsType);
@@ -155,7 +167,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setKmsProps(kmsProps);
     request.setDoc(doc);
     request.setShared(shared);
-    Kek kek = restService.createKek(request);
+    Kek kek = restService.createKek(requestProperties, request);
     kekCache.put(new KekId(name, false), kek);
     return kek;
   }
@@ -167,11 +179,21 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       DekFormat algorithm,
       String encryptedKeyMaterial)
       throws IOException, RestClientException {
+    return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, subject, algorithm, encryptedKeyMaterial);
+  }
+
+  public Dek createDek(
+      Map<String, String> requestProperties,
+      String kekName,
+      String subject,
+      DekFormat algorithm,
+      String encryptedKeyMaterial)
+      throws IOException, RestClientException {
     CreateDekRequest request = new CreateDekRequest();
     request.setSubject(subject);
     request.setAlgorithm(algorithm);
     request.setEncryptedKeyMaterial(encryptedKeyMaterial);
-    Dek dek = restService.createDek(kekName, request);
+    Dek dek = restService.createDek(requestProperties, kekName, request);
     dekCache.put(new DekId(kekName, subject, algorithm, false), dek);
     return dek;
   }
@@ -183,11 +205,21 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       String doc,
       Boolean shared)
       throws IOException, RestClientException {
+    return updateKek(DEFAULT_REQUEST_PROPERTIES, name, kmsProps, doc, shared);
+  }
+
+  public Kek updateKek(
+      Map<String, String> requestProperties,
+      String name,
+      Map<String, String> kmsProps,
+      String doc,
+      Boolean shared)
+      throws IOException, RestClientException {
     UpdateKekRequest request = new UpdateKekRequest();
     request.setKmsProps(kmsProps);
     request.setDoc(doc);
     request.setShared(shared);
-    Kek kek = restService.updateKek(name, request);
+    Kek kek = restService.updateKek(requestProperties, name, request);
     kekCache.put(new KekId(name, false), kek);
     return kek;
   }
@@ -195,21 +227,41 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   @Override
   public void deleteKek(String kekName, boolean permanentDelete)
       throws IOException, RestClientException {
-    restService.deleteKek(kekName, permanentDelete);
+    deleteKek(DEFAULT_REQUEST_PROPERTIES, kekName, permanentDelete);
+  }
+
+  public void deleteKek(
+      Map<String, String> requestProperties, String kekName, boolean permanentDelete)
+      throws IOException, RestClientException {
+    restService.deleteKek(requestProperties, kekName, permanentDelete);
     kekCache.invalidate(new KekId(kekName, permanentDelete));
   }
 
   @Override
   public void deleteDek(String kekName, String subject, boolean permanentDelete)
       throws IOException, RestClientException {
-    deleteDek(kekName, subject, null, permanentDelete);
+    deleteDek(DEFAULT_REQUEST_PROPERTIES, kekName, subject, permanentDelete);
+  }
+
+  public void deleteDek(
+      Map<String, String> requestProperties, String kekName,
+      String subject, boolean permanentDelete)
+      throws IOException, RestClientException {
+    deleteDek(requestProperties, kekName, subject, null, permanentDelete);
   }
 
   @Override
   public void deleteDek(
       String kekName, String subject, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException {
-    restService.deleteDek(kekName, subject, algorithm, permanentDelete);
+    deleteDek(DEFAULT_REQUEST_PROPERTIES, kekName, subject, algorithm, permanentDelete);
+  }
+
+  public void deleteDek(
+      Map<String, String> requestProperties, String kekName, String subject, DekFormat algorithm,
+      boolean permanentDelete)
+      throws IOException, RestClientException {
+    restService.deleteDek(requestProperties, kekName, subject, algorithm, permanentDelete);
     dekCache.invalidate(new DekId(kekName, subject, algorithm, permanentDelete));
   }
 
