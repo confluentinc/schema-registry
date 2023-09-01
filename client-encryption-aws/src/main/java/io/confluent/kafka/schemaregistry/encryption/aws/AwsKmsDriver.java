@@ -26,7 +26,6 @@ import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.integration.awskms.AwsKmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -58,7 +57,7 @@ public class AwsKmsDriver implements KmsDriver {
       } else {
         return new DefaultAWSCredentialsProviderChain();
       }
-    } catch (IOException e) {
+    } catch (Exception e) {
       throw new GeneralSecurityException("cannot load credentials", e);
     }
   }

@@ -23,6 +23,8 @@ import com.google.inject.Singleton;
 import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
+import io.confluent.dekregistry.client.rest.entities.Dek;
+import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
 import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.storage.utils.CompositeCacheUpdateHandler;
@@ -98,11 +100,11 @@ public class DekRegistry implements Closeable {
   public static final String AZURE_KMS = "azure-kms";
   public static final String GCP_KMS = "gcp-kms";
 
-  private static final TypeReference<KeyEncryptionKey> KEY_ENCRYPTION_KEY_TYPE =
-      new TypeReference<KeyEncryptionKey>() {
+  private static final TypeReference<Kek> KEK_TYPE =
+      new TypeReference<Kek>() {
       };
-  private static final TypeReference<DataEncryptionKey> DATA_ENCRYPTION_KEY_TYPE =
-      new TypeReference<DataEncryptionKey>() {
+  private static final TypeReference<Dek> DEK_TYPE =
+      new TypeReference<Dek>() {
       };
   private static final TypeReference<Void> VOID_TYPE =
       new TypeReference<Void>() {
@@ -360,13 +362,13 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public KeyEncryptionKey createKekOrForward(CreateKekRequest request,
+  public Kek createKekOrForward(CreateKekRequest request,
       Map<String, String> headerProperties) throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     lock(tenant, headerProperties);
     try {
       if (isLeader(headerProperties)) {
-        return createKek(request);
+        return createKek(request).toKekEntity();
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
@@ -380,7 +382,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private KeyEncryptionKey forwardCreateKekRequestToLeader(CreateKekRequest request,
+  private Kek forwardCreateKekRequestToLeader(CreateKekRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     RestService leaderRestService = schemaRegistry.leaderRestService();
@@ -392,7 +394,7 @@ public class DekRegistry implements Closeable {
     log.debug(String.format("Forwarding create key request to %s", baseUrl));
     try {
       return leaderRestService.httpRequest(
-          path, "POST", toJson(request), headerProperties, KEY_ENCRYPTION_KEY_TYPE);
+          path, "POST", toJson(request), headerProperties, KEK_TYPE);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the create key request to %s",
@@ -441,13 +443,13 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public DataEncryptionKey createDekOrForward(String kekName, CreateDekRequest request,
+  public Dek createDekOrForward(String kekName, CreateDekRequest request,
       Map<String, String> headerProperties) throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     lock(tenant, headerProperties);
     try {
       if (isLeader(headerProperties)) {
-        return createDek(kekName, request);
+        return createDek(kekName, request).toDekEntity();
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
@@ -461,7 +463,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private DataEncryptionKey forwardCreateDekRequestToLeader(String kekName,
+  private Dek forwardCreateDekRequestToLeader(String kekName,
       CreateDekRequest request, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     RestService leaderRestService = schemaRegistry.leaderRestService();
@@ -473,7 +475,7 @@ public class DekRegistry implements Closeable {
     log.debug(String.format("Forwarding create key request to %s", baseUrl));
     try {
       return leaderRestService.httpRequest(
-          path, "POST", toJson(request), headerProperties, DATA_ENCRYPTION_KEY_TYPE);
+          path, "POST", toJson(request), headerProperties, DEK_TYPE);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the create key request to %s",
@@ -559,13 +561,14 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public KeyEncryptionKey putKekOrForward(String name, UpdateKekRequest request,
+  public Kek putKekOrForward(String name, UpdateKekRequest request,
       Map<String, String> headerProperties) throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     lock(tenant, headerProperties);
     try {
       if (isLeader(headerProperties)) {
-        return putKek(name, request);
+        KeyEncryptionKey kek = putKek(name, request);
+        return kek != null ? kek.toKekEntity() : null;
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
@@ -579,7 +582,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private KeyEncryptionKey forwardPutKekRequestToLeader(String name,
+  private Kek forwardPutKekRequestToLeader(String name,
       UpdateKekRequest request, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     RestService leaderRestService = schemaRegistry.leaderRestService();
@@ -591,7 +594,7 @@ public class DekRegistry implements Closeable {
     log.debug(String.format("Forwarding put key request to %s", baseUrl));
     try {
       return leaderRestService.httpRequest(
-          path, "PUT", toJson(request), headerProperties, KEY_ENCRYPTION_KEY_TYPE);
+          path, "PUT", toJson(request), headerProperties, KEK_TYPE);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the put key request to %s",

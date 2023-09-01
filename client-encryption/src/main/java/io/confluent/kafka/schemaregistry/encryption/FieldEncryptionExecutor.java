@@ -82,6 +82,11 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   }
 
   @Override
+  public boolean addOriginalConfigs() {
+    return true;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     this.configs = configs;
     Object cacheExpirySecsConfig = configs.get(CACHE_EXPIRY_SECS);
@@ -406,7 +411,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
           default:
             throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
         }
-      } catch (GeneralSecurityException e) {
+      } catch (Exception e) {
         throw new RuleException(e);
       }
     }
