@@ -14,9 +14,9 @@
  */
 package io.confluent.dekregistry.web.rest;
 
+import static io.confluent.dekregistry.storage.DekRegistry.X_FORWARD_HEADER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -24,7 +24,6 @@ import com.google.common.testing.FakeTicker;
 import com.google.crypto.tink.Aead;
 import io.confluent.dekregistry.DekRegistryResourceExtension;
 import io.confluent.dekregistry.client.CachedDekRegistryClient;
-import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
@@ -32,6 +31,7 @@ import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -41,6 +41,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import java.nio.charset.StandardCharsets;
@@ -57,7 +58,7 @@ import org.junit.Test;
 public class RestApiTest extends ClusterTestHarness {
 
   FakeTicker fakeTicker;
-  DekRegistryClient client;
+  CachedDekRegistryClient client;
 
   public RestApiTest() {
     super(1, true);
@@ -66,7 +67,14 @@ public class RestApiTest extends ClusterTestHarness {
   @Override
   public Properties getSchemaRegistryProperties() throws Exception {
     Properties props = new Properties();
-    props.setProperty("resource.extension.class", DekRegistryResourceExtension.class.getName());
+    props.put(
+        SchemaRegistryConfig.RESOURCE_EXTENSION_CONFIG,
+        DekRegistryResourceExtension.class.getName()
+    );
+    props.put(
+        SchemaRegistryConfig.INTER_INSTANCE_HEADERS_WHITELIST_CONFIG,
+        DekRegistryRestService.X_FORWARD_HEADER
+    );
     return props;
   }
 
@@ -99,6 +107,20 @@ public class RestApiTest extends ClusterTestHarness {
 
   @Test
   public void testBasic() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    testBasic(headers);
+  }
+
+  @Test
+  public void testForwarding() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    headers.put(X_FORWARD_HEADER, "false");
+    testBasic(headers);
+  }
+
+  private void testBasic(Map<String, String> headers) throws Exception {
     String kekName = "kek1";
     String kmsType = "test-kms";
     String kmsKeyId = "myid";
@@ -109,7 +131,7 @@ public class RestApiTest extends ClusterTestHarness {
     Kek kek = new Kek(kekName, kmsType, kmsKeyId, null, null, false, null);
 
     // Create kek
-    Kek newKek = client.createKek(kekName, kmsType, kmsKeyId, null, null, false);
+    Kek newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false);
     assertEquals(kek, newKek);
 
     newKek = client.getKek(kekName, false);
@@ -119,19 +141,19 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(Collections.singletonList(kekName), keks);
 
     try {
-      client.deleteKek(kekName, true);
+      client.deleteKek(headers, kekName, true);
       fail();
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.KEY_NOT_SOFT_DELETED_ERROR_CODE, e.getErrorCode());
     }
 
     // Delete kek
-    client.deleteKek(kekName, false);
+    client.deleteKek(headers, kekName, false);
 
     Map<String, String> kmsProps = Collections.singletonMap("hi", "there");
     String doc = "mydoc";
     try {
-      client.updateKek(kekName, kmsProps, doc, true);
+      client.updateKek(headers, kekName, kmsProps, doc, true);
       fail();
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
@@ -153,7 +175,7 @@ public class RestApiTest extends ClusterTestHarness {
     newKek = client.getKek(kekName, true);
     assertEquals(kek, newKek);
 
-    client.deleteKek(kekName, true);
+    client.deleteKek(headers, kekName, true);
 
     try {
       client.getKek(kekName, false);
@@ -176,7 +198,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(Collections.emptyList(), keks);
 
     // Recreate kek
-    newKek = client.createKek(kekName, kmsType, kmsKeyId, null, null, false);
+    newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false);
     assertEquals(kek, newKek);
 
     newKek = client.getKek(kekName, false);
@@ -192,7 +214,7 @@ public class RestApiTest extends ClusterTestHarness {
     Dek dek = new Dek(kekName, subject, 1, algorithm, encryptedDekStr, null, null);
 
     // Create dek
-    Dek newDek = client.createDek(kekName, subject, algorithm, encryptedDekStr);
+    Dek newDek = client.createDek(headers, kekName, subject, algorithm, encryptedDekStr);
     assertEquals(dek, newDek);
 
     newDek = client.getDek(kekName, subject, algorithm, false);
@@ -200,7 +222,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Create dek w/o key material
     try {
-      newDek = client.createDek(kekName, badSubject, algorithm, null);
+      newDek = client.createDek(headers, kekName, badSubject, algorithm, null);
       fail();
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.INVALID_KEY_ERROR_CODE, e.getErrorCode());
@@ -212,7 +234,7 @@ public class RestApiTest extends ClusterTestHarness {
     Kek kek2 = new Kek(kekName, kmsType, kmsKeyId, kmsProps, doc, true, null);
 
     // Set shared flag to true
-    newKek = client.updateKek(kekName, kmsProps, doc, true);
+    newKek = client.updateKek(headers, kekName, kmsProps, doc, true);
     assertEquals(kek2, newKek);
 
     // Advance ticker
@@ -224,7 +246,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(dek2, newDek);
 
     // Create dek w/o key material, receive both encrypted and decrypted key material
-    newDek = client.createDek(kekName, subject2, algorithm, null);
+    newDek = client.createDek(headers, kekName, subject2, algorithm, null);
     assertNotNull(newDek.getEncryptedKeyMaterial());
     assertNotNull(newDek.getKeyMaterial());
 
@@ -232,20 +254,20 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(ImmutableList.of(subject, subject2), deks);
 
     try {
-      client.deleteKek(kekName, false);
+      client.deleteKek(headers, kekName, false);
       fail();
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
     }
 
     try {
-      client.deleteDek(kekName, subject, algorithm, true);
+      client.deleteDek(headers, kekName, subject, algorithm, true);
       fail();
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.KEY_NOT_SOFT_DELETED_ERROR_CODE, e.getErrorCode());
     }
 
-    client.deleteDek(kekName, subject, algorithm, false);
+    client.deleteDek(headers, kekName, subject, algorithm, false);
 
     try {
       client.getDek(kekName, subject, algorithm, false);
@@ -263,8 +285,8 @@ public class RestApiTest extends ClusterTestHarness {
     deks = client.listDeks(kekName, true);
     assertEquals(ImmutableList.of(subject, subject2), deks);
 
-    client.deleteDek(kekName, subject2, algorithm, false);
-    client.deleteKek(kekName, false);
+    client.deleteDek(headers, kekName, subject2, algorithm, false);
+    client.deleteKek(headers, kekName, false);
 
     deks = client.listDeks(kekName, false);
     assertEquals(Collections.emptyList(), deks);
@@ -273,14 +295,14 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(ImmutableList.of(subject, subject2), deks);
 
     try {
-      client.deleteKek(kekName, true);
+      client.deleteKek(headers, kekName, true);
       fail();
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
     }
 
-    client.deleteDek(kekName, subject, algorithm, true);
-    client.deleteDek(kekName, subject2, algorithm, true);
+    client.deleteDek(headers, kekName, subject, algorithm, true);
+    client.deleteDek(headers, kekName, subject2, algorithm, true);
 
     deks = client.listDeks(kekName, false);
     assertEquals(Collections.emptyList(), deks);
@@ -288,7 +310,7 @@ public class RestApiTest extends ClusterTestHarness {
     deks = client.listDeks(kekName, true);
     assertEquals(Collections.emptyList(), deks);
 
-    client.deleteKek(kekName, true);
+    client.deleteKek(headers, kekName, true);
   }
 
   @Test

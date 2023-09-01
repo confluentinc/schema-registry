@@ -23,7 +23,6 @@ import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.integration.gcpkms.GcpKmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -68,7 +67,7 @@ public class GcpKmsDriver implements KmsDriver {
       } else {
         return GoogleCredentials.getApplicationDefault();
       }
-    } catch (IOException e) {
+    } catch (Exception e) {
       throw new GeneralSecurityException("cannot load credentials", e);
     }
   }
