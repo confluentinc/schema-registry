@@ -51,6 +51,7 @@ import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.Optional;
 import java.util.Set;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
@@ -399,9 +400,25 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
-  public void validate() {
+  public void validate(boolean strict) {
     // Access the raw schema since it is computed lazily
-    rawSchema();
+    Schema rawSchema = rawSchema();
+    if (strict) {
+      if (rawSchema instanceof ObjectSchema) {
+        ObjectSchema schema = (ObjectSchema) rawSchema;
+        Optional<String> restrictedField = schema.getPropertySchemas()
+                .keySet()
+                .stream()
+                .filter(field -> field.startsWith("$"))
+                .findAny();
+        if (restrictedField.isPresent()) {
+          throw new ValidationException(schema,
+                  "Field names cannot start with $ symbol",
+                  "properties",
+                  String.format("#/properties/%s", restrictedField.get()));
+        }
+      }
+    }
   }
 
   public void validate(Object value) throws JsonProcessingException, ValidationException {
