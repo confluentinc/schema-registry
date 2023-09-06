@@ -230,9 +230,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       return Stream.empty();
     }
     try {
-      RuleBase ruleObject = propertyValue instanceof Class ?
-          Utils.newInstance((Class<?>) propertyValue, RuleBase.class) :
-          Utils.newInstance(propertyValue.toString(), RuleBase.class);
+      RuleBase ruleObject = propertyValue instanceof Class
+          ? Utils.newInstance((Class<?>) propertyValue, RuleBase.class)
+          : Utils.newInstance(propertyValue.toString(), RuleBase.class);
       configureRuleObject(ruleObject, name, config, configName);
       return Stream.of(ruleObject);
     } catch (ClassNotFoundException e) {
@@ -720,6 +720,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     }
     if (actionName != null) {
       RuleAction ruleAction = getRuleAction(ctx, actionName);
+      if (ruleAction == null) {
+        throw new IllegalArgumentException("Could not find rule action of type " + actionName);
+      }
       try {
         ruleAction.run(ctx, message, ex);
       } catch (RuleException e) {
