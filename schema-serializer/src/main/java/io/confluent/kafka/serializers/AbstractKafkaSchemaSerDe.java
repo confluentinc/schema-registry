@@ -229,9 +229,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     if (propertyValue == null) {
       return Stream.empty();
     }
-    String className = propertyValue.toString();
     try {
-      RuleBase ruleObject = Utils.newInstance(className, RuleBase.class);
+      RuleBase ruleObject = propertyValue instanceof Class ?
+          Utils.newInstance((Class<?>) propertyValue, RuleBase.class) :
+          Utils.newInstance(propertyValue.toString(), RuleBase.class);
       configureRuleObject(ruleObject, name, config, configName);
       return Stream.of(ruleObject);
     } catch (ClassNotFoundException e) {
