@@ -721,6 +721,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     if (actionName != null) {
       RuleAction ruleAction = getRuleAction(ctx, actionName);
       if (ruleAction == null) {
+        log.error("Could not find rule action of type {}", actionName);
         throw new IllegalArgumentException("Could not find rule action of type " + actionName);
       }
       try {
