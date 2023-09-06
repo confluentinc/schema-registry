@@ -676,7 +676,19 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       RuleExecutor ruleExecutor = getRuleExecutor(ctx);
       if (ruleExecutor != null) {
         try {
-          message = ruleExecutor.transform(ctx, message);
+          Object result = ruleExecutor.transform(ctx, message);
+          switch (ctx.rule().getKind()) {
+            case CONDITION:
+              if (Boolean.FALSE.equals(result)) {
+                throw new RuleException("Expr failed: '" + ctx.rule().getExpr() + "'");
+              }
+              break;
+            case TRANSFORM:
+              message = result;
+              break;
+            default:
+              throw new IllegalStateException("Unsupported rule kind " + ctx.rule().getKind());
+          }
           runAction(ctx, ruleMode, rule,
               message != null ? rule.getOnSuccess() : rule.getOnFailure(),
               message, null, message != null ? null : ErrorAction.TYPE
