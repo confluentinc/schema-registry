@@ -961,6 +961,27 @@ public class JsonSchemaTest {
     JsonSchema jsonSchema = new JsonSchema(schema);
     jsonSchema.validate(false);
     assertThrows(ValidationException.class, () -> jsonSchema.validate(true));
+    String stringSchema = "{\n"
+            + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+            + "  \"$id\": \"task.schema.json\",\n"
+            + "  \"title\": \"Task\",\n"
+            + "  \"description\": \"A task\",\n"
+            + "  \"type\": \"object\",\n"
+            + "  \"properties\": {\n"
+            + "    \"id\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"title\": {\n"
+            + "        \"description\": \"Task title\",\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"status\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+    JsonSchema validSchema = new JsonSchema(stringSchema);
+    validSchema.validate(true);
   }
 
   private static Map<String, String> getJsonSchemaWithReferences() {
