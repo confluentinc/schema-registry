@@ -98,7 +98,7 @@ public class JsonataExecutorTest {
     defaultConfig.put(KafkaAvroSerializerConfig.LATEST_COMPATIBILITY_STRICT, "false");
     defaultConfig.put(KafkaAvroSerializerConfig.RULE_EXECUTORS, "jsonata");
     defaultConfig.put(KafkaAvroSerializerConfig.RULE_EXECUTORS + ".jsonata.class",
-        JsonataExecutor.class.getName());
+        JsonataExecutor.class);
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, defaultConfig);
     Map<String, Object> defaultConfig2 = new HashMap<>(defaultConfig);
     defaultConfig2.put(KafkaAvroSerializerConfig.USE_LATEST_WITH_METADATA,
