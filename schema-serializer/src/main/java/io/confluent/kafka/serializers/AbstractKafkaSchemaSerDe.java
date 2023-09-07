@@ -677,16 +677,13 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       if (ruleExecutor != null) {
         try {
           Object result = ruleExecutor.transform(ctx, message);
-          switch (ctx.rule().getKind()) {
+          switch (rule.getKind()) {
             case CONDITION:
               if (Boolean.FALSE.equals(result)) {
-                String expr = ctx.rule().getExpr();
-                String errMsg;
-                if (expr != null) {
-                  errMsg = "Expr failed: '" + expr + "'";
-                } else {
-                  errMsg = "Condition failed: '" + ctx.rule().getName() + "'";
-                }
+                String expr = rule.getExpr();
+                String errMsg = expr != null
+                    ? "Expr failed: '" + expr + "'"
+                    : "Condition failed: '" + rule.getName() + "'";
                 throw new RuleException(errMsg);
               }
               break;
@@ -694,7 +691,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
               message = result;
               break;
             default:
-              throw new IllegalStateException("Unsupported rule kind " + ctx.rule().getKind());
+              throw new IllegalStateException("Unsupported rule kind " + rule.getKind());
           }
           runAction(ctx, ruleMode, rule,
               message != null ? rule.getOnSuccess() : rule.getOnFailure(),
