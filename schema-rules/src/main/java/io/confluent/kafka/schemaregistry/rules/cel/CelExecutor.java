@@ -134,24 +134,16 @@ public class CelExecutor implements RuleExecutor {
       input = message;
     }
     Object result = execute(ctx, input, ImmutableMap.of("message", input));
-    if (ctx.rule().getKind() == RuleKind.CONDITION) {
-      if (Boolean.TRUE.equals(result)) {
-        return message;
-      } else {
-        throw new RuleException("Expr failed: '" + ctx.rule().getExpr() + "'");
+    if (result instanceof Map) {
+      // Convert maps to the target object type
+      try {
+        JsonNode jsonNode = mapper.valueToTree(result);
+        result = ctx.target().fromJson(jsonNode);
+      } catch (IOException e) {
+        throw new RuleException(e);
       }
-    } else {
-      if (result instanceof Map) {
-        // Convert maps to the target object type
-        try {
-          JsonNode jsonNode = mapper.valueToTree(result);
-          result = ctx.target().fromJson(jsonNode);
-        } catch (IOException e) {
-          throw new RuleException(e);
-        }
-      }
-      return result;
     }
+    return result;
   }
 
   protected Object execute(
