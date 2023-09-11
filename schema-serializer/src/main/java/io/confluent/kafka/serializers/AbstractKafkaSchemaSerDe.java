@@ -229,9 +229,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     if (propertyValue == null) {
       return Stream.empty();
     }
-    String className = propertyValue.toString();
     try {
-      RuleBase ruleObject = Utils.newInstance(className, RuleBase.class);
+      RuleBase ruleObject = propertyValue instanceof Class
+          ? Utils.newInstance((Class<?>) propertyValue, RuleBase.class)
+          : Utils.newInstance(propertyValue.toString(), RuleBase.class);
       configureRuleObject(ruleObject, name, config, configName);
       return Stream.of(ruleObject);
     } catch (ClassNotFoundException e) {
@@ -675,7 +676,23 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       RuleExecutor ruleExecutor = getRuleExecutor(ctx);
       if (ruleExecutor != null) {
         try {
-          message = ruleExecutor.transform(ctx, message);
+          Object result = ruleExecutor.transform(ctx, message);
+          switch (rule.getKind()) {
+            case CONDITION:
+              if (Boolean.FALSE.equals(result)) {
+                String expr = rule.getExpr();
+                String errMsg = expr != null
+                    ? "Expr failed: '" + expr + "'"
+                    : "Condition failed: '" + rule.getName() + "'";
+                throw new RuleException(errMsg);
+              }
+              break;
+            case TRANSFORM:
+              message = result;
+              break;
+            default:
+              throw new IllegalStateException("Unsupported rule kind " + rule.getKind());
+          }
           runAction(ctx, ruleMode, rule,
               message != null ? rule.getOnSuccess() : rule.getOnFailure(),
               message, null, message != null ? null : ErrorAction.TYPE
@@ -719,6 +736,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     }
     if (actionName != null) {
       RuleAction ruleAction = getRuleAction(ctx, actionName);
+      if (ruleAction == null) {
+        log.error("Could not find rule action of type {}", actionName);
+        throw new ConfigException("Could not find rule action of type " + actionName);
+      }
       try {
         ruleAction.run(ctx, message, ex);
       } catch (RuleException e) {
