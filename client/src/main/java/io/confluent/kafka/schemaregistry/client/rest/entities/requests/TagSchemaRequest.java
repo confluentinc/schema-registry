@@ -43,7 +43,7 @@ public class TagSchemaRequest {
 
   private static final String newVersionDescription =
       "The new version should be the latest version in the subject + 1."
-          + " If set, the new version will be encoded to the schema metadata.";
+          + " The new version will be encoded to the schema metadata.";
   private Integer newVersion;
   private List<SchemaTags> tagsToAdd;
   private List<SchemaTags> tagsToRemove;

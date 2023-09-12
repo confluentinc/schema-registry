@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
@@ -595,6 +596,10 @@ public class SubjectVersionsResource {
         subjectName, version, request.getNewVersion(),
         request.getTagsToAdd() == null ? 0 : request.getTagsToAdd().size(),
         request.getTagsToRemove() == null ? 0 : request.getTagsToRemove().size());
+
+    if (request.getNewVersion() == null) {
+      throw new RestInvalidSchemaException("Missing required field: 'newVersion'. Must be 1 more that the latest version.");
+    }
 
     // get schema by subject version
     if (!QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subjectName)) {

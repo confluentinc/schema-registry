@@ -119,7 +119,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    */
   public static final int MIN_VERSION = 1;
   public static final int MAX_VERSION = Integer.MAX_VALUE;
-  private static final String CONFLUENT_VERSION = "confluent:version";
+  public static final String CONFLUENT_VERSION = "confluent:version";
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
   private final SchemaRegistryConfig config;
@@ -871,18 +871,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Schema modifySchemaTags(String subject, Schema schema, TagSchemaRequest request)
       throws SchemaRegistryException {
     ParsedSchema parsedSchema = parseSchema(schema);
-    int newVersion = request.getNewVersion() != null ? request.getNewVersion() : 0;
+    int newVersion = request.getNewVersion();
 
     Metadata mergedMetadata = request.getMetadata() != null
         ? request.getMetadata()
         : parsedSchema.metadata();
-    if (request.getNewVersion() != null) {
-      Metadata newMetadata = new Metadata(
-          Collections.emptyMap(),
-          Collections.singletonMap(CONFLUENT_VERSION, String.valueOf(newVersion)),
-          Collections.emptySet());
-      mergedMetadata = Metadata.mergeMetadata(mergedMetadata, newMetadata);
-    }
+    Metadata newMetadata = new Metadata(
+        Collections.emptyMap(),
+        Collections.singletonMap(CONFLUENT_VERSION, String.valueOf(newVersion)),
+        Collections.emptySet());
+    mergedMetadata = Metadata.mergeMetadata(mergedMetadata, newMetadata);
 
     try {
       ParsedSchema newSchema = parsedSchema
