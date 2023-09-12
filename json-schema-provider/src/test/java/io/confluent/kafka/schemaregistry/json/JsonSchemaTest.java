@@ -49,6 +49,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -958,6 +959,53 @@ public class JsonSchemaTest {
                     " property at path '#/properties/status' that conflicts with the reserved properties which is " +
                     "missing in the %s schema.'}",
             errorMessages.get(1));
+  }
+
+  @Test
+  public void testRestrictedFields() {
+    String schema = "{\n"
+            + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+            + "  \"$id\": \"task.schema.json\",\n"
+            + "  \"title\": \"Task\",\n"
+            + "  \"description\": \"A task\",\n"
+            + "  \"type\": \"object\",\n"
+            + "  \"properties\": {\n"
+            + "    \"$id\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"$title\": {\n"
+            + "        \"description\": \"Task title\",\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"status\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    jsonSchema.validate(false);
+    assertThrows(ValidationException.class, () -> jsonSchema.validate(true));
+    String stringSchema = "{\n"
+            + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+            + "  \"$id\": \"task.schema.json\",\n"
+            + "  \"title\": \"Task\",\n"
+            + "  \"description\": \"A task\",\n"
+            + "  \"type\": \"object\",\n"
+            + "  \"properties\": {\n"
+            + "    \"id\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"title\": {\n"
+            + "        \"description\": \"Task title\",\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"status\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+    JsonSchema validSchema = new JsonSchema(stringSchema);
+    validSchema.validate(true);
   }
 
   private static Map<String, String> getJsonSchemaWithReferences() {

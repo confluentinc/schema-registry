@@ -629,7 +629,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
 
       int schemaId = schema.getId();
-      ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
+      ParsedSchema parsedSchema = canonicalizeSchema(schema, config, schemaId < 0, normalize);
 
       if (parsedSchema != null) {
         // see if the schema to be registered already exists
@@ -1104,7 +1104,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       // Pass a copy of the schema so the original is not modified during normalization
       // to ensure that invalid defaults are not dropped since default validation is disabled
       Schema newSchema = schema != null ? schema.copy() : null;
-      ParsedSchema parsedSchema = canonicalizeSchema(newSchema, false, normalize);
+      Config config = getConfigInScope(subject);
+      ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, false, normalize);
       if (parsedSchema != null) {
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(newSchema);
         if (schemaIdAndSubjects != null) {
@@ -1348,23 +1349,29 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private ParsedSchema canonicalizeSchema(Schema schema, boolean isNew, boolean normalize)
-          throws InvalidSchemaException {
+  private ParsedSchema canonicalizeSchema(Schema schema,
+                                          Config config,
+                                          boolean isNew,
+                                          boolean normalize) throws InvalidSchemaException {
     if (schema == null
         || schema.getSchema() == null
         || schema.getSchema().trim().isEmpty()) {
       return null;
     }
     ParsedSchema parsedSchema = parseSchema(schema, isNew, normalize);
-    return maybeValidateAndNormalizeSchema(parsedSchema, schema, true, normalize);
+    return maybeValidateAndNormalizeSchema(parsedSchema, schema, config, true, normalize);
   }
 
-  private ParsedSchema maybeValidateAndNormalizeSchema(
-      ParsedSchema parsedSchema, Schema schema, boolean validate, boolean normalize)
+  private ParsedSchema maybeValidateAndNormalizeSchema(ParsedSchema parsedSchema,
+                                                       Schema schema,
+                                                       Config config,
+                                                       boolean validate,
+                                                       boolean normalize)
           throws InvalidSchemaException {
     try {
       if (validate) {
-        parsedSchema.validate();
+        boolean isStrict = config.isValidateFields() != null ? config.isValidateFields() : true;
+        parsedSchema.validate(isStrict);
       }
       if (normalize) {
         parsedSchema = parsedSchema.normalize();
@@ -1973,12 +1980,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       prevParsedSchemas.add(new LazyParsedSchemaHolder(this, previousSchema));
     }
 
-    ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true, normalize);
+    Config config = getConfigInScope(subject);
+    ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, true, normalize);
     if (parsedSchema == null) {
       log.error("Empty schema");
       throw new InvalidSchemaException("Empty schema");
     }
-    Config config = getConfigInScope(subject);
     return isCompatibleWithPrevious(config, parsedSchema, prevParsedSchemas);
   }
 
