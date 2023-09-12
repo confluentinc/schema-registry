@@ -67,6 +67,18 @@ public class JsonSchemaTest {
 
   private static final JsonSchema recordSchema = new JsonSchema(recordSchemaString);
 
+  private static final String recordWithDefaultsSchemaString = "{\"properties\": {\n"
+      + "     \"null\": {\"type\": \"null\", \"default\": null},\n"
+      + "     \"boolean\": {\"type\": \"boolean\", \"default\": true},\n"
+      + "     \"number\": {\"type\": \"number\", \"default\": 123},\n"
+      + "     \"string\": {\"type\": \"string\", \"default\": \"abc\"}\n"
+      + "  },\n"
+      + "  \"additionalProperties\": false\n"
+      + "}";
+
+  private static final JsonSchema recordWithDefaultsSchema =
+      new JsonSchema(recordWithDefaultsSchemaString);
+
   private static final String arraySchemaString = "{\"type\": \"array\", \"items\": { \"type\": "
       + "\"string\" } }";
 
@@ -134,6 +146,18 @@ public class JsonSchemaTest {
     assertEquals(true, result.get("boolean").booleanValue());
     assertEquals(12, result.get("number").intValue());
     assertEquals("string", result.get("string").textValue());
+  }
+
+  @Test
+  public void testRecordWithDefaultsToJsonSchema() throws Exception {
+    String json = "{}";
+
+    JsonNode envelope = (JsonNode) JsonSchemaUtils.toObject(json, recordWithDefaultsSchema);
+    JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
+    assertEquals(true, result.get("null").isNull());
+    assertEquals(true, result.get("boolean").booleanValue());
+    assertEquals(123, result.get("number").intValue());
+    assertEquals("abc", result.get("string").textValue());
   }
 
   @Test(expected = ValidationException.class)

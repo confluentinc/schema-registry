@@ -156,7 +156,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       }
       object = (T) executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
       if (validate) {
-        validateJson(object, schema);
+        object = validateJson(object, schema);
       }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
@@ -176,12 +176,14 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     }
   }
 
-  protected void validateJson(T object,
-                              JsonSchema schema)
+  @SuppressWarnings("unchecked")
+  protected T validateJson(T object,
+                           JsonSchema schema)
       throws SerializationException {
     try {
       JsonNode jsonNode = objectMapper.convertValue(object, JsonNode.class);
-      schema.validate(jsonNode);
+      jsonNode = schema.validate(jsonNode);
+      return (T) objectMapper.convertValue(jsonNode, object.getClass());
     } catch (JsonProcessingException e) {
       throw new SerializationException("JSON "
           + object
