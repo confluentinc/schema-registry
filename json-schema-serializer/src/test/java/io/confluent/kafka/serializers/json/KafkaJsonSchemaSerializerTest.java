@@ -16,6 +16,8 @@
 package io.confluent.kafka.serializers.json;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
@@ -46,6 +48,18 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 public class KafkaJsonSchemaSerializerTest {
+
+  private static final String recordWithDefaultsSchemaString = "{\"properties\": {\n"
+      + "     \"null\": {\"type\": \"null\", \"default\": null},\n"
+      + "     \"boolean\": {\"type\": \"boolean\", \"default\": true},\n"
+      + "     \"number\": {\"type\": \"number\", \"default\": 123},\n"
+      + "     \"string\": {\"type\": \"string\", \"default\": \"abc\"}\n"
+      + "  },\n"
+      + "  \"additionalProperties\": false\n"
+      + "}";
+
+  private static final JsonSchema recordWithDefaultsSchema =
+      new JsonSchema(recordWithDefaultsSchemaString);
 
   private final Properties config;
   private final SchemaRegistryClient schemaRegistry;
@@ -214,6 +228,25 @@ public class KafkaJsonSchemaSerializerTest {
     // Test for javaType property
     deserialized = getDeserializer(null).deserialize(topic, bytes);
     assertEquals(customer, deserialized);
+  }
+
+  @Test
+  public void serializeRecordWithDefaults() throws Exception {
+    schemaRegistry.register(topic + "-value", recordWithDefaultsSchema);
+
+    String json = "{}";
+    JsonNode record = new ObjectMapper().readTree(json);
+    byte[] bytes = latestSerializer.serialize(topic, record);
+
+    String expectedJson = "{\n"
+        + "    \"null\": null,\n"
+        + "    \"boolean\": true,\n"
+        + "    \"number\": 123,\n"
+        + "    \"string\": \"abc\"\n"
+        + "}";
+    JsonNode expectedRecord = new ObjectMapper().readTree(expectedJson);
+    Object deserialized = getDeserializer(null).deserialize(topic, bytes);
+    assertEquals(expectedRecord, deserialized);
   }
 
   // Generate javaType property

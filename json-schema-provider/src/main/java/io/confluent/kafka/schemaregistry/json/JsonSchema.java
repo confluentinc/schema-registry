@@ -404,11 +404,11 @@ public class JsonSchema implements ParsedSchema {
     rawSchema();
   }
 
-  public void validate(Object value) throws JsonProcessingException, ValidationException {
-    validate(rawSchema(), value);
+  public JsonNode validate(Object value) throws JsonProcessingException, ValidationException {
+    return validate(rawSchema(), value);
   }
 
-  public static void validate(Schema schema, Object value)
+  public static JsonNode validate(Schema schema, Object value)
       throws JsonProcessingException, ValidationException {
     Object primitiveValue = NONE_MARKER;
     if (isPrimitive(value)) {
@@ -426,6 +426,7 @@ public class JsonSchema implements ParsedSchema {
     }
     if (primitiveValue != NONE_MARKER) {
       schema.validate(primitiveValue);
+      return objectMapper.convertValue(primitiveValue, JsonNode.class);
     } else {
       Object jsonObject;
       if (value instanceof ArrayNode) {
@@ -438,6 +439,7 @@ public class JsonSchema implements ParsedSchema {
         jsonObject = objectMapper.convertValue(value, JSONObject.class);
       }
       schema.validate(jsonObject);
+      return objectMapper.convertValue(jsonObject, JsonNode.class);
     }
   }
 
