@@ -18,6 +18,13 @@ package io.confluent.kafka.serializers.json;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.BooleanNode;
+import com.fasterxml.jackson.databind.node.DoubleNode;
+import com.fasterxml.jackson.databind.node.FloatNode;
+import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.LongNode;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
@@ -99,13 +106,26 @@ public class KafkaJsonSchemaSerializerTest {
     bytes = serializer.serialize(topic, null);
     assertEquals(null, deserializer.deserialize(topic, bytes));
 
+    bytes = serializer.serialize(topic, NullNode.getInstance());
+    assertEquals(null, deserializer.deserialize(topic, bytes));
+
     bytes = serializer.serialize(topic, true);
+    assertEquals(true, deserializer.deserialize(topic, bytes));
+
+    bytes = serializer.serialize(topic, BooleanNode.getTrue());
     assertEquals(true, deserializer.deserialize(topic, bytes));
 
     bytes = serializer.serialize(topic, 123);
     assertEquals(123, deserializer.deserialize(topic, bytes));
 
+    bytes = serializer.serialize(topic, IntNode.valueOf(123));
+    assertEquals(123, deserializer.deserialize(topic, bytes));
+
     bytes = serializer.serialize(topic, 345L);
+    // JSON can't distinguish longs
+    assertEquals(345, deserializer.deserialize(topic, bytes));
+
+    bytes = serializer.serialize(topic, LongNode.valueOf(345L));
     // JSON can't distinguish longs
     assertEquals(345, deserializer.deserialize(topic, bytes));
 
@@ -113,10 +133,20 @@ public class KafkaJsonSchemaSerializerTest {
     // JSON can't distinguish doubles
     assertEquals(new BigDecimal("1.23"), deserializer.deserialize(topic, bytes));
 
+    bytes = serializer.serialize(topic, FloatNode.valueOf(1.23f));
+    // JSON can't distinguish doubles
+    assertEquals(new BigDecimal("1.23"), deserializer.deserialize(topic, bytes));
+
     bytes = serializer.serialize(topic, 2.34d);
     assertEquals(new BigDecimal("2.34"), deserializer.deserialize(topic, bytes));
 
+    bytes = serializer.serialize(topic, DoubleNode.valueOf(2.34d));
+    assertEquals(new BigDecimal("2.34"), deserializer.deserialize(topic, bytes));
+
     bytes = serializer.serialize(topic, "abc");
+    assertEquals("abc", deserializer.deserialize(topic, bytes));
+
+    bytes = serializer.serialize(topic, TextNode.valueOf("abc"));
     assertEquals("abc", deserializer.deserialize(topic, bytes));
   }
 
