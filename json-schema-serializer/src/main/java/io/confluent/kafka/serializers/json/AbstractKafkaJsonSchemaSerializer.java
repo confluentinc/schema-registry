@@ -181,9 +181,13 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
                            JsonSchema schema)
       throws SerializationException {
     try {
-      JsonNode jsonNode = objectMapper.convertValue(object, JsonNode.class);
+      JsonNode jsonNode = object instanceof JsonNode
+          ? (JsonNode) object
+          : objectMapper.convertValue(object, JsonNode.class);
       jsonNode = schema.validate(jsonNode);
-      return (T) objectMapper.convertValue(jsonNode, object.getClass());
+      return object instanceof JsonNode
+          ? object
+          : (T) objectMapper.convertValue(jsonNode, object.getClass());
     } catch (JsonProcessingException e) {
       throw new SerializationException("JSON "
           + object
