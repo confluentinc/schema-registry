@@ -598,8 +598,8 @@ public class SubjectVersionsResource {
         request.getTagsToRemove() == null ? 0 : request.getTagsToRemove().size());
 
     if (request.getNewVersion() == null) {
-      throw new RestInvalidSchemaException("Missing required field: 'newVersion'. " +
-          "Must be 1 more that the latest version.");
+      throw new RestInvalidSchemaException("Missing required field: 'newVersion'. "
+          + "Must be 1 more that the latest version.");
     }
 
     // get schema by subject version
