@@ -486,7 +486,7 @@ public class RestApiTest extends ClusterTestHarness {
     Schema result = restApp.restClient.getLatestVersion(subject);
     assertEquals(expectedSchema, result.getSchema());
     assertEquals((Integer) 2, result.getVersion());
-    assertNull(result.getMetadata());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
 
     tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setNewVersion(3);
