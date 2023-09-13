@@ -443,7 +443,9 @@ public class JsonSchema implements ParsedSchema {
     }
     if (primitiveValue != NONE_MARKER) {
       schema.validate(primitiveValue);
-      return objectMapper.convertValue(primitiveValue, JsonNode.class);
+      return value instanceof JsonNode
+          ? (JsonNode) value
+          : objectMapper.convertValue(primitiveValue, JsonNode.class);
     } else {
       Object jsonObject;
       if (value instanceof ArrayNode) {
