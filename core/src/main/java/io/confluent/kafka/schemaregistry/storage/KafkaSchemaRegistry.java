@@ -119,7 +119,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    */
   public static final int MIN_VERSION = 1;
   public static final int MAX_VERSION = Integer.MAX_VALUE;
-  private static final String CONFLUENT_VERSION = "confluent:version";
+  public static final String CONFLUENT_VERSION = "confluent:version";
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
   private final SchemaRegistryConfig config;
@@ -625,7 +625,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       boolean modifiedSchema = false;
       if (mode != Mode.IMPORT) {
-        modifiedSchema = maybePopulateFromPrevious(config, schema, undeletedVersions);
+        modifiedSchema = maybePopulateFromPrevious(config, schema, undeletedVersions, newVersion);
       }
 
       int schemaId = schema.getId();
@@ -773,7 +773,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private boolean maybePopulateFromPrevious(
-      Config config, Schema schema, List<ParsedSchemaHolder> undeletedVersions)
+      Config config, Schema schema, List<ParsedSchemaHolder> undeletedVersions, int newVersion)
       throws SchemaRegistryException {
     boolean populatedSchema = false;
     SchemaValue previousSchemaValue = undeletedVersions.size() > 0
@@ -794,11 +794,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         throw new InvalidSchemaException("Empty schema");
       }
     }
-    boolean populatedMetadataRuleSet = maybeSetMetadataRuleSet(config, schema, previousSchema);
+    boolean populatedMetadataRuleSet = maybeSetMetadataRuleSet(
+        config, schema, previousSchema, newVersion);
     return populatedSchema || populatedMetadataRuleSet;
   }
 
-  private boolean maybeSetMetadataRuleSet(Config config, Schema schema, Schema previousSchema) {
+  private boolean maybeSetMetadataRuleSet(
+      Config config, Schema schema, Schema previousSchema, int newVersion) {
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata specificMetadata = null;
     if (schema.getMetadata() != null) {
       specificMetadata = schema.getMetadata();
@@ -825,6 +827,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     overrideRuleSet = config.getOverrideRuleSet();
     mergedRuleSet = mergeRuleSets(mergeRuleSets(defaultRuleSet, specificRuleSet), overrideRuleSet);
     if (mergedMetadata != null || mergedRuleSet != null) {
+      if (mergedMetadata != null && mergedMetadata.getProperties() != null) {
+        Map<String, String> props = mergedMetadata.getProperties();
+        String versionStr = props.get(CONFLUENT_VERSION);
+        if ("0".equals(versionStr)) {
+          Map<String, String> newProps =
+              Collections.singletonMap(CONFLUENT_VERSION, String.valueOf(newVersion));
+          mergedMetadata = mergeMetadata(mergedMetadata,
+              new io.confluent.kafka.schemaregistry.client.rest.entities.Metadata(
+                  null, newProps, null));
+        }
+      }
       schema.setMetadata(mergedMetadata);
       schema.setRuleSet(mergedRuleSet);
       return true;
@@ -876,13 +889,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     Metadata mergedMetadata = request.getMetadata() != null
         ? request.getMetadata()
         : parsedSchema.metadata();
-    if (request.getNewVersion() != null) {
-      Metadata newMetadata = new Metadata(
-          Collections.emptyMap(),
-          Collections.singletonMap(CONFLUENT_VERSION, String.valueOf(newVersion)),
-          Collections.emptySet());
-      mergedMetadata = Metadata.mergeMetadata(mergedMetadata, newMetadata);
-    }
+    Metadata newMetadata = new Metadata(
+        Collections.emptyMap(),
+        Collections.singletonMap(CONFLUENT_VERSION, String.valueOf(newVersion)),
+        Collections.emptySet());
+    mergedMetadata = Metadata.mergeMetadata(mergedMetadata, newMetadata);
 
     try {
       ParsedSchema newSchema = parsedSchema
