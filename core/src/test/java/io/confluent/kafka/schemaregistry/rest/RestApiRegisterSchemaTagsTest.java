@@ -91,6 +91,50 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testRegisterSchemaWithoutNewVersionInput() throws Exception {
+    String subject = "test";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+
+    TagSchemaRequest tagSchemaRequest = new TagSchemaRequest();
+    tagSchemaRequest.setTagsToAdd(Collections.singletonList(
+        new SchemaTags(new SchemaEntity("myrecord", SchemaEntity.EntityType.SR_RECORD),
+            Arrays.asList("TAG1", "TAG2"))));
+
+    String expectedSchema = "{" +
+        "\"type\":\"record\"," +
+        "\"name\":\"myrecord\"," +
+        "\"fields\":[{\"name\":\"f1\",\"type\":\"string\"}]," +
+        "\"confluent:tags\":[\"TAG1\",\"TAG2\"]}";
+    RegisterSchemaResponse responses = restApp.restClient
+        .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
+    assertEquals(2, responses.getId());
+
+    Schema result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(expectedSchema, result.getSchema());
+    assertEquals((Integer) 2, result.getVersion());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    tagSchemaRequest = new TagSchemaRequest();
+    tagSchemaRequest.setTagsToRemove(Collections.singletonList(
+        new SchemaTags(new SchemaEntity("myrecord", SchemaEntity.EntityType.SR_RECORD),
+            Arrays.asList("TAG2"))));
+
+    expectedSchema = "{" +
+        "\"type\":\"record\"," +
+        "\"name\":\"myrecord\"," +
+        "\"fields\":[{\"name\":\"f1\",\"type\":\"string\"}]," +
+        "\"confluent:tags\":[\"TAG1\"]}";
+    responses = restApp.restClient
+        .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
+    assertEquals(3, responses.getId());
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(expectedSchema, result.getSchema());
+    assertEquals((Integer) 3, result.getVersion());
+    assertEquals("3", result.getMetadata().getProperties().get("confluent:version"));
+  }
+
+  @Test
   public void testRegisterSchemaTagsInDiffContext() throws Exception {
     String subject = ":.ctx:testSubject";
     TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
