@@ -2399,9 +2399,9 @@ components:
           example: 1
         ts:
           type: integer
-          description: Timestamp
+          description: Timestamp in milliseconds since epoch
           format: int64
-          example: 1694571755
+          example: 1694571755123
       description: Schema definition
     Schema:
       type: object
@@ -2439,9 +2439,9 @@ components:
           example: "{\"schema\": \"{\"type\": \"string\"}\"}"
         ts:
           type: integer
-          description: Timestamp
+          description: Timestamp in milliseconds since epoch
           format: int64
-          example: 1694571755
+          example: 1694571755123
         ruleSet:
           $ref: '#/components/schemas/RuleSet'
       description: Schema

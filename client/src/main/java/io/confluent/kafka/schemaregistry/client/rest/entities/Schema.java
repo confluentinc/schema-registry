@@ -57,8 +57,8 @@ public class Schema implements Comparable<Schema> {
   public static final String SCHEMA_DESC = "Schema definition string";
   public static final String SCHEMA_EXAMPLE = "{\"schema\": \"{\"type\": \"string\"}\"}";
 
-  public static final String TS_DESC = "Timestamp";
-  public static final String TS_EXAMPLE = "1694571755";
+  public static final String TS_DESC = "Timestamp in milliseconds since epoch";
+  public static final String TS_EXAMPLE = "1694571755123";
 
   private String subject;
   private Integer version;
