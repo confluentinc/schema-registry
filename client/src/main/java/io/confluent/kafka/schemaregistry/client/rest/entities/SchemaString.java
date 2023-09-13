@@ -120,7 +120,8 @@ public class SchemaString {
     this.ruleSet = ruleSet;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TS_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TS_DESC,
+      example = Schema.TS_EXAMPLE)
   @JsonProperty("ts")
   public Long getTimestamp() {
     return ts;
