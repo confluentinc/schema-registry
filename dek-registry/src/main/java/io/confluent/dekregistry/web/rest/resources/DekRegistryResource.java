@@ -318,6 +318,11 @@ public class DekRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
+      KeyEncryptionKey kek = dekRegistry.getKek(name, true);
+      if (kek == null) {
+        throw DekRegistryErrors.keyNotFoundException(name);
+      }
+
       dekRegistry.deleteKekOrForward(name, permanentDelete, headerProperties);
       asyncResponse.resume(Response.status(204).build());
     } catch (KeyNotSoftDeletedException e) {
@@ -358,6 +363,15 @@ public class DekRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
+      KeyEncryptionKey kek = dekRegistry.getKek(kekName, true);
+      if (kek == null) {
+        throw DekRegistryErrors.keyNotFoundException(kekName);
+      }
+      DataEncryptionKey key = dekRegistry.getDek(kekName, subject, algorithm, true);
+      if (key == null) {
+        throw DekRegistryErrors.keyNotFoundException(subject);
+      }
+
       dekRegistry.deleteDekOrForward(
           kekName, subject, algorithm, permanentDelete, headerProperties);
       asyncResponse.resume(Response.status(204).build());
