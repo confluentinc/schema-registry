@@ -427,6 +427,8 @@ public class DekRegistry implements Closeable {
     KeyEncryptionKey key = new KeyEncryptionKey(request.getName(), kmsType,
         request.getKmsKeyId(), kmsProps, request.getDoc(), request.isShared(), false);
     keys.put(keyId, key);
+    // Retrieve key with ts set
+    key = (KeyEncryptionKey) keys.get(keyId);
     return key;
   }
 
@@ -516,6 +518,8 @@ public class DekRegistry implements Closeable {
       }
     }
     keys.put(keyId, key);
+    // Retrieve key with ts set
+    key = (DataEncryptionKey) keys.get(keyId);
     if (kek.isShared()) {
       key = generateRawDek(kek, key);
     }
@@ -551,10 +555,11 @@ public class DekRegistry implements Closeable {
       String rawDekStr =
           new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
       // Copy dek
-      key = new DataEncryptionKey(key.getKekName(), key.getSubject(), key.getVersion(),
-          key.getAlgorithm(), key.getEncryptedKeyMaterial(), key.isDeleted());
-      key.setKeyMaterial(rawDekStr);
-      return key;
+      DataEncryptionKey newKey = new DataEncryptionKey(key.getKekName(), key.getSubject(),
+          key.getVersion(), key.getAlgorithm(), key.getEncryptedKeyMaterial(), key.isDeleted());
+      newKey.setKeyMaterial(rawDekStr);
+      newKey.setTimestamp(key.getTimestamp());
+      return newKey;
     } catch (GeneralSecurityException e) {
       log.error("Could not generate raw dek for " + key.getSubject(), e);
       throw new DekGenerationException("Could not generate raw dek for " + key.getSubject());
@@ -624,6 +629,8 @@ public class DekRegistry implements Closeable {
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
         key.getKmsKeyId(), kmsProps, doc, shared, false);
     keys.put(keyId, newKey);
+    // Retrieve key with ts set
+    newKey = (KeyEncryptionKey) keys.get(keyId);
     return newKey;
   }
 
