@@ -17,6 +17,8 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -33,6 +35,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,6 +92,8 @@ public class SchemasResource {
       @Parameter(description =
           "Whether to return latest schema versions only for each matching subject")
       @DefaultValue("false") @QueryParam("latestOnly") boolean latestOnly,
+      @Parameter(description = "Filters results by the given rule type")
+      @DefaultValue("") @QueryParam("ruleType") String ruleType,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
@@ -98,7 +103,11 @@ public class SchemasResource {
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
     LookupFilter filter = lookupDeletedSchema ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT;
     try {
-      schemas = schemaRegistry.getVersionsWithSubjectPrefix(subjectPrefix, filter, latestOnly);
+      Predicate<Schema> postFilter = ruleType != null && !ruleType.isEmpty()
+          ? schema -> hasRuleType(schema, ruleType)
+          : null;
+      schemas = schemaRegistry.getVersionsWithSubjectPrefix(
+          subjectPrefix, filter, latestOnly, postFilter);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -115,6 +124,25 @@ public class SchemasResource {
       index++;
     }
     return filteredSchemas;
+  }
+
+  private boolean hasRuleType(Schema schema, String ruleType) {
+    RuleSet ruleSet = schema.getRuleSet();
+    if (ruleSet == null
+        || (ruleSet.getDomainRules().isEmpty() && ruleSet.getMigrationRules().isEmpty())) {
+      return false;
+    }
+    for (Rule rule : ruleSet.getDomainRules()) {
+      if (ruleType.equals(rule.getType())) {
+        return true;
+      }
+    }
+    for (Rule rule : ruleSet.getMigrationRules()) {
+      if (ruleType.equals(rule.getType())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @GET
