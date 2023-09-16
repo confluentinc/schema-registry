@@ -832,13 +832,14 @@ public class RestService implements Closeable, Configurable {
       boolean latestOnly)
       throws IOException, RestClientException {
     return getSchemas(DEFAULT_REQUEST_PROPERTIES,
-        subjectPrefix, lookupDeletedSchema, latestOnly, null, null);
+        subjectPrefix, lookupDeletedSchema, latestOnly, null, null, null);
   }
 
   public List<Schema> getSchemas(Map<String, String> requestProperties,
       String subjectPrefix,
       boolean lookupDeletedSchema,
       boolean latestOnly,
+      String ruleType,
       Integer offset,
       Integer limit)
       throws IOException, RestClientException {
@@ -848,6 +849,9 @@ public class RestService implements Closeable, Configurable {
     }
     builder.queryParam("deleted", lookupDeletedSchema);
     builder.queryParam("latestOnly", latestOnly);
+    if (ruleType != null) {
+      builder.queryParam("ruleType", ruleType);
+    }
     if (offset != null) {
       builder.queryParam("offset", offset);
     }
