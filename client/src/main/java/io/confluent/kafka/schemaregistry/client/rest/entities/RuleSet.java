@@ -81,6 +81,11 @@ public class RuleSet {
     }
   }
 
+  public boolean hasRulesWithType(String type) {
+    return getDomainRules().stream().anyMatch(r -> type.equals(r.getType()))
+        || getMigrationRules().stream().anyMatch(r -> type.equals(r.getType()));
+  }
+
   public boolean equals(Object o) {
     if (this == o) {
       return true;
