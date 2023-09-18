@@ -263,7 +263,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       schemas = schemaRegistry.getVersionsWithSubjectPrefix(
           subjectPrefix,
           lookupDeletedSchema ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT,
-          latestOnly);
+          latestOnly,
+          null);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
