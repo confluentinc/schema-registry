@@ -327,14 +327,13 @@ public class Schema implements Comparable<Schema> {
         && Objects.equals(references, schema1.references)
         && Objects.equals(metadata, schema1.metadata)
         && Objects.equals(ruleSet, schema1.ruleSet)
-        && Objects.equals(schema, schema1.schema)
-        && Objects.equals(ts, schema1.ts);
+        && Objects.equals(schema, schema1.schema);
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(
-        subject, version, id, schemaType, references, metadata, ruleSet, schema, ts);
+        subject, version, id, schemaType, references, metadata, ruleSet, schema);
   }
 
   @Override
