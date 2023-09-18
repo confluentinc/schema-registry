@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import java.util.function.Predicate;
 
 public interface SchemaRegistry extends SchemaVersionFetcher {
 
@@ -71,7 +72,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       throws SchemaRegistryException;
 
   Iterator<Schema> getVersionsWithSubjectPrefix(
-      String prefix, LookupFilter filter, boolean latestOnly)
+      String prefix, LookupFilter filter, boolean latestOnly, Predicate<Schema> postFilter)
       throws SchemaRegistryException;
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
