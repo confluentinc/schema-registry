@@ -161,12 +161,11 @@ public class SchemaString {
         && Objects.equals(references, that.references)
         && Objects.equals(metadata, that.metadata)
         && Objects.equals(ruleSet, that.ruleSet)
-        && Objects.equals(ts, that.ts)
         && Objects.equals(maxId, that.maxId);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaType, schemaString, references, metadata, ruleSet, ts, maxId);
+    return Objects.hash(schemaType, schemaString, references, metadata, ruleSet, maxId);
   }
 }
