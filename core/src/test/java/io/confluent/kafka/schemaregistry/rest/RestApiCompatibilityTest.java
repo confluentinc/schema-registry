@@ -532,7 +532,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         config,
         restApp.restClient.updateConfig(config, null));
 
-    Rule r2 = new Rule("bar", null, null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, null, false);
+    Rule r2 = new Rule("bar", null, null, RuleMode.UPGRADE, "type1", null, null, null, null, null, false);
     rules = Collections.singletonList(r2);
     ruleSet = new RuleSet(rules, null);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
@@ -551,6 +551,14 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         restApp.restClient.lookUpSubjectVersion(
             new RegisterSchemaRequest(
                 new Schema(subject, response)), subject, false, false).getVersion());
+
+
+    List<Schema> schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, false, "type1", null, null);
+    assertEquals(1, schemas.size());
+    schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, true, "type1", null, null);
+    assertEquals(1, schemas.size());
 
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
@@ -596,6 +604,13 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     assertEquals("foo", ruleSet2.getMigrationRules().get(0).getName());
     assertEquals("bar", ruleSet2.getMigrationRules().get(1).getName());
 
+    schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, false, "type1", null, null);
+    assertEquals(2, schemas.size());
+    schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, true, "type1", null, null);
+    assertEquals(1, schemas.size());
+
     // re-register
     response = restApp.restClient.registerSchema(request2, subject, false);
     assertEquals("Registering should succeed",
@@ -612,7 +627,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"},"
         + " {\"type\":\"string\",\"name\":\"f3\"}]}");
-    Rule r3 = new Rule("zap", null, null, RuleMode.UPGRADE, "IGNORE", null, null, null, null, null, false);
+    Rule r3 = new Rule("zap", null, null, RuleMode.UPGRADE, "type2", null, null, null, null, null, false);
     rules = Collections.singletonList(r3);
     ruleSet = new RuleSet(rules, null);
     RegisterSchemaRequest request3 = new RegisterSchemaRequest(schema3);
@@ -636,6 +651,19 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     ruleSet3 = schemaString.getRuleSet();
     assertEquals("foo", ruleSet3.getMigrationRules().get(0).getName());
     assertEquals("zap", ruleSet3.getMigrationRules().get(1).getName());
+
+    schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, false, "type1", null, null);
+    assertEquals(2, schemas.size());
+    schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, false, "type2", null, null);
+    assertEquals(1, schemas.size());
+    schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, true, "type1", null, null);
+    assertEquals(0, schemas.size());
+    schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, true, "type2", null, null);
+    assertEquals(1, schemas.size());
   }
 
   @Test

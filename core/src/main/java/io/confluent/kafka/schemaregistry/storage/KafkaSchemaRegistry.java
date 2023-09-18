@@ -15,10 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.github.benmanes.caffeine.cache.CacheLoader;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
@@ -90,6 +90,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -203,7 +204,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
     this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
     this.providers = initProviders(config);
-    this.schemaCache = CacheBuilder.newBuilder()
+    this.schemaCache = Caffeine.newBuilder()
         .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
         .expireAfterAccess(
             config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
@@ -1412,7 +1413,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         parsedSchema = parsedSchema.copy(schema.getVersion());
       }
       return parsedSchema;
-    } catch (ExecutionException e) {
+    } catch (Exception e) {
       Throwable cause = e.getCause();
       if (cause instanceof InvalidSchemaException) {
         throw (InvalidSchemaException) cause;
@@ -1736,10 +1737,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public Iterator<Schema> getVersionsWithSubjectPrefix(String prefix,
                                                        LookupFilter filter,
-                                                       boolean returnLatestOnly)
+                                                       boolean returnLatestOnly,
+                                                       Predicate<Schema> postFilter)
       throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
-      return sortSchemasByVersion(allVersions, filter, returnLatestOnly)
+      return sortSchemasByVersion(allVersions, filter, returnLatestOnly, postFilter)
           .iterator();
     }
   }
@@ -2160,7 +2162,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private List<Schema> sortSchemasByVersion(CloseableIterator<SchemaRegistryValue> schemas,
                                             LookupFilter filter,
-                                            boolean returnLatestOnly) {
+                                            boolean returnLatestOnly,
+                                            Predicate<Schema> postFilter) {
     List<Schema> schemaList = new ArrayList<>();
     Schema previousSchema = null;
     while (schemas.hasNext()) {
@@ -2185,6 +2188,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (lastSchema == null || !lastSchema.getSubject().equals(previousSchema.getSubject())) {
         schemaList.add(previousSchema);
       }
+    }
+    if (postFilter != null) {
+      schemaList = schemaList.stream()
+          .filter(postFilter)
+          .collect(Collectors.toList());
     }
     Collections.sort(schemaList);
     return schemaList;
