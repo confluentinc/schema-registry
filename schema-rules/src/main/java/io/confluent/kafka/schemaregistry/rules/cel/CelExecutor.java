@@ -109,8 +109,9 @@ public class CelExecutor implements RuleExecutor {
                 scriptBuilder = scriptBuilder.withTypes(ruleWithArgs.getJsonClass());
                 break;
               case PROTOBUF:
+                // Use buildPartial to ignore missing required fields
                 scriptBuilder = scriptBuilder.withTypes(
-                    DynamicMessage.newBuilder(ruleWithArgs.getProtobufDesc()).build());
+                    DynamicMessage.newBuilder(ruleWithArgs.getProtobufDesc()).buildPartial());
                 break;
               default:
                 throw new IllegalArgumentException("Unsupported type " + ruleWithArgs.getType());

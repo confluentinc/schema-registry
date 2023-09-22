@@ -60,6 +60,8 @@ import io.confluent.kafka.schemaregistry.rules.PiiProto;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Kind;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
+import io.confluent.kafka.schemaregistry.rules.WidgetProto2;
+import io.confluent.kafka.schemaregistry.rules.WidgetProto2.Widget2;
 import io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -99,6 +101,7 @@ public class CelExecutorTest {
   private final KafkaAvroSerializer reflectionAvroSerializer;
   private final KafkaAvroDeserializer reflectionAvroDeserializer;
   private final KafkaProtobufSerializer<Widget> protobufSerializer;
+  private final KafkaProtobufSerializer<Widget2> protobuf2Serializer;
   private final KafkaProtobufSerializer<WidgetWithRef> protobufWithRefSerializer;
   private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
@@ -161,6 +164,7 @@ public class CelExecutorTest {
     reflectionAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, reflectionProps);
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
+    protobuf2Serializer = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
     protobufWithRefSerializer = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
     protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, defaultConfig);
 
@@ -961,6 +965,47 @@ public class CelExecutorTest {
     schemaRegistry.register(topic + "-value", protobufSchema);
 
     bytes = protobufSerializer.serialize(topic, widget);
+    obj = protobufDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Widget",
+        DynamicMessage.class.isInstance(obj)
+    );
+    DynamicMessage dynamicMessage = (DynamicMessage) obj;
+    Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
+    );
+  }
+
+  @Test
+  public void testKafkaProtobuf2Serializer() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    Widget2 widget = Widget2.newBuilder()
+        .setName("alice")
+        .setKind(WidgetProto2.Kind.ONE)
+        .addSsn("123")
+        .addSsn("456")
+        .addPiiArray(WidgetProto2.Pii.newBuilder().setPii("789").build())
+        .addPiiArray(WidgetProto2.Pii.newBuilder().setPii("012").build())
+        .putPiiMap("key1", WidgetProto2.Pii.newBuilder().setPii("345").build())
+        .putPiiMap("key2", WidgetProto2.Pii.newBuilder().setPii("678").build())
+        .setSize(123)
+        .build();
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITEREAD,
+        CelExecutor.TYPE, null, null,
+        "message.name == \"alice\" && size(message.name) == 5 && message.kind == 1",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+
+    protobufSchema = protobufSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    bytes = protobuf2Serializer.serialize(topic, widget);
     obj = protobufDeserializer.deserialize(topic, bytes);
     assertTrue(
         "Returned object should be a Widget",
