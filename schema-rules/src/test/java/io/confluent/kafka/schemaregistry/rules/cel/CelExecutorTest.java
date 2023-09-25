@@ -60,6 +60,8 @@ import io.confluent.kafka.schemaregistry.rules.PiiProto;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Kind;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
+import io.confluent.kafka.schemaregistry.rules.WidgetProto2;
+import io.confluent.kafka.schemaregistry.rules.WidgetProto2.Widget2;
 import io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -99,6 +101,7 @@ public class CelExecutorTest {
   private final KafkaAvroSerializer reflectionAvroSerializer;
   private final KafkaAvroDeserializer reflectionAvroDeserializer;
   private final KafkaProtobufSerializer<Widget> protobufSerializer;
+  private final KafkaProtobufSerializer<Widget2> protobuf2Serializer;
   private final KafkaProtobufSerializer<WidgetWithRef> protobufWithRefSerializer;
   private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
@@ -161,6 +164,7 @@ public class CelExecutorTest {
     reflectionAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, reflectionProps);
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
+    protobuf2Serializer = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
     protobufWithRefSerializer = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
     protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, defaultConfig);
 
@@ -576,7 +580,7 @@ public class CelExecutorTest {
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         OldWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
@@ -611,7 +615,7 @@ public class CelExecutorTest {
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         OldWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
@@ -685,7 +689,7 @@ public class CelExecutorTest {
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         OldWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
@@ -734,7 +738,7 @@ public class CelExecutorTest {
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         OldWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
@@ -771,7 +775,7 @@ public class CelExecutorTest {
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         OldWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
@@ -809,7 +813,7 @@ public class CelExecutorTest {
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         OldWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
@@ -855,7 +859,7 @@ public class CelExecutorTest {
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         OldWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
@@ -963,6 +967,47 @@ public class CelExecutorTest {
     bytes = protobufSerializer.serialize(topic, widget);
     obj = protobufDeserializer.deserialize(topic, bytes);
     assertTrue(
+        "Returned object does not match",
+        DynamicMessage.class.isInstance(obj)
+    );
+    DynamicMessage dynamicMessage = (DynamicMessage) obj;
+    Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
+    assertEquals(
+        "Returned object does not match",
+        "alice",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
+    );
+  }
+
+  @Test
+  public void testKafkaProtobuf2Serializer() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    Widget2 widget = Widget2.newBuilder()
+        .setName("alice")
+        .setKind(WidgetProto2.Kind.ONE)
+        .addSsn("123")
+        .addSsn("456")
+        .addPiiArray(WidgetProto2.Pii.newBuilder().setPii("789").build())
+        .addPiiArray(WidgetProto2.Pii.newBuilder().setPii("012").build())
+        .putPiiMap("key1", WidgetProto2.Pii.newBuilder().setPii("345").build())
+        .putPiiMap("key2", WidgetProto2.Pii.newBuilder().setPii("678").build())
+        .setSize(123)
+        .build();
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITEREAD,
+        CelExecutor.TYPE, null, null,
+        "message.name == \"alice\" && size(message.name) == 5 && message.kind == 1",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+
+    protobufSchema = protobufSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    bytes = protobuf2Serializer.serialize(topic, widget);
+    obj = protobufDeserializer.deserialize(topic, bytes);
+    assertTrue(
         "Returned object should be a Widget",
         DynamicMessage.class.isInstance(obj)
     );
@@ -1002,18 +1047,18 @@ public class CelExecutorTest {
 
     obj = protobufDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         DynamicMessage.class.isInstance(obj)
     );
     DynamicMessage dynamicMessage = (DynamicMessage) obj;
     Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice-suffix",
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("123-suffix", "456-suffix"),
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("ssn"))
     );
@@ -1025,7 +1070,7 @@ public class CelExecutorTest {
         })
         .collect(Collectors.toList());
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("789-suffix", "012-suffix"),
         ssnArrayValues
     );
@@ -1038,7 +1083,7 @@ public class CelExecutorTest {
         })
         .collect(Collectors.toList());
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("345-suffix", "678-suffix"),
         ssnMapValues
     );
@@ -1074,23 +1119,23 @@ public class CelExecutorTest {
 
     obj = protobufDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         DynamicMessage.class.isInstance(obj)
     );
     DynamicMessage dynamicMessage = (DynamicMessage) obj;
     Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice-suffix",
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "smith-suffix",
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("lastName"))
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("123-suffix", "456-suffix"),
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("ssn"))
     );
@@ -1102,7 +1147,7 @@ public class CelExecutorTest {
         })
         .collect(Collectors.toList());
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("789-suffix", "012-suffix"),
         ssnArrayValues
     );
@@ -1115,7 +1160,7 @@ public class CelExecutorTest {
         })
         .collect(Collectors.toList());
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("345-suffix", "678-suffix"),
         ssnMapValues
     );
@@ -1188,54 +1233,54 @@ public class CelExecutorTest {
 
     obj = protobufDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         DynamicMessage.class.isInstance(obj)
     );
     DynamicMessage dynamicMessage = (DynamicMessage) obj;
     Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice",
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice smith",
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("fullName"))
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ByteString.copyFrom(new byte[]{1}),
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("mybytes"))
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         2,
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("myint"))
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         3L,
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("mylong"))
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         4f,
         (Float) ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("myfloat")),
         0.1
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         5d,
         (Double) ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("mydouble")),
         0.1
     );
     assertFalse(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         (Boolean) ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("myboolean"))
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("123", "456"),
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("ssn"))
     );
@@ -1247,7 +1292,7 @@ public class CelExecutorTest {
         })
         .collect(Collectors.toList());
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("789", "012"),
         ssnArrayValues
     );
@@ -1260,7 +1305,7 @@ public class CelExecutorTest {
         })
         .collect(Collectors.toList());
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("345", "678"),
         ssnMapValues
     );
@@ -1297,18 +1342,18 @@ public class CelExecutorTest {
 
     obj = protobufDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         DynamicMessage.class.isInstance(obj)
     );
     DynamicMessage dynamicMessage = (DynamicMessage) obj;
     Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice-suffix",
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("123-suffix", "456-suffix"),
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("ssn"))
     );
@@ -1320,7 +1365,7 @@ public class CelExecutorTest {
         })
         .collect(Collectors.toList());
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("789-suffix", "012-suffix"),
         ssnArrayValues
     );
@@ -1333,7 +1378,7 @@ public class CelExecutorTest {
         })
         .collect(Collectors.toList());
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("345-suffix", "678-suffix"),
         ssnMapValues
     );
@@ -1366,13 +1411,13 @@ public class CelExecutorTest {
     bytes = protobufSerializer.serialize(topic, widget);
     obj = protobufDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         DynamicMessage.class.isInstance(obj)
     );
     DynamicMessage dynamicMessage = (DynamicMessage) obj;
     Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "Bob",
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
     );
@@ -1405,18 +1450,18 @@ public class CelExecutorTest {
     bytes = protobufSerializer.serialize(topic, widget);
     obj = protobufDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         DynamicMessage.class.isInstance(obj)
     );
     DynamicMessage dynamicMessage = (DynamicMessage) obj;
     Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice",
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("123", "456"),
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("ssn"))
     );
@@ -1428,7 +1473,7 @@ public class CelExecutorTest {
         })
         .collect(Collectors.toList());
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("789", "012"),
         ssnArrayValues
     );
@@ -1441,7 +1486,7 @@ public class CelExecutorTest {
         })
         .collect(Collectors.toList());
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ImmutableList.of("345", "678"),
         ssnMapValues
     );
@@ -1489,11 +1534,11 @@ public class CelExecutorTest {
 
     obj = jsonSchemaDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         JsonNode.class.isInstance(obj)
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice",
         ((JsonNode)obj).get("name").textValue()
     );
@@ -1540,31 +1585,31 @@ public class CelExecutorTest {
 
     obj = jsonSchemaDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         JsonNode.class.isInstance(obj)
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice-suffix",
         ((JsonNode)obj).get("name").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "123-suffix",
         ((JsonNode)obj).get("ssn").get(0).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "456-suffix",
         ((JsonNode)obj).get("ssn").get(1).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "789-suffix",
         ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "012-suffix",
         ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
     );
@@ -1614,36 +1659,36 @@ public class CelExecutorTest {
 
     obj = jsonSchemaDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         JsonNode.class.isInstance(obj)
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice-suffix",
         ((JsonNode)obj).get("name").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "smith-suffix",
         ((JsonNode)obj).get("lastName").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "123-suffix",
         ((JsonNode)obj).get("ssn").get(0).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "456-suffix",
         ((JsonNode)obj).get("ssn").get(1).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "789-suffix",
         ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "012-suffix",
         ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
     );
@@ -1724,62 +1769,62 @@ public class CelExecutorTest {
 
     obj = jsonSchemaDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         JsonNode.class.isInstance(obj)
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice",
         ((JsonNode)obj).get("name").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice smith",
         ((JsonNode)obj).get("fullName").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         2,
         ((JsonNode)obj).get("myint").intValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         3L,
         ((JsonNode)obj).get("mylong").longValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         4f,
         ((JsonNode)obj).get("myfloat").floatValue(),
         0.1
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         5d,
         ((JsonNode)obj).get("mydouble").doubleValue(),
         0.1
     );
     assertFalse(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ((JsonNode)obj).get("myboolean").booleanValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "123",
         ((JsonNode)obj).get("ssn").get(0).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "456",
         ((JsonNode)obj).get("ssn").get(1).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "789",
         ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "012",
         ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
     );
@@ -1831,31 +1876,31 @@ public class CelExecutorTest {
 
     obj = jsonSchemaDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         JsonNode.class.isInstance(obj)
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice-suffix",
         ((JsonNode)obj).get("name").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "123-suffix",
         ((JsonNode)obj).get("ssn").get(0).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "456-suffix",
         ((JsonNode)obj).get("ssn").get(1).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "789-suffix",
         ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "012-suffix",
         ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
     );
@@ -1895,31 +1940,31 @@ public class CelExecutorTest {
 
     obj = jsonSchemaDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         JsonNode.class.isInstance(obj)
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice-suffix",
         ((JsonNode)obj).get("name").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "123-suffix",
         ((JsonNode)obj).get("ssn").get(0).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "456-suffix",
         ((JsonNode)obj).get("ssn").get(1).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "789-suffix",
         ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "012-suffix",
         ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
     );
@@ -1966,11 +2011,11 @@ public class CelExecutorTest {
 
     obj = jsonSchemaDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         JsonNode.class.isInstance(obj)
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "Bob",
         ((JsonNode)obj).get("name").textValue()
     );
@@ -2017,11 +2062,11 @@ public class CelExecutorTest {
 
     obj = jsonSchemaDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         JsonNode.class.isInstance(obj)
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice",
         ((JsonNode)obj).get("name").textValue()
     );
@@ -2071,11 +2116,11 @@ public class CelExecutorTest {
 
     obj = jsonSchemaDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         JsonNode.class.isInstance(obj)
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice",
         ((JsonNode)obj).get("name").textValue()
     );
@@ -2124,31 +2169,31 @@ public class CelExecutorTest {
 
     obj = jsonSchemaDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         JsonNode.class.isInstance(obj)
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice-suffix",
         ((JsonNode)obj).get("name").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "123-suffix",
         ((JsonNode)obj).get("ssn").get(0).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "456-suffix",
         ((JsonNode)obj).get("ssn").get(1).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "789-suffix",
         ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "012-suffix",
         ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
     );
@@ -2231,62 +2276,62 @@ public class CelExecutorTest {
 
     obj = jsonSchemaDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a Widget",
+        "Returned object does not match",
         JsonNode.class.isInstance(obj)
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice",
         ((JsonNode)obj).get("name").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "alice smith",
         ((JsonNode)obj).get("fullName").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         2,
         ((JsonNode)obj).get("myint").intValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         3L,
         ((JsonNode)obj).get("mylong").longValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         4f,
         ((JsonNode)obj).get("myfloat").floatValue(),
         0.1
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         5d,
         ((JsonNode)obj).get("mydouble").doubleValue(),
         0.1
     );
     assertFalse(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         ((JsonNode)obj).get("myboolean").booleanValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "123",
         ((JsonNode)obj).get("ssn").get(0).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "456",
         ((JsonNode)obj).get("ssn").get(1).textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "789",
         ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
     );
     assertEquals(
-        "Returned object should be a NewWidget",
+        "Returned object does not match",
         "012",
         ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
     );
