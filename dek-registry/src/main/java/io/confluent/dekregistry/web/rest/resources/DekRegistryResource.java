@@ -182,7 +182,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
           content = @Content(schema = @Schema(implementation = Kek.class))),
   })
   @PerformanceMetric("keks.create")
-  @DocumentedName("createKek")
+  @DocumentedName("registerKek")
   public void createKek(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
@@ -221,7 +221,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
           content = @Content(schema = @Schema(implementation = Dek.class))),
   })
   @PerformanceMetric("deks.create")
-  @DocumentedName("createDek")
+  @DocumentedName("registerDek")
   public void createDek(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
@@ -301,7 +301,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
   })
   @PerformanceMetric("keks.delete")
-  @DocumentedName("deleteKek")
+  @DocumentedName("deregisterKek")
   public void deleteKek(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
@@ -341,7 +341,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
   })
   @PerformanceMetric("deks.delete")
-  @DocumentedName("deleteDek")
+  @DocumentedName("deregisterDek")
   public void deleteDek(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
