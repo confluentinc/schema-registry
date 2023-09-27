@@ -141,7 +141,7 @@ public class CelExecutorTest {
         "dlq-topic");
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel.param." + DlqAction.PRODUCER,
         producer);
-    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel.param." + DlqAction.AUTO_FLUSH,
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel.param." + DlqAction.DLQ_AUTO_FLUSH,
         true);
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.class",
         DlqAction.class.getName());
@@ -149,7 +149,7 @@ public class CelExecutorTest {
         "dlq-topic2");
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.param." + DlqAction.PRODUCER,
         producer2);
-    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.param." + DlqAction.AUTO_FLUSH,
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.param." + DlqAction.DLQ_AUTO_FLUSH,
         true);
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, defaultConfig);
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, defaultConfig);
