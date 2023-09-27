@@ -53,7 +53,6 @@ public class DlqAction implements RuleAction {
   public static final String RULE_TOPIC = HEADER_PREFIX + "topic";
   public static final String RULE_EXCEPTION = HEADER_PREFIX + "exception";
 
-  public static final String TOPIC = "topic";
   public static final String AUTO_FLUSH = "auto.flush";
   public static final String PRODUCER = "producer";  // for testing
 
@@ -77,7 +76,7 @@ public class DlqAction implements RuleAction {
   @SuppressWarnings("unchecked")
   public void configure(Map<String, ?> configs) {
     this.configs = configs;
-    this.topic = (String) configs.get(TOPIC);
+    this.topic = (String) configs.get(DLQ_TOPIC);
     Object autoFlushConfig = configs.get(AUTO_FLUSH);
     if (autoFlushConfig != null) {
       this.autoFlush = Boolean.parseBoolean(autoFlushConfig.toString());

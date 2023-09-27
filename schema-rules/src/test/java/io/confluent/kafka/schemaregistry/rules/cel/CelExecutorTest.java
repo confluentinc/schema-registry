@@ -137,7 +137,7 @@ public class CelExecutorTest {
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS, "cel,cel_field");
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel.class",
         DlqAction.class.getName());
-    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel.param." + DlqAction.TOPIC,
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel.param." + DlqAction.DLQ_TOPIC,
         "dlq-topic");
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel.param." + DlqAction.PRODUCER,
         producer);
@@ -145,7 +145,7 @@ public class CelExecutorTest {
         true);
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.class",
         DlqAction.class.getName());
-    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.param." + DlqAction.TOPIC,
+    defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.param." + DlqAction.DLQ_TOPIC,
         "dlq-topic2");
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.param." + DlqAction.PRODUCER,
         producer2);
