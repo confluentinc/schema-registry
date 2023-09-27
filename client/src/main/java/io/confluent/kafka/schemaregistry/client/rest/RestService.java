@@ -57,6 +57,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
@@ -674,11 +675,12 @@ public class RestService implements Closeable, Configurable {
         httpRequest(path, "POST",
                     registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
                     requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
-    if (verbose) {
-      return response.getMessages() == null ? Collections.emptyList() : response.getMessages();
+    if (response.getIsCompatible()) {
+      return Collections.emptyList();
     } else {
-      return response.getIsCompatible()
-              ? Collections.emptyList() : Collections.singletonList("Schemas are incompatible");
+      return Optional.ofNullable(response.getMessages())
+              .filter(it -> !it.isEmpty())
+              .orElseGet(() -> Collections.singletonList("Schemas are incompatible"));
     }
   }
 
