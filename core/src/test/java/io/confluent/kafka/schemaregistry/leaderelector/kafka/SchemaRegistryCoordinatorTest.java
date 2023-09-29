@@ -78,6 +78,7 @@ public class SchemaRegistryCoordinatorTest {
   private int rebalanceTimeoutMs = 60;
   private int heartbeatIntervalMs = 2;
   private long retryBackoffMs = 100;
+  private long retryBackoffMaxMs = 1000;
   private MockTime time;
   private MockClient client;
   private Cluster cluster = TestUtils.singletonCluster("topic", 1);
@@ -91,7 +92,7 @@ public class SchemaRegistryCoordinatorTest {
   @Before
   public void setup() {
     this.time = new MockTime();
-    this.metadata = new Metadata(0, Long.MAX_VALUE, new LogContext(), new ClusterResourceListeners());
+    this.metadata = new Metadata(0, Long.MAX_VALUE, Long.MAX_VALUE, new LogContext(), new ClusterResourceListeners());
     this.client = new MockClient(time, new MockClient.MockMetadataUpdater() {
       @Override
       public List<Node> fetchNodes() {
@@ -125,6 +126,7 @@ public class SchemaRegistryCoordinatorTest {
         "sr-" + groupId,
         time,
         retryBackoffMs,
+        retryBackoffMaxMs,
         LEADER_INFO,
         rebalanceListener,
         null
