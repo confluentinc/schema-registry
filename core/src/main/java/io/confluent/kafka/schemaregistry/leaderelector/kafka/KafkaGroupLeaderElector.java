@@ -109,8 +109,12 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
 
       this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
       this.retryBackoffMs = clientConfig.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
+      // Temporary build fix
+      this.retryBackoffMaxMs = this.retryBackoffMs;
+      /*
       this.retryBackoffMaxMs =
           clientConfig.getLong(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG);
+      */
       String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
       LogContext logContext = new LogContext("[Schema registry clientId=" + clientId + ", groupId="
           + groupId + "] ");
