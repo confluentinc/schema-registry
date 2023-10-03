@@ -52,6 +52,7 @@ public class Kek {
   private final String doc;
   private final boolean shared;
   private final Long timestamp;
+  private final Boolean deleted;
 
   @JsonCreator
   public Kek(
@@ -61,7 +62,8 @@ public class Kek {
       @JsonProperty("kmsProps") Map<String, String> kmsProps,
       @JsonProperty("doc") String doc,
       @JsonProperty("shared") boolean shared,
-      @JsonProperty("ts") Long timestamp
+      @JsonProperty("ts") Long timestamp,
+      @JsonProperty("deleted") Boolean deleted
   ) {
     this.name = name;
     this.kmsType = kmsType;
@@ -73,6 +75,7 @@ public class Kek {
     this.doc = doc;
     this.shared = shared;
     this.timestamp = timestamp;
+    this.deleted = deleted;
   }
 
   @JsonProperty("name")
@@ -108,6 +111,16 @@ public class Kek {
   @JsonProperty("ts")
   public Long getTimestamp() {
     return this.timestamp;
+  }
+
+  @JsonProperty("deleted")
+  public Boolean getDeleted() {
+    return this.deleted;
+  }
+
+  @JsonIgnore
+  public boolean isDeleted() {
+    return Boolean.TRUE.equals(this.deleted);
   }
 
   @JsonIgnore

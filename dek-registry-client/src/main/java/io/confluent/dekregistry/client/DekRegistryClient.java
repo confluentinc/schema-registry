@@ -41,10 +41,19 @@ public interface DekRegistryClient extends Closeable {
   List<String> listDeks(String kekName, boolean lookupDeleted)
       throws IOException, RestClientException;
 
-  Dek getDek(String kekName, String subject, boolean lookupDeleted)
+  List<Integer> listDekVersions(String kekName, String subject,
+      DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException;
 
   Dek getDek(String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
+      throws IOException, RestClientException;
+
+  Dek getDekVersion(String kekName, String subject, int version,
+      DekFormat algorithm, boolean lookupDeleted)
+      throws IOException, RestClientException;
+
+  Dek getDekLatestVersion(String kekName, String subject,
+      DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException;
 
   Kek createKek(
@@ -63,6 +72,14 @@ public interface DekRegistryClient extends Closeable {
       String encryptedKeyMaterial)
       throws IOException, RestClientException;
 
+  Dek createDek(
+      String kekName,
+      String subject,
+      int version,
+      DekFormat algorithm,
+      String encryptedKeyMaterial)
+      throws IOException, RestClientException;
+
   Kek updateKek(
       String name,
       Map<String, String> kmsProps,
@@ -73,10 +90,20 @@ public interface DekRegistryClient extends Closeable {
   void deleteKek(String kekName, boolean permanentDelete)
       throws IOException, RestClientException;
 
-  void deleteDek(String kekName, String subject, boolean permanentDelete)
+  void deleteDek(String kekName, String subject, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException;
 
-  void deleteDek(String kekName, String subject, DekFormat algorithm, boolean permanentDelete)
+  void deleteDekVersion(String kekName, String subject, int version,
+      DekFormat algorithm, boolean permanentDelete)
+      throws IOException, RestClientException;
+
+  void undeleteKek(String kekName)
+      throws IOException, RestClientException;
+
+  void undeleteDek(String kekName, String subject, DekFormat algorithm)
+      throws IOException, RestClientException;
+
+  void undeleteDekVersion(String kekName, String subject, int version, DekFormat algorithm)
       throws IOException, RestClientException;
 
   void reset();

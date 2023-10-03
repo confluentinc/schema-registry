@@ -116,6 +116,7 @@ public class DataEncryptionKey extends EncryptionKey {
 
   public Dek toDekEntity() {
     return new Dek(
-        kekName, subject, version, algorithm, encryptedKeyMaterial, keyMaterial, timestamp);
+        kekName, subject, version, algorithm, encryptedKeyMaterial, keyMaterial, timestamp,
+        deleted ? true : null);
   }
 }

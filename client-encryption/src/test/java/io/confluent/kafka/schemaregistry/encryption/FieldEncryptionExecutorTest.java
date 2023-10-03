@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TICKER;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 import static org.junit.Assert.assertEquals;
@@ -32,9 +33,11 @@ import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
+import com.google.common.testing.FakeTicker;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
@@ -71,6 +74,8 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -120,12 +125,14 @@ public abstract class FieldEncryptionExecutorTest {
   private final KafkaAvroSerializer badSerializer;
   private final KafkaAvroDeserializer badDeserializer;
   private final String topic;
+  private final FakeTicker fakeTicker = new FakeTicker();
 
   public FieldEncryptionExecutorTest() throws Exception {
     topic = "test";
     List<String> ruleNames = ImmutableList.of("rule1", "rule2");
     fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
     Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties("mock://");
+    clientProps.put(TICKER, fakeTicker);
     schemaRegistry = SchemaRegistryClientFactory.newClient(Collections.singletonList(
         "mock://"),
         1000,
@@ -799,6 +806,40 @@ public abstract class FieldEncryptionExecutorTest {
     } catch (Exception e) {
       assertTrue(e instanceof SerializationException);
     }
+  }
+
+  @Test
+  public void testKafkaAvroDekRotation() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("encrypt.dek.expiry.days", "1"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer, DekFormat.AES256_GCM);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer, DekFormat.AES256_GCM);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
+
+    fakeTicker.advance(Duration.of(2, ChronoUnit.DAYS));
+
+    avroRecord = createUserRecord();
+    cryptor = addSpyToCryptor(avroSerializer, DekFormat.AES256_GCM);
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer, DekFormat.AES256_GCM);
+    record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
   }
 
   @Test

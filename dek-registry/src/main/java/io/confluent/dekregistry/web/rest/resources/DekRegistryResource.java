@@ -15,12 +15,15 @@
 
 package io.confluent.dekregistry.web.rest.resources;
 
+import static io.confluent.dekregistry.storage.DekRegistry.MIN_VERSION;
+
 import com.google.common.base.CharMatcher;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
 import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
+import io.confluent.dekregistry.storage.exceptions.KeySoftDeletedException;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
@@ -33,7 +36,9 @@ import io.confluent.dekregistry.storage.exceptions.KeyReferenceExistsException;
 import io.confluent.dekregistry.storage.exceptions.TooManyKeysException;
 import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.resources.DocumentedName;
 import io.confluent.kafka.schemaregistry.rest.resources.RequestHeaderBuilder;
@@ -41,6 +46,7 @@ import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -88,7 +94,12 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   @GET
-  @Operation(summary = "Get a list of kek names.")
+  @Operation(summary = "Get a list of kek names.", responses = {
+      @ApiResponse(responseCode = "200",
+          description = "List of kek names", content = @Content(
+          array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
+              example = "mykek")))),
+  })
   @PerformanceMetric("keks.list")
   @DocumentedName("getKekNames")
   public List<String> getKekNames(
@@ -123,7 +134,13 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
   @GET
   @Path("/{name}/deks")
-  @Operation(summary = "Get a list of dek subjects.")
+  @Operation(summary = "Get a list of dek subjects.", responses = {
+      @ApiResponse(responseCode = "200",
+          description = "List of dek subjects", content = @Content(
+          array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
+              example = "User")))),
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+  })
   @PerformanceMetric("deks.list")
   @DocumentedName("getDekSubjects")
   public List<String> getDekSubjects(
@@ -134,6 +151,10 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     checkName(kekName);
 
+    KeyEncryptionKey key = dekRegistry.getKek(kekName, lookupDeleted);
+    if (key == null) {
+      throw DekRegistryErrors.keyNotFoundException(kekName);
+    }
     return dekRegistry.getDekSubjects(kekName, lookupDeleted);
   }
 
@@ -164,7 +185,89 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(kekName);
       }
-      DataEncryptionKey key = dekRegistry.getDek(kekName, subject, algorithm, lookupDeleted);
+      DataEncryptionKey key = dekRegistry.getDek(
+          kekName, subject, MIN_VERSION, algorithm, lookupDeleted);
+      if (key == null) {
+        throw DekRegistryErrors.keyNotFoundException(subject);
+      }
+      return key.toDekEntity();
+    } catch (DekGenerationException e) {
+      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while retrieving key", e);
+    }
+  }
+
+  @GET
+  @Path("/{name}/deks/{subject}/versions")
+  @Operation(summary = "List versions of dek.", responses = {
+      @ApiResponse(responseCode = "200",
+          description = "List of version numbers for dek",
+          content = @Content(array = @ArraySchema(
+              schema = @io.swagger.v3.oas.annotations.media.Schema(type = "integer",
+                  format = "int32", example = "1")))),
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+  })
+  @PerformanceMetric("deks.versions.list")
+  @DocumentedName("getAllDekVersions")
+  public List<Integer> getDekVersions(
+      @Parameter(description = "Name of the kek", required = true)
+      @PathParam("name") String kekName,
+      @Parameter(description = "Subject of the dek", required = true)
+      @PathParam("subject") String subject,
+      @Parameter(description = "Algorithm of the dek")
+      @QueryParam("algorithm") DekFormat algorithm,
+      @Parameter(description = "Whether to include deleted keys")
+      @QueryParam("deleted") boolean lookupDeleted) {
+
+    checkName(kekName);
+    checkSubject(subject);
+
+    KeyEncryptionKey kek = dekRegistry.getKek(kekName, lookupDeleted);
+    if (kek == null) {
+      throw DekRegistryErrors.keyNotFoundException(kekName);
+    }
+    return dekRegistry.getDekVersions(kekName, subject, algorithm, lookupDeleted);
+  }
+
+  @GET
+  @Path("/{name}/deks/{subject}/versions/{version}")
+  @Operation(summary = "Get a dek by subject and version.", responses = {
+      @ApiResponse(responseCode = "200", description = "The dek info",
+          content = @Content(schema = @Schema(implementation = Dek.class))),
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
+      @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version")
+  })
+  @PerformanceMetric("deks.versions.get")
+  @DocumentedName("getDekByVersion")
+  public Dek getDekByVersion(
+      @Parameter(description = "Name of the kek", required = true)
+      @PathParam("name") String kekName,
+      @Parameter(description = "Subject of the dek", required = true)
+      @PathParam("subject") String subject,
+      @Parameter(description = "Version of the dek", required = true)
+      @PathParam("version") String version,
+      @Parameter(description = "Algorithm of the dek")
+      @QueryParam("algorithm") DekFormat algorithm,
+      @Parameter(description = "Whether to include deleted keys")
+      @QueryParam("deleted") boolean lookupDeleted) {
+
+    checkName(kekName);
+    checkSubject(subject);
+    VersionId versionId;
+    try {
+      versionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException(e.getMessage());
+    }
+
+    try {
+      KeyEncryptionKey kek = dekRegistry.getKek(kekName, lookupDeleted);
+      if (kek == null) {
+        throw DekRegistryErrors.keyNotFoundException(kekName);
+      }
+      DataEncryptionKey key = dekRegistry.getDek(
+          kekName, subject, versionId.getVersionId(), algorithm, lookupDeleted);
       if (key == null) {
         throw DekRegistryErrors.keyNotFoundException(subject);
       }
@@ -336,13 +439,13 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
   @DELETE
   @Path("/{name}/deks/{subject}")
-  @Operation(summary = "Delete a dek.", responses = {
+  @Operation(summary = "Delete all versions of a dek.", responses = {
       @ApiResponse(responseCode = "204", description = "No Content"),
       @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
   })
   @PerformanceMetric("deks.delete")
-  @DocumentedName("deregisterDek")
-  public void deleteDek(
+  @DocumentedName("deregisterDekVersions")
+  public void deleteDekVersions(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
       @Parameter(description = "Name of the kek", required = true)
@@ -367,7 +470,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(kekName);
       }
-      DataEncryptionKey key = dekRegistry.getDek(kekName, subject, algorithm, true);
+      DataEncryptionKey key = dekRegistry.getLatestDek(kekName, subject, algorithm, true);
       if (key == null) {
         throw DekRegistryErrors.keyNotFoundException(subject);
       }
@@ -379,6 +482,201 @@ public class DekRegistryResource extends SchemaRegistryResource {
       throw DekRegistryErrors.keyNotSoftDeletedException(e.getName());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting key", e);
+    }
+  }
+
+  @DELETE
+  @Path("/{name}/deks/{subject}/versions/{version}")
+  @Operation(summary = "Delete a dek version.", responses = {
+      @ApiResponse(responseCode = "204", description = "No Content"),
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
+      @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version")
+  })
+  @PerformanceMetric("deks.versions.delete")
+  @DocumentedName("deregisterDekVersion")
+  public void deleteDekVersion(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      @Parameter(description = "Name of the kek", required = true)
+      @PathParam("name") String kekName,
+      @Parameter(description = "Subject of the dek", required = true)
+      @PathParam("subject") String subject,
+      @Parameter(description = "Version of the dek", required = true)
+      @PathParam("version") String version,
+      @Parameter(description = "Algorithm of the dek")
+      @QueryParam("algorithm") DekFormat algorithm,
+      @Parameter(description = "Whether to perform a permanent delete")
+      @QueryParam("permanent") boolean permanentDelete) {
+
+    log.debug("Deleting dek {} for kek {}", subject, kekName);
+
+    checkName(kekName);
+    checkSubject(subject);
+    VersionId versionId;
+    try {
+      versionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException(e.getMessage());
+    }
+
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, getSchemaRegistry().config().whitelistHeaders());
+
+    try {
+      KeyEncryptionKey kek = dekRegistry.getKek(kekName, true);
+      if (kek == null) {
+        throw DekRegistryErrors.keyNotFoundException(kekName);
+      }
+      DataEncryptionKey key = dekRegistry.getDek(
+          kekName, subject, versionId.getVersionId(), algorithm, true);
+      if (key == null) {
+        throw DekRegistryErrors.keyNotFoundException(subject);
+      }
+
+      dekRegistry.deleteDekVersionOrForward(
+          kekName, subject, versionId.getVersionId(), algorithm, permanentDelete, headerProperties);
+      asyncResponse.resume(Response.status(204).build());
+    } catch (KeyNotSoftDeletedException e) {
+      throw DekRegistryErrors.keyNotSoftDeletedException(e.getName());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while deleting key", e);
+    }
+  }
+
+  @POST
+  @Path("/{name}/undelete")
+  @Operation(summary = "Undelete a kek.", responses = {
+      @ApiResponse(responseCode = "204", description = "No Content"),
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+  })
+  @PerformanceMetric("keks.undelete")
+  @DocumentedName("undeleteKek")
+  public void undeleteKek(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      @Parameter(description = "Name of the kek", required = true)
+      @PathParam("name") String name) {
+
+    log.debug("Undeleting kek {}", name);
+
+    checkName(name);
+
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, getSchemaRegistry().config().whitelistHeaders());
+
+    try {
+      KeyEncryptionKey kek = dekRegistry.getKek(name, true);
+      if (kek == null) {
+        throw DekRegistryErrors.keyNotFoundException(name);
+      }
+
+      dekRegistry.undeleteKekOrForward(name, headerProperties);
+      asyncResponse.resume(Response.status(204).build());
+    } catch (KeyReferenceExistsException e) {
+      throw DekRegistryErrors.referenceExistsException(e.getMessage());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while deleting key", e);
+    }
+  }
+
+  @POST
+  @Path("/{name}/deks/{subject}/undelete")
+  @Operation(summary = "Undelete all versions of a dek.", responses = {
+      @ApiResponse(responseCode = "204", description = "No Content"),
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+  })
+  @PerformanceMetric("deks.undelete")
+  @DocumentedName("undeleteDekVersions")
+  public void undeleteDekVersions(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      @Parameter(description = "Name of the kek", required = true)
+      @PathParam("name") String kekName,
+      @Parameter(description = "Subject of the dek", required = true)
+      @PathParam("subject") String subject,
+      @Parameter(description = "Algorithm of the dek")
+      @QueryParam("algorithm") DekFormat algorithm) {
+
+    log.debug("Undeleting dek {} for kek {}", subject, kekName);
+
+    checkName(kekName);
+    checkSubject(subject);
+
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, getSchemaRegistry().config().whitelistHeaders());
+
+    try {
+      KeyEncryptionKey kek = dekRegistry.getKek(kekName, true);
+      if (kek == null) {
+        throw DekRegistryErrors.keyNotFoundException(kekName);
+      }
+      DataEncryptionKey key = dekRegistry.getLatestDek(kekName, subject, algorithm, true);
+      if (key == null) {
+        throw DekRegistryErrors.keyNotFoundException(subject);
+      }
+
+      dekRegistry.undeleteDekOrForward(kekName, subject, algorithm, headerProperties);
+      asyncResponse.resume(Response.status(204).build());
+    } catch (KeySoftDeletedException e) {
+      throw DekRegistryErrors.keySoftDeletedException(e.getName());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while deleting key", e);
+    }
+  }
+
+  @POST
+  @Path("/{name}/deks/{subject}/versions/{version}/undelete")
+  @Operation(summary = "Undelete a dek version.", responses = {
+      @ApiResponse(responseCode = "204", description = "No Content"),
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
+      @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version")
+  })
+  @PerformanceMetric("deks.versions.undelete")
+  @DocumentedName("undeleteDekVersion")
+  public void undeleteDekVersion(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      @Parameter(description = "Name of the kek", required = true)
+      @PathParam("name") String kekName,
+      @Parameter(description = "Subject of the dek", required = true)
+      @PathParam("subject") String subject,
+      @Parameter(description = "Version of the dek", required = true)
+      @PathParam("version") String version,
+      @Parameter(description = "Algorithm of the dek")
+      @QueryParam("algorithm") DekFormat algorithm) {
+
+    log.debug("Undeleting dek {} for kek {}", subject, kekName);
+
+    checkName(kekName);
+    checkSubject(subject);
+    VersionId versionId;
+    try {
+      versionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException(e.getMessage());
+    }
+
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, getSchemaRegistry().config().whitelistHeaders());
+
+    try {
+      KeyEncryptionKey kek = dekRegistry.getKek(kekName, true);
+      if (kek == null) {
+        throw DekRegistryErrors.keyNotFoundException(kekName);
+      }
+      DataEncryptionKey key = dekRegistry.getDek(
+          kekName, subject, versionId.getVersionId(), algorithm, true);
+      if (key == null) {
+        throw DekRegistryErrors.keyNotFoundException(subject);
+      }
+
+      dekRegistry.undeleteDekVersionOrForward(
+          kekName, subject, versionId.getVersionId(), algorithm, headerProperties);
+      asyncResponse.resume(Response.status(204).build());
+    } catch (KeySoftDeletedException e) {
+      throw DekRegistryErrors.keySoftDeletedException(e.getName());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while undeleting key", e);
     }
   }
 

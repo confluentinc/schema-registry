@@ -181,8 +181,8 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     assertEquals("testUser", record.get("name").toString());
 
-    dekRegistry.deleteDek("kek1", subject, false);
-    dekRegistry.deleteDek("kek1", subject, true);
+    dekRegistry.deleteDek("kek1", subject, null, false);
+    dekRegistry.deleteDek("kek1", subject, null, true);
 
     Map<String, Object> badClientProps = new HashMap<>(clientProps);
     badClientProps.remove(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS);

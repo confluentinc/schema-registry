@@ -27,6 +27,7 @@ import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
 import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
+import io.confluent.dekregistry.storage.exceptions.KeySoftDeletedException;
 import io.confluent.dekregistry.storage.utils.CompositeCacheUpdateHandler;
 import io.confluent.dekregistry.web.rest.handlers.EncryptionUpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
@@ -268,20 +269,23 @@ public class DekRegistry implements Closeable {
 
   public List<String> getKekNames(boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
-    return getKeks(tenant).stream()
-        .filter(kv -> !kv.value.isDeleted() || lookupDeleted)
+    return getKeks(tenant, lookupDeleted).stream()
         .map(kv -> ((KeyEncryptionKeyId) kv.key).getName())
         .collect(Collectors.toList());
   }
 
-  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getKeks(String tenant) {
+  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getKeks(
+      String tenant, boolean lookupDeleted) {
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     KeyEncryptionKeyId key1 = new KeyEncryptionKeyId(tenant, String.valueOf(Character.MIN_VALUE));
     KeyEncryptionKeyId key2 = new KeyEncryptionKeyId(tenant, String.valueOf(Character.MAX_VALUE));
     try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
         keys().range(key1, true, key2, false)) {
       while (iter.hasNext()) {
-        result.add(iter.next());
+        KeyValue<EncryptionKeyId, EncryptionKey> kv = iter.next();
+        if (!kv.value.isDeleted() || lookupDeleted) {
+          result.add(kv);
+        }
       }
     }
     return result;
@@ -300,30 +304,22 @@ public class DekRegistry implements Closeable {
 
   public List<String> getDekSubjects(String kekName, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
-    return getDeks(tenant, kekName).stream()
-        .filter(kv -> !kv.value.isDeleted() || lookupDeleted)
+    return getDeks(tenant, kekName, lookupDeleted).stream()
         .map(kv -> ((DataEncryptionKeyId) kv.key).getSubject())
+        .distinct()
         .collect(Collectors.toList());
   }
 
-  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(String tenant) {
-    List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
-    DataEncryptionKeyId key1 = new DataEncryptionKeyId(
-        tenant, String.valueOf(Character.MIN_VALUE),
-        String.valueOf(Character.MIN_VALUE), MIN_VERSION, DekFormat.AES128_GCM);
-    DataEncryptionKeyId key2 = new DataEncryptionKeyId(
-        tenant, String.valueOf(Character.MAX_VALUE),
-        String.valueOf(Character.MAX_VALUE), Integer.MAX_VALUE, DekFormat.AES256_SIV);
-    try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
-        keys().range(key1, true, key2, false)) {
-      while (iter.hasNext()) {
-        result.add(iter.next());
-      }
-    }
-    return result;
+  public List<Integer> getDekVersions(
+      String kekName, String subject, DekFormat algorithm, boolean lookupDeleted) {
+    String tenant = schemaRegistry.tenant();
+    return getDeks(tenant, kekName, subject, algorithm, lookupDeleted).stream()
+        .map(kv -> ((DataEncryptionKeyId) kv.key).getVersion())
+        .collect(Collectors.toList());
   }
 
-  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(String tenant, String kekName) {
+  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
+      String tenant, String kekName, boolean lookupDeleted) {
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     DataEncryptionKeyId key1 = new DataEncryptionKeyId(
         tenant, kekName, String.valueOf(Character.MIN_VALUE),
@@ -334,20 +330,58 @@ public class DekRegistry implements Closeable {
     try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
         keys().range(key1, true, key2, false)) {
       while (iter.hasNext()) {
-        result.add(iter.next());
+        KeyValue<EncryptionKeyId, EncryptionKey> kv = iter.next();
+        if (!kv.value.isDeleted() || lookupDeleted) {
+          result.add(kv);
+        }
       }
     }
     return result;
   }
 
-  public DataEncryptionKey getDek(String kekName, String subject, DekFormat algorithm,
+  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
+      String tenant, String kekName, String subject, DekFormat algorithm, boolean lookupDeleted) {
+    if (algorithm == null) {
+      algorithm = DekFormat.AES256_GCM;
+    }
+    List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
+    DataEncryptionKeyId key1 = new DataEncryptionKeyId(
+        tenant, kekName, subject,
+        MIN_VERSION, DekFormat.AES128_GCM);
+    DataEncryptionKeyId key2 = new DataEncryptionKeyId(
+        tenant, kekName, subject,
+        Integer.MAX_VALUE, DekFormat.AES256_SIV);
+    try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
+        keys().range(key1, true, key2, false)) {
+      while (iter.hasNext()) {
+        KeyValue<EncryptionKeyId, EncryptionKey> kv = iter.next();
+        DataEncryptionKeyId key = (DataEncryptionKeyId) kv.key;
+        if (key.getAlgorithm() == algorithm && !kv.value.isDeleted() || lookupDeleted) {
+          result.add(kv);
+        }
+      }
+    }
+    return result;
+  }
+
+  public DataEncryptionKey getLatestDek(String kekName, String subject, DekFormat algorithm,
       boolean lookupDeleted) throws SchemaRegistryException {
+    String tenant = schemaRegistry.tenant();
+    List<KeyValue<EncryptionKeyId, EncryptionKey>> deks =
+        getDeks(tenant, kekName, subject, algorithm, lookupDeleted);
+    Collections.reverse(deks);
+    return deks.isEmpty() ? null : (DataEncryptionKey) deks.get(0).value;
+  }
+
+  public DataEncryptionKey getDek(String kekName, String subject, int version,
+      DekFormat algorithm, boolean lookupDeleted) throws SchemaRegistryException {
+    if (version == -1) {
+      return getLatestDek(kekName, subject, algorithm, lookupDeleted);
+    }
     String tenant = schemaRegistry.tenant();
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
-    // NOTE (version): in the future we may allow a version to be passed
-    int version = MIN_VERSION;
     DataEncryptionKeyId keyId = new DataEncryptionKeyId(
         tenant, kekName, subject, version, algorithm);
     DataEncryptionKey key = (DataEncryptionKey) keys.get(keyId);
@@ -500,8 +534,7 @@ public class DekRegistry implements Closeable {
     DekFormat algorithm = request.getAlgorithm() != null
         ? request.getAlgorithm()
         : DekFormat.AES256_GCM;
-    // NOTE (version): in the future we may allow a version to be passed
-    int version = MIN_VERSION;
+    int version = request.getVersion() != null ? request.getVersion() : MIN_VERSION;
     DataEncryptionKeyId keyId = new DataEncryptionKeyId(
         tenant, kekName, request.getSubject(), version, algorithm);
     if (keys.containsKey(keyId)) {
@@ -683,23 +716,23 @@ public class DekRegistry implements Closeable {
     keys.sync();
 
     String tenant = schemaRegistry.tenant();
-    if (getDeks(tenant, name).stream().anyMatch(dek -> permanentDelete || !dek.value.isDeleted())) {
+    if (!getDeks(tenant, name, permanentDelete).isEmpty()) {
       throw new KeyReferenceExistsException(name);
     }
     EncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, name);
-    KeyEncryptionKey key = (KeyEncryptionKey) keys.get(keyId);
-    if (key == null) {
+    KeyEncryptionKey oldKey = (KeyEncryptionKey) keys.get(keyId);
+    if (oldKey == null) {
       return;
     }
     if (permanentDelete) {
-      if (!key.isDeleted()) {
+      if (!oldKey.isDeleted()) {
         throw new KeyNotSoftDeletedException(name);
       }
       keys.remove(keyId);
     } else {
-      if (!key.isDeleted()) {
-        KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
-            key.getKmsKeyId(), key.getKmsProps(), key.getDoc(), key.isShared(), true);
+      if (!oldKey.isDeleted()) {
+        KeyEncryptionKey newKey = new KeyEncryptionKey(name, oldKey.getKmsType(),
+            oldKey.getKmsKeyId(), oldKey.getKmsProps(), oldKey.getDoc(), oldKey.isShared(), true);
         keys.put(keyId, newKey);
       }
     }
@@ -759,14 +792,96 @@ public class DekRegistry implements Closeable {
     // Ensure cache is up-to-date
     keys.sync();
 
+    String tenant = schemaRegistry.tenant();
+    List<KeyValue<EncryptionKeyId, EncryptionKey>> deks =
+        getDeks(tenant, name, subject, algorithm, permanentDelete);
+
+    if (permanentDelete) {
+      for (KeyValue<EncryptionKeyId, EncryptionKey> dek : deks) {
+        if (!dek.value.isDeleted()) {
+          DataEncryptionKeyId keyId = (DataEncryptionKeyId) dek.key;
+          throw new KeyNotSoftDeletedException(keyId.getSubject());
+        }
+      }
+      for (KeyValue<EncryptionKeyId, EncryptionKey> dek : deks) {
+        DataEncryptionKeyId keyId = (DataEncryptionKeyId) dek.key;
+        keys.remove(keyId);
+      }
+    } else {
+      for (KeyValue<EncryptionKeyId, EncryptionKey> dek : deks) {
+        if (!dek.value.isDeleted()) {
+          DataEncryptionKeyId id = (DataEncryptionKeyId) dek.key;
+          DataEncryptionKey oldKey = (DataEncryptionKey) dek.value;
+          DataEncryptionKey newKey = new DataEncryptionKey(name, oldKey.getSubject(),
+              oldKey.getVersion(), oldKey.getAlgorithm(), oldKey.getEncryptedKeyMaterial(), true);
+          keys.put(id, newKey);
+        }
+      }
+    }
+  }
+
+  public void deleteDekVersionOrForward(String name, String subject, int version,
+      DekFormat algorithm, boolean permanentDelete, Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    String tenant = schemaRegistry.tenant();
+    lock(tenant, headerProperties);
+    try {
+      if (isLeader(headerProperties)) {
+        deleteDekVersion(name, subject, version, algorithm, permanentDelete);
+      } else {
+        // forward registering request to the leader
+        if (schemaRegistry.leaderIdentity() != null) {
+          forwardDeleteDekVersionRequestToLeader(name, subject, version, algorithm,
+              permanentDelete, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Request failed since leader is unknown");
+        }
+      }
+    } finally {
+      unlock(tenant);
+    }
+  }
+
+  private void forwardDeleteDekVersionRequestToLeader(String name, String subject, int version,
+      DekFormat algorithm, boolean permanentDelete, Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+    RestService leaderRestService = schemaRegistry.leaderRestService();
+    final UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    UriBuilder builder = UriBuilder.fromPath(
+        "/dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}")
+        .queryParam("permanent", permanentDelete);
+    if (algorithm != null) {
+      builder = builder.queryParam("algorithm", algorithm.name());
+    }
+    String path = builder.build(name, subject, version).toString();
+
+    log.debug(String.format("Forwarding delete key version request to %s", baseUrl));
+    try {
+      leaderRestService.httpRequest(
+          path, "DELETE", null, headerProperties, VOID_TYPE);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format("Unexpected error while forwarding the delete key version request to %s",
+              baseUrl),
+          e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private void deleteDekVersion(String name, String subject, int version,
+      DekFormat algorithm, boolean permanentDelete)
+      throws SchemaRegistryException {
+    // Ensure cache is up-to-date
+    keys.sync();
+
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
     String tenant = schemaRegistry.tenant();
-    // NOTE (version): in the future we may allow a version to be passed
-    int version = MIN_VERSION;
-    DataEncryptionKeyId keyId = new DataEncryptionKeyId(tenant, name, subject, version, algorithm);
-    DataEncryptionKey key = (DataEncryptionKey) keys.get(keyId);
+    DataEncryptionKeyId id = new DataEncryptionKeyId(tenant, name, subject, version, algorithm);
+    DataEncryptionKey key = (DataEncryptionKey) keys.get(id);
     if (key == null) {
       return;
     }
@@ -774,13 +889,225 @@ public class DekRegistry implements Closeable {
       if (!key.isDeleted()) {
         throw new KeyNotSoftDeletedException(subject);
       }
-      keys.remove(keyId);
+      keys.remove(id);
     } else {
       if (!key.isDeleted()) {
         DataEncryptionKey newKey = new DataEncryptionKey(name, key.getSubject(),
             key.getVersion(), key.getAlgorithm(), key.getEncryptedKeyMaterial(), true);
-        keys.put(keyId, newKey);
+        keys.put(id, newKey);
       }
+    }
+  }
+
+  public void undeleteKekOrForward(String name, Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    String tenant = schemaRegistry.tenant();
+    lock(tenant, headerProperties);
+    try {
+      if (isLeader(headerProperties)) {
+        undeleteKek(name);
+      } else {
+        // forward registering request to the leader
+        if (schemaRegistry.leaderIdentity() != null) {
+          forwardUndeleteKekRequestToLeader(name, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Request failed since leader is unknown");
+        }
+      }
+    } finally {
+      unlock(tenant);
+    }
+  }
+
+  private void forwardUndeleteKekRequestToLeader(String name, Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+    RestService leaderRestService = schemaRegistry.leaderRestService();
+    final UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/undelete");
+    String path = builder.build(name).toString();
+
+    log.debug(String.format("Forwarding undelete key request to %s", baseUrl));
+    try {
+      leaderRestService.httpRequest(
+          path, "POST", null, headerProperties, VOID_TYPE);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format("Unexpected error while forwarding the undelete key request to %s",
+              baseUrl),
+          e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private void undeleteKek(String name) throws SchemaRegistryException {
+    // Ensure cache is up-to-date
+    keys.sync();
+
+    String tenant = schemaRegistry.tenant();
+    EncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, name);
+    KeyEncryptionKey key = (KeyEncryptionKey) keys.get(keyId);
+    if (key == null) {
+      return;
+    }
+    if (key.isDeleted()) {
+      KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
+          key.getKmsKeyId(), key.getKmsProps(), key.getDoc(), key.isShared(), false);
+      keys.put(keyId, newKey);
+    }
+  }
+
+  public void undeleteDekOrForward(String name, String subject, DekFormat algorithm,
+      Map<String, String> headerProperties) throws SchemaRegistryException {
+    String tenant = schemaRegistry.tenant();
+    lock(tenant, headerProperties);
+    try {
+      if (isLeader(headerProperties)) {
+        undeleteDek(name, subject, algorithm);
+      } else {
+        // forward registering request to the leader
+        if (schemaRegistry.leaderIdentity() != null) {
+          forwardUndeleteDekRequestToLeader(name, subject, algorithm, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Request failed since leader is unknown");
+        }
+      }
+    } finally {
+      unlock(tenant);
+    }
+  }
+
+  private void forwardUndeleteDekRequestToLeader(String name, String subject, DekFormat algorithm,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+    RestService leaderRestService = schemaRegistry.leaderRestService();
+    final UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    UriBuilder builder = UriBuilder.fromPath(
+        "/dek-registry/v1/keks/{name}/deks/{subject}/undelete");
+    if (algorithm != null) {
+      builder = builder.queryParam("algorithm", algorithm.name());
+    }
+    String path = builder.build(name, subject).toString();
+
+    log.debug(String.format("Forwarding undelete key request to %s", baseUrl));
+    try {
+      leaderRestService.httpRequest(
+          path, "POST", null, headerProperties, VOID_TYPE);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format("Unexpected error while forwarding the undelete key request to %s",
+              baseUrl),
+          e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private void undeleteDek(String name, String subject, DekFormat algorithm)
+      throws SchemaRegistryException {
+    // Ensure cache is up-to-date
+    keys.sync();
+
+    String tenant = schemaRegistry.tenant();
+    EncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, name);
+    KeyEncryptionKey key = (KeyEncryptionKey) keys.get(keyId);
+    if (key == null) {
+      return;
+    }
+    if (key.isDeleted()) {
+      throw new KeySoftDeletedException(name);
+    }
+    List<KeyValue<EncryptionKeyId, EncryptionKey>> deks =
+        getDeks(tenant, name, subject, algorithm, true);
+
+    for (KeyValue<EncryptionKeyId, EncryptionKey> dek : deks) {
+      DataEncryptionKeyId id = (DataEncryptionKeyId) dek.key;
+      DataEncryptionKey oldKey = (DataEncryptionKey) dek.value;
+      if (oldKey.isDeleted()) {
+        DataEncryptionKey newKey = new DataEncryptionKey(name, oldKey.getSubject(),
+            oldKey.getVersion(), oldKey.getAlgorithm(), oldKey.getEncryptedKeyMaterial(), false);
+        keys.put(id, newKey);
+      }
+    }
+  }
+
+  public void undeleteDekVersionOrForward(String name, String subject, int version,
+      DekFormat algorithm, Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    String tenant = schemaRegistry.tenant();
+    lock(tenant, headerProperties);
+    try {
+      if (isLeader(headerProperties)) {
+        undeleteDekVersion(name, subject, version, algorithm);
+      } else {
+        // forward registering request to the leader
+        if (schemaRegistry.leaderIdentity() != null) {
+          forwardUndeleteDekVersionRequestToLeader(name, subject, version, algorithm,
+              headerProperties);
+        } else {
+          throw new UnknownLeaderException("Request failed since leader is unknown");
+        }
+      }
+    } finally {
+      unlock(tenant);
+    }
+  }
+
+  private void forwardUndeleteDekVersionRequestToLeader(String name, String subject, int version,
+      DekFormat algorithm, Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+    RestService leaderRestService = schemaRegistry.leaderRestService();
+    final UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    UriBuilder builder = UriBuilder.fromPath(
+            "/dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}/undelete");
+    if (algorithm != null) {
+      builder = builder.queryParam("algorithm", algorithm.name());
+    }
+    String path = builder.build(name, subject, version).toString();
+
+    log.debug(String.format("Forwarding undelete key version request to %s", baseUrl));
+    try {
+      leaderRestService.httpRequest(
+          path, "POST", null, headerProperties, VOID_TYPE);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format("Unexpected error while forwarding the undelete key version request to %s",
+              baseUrl),
+          e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private void undeleteDekVersion(String name, String subject, int version,
+      DekFormat algorithm) throws SchemaRegistryException {
+    // Ensure cache is up-to-date
+    keys.sync();
+
+    if (algorithm == null) {
+      algorithm = DekFormat.AES256_GCM;
+    }
+    String tenant = schemaRegistry.tenant();
+    EncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, name);
+    KeyEncryptionKey key = (KeyEncryptionKey) keys.get(keyId);
+    if (key == null) {
+      return;
+    }
+    if (key.isDeleted()) {
+      throw new KeySoftDeletedException(name);
+    }
+    DataEncryptionKeyId id = new DataEncryptionKeyId(tenant, name, subject, version, algorithm);
+    DataEncryptionKey oldKey = (DataEncryptionKey) keys.get(id);
+    if (oldKey == null) {
+      return;
+    }
+    if (oldKey.isDeleted()) {
+      DataEncryptionKey newKey = new DataEncryptionKey(name, oldKey.getSubject(),
+          oldKey.getVersion(), oldKey.getAlgorithm(), oldKey.getEncryptedKeyMaterial(), false);
+      keys.put(id, newKey);
     }
   }
 
