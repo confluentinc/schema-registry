@@ -389,6 +389,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
         DekInfo dek = getDek(ctx, kekName, kek);
         byte[] plaintext;
         byte[] ciphertext;
+        Object result;
         switch (ctx.ruleMode()) {
           case WRITE:
             plaintext = toBytes(fieldCtx.getType(), fieldValue);
@@ -399,14 +400,18 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
             if (fieldCtx.getType() == Type.STRING) {
               ciphertext = Base64.getEncoder().encode(ciphertext);
             }
-            return toObject(fieldCtx.getType(), ciphertext);
+            result = toObject(fieldCtx.getType(), ciphertext);
+            return result != null ? result : fieldValue;
           case READ:
             ciphertext = toBytes(fieldCtx.getType(), fieldValue);
+            if (ciphertext == null) {
+              return fieldValue;
+            }
             if (fieldCtx.getType() == Type.STRING) {
               ciphertext = Base64.getDecoder().decode(ciphertext);
             }
             plaintext = cryptor.decrypt(dek.getRawDek(), ciphertext, EMPTY_AAD);
-            Object result = toObject(fieldCtx.getType(), plaintext);
+            result = toObject(fieldCtx.getType(), plaintext);
             return result != null ? result : fieldValue;
           default:
             throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());

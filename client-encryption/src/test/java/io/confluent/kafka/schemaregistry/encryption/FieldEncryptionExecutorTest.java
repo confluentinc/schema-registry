@@ -257,7 +257,8 @@ public abstract class FieldEncryptionExecutorTest {
         + "\"name\": \"User\","
         + "\"fields\": ["
         + "{\"name\": \"name\", \"type\": [\"null\", \"string\"], \"confluent:tags\": [\"PII\", \"PII3\"]},"
-        + "{\"name\": \"name2\", \"type\": [\"null\", \"string\"], \"confluent:tags\": [\"PII2\"]}"
+        + "{\"name\": \"name2\", \"type\": [\"null\", \"string\"], \"confluent:tags\": [\"PII2\"]},"
+        + "{\"name\": \"age\", \"type\": [\"null\", \"int\"], \"confluent:tags\": [\"PII\"]}"
         + "]}";
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
@@ -269,6 +270,7 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
     avroRecord.put("name2", "testUser2");
+    avroRecord.put("age", 18);
     return avroRecord;
   }
 
@@ -277,7 +279,8 @@ public abstract class FieldEncryptionExecutorTest {
         + "\"name\": \"User\","
         + "\"fields\": ["
         + "{\"name\": \"name\", \"type\": [\"null\", \"bytes\"], \"confluent:tags\": [\"PII\", \"PII3\"]},"
-        + "{\"name\": \"name2\", \"type\": [\"null\", \"bytes\"], \"confluent:tags\": [\"PII2\"]}"
+        + "{\"name\": \"name2\", \"type\": [\"null\", \"bytes\"], \"confluent:tags\": [\"PII2\"]},"
+        + "{\"name\": \"age\", \"type\": [\"null\", \"int\"], \"confluent:tags\": [\"PII\"]}"
         + "]}";
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
@@ -289,6 +292,7 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", ByteBuffer.wrap("testUser".getBytes(StandardCharsets.UTF_8)));
     avroRecord.put("name2", ByteBuffer.wrap("testUser2".getBytes(StandardCharsets.UTF_8)));
+    avroRecord.put("age", 18);
     return avroRecord;
   }
 
@@ -332,6 +336,7 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
+    assertEquals(18, record.get("age"));
   }
 
   @Test
@@ -355,6 +360,7 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
+    assertEquals(18, record.get("age"));
   }
 
   @Test
@@ -377,6 +383,7 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals(ByteBuffer.wrap("testUser".getBytes(StandardCharsets.UTF_8)), record.get("name"));
+    assertEquals(18, record.get("age"));
   }
 
   @Test
@@ -451,6 +458,7 @@ public abstract class FieldEncryptionExecutorTest {
     }
     assertEquals("testUser", record.get("name"));
     assertEquals("testUser2", record.get("name2"));
+    assertEquals(18, record.get("age"));
   }
 
   @Test
@@ -487,6 +495,7 @@ public abstract class FieldEncryptionExecutorTest {
       verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
     }
     assertEquals("testUser", record.get("name"));
+    assertEquals(18, record.get("age"));
   }
 
   @Test
@@ -524,6 +533,7 @@ public abstract class FieldEncryptionExecutorTest {
       verify(cryptor2, times(expectedEncryptionsRule2)).decrypt(any(), any(), any());
     }
     assertEquals("testUser", record.get("name"));
+    assertEquals(18, record.get("age"));
   }
 
   @Test
@@ -561,11 +571,13 @@ public abstract class FieldEncryptionExecutorTest {
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name").toString());
     assertEquals("testUser2", record.get("name2").toString());
+    assertEquals(18, record.get("age"));
     cryptor2 = addSpyToCryptor(avroValueDeserializer, "test-value:rule1");
     GenericRecord record2 = (GenericRecord) avroValueDeserializer.deserialize(topic, headers2, bytes2);
     verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record2.get("name").toString());
     assertEquals("testUser2", record2.get("name2").toString());
+    assertEquals(18, record2.get("age"));
   }
 
   @Test
@@ -594,6 +606,7 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
+    assertEquals(18, record.get("age"));
   }
 
   @Test
@@ -620,6 +633,7 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
+    assertEquals(18, record.get("age"));
   }
 
   @Test
@@ -988,6 +1002,7 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name").toString());
+    assertEquals(18, record.get("age"));
   }
 
   @Test
@@ -1054,6 +1069,7 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertNotEquals("testUser", record.get("name").toString()); // still encrypted
+    assertEquals(18, record.get("age"));
   }
 
   @Test
@@ -1120,6 +1136,7 @@ public abstract class FieldEncryptionExecutorTest {
     assertNull(cryptor);
     GenericRecord record = (GenericRecord) badDeserializer.deserialize(topic, headers, bytes);
     assertNotEquals("testUser", record.get("name").toString()); // still encrypted
+    assertEquals(18, record.get("age"));
   }
 
   protected Metadata getMetadata(String kekName) {
