@@ -257,7 +257,8 @@ public abstract class FieldEncryptionExecutorTest {
         + "\"name\": \"User\","
         + "\"fields\": ["
         + "{\"name\": \"name\", \"type\": [\"null\", \"string\"], \"confluent:tags\": [\"PII\", \"PII3\"]},"
-        + "{\"name\": \"name2\", \"type\": [\"null\", \"string\"], \"confluent:tags\": [\"PII2\"]}"
+        + "{\"name\": \"name2\", \"type\": [\"null\", \"string\"], \"confluent:tags\": [\"PII2\"]},"
+        + "{\"name\": \"age\", \"type\": [\"null\", \"int\"]}"
         + "]}";
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
@@ -269,6 +270,29 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
     avroRecord.put("name2", "testUser2");
+    avroRecord.put("age", 18);
+    return avroRecord;
+  }
+
+  private Schema createUserSchemaWithTaggedInt() {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
+        + "\"name\": \"User\","
+        + "\"fields\": ["
+        + "{\"name\": \"name\", \"type\": [\"null\", \"string\"], \"confluent:tags\": [\"PII\", \"PII3\"]},"
+        + "{\"name\": \"name2\", \"type\": [\"null\", \"string\"], \"confluent:tags\": [\"PII2\"]},"
+        + "{\"name\": \"age\", \"type\": [\"null\", \"int\"], \"confluent:tags\": [\"PII\"]}"
+        + "]}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(userSchema);
+    return schema;
+  }
+
+  private IndexedRecord createUserRecordWithTaggedInt() {
+    Schema schema = createUserSchemaWithTaggedInt();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", "testUser");
+    avroRecord.put("name2", "testUser2");
+    avroRecord.put("age", 18);
     return avroRecord;
   }
 
@@ -377,6 +401,21 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals(ByteBuffer.wrap("testUser".getBytes(StandardCharsets.UTF_8)), record.get("name"));
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaAvroSerializerInt() throws Exception {
+    IndexedRecord avroRecord = createUserRecordWithTaggedInt();
+    AvroSchema avroSchema = new AvroSchema(createUserSchemaWithTaggedInt());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    avroSerializer.serialize(topic, headers, avroRecord);
   }
 
   @Test
