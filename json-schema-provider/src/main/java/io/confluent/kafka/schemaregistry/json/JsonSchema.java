@@ -45,7 +45,6 @@ import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
-import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.HashMap;
@@ -511,7 +510,15 @@ public class JsonSchema implements ParsedSchema {
     if (message instanceof JsonNode) {
       return (JsonNode) message;
     }
-    return JacksonMapper.INSTANCE.readTree(JsonSchemaUtils.toJson(message));
+    return objectMapper.readTree(JsonSchemaUtils.toJson(message));
+  }
+
+  @Override
+  public Object copyMessage(Object message) throws IOException {
+    if (message instanceof JsonNode) {
+      return ((JsonNode) message).deepCopy();
+    }
+    return toJson(message);
   }
 
   @Override

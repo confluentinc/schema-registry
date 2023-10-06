@@ -66,6 +66,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
   public static final String ENCRYPT_KMS_TYPE = "encrypt.kms.type";
   public static final String ENCRYPT_DEK_ALGORITHM = "encrypt.dek.algorithm";
+  public static final String ENCRYPT_PRESERVE_SOURCE = "encrypt.preserve.source";
 
   public static final String KMS_TYPE_SUFFIX = "://";
   public static final byte[] EMPTY_AAD = new byte[0];
@@ -74,11 +75,16 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
 
   private Map<DekFormat, Cryptor> cryptors;
   private Map<String, ?> configs;
+  private Boolean preserveSource;
   private int cacheExpirySecs = -1;
   private int cacheSize = 10000;
   private DekRegistryClient client;
 
   public FieldEncryptionExecutor() {
+  }
+
+  public boolean isPreserveSource() {
+    return Boolean.TRUE.equals(preserveSource);
   }
 
   @Override
@@ -89,6 +95,10 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
   @Override
   public void configure(Map<String, ?> configs) {
     this.configs = configs;
+    Object preserveSourceConfig = configs.get(ENCRYPT_PRESERVE_SOURCE);
+    if (preserveSourceConfig != null) {
+      this.preserveSource = Boolean.parseBoolean(preserveSourceConfig.toString());
+    }
     Object cacheExpirySecsConfig = configs.get(CACHE_EXPIRY_SECS);
     if (cacheExpirySecsConfig != null) {
       try {
@@ -125,6 +135,20 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
     FieldTransform transform = new FieldEncryptionExecutorTransform();
     transform.init(ctx);
     return transform;
+  }
+
+  @Override
+  public Object preTransformMessage(RuleContext ctx, FieldTransform transform, Object message)
+      throws RuleException {
+    if (isPreserveSource()) {
+      try {
+        // We use the target schema
+        message = ctx.target().copyMessage(message);
+      } catch (IOException e) {
+        throw new RuleException("Could copy source message", e);
+      }
+    }
+    return message;
   }
 
   private Cryptor getCryptor(RuleContext ctx) {
@@ -201,6 +225,12 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
       cryptor = getCryptor(ctx);
       kekName = getKekName(ctx);
       kek = getKek(ctx, kekName);
+      if (FieldEncryptionExecutor.this.preserveSource == null) {
+        String preserveValueConfig = ctx.getParameter(ENCRYPT_PRESERVE_SOURCE);
+        if (preserveValueConfig != null) {
+          FieldEncryptionExecutor.this.preserveSource = Boolean.parseBoolean(preserveValueConfig);
+        }
+      }
     }
 
     protected String getKekName(RuleContext ctx) throws RuleException {

@@ -63,11 +63,17 @@ public interface FieldRuleExecutor extends RuleExecutor {
 
     try (FieldTransform transform = newTransform(ctx)) {
       if (transform != null) {
+        message = preTransformMessage(ctx, transform, message);
         return ctx.target().transformMessage(ctx, transform, message);
       } else {
         return message;
       }
     }
+  }
+
+  default Object preTransformMessage(RuleContext ctx, FieldTransform transform, Object message)
+      throws RuleException {
+    return message;
   }
 
   static boolean areTransformsWithSameTags(Rule rule1, Rule rule2) {

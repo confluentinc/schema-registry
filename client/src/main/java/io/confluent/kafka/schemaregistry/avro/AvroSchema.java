@@ -510,6 +510,12 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
+  public Object copyMessage(Object message) throws IOException {
+    GenericData data = getData(message);
+    return data.deepCopy(rawSchema(), message);
+  }
+
+  @Override
   public Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     try {

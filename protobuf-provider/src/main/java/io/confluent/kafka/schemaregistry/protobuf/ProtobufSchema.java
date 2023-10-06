@@ -2275,6 +2275,12 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   @Override
+  public Object copyMessage(Object message) throws IOException {
+    // Protobuf messages are already immutable
+    return message;
+  }
+
+  @Override
   public Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     try {
