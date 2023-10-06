@@ -145,7 +145,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
         // We use the target schema
         message = ctx.target().copyMessage(message);
       } catch (IOException e) {
-        throw new RuleException("Could copy source message", e);
+        throw new RuleException("Could not copy source message", e);
       }
     }
     return message;
