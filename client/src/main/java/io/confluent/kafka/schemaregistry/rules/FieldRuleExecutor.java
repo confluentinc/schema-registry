@@ -18,6 +18,9 @@ package io.confluent.kafka.schemaregistry.rules;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import java.io.IOException;
+import java.util.Map;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,13 +28,36 @@ import org.slf4j.LoggerFactory;
 /**
  * A field-level rule executor.
  */
-public interface FieldRuleExecutor extends RuleExecutor {
+public abstract class FieldRuleExecutor implements RuleExecutor {
 
   Logger log = LoggerFactory.getLogger(FieldRuleExecutor.class);
 
-  FieldTransform newTransform(RuleContext ctx) throws RuleException;
+  public static final String PRESERVE_SOURCE_FIELDS = "preserve.source.fields";
 
-  default Object transform(RuleContext ctx, Object message) throws RuleException {
+  private Boolean preserveSource;
+
+  @Override
+  public void configure(Map<String, ?> configs) {
+    Object preserveSourceConfig = configs.get(PRESERVE_SOURCE_FIELDS);
+    if (preserveSourceConfig != null) {
+      this.preserveSource = Boolean.parseBoolean(preserveSourceConfig.toString());
+    }
+  }
+
+  public boolean isPreserveSource() {
+    return Boolean.TRUE.equals(preserveSource);
+  }
+
+  public abstract FieldTransform newTransform(RuleContext ctx) throws RuleException;
+
+  @Override
+  public Object transform(RuleContext ctx, Object message) throws RuleException {
+    if (this.preserveSource == null) {
+      String preserveValueConfig = ctx.getParameter(PRESERVE_SOURCE_FIELDS);
+      if (preserveValueConfig != null) {
+        this.preserveSource = Boolean.parseBoolean(preserveValueConfig);
+      }
+    }
     switch (ctx.ruleMode()) {
       case WRITE:
       case UPGRADE:
@@ -63,6 +89,16 @@ public interface FieldRuleExecutor extends RuleExecutor {
 
     try (FieldTransform transform = newTransform(ctx)) {
       if (transform != null) {
+        if (ctx.ruleMode() == RuleMode.WRITE
+            && ctx.rule().getKind() == RuleKind.TRANSFORM
+            && isPreserveSource()) {
+          try {
+            // We use the target schema
+            message = ctx.target().copyMessage(message);
+          } catch (IOException e) {
+            throw new RuleException("Could not copy source message", e);
+          }
+        }
         return ctx.target().transformMessage(ctx, transform, message);
       } else {
         return message;

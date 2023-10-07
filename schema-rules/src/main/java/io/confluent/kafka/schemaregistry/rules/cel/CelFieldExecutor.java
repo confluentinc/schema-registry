@@ -29,7 +29,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-public class CelFieldExecutor implements FieldRuleExecutor {
+public class CelFieldExecutor extends FieldRuleExecutor {
 
   public static final String TYPE = "CEL_FIELD";
 
