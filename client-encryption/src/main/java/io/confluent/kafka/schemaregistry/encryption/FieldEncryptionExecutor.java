@@ -58,7 +58,7 @@ import org.apache.kafka.common.config.ConfigException;
  * encrypted data, use the KEK from KMS to decrypt the DEK, and use the decrypted DEK to decrypt
  * the data.
  */
-public class FieldEncryptionExecutor implements FieldRuleExecutor {
+public class FieldEncryptionExecutor extends FieldRuleExecutor {
 
   public static final String TYPE = "ENCRYPT";
 
@@ -88,6 +88,7 @@ public class FieldEncryptionExecutor implements FieldRuleExecutor {
 
   @Override
   public void configure(Map<String, ?> configs) {
+    super.configure(configs);
     this.configs = configs;
     Object cacheExpirySecsConfig = configs.get(CACHE_EXPIRY_SECS);
     if (cacheExpirySecsConfig != null) {
