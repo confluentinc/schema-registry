@@ -364,7 +364,7 @@ public abstract class FieldEncryptionExecutorTest {
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
-        ImmutableMap.of("encrypt.preserve.source", "true"), null, null, null, false);
+        ImmutableMap.of("rule.preserve.source", "true"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = getMetadata("kek1");
     avroSchema = avroSchema.copy(metadata, ruleSet);
@@ -490,7 +490,7 @@ public abstract class FieldEncryptionExecutorTest {
     AvroSchema avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
-        ImmutableMap.of("encrypt.preserve.source", "true"), null, null, null, false);
+        ImmutableMap.of("rule.preserve.source", "true"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = getMetadata("kek1");
     avroSchema = avroSchema.copy(metadata, ruleSet);
@@ -890,7 +890,7 @@ public abstract class FieldEncryptionExecutorTest {
     JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
-        ImmutableMap.of("encrypt.preserve.source", "true"), null, null, null, false);
+        ImmutableMap.of("rule.preserve.source", "true"), null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     Metadata metadata = getMetadata("kek1");
     jsonSchema = jsonSchema.copy(metadata, ruleSet);
