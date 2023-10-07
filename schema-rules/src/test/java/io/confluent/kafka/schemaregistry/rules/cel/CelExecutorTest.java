@@ -728,7 +728,7 @@ public class CelExecutorTest {
     AvroSchema avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
         CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"),
-        ImmutableMap.of("ignore.guard.separator", "true"), "value + \"-suffix;\"",
+        ImmutableMap.of("cel.ignore.guard.separator", "true"), "value + \"-suffix;\"",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     avroSchema = avroSchema.copy(null, ruleSet);

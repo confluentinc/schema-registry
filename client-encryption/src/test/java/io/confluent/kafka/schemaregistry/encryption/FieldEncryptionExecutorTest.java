@@ -265,7 +265,7 @@ public abstract class FieldEncryptionExecutorTest {
     return schema;
   }
 
-  private IndexedRecord createUserRecord() {
+  private GenericRecord createUserRecord() {
     Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
@@ -356,6 +356,31 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerPreserveSource() throws Exception {
+    GenericRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("preserve.source.fields", "true"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
+    // Old value is preserved
+    assertEquals("testUser", avroRecord.get("name"));
   }
 
   @Test
@@ -453,6 +478,40 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("012", ((OldWidget)obj).getPiiArray().get(1).getPii());
     assertEquals("345", ((OldWidget)obj).getPiiMap().get("key1").getPii());
     assertEquals("678", ((OldWidget)obj).getPiiMap().get("key2").getPii());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerReflectionPreserveSource() throws Exception {
+    OldWidget widget = new OldWidget("alice");
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
+    Schema schema = createWidgetSchema();
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("preserve.source.fields", "true"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 7;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(reflectionAvroSerializer);
+    byte[] bytes = reflectionAvroSerializer.serialize(topic, headers, widget);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(reflectionAvroDeserializer);
+    Object obj = reflectionAvroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+
+    assertTrue(
+        "Returned object should be a Widget",
+        OldWidget.class.isInstance(obj)
+    );
+    assertEquals("alice", ((OldWidget)obj).getName());
+    // Old value is preserved
+    assertEquals("alice", widget.getName());
   }
 
   @Test
@@ -807,6 +866,48 @@ public abstract class FieldEncryptionExecutorTest {
         "012",
         ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
     );
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerPreserveSource() throws Exception {
+    OldWidget widget = new OldWidget("alice");
+    widget.setSize(123);
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
+        + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"size\":{\"type\":\"integer\"},"
+        + "\"version\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"size\",\"version\"],"
+        + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
+        + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]}}}}}";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("preserve.source.fields", "true"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    int expectedEncryptions = 5;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer);
+    byte[] bytes = jsonSchemaSerializer.serialize(topic, headers, widget);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(jsonSchemaDeserializer);
+    Object obj = jsonSchemaDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+
+    assertEquals("alice", ((JsonNode)obj).get("name").textValue());
+    // Old value is preserved
+    assertEquals("alice", widget.getName());
   }
 
   @Test

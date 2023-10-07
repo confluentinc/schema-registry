@@ -45,6 +45,8 @@ public class DlqAction implements RuleAction {
   public static final String TYPE = "DLQ";
 
   public static final String DLQ_TOPIC = "dlq.topic";
+  public static final String DLQ_AUTO_FLUSH = "dlq.auto.flush";
+  public static final String PRODUCER = "producer";  // for testing
 
   public static final String HEADER_PREFIX = "__rule.";
   public static final String RULE_NAME = HEADER_PREFIX + "name";
@@ -52,9 +54,6 @@ public class DlqAction implements RuleAction {
   public static final String RULE_SUBJECT = HEADER_PREFIX + "subject";
   public static final String RULE_TOPIC = HEADER_PREFIX + "topic";
   public static final String RULE_EXCEPTION = HEADER_PREFIX + "exception";
-
-  public static final String DLQ_AUTO_FLUSH = "dlq.auto.flush";
-  public static final String PRODUCER = "producer";  // for testing
 
   private static final LongSerializer LONG_SERIALIZER = new LongSerializer();
   private static final IntegerSerializer INT_SERIALIZER = new IntegerSerializer();

@@ -235,6 +235,10 @@ public interface ParsedSchema {
     throw new UnsupportedOperationException();
   }
 
+  default Object copyMessage(Object message) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
   default Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     throw new UnsupportedOperationException();

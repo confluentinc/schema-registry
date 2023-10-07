@@ -61,7 +61,7 @@ public class CelExecutor implements RuleExecutor {
 
   public static final String TYPE = "CEL";
 
-  public static final String IGNORE_GUARD_SEPARATOR = "ignore.guard.separator";
+  public static final String CEL_IGNORE_GUARD_SEPARATOR = "cel.ignore.guard.separator";
 
   private static final ObjectMapper mapper = new ObjectMapper();
 
@@ -151,7 +151,7 @@ public class CelExecutor implements RuleExecutor {
       RuleContext ctx, Object obj, Map<String, Object> args)
       throws RuleException {
     String expr = ctx.rule().getExpr();
-    String ignoreGuardStr = ctx.getParameter(IGNORE_GUARD_SEPARATOR);
+    String ignoreGuardStr = ctx.getParameter(CEL_IGNORE_GUARD_SEPARATOR);
     boolean ignoreGuard = Boolean.parseBoolean(ignoreGuardStr);
     if (!ignoreGuard) {
       // An optional guard (followed by semicolon) can precede the expr
