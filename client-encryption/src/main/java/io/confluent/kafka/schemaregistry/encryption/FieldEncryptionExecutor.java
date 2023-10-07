@@ -66,7 +66,6 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
   public static final String ENCRYPT_KMS_TYPE = "encrypt.kms.type";
   public static final String ENCRYPT_DEK_ALGORITHM = "encrypt.dek.algorithm";
-  public static final String ENCRYPT_PRESERVE_SOURCE = "encrypt.preserve.source";
 
   public static final String KMS_TYPE_SUFFIX = "://";
   public static final byte[] EMPTY_AAD = new byte[0];
