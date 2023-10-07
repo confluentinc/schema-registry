@@ -32,13 +32,13 @@ public abstract class FieldRuleExecutor implements RuleExecutor {
 
   Logger log = LoggerFactory.getLogger(FieldRuleExecutor.class);
 
-  public static final String RULE_PRESERVE_SOURCE = "rule.preserve.source";
+  public static final String PRESERVE_SOURCE_FIELDS = "preserve.source.fields";
 
   private Boolean preserveSource;
 
   @Override
   public void configure(Map<String, ?> configs) {
-    Object preserveSourceConfig = configs.get(RULE_PRESERVE_SOURCE);
+    Object preserveSourceConfig = configs.get(PRESERVE_SOURCE_FIELDS);
     if (preserveSourceConfig != null) {
       this.preserveSource = Boolean.parseBoolean(preserveSourceConfig.toString());
     }
@@ -53,7 +53,7 @@ public abstract class FieldRuleExecutor implements RuleExecutor {
   @Override
   public Object transform(RuleContext ctx, Object message) throws RuleException {
     if (this.preserveSource == null) {
-      String preserveValueConfig = ctx.getParameter(RULE_PRESERVE_SOURCE);
+      String preserveValueConfig = ctx.getParameter(PRESERVE_SOURCE_FIELDS);
       if (preserveValueConfig != null) {
         this.preserveSource = Boolean.parseBoolean(preserveValueConfig);
       }
@@ -89,7 +89,9 @@ public abstract class FieldRuleExecutor implements RuleExecutor {
 
     try (FieldTransform transform = newTransform(ctx)) {
       if (transform != null) {
-        if (ctx.ruleMode() == RuleMode.WRITE && isPreserveSource()) {
+        if (ctx.ruleMode() == RuleMode.WRITE
+            && ctx.rule().getKind() == RuleKind.TRANSFORM
+            && isPreserveSource()) {
           try {
             // We use the target schema
             message = ctx.target().copyMessage(message);
