@@ -814,7 +814,8 @@ public abstract class FieldEncryptionExecutorTest {
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
-        ImmutableMap.of("encrypt.dek.expiry.days", "1"), null, null, null, false);
+        ImmutableMap.of("encrypt.dek.expiry.days", "1", "preserve.source.fields", "true"),
+        null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = getMetadata("kek1");
     avroSchema = avroSchema.copy(metadata, ruleSet);
@@ -832,7 +833,6 @@ public abstract class FieldEncryptionExecutorTest {
 
     fakeTicker.advance(Duration.of(2, ChronoUnit.DAYS));
 
-    avroRecord = createUserRecord();
     cryptor = addSpyToCryptor(avroSerializer, DekFormat.AES256_GCM);
     bytes = avroSerializer.serialize(topic, headers, avroRecord);
     verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
