@@ -99,6 +99,8 @@ public class JsonSkemaArraySerializer extends JsonSkemaBaseSerializer<JsonArray>
           g.writeNumber(num.doubleValue());
         } else if (num instanceof Float) {
           g.writeNumber(num.floatValue());
+        } else if (num instanceof Long) {
+          g.writeNumber(num.longValue());
         } else {
           g.writeNumber(num.intValue());
         }

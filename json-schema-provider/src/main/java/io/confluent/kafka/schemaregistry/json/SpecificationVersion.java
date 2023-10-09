@@ -46,7 +46,7 @@ public enum SpecificationVersion {
       "https://json-schema.org/draft/2020-12/schema"
   ));
 
-  private List<String> urls;
+  private final List<String> urls;
 
   SpecificationVersion(List<String> urls) {
     this.urls = urls;
@@ -61,10 +61,8 @@ public enum SpecificationVersion {
   private static final Map<String, SpecificationVersion> urlLookup = new HashMap<>();
 
   static {
-    for (SpecificationVersion m : EnumSet.allOf(SpecificationVersion.class)) {
-      lookup.put(m.toString(), m);
-    }
     for (SpecificationVersion spec : SpecificationVersion.values()) {
+      lookup.put(spec.toString(), spec);
       for (String url : spec.getUrls()) {
         urlLookup.put(url, spec);
       }
