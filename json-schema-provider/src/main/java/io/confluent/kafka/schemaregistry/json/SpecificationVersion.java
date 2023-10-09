@@ -16,7 +16,6 @@
 package io.confluent.kafka.schemaregistry.json;
 
 import java.util.Arrays;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
