@@ -95,6 +95,7 @@
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.4.1</jsonata-version>
         <json-schema.version>1.14.2</json-schema.version>
+        <json-skema.version>0.9.0</json-skema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
@@ -243,6 +244,11 @@
                 <groupId>com.github.erosb</groupId>
                 <artifactId>everit-json-schema</artifactId>
                 <version>${json-schema.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.erosb</groupId>
+                <artifactId>json-sKema</artifactId>
+                <version>${json-skema.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.kjetland</groupId>
