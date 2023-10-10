@@ -93,6 +93,7 @@ public class DekRegistry implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(DekRegistry.class);
 
+  public static final int LATEST_VERSION = -1;
   public static final int MIN_VERSION = 1;
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String X_FORWARD_HEADER = DekRegistryRestService.X_FORWARD_HEADER;
@@ -375,7 +376,7 @@ public class DekRegistry implements Closeable {
 
   public DataEncryptionKey getDek(String kekName, String subject, int version,
       DekFormat algorithm, boolean lookupDeleted) throws SchemaRegistryException {
-    if (version == -1) {
+    if (version == LATEST_VERSION) {
       return getLatestDek(kekName, subject, algorithm, lookupDeleted);
     }
     String tenant = schemaRegistry.tenant();
