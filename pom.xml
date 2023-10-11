@@ -93,15 +93,16 @@
         <cel-version>0.3.12</cel-version>
         <google.api-client.version>1.35.2</google.api-client.version>
         <guice.version>5.1.0</guice.version>
-        <jsonata-version>2.4.1</jsonata-version>
+        <jsonata-version>2.4.3</jsonata-version>
         <json-schema.version>1.14.2</json-schema.version>
         <json-skema.version>0.9.0</json-skema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <okio.version>3.0.0</okio.version>
-        <tink.version>1.10.0</tink.version>
-        <tink.kms.version>1.8.0</tink.kms.version>
+        <tink.version>1.11.0</tink.version>
+        <tink.aws.kms.version>1.9.1</tink.aws.kms.version>
+        <tink.gcp.kms.version>1.9.0</tink.gcp.kms.version>
         <wire.version>4.9.0</wire.version>
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.6.0-0</io.confluent.schema-registry.version>
@@ -305,12 +306,12 @@
             <dependency>
                 <groupId>com.google.crypto.tink</groupId>
                 <artifactId>tink-awskms</artifactId>
-                <version>${tink.kms.version}</version>
+                <version>${tink.aws.kms.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.crypto.tink</groupId>
                 <artifactId>tink-gcpkms</artifactId>
-                <version>${tink.kms.version}</version>
+                <version>${tink.gcp.kms.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.api-client</groupId>
