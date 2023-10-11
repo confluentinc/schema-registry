@@ -84,6 +84,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
   private static final Logger log = LoggerFactory.getLogger(DekRegistryResource.class);
 
+  public static final int NAME_MAX_LENGTH = 64;
+
   private final DekRegistry dekRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
@@ -682,6 +684,9 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
   private static void checkName(String name) {
     if (name == null || name.isEmpty()) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo("name");
+    }
+    if (name.length() > NAME_MAX_LENGTH) {
       throw DekRegistryErrors.invalidOrMissingKeyInfo("name");
     }
     char first = name.charAt(0);
