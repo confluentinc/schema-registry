@@ -21,9 +21,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.bettercloud.vault.Vault;
-import com.bettercloud.vault.api.Logical;
-import com.bettercloud.vault.response.LogicalResponse;
+import io.github.jopenlibs.vault.api.Logical;
+import io.github.jopenlibs.vault.response.LogicalResponse;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeyTemplates;
 import com.google.crypto.tink.KeysetHandle;
@@ -78,14 +77,12 @@ public class HcVaultFieldEncryptionProperties extends FieldEncryptionProperties 
     return mockClient(getKmsKeyId());
   }
 
-  static Vault mockClient(String keyId) throws Exception {
+  static Logical mockClient(String keyId) throws Exception {
     Aead aead = KeysetHandle.generateNew(KeyTemplates.get("AES128_GCM")).getPrimitive(Aead.class);
     Map<String, String> response = new HashMap<>();
     LogicalResponse logicalResponse = mock(LogicalResponse.class);
     when(logicalResponse.getData()).thenReturn(response);
     Logical logical = mock(Logical.class);
-    Vault client = mock(Vault.class);
-    when(client.logical()).thenReturn(logical);
     when(logical.write(any(String.class), any(Map.class)))
         .thenAnswer(invocationOnMock -> {
           String path = invocationOnMock.getArgument(0);
@@ -101,7 +98,7 @@ public class HcVaultFieldEncryptionProperties extends FieldEncryptionProperties 
           }
           return logicalResponse;
         });
-    return client;
+    return logical;
   }
 }
 
