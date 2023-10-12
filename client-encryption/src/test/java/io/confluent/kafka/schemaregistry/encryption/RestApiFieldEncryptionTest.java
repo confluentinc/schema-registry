@@ -19,6 +19,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.testing.FakeTicker;
 import com.google.crypto.tink.aead.AeadConfig;
@@ -26,6 +27,7 @@ import io.confluent.dekregistry.DekRegistryResourceExtension;
 import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.CachedDekRegistryClient;
 import io.confluent.dekregistry.client.rest.DekRegistryRestService;
+import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -190,6 +192,78 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
 
     record = (GenericRecord) badDeserializer.deserialize(topic, headers, bytes);
     assertNotEquals("testUser", record.get("name").toString());  // still encrypted
+  }
+
+  @Test
+  public void testFieldEncryptionWithDekRotation() throws Exception {
+    List<String> ruleNames = ImmutableList.of("myRule");
+    FieldEncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
+
+    DekRegistryClient dekRegistry = new CachedDekRegistryClient(
+        new DekRegistryRestService(restApp.restClient.getBaseUrls()),
+        1000,
+        600,
+        Collections.emptyMap(),
+        Collections.emptyMap()
+    );
+
+    String topic = "test";
+    Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties(
+        restApp.restClient.getBaseUrls().toString());
+    FakeTicker fakeTicker = new FakeTicker();
+    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(
+        restApp.restClient,
+        10,
+        ImmutableList.of(
+            new AvroSchemaProvider(), new ProtobufSchemaProvider(), new JsonSchemaProvider()),
+        Collections.emptyMap(),
+        Collections.emptyMap(),
+        fakeTicker
+    );
+
+    KafkaAvroSerializer avroSerializer = new KafkaAvroSerializer(schemaRegistry, clientProps);
+    KafkaAvroDeserializer avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, clientProps);
+
+    String subject = "test-value";
+    AvroSchema schema = createUserSchema();
+    registerAndVerifySchema(schemaRegistry, schema, 1, subject);
+
+    IndexedRecord avroRecord = createUserRecord();
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    assertEquals("testUser", record.get("name").toString());
+
+    Rule rule = new Rule("myRule", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("encrypt.dek.expiry.days", "1", "preserve.source.fields", "true"),
+        null, null, "ERROR,NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata(fieldEncryptionProps, "kek1");
+    AvroSchema ruleSchema = new AvroSchema(
+        null, Collections.emptyList(), Collections.emptyMap(), metadata, ruleSet, null, true);
+    registerAndVerifySchema(schemaRegistry, ruleSchema, 2, subject);
+
+    fakeTicker.advance(61, TimeUnit.SECONDS);
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    assertEquals("testUser", record.get("name").toString());
+
+    fakeTicker.advance(2, TimeUnit.DAYS);
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    assertEquals("testUser", record.get("name").toString());
+
+    fakeTicker.advance(2, TimeUnit.DAYS);
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    assertEquals("testUser", record.get("name").toString());
+
+    Dek dek = dekRegistry.getDekLatestVersion("kek1", subject, null, false);
+    assertEquals(3, dek.getVersion());
+
+    dekRegistry.deleteDek("kek1", subject, null, false);
+    dekRegistry.deleteDek("kek1", subject, null, true);
   }
 
   private AvroSchema createUserSchema() {
