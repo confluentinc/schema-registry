@@ -681,7 +681,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
             case CONDITION:
               if (Boolean.FALSE.equals(result)) {
                 String errMsg = rule.getDoc();
-                if (errMsg == null) {
+                if (errMsg == null || errMsg.isEmpty()) {
                   String expr = rule.getExpr();
                   errMsg = expr != null
                       ? "Expr failed: '" + expr + "'"
