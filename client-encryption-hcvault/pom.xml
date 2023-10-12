@@ -44,7 +44,7 @@
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.bettercloud</groupId>
+            <groupId>io.github.jopenlibs</groupId>
             <artifactId>vault-java-driver</artifactId>
         </dependency>
         <dependency>
