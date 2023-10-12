@@ -33,6 +33,7 @@ import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.subtle.Validators;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -75,7 +76,7 @@ public final class AzureKmsClient implements KmsClient {
     if (algorithm == null) {
       throw new IllegalArgumentException("algorithm must not be null");
     }
-    if (!uri.toLowerCase().startsWith(PREFIX)) {
+    if (!uri.toLowerCase(Locale.US).startsWith(PREFIX)) {
       throw new IllegalArgumentException("key URI must starts with " + PREFIX);
     }
     this.keyUri = uri;
@@ -92,7 +93,7 @@ public final class AzureKmsClient implements KmsClient {
     if (this.keyUri != null && this.keyUri.equals(uri)) {
       return true;
     }
-    return this.keyUri == null && uri.toLowerCase().startsWith(PREFIX);
+    return this.keyUri == null && uri.toLowerCase(Locale.US).startsWith(PREFIX);
   }
 
   /**

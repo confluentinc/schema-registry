@@ -16,16 +16,20 @@
 
 package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
-import com.bettercloud.vault.Vault;
-import com.bettercloud.vault.VaultConfig;
-import com.bettercloud.vault.VaultException;
+import io.github.jopenlibs.vault.EnvironmentLoader;
+import io.github.jopenlibs.vault.Vault;
+import io.github.jopenlibs.vault.VaultConfig;
+import io.github.jopenlibs.vault.VaultException;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.subtle.Validators;
 
+import io.github.jopenlibs.vault.api.Logical;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
+import java.util.Locale;
+import java.util.Optional;
 
 /**
  * An implementation of {@link KmsClient} for <a
@@ -36,7 +40,7 @@ public class HcVaultKmsClient implements KmsClient {
   public static final String PREFIX = "hcvault://";
 
   private String keyUri;
-  private Vault vault;
+  private Logical vault;
 
   public HcVaultKmsClient() {
   }
@@ -46,7 +50,7 @@ public class HcVaultKmsClient implements KmsClient {
    * {@code uri}.
    */
   public HcVaultKmsClient(String uri) {
-    if (!uri.toLowerCase().startsWith(PREFIX)) {
+    if (!uri.toLowerCase(Locale.US).startsWith(PREFIX)) {
       throw new IllegalArgumentException("key URI must starts with " + PREFIX);
     }
     this.keyUri = uri;
@@ -62,7 +66,7 @@ public class HcVaultKmsClient implements KmsClient {
     if (this.keyUri != null && this.keyUri.equals(uri)) {
       return true;
     }
-    return this.keyUri == null && uri.toLowerCase().startsWith(PREFIX);
+    return this.keyUri == null && uri.toLowerCase(Locale.US).startsWith(PREFIX);
   }
 
   /**
@@ -74,6 +78,11 @@ public class HcVaultKmsClient implements KmsClient {
    */
   @Override
   public KmsClient withCredentials(String token) throws GeneralSecurityException {
+    return withCredentials(token, Optional.empty());
+  }
+
+  public KmsClient withCredentials(String token, Optional<String> namespace)
+      throws GeneralSecurityException {
     try {
       URI uri = new URI(toHcVaultUri(this.keyUri));
       String address = "";
@@ -87,10 +96,15 @@ public class HcVaultKmsClient implements KmsClient {
       VaultConfig config = new VaultConfig()
           .address(address)
           .token(token)
-          .engineVersion(1)
-          .build();
+          .engineVersion(1);
 
-      this.vault = new Vault(config);
+      if (namespace.isPresent()) {
+        config = config.nameSpace(namespace.get());
+      }
+
+      config = config.build();
+
+      this.vault = Vault.create(config).logical();
       return this;
     } catch (URISyntaxException | VaultException e) {
       throw new GeneralSecurityException("invalid path provided", e);
@@ -100,10 +114,9 @@ public class HcVaultKmsClient implements KmsClient {
   /**
    * Loads default Vault config.
    *
-   * <p>Vault Address, Token and timeouts can be loaded from environment variables.
+   * <p>Token and timeouts can be loaded from environment variables.
    *
    * <ul>
-   *     <li>Vault Address read from "VAULT_ADDR" environment variable</li>
    *     <li>Vault Token read from "VAULT_TOKEN" environment variable</li>
    *     <li>Open Timeout read from "VAULT_OPEN_TIMEOUT" environment variable</li>
    *     <li>Read Timeout read from "VAULT_READ_TIMEOUT" environment variable</li>
@@ -122,10 +135,19 @@ public class HcVaultKmsClient implements KmsClient {
       if (uri.getPort() != -1) {
         address += ":" + uri.getPort();
       }
-      this.vault = new Vault(new VaultConfig()
+      VaultConfig config = new VaultConfig()
           .address(address)
-          .engineVersion(1)
-          .build());
+          .engineVersion(1);
+
+      EnvironmentLoader envLoader = new EnvironmentLoader();
+      String namespace = envLoader.loadVariable("VAULT_NAMESPACE");
+      if (namespace != null && !namespace.isEmpty()) {
+        config = config.nameSpace(namespace);
+      }
+
+      config = config.build();
+
+      this.vault = Vault.create(config).logical();
     } catch (URISyntaxException | VaultException e) {
       throw new GeneralSecurityException("unable to create config", e);
     }
@@ -133,9 +155,18 @@ public class HcVaultKmsClient implements KmsClient {
   }
 
   /**
-   * Utilizes the provided vault client.
+   * Loads Vault credentials from a config.
    */
-  public KmsClient withVault(Vault vault) {
+  public KmsClient withConfig(VaultConfig config)
+      throws GeneralSecurityException {
+    this.vault = Vault.create(config).logical();
+    return this;
+  }
+
+  /**
+   * Specifies the {@link Logical} object to be used. Only used for testing.
+   */
+  public KmsClient withVault(Logical vault) {
     this.vault = vault;
     return this;
   }

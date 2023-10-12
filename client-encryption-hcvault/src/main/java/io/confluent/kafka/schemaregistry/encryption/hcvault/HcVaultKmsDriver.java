@@ -16,10 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
-import com.bettercloud.vault.Vault;
 import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
+import io.github.jopenlibs.vault.api.Logical;
 import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.Optional;
@@ -27,6 +27,7 @@ import java.util.Optional;
 public class HcVaultKmsDriver implements KmsDriver {
 
   public static final String TOKEN_ID = "token.id";
+  public static final String NAMESPACE = "namespace";
 
   public HcVaultKmsDriver() {
   }
@@ -40,18 +41,24 @@ public class HcVaultKmsDriver implements KmsDriver {
     return (String) configs.get(TOKEN_ID);
   }
 
+  private String getNamespace(Map<String, ?> configs) {
+    return (String) configs.get(NAMESPACE);
+  }
+
   @Override
   public KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
-    Vault testClient = (Vault) getTestClient(configs);
+    Logical testClient = (Logical) getTestClient(configs);
     Optional<String> creds = testClient != null
         ? Optional.empty()
         : Optional.ofNullable(getToken(configs));
-    return registerWithHcVaultKms(kekUrl, creds, testClient);
+    Optional<String> namespace = Optional.ofNullable(getNamespace(configs));
+    return registerWithHcVaultKms(kekUrl, creds, namespace, testClient);
   }
 
   public static KmsClient registerWithHcVaultKms(
-      Optional<String> keyUri, Optional<String> credentials, Vault vault)
+      Optional<String> keyUri, Optional<String> credentials,
+      Optional<String> namespace, Logical vault)
       throws GeneralSecurityException {
     HcVaultKmsClient client;
     if (keyUri.isPresent()) {

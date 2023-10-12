@@ -288,9 +288,9 @@
                 <version>1.13.8</version>
             </dependency>
             <dependency>
-                <groupId>com.bettercloud</groupId>
+                <groupId>io.github.jopenlibs</groupId>
                 <artifactId>vault-java-driver</artifactId>
-                <version>5.1.0</version>
+                <version>6.1.0</version>
             </dependency>
             <dependency>
                 <groupId>com.google.crypto.tink</groupId>
