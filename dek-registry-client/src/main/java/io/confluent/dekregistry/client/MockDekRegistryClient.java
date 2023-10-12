@@ -116,7 +116,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
   public Dek getDekVersion(String kekName, String subject, int version,
       DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
-    if (version == -1) {
+    if (version == LATEST_VERSION) {
       return getDekLatestVersion(kekName, subject, algorithm, lookupDeleted);
     }
     if (algorithm == null) {

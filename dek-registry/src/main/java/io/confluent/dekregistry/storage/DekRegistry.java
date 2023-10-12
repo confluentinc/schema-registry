@@ -20,6 +20,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.crypto.tink.Aead;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
@@ -93,7 +94,7 @@ public class DekRegistry implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(DekRegistry.class);
 
-  public static final int LATEST_VERSION = -1;
+  public static final int LATEST_VERSION = DekRegistryClient.LATEST_VERSION;
   public static final int MIN_VERSION = 1;
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String X_FORWARD_HEADER = DekRegistryRestService.X_FORWARD_HEADER;

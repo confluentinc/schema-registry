@@ -169,8 +169,10 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     try {
-      return dekCache.get(new DekId(kekName, subject, -1, algorithm, lookupDeleted), () ->
-          restService.getDekVersion(kekName, subject, -1, algorithm, lookupDeleted));
+      return dekCache.get(
+          new DekId(kekName, subject, LATEST_VERSION, algorithm, lookupDeleted), () ->
+              restService.getDekVersion(
+                  kekName, subject, LATEST_VERSION, algorithm, lookupDeleted));
     } catch (ExecutionException e) {
       if (e.getCause() instanceof IOException) {
         throw (IOException) e.getCause();
@@ -252,6 +254,8 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setEncryptedKeyMaterial(encryptedKeyMaterial);
     Dek dek = restService.createDek(requestProperties, kekName, request);
     dekCache.put(new DekId(kekName, subject, version, algorithm, false), dek);
+    dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, false));
+    dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, true));
     return dek;
   }
 

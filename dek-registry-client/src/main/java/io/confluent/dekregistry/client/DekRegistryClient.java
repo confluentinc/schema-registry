@@ -28,6 +28,8 @@ import java.util.Map;
 
 public interface DekRegistryClient extends Closeable {
 
+  public static final int LATEST_VERSION = -1;
+
   default Ticker ticker() {
     return Ticker.systemTicker();
   }
