@@ -680,10 +680,13 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
           switch (rule.getKind()) {
             case CONDITION:
               if (Boolean.FALSE.equals(result)) {
-                String expr = rule.getExpr();
-                String errMsg = expr != null
-                    ? "Expr failed: '" + expr + "'"
-                    : "Condition failed: '" + rule.getName() + "'";
+                String errMsg = rule.getDoc();
+                if (errMsg == null || errMsg.isEmpty()) {
+                  String expr = rule.getExpr();
+                  errMsg = expr != null
+                      ? "Expr failed: '" + expr + "'"
+                      : "Condition failed: '" + rule.getName() + "'";
+                }
                 throw new RuleException(errMsg);
               }
               break;
