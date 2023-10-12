@@ -290,7 +290,7 @@
             <dependency>
                 <groupId>io.github.jopenlibs</groupId>
                 <artifactId>vault-java-driver</artifactId>
-                <version>6.1.0</version>
+                <version>5.4.0</version>
             </dependency>
             <dependency>
                 <groupId>com.google.crypto.tink</groupId>
