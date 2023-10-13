@@ -634,6 +634,10 @@ public class SubjectVersionsResource {
     RegisterSchemaResponse registerSchemaResponse;
     try {
       if (request.getRulesToMerge() != null || request.getRulesToRemove() != null) {
+        if (request.getRuleSet() != null) {
+          throw new RestInvalidRuleSetException(
+              "ruleSet should be omitted if specifying rulesToMerge or rulesToRemove");
+        }
         modifyPreviousRuleSet(subject, request);
       }
 
