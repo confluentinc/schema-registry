@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableSortedSet;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -259,13 +260,18 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
 
     TagSchemaRequest tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setNewVersion(2);
-    Rule rule = new Rule("myRule", null, null, null,
+    Rule migrationRule = new Rule("myMigrationRule", null, null, RuleMode.UPGRADE,
         "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
-    Rule rule2 = new Rule("myRule2", null, null, null,
+    Rule migrationRule2 = new Rule("myMigrationRule2", null, null, RuleMode.UPGRADE,
         "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
-    Rule rule3 = new Rule("myRule3", null, null, null,
+    Rule domainRule = new Rule("myRule", null, null, null,
         "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule, rule2, rule3));
+    Rule domainRule2 = new Rule("myRule2", null, null, null,
+        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
+    Rule domainRule3 = new Rule("myRule3", null, null, null,
+        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
+    RuleSet ruleSet = new RuleSet(ImmutableList.of(migrationRule, migrationRule2),
+        ImmutableList.of(domainRule, domainRule2, domainRule3));
     tagSchemaRequest.setRulesToMerge(ruleSet);
     tagSchemaRequest.setRulesToRemove(ImmutableList.of("myRule4"));
 
@@ -280,17 +286,21 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
 
     tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setNewVersion(3);
-    Rule rule5 = new Rule("myRule5", null, null, null,
+    Rule migrationRule3 = new Rule("myMigrationRule3", null, null, RuleMode.UPGRADE,
         "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE,NONE", false);
-    Rule rule4 = new Rule("myRule4", null, null, null,
+    Rule domainRule5 = new Rule("myRule5", null, null, null,
         "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE,NONE", false);
-    rule2 = new Rule("myRule2", null, null, null,
+    Rule domainRule4 = new Rule("myRule4", null, null, null,
         "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE,NONE", false);
-    ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule5, rule4, rule2));
+    domainRule2 = new Rule("myRule2", null, null, null,
+        "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE,NONE", false);
+    ruleSet = new RuleSet(ImmutableList.of(migrationRule3),
+        ImmutableList.of(domainRule5, domainRule4, domainRule2));
     tagSchemaRequest.setRulesToMerge(ruleSet);
-    tagSchemaRequest.setRulesToRemove(ImmutableList.of("myRule"));
+    tagSchemaRequest.setRulesToRemove(ImmutableList.of("myRule", "myMigrationRule2"));
 
-    RuleSet expectedRuleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule3, rule5, rule4, rule2));
+    RuleSet expectedRuleSet = new RuleSet(ImmutableList.of(migrationRule, migrationRule3),
+        ImmutableList.of(domainRule3, domainRule5, domainRule4, domainRule2));
     responses = restApp.restClient
         .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
     assertEquals(3, responses.getId());

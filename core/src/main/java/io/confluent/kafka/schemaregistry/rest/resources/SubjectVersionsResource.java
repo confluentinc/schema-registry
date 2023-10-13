@@ -633,32 +633,8 @@ public class SubjectVersionsResource {
         headers, schemaRegistry.config().whitelistHeaders());
     RegisterSchemaResponse registerSchemaResponse;
     try {
-      RuleSet ruleSet = request.getRuleSet();
       if (request.getRulesToMerge() != null || request.getRulesToRemove() != null) {
-        int oldVersion = request.getNewVersion() != null ? request.getNewVersion() - 1 : -1;
-        Schema oldSchema = schemaRegistry.get(subject, oldVersion, false);
-        // Use the previous ruleSet instead of the passed in one
-        ruleSet = oldSchema != null ? oldSchema.getRuleSet() : null;
-        if (request.getRulesToMerge() != null) {
-          ruleSet = mergeRuleSets(ruleSet, request.getRulesToMerge());
-        }
-        if (ruleSet != null && request.getRulesToRemove() != null) {
-          List<String> rulesToRemove = request.getRulesToRemove();
-          List<Rule> migrationRules = ruleSet.getMigrationRules();
-          if (migrationRules != null) {
-            migrationRules = migrationRules.stream()
-                .filter(r -> !rulesToRemove.contains(r.getName()))
-                .collect(Collectors.toList());
-          }
-          List<Rule> domainRules = ruleSet.getDomainRules();
-          if (domainRules != null) {
-            domainRules = domainRules.stream()
-                .filter(r -> !rulesToRemove.contains(r.getName()))
-                .collect(Collectors.toList());
-          }
-          ruleSet = new RuleSet(migrationRules, domainRules);
-        }
-        request.setRuleSet(ruleSet);
+        modifyPreviousRuleSet(subject, request);
       }
 
       if (request.getRuleSet() != null) {
@@ -696,5 +672,33 @@ public class SubjectVersionsResource {
       throw Errors.schemaRegistryException("Error while registering schema", e);
     }
     asyncResponse.resume(registerSchemaResponse);
+  }
+
+  private void modifyPreviousRuleSet(String subject, TagSchemaRequest request)
+      throws SchemaRegistryException {
+    int oldVersion = request.getNewVersion() != null ? request.getNewVersion() - 1 : -1;
+    Schema oldSchema = schemaRegistry.get(subject, oldVersion, false);
+    // Use the previous ruleSet instead of the passed in one
+    RuleSet ruleSet = oldSchema != null ? oldSchema.getRuleSet() : null;
+    if (request.getRulesToMerge() != null) {
+      ruleSet = mergeRuleSets(ruleSet, request.getRulesToMerge());
+    }
+    if (ruleSet != null && request.getRulesToRemove() != null) {
+      List<String> rulesToRemove = request.getRulesToRemove();
+      List<Rule> migrationRules = ruleSet.getMigrationRules();
+      if (migrationRules != null) {
+        migrationRules = migrationRules.stream()
+            .filter(r -> !rulesToRemove.contains(r.getName()))
+            .collect(Collectors.toList());
+      }
+      List<Rule> domainRules = ruleSet.getDomainRules();
+      if (domainRules != null) {
+        domainRules = domainRules.stream()
+            .filter(r -> !rulesToRemove.contains(r.getName()))
+            .collect(Collectors.toList());
+      }
+      ruleSet = new RuleSet(migrationRules, domainRules);
+    }
+    request.setRuleSet(ruleSet);
   }
 }
