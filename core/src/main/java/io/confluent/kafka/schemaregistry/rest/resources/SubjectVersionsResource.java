@@ -15,8 +15,12 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
+
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -50,6 +54,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -624,18 +629,46 @@ public class SubjectVersionsResource {
     }
     schemaRegistry.getCompositeUpdateRequestHandler().handle(schema, request);
 
-    if (request.getRuleSet() != null) {
-      try {
-        request.getRuleSet().validate();
-      } catch (RuleException e) {
-        throw new RestInvalidRuleSetException(e.getMessage());
-      }
-    }
-
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
     RegisterSchemaResponse registerSchemaResponse;
     try {
+      RuleSet ruleSet = request.getRuleSet();
+      if (request.getRulesToMerge() != null || request.getRulesToRemove() != null) {
+        int oldVersion = request.getNewVersion() != null ? request.getNewVersion() - 1 : -1;
+        Schema oldSchema = schemaRegistry.get(subject, oldVersion, false);
+        // Use the previous ruleSet instead of the passed in one
+        ruleSet = oldSchema != null ? oldSchema.getRuleSet() : null;
+        if (request.getRulesToMerge() != null) {
+          ruleSet = mergeRuleSets(ruleSet, request.getRulesToMerge());
+        }
+        if (ruleSet != null && request.getRulesToRemove() != null) {
+          List<String> rulesToRemove = request.getRulesToRemove();
+          List<Rule> migrationRules = ruleSet.getMigrationRules();
+          if (migrationRules != null) {
+            migrationRules = migrationRules.stream()
+                .filter(r -> !rulesToRemove.contains(r.getName()))
+                .collect(Collectors.toList());
+          }
+          List<Rule> domainRules = ruleSet.getDomainRules();
+          if (domainRules != null) {
+            domainRules = domainRules.stream()
+                .filter(r -> !rulesToRemove.contains(r.getName()))
+                .collect(Collectors.toList());
+          }
+          ruleSet = new RuleSet(migrationRules, domainRules);
+        }
+        request.setRuleSet(ruleSet);
+      }
+
+      if (request.getRuleSet() != null) {
+        try {
+          request.getRuleSet().validate();
+        } catch (RuleException e) {
+          throw new RestInvalidRuleSetException(e.getMessage());
+        }
+      }
+
       Schema result =
           schemaRegistry.modifySchemaTagsOrForward(subject, schema, request, headerProperties);
       registerSchemaResponse = new RegisterSchemaResponse(result);
