@@ -136,7 +136,7 @@ public class TestLocalCompatibilityMojoTest extends SchemaRegistryTest{
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
-        + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]},"
+        + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"},"
         + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"bar\"}]}";
     makeFile(schemaString8, "schema8.avsc");
 
