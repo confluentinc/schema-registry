@@ -673,7 +673,12 @@ public class KafkaAvroSerializerTest {
     assertNotNull("Optional field should have a non-null default value", genericRecordV2.get(newOptionalField));
 
     // In version 2 of the schema, the fieldToDelete field is gone
-    assertNull("Field was removed in schema V2 but is still present", genericRecordV2.get(fieldToDelete));
+    try {
+      genericRecordV2.get(fieldToDelete);
+      fail("Getting invalid schema field should fail");
+    } catch (AvroRuntimeException e){
+      //this is expected
+    }
   }
 
   @Test
