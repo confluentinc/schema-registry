@@ -49,6 +49,8 @@ public class TagSchemaRequest {
   private List<SchemaTags> tagsToRemove;
   private Metadata metadata;
   private RuleSet ruleSet;
+  private RuleSet rulesToMerge;
+  private List<String> rulesToRemove;
 
   public TagSchemaRequest() {
   }
@@ -106,6 +108,26 @@ public class TagSchemaRequest {
     this.ruleSet = ruleSet;
   }
 
+  @JsonProperty("rulesToMerge")
+  public RuleSet getRulesToMerge() {
+    return rulesToMerge;
+  }
+
+  @JsonProperty("rulesToMerge")
+  public void setRulesToMerge(RuleSet rulesToMerge) {
+    this.rulesToMerge = rulesToMerge;
+  }
+
+  @JsonProperty("rulesToRemove")
+  public List<String> getRulesToRemove() {
+    return rulesToRemove;
+  }
+
+  @JsonProperty("rulesToRemove")
+  public void setRulesToRemove(List<String> rulesToRemove) {
+    this.rulesToRemove = rulesToRemove;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -122,12 +144,15 @@ public class TagSchemaRequest {
         && Objects.equals(tagsToAdd, tagSchemaRequest.tagsToAdd)
         && Objects.equals(tagsToRemove, tagSchemaRequest.tagsToRemove)
         && Objects.equals(metadata, tagSchemaRequest.metadata)
-        && Objects.equals(ruleSet, tagSchemaRequest.ruleSet);
+        && Objects.equals(ruleSet, tagSchemaRequest.ruleSet)
+        && Objects.equals(rulesToMerge, tagSchemaRequest.rulesToMerge)
+        && Objects.equals(rulesToRemove, tagSchemaRequest.rulesToRemove);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(newVersion, tagsToAdd, tagsToRemove, metadata, ruleSet);
+    return Objects.hash(newVersion, tagsToAdd, tagsToRemove, metadata,
+        ruleSet, rulesToMerge, rulesToRemove);
   }
 
   public String toJson() throws IOException {
