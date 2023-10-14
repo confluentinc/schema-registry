@@ -616,7 +616,12 @@ public class KafkaAvroSerializerTest {
     GenericData.Record decoderProjection = (GenericData.Record) obj;
     assertEquals("testUser", decoderProjection.get("name").toString());
     //Age field was hidden by projection
-    assertNull(decoderProjection.get("age"));
+    try {
+      decoderProjection.get("age");
+      fail("Getting invalid schema field should fail");
+    } catch (AvroRuntimeException e){
+      //this is expected
+    }
 
     obj = avroDeserializer.deserialize(topic, bytes, User.getClassSchema());
     assertTrue(
