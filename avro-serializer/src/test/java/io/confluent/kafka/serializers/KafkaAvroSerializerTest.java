@@ -634,7 +634,7 @@ public class KafkaAvroSerializerTest {
     assertEquals("testUser", deserializeProjection.get("name").toString());
     //Age field was hidden by projection
     try {
-      decoderProjection.get("age");
+      deserializeProjection.get("age");
       fail("Getting invalid schema field should fail");
     } catch (AvroRuntimeException e){
       //this is expected
