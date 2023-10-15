@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.encryption.local;
 
 import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.KeyManager;
 import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.PrimitiveSet;

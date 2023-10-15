@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.encryption.tink;
 
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.DeterministicAead;
-import com.google.crypto.tink.KeyTemplates;
 import com.google.crypto.tink.Registry;
 import com.google.crypto.tink.TinkProtoParametersFormat;
 import com.google.crypto.tink.aead.AeadConfig;
