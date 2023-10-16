@@ -48,6 +48,8 @@ public final class LocalKmsClient implements KmsClient {
    */
   public static final String PREFIX = "local-kms://";
 
+  private static final String AES_GCM_KEY = "type.googleapis.com/google.crypto.tink.AesGcmKey";
+
   @Nullable
   private String keyUri;
   private Aead aead;
@@ -78,8 +80,7 @@ public final class LocalKmsClient implements KmsClient {
         .setVersion(0)
         .setKeyValue(ByteString.copyFrom(keyBytes))
         .build();
-    return Registry.getPrimitive(
-        "type.googleapis.com/google.crypto.tink.AesGcmKey", key.toByteString(), Aead.class);
+    return Registry.getPrimitive(AES_GCM_KEY, key.toByteString(), Aead.class);
   }
 
   private Key getKey(String secret) throws GeneralSecurityException {
