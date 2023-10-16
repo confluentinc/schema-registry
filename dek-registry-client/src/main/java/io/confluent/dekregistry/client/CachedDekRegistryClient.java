@@ -42,6 +42,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   private final DekRegistryRestService restService;
   private final Cache<KekId, Kek> kekCache;
   private final Cache<DekId, Dek> dekCache;
+  private final Ticker ticker;
 
   public CachedDekRegistryClient(
       List<String> baseUrls,
@@ -87,6 +88,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       cacheBuilder = cacheBuilder.expireAfterWrite(Duration.ofSeconds(cacheExpirySecs));
     }
     this.dekCache = cacheBuilder.build();
+    this.ticker = ticker;
+  }
+
+  @Override
+  public Ticker ticker() {
+    return ticker;
   }
 
   @Override
@@ -118,17 +125,54 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   }
 
   @Override
-  public Dek getDek(String kekName, String subject, boolean lookupDeleted)
+  public List<Integer> listDekVersions(String kekName, String subject,
+      DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
-    return getDek(kekName, subject, null, lookupDeleted);
+    return restService.listDekVersions(kekName, subject, algorithm, lookupDeleted);
   }
 
   @Override
   public Dek getDek(String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     try {
-      return dekCache.get(new DekId(kekName, subject, algorithm, lookupDeleted), () ->
+      return dekCache.get(new DekId(kekName, subject, null, algorithm, lookupDeleted), () ->
           restService.getDek(kekName, subject, algorithm, lookupDeleted));
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof IOException) {
+        throw (IOException) e.getCause();
+      } else if (e.getCause() instanceof RestClientException) {
+        throw (RestClientException) e.getCause();
+      }
+      throw new RuntimeException(e.getCause());
+    }
+  }
+
+  @Override
+  public Dek getDekVersion(String kekName, String subject, int version,
+      DekFormat algorithm, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    try {
+      return dekCache.get(new DekId(kekName, subject, version, algorithm, lookupDeleted), () ->
+          restService.getDekVersion(kekName, subject, version, algorithm, lookupDeleted));
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof IOException) {
+        throw (IOException) e.getCause();
+      } else if (e.getCause() instanceof RestClientException) {
+        throw (RestClientException) e.getCause();
+      }
+      throw new RuntimeException(e.getCause());
+    }
+  }
+
+  @Override
+  public Dek getDekLatestVersion(String kekName, String subject,
+      DekFormat algorithm, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    try {
+      return dekCache.get(
+          new DekId(kekName, subject, LATEST_VERSION, algorithm, lookupDeleted), () ->
+              restService.getDekVersion(
+                  kekName, subject, LATEST_VERSION, algorithm, lookupDeleted));
     } catch (ExecutionException e) {
       if (e.getCause() instanceof IOException) {
         throw (IOException) e.getCause();
@@ -179,22 +223,39 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       DekFormat algorithm,
       String encryptedKeyMaterial)
       throws IOException, RestClientException {
-    return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, subject, algorithm, encryptedKeyMaterial);
+    return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, subject, null,
+        algorithm, encryptedKeyMaterial);
+  }
+
+  @Override
+  public Dek createDek(
+      String kekName,
+      String subject,
+      int version,
+      DekFormat algorithm,
+      String encryptedKeyMaterial)
+      throws IOException, RestClientException {
+    return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, subject, version,
+        algorithm, encryptedKeyMaterial);
   }
 
   public Dek createDek(
       Map<String, String> requestProperties,
       String kekName,
       String subject,
+      Integer version,
       DekFormat algorithm,
       String encryptedKeyMaterial)
       throws IOException, RestClientException {
     CreateDekRequest request = new CreateDekRequest();
     request.setSubject(subject);
+    request.setVersion(version);
     request.setAlgorithm(algorithm);
     request.setEncryptedKeyMaterial(encryptedKeyMaterial);
     Dek dek = restService.createDek(requestProperties, kekName, request);
-    dekCache.put(new DekId(kekName, subject, algorithm, false), dek);
+    dekCache.put(new DekId(kekName, subject, version, algorithm, false), dek);
+    dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, false));
+    dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, true));
     return dek;
   }
 
@@ -234,20 +295,8 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       Map<String, String> requestProperties, String kekName, boolean permanentDelete)
       throws IOException, RestClientException {
     restService.deleteKek(requestProperties, kekName, permanentDelete);
-    kekCache.invalidate(new KekId(kekName, permanentDelete));
-  }
-
-  @Override
-  public void deleteDek(String kekName, String subject, boolean permanentDelete)
-      throws IOException, RestClientException {
-    deleteDek(DEFAULT_REQUEST_PROPERTIES, kekName, subject, permanentDelete);
-  }
-
-  public void deleteDek(
-      Map<String, String> requestProperties, String kekName,
-      String subject, boolean permanentDelete)
-      throws IOException, RestClientException {
-    deleteDek(requestProperties, kekName, subject, null, permanentDelete);
+    kekCache.invalidate(new KekId(kekName, false));
+    kekCache.invalidate(new KekId(kekName, true));
   }
 
   @Override
@@ -262,7 +311,72 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       boolean permanentDelete)
       throws IOException, RestClientException {
     restService.deleteDek(requestProperties, kekName, subject, algorithm, permanentDelete);
-    dekCache.invalidate(new DekId(kekName, subject, algorithm, permanentDelete));
+    dekCache.invalidateAll();
+  }
+
+  @Override
+  public void deleteDekVersion(
+      String kekName, String subject, int version, DekFormat algorithm, boolean permanentDelete)
+      throws IOException, RestClientException {
+    deleteDekVersion(DEFAULT_REQUEST_PROPERTIES, kekName, subject, version,
+        algorithm, permanentDelete);
+  }
+
+  public void deleteDekVersion(
+      Map<String, String> requestProperties, String kekName, String subject, int version,
+      DekFormat algorithm, boolean permanentDelete)
+      throws IOException, RestClientException {
+    restService.deleteDekVersion(requestProperties, kekName, subject, version,
+        algorithm, permanentDelete);
+    // Just invalidate all since the version can be represented many ways,
+    // such as null for first or -1 for latest
+    dekCache.invalidateAll();
+  }
+
+  @Override
+  public void undeleteKek(String kekName)
+      throws IOException, RestClientException {
+    undeleteKek(DEFAULT_REQUEST_PROPERTIES, kekName);
+  }
+
+  public void undeleteKek(
+      Map<String, String> requestProperties, String kekName)
+      throws IOException, RestClientException {
+    restService.undeleteKek(requestProperties, kekName);
+    kekCache.invalidate(new KekId(kekName, false));
+    kekCache.invalidate(new KekId(kekName, true));
+  }
+
+  @Override
+  public void undeleteDek(
+      String kekName, String subject, DekFormat algorithm)
+      throws IOException, RestClientException {
+    undeleteDek(DEFAULT_REQUEST_PROPERTIES, kekName, subject, algorithm);
+  }
+
+  public void undeleteDek(
+      Map<String, String> requestProperties, String kekName, String subject, DekFormat algorithm)
+      throws IOException, RestClientException {
+    restService.undeleteDek(requestProperties, kekName, subject, algorithm);
+    dekCache.invalidateAll();
+  }
+
+  @Override
+  public void undeleteDekVersion(
+      String kekName, String subject, int version, DekFormat algorithm)
+      throws IOException, RestClientException {
+    undeleteDekVersion(DEFAULT_REQUEST_PROPERTIES, kekName, subject, version,
+        algorithm);
+  }
+
+  public void undeleteDekVersion(
+      Map<String, String> requestProperties, String kekName, String subject, int version,
+      DekFormat algorithm)
+      throws IOException, RestClientException {
+    restService.undeleteDekVersion(requestProperties, kekName, subject, version, algorithm);
+    // Just invalidate all since the version can be represented many ways,
+    // such as null for first or -1 for latest
+    dekCache.invalidateAll();
   }
 
   @Override
@@ -312,12 +426,15 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
 
     private final String kekName;
     private final String subject;
+    private final Integer version;
     private final DekFormat dekFormat;
     private final boolean lookupDeleted;
 
-    public DekId(String kekName, String subject, DekFormat dekFormat, boolean lookupDeleted) {
+    public DekId(String kekName, String subject, Integer version,
+        DekFormat dekFormat, boolean lookupDeleted) {
       this.kekName = kekName;
       this.subject = subject;
+      this.version = version;
       this.dekFormat = dekFormat;
       this.lookupDeleted = lookupDeleted;
     }
@@ -328,6 +445,10 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
 
     public String getSubject() {
       return subject;
+    }
+
+    public Integer getVersion() {
+      return version;
     }
 
     public DekFormat getDekFormat() {
@@ -350,12 +471,13 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       return lookupDeleted == dekId.lookupDeleted
           && Objects.equals(kekName, dekId.kekName)
           && Objects.equals(subject, dekId.subject)
+          && Objects.equals(version, dekId.version)
           && dekFormat == dekId.dekFormat;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(kekName, subject, dekFormat, lookupDeleted);
+      return Objects.hash(kekName, subject, version, dekFormat, lookupDeleted);
     }
   }
 }

@@ -42,6 +42,9 @@ public class DekRegistryRestService extends RestService implements Configurable 
   private static final TypeReference<List<String>> STRINGS_TYPE =
       new TypeReference<List<String>>() {
       };
+  private static final TypeReference<List<Integer>> INTEGERS_TYPE =
+      new TypeReference<List<Integer>>() {
+      };
   private static final TypeReference<Dek> DEK_TYPE =
       new TypeReference<Dek>() {
       };
@@ -107,6 +110,25 @@ public class DekRegistryRestService extends RestService implements Configurable 
     return httpRequest(path, "GET", null, requestProperties, STRINGS_TYPE);
   }
 
+  public List<Integer> listDekVersions(String kekName, String subject,
+      DekFormat algorithm, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    return listDekVersions(DEFAULT_REQUEST_PROPERTIES, kekName, subject, algorithm, lookupDeleted);
+  }
+
+  public List<Integer> listDekVersions(Map<String, String> requestProperties,
+      String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}/versions")
+        .queryParam("deleted", lookupDeleted);
+    if (algorithm != null) {
+      builder = builder.queryParam("algorithm", algorithm.name());
+    }
+    String path = builder.build(kekName, subject).toString();
+
+    return httpRequest(path, "GET", null, requestProperties, INTEGERS_TYPE);
+  }
+
   public Dek getDek(String name, String subject, boolean lookupDeleted)
       throws IOException, RestClientException {
     return getDek(name, subject, null, lookupDeleted);
@@ -126,6 +148,33 @@ public class DekRegistryRestService extends RestService implements Configurable 
       builder = builder.queryParam("algorithm", algorithm.name());
     }
     String path = builder.build(kekName, subject).toString();
+
+    return httpRequest(path, "GET", null, requestProperties, DEK_TYPE);
+  }
+
+  public Dek getDekVersion(String name, String subject, int version, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    return getDekVersion(name, subject, version, null, lookupDeleted);
+  }
+
+  public Dek getDekVersion(String name, String subject, int version,
+      DekFormat algorithm, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    return getDekVersion(
+        DEFAULT_REQUEST_PROPERTIES, name, subject, version, algorithm, lookupDeleted);
+  }
+
+  public Dek getDekVersion(Map<String, String> requestProperties,
+      String kekName, String subject, int version,
+      DekFormat algorithm, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath(
+        "/dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}")
+        .queryParam("deleted", lookupDeleted);
+    if (algorithm != null) {
+      builder = builder.queryParam("algorithm", algorithm.name());
+    }
+    String path = builder.build(kekName, subject, version).toString();
 
     return httpRequest(path, "GET", null, requestProperties, DEK_TYPE);
   }
@@ -224,5 +273,82 @@ public class DekRegistryRestService extends RestService implements Configurable 
     String path = builder.build(name, subject).toString();
 
     httpRequest(path, "DELETE", null, requestProperties, VOID_TYPE);
+  }
+
+  public void deleteDekVersion(String name, String subject, int version, boolean permanentDelete)
+      throws IOException, RestClientException {
+    deleteDekVersion(name, subject, version, null, permanentDelete);
+  }
+
+  public void deleteDekVersion(String name, String subject, int version,
+      DekFormat algorithm, boolean permanentDelete)
+      throws IOException, RestClientException {
+    deleteDekVersion(
+        DEFAULT_REQUEST_PROPERTIES, name, subject, version, algorithm, permanentDelete);
+  }
+
+  public void deleteDekVersion(Map<String, String> requestProperties, String name, String subject,
+      int version, DekFormat algorithm, boolean permanentDelete)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath(
+        "/dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}")
+        .queryParam("permanent", permanentDelete);
+    if (algorithm != null) {
+      builder = builder.queryParam("algorithm", algorithm.name());
+    }
+    String path = builder.build(name, subject, version).toString();
+
+    httpRequest(path, "DELETE", null, requestProperties, VOID_TYPE);
+  }
+
+  public void undeleteKek(String name)
+      throws IOException, RestClientException {
+    undeleteKek(DEFAULT_REQUEST_PROPERTIES, name);
+  }
+
+  public void undeleteKek(Map<String, String> requestProperties, String name)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/undelete");
+    String path = builder.build(name).toString();
+
+    httpRequest(path, "POST", null, requestProperties, VOID_TYPE);
+  }
+
+  public void undeleteDek(String name, String subject, DekFormat algorithm)
+      throws IOException, RestClientException {
+    undeleteDek(DEFAULT_REQUEST_PROPERTIES, name, subject, algorithm);
+  }
+
+  public void undeleteDek(Map<String, String> requestProperties, String name, String subject,
+      DekFormat algorithm)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath(
+        "/dek-registry/v1/keks/{name}/deks/{subject}/undelete");
+    if (algorithm != null) {
+      builder = builder.queryParam("algorithm", algorithm.name());
+    }
+    String path = builder.build(name, subject).toString();
+
+    httpRequest(path, "POST", null, requestProperties, VOID_TYPE);
+  }
+
+  public void undeleteDekVersion(String name, String subject, int version,
+      DekFormat algorithm)
+      throws IOException, RestClientException {
+    undeleteDekVersion(
+        DEFAULT_REQUEST_PROPERTIES, name, subject, version, algorithm);
+  }
+
+  public void undeleteDekVersion(Map<String, String> requestProperties, String name, String subject,
+      int version, DekFormat algorithm)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath(
+            "/dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}/undelete");
+    if (algorithm != null) {
+      builder = builder.queryParam("algorithm", algorithm.name());
+    }
+    String path = builder.build(name, subject, version).toString();
+
+    httpRequest(path, "POST", null, requestProperties, VOID_TYPE);
   }
 }

@@ -32,8 +32,8 @@ public class DataEncryptionKey extends EncryptionKey {
 
   private final String kekName;
   private final String subject;
-  private final int version;
   private final DekFormat algorithm;
+  private final int version;
   private final String encryptedKeyMaterial;
   private String keyMaterial;
 
@@ -41,16 +41,16 @@ public class DataEncryptionKey extends EncryptionKey {
   public DataEncryptionKey(
       @JsonProperty("kekName") String kekName,
       @JsonProperty("subject") String subject,
-      @JsonProperty("version") int version,
       @JsonProperty("algorithm") DekFormat algorithm,
+      @JsonProperty("version") int version,
       @JsonProperty("encryptedKeyMaterial") String encryptedKeyMaterial,
       @JsonProperty("deleted") boolean deleted
   ) {
     super(KeyType.DEK, deleted);
     this.kekName = kekName;
     this.subject = subject;
-    this.version = version;
     this.algorithm = algorithm;
+    this.version = version;
     this.encryptedKeyMaterial = encryptedKeyMaterial;
   }
 
@@ -64,14 +64,14 @@ public class DataEncryptionKey extends EncryptionKey {
     return this.subject;
   }
 
-  @JsonProperty("version")
-  public int getVersion() {
-    return this.version;
-  }
-
   @JsonProperty("algorithm")
   public DekFormat getAlgorithm() {
     return this.algorithm;
+  }
+
+  @JsonProperty("version")
+  public int getVersion() {
+    return this.version;
   }
 
   @JsonProperty("encryptedKeyMaterial")
@@ -101,21 +101,22 @@ public class DataEncryptionKey extends EncryptionKey {
       return false;
     }
     DataEncryptionKey that = (DataEncryptionKey) o;
-    return version == that.version
-        && Objects.equals(kekName, that.kekName)
+    return Objects.equals(kekName, that.kekName)
         && Objects.equals(subject, that.subject)
         && algorithm == that.algorithm
+        && version == that.version
         && Objects.equals(encryptedKeyMaterial, that.encryptedKeyMaterial);
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(
-        super.hashCode(), kekName, subject, version, algorithm, encryptedKeyMaterial);
+        super.hashCode(), kekName, subject, algorithm, version, encryptedKeyMaterial);
   }
 
   public Dek toDekEntity() {
     return new Dek(
-        kekName, subject, version, algorithm, encryptedKeyMaterial, keyMaterial, timestamp);
+        kekName, subject, version, algorithm, encryptedKeyMaterial, keyMaterial, timestamp,
+        deleted ? true : null);
   }
 }
