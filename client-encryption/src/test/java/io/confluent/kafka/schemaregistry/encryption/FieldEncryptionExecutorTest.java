@@ -1533,6 +1533,7 @@ public abstract class FieldEncryptionExecutorTest {
 
     @Override
     protected byte[] generateDek(DekFormat dekFormat) throws GeneralSecurityException {
+      // generate an invalid dek
       return new byte[15];
     }
   }
