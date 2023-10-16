@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.encryption.local;
 
 import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.KeyManager;
 import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.PrimitiveSet;
@@ -49,6 +48,8 @@ public final class LocalKmsClient implements KmsClient {
    */
   public static final String PREFIX = "local-kms://";
 
+  private static final String AES_GCM_KEY = "type.googleapis.com/google.crypto.tink.AesGcmKey";
+
   @Nullable
   private String keyUri;
   private Aead aead;
@@ -63,17 +64,15 @@ public final class LocalKmsClient implements KmsClient {
     }
     this.keyUri = uri;
 
-    KeyManager<Aead> keyManager = Registry.getKeyManager(
-        "type.googleapis.com/google.crypto.tink.AesGcmKey", Aead.class);
     PrimitiveSet.Builder<Aead> builder = PrimitiveSet.newBuilder(Aead.class);
-    builder.addPrimaryPrimitive(getPrimitive(keyManager, secret), getKey(secret));
+    builder.addPrimaryPrimitive(getPrimitive(secret), getKey(secret));
     for (String oldSecret : oldSecrets) {
-      builder.addPrimitive(getPrimitive(keyManager, oldSecret), getKey(oldSecret));
+      builder.addPrimitive(getPrimitive(oldSecret), getKey(oldSecret));
     }
     this.aead = Registry.wrap(builder.build());
   }
 
-  private Aead getPrimitive(KeyManager<Aead> keyManager, String secret)
+  private Aead getPrimitive(String secret)
       throws GeneralSecurityException {
     byte[] keyBytes = Hkdf.computeHkdf(
         "HmacSha256", secret.getBytes(StandardCharsets.UTF_8), null, null, 16);
@@ -81,7 +80,7 @@ public final class LocalKmsClient implements KmsClient {
         .setVersion(0)
         .setKeyValue(ByteString.copyFrom(keyBytes))
         .build();
-    return keyManager.getPrimitive(key);
+    return Registry.getPrimitive(AES_GCM_KEY, key.toByteString(), Aead.class);
   }
 
   private Key getKey(String secret) throws GeneralSecurityException {
