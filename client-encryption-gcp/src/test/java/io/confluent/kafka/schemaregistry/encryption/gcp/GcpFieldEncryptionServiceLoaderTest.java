@@ -19,18 +19,19 @@ package io.confluent.kafka.schemaregistry.encryption.gcp;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 
 import com.google.common.collect.ImmutableList;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionServiceLoaderTest;
 import java.util.List;
 
-public class GcpFieldEncryptionServiceLoaderTest extends FieldEncryptionExecutorTest {
+public class GcpFieldEncryptionServiceLoaderTest extends FieldEncryptionServiceLoaderTest {
 
   public GcpFieldEncryptionServiceLoaderTest() throws Exception {
     super();
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new GcpFieldEncryptionProperties(ImmutableList.of(DEFAULT_NAME));
+  protected FieldEncryptionProperties getFieldEncryptionProperties(
+      List<String> ruleNames, Class<?> ruleExecutor) {
+    return new GcpFieldEncryptionProperties(ImmutableList.of(DEFAULT_NAME), ruleExecutor);
   }
 }

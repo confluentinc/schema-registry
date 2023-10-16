@@ -31,6 +31,10 @@ public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
     super(ruleNames);
   }
 
+  public LocalFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+    super(ruleNames, ruleExecutor);
+  }
+
   @Override
   public String getKmsType() {
     return "local-kms";
@@ -57,7 +61,7 @@ public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, String.join(",", ruleNames));
     for (String ruleName : ruleNames) {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
-          FieldEncryptionExecutor.class.getName());
+          getRuleExecutor().getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
           + ".param." + SECRET, "mysecret");
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName

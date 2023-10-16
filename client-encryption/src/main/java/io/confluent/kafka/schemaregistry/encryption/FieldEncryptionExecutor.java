@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.encryption;
 
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KmsClient;
+import com.google.crypto.tink.proto.AesGcmKey;
+import com.google.crypto.tink.proto.AesSivKey;
 import com.google.protobuf.ByteString;
 import io.confluent.dekregistry.client.CachedDekRegistryClient.DekId;
 import io.confluent.dekregistry.client.CachedDekRegistryClient.KekId;
@@ -151,8 +153,32 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
     return cryptors;
   }
 
-  protected byte[] generateKey(DekFormat dekFormat) throws GeneralSecurityException {
-    return getCryptor(dekFormat).generateKey();
+  private byte[] generateKey(DekFormat dekFormat) throws GeneralSecurityException {
+    byte[] dek = generateDek(dekFormat);
+    if (dek != null) {
+      switch (dekFormat) {
+        case AES128_GCM:
+        case AES256_GCM:
+          return AesGcmKey.newBuilder()
+              .setKeyValue(ByteString.copyFrom(dek))
+              .build()
+              .toByteArray();
+        case AES256_SIV:
+          return AesSivKey.newBuilder()
+              .setKeyValue(ByteString.copyFrom(dek))
+              .build()
+              .toByteArray();
+        default:
+          throw new IllegalArgumentException("Invalid format " + dekFormat);
+      }
+    } else {
+      return getCryptor(dekFormat).generateKey();
+    }
+  }
+
+  // Can be overridden to generate a custom dek
+  protected byte[] generateDek(DekFormat dekFormat) throws GeneralSecurityException {
+    return null;
   }
 
   private static byte[] toBytes(Type type, Object obj) {

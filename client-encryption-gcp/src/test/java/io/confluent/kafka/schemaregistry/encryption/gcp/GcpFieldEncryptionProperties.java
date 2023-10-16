@@ -34,6 +34,10 @@ public class GcpFieldEncryptionProperties extends FieldEncryptionProperties {
     super(ruleNames);
   }
 
+  public GcpFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+    super(ruleNames, ruleExecutor);
+  }
+
   @Override
   public String getKmsType() {
     return "gcp-kms";
@@ -61,7 +65,7 @@ public class GcpFieldEncryptionProperties extends FieldEncryptionProperties {
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, String.join(",", ruleNames));
     for (String ruleName : ruleNames) {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
-          FieldEncryptionExecutor.class.getName());
+          getRuleExecutor().getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
               + ".param." + CLIENT_ID,
           clientId);

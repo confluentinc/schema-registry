@@ -119,12 +119,14 @@ public abstract class FieldEncryptionExecutorTest {
   private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   private final KafkaAvroSerializer badSerializer;
   private final KafkaAvroDeserializer badDeserializer;
+  private final KafkaAvroSerializer badDekSerializer;
+  private final KafkaAvroDeserializer badDekDeserializer;
   private final String topic;
 
   public FieldEncryptionExecutorTest() throws Exception {
     topic = "test";
     List<String> ruleNames = ImmutableList.of("rule1", "rule2");
-    fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
+    fieldEncryptionProps = getFieldEncryptionProperties(ruleNames, FieldEncryptionExecutor.class);
     Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties("mock://");
     schemaRegistry = SchemaRegistryClientFactory.newClient(Collections.singletonList(
         "mock://"),
@@ -146,7 +148,8 @@ public abstract class FieldEncryptionExecutorTest {
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, clientProps);
 
     List<String> qualifiedRuleNames = ImmutableList.of("test-key:rule1", "test-value:rule1");
-    FieldEncryptionProperties qualifiedFieldEncryptionProps = getFieldEncryptionProperties(qualifiedRuleNames);
+    FieldEncryptionProperties qualifiedFieldEncryptionProps =
+        getFieldEncryptionProperties(qualifiedRuleNames, FieldEncryptionExecutor.class);
     Map<String, Object> qualifiedClientProps = qualifiedFieldEncryptionProps.getClientProperties("mock://");
     avroKeySerializer = new KafkaAvroSerializer();
     avroKeySerializer.configure(qualifiedClientProps, true);
@@ -179,9 +182,15 @@ public abstract class FieldEncryptionExecutorTest {
     badClientProps.put(AbstractKafkaSchemaSerDeConfig.RULE_SERVICE_LOADER_ENABLE, false);
     badSerializer = new KafkaAvroSerializer(schemaRegistry, badClientProps);
     badDeserializer = new KafkaAvroDeserializer(schemaRegistry, badClientProps);
+
+    FieldEncryptionProperties badDekProps = getFieldEncryptionProperties(ruleNames, BadDekGenerator.class);
+    Map<String, Object> badDekClientProps = badDekProps.getClientProperties("mock://");
+    badDekSerializer = new KafkaAvroSerializer(schemaRegistry, badDekClientProps);
+    badDekDeserializer = new KafkaAvroDeserializer(schemaRegistry, badDekClientProps);
   }
 
-  protected abstract FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames);
+  protected abstract FieldEncryptionProperties getFieldEncryptionProperties(
+      List<String> ruleNames, Class<?> ruleExecutor);
 
   private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
     return addSpyToCryptor(serde, DekFormat.AES256_GCM);
@@ -1262,6 +1271,27 @@ public abstract class FieldEncryptionExecutorTest {
     assertNotEquals("testUser", record.get("name").toString()); // still encrypted
   }
 
+  @Test
+  public void testBadDekGenerator() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+
+    RecordHeaders headers = new RecordHeaders();
+    try {
+      badDekSerializer.serialize(topic, headers, avroRecord);
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof SerializationException);
+    }
+  }
+
   protected Metadata getMetadata(String kekName) {
     Map<String, String> properties = new HashMap<>();
     properties.put(FieldEncryptionExecutor.ENCRYPT_KEK_NAME, kekName);
@@ -1496,6 +1526,14 @@ public abstract class FieldEncryptionExecutorTest {
     @Override
     public int hashCode() {
       return Objects.hash(annotatedPii);
+    }
+  }
+
+  public static class BadDekGenerator extends FieldEncryptionExecutor {
+
+    @Override
+    protected byte[] generateDek(DekFormat dekFormat) throws GeneralSecurityException {
+      return new byte[15];
     }
   }
 }

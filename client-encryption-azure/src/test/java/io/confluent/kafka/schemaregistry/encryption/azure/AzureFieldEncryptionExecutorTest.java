@@ -27,8 +27,9 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new AzureFieldEncryptionProperties(ruleNames);
+  protected FieldEncryptionProperties getFieldEncryptionProperties(
+      List<String> ruleNames, Class<?> ruleExecutor) {
+    return new AzureFieldEncryptionProperties(ruleNames, ruleExecutor);
   }
 }
 

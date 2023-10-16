@@ -19,18 +19,19 @@ package io.confluent.kafka.schemaregistry.encryption.azure;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 
 import com.google.common.collect.ImmutableList;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionServiceLoaderTest;
 import java.util.List;
 
-public class AzureFieldEncryptionServiceLoaderTest extends FieldEncryptionExecutorTest {
+public class AzureFieldEncryptionServiceLoaderTest extends FieldEncryptionServiceLoaderTest {
 
   public AzureFieldEncryptionServiceLoaderTest() throws Exception {
     super();
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new AzureFieldEncryptionProperties(ImmutableList.of(DEFAULT_NAME));
+  protected FieldEncryptionProperties getFieldEncryptionProperties(
+      List<String> ruleNames, Class<?> ruleExecutor) {
+    return new AzureFieldEncryptionProperties(ImmutableList.of(DEFAULT_NAME), ruleExecutor);
   }
 }
