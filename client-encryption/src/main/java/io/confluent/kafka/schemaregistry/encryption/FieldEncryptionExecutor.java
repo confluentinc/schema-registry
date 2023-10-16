@@ -151,6 +151,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
     return cryptors;
   }
 
+  protected byte[] generateKey(DekFormat dekFormat) throws GeneralSecurityException {
+    return getCryptor(dekFormat).generateKey();
+  }
+
   private static byte[] toBytes(Type type, Object obj) {
     switch (type) {
       case BYTES:
@@ -311,7 +315,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         if (!kek.isShared()) {
           aead = getAead(configs, kek);
           // Generate new dek
-          byte[] rawDek = getCryptor(dekId.getDekFormat()).generateKey();
+          byte[] rawDek = generateKey(dekId.getDekFormat());
           byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
           dek = new DekInfo(rawDek, encryptedDek);
         }
