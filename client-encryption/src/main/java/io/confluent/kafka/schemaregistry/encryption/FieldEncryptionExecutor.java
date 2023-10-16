@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import com.google.common.base.Ticker;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KmsClient;
 import com.google.protobuf.ByteString;
@@ -41,6 +42,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -66,16 +68,24 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
   public static final String ENCRYPT_KMS_TYPE = "encrypt.kms.type";
   public static final String ENCRYPT_DEK_ALGORITHM = "encrypt.dek.algorithm";
+  public static final String ENCRYPT_DEK_EXPIRY_DAYS = "encrypt.dek.expiry.days";
 
   public static final String KMS_TYPE_SUFFIX = "://";
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String CACHE_EXPIRY_SECS = "cache.expiry.secs";
   public static final String CACHE_SIZE = "cache.size";
+  public static final String TICKER = "ticker";
+
+  protected static final int LATEST_VERSION = -1;
+  protected static final byte MAGIC_BYTE = 0x0;
+  protected static final int MILLIS_IN_DAY = 24 * 60 * 60 * 1000;
+  protected static final int VERSION_SIZE = 4;
 
   private Map<DekFormat, Cryptor> cryptors;
   private Map<String, ?> configs;
   private int cacheExpirySecs = -1;
   private int cacheSize = 10000;
+  private Ticker ticker = Ticker.systemTicker();
   private DekRegistryClient client;
 
   public FieldEncryptionExecutor() {
@@ -105,6 +115,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       } catch (NumberFormatException e) {
         throw new ConfigException("Cannot parse " + CACHE_SIZE);
       }
+    }
+    Object ticker = configs.get(TICKER);
+    if (ticker instanceof Ticker) {
+      this.ticker = (Ticker) ticker;
     }
     Object url = configs.get(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
@@ -201,11 +215,17 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
     private Cryptor cryptor;
     private String kekName;
     private KekInfo kek;
+    private int dekExpiryDays;
 
     public void init(RuleContext ctx) throws RuleException {
       cryptor = getCryptor(ctx);
       kekName = getKekName(ctx);
       kek = getKek(ctx, kekName);
+      dekExpiryDays = getDekExpiryDays(ctx);
+    }
+
+    public boolean isDekRotated() {
+      return dekExpiryDays > 0;
     }
 
     protected String getKekName(RuleContext ctx) throws RuleException {
@@ -231,13 +251,15 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
     }
 
     protected KekInfo getKek(RuleContext ctx, String kekName) throws RuleException {
-      KekId kekId = new KekId(kekName, ctx.ruleMode() == RuleMode.READ);
+      boolean isRead = ctx.ruleMode() == RuleMode.READ;
+      KekId kekId = new KekId(kekName, isRead);
+
       String kmsType = ctx.getParameter(ENCRYPT_KMS_TYPE);
       String kmsKeyId = ctx.getParameter(ENCRYPT_KMS_KEY_ID);
 
       KekInfo kek = retrieveKekFromRegistry(ctx, kekId);
       if (kek == null) {
-        if (ctx.ruleMode() == RuleMode.READ) {
+        if (isRead) {
           throw new RuleException("No kek found for " + kekName + " during consume");
         }
         if (kmsType == null) {
@@ -265,6 +287,15 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
             + kek.getKmsKeyId());
       }
       return kek;
+    }
+
+    private int getDekExpiryDays(RuleContext ctx) {
+      String expiryStr = ctx.getParameter(ENCRYPT_DEK_EXPIRY_DAYS);
+      try {
+        return Integer.parseInt(expiryStr);
+      } catch (NumberFormatException e) {
+        return 0;
+      }
     }
 
     private KekInfo retrieveKekFromRegistry(RuleContext ctx, KekId key) throws RuleException {
@@ -301,29 +332,34 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       }
     }
 
-    protected DekInfo getDek(RuleContext ctx, String kekName, KekInfo kek)
+    protected DekInfo getDek(RuleContext ctx, String kekName, KekInfo kek, Integer version)
         throws RuleException, GeneralSecurityException {
-      DekId dekId = new DekId(
-          kekName, ctx.subject(), cryptor.getDekFormat(), ctx.ruleMode() == RuleMode.READ);
+      boolean isRead = ctx.ruleMode() == RuleMode.READ;
+      DekId dekId = new DekId(kekName, ctx.subject(), version, cryptor.getDekFormat(), isRead);
 
       Aead aead = null;
-      DekInfo dek = retrieveDekFromRegistry(ctx, dekId);
-      if (dek == null) {
-        if (ctx.ruleMode() == RuleMode.READ) {
+      DekInfo dek = retrieveDekFromRegistry(dekId);
+      boolean isExpired = isExpired(ctx, dek);
+      if (dek == null || isExpired) {
+        if (isRead) {
           throw new RuleException("No dek found for " + kekName + " during consume");
         }
+        byte[] encryptedDek = null;
         if (!kek.isShared()) {
           aead = getAead(configs, kek);
           // Generate new dek
           byte[] rawDek = generateKey(dekId.getDekFormat());
-          byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
-          dek = new DekInfo(rawDek, encryptedDek);
+          encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
         }
-        // dek may be passed as null if kek is shared
-        dek = storeDekToRegistry(ctx, dekId, dek);
+        Integer newVersion = isExpired ? dek.getVersion() + 1 : null;
+        DekId newDekId = new DekId(kekName, ctx.subject(), newVersion,
+            cryptor.getDekFormat(), isRead);
+        // encryptedDek may be passed as null if kek is shared
+        dek = storeDekToRegistry(newDekId, encryptedDek);
         if (dek == null) {
           // Handle conflicts (409)
-          dek = retrieveDekFromRegistry(ctx, dekId);
+          // Use the original version, which should be null or LATEST_VERSION
+          dek = retrieveDekFromRegistry(dekId);
         }
         if (dek == null) {
           throw new RuleException("No dek found for " + kekName + " during produce");
@@ -339,10 +375,25 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       return dek;
     }
 
-    private DekInfo retrieveDekFromRegistry(RuleContext ctx, DekId key) throws RuleException {
+    private boolean isExpired(RuleContext ctx, DekInfo dek) {
+      return ctx.ruleMode() != RuleMode.READ
+          && dekExpiryDays > 0
+          && dek != null
+          && (ticker.read() - dek.getTimestamp()) / MILLIS_IN_DAY >= dekExpiryDays;
+    }
+
+    private DekInfo retrieveDekFromRegistry(DekId key)
+        throws RuleException {
       try {
-        Dek dek = client.getDek(
-            key.getKekName(), key.getSubject(), key.getDekFormat(), key.isLookupDeleted());
+        Dek dek;
+        if (key.getVersion() != null) {
+          dek = client.getDekVersion(
+              key.getKekName(), key.getSubject(), key.getVersion(), key.getDekFormat(),
+              key.isLookupDeleted());
+        } else {
+          dek = client.getDek(
+              key.getKekName(), key.getSubject(), key.getDekFormat(), key.isLookupDeleted());
+        }
         if (dek == null) {
           return null;
         }
@@ -352,7 +403,9 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         byte[] encryptedDek = dek.getEncryptedKeyMaterial() != null
             ? Base64.getDecoder().decode(toBytes(Type.STRING, dek.getEncryptedKeyMaterial()))
             : null;
-        return encryptedDek != null ? new DekInfo(rawDek, encryptedDek) : null;
+        return encryptedDek != null
+            ? new DekInfo(dek.getVersion(), rawDek, encryptedDek, dek.getTimestamp())
+            : null;
       } catch (RestClientException e) {
         if (e.getStatus() == 404) {
           return null;
@@ -363,21 +416,28 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       }
     }
 
-    private DekInfo storeDekToRegistry(RuleContext ctx, DekId key, DekInfo dekInfo)
+    private DekInfo storeDekToRegistry(DekId key, byte[] encryptedDek)
         throws RuleException {
       try {
-        String encryptedDekStr = dekInfo != null && dekInfo.getEncryptedDek() != null
-            ? (String) toObject(Type.STRING, Base64.getEncoder().encode(dekInfo.getEncryptedDek()))
+        String encryptedDekStr = encryptedDek != null
+            ? (String) toObject(Type.STRING, Base64.getEncoder().encode(encryptedDek))
             : null;
-        Dek dek = client.createDek(
-            key.getKekName(), key.getSubject(), key.getDekFormat(), encryptedDekStr);
+        Dek dek;
+        if (key.getVersion() != null) {
+          dek = client.createDek(
+              key.getKekName(), key.getSubject(), key.getVersion(),
+              key.getDekFormat(), encryptedDekStr);
+        } else {
+          dek = client.createDek(
+              key.getKekName(), key.getSubject(), key.getDekFormat(), encryptedDekStr);
+        }
         byte[] rawDek = dek.getKeyMaterial() != null
             ? Base64.getDecoder().decode(toBytes(Type.STRING, dek.getKeyMaterial()))
             : null;
-        byte[] encryptedDek = dek.getEncryptedKeyMaterial() != null
+        encryptedDek = dek.getEncryptedKeyMaterial() != null
             ? Base64.getDecoder().decode(toBytes(Type.STRING, dek.getEncryptedKeyMaterial()))
             : null;
-        return new DekInfo(rawDek, encryptedDek);
+        return new DekInfo(dek.getVersion(), rawDek, encryptedDek, dek.getTimestamp());
       } catch (RestClientException e) {
         if (e.getStatus() == 409) {
           return null;
@@ -394,7 +454,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         if (fieldValue == null) {
           return null;
         }
-        DekInfo dek = getDek(ctx, kekName, kek);
+        DekInfo dek;
         byte[] plaintext;
         byte[] ciphertext;
         Object result;
@@ -405,7 +465,11 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
               throw new RuleException(
                   "Type '" + fieldCtx.getType() + "' not supported for encryption");
             }
+            dek = getDek(ctx, kekName, kek, isDekRotated() ? LATEST_VERSION : null);
             ciphertext = cryptor.encrypt(dek.getRawDek(), plaintext, EMPTY_AAD);
+            if (isDekRotated()) {
+              ciphertext = prefixVersion(dek.getVersion(), ciphertext);
+            }
             if (fieldCtx.getType() == Type.STRING) {
               ciphertext = Base64.getEncoder().encode(ciphertext);
             }
@@ -418,6 +482,13 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
             if (fieldCtx.getType() == Type.STRING) {
               ciphertext = Base64.getDecoder().decode(ciphertext);
             }
+            Integer version = null;
+            if (isDekRotated()) {
+              Map.Entry<Integer, byte[]> kv = extractVersion(ciphertext);
+              version = kv.getKey();
+              ciphertext = kv.getValue();
+            }
+            dek = getDek(ctx, kekName, kek, version);
             plaintext = cryptor.decrypt(dek.getRawDek(), ciphertext, EMPTY_AAD);
             return toObject(fieldCtx.getType(), plaintext);
           default:
@@ -426,6 +497,27 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       } catch (Exception e) {
         throw new RuleException(e);
       }
+    }
+
+    private byte[] prefixVersion(int version, byte[] ciphertext) throws RuleException {
+      byte[] combined = new byte[ciphertext.length + 1 + VERSION_SIZE];
+      ByteBuffer buffer = ByteBuffer.wrap(combined);
+      buffer.put(MAGIC_BYTE);
+      buffer.putInt(version);
+      buffer.put(ciphertext);
+      return combined;
+    }
+
+    private Map.Entry<Integer, byte[]> extractVersion(byte[] ciphertext) throws RuleException {
+      ByteBuffer buffer = ByteBuffer.wrap(ciphertext);
+      if (buffer.get() != MAGIC_BYTE) {
+        throw new RuleException("Unknown magic byte!");
+      }
+      int version = buffer.getInt();
+      int remainingSize = ciphertext.length - 1 - VERSION_SIZE;
+      byte[] remaining = new byte[remainingSize];
+      buffer.get(remaining, 0, remainingSize);
+      return new SimpleEntry<>(version, remaining);
     }
 
     @Override
@@ -498,12 +590,20 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
 
   static class DekInfo {
 
+    private final Integer version;
     private byte[] rawDek;
     private final byte[] encryptedDek;
+    private final Long ts;
 
-    public DekInfo(byte[] rawDek, byte[] encryptedDek) {
+    public DekInfo(Integer version, byte[] rawDek, byte[] encryptedDek, Long ts) {
+      this.version = version;
       this.rawDek = rawDek;
       this.encryptedDek = encryptedDek;
+      this.ts = ts;
+    }
+
+    public Integer getVersion() {
+      return version;
     }
 
     public byte[] getRawDek() {
@@ -518,6 +618,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       return encryptedDek;
     }
 
+    public Long getTimestamp() {
+      return ts;
+    }
+
     @Override
     public boolean equals(Object o) {
       if (this == o) {
@@ -527,13 +631,15 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         return false;
       }
       DekInfo dek = (DekInfo) o;
-      return Arrays.equals(rawDek, dek.rawDek)
+      return Objects.equals(version, dek.version)
+          && Arrays.equals(rawDek, dek.rawDek)
           && Arrays.equals(encryptedDek, dek.encryptedDek);
     }
 
     @Override
     public int hashCode() {
-      int result = Arrays.hashCode(rawDek);
+      int result = Objects.hash(version);
+      result = 31 * result + Arrays.hashCode(rawDek);
       result = 31 * result + Arrays.hashCode(encryptedDek);
       return result;
     }

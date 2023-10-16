@@ -18,14 +18,15 @@ package io.confluent.dekregistry.client;
 
 import com.google.crypto.tink.Aead;
 import io.confluent.dekregistry.client.rest.entities.Dek;
+import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
-import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,8 +38,8 @@ public class MockDekRegistryClient implements DekRegistryClient {
   public static final byte[] EMPTY_AAD = new byte[0];
 
   private final Map<String, ?> configs;
-  private final Map<KekId, KekInfo> keks;
-  private final Map<DekId, DekInfo> deks;
+  private final Map<KekId, Kek> keks;
+  private final Map<DekId, Dek> deks;
   private final Map<DekFormat, Cryptor> cryptors;
 
   public MockDekRegistryClient(Map<String, ?> configs) {
@@ -68,10 +69,27 @@ public class MockDekRegistryClient implements DekRegistryClient {
   }
 
   @Override
+  public List<Integer> listDekVersions(String kekName, String subject,
+      DekFormat algorithm, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    if (algorithm == null) {
+      algorithm = DekFormat.AES256_GCM;
+    }
+    DekFormat algo = algorithm;
+    return deks.entrySet().stream()
+        .filter(kv -> kv.getKey().getKekName().equals(kekName)
+            && kv.getKey().getSubject().equals(subject)
+            && kv.getValue().getAlgorithm().equals(algo)
+            && (!kv.getValue().isDeleted() || lookupDeleted))
+        .map(kv -> kv.getKey().getVersion())
+        .collect(Collectors.toList());
+  }
+
+  @Override
   public Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException {
     KekId keyId = new KekId(name);
-    KekInfo key = keks.get(keyId);
+    Kek key = keks.get(keyId);
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
       return key;
     } else {
@@ -89,25 +107,51 @@ public class MockDekRegistryClient implements DekRegistryClient {
   }
 
   @Override
-  public Dek getDek(String kekName, String subject, boolean lookupDeleted)
+  public Dek getDek(String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
-    return getDek(kekName, subject, null, lookupDeleted);
+    return getDekVersion(kekName, subject, 1, algorithm, lookupDeleted);
   }
 
   @Override
-  public Dek getDek(String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
+  public Dek getDekVersion(String kekName, String subject, int version,
+      DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
+    if (version == LATEST_VERSION) {
+      return getDekLatestVersion(kekName, subject, algorithm, lookupDeleted);
+    }
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
-    DekId keyId = new DekId(kekName, subject, algorithm);
-    DekInfo key = deks.get(keyId);
+    DekId keyId = new DekId(kekName, subject, version, algorithm);
+    Dek key = deks.get(keyId);
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
       key = maybeGenerateRawDek(key);
       return key;
     } else {
       throw new RestClientException("Key not found", 404, 40470);
     }
+  }
+
+  @Override
+  public Dek getDekLatestVersion(String kekName, String subject,
+      DekFormat algorithm, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    if (algorithm == null) {
+      algorithm = DekFormat.AES256_GCM;
+    }
+    DekFormat algo = algorithm;
+    List<Integer> versions = deks.entrySet().stream()
+        .filter(kv -> kv.getKey().getKekName().equals(kekName)
+            && kv.getKey().getSubject().equals(subject)
+            && kv.getValue().getAlgorithm().equals(algo)
+            && (!kv.getValue().isDeleted() || lookupDeleted))
+        .map(kv -> kv.getKey().getVersion())
+        .sorted()
+        .collect(Collectors.toList());
+    return versions.isEmpty()
+        ? null
+        : getDekVersion(kekName, subject, versions.get(versions.size() - 1),
+            algorithm, lookupDeleted);
   }
 
   @Override
@@ -123,7 +167,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     if (keks.containsKey(keyId)) {
       throw new RestClientException("Key " + name + " already exists", 409, 40972);
     }
-    KekInfo key = new KekInfo(name, kmsType, kmsKeyId,
+    Kek key = new Kek(name, kmsType, kmsKeyId,
         kmsProps, doc, shared, System.currentTimeMillis(), false);
     keks.put(keyId, key);
     return key;
@@ -136,13 +180,22 @@ public class MockDekRegistryClient implements DekRegistryClient {
       DekFormat algorithm,
       String encryptedKeyMaterial)
       throws IOException, RestClientException {
-    DekId keyId = new DekId(kekName, subject, algorithm);
+    return createDek(kekName, subject, 1, algorithm, encryptedKeyMaterial);
+  }
+
+  @Override
+  public Dek createDek(
+      String kekName,
+      String subject,
+      int version,
+      DekFormat algorithm,
+      String encryptedKeyMaterial)
+      throws IOException, RestClientException {
+    DekId keyId = new DekId(kekName, subject, version, algorithm);
     if (deks.containsKey(keyId)) {
       throw new RestClientException("Key " + subject + " already exists", 409, 40972);
     }
-    // NOTE (version): in the future we may allow a version to be passed
-    int version = 1;
-    DekInfo key = new DekInfo(kekName, subject, version, algorithm,
+    Dek key = new Dek(kekName, subject, version, algorithm,
         encryptedKeyMaterial, null, System.currentTimeMillis(), false);
     key = maybeGenerateEncryptedDek(key);
     if (key.getEncryptedKeyMaterial() == null) {
@@ -153,7 +206,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     return key;
   }
 
-  protected DekInfo maybeGenerateEncryptedDek(DekInfo key)
+  protected Dek maybeGenerateEncryptedDek(Dek key)
       throws IOException, RestClientException {
     try {
       if (key.getEncryptedKeyMaterial() == null) {
@@ -164,7 +217,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
         byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
         String encryptedDekStr =
             new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
-        key = new DekInfo(key.getKekName(), key.getSubject(), key.getVersion(), key.getAlgorithm(),
+        key = new Dek(key.getKekName(), key.getSubject(), key.getVersion(), key.getAlgorithm(),
             encryptedDekStr, null, key.getTimestamp(), key.isDeleted());
       }
       return key;
@@ -173,7 +226,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     }
   }
 
-  protected DekInfo maybeGenerateRawDek(DekInfo key)
+  protected Dek maybeGenerateRawDek(Dek key)
       throws IOException, RestClientException {
     try {
       Kek kek = getKek(key.getKekName(), true);
@@ -186,7 +239,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
         String rawDekStr =
             new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
         // Copy dek
-        key = new DekInfo(key.getKekName(), key.getSubject(), key.getVersion(), key.getAlgorithm(),
+        key = new Dek(key.getKekName(), key.getSubject(), key.getVersion(), key.getAlgorithm(),
             key.getEncryptedKeyMaterial(), rawDekStr, key.getTimestamp(), key.isDeleted());
       }
       return key;
@@ -203,7 +256,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
       Boolean shared)
       throws IOException, RestClientException {
     KekId keyId = new KekId(name);
-    KekInfo key = keks.get(keyId);
+    Kek key = keks.get(keyId);
     if (key == null) {
       throw new RestClientException("Key not found", 404, 40470);
     }
@@ -216,7 +269,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
     if (shared == null) {
       shared = key.isShared();
     }
-    KekInfo newKey = new KekInfo(name, key.getKmsType(), key.getKmsKeyId(),
+    Kek newKey = new Kek(name, key.getKmsType(), key.getKmsKeyId(),
         kmsProps, doc, shared, System.currentTimeMillis(), false);
     keks.put(keyId, newKey);
     return key;
@@ -226,24 +279,26 @@ public class MockDekRegistryClient implements DekRegistryClient {
   public void deleteKek(String kekName, boolean permanentDelete)
       throws IOException, RestClientException {
     KekId keyId = new KekId(kekName);
-    KekInfo key = keks.get(keyId);
+    Kek key = keks.get(keyId);
     if (key == null) {
       return;
     }
     if (permanentDelete) {
+      if (!key.isDeleted()) {
+        throw new RestClientException(
+            "Key " + kekName
+                + " was not deleted first before being permanently deleted",
+            404,
+            40471);
+      }
       keks.remove(keyId);
     } else {
-      KekInfo newKey = new KekInfo(kekName, key.getKmsType(), key.getKmsKeyId(),
-          key.getKmsProps(), key.getDoc(), key.isShared(), System.currentTimeMillis(), true);
-      keks.put(keyId, newKey);
+      if (!key.isDeleted()) {
+        Kek newKey = new Kek(kekName, key.getKmsType(), key.getKmsKeyId(),
+            key.getKmsProps(), key.getDoc(), key.isShared(), System.currentTimeMillis(), true);
+        keks.put(keyId, newKey);
+      }
     }
-  }
-
-  @Override
-  public void deleteDek(String kekName, String subject, boolean permanentDelete)
-      throws IOException, RestClientException {
-    deleteDek(kekName, subject, null, permanentDelete);
-
   }
 
   @Override
@@ -253,17 +308,163 @@ public class MockDekRegistryClient implements DekRegistryClient {
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
-    DekId keyId = new DekId(kekName, subject, algorithm);
-    DekInfo key = deks.get(keyId);
+    if (permanentDelete) {
+      for (Iterator<Map.Entry<DekId, Dek>> iter = deks.entrySet().iterator();
+          iter.hasNext(); ) {
+        Map.Entry<DekId, Dek> entry = iter.next();
+        DekId dekId = entry.getKey();
+        Dek dekInfo = entry.getValue();
+        if (dekId.getKekName().equals(kekName)
+            && dekId.getSubject().equals(subject)
+            && dekInfo.getAlgorithm().equals(algorithm)) {
+          if (!dekInfo.isDeleted()) {
+            throw new RestClientException(
+                "Key " + dekId.getKekName()
+                    + " was not deleted first before being permanently deleted",
+                404,
+                40471);
+          }
+        }
+      }
+      for (Iterator<Map.Entry<DekId, Dek>> iter = deks.entrySet().iterator();
+          iter.hasNext(); ) {
+        Map.Entry<DekId, Dek> entry = iter.next();
+        DekId dekId = entry.getKey();
+        Dek dekInfo = entry.getValue();
+        if (dekId.getKekName().equals(kekName)
+            && dekId.getSubject().equals(subject)
+            && dekInfo.getAlgorithm().equals(algorithm)) {
+          iter.remove();
+        }
+      }
+    } else {
+      for (Iterator<Map.Entry<DekId, Dek>> iter = deks.entrySet().iterator();
+          iter.hasNext(); ) {
+        Map.Entry<DekId, Dek> entry = iter.next();
+        DekId dekId = entry.getKey();
+        Dek dekInfo = entry.getValue();
+        if (dekId.getKekName().equals(kekName)
+            && dekId.getSubject().equals(subject)
+            && dekInfo.getAlgorithm().equals(algorithm)
+            && !dekInfo.isDeleted()) {
+          Dek newKey = new Dek(kekName, dekInfo.getSubject(),
+              dekInfo.getVersion(), dekInfo.getAlgorithm(), dekInfo.getEncryptedKeyMaterial(),
+              dekInfo.getKeyMaterial(), dekInfo.getTimestamp(), true);
+          entry.setValue(newKey);
+        }
+      }
+    }
+  }
+
+  @Override
+  public void deleteDekVersion(
+      String kekName, String subject, int version, DekFormat algorithm, boolean permanentDelete)
+      throws IOException, RestClientException {
+    if (algorithm == null) {
+      algorithm = DekFormat.AES256_GCM;
+    }
+    DekId keyId = new DekId(kekName, subject, version, algorithm);
+    Dek key = deks.get(keyId);
     if (key == null) {
       return;
     }
     if (permanentDelete) {
+      if (!key.isDeleted()) {
+        throw new RestClientException(
+            "Key " + key.getKekName() + " was not deleted first before being permanently deleted",
+            404,
+            40471);
+      }
       deks.remove(keyId);
     } else {
-      DekInfo newKey = new DekInfo(kekName, key.getSubject(), key.getVersion(), key.getAlgorithm(),
-          key.getEncryptedKeyMaterial(), key.getKeyMaterial(), System.currentTimeMillis(), true);
-      deks.put(keyId, newKey);
+      if (!key.isDeleted()) {
+        Dek newKey = new Dek(kekName, key.getSubject(), key.getVersion(),
+            key.getAlgorithm(),
+            key.getEncryptedKeyMaterial(), key.getKeyMaterial(), System.currentTimeMillis(), true);
+        deks.put(keyId, newKey);
+      }
+    }
+  }
+
+  @Override
+  public void undeleteKek(String kekName)
+      throws IOException, RestClientException {
+    KekId keyId = new KekId(kekName);
+    Kek key = keks.get(keyId);
+    if (key == null) {
+      return;
+    }
+    if (key.isDeleted()) {
+      Kek newKey = new Kek(kekName, key.getKmsType(), key.getKmsKeyId(),
+          key.getKmsProps(), key.getDoc(), key.isShared(), System.currentTimeMillis(), false);
+      keks.put(keyId, newKey);
+    }
+  }
+
+  @Override
+  public void undeleteDek(
+      String kekName, String subject, DekFormat algorithm)
+      throws IOException, RestClientException {
+    if (algorithm == null) {
+      algorithm = DekFormat.AES256_GCM;
+    }
+    KekId keyId = new KekId(kekName);
+    Kek key = keks.get(keyId);
+    if (key == null) {
+      return;
+    }
+    if (key.isDeleted()) {
+      throw new RestClientException(
+          "Key " + kekName + " must be undeleted first",
+          404,
+          40472);
+    }
+    for (Iterator<Map.Entry<DekId, Dek>> iter = deks.entrySet().iterator();
+        iter.hasNext(); ) {
+      Map.Entry<DekId, Dek> entry = iter.next();
+      DekId dekId = entry.getKey();
+      Dek dekInfo = entry.getValue();
+      if (dekId.getKekName().equals(kekName)
+          && dekId.getSubject().equals(subject)
+          && dekInfo.getAlgorithm().equals(algorithm)
+          && !dekInfo.isDeleted()) {
+        Dek newKey = new Dek(kekName, dekInfo.getSubject(),
+            dekInfo.getVersion(), dekInfo.getAlgorithm(), dekInfo.getEncryptedKeyMaterial(),
+            dekInfo.getKeyMaterial(), dekInfo.getTimestamp(), false);
+        entry.setValue(newKey);
+      }
+    }
+  }
+
+  @Override
+  public void undeleteDekVersion(
+      String kekName, String subject, int version, DekFormat algorithm)
+      throws IOException, RestClientException {
+    if (algorithm == null) {
+      algorithm = DekFormat.AES256_GCM;
+    }
+    KekId keyId = new KekId(kekName);
+    Kek key = keks.get(keyId);
+    if (key == null) {
+      return;
+    }
+    if (key.isDeleted()) {
+      throw new RestClientException(
+          "Key " + kekName + " must be undeleted first",
+          404,
+          40472);
+    }
+    DekId id = new DekId(kekName, subject, version, algorithm);
+    Dek oldKey = deks.get(id);
+    if (oldKey == null) {
+      return;
+    }
+    if (oldKey.isDeleted()) {
+      Dek newKey = new Dek(kekName, oldKey.getSubject(), oldKey.getVersion(),
+          oldKey.getAlgorithm(),
+          oldKey.getEncryptedKeyMaterial(), oldKey.getKeyMaterial(), System.currentTimeMillis(),
+          false);
+      deks.put(id, newKey);
     }
   }
 
@@ -308,11 +509,13 @@ public class MockDekRegistryClient implements DekRegistryClient {
 
     private final String kekName;
     private final String subject;
+    private final Integer version;
     private final DekFormat dekFormat;
 
-    public DekId(String kekName, String subject, DekFormat dekFormat) {
+    public DekId(String kekName, String subject, Integer version, DekFormat dekFormat) {
       this.kekName = kekName;
       this.subject = subject;
+      this.version = version;
       this.dekFormat = dekFormat;
     }
 
@@ -322,6 +525,10 @@ public class MockDekRegistryClient implements DekRegistryClient {
 
     public String getSubject() {
       return subject;
+    }
+
+    public Integer getVersion() {
+      return version;
     }
 
     public DekFormat getDekFormat() {
@@ -339,82 +546,13 @@ public class MockDekRegistryClient implements DekRegistryClient {
       DekId that = (DekId) o;
       return Objects.equals(kekName, that.kekName)
           && Objects.equals(subject, that.subject)
+          && Objects.equals(version, that.version)
           && dekFormat == that.dekFormat;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(kekName, subject, dekFormat);
-    }
-  }
-
-  static class KekInfo extends Kek {
-
-    private final boolean deleted;
-
-    public KekInfo(String name, String kmsType, String kmsKeyId, Map<String, String> kmsProps,
-          String doc, boolean shared, Long timestamp, boolean deleted) {
-      super(name, kmsType, kmsKeyId, kmsProps, doc, shared, timestamp);
-      this.deleted = deleted;
-    }
-
-    public boolean isDeleted() {
-      return deleted;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      if (!super.equals(o)) {
-        return false;
-      }
-      KekInfo kekInfo = (KekInfo) o;
-      return deleted == kekInfo.deleted;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(super.hashCode(), deleted);
-    }
-  }
-
-  static class DekInfo extends Dek {
-
-    private final boolean deleted;
-
-    public DekInfo(String kekName, String subject, int version, DekFormat algorithm,
-        String encryptedKeyMaterial, String keyMaterial, Long timestamp, boolean deleted) {
-      super(kekName, subject, version, algorithm, encryptedKeyMaterial, keyMaterial, timestamp);
-      this.deleted = deleted;
-    }
-
-    public boolean isDeleted() {
-      return deleted;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      if (!super.equals(o)) {
-        return false;
-      }
-      DekInfo dekInfo = (DekInfo) o;
-      return deleted == dekInfo.deleted;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(super.hashCode(), deleted);
+      return Objects.hash(kekName, subject, version, dekFormat);
     }
   }
 }
