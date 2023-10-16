@@ -2076,7 +2076,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     ModeKey modeKey = new ModeKey(subject);
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-      if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT && !force) {
+      if (mode == Mode.IMPORT && getModeInScope(subject) != Mode.IMPORT && !force) {
         // Changing to import mode requires that no schemas exist with matching subjects.
         if (hasSubjects(subject, false)) {
           throw new OperationNotPermittedException("Cannot import since found existing subjects");
