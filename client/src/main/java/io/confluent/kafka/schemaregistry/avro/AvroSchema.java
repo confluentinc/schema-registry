@@ -177,6 +177,18 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
+  public AvroSchema normalize() {
+    String normalized = AvroSchemaUtils.toNormalizedString(this);
+    return new AvroSchema(
+        normalized,
+        this.references.stream().sorted().distinct().collect(Collectors.toList()),
+        this.resolvedReferences,
+        this.version,
+        this.isNew
+    );
+  }
+
+  @Override
   public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Collections.singletonList("Incompatible because of different schema type");
@@ -245,6 +257,9 @@ public class AvroSchema implements ParsedSchema {
         cache.put(sp, equals);
         return equals;
       case ENUM:
+        return Objects.equals(schema1.getAliases(), schema2.getAliases())
+            && Objects.equals(schema1.getDoc(), schema2.getDoc())
+            && Objects.equals(schema1.getEnumDefault(), schema2.getEnumDefault());
       case FIXED:
         return Objects.equals(schema1.getAliases(), schema2.getAliases())
             && Objects.equals(schema1.getDoc(), schema2.getDoc());
@@ -319,6 +334,7 @@ public class AvroSchema implements ParsedSchema {
         cache.put(schema, result);
         return result;
       case ENUM:
+        return Objects.hash(schema.getAliases(), schema.getDoc(), schema.getEnumDefault());
       case FIXED:
         return Objects.hash(schema.getAliases(), schema.getDoc());
       case UNION:

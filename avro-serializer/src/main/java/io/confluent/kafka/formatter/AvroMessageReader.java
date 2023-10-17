@@ -42,7 +42,7 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
  * command.
  *
  * <p>1. Send Avro string as value. (make sure there is no space in the schema string)
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
+ * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic t1 \
  *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
  *   --property schema.registry.url=http://localhost:8081 \
  *   --property value.schema='{"type":"string"}'
@@ -52,7 +52,7 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
  * "b"
  *
  * <p>2. Send Avro record as value.
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
+ * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic t1 \
  *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
  *   --property schema.registry.url=http://localhost:8081 \
  *   --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
@@ -61,7 +61,7 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
  * {"f1": "value1"}
  *
  * <p>3. Send Avro string as key and Avro record as value.
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
+ * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic t1 \
  *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
  *   --property schema.registry.url=http://localhost:8081 \
  *   --property parse.key=true \
@@ -92,21 +92,24 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
       String topic,
       boolean parseKey,
       BufferedReader reader,
+      boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest
   ) {
     super(schemaRegistryClient, new AvroSchema(keySchema), new AvroSchema(valueSchema), topic,
-        parseKey, reader, autoRegister, useLatest);
+        parseKey, reader, normalizeSchema, autoRegister, useLatest);
   }
 
   @Override
   protected SchemaMessageSerializer<Object> createSerializer(
       SchemaRegistryClient schemaRegistryClient,
+      boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest,
       Serializer keySerializer
   ) {
-    return new AvroMessageSerializer(schemaRegistryClient, autoRegister, useLatest, keySerializer);
+    return new AvroMessageSerializer(
+        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, keySerializer);
   }
 
   @Override
@@ -139,9 +142,10 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
 
     AvroMessageSerializer(
         SchemaRegistryClient schemaRegistryClient,
-        boolean autoRegister, boolean useLatest, Serializer keySerializer
+        boolean normalizeSchema, boolean autoRegister, boolean useLatest, Serializer keySerializer
     ) {
       this.schemaRegistry = schemaRegistryClient;
+      this.normalizeSchema = normalizeSchema;
       this.autoRegisterSchema = autoRegister;
       this.useLatestVersion = useLatest;
       this.keySerializer = keySerializer;

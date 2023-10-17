@@ -43,6 +43,50 @@ public class RestApiModeTest extends ClusterTestHarness {
               + "[{\"type\":\"int\",\"name\":\"f1\"}]}")
       .canonicalString();
 
+  private static String SCHEMA_WITH_DECIMAL = AvroUtils.parseSchema(
+          "{\n"
+              + "    \"type\": \"record\",\n"
+              + "    \"name\": \"MyRecord\",\n"
+              + "    \"fields\": [\n"
+              + "        {\n"
+              + "            \"name\": \"field1\",\n"
+              + "            \"type\": [\n"
+              + "                \"null\",\n"
+              + "                {\n"
+              + "                    \"type\": \"bytes\",\n"
+              + "                    \"scale\": 4,\n"
+              + "                    \"precision\": 17,\n"
+              + "                    \"logicalType\": \"decimal\"\n"
+              + "                }\n"
+              + "            ],\n"
+              + "            \"default\": null\n"
+              + "        }\n"
+              + "    ]\n"
+              + "}")
+      .canonicalString();
+
+  private static String SCHEMA_WITH_DECIMAL2 = AvroUtils.parseSchema(
+          "{\n"
+              + "    \"type\": \"record\",\n"
+              + "    \"name\": \"MyRecord\",\n"
+              + "    \"fields\": [\n"
+              + "        {\n"
+              + "            \"name\": \"field1\",\n"
+              + "            \"type\": [\n"
+              + "                \"null\",\n"
+              + "                {\n"
+              + "                    \"type\": \"bytes\",\n"
+              + "                    \"logicalType\": \"decimal\",\n"
+              + "                    \"precision\": 17,\n"
+              + "                    \"scale\": 4\n"
+              + "                }\n"
+              + "            ],\n"
+              + "            \"default\": null\n"
+              + "        }\n"
+              + "    ]\n"
+              + "}")
+      .canonicalString();
+
   public RestApiModeTest() {
     super(1, true, CompatibilityLevel.BACKWARD.name);
   }
@@ -155,6 +199,16 @@ public class RestApiModeTest extends ClusterTestHarness {
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
           e.getStatus());
     }
+
+    // set subject mode to import with force=true
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode, subject, true).getMode());
+
+    // set global mode to import with force=true
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode, null, true).getMode());
   }
 
   @Test
@@ -232,6 +286,66 @@ public class RestApiModeTest extends ClusterTestHarness {
     assertEquals("Getting schema by id should succeed",
             SCHEMA_STRING,
             restApp.restClient.getVersion(subject, 1).getSchema());
+  }
+
+  @Test
+  public void testImportModeWithEquivalentSchemaDifferentId() throws Exception {
+    String subject = "testSubject";
+    String mode = "IMPORT";
+
+    // set mode to import
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    int expectedIdSchema1 = 100;
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
+
+    assertEquals("Getting schema by id should succeed",
+        SCHEMA_WITH_DECIMAL,
+        restApp.restClient.getVersion(subject, 1).getSchema());
+
+    // register equivalent schema with different id
+    expectedIdSchema1 = 200;
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL2, subject, 2, expectedIdSchema1));
+
+    assertEquals("Getting schema by id should succeed",
+        SCHEMA_WITH_DECIMAL2,
+        restApp.restClient.getVersion(subject, 2).getSchema());
+  }
+
+  @Test
+  public void testImportModeWithSameSchemaDifferentId() throws Exception {
+    String subject = "testSubject";
+    String mode = "IMPORT";
+
+    // set mode to import
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    int expectedIdSchema1 = 100;
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
+
+    assertEquals("Getting schema by id should succeed",
+        SCHEMA_WITH_DECIMAL,
+        restApp.restClient.getVersion(subject, 1).getSchema());
+
+    // register equivalent schema with different id
+    expectedIdSchema1 = 200;
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 2, expectedIdSchema1));
+
+    assertEquals("Getting schema by id should succeed",
+        SCHEMA_WITH_DECIMAL,
+        restApp.restClient.getVersion(subject, 2).getSchema());
   }
 
   @Test

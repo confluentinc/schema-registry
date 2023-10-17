@@ -36,7 +36,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
-import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
@@ -48,48 +47,14 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@RunWith(Parameterized.class)
 public class LeaderElectorTest extends ClusterTestHarness {
 
-  @Parameters(name = "{0}")
-  public static Collection<Object[]> data() {
-    return Arrays.asList(new Object[][] {
-        {
-            "kafka",
-            0, // reservation size, i.e. how many IDs are reserved and potentially discarded
-        },
-        {
-            "zookeeper",
-            ZookeeperIdGenerator.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE
-        }
-    });
-  }
-
-  @Parameter(0)
-  public String electorType;
-  @Parameter(1)
-  public int reservationBatchSize;
-
   private String zkConnect() {
-    switch (electorType) {
-      case "zookeeper":
-        return zkConnect;
-      case "kafka":
-        return null;
-      default:
-        throw new IllegalArgumentException();
-    }
+    return null;
   }
 
   private String bootstrapServers() {
-    switch (electorType) {
-      case "zookeeper":
-        return null;
-      case "kafka":
-        return bootstrapServers;
-      default:
-        throw new IllegalArgumentException();
-    }
+    return bootstrapServers;
   }
 
   @Test
@@ -253,12 +218,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
     // registering a schema to the leader
     final String thirdSchema = avroSchemas.get(2);
     final int thirdSchemaExpectedVersion = 3;
-    final int thirdSchemaExpectedId;
-    if (electorType == "zookeeper") {
-      thirdSchemaExpectedId = reservationBatchSize + 1;
-    } else {
-      thirdSchemaExpectedId = secondSchemaExpectedId + 1;
-    }
+    final int thirdSchemaExpectedId = secondSchemaExpectedId + 1;
     assertEquals("Registering a new schema to the leader should succeed",
             thirdSchemaExpectedId,
             restApp1.restClient.registerSchema(thirdSchema, subject));
@@ -287,12 +247,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
 
     // register a schema to the new leader
     final String fourthSchema = avroSchemas.get(3);
-    final int fourthSchemaExpectedId;
-    if (electorType == "zookeeper") {
-      fourthSchemaExpectedId = 2 * reservationBatchSize + 1;
-    } else {
-      fourthSchemaExpectedId = thirdSchemaExpectedId + 1;
-    }
+    final int fourthSchemaExpectedId = thirdSchemaExpectedId + 1;
     TestUtils.registerAndVerifySchema(restApp2.restClient, fourthSchema,
                                       fourthSchemaExpectedId,
                                       subject);
@@ -659,7 +614,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
     for (RestApp restApp: cluster) {
       for (int i = 0; i < 3; i++) {
         SchemaRegistryIdentity leaderIdentity = restApp.leaderIdentity();
-        // There can be some latency in all the nodes picking up the new leader from ZK so we need
+        // There can be some latency in all the nodes picking up the new leader so we need
         // to allow for some retries here.
         if (leaderIdentity == null) {
           try {

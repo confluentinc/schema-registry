@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
+package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -27,15 +27,15 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class ModeGetResponse {
+public class Mode {
 
   private String mode;
 
-  public static ModeGetResponse fromJson(String json) throws IOException {
-    return JacksonMapper.INSTANCE.readValue(json, ModeGetResponse.class);
+  public static Mode fromJson(String json) throws IOException {
+    return JacksonMapper.INSTANCE.readValue(json, Mode.class);
   }
 
-  public ModeGetResponse(@JsonProperty("mode") String mode) {
+  public Mode(@JsonProperty("mode") String mode) {
     this.mode = mode;
   }
 
@@ -61,7 +61,7 @@ public class ModeGetResponse {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    ModeGetResponse that = (ModeGetResponse) o;
+    Mode that = (Mode) o;
     return Objects.equals(mode, that.mode);
   }
 
