@@ -17,7 +17,6 @@ package io.confluent.kafka.schemaregistry.encryption.local;
 import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.OLD_SECRETS;
 import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.SECRET;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Collections;

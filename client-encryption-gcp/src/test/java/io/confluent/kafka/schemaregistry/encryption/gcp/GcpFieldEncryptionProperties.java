@@ -20,7 +20,6 @@ import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpKmsDriver.PRIV
 import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpKmsDriver.PRIVATE_KEY_ID;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Collections;

@@ -34,7 +34,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import javax.annotation.Nullable;
@@ -45,6 +44,8 @@ import javax.annotation.Nullable;
 public final class TestKmsClient implements KmsClient {
 
   public static final String PREFIX = "test-kms://";
+
+  private static final String AES_GCM_KEY = "type.googleapis.com/google.crypto.tink.AesGcmKey";
 
   @Nullable
   private String keyUri;
@@ -60,14 +61,12 @@ public final class TestKmsClient implements KmsClient {
     }
     this.keyUri = uri;
 
-    KeyManager<Aead> keyManager = Registry.getKeyManager(
-        "type.googleapis.com/google.crypto.tink.AesGcmKey", Aead.class);
     PrimitiveSet.Builder<Aead> builder = PrimitiveSet.newBuilder(Aead.class);
-    builder.addPrimaryPrimitive(getPrimitive(keyManager, secret), getKey(secret));
+    builder.addPrimaryPrimitive(getPrimitive(secret), getKey(secret));
     this.aead = Registry.wrap(builder.build());
   }
 
-  private Aead getPrimitive(KeyManager<Aead> keyManager, String secret)
+  private Aead getPrimitive(String secret)
       throws GeneralSecurityException {
     byte[] keyBytes = Hkdf.computeHkdf(
         "HmacSha256", secret.getBytes(StandardCharsets.UTF_8), null, null, 16);
@@ -75,7 +74,7 @@ public final class TestKmsClient implements KmsClient {
         .setVersion(0)
         .setKeyValue(ByteString.copyFrom(keyBytes))
         .build();
-    return keyManager.getPrimitive(key);
+    return Registry.getPrimitive(AES_GCM_KEY, key.toByteString(), Aead.class);
   }
 
   private Key getKey(String secret) throws GeneralSecurityException {
