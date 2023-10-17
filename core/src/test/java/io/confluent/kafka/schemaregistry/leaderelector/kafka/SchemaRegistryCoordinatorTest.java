@@ -17,9 +17,8 @@ package io.confluent.kafka.schemaregistry.leaderelector.kafka;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
+import io.confluent.kafka.schemaregistry.leaderelector.kafka.SchemaRegistryProtocol.Assignment;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import java.nio.ByteBuffer;
@@ -39,7 +38,6 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
@@ -223,136 +221,34 @@ public class SchemaRegistryCoordinatorTest {
 
   @Test
   public void testNormalJoinGroupLeader() {
-    final String consumerId = LEADER_ID;
+    initiateFindJoinSyncFlow(LEADER_ID, coordinator, Collections.singletonMap(LEADER_ID, LEADER_INFO), true, LEADER_ID, LEADER_INFO, Assignment.NO_ERROR);
 
-    client.prepareResponse(groupCoordinatorResponse(node, consumerId, Errors.NONE));
-    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
-    // normal join group
-    Map<String, SchemaRegistryIdentity> memberInfo = Collections.singletonMap(consumerId, LEADER_INFO);
-    client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberInfo, Errors.NONE));
-    SyncGroupResponse syncGroupResponse = syncGroupResponse(
-        SchemaRegistryProtocol.Assignment.NO_ERROR,
-        consumerId,
-        LEADER_INFO,
-        Errors.NONE
-    );
-    client.prepareResponse(body -> {
-      SyncGroupRequest sync = (SyncGroupRequest) body;
-      return sync.data().memberId().equals(consumerId) &&
-             sync.data().generationId() == 1 &&
-             sync.groupAssignments().containsKey(consumerId);
-    }, syncGroupResponse);
-    coordinator.ensureActiveGroup();
-
-    assertFalse(coordinator.rejoinNeededOrPending());
-    assertEquals(0, rebalanceListener.revokedCount);
-    assertEquals(1, rebalanceListener.assignedCount);
-    assertFalse(rebalanceListener.assignments.get(0).failed());
-    assertEquals(consumerId, rebalanceListener.assignments.get(0).leader());
-    assertEquals(LEADER_INFO, rebalanceListener.assignments.get(0).leaderIdentity());
+    validate(coordinator, rebalanceListener, 0, 1, false, LEADER_ID, LEADER_INFO);
   }
 
   @Test
   public void testJoinGroupLeaderNoneEligible() {
-    final String consumerId = LEADER_ID;
+    initiateFindJoinSyncFlow(LEADER_ID, coordinator, Collections.singletonMap(LEADER_ID, INELIGIBLE_LEADER_INFO), true, null, null, Assignment.NO_ERROR);
 
-    client.prepareResponse(groupCoordinatorResponse(node, consumerId, Errors.NONE));
-    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
-    Map<String, SchemaRegistryIdentity> memberInfo = Collections.singletonMap(
-        consumerId,
-        INELIGIBLE_LEADER_INFO
-    );
-    client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberInfo, Errors.NONE));
-    SyncGroupResponse syncGroupResponse = syncGroupResponse(
-        SchemaRegistryProtocol.Assignment.NO_ERROR,
-        null,
-        null,
-        Errors.NONE
-    );
-    client.prepareResponse(body -> {
-      SyncGroupRequest sync = (SyncGroupRequest) body;
-      return sync.data().memberId().equals(consumerId) &&
-             sync.data().generationId() == 1 &&
-             sync.groupAssignments().containsKey(consumerId);
-    }, syncGroupResponse);
-
-    coordinator.ensureActiveGroup();
-
-    assertFalse(coordinator.rejoinNeededOrPending());
-    assertEquals(0, rebalanceListener.revokedCount);
-    assertEquals(1, rebalanceListener.assignedCount);
-    // No leader isn't considered a failure
-    assertFalse(rebalanceListener.assignments.get(0).failed());
-    assertNull(rebalanceListener.assignments.get(0).leader());
-    assertNull(rebalanceListener.assignments.get(0).leaderIdentity());
+    validate(coordinator, rebalanceListener, 0, 1, false, null, null);
   }
 
   @Test
   public void testJoinGroupLeaderDuplicateUrls() {
-    final String consumerId = LEADER_ID;
-
-    client.prepareResponse(groupCoordinatorResponse(node, consumerId, Errors.NONE));
-    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
     Map<String, SchemaRegistryIdentity> memberInfo = new HashMap<>();
     // intentionally duplicate info to get duplicate URLs
     memberInfo.put(LEADER_ID, LEADER_INFO);
     memberInfo.put(MEMBER_ID, LEADER_INFO);
-    client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberInfo, Errors.NONE));
-    SyncGroupResponse syncGroupResponse = syncGroupResponse(
-        SchemaRegistryProtocol.Assignment.DUPLICATE_URLS,
-        null,
-        null,
-        Errors.NONE
-    );
-    client.prepareResponse(body -> {
-      SyncGroupRequest sync = (SyncGroupRequest) body;
-      return sync.data().memberId().equals(consumerId) &&
-             sync.data().generationId() == 1 &&
-             sync.groupAssignments().containsKey(consumerId);
-    }, syncGroupResponse);
+    initiateFindJoinSyncFlow(LEADER_ID, coordinator, memberInfo, true, null, null, Assignment.DUPLICATE_URLS);
 
-    coordinator.ensureActiveGroup();
-
-    assertFalse(coordinator.rejoinNeededOrPending());
-    assertEquals(0, rebalanceListener.revokedCount);
-    assertEquals(1, rebalanceListener.assignedCount);
-    assertTrue(rebalanceListener.assignments.get(0).failed());
-    assertNull(rebalanceListener.assignments.get(0).leader());
-    assertNull(rebalanceListener.assignments.get(0).leaderIdentity());
+    validate(coordinator, rebalanceListener, 0, 1, true, null, null);
   }
 
   @Test
   public void testNormalJoinGroupFollower() {
-    final String consumerId = MEMBER_ID;
+    initiateFindJoinSyncFlow(MEMBER_ID, coordinator, null, false, LEADER_ID, LEADER_INFO, Assignment.NO_ERROR);
 
-    client.prepareResponse(groupCoordinatorResponse(node, consumerId, Errors.NONE));
-    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
-    // normal join group
-    client.prepareResponse(joinGroupFollowerResponse(1, consumerId, LEADER_ID, Errors.NONE));
-    SyncGroupResponse syncGroupResponse = syncGroupResponse(
-        SchemaRegistryProtocol.Assignment.NO_ERROR,
-        LEADER_ID,
-        LEADER_INFO,
-        Errors.NONE
-    );
-    client.prepareResponse(body -> {
-      SyncGroupRequest sync = (SyncGroupRequest) body;
-      return sync.data().memberId().equals(consumerId) &&
-             sync.data().generationId() == 1 &&
-             sync.groupAssignments().isEmpty();
-    }, syncGroupResponse);
-    coordinator.ensureActiveGroup();
-
-    assertFalse(coordinator.rejoinNeededOrPending());
-    assertEquals(0, rebalanceListener.revokedCount);
-    assertEquals(1, rebalanceListener.assignedCount);
-    assertFalse(rebalanceListener.assignments.get(0).failed());
-    assertEquals(LEADER_ID, rebalanceListener.assignments.get(0).leader());
-    assertEquals(LEADER_INFO, rebalanceListener.assignments.get(0).leaderIdentity());
+    validate(coordinator, rebalanceListener, 0, 1, false, LEADER_ID, LEADER_INFO);
   }
 
   /*
@@ -363,88 +259,89 @@ public class SchemaRegistryCoordinatorTest {
     // member 0 joins group
     Map<String, SchemaRegistryIdentity> groupMembership = new HashMap<>();
     groupMembership.put(MEMBER_0, MEMBER_0_INFO);
-    initiateFindJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, null, MEMBER_0_INFO);
-    validate(member0Coordinator, member0RebalanceListener, 0, 1, MEMBER_0, MEMBER_0_INFO);
+    initiateFindJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 0, 1, false, MEMBER_0, MEMBER_0_INFO);
 
     // member 1 joins group
     groupMembership.put(MEMBER_1, MEMBER_1_INFO);
-    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, null, MEMBER_0_INFO);
-    initiateFindJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO);
-    validate(member0Coordinator, member0RebalanceListener, 1, 2, MEMBER_0, MEMBER_0_INFO);
-    validate(member1Coordinator, member1RebalanceListener, 0, 1, MEMBER_0, MEMBER_0_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateFindJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 1, 2, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 0, 1, false, MEMBER_0, MEMBER_0_INFO);
 
     // member 2 joins group
     groupMembership.put(MEMBER_2, MEMBER_2_INFO);
-    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, null, MEMBER_0_INFO);
-    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO);
-    initiateFindJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO);
-    validate(member0Coordinator, member0RebalanceListener, 2, 3, MEMBER_0, MEMBER_0_INFO);
-    validate(member1Coordinator, member1RebalanceListener, 1, 2, MEMBER_0, MEMBER_0_INFO);
-    validate(member2Coordinator, member2RebalanceListener, 0, 1, MEMBER_0, MEMBER_0_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateFindJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 2, 3, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 1, 2, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 0, 1, false, MEMBER_0, MEMBER_0_INFO);
 
     // member 2 leaves group
     groupMembership.remove(MEMBER_2);
     member2Coordinator.setAssignmentSnapshot(null);
-    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, null, MEMBER_0_INFO);
-    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO);
-    validate(member0Coordinator, member0RebalanceListener, 3, 4, MEMBER_0, MEMBER_0_INFO);
-    validate(member1Coordinator, member1RebalanceListener, 2, 3, MEMBER_0, MEMBER_0_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 3, 4, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 2, 3, false, MEMBER_0, MEMBER_0_INFO);
 
     // member 2 re-joins group
     groupMembership.put(MEMBER_2, MEMBER_2_INFO);
-    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, null, MEMBER_0_INFO);
-    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO);
-    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO);
-    validate(member0Coordinator, member0RebalanceListener, 4, 5, MEMBER_0, MEMBER_0_INFO);
-    validate(member1Coordinator, member1RebalanceListener, 3, 4, MEMBER_0, MEMBER_0_INFO);
-    validate(member2Coordinator, member2RebalanceListener, 0, 2, MEMBER_0, MEMBER_0_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 4, 5, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 3, 4, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 0, 2, false, MEMBER_0, MEMBER_0_INFO);
 
     // member 1 leaves group
     groupMembership.remove(MEMBER_1);
     member1Coordinator.setAssignmentSnapshot(null);
-    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, null, MEMBER_0_INFO);
-    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO);
-    validate(member0Coordinator, member0RebalanceListener, 5, 6, MEMBER_0, MEMBER_0_INFO);
-    validate(member2Coordinator, member2RebalanceListener, 1, 3, MEMBER_0, MEMBER_0_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 5, 6, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 1, 3, false, MEMBER_0, MEMBER_0_INFO);
 
     // member 1 re-joins group
     groupMembership.put(MEMBER_1, MEMBER_1_INFO);
-    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, null, MEMBER_0_INFO);
-    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO);
-    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO);
-    validate(member0Coordinator, member0RebalanceListener, 6, 7, MEMBER_0, MEMBER_0_INFO);
-    validate(member1Coordinator, member1RebalanceListener, 3, 5, MEMBER_0, MEMBER_0_INFO);
-    validate(member2Coordinator, member2RebalanceListener, 2, 4, MEMBER_0, MEMBER_0_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 6, 7, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 3, 5, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 2, 4, false, MEMBER_0, MEMBER_0_INFO);
 
     // member 0 leaves group
     groupMembership.remove(MEMBER_0);
     member0Coordinator.setAssignmentSnapshot(null);
     member0Coordinator.getIdentity().setLeader(false);
-    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, true, null, MEMBER_1_INFO);
-    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_1, MEMBER_1_INFO);
-    validate(member1Coordinator, member1RebalanceListener, 4, 6, MEMBER_1, MEMBER_1_INFO);
-    validate(member2Coordinator, member2RebalanceListener, 3, 5, MEMBER_1, MEMBER_1_INFO);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, true, MEMBER_1, MEMBER_1_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_1, MEMBER_1_INFO, Assignment.NO_ERROR);
+    validate(member1Coordinator, member1RebalanceListener, 4, 6, false, MEMBER_1, MEMBER_1_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 3, 5, false, MEMBER_1, MEMBER_1_INFO);
 
     // member 0 re-joins group
     groupMembership.put(MEMBER_0, MEMBER_0_INFO);
-    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_1_INFO);
-    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_1_INFO);
-    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_1_INFO);
-    validate(member0Coordinator, member0RebalanceListener, 6, 8, MEMBER_0, MEMBER_1_INFO);
-    validate(member1Coordinator, member1RebalanceListener, 5, 7, MEMBER_0, MEMBER_1_INFO);
-    validate(member2Coordinator, member2RebalanceListener, 4, 6, MEMBER_0, MEMBER_1_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_1_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_1_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_1_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 6, 8, false, MEMBER_0, MEMBER_1_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 5, 7, false, MEMBER_0, MEMBER_1_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 4, 6, false, MEMBER_0, MEMBER_1_INFO);
   }
 
   private void validate(SchemaRegistryCoordinator memberCoordinator,
                         MockRebalanceListener memberRebalanceListener,
                         int revokedCount,
                         int assignedCount,
+                        boolean assignmentFailed,
                         String groupLeader,
                         SchemaRegistryIdentity leaderIdentity) {
     assertFalse(memberCoordinator.rejoinNeededOrPending());
     assertEquals(revokedCount, memberRebalanceListener.revokedCount);
     assertEquals(assignedCount, memberRebalanceListener.assignedCount);
-    assertFalse(memberRebalanceListener.assignments.get(assignedCount - 1).failed());
+    assertEquals(assignmentFailed, memberRebalanceListener.assignments.get(assignedCount - 1).failed());
     assertEquals(groupLeader, memberRebalanceListener.assignments.get(assignedCount - 1).leader());
     assertEquals(leaderIdentity, memberRebalanceListener.assignments.get(assignedCount - 1).leaderIdentity());
   }
@@ -454,12 +351,13 @@ public class SchemaRegistryCoordinatorTest {
                                     Map<String, SchemaRegistryIdentity> groupMembership,
                                     boolean isGroupLeader,
                                     String leader,
-                                    SchemaRegistryIdentity leaderIdentity) {
+                                    SchemaRegistryIdentity leaderIdentity,
+                                    short assignmentError) {
     // normal join group
     if (isGroupLeader) {
       client.prepareResponse(joinGroupLeaderResponse(1, member, groupMembership, Errors.NONE));
-      SyncGroupResponse syncGroupResponse = syncGroupResponse(SchemaRegistryProtocol.Assignment.NO_ERROR,
-              member,
+      SyncGroupResponse syncGroupResponse = syncGroupResponse(assignmentError,
+              leader,
               leaderIdentity,
               Errors.NONE);
       client.prepareResponse(body -> {
@@ -471,7 +369,7 @@ public class SchemaRegistryCoordinatorTest {
     }
     else {
       client.prepareResponse(joinGroupFollowerResponse(1, member, leader, Errors.NONE));
-      SyncGroupResponse syncGroupResponse = syncGroupResponse(SchemaRegistryProtocol.Assignment.NO_ERROR,
+      SyncGroupResponse syncGroupResponse = syncGroupResponse(assignmentError,
               leader,
               leaderIdentity,
               Errors.NONE);
@@ -490,12 +388,13 @@ public class SchemaRegistryCoordinatorTest {
                                         Map<String, SchemaRegistryIdentity> groupMembership,
                                         boolean isGroupLeader,
                                         String leader,
-                                        SchemaRegistryIdentity leaderIdentity) {
+                                        SchemaRegistryIdentity leaderIdentity,
+                                        short assignmentError) {
     client.prepareResponse(groupCoordinatorResponse(node, member, Errors.NONE));
     memberCoordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
     // normal join group
-    initiateJoinSyncFlow(member, memberCoordinator, groupMembership, isGroupLeader, leader, leaderIdentity);
+    initiateJoinSyncFlow(member, memberCoordinator, groupMembership, isGroupLeader, leader, leaderIdentity, assignmentError);
   }
 
   private FindCoordinatorResponse groupCoordinatorResponse(Node node, String key,  Errors error) {
@@ -548,7 +447,7 @@ public class SchemaRegistryCoordinatorTest {
       SchemaRegistryIdentity leaderIdentity,
       Errors error
   ) {
-    SchemaRegistryProtocol.Assignment assignment = new SchemaRegistryProtocol.Assignment(
+    Assignment assignment = new Assignment(
         assignmentError, leader, leaderIdentity
     );
     ByteBuffer buf = SchemaRegistryProtocol.serializeAssignment(assignment);
@@ -559,13 +458,13 @@ public class SchemaRegistryCoordinatorTest {
   }
 
   private static class MockRebalanceListener implements SchemaRegistryRebalanceListener {
-    public List<SchemaRegistryProtocol.Assignment> assignments = new ArrayList<>();
+    public List<Assignment> assignments = new ArrayList<>();
 
     public int revokedCount = 0;
     public int assignedCount = 0;
 
     @Override
-    public void onAssigned(SchemaRegistryProtocol.Assignment assignment, int generation) {
+    public void onAssigned(Assignment assignment, int generation) {
       this.assignments.add(assignment);
       assignedCount++;
     }
