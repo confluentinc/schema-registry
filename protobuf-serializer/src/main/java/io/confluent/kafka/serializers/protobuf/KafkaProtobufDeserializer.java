@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.protobuf;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.Message;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
@@ -36,7 +37,8 @@ public class KafkaProtobufDeserializer<T extends Message>
   }
 
   public KafkaProtobufDeserializer(SchemaRegistryClient client) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
   }
 
   public KafkaProtobufDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -47,7 +49,8 @@ public class KafkaProtobufDeserializer<T extends Message>
   public KafkaProtobufDeserializer(SchemaRegistryClient client,
                                    Map<String, ?> props,
                                    Class<T> type) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
     configure(deserializerConfig(props), type);
   }
 
@@ -74,7 +77,12 @@ public class KafkaProtobufDeserializer<T extends Message>
 
   @Override
   public T deserialize(String topic, byte[] bytes) {
-    return (T) deserialize(false, topic, isKey, bytes);
+    return deserialize(topic, null, bytes);
+  }
+
+  @Override
+  public T deserialize(String topic, Headers headers, byte[] bytes) {
+    return (T) deserialize(false, topic, isKey, headers, bytes);
   }
 
   @Override

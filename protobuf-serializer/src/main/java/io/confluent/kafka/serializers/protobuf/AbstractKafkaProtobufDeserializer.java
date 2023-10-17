@@ -16,11 +16,16 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.InterruptedIOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import org.apache.kafka.common.config.ConfigException;
@@ -41,17 +46,17 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Headers;
 
 public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
 
-  private static int DEFAULT_CACHE_CAPACITY = 1000;
+  private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
-  protected boolean isKey;
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
   protected boolean deriveType;
-  private Map<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
+  private final Map<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
     schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
@@ -61,7 +66,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    * Sets properties for this deserializer without overriding the schema registry client itself.
    * Useful for testing, where a mock client is injected.
    */
-  @SuppressWarnings("unchecked")
   protected void configure(KafkaProtobufDeserializerConfig config, Class<T> type) {
     configureClientProperties(config, new ProtobufSchemaProvider());
     try {
@@ -102,10 +106,16 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     return (T) deserialize(false, null, isKey, payload);
   }
 
+  protected Object deserialize(
+      boolean includeSchemaAndVersion, String topic, Boolean isKey, byte[] payload
+  ) throws SerializationException, InvalidConfigurationException {
+    return deserialize(includeSchemaAndVersion, topic, isKey, null, payload);
+  }
+
   // The Object return type is a bit messy, but this is the simplest way to have
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
-      boolean includeSchemaAndVersion, String topic, Boolean isKey, byte[] payload
+      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
@@ -125,18 +135,58 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       String subject = isKey == null || strategyUsesSchema(isKey)
           ? getContextName(topic) : subjectName(topic, isKey, null);
       ProtobufSchema schema = ((ProtobufSchema)
-              schemaRegistry.getSchemaBySubjectAndId(subject, id));
+          schemaRegistry.getSchemaBySubjectAndId(subject, id));
       MessageIndexes indexes = MessageIndexes.readFrom(buffer);
       String name = schema.toMessageName(indexes);
       schema = schemaWithName(schema, name);
-      if (includeSchemaAndVersion) {
+
+      ParsedSchema readerSchema = null;
+      if (metadata != null) {
+        readerSchema = getLatestWithMetadata(subject);
+      } else if (useLatestVersion) {
+        readerSchema = lookupLatestVersion(subject, schema, false);
+      }
+      if (includeSchemaAndVersion || readerSchema != null) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(id, schema, subject, isKey);
+        Integer version = schemaVersion(topic, isKey, id, subject, schema, null);
+        schema = schema.copy(version);
         schema = schemaWithName(schema, name);
+      }
+      List<Migration> migrations = Collections.emptyList();
+      if (readerSchema != null) {
+        migrations = getMigrations(subject, schema, readerSchema);
       }
 
       int length = buffer.limit() - 1 - idSize;
       int start = buffer.position() + buffer.arrayOffset();
+
+      Object message = null;
+      if (!migrations.isEmpty()) {
+        message = DynamicMessage.parseFrom(schema.toDescriptor(),
+            new ByteArrayInputStream(buffer.array(), start, length));
+        message = executeMigrations(migrations, subject, topic, headers, message);
+        message = readerSchema.fromJson((JsonNode) message);
+      }
+
+      if (readerSchema != null) {
+        schema = (ProtobufSchema) readerSchema;
+      }
+      if (schema.ruleSet() != null && schema.ruleSet().hasRules(RuleMode.READ)) {
+        if (message == null) {
+          message = DynamicMessage.parseFrom(schema.toDescriptor(),
+              new ByteArrayInputStream(buffer.array(), start, length));
+        }
+        message = executeRules(
+            subject, topic, headers, payload, RuleMode.READ, null, schema, message
+        );
+      }
+
+      if (message != null) {
+        buffer = ByteBuffer.wrap(((Message) message).toByteArray());
+        length = buffer.limit();
+        start = 0;
+      }
 
       Object value;
       if (parseMethod != null) {
@@ -168,8 +218,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         // schema registry's ordering (which is implicit by auto-registration time rather than
         // explicit from the Connector).
 
-        Integer version = schemaVersion(topic, isKey, id, subject, schema, value);
-        return new ProtobufSchemaAndValue(schema.copy(version), value);
+        return new ProtobufSchemaAndValue(schema, value);
       }
 
       return value;
@@ -179,6 +228,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       throw new SerializationException("Error deserializing Protobuf message for id " + id, e);
     } catch (RestClientException e) {
       throw toKafkaException(e, "Error retrieving Protobuf schema for id " + id);
+    } finally {
+      postOp(payload);
     }
   }
 
@@ -236,14 +287,14 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   }
 
   protected ProtobufSchemaAndValue deserializeWithSchemaAndVersion(
-      String topic, boolean isKey, byte[] payload
+      String topic, boolean isKey, Headers headers, byte[] payload
   ) throws SerializationException {
-    return (ProtobufSchemaAndValue) deserialize(true, topic, isKey, payload);
+    return (ProtobufSchemaAndValue) deserialize(true, topic, isKey, headers, payload);
   }
 
   static class Pair<K, V> {
-    private K key;
-    private V value;
+    private final K key;
+    private final V value;
 
     public Pair(K key, V value) {
       this.key = key;

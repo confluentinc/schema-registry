@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+import "confluent/meta.proto";
+
+package io.confluent.kafka.schemaregistry.rules;
+
+option java_package = "io.confluent.kafka.schemaregistry.rules";
+option java_outer_classname = "WidgetBytesProto";
+option java_multiple_files = false;
+
+message WidgetBytes {
+    bytes name = 1 [(.confluent.field_meta).tags = "PII", (.confluent.field_meta).tags = "PUBLIC"];
+    repeated bytes ssn = 2 [(.confluent.field_meta).tags = "PII", (.confluent.field_meta).tags = "PRIVATE"];
+    repeated PiiBytes pii_array = 3;
+    int32 size = 4;
+    int32 version = 5;
+}
+
+message PiiBytes {
+    bytes pii = 1 [(.confluent.field_meta).tags = "PII"];
+}

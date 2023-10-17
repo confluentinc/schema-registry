@@ -16,7 +16,7 @@
 package io.confluent.kafka.schemaregistry.exceptions;
 
 /**
- * Indicates the schema cannot be deleted because another schema refernces it.
+ * Indicates the schema cannot be deleted because another schema references it.
  */
 public class ReferenceExistsException extends SchemaRegistryException {
 

@@ -87,6 +87,11 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String USE_LATEST_VERSION_DOC =
       "Specify if the Serializer should use the latest subject version for serialization";
 
+  public static final String USE_LATEST_WITH_METADATA = "use.latest.with.metadata";
+  public static final String USE_LATEST_WITH_METADATA_DOC =
+      "Specify if the Serializer or Deserializer should use the latest subject version with the "
+          + "given metadata property and value, for example, 'application.version=v1'";
+
   public static final String LATEST_COMPATIBILITY_STRICT = "latest.compatibility.strict";
   public static final boolean LATEST_COMPATIBILITY_STRICT_DEFAULT = true;
   public static final String LATEST_COMPATIBILITY_STRICT_DOC =
@@ -106,9 +111,31 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String HTTP_READ_TIMEOUT_MS_DOC = "Specify the http read timeout"
       + " in milliseconds for schema registry client";
 
+  public static final String LATEST_CACHE_SIZE = "latest.cache.size";
+  public static final int LATEST_CACHE_SIZE_DEFAULT = 1000;
+  public static final String LATEST_CACHE_SIZE_DOC =
+      "The maximum size for caches holding latest schemas";
+
+  public static final String LATEST_CACHE_TTL = "latest.cache.ttl.sec";
+  public static final int LATEST_CACHE_TTL_DEFAULT = -1;
+  public static final String LATEST_CACHE_TTL_DOC =
+      "The TTL for caches holding latest schemas, or -1 for no TTL";
+
   public static final String SCHEMA_FORMAT = "schema.format";
   public static final String SCHEMA_FORMAT_DOC =
       "The schema format to use when registering or looking up schemas.";
+
+  public static final String RULE_EXECUTORS = "rule.executors";
+  public static final String RULE_EXECUTORS_DOCS =
+      "A comma-separated list of rule executor names.";
+
+  public static final String RULE_ACTIONS = "rule.actions";
+  public static final String RULE_ACTIONS_DOCS =
+      "A comma-separated list of rule action names.";
+
+  public static final String RULE_SERVICE_LOADER_ENABLE = "rule.service.loader.enable";
+  public static final String RULE_SERVICE_LOADER_ENABLE_DOCS =
+      "Whether to enable the ServiceLoader for rule executors, defaults to true.";
 
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
@@ -261,8 +288,20 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, USE_LATEST_VERSION_DOC)
         .define(LATEST_COMPATIBILITY_STRICT, Type.BOOLEAN, LATEST_COMPATIBILITY_STRICT_DEFAULT,
                 Importance.LOW, LATEST_COMPATIBILITY_STRICT_DOC)
+        .define(LATEST_CACHE_SIZE, Type.INT, LATEST_CACHE_SIZE_DEFAULT,
+                Importance.LOW, LATEST_CACHE_SIZE_DOC)
+        .define(LATEST_CACHE_TTL, Type.INT, LATEST_CACHE_TTL_DEFAULT,
+                Importance.LOW, LATEST_CACHE_TTL_DOC)
+        .define(USE_LATEST_WITH_METADATA, Type.STRING, null,
+                Importance.LOW, USE_LATEST_WITH_METADATA_DOC)
         .define(SCHEMA_FORMAT, Type.STRING, null,
                 Importance.LOW, SCHEMA_FORMAT_DOC)
+        .define(RULE_EXECUTORS, Type.LIST, "",
+                Importance.LOW, RULE_EXECUTORS_DOCS)
+        .define(RULE_ACTIONS, Type.LIST, "",
+                Importance.LOW, RULE_ACTIONS_DOCS)
+        .define(RULE_SERVICE_LOADER_ENABLE, Type.BOOLEAN, true,
+            Importance.LOW, RULE_SERVICE_LOADER_ENABLE_DOCS)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
                 Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
@@ -277,7 +316,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 BEARER_AUTH_ISSUER_ENDPOINT_URL_DOC)
         .define(BEARER_AUTH_CLIENT_ID, Type.STRING,null, Importance.MEDIUM,
                 BEARER_AUTH_CLIENT_ID_DOC)
-        .define(BEARER_AUTH_CLIENT_SECRET, Type.STRING, null, Importance.MEDIUM,
+        .define(BEARER_AUTH_CLIENT_SECRET, Type.PASSWORD, null, Importance.MEDIUM,
                 BEARER_AUTH_CLIENT_SECRET_DOC)
         .define(BEARER_AUTH_SCOPE, Type.STRING,null, Importance.MEDIUM ,
                 BEARER_AUTH_SCOPE_DOC)
@@ -358,8 +397,24 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     return this.getBoolean(LATEST_COMPATIBILITY_STRICT);
   }
 
+  public int getLatestCacheSize() {
+    return this.getInt(LATEST_CACHE_SIZE);
+  }
+
+  public int getLatestCacheTtl() {
+    return this.getInt(LATEST_CACHE_TTL);
+  }
+
+  public String getLatestWithMetadataSpec() {
+    return this.getString(USE_LATEST_WITH_METADATA);
+  }
+
   public String getSchemaFormat() {
     return this.getString(SCHEMA_FORMAT);
+  }
+
+  public boolean enableRuleServiceLoader() {
+    return this.getBoolean(RULE_SERVICE_LOADER_ENABLE);
   }
 
   public ContextNameStrategy contextNameStrategy() {

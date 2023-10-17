@@ -16,8 +16,6 @@
 
 package io.confluent.kafka.schemaregistry;
 
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
-
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.Collections;
 import java.util.HashSet;
@@ -70,7 +68,7 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       }
       if (!schemas.containsKey(reference.getName())) {
         QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
-            DEFAULT_TENANT, schema.getSubject(), reference.getSubject());
+            schemaVersionFetcher().tenant(), schema.getSubject(), reference.getSubject());
         Schema s = schemaVersionFetcher().getByVersion(refSubject.toQualifiedSubject(),
             reference.getVersion(), true);
         if (s == null) {

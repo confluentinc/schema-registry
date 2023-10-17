@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import java.util.Collections;
 import java.util.List;
@@ -30,6 +32,8 @@ public class SchemaMetadata {
   private String schemaType;
   private String schema;
   private List<SchemaReference> references;
+  private Metadata metadata = null;
+  private RuleSet ruleSet = null;
 
   public SchemaMetadata(int id,
                         int version,
@@ -57,6 +61,8 @@ public class SchemaMetadata {
     this.schemaType = schema.getSchemaType();
     this.schema = schema.getSchema();
     this.references = schema.getReferences();
+    this.metadata = schema.getMetadata();
+    this.ruleSet = schema.getRuleSet();
   }
 
   public int getId() {
@@ -77,5 +83,13 @@ public class SchemaMetadata {
 
   public List<SchemaReference> getReferences() {
     return references;
+  }
+
+  public Metadata getMetadata() {
+    return this.metadata;
+  }
+
+  public RuleSet getRuleSet() {
+    return this.ruleSet;
   }
 }

@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+import "confluent/meta.proto";
+
+package io.confluent.kafka.schemaregistry.rules;
+
+option java_package = "io.confluent.kafka.schemaregistry.rules";
+option java_outer_classname = "PiiProto";
+option java_multiple_files = false;
+
+message Pii {
+    string pii = 1 [(.confluent.field_meta).tags = "PII"];
+}
