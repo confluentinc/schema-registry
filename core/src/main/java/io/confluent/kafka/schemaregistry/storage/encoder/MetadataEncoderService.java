@@ -17,7 +17,6 @@ package io.confluent.kafka.schemaregistry.storage.encoder;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.KeyManager;
 import com.google.crypto.tink.KeyTemplate;
 import com.google.crypto.tink.KeyTemplates;
 import com.google.crypto.tink.KeysetHandle;
