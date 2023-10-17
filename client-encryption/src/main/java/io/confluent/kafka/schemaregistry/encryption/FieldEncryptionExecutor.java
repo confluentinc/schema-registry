@@ -423,7 +423,6 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         DekInfo dek = getDek(ctx, kekName, kek);
         byte[] plaintext;
         byte[] ciphertext;
-        Object result;
         switch (ctx.ruleMode()) {
           case WRITE:
             plaintext = toBytes(fieldCtx.getType(), fieldValue);
