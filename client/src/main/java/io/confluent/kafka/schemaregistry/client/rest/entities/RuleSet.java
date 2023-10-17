@@ -121,8 +121,8 @@ public class RuleSet {
   }
 
   public void validate() throws RuleException {
+    Set<String> names = new HashSet<>();
     if (migrationRules != null) {
-      Set<String> names = new HashSet<>();
       for (Rule rule : migrationRules) {
         String name = rule.getName();
         if (names.contains(name)) {
@@ -136,7 +136,6 @@ public class RuleSet {
       }
     }
     if (domainRules != null) {
-      Set<String> names = new HashSet<>();
       for (Rule rule : domainRules) {
         String name = rule.getName();
         if (names.contains(name)) {

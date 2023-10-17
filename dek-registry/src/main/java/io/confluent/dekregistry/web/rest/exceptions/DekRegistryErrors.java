@@ -30,6 +30,9 @@ public class DekRegistryErrors {
       + "first before being permanently deleted";
   public static final int KEY_NOT_SOFT_DELETED_ERROR_CODE = 40471;
 
+  public static final String KEY_SOFT_DELETED_MESSAGE_FORMAT = "Key '%s' must be undeleted first";
+  public static final int KEY_SOFT_DELETED_ERROR_CODE = 40472;
+
   // HTTP 409
   public static final String ALREADY_EXISTS_MESSAGE_FORMAT =
       "Key '%s' already exists";
@@ -55,6 +58,12 @@ public class DekRegistryErrors {
     return new RestNotFoundException(
         String.format(KEY_NOT_SOFT_DELETED_MESSAGE_FORMAT, name),
         KEY_NOT_SOFT_DELETED_ERROR_CODE);
+  }
+
+  public static RestException keySoftDeletedException(String name) {
+    return new RestNotFoundException(
+        String.format(KEY_SOFT_DELETED_MESSAGE_FORMAT, name),
+        KEY_SOFT_DELETED_ERROR_CODE);
   }
 
   public static RestException alreadyExistsException(String name) {

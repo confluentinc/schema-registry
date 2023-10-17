@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TICKER;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 import static org.junit.Assert.assertEquals;
@@ -32,9 +33,11 @@ import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
+import com.google.common.testing.FakeTicker;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
@@ -42,6 +45,7 @@ import com.google.protobuf.DynamicMessage;
 import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.DekRegistryClientFactory;
 import io.confluent.dekregistry.client.MockDekRegistryClientFactory;
+import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -71,6 +75,8 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -120,12 +126,14 @@ public abstract class FieldEncryptionExecutorTest {
   private final KafkaAvroSerializer badSerializer;
   private final KafkaAvroDeserializer badDeserializer;
   private final String topic;
+  private final FakeTicker fakeTicker = new FakeTicker();
 
   public FieldEncryptionExecutorTest() throws Exception {
     topic = "test";
     List<String> ruleNames = ImmutableList.of("rule1", "rule2");
     fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
     Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties("mock://");
+    clientProps.put(TICKER, fakeTicker);
     schemaRegistry = SchemaRegistryClientFactory.newClient(Collections.singletonList(
         "mock://"),
         1000,
@@ -207,7 +215,8 @@ public abstract class FieldEncryptionExecutorTest {
     return addSpyToCryptor(serde, name, DekFormat.AES256_GCM);
   }
 
-  private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, String name, DekFormat dekFormat) throws Exception {
+  private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, String name, DekFormat dekFormat)
+      throws Exception {
     Map<String, Map<String, RuleBase>> executors = serde.getRuleExecutors();
     Map<String, RuleBase> executorsByType = executors.get(FieldEncryptionExecutor.TYPE);
     FieldEncryptionExecutor executor = null;
@@ -384,12 +393,13 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
-  public void testKafkaAvroSerializer2() throws Exception {
+  public void testKafkaAvroDekRotation() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
-        ImmutableMap.of("encrypt.dek.algorithm", "AES256_GCM"), null, null, null, false);
+        ImmutableMap.of("encrypt.dek.expiry.days", "1", "preserve.source.fields", "true"),
+        null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
     Metadata metadata = getMetadata("kek1");
     avroSchema = avroSchema.copy(metadata, ruleSet);
@@ -397,10 +407,64 @@ public abstract class FieldEncryptionExecutorTest {
 
     int expectedEncryptions = 1;
     RecordHeaders headers = new RecordHeaders();
-    Cryptor cryptor = addSpyToCryptor(avroSerializer, DekFormat.AES256_GCM);
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
     verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
-    cryptor = addSpyToCryptor(avroDeserializer, DekFormat.AES256_GCM);
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
+
+    Dek dek = dekRegistry.getDekLatestVersion("kek1", topic + "-value", null, false);
+    assertEquals(1, dek.getVersion());
+
+    // Advance 2 days
+    fakeTicker.advance(Duration.of(2, ChronoUnit.DAYS));
+
+    cryptor = addSpyToCryptor(avroSerializer);
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
+
+    dek = dekRegistry.getDekLatestVersion("kek1", topic + "-value", null, false);
+    assertEquals(2, dek.getVersion());
+
+    // Advance 2 days
+    fakeTicker.advance(Duration.of(2, ChronoUnit.DAYS));
+
+    cryptor = addSpyToCryptor(avroSerializer);
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
+
+    dek = dekRegistry.getDekLatestVersion("kek1", topic + "-value", null, false);
+    assertEquals(3, dek.getVersion());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithAlgorithm() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("encrypt.dek.algorithm", "AES128_GCM"), null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer, DekFormat.AES128_GCM);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer, DekFormat.AES128_GCM);
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
@@ -552,6 +616,75 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerMultipleRulesIncludingDekRotation() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("preserve.source.fields", "true"),
+        null, null, null, false);
+    Rule rule2 = new Rule("rule2", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII2"),
+        ImmutableMap.of("encrypt.dek.expiry.days", "1", "preserve.source.fields", "true"),
+        null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule, rule2));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer, "rule1");
+    Cryptor cryptor2 = addSpyToCryptor(avroSerializer, "rule2");
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).encrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).encrypt(any(), any(), any());
+    }
+    cryptor = addSpyToCryptor(avroDeserializer, "rule1");
+    cryptor2 = addSpyToCryptor(avroDeserializer, "rule2");
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).decrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
+    }
+    assertEquals("testUser", record.get("name"));
+    assertEquals("testUser2", record.get("name2"));
+
+    // Advance 2 days
+    fakeTicker.advance(Duration.of(2, ChronoUnit.DAYS));
+
+    expectedEncryptions += 1;
+    cryptor = addSpyToCryptor(avroSerializer, "rule1");
+    cryptor2 = addSpyToCryptor(avroSerializer, "rule2");
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).encrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).encrypt(any(), any(), any());
+    }
+    cryptor = addSpyToCryptor(avroDeserializer, "rule1");
+    cryptor2 = addSpyToCryptor(avroDeserializer, "rule2");
+    record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).decrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
+    }
+    assertEquals("testUser", record.get("name"));
+    assertEquals("testUser2", record.get("name2"));
+
+    Dek dek = dekRegistry.getDekLatestVersion("kek1", topic + "-value", null, false);
+    assertEquals(2, dek.getVersion());
+  }
+
+  @Test
   public void testKafkaAvroSerializerDoubleEncryption() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
@@ -585,6 +718,142 @@ public abstract class FieldEncryptionExecutorTest {
       verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
     }
     assertEquals("testUser", record.get("name"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerDoubleEncryptionWithDekRotation() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("preserve.source.fields", "true"),
+        null, null, null, false);
+    Rule rule2 = new Rule("rule2", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII3"),
+        ImmutableMap.of("encrypt.dek.expiry.days", "1", "preserve.source.fields", "true"),
+        null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule, rule2));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer, "rule1");
+    Cryptor cryptor2 = addSpyToCryptor(avroSerializer, "rule2");
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).encrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).encrypt(any(), any(), any());
+    }
+    cryptor = addSpyToCryptor(avroDeserializer, "rule1");
+    cryptor2 = addSpyToCryptor(avroDeserializer, "rule2");
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).decrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
+    }
+    assertEquals("testUser", record.get("name"));
+
+    // Advance 2 days
+    fakeTicker.advance(Duration.of(2, ChronoUnit.DAYS));
+
+    expectedEncryptions += 1;
+    headers = new RecordHeaders();
+    cryptor = addSpyToCryptor(avroSerializer, "rule1");
+    cryptor2 = addSpyToCryptor(avroSerializer, "rule2");
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).encrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).encrypt(any(), any(), any());
+    }
+    cryptor = addSpyToCryptor(avroDeserializer, "rule1");
+    cryptor2 = addSpyToCryptor(avroDeserializer, "rule2");
+    record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).decrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
+    }
+    assertEquals("testUser", record.get("name"));
+
+    Dek dek = dekRegistry.getDekLatestVersion("kek1", topic + "-value", null, false);
+    assertEquals(2, dek.getVersion());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerDoubleEncryptionAllDekRotation() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("encrypt.dek.expiry.days", "2", "preserve.source.fields", "true"),
+        null, null, null, false);
+    Rule rule2 = new Rule("rule2", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII3"),
+        ImmutableMap.of("encrypt.dek.expiry.days", "1", "preserve.source.fields", "true"),
+        null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule, rule2));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer, "rule1");
+    Cryptor cryptor2 = addSpyToCryptor(avroSerializer, "rule2");
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).encrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).encrypt(any(), any(), any());
+    }
+    cryptor = addSpyToCryptor(avroDeserializer, "rule1");
+    cryptor2 = addSpyToCryptor(avroDeserializer, "rule2");
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).decrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
+    }
+    assertEquals("testUser", record.get("name"));
+
+    // Advance 2 days
+    fakeTicker.advance(Duration.of(3, ChronoUnit.DAYS));
+
+    expectedEncryptions += 1;
+    headers = new RecordHeaders();
+    cryptor = addSpyToCryptor(avroSerializer, "rule1");
+    cryptor2 = addSpyToCryptor(avroSerializer, "rule2");
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).encrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).encrypt(any(), any(), any());
+    }
+    cryptor = addSpyToCryptor(avroDeserializer, "rule1");
+    cryptor2 = addSpyToCryptor(avroDeserializer, "rule2");
+    record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    if (cryptor == cryptor2) {
+      verify(cryptor, times(expectedEncryptions * 2)).decrypt(any(), any(), any());
+    } else {
+      verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+      verify(cryptor2, times(expectedEncryptions)).decrypt(any(), any(), any());
+    }
+    assertEquals("testUser", record.get("name"));
+
+    Dek dek = dekRegistry.getDekLatestVersion("kek1", topic + "-value", null, false);
+    assertEquals(3, dek.getVersion());
   }
 
   @Test

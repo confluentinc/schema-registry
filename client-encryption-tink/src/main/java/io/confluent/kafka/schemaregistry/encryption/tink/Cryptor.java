@@ -18,12 +18,13 @@ package io.confluent.kafka.schemaregistry.encryption.tink;
 
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.DeterministicAead;
-import com.google.crypto.tink.KeyTemplates;
 import com.google.crypto.tink.Registry;
+import com.google.crypto.tink.TinkProtoParametersFormat;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.daead.DeterministicAeadConfig;
 import com.google.crypto.tink.proto.KeyTemplate;
-import com.google.protobuf.ByteString;
+import com.google.protobuf.ExtensionRegistryLite;
+import com.google.protobuf.InvalidProtocolBufferException;
 import java.nio.BufferUnderflowException;
 import java.security.GeneralSecurityException;
 
@@ -42,12 +43,14 @@ public class Cryptor {
   private final KeyTemplate dekTemplate;
 
   public Cryptor(DekFormat dekFormat) throws GeneralSecurityException {
-    this.dekFormat = dekFormat;
-    com.google.crypto.tink.KeyTemplate keyTemplate = KeyTemplates.get(dekFormat.name());
-    this.dekTemplate = com.google.crypto.tink.proto.KeyTemplate.newBuilder()
-        .setTypeUrl(keyTemplate.getTypeUrl())
-        .setValue(ByteString.copyFrom(keyTemplate.getValue()))
-        .build();
+    try {
+      this.dekFormat = dekFormat;
+      this.dekTemplate = KeyTemplate.parseFrom(
+          TinkProtoParametersFormat.serialize(dekFormat.getParameters()),
+          ExtensionRegistryLite.getEmptyRegistry());
+    } catch (InvalidProtocolBufferException e) {
+      throw new GeneralSecurityException(e);
+    }
   }
 
   public DekFormat getDekFormat() {
@@ -55,7 +58,7 @@ public class Cryptor {
   }
 
   public byte[] generateKey() throws GeneralSecurityException {
-    return Registry.newKey(dekTemplate).toByteArray();
+    return Registry.newKeyData(dekTemplate).getValue().toByteArray();
   }
 
   public byte[] encrypt(byte[] dek, byte[] plaintext, byte[] associatedData)

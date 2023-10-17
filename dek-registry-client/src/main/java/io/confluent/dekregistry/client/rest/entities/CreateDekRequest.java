@@ -30,6 +30,7 @@ import java.util.Objects;
 public class CreateDekRequest {
 
   private String subject;
+  private Integer version;
   private DekFormat algorithm;
   private String encryptedKeyMaterial;
 
@@ -45,6 +46,16 @@ public class CreateDekRequest {
   @JsonProperty("subject")
   public void setSubject(String subject) {
     this.subject = subject;
+  }
+
+  @JsonProperty("version")
+  public Integer getVersion() {
+    return this.version;
+  }
+
+  @JsonProperty("version")
+  public void setVersion(Integer version) {
+    this.version = version;
   }
 
   @JsonProperty("algorithm")
@@ -77,13 +88,14 @@ public class CreateDekRequest {
     }
     CreateDekRequest dek = (CreateDekRequest) o;
     return Objects.equals(subject, dek.subject)
+        && Objects.equals(version, dek.version)
         && Objects.equals(algorithm, dek.algorithm)
         && Objects.equals(encryptedKeyMaterial, dek.encryptedKeyMaterial);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(subject, algorithm, encryptedKeyMaterial);
+    return Objects.hash(subject, version, algorithm, encryptedKeyMaterial);
   }
 
   @Override

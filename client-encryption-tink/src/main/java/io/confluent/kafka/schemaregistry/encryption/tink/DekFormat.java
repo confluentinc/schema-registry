@@ -16,18 +16,28 @@
 
 package io.confluent.kafka.schemaregistry.encryption.tink;
 
+import com.google.crypto.tink.Parameters;
+import com.google.crypto.tink.aead.PredefinedAeadParameters;
+import com.google.crypto.tink.daead.PredefinedDeterministicAeadParameters;
+
 public enum DekFormat {
-  AES128_GCM(false),
-  AES256_GCM(false),
-  AES256_SIV(true);
+  AES128_GCM(false, PredefinedAeadParameters.AES128_GCM),
+  AES256_GCM(false, PredefinedAeadParameters.AES256_GCM),
+  AES256_SIV(true, PredefinedDeterministicAeadParameters.AES256_SIV);
 
   private final boolean isDeterministic;
+  private final Parameters parameters;
 
-  DekFormat(boolean isDeterministic) {
+  DekFormat(boolean isDeterministic, Parameters parameters) {
     this.isDeterministic = isDeterministic;
+    this.parameters = parameters;
   }
 
   public boolean isDeterministic() {
     return isDeterministic;
+  }
+
+  public Parameters getParameters() {
+    return parameters;
   }
 }

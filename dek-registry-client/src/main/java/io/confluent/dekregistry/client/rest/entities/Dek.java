@@ -17,6 +17,7 @@
 package io.confluent.dekregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -37,6 +38,7 @@ public class Dek {
   private final String encryptedKeyMaterial;
   private final String keyMaterial;
   private final Long timestamp;
+  private final Boolean deleted;
 
   @JsonCreator
   public Dek(
@@ -46,7 +48,8 @@ public class Dek {
       @JsonProperty("algorithm") DekFormat algorithm,
       @JsonProperty("encryptedKeyMaterial") String encryptedKeyMaterial,
       @JsonProperty("keyMaterial") String keyMaterial,
-      @JsonProperty("ts") Long timestamp
+      @JsonProperty("ts") Long timestamp,
+      @JsonProperty("deleted") Boolean deleted
   ) {
     this.kekName = kekName;
     this.subject = subject;
@@ -55,6 +58,7 @@ public class Dek {
     this.encryptedKeyMaterial = encryptedKeyMaterial;
     this.keyMaterial = keyMaterial;
     this.timestamp = timestamp;
+    this.deleted = deleted;
   }
 
   @JsonProperty("kekName")
@@ -90,6 +94,16 @@ public class Dek {
   @JsonProperty("ts")
   public Long getTimestamp() {
     return this.timestamp;
+  }
+
+  @JsonProperty("deleted")
+  public Boolean getDeleted() {
+    return this.deleted;
+  }
+
+  @JsonIgnore
+  public boolean isDeleted() {
+    return Boolean.TRUE.equals(this.deleted);
   }
 
   @Override

@@ -30,22 +30,22 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
 
   private final String kekName;
   private final String subject;
-  private final int version;
   private final DekFormat algorithm;
+  private final int version;
 
   @JsonCreator
   public DataEncryptionKeyId(
       @JsonProperty("tenant") String tenant,
       @JsonProperty("kekName") String kekName,
       @JsonProperty("subject") String subject,
-      @JsonProperty("version") int version,
-      @JsonProperty("algorithm") DekFormat algorithm
+      @JsonProperty("algorithm") DekFormat algorithm,
+      @JsonProperty("version") int version
   ) {
     super(tenant, KeyType.DEK);
     this.kekName = kekName;
     this.subject = subject;
-    this.version = version;
     this.algorithm = algorithm;
+    this.version = version;
   }
 
   @JsonProperty("kekName")
@@ -58,14 +58,14 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
     return this.subject;
   }
 
-  @JsonProperty("version")
-  public int getVersion() {
-    return this.version;
-  }
-
   @JsonProperty("algorithm")
   public DekFormat getAlgorithm() {
     return this.algorithm;
+  }
+
+  @JsonProperty("version")
+  public int getVersion() {
+    return this.version;
   }
 
   @Override
@@ -80,15 +80,15 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
       return false;
     }
     DataEncryptionKeyId that = (DataEncryptionKeyId) o;
-    return version == that.version
-        && Objects.equals(kekName, that.kekName)
+    return Objects.equals(kekName, that.kekName)
         && Objects.equals(subject, that.subject)
-        && algorithm == that.algorithm;
+        && algorithm == that.algorithm
+        && version == that.version;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), kekName, subject, version, algorithm);
+    return Objects.hash(super.hashCode(), kekName, subject, algorithm, version);
   }
 
   @Override
@@ -125,18 +125,23 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
       }
     }
 
-    if (this.getVersion() != that.getVersion()) {
-      return (this.getVersion() < that.getVersion() ? -1 : 1);
-    }
-
     if (this.getAlgorithm() == null && that.getAlgorithm() == null) {
-      return 0;
+      // pass
     } else if (this.getAlgorithm() == null) {
       return -1;
     } else if (that.getAlgorithm() == null) {
       return 1;
     } else {
-      return this.getAlgorithm().compareTo(that.getAlgorithm());
+      int algorithmComparison = this.getAlgorithm().compareTo(that.getAlgorithm());
+      if (algorithmComparison != 0) {
+        return algorithmComparison < 0 ? -1 : 1;
+      }
     }
+
+    if (this.getVersion() != that.getVersion()) {
+      return (this.getVersion() < that.getVersion() ? -1 : 1);
+    }
+
+    return 0;
   }
 }

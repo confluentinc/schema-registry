@@ -40,6 +40,8 @@ import java.util.stream.Collectors;
 @Schema(description = "Rule")
 public class Rule {
 
+  public static final int NAME_MAX_LENGTH = 64;
+
   private final String name;
   private final String doc;
   private final RuleKind kind;
@@ -260,6 +262,9 @@ public class Rule {
     int length = name.length();
     if (length == 0) {
       throw new RuleException("Empty rule name");
+    }
+    if (length > NAME_MAX_LENGTH) {
+      throw new RuleException("Rule name too long");
     }
     char first = name.charAt(0);
     if (!(Character.isLetter(first) || first == '_')) {
