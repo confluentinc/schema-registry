@@ -96,6 +96,7 @@ import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -158,6 +159,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final String groupId;
   private final List<Consumer<Boolean>> leaderChangeListeners = new CopyOnWriteArrayList<>();
   private final AtomicBoolean initialized = new AtomicBoolean(false);
+  private final Time time;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -222,6 +224,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.kafkaStore = kafkaStore(config);
     this.metadataEncoder = new MetadataEncoderService(this);
     this.ruleSetHandler = new RuleSetHandler();
+    this.time = config.getTime();
   }
 
   @VisibleForTesting
@@ -473,6 +476,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public void setLeader(@Nullable SchemaRegistryIdentity newLeader)
       throws SchemaRegistryTimeoutException, SchemaRegistryStoreException, IdGenerationException {
+    final long started = time.hiResClockMs();
     log.debug("Setting the leader to {}", newLeader);
 
     // Only schema registry instances eligible for leader can be set to leader
@@ -503,18 +507,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       isLeader = isLeader();
       leaderChanged = leaderIdentity != null && !leaderIdentity.equals(previousLeader);
-      if (leaderChanged && isLeader) {
-        // The new leader may not know the exact last offset in the Kafka log. So, mark the
-        // last offset invalid here
-        kafkaStore.markLastWrittenOffsetInvalid();
-        //ensure the new leader catches up with the offsets before it gets nextid and assigns
-        // leader
-        try {
-          kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
-        } catch (StoreException e) {
-          throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
+      if (leaderChanged) {
+        log.debug("Leader changed from {} to {}", previousLeader, leaderIdentity);
+        if (isLeader) {
+          // The new leader may not know the exact last offset in the Kafka log. So, mark the
+          // last offset invalid here
+          kafkaStore.markLastWrittenOffsetInvalid();
+          //ensure the new leader catches up with the offsets before it gets nextid and assigns
+          // leader
+          try {
+            kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
+          } catch (StoreException e) {
+            throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
+          }
+          idGenerator.init();
         }
-        idGenerator.init();
       }
       metricsContainer.getLeaderNode().record(isLeader() ? 1 : 0);
     } finally {
@@ -530,6 +537,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
     }
+    long elapsed = time.hiResClockMs() - started;
+    metricsContainer.getLeaderInitializationLatencyMetric().record(elapsed);
   }
 
   /**

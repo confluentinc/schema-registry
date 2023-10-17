@@ -265,22 +265,6 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
     }
   }
 
-  @Override
-  public void onRevoked() {
-    log.info("Rebalance started");
-    try {
-      schemaRegistry.setLeader(null);
-    } catch (SchemaRegistryException e) {
-      // This shouldn't be possible with this implementation. The exceptions from setLeader come
-      // from it calling nextRange in this class, but this implementation doesn't require doing
-      // any IO, so the errors that can occur in the ZK implementation should not be possible here.
-      log.error(
-          "Error when updating leader, we will not be able to forward requests to the leader",
-          e
-      );
-    }
-  }
-
   private void stop(boolean swallowException) {
     log.trace("Stopping the schema registry group member.");
 
@@ -319,6 +303,14 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
       log.debug("The schema registry group member has stopped.");
     }
   }
+
+  /**
+   * This is a no-op during leader election as we're not revoking previous leader assignment. The
+   * expectation is that the sync group response will notify the group members if there's a
+   * leadership change.
+   */
+  @Override
+  public void onRevoked() {}
 
   private static void closeQuietly(AutoCloseable closeable,
                                    String name,

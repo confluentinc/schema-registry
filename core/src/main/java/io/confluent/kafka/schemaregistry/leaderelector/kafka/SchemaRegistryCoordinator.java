@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.leaderelector.kafka;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -131,11 +132,22 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
 
   @Override
   public JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
+    log.debug("Updating metadata");
     ByteBuffer metadata = SchemaRegistryProtocol.serializeMetadata(identity);
     return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
             Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName(SR_SUBPROTOCOL_V0)
                     .setMetadata(metadata.array())).iterator());
+  }
+
+  @VisibleForTesting
+  public void setAssignmentSnapshot(SchemaRegistryProtocol.Assignment assignment) {
+    this.assignmentSnapshot = assignment;
+  }
+
+  @VisibleForTesting
+  public SchemaRegistryIdentity getIdentity() {
+    return identity;
   }
 
   @Override
@@ -146,6 +158,9 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       ByteBuffer memberAssignment
   ) {
     assignmentSnapshot = SchemaRegistryProtocol.deserializeAssignment(memberAssignment);
+    if (assignmentSnapshot != null && assignmentSnapshot.leaderIdentity() != null) {
+      identity.setLeader(assignmentSnapshot.leaderIdentity().equals(identity));
+    }
     listener.onAssigned(assignmentSnapshot, generation);
   }
 
@@ -176,6 +191,9 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     // usually keep the leader assigned to the same member across rebalances.
     SchemaRegistryIdentity leaderIdentity = null;
     String leaderKafkaId = null;
+    SchemaRegistryIdentity existingLeaderIdentity = null;
+    String existingLeaderKafkaId = null;
+    boolean multipleLeadersFound = false;
     Set<String> urls = new HashSet<>();
     for (Map.Entry<String, SchemaRegistryIdentity> entry : memberConfigs.entrySet()) {
       String kafkaMemberId = entry.getKey();
@@ -187,6 +205,15 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       if (eligible && smallerIdentity) {
         leaderKafkaId = kafkaMemberId;
         leaderIdentity = memberIdentity;
+      }
+      if (eligible && memberIdentity.isLeader()) {
+        if (existingLeaderIdentity != null) {
+          log.warn("Multiple leaders found in group [{}, {}].",
+                  existingLeaderIdentity, memberIdentity);
+          multipleLeadersFound = true;
+        }
+        existingLeaderKafkaId = kafkaMemberId;
+        existingLeaderIdentity = memberIdentity;
       }
     }
     short error = SchemaRegistryProtocol.Assignment.NO_ERROR;
@@ -200,8 +227,15 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       error = SchemaRegistryProtocol.Assignment.DUPLICATE_URLS;
     }
 
-    // All members currently receive the same assignment information since it is just the leader ID
     Map<String, ByteBuffer> groupAssignment = new HashMap<>();
+    if (!multipleLeadersFound && existingLeaderKafkaId != null) {
+      leaderKafkaId = existingLeaderKafkaId;
+      leaderIdentity = existingLeaderIdentity;
+      if (!identity.equals(leaderIdentity) && identity.isLeader()) {
+        identity.setLeader(false);
+      }
+    }
+    // All members currently receive the same assignment information since it is just the leader ID
     SchemaRegistryProtocol.Assignment assignment
         = new SchemaRegistryProtocol.Assignment(error, leaderKafkaId, leaderIdentity);
     log.debug("Assignment: {}", assignment);
@@ -211,9 +245,13 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     return groupAssignment;
   }
 
+  /**
+   * We might as well just return true here as {@link KafkaGroupLeaderElector#onRevoked()} is a
+   * no-op. Keeping this for now as the mock listener keeps track of the number of times
+   * `onRevoked` is called.
+   */
   @Override
   protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
-    log.debug("Revoking previous assignment {}", assignmentSnapshot);
     if (assignmentSnapshot != null) {
       listener.onRevoked();
     }
