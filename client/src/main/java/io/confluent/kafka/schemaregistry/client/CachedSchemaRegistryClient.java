@@ -832,8 +832,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   private boolean isSchemaOrSubjectNotFoundException(RestClientException rce) {
-    return rce.getStatus() == HTTP_NOT_FOUND &&
-            (rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE || rce.getErrorCode() == SUBJECT_NOT_FOUND_ERROR_CODE);
+    return rce.getStatus() == HTTP_NOT_FOUND
+        && (rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE
+        || rce.getErrorCode() == SUBJECT_NOT_FOUND_ERROR_CODE);
   }
 
   private static String toQualifiedContext(String subject) {

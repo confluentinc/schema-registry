@@ -634,7 +634,7 @@ public class CachedSchemaRegistryClientTest {
       client.getId(SUBJECT_0, AVRO_SCHEMA_0);
       fail();
     } catch (RestClientException rce) {
-      assertEquals("Subject not found; error code: 40401", rce.getMessage());
+      assertEquals("Schema not found; error code: 40403", rce.getMessage());
     }
 
     fakeTicker.advance(2, TimeUnit.SECONDS);
