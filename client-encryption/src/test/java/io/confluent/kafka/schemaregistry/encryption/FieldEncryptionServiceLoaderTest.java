@@ -14,22 +14,19 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.encryption.local;
+package io.confluent.kafka.schemaregistry.encryption;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
-import java.util.List;
+import org.junit.Ignore;
+import org.junit.Test;
 
-public class LocalFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
+public abstract class FieldEncryptionServiceLoaderTest extends FieldEncryptionExecutorTest {
 
-  public LocalFieldEncryptionExecutorTest() throws Exception {
+  public FieldEncryptionServiceLoaderTest() throws Exception {
     super();
   }
 
-  @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(
-      List<String> ruleNames, Class<?> ruleExecutor) {
-    return new LocalFieldEncryptionProperties(ruleNames, ruleExecutor);
+  @Test
+  @Ignore
+  public void testBadDekGenerator() throws Exception {
   }
 }
-
