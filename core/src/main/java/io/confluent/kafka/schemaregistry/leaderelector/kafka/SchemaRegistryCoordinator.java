@@ -187,8 +187,10 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     }
 
     // Compute the leader as the leader-eligible member with the "smallest" (lexicographically) ID.
-    // This doesn't guarantee a member will stay leader until it leaves the group, but should
-    // usually keep the leader assigned to the same member across rebalances.
+    // If the group has an existing leader, this leader takes precedence. If multiple group
+    // members are determined to be leaders, fall back to the member with the smallest ID.
+    // This guarantees that a member will stay as the leader until it leaves the group or the
+    // coordinator detects that the member's heartbeat stopped and evicts the member.
     SchemaRegistryIdentity leaderIdentity = null;
     String leaderKafkaId = null;
     SchemaRegistryIdentity existingLeaderIdentity = null;
@@ -206,14 +208,17 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
         leaderKafkaId = kafkaMemberId;
         leaderIdentity = memberIdentity;
       }
-      if (eligible && memberIdentity.isLeader()) {
+      if (eligible && memberIdentity.isLeader() && !multipleLeadersFound) {
         if (existingLeaderIdentity != null) {
           log.warn("Multiple leaders found in group [{}, {}].",
                   existingLeaderIdentity, memberIdentity);
           multipleLeadersFound = true;
+          existingLeaderKafkaId = null;
+          existingLeaderIdentity = null;
+        } else {
+          existingLeaderKafkaId = kafkaMemberId;
+          existingLeaderIdentity = memberIdentity;
         }
-        existingLeaderKafkaId = kafkaMemberId;
-        existingLeaderIdentity = memberIdentity;
       }
     }
     short error = SchemaRegistryProtocol.Assignment.NO_ERROR;
@@ -228,7 +233,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     }
 
     Map<String, ByteBuffer> groupAssignment = new HashMap<>();
-    if (!multipleLeadersFound && existingLeaderKafkaId != null) {
+    if (existingLeaderKafkaId != null) {
       leaderKafkaId = existingLeaderKafkaId;
       leaderIdentity = existingLeaderIdentity;
       if (!identity.equals(leaderIdentity) && identity.isLeader()) {

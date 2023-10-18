@@ -125,12 +125,12 @@ public class SchemaRegistryIdentity {
     return CURRENT_VERSION;
   }
 
-  @JsonProperty("is_leader")
+  @JsonProperty("leader")
   public Boolean isLeader() {
     return isLeader;
   }
 
-  @JsonProperty("is_leader")
+  @JsonProperty("leader")
   public void setLeader(Boolean isLeader) {
     this.isLeader = isLeader;
   }
