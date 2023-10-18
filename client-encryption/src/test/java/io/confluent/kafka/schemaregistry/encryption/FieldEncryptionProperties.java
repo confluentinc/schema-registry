@@ -20,13 +20,24 @@ import java.util.Map;
 public abstract class FieldEncryptionProperties {
 
   private List<String> ruleNames;
+  private Class<?> ruleExecutor;
 
   public FieldEncryptionProperties(List<String> ruleNames) {
     this.ruleNames = ruleNames;
+    this.ruleExecutor = FieldEncryptionExecutor.class;
+  }
+
+  public FieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+    this.ruleNames = ruleNames;
+    this.ruleExecutor = ruleExecutor;
   }
 
   public List<String> getRuleNames() {
     return ruleNames;
+  }
+
+  public Class<?> getRuleExecutor() {
+    return ruleExecutor;
   }
 
   public abstract String getKmsType();

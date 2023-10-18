@@ -20,7 +20,6 @@ import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpKmsDriver.PRIV
 import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpKmsDriver.PRIVATE_KEY_ID;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Collections;
@@ -32,6 +31,10 @@ public class GcpFieldEncryptionProperties extends FieldEncryptionProperties {
 
   public GcpFieldEncryptionProperties(List<String> ruleNames) {
     super(ruleNames);
+  }
+
+  public GcpFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+    super(ruleNames, ruleExecutor);
   }
 
   @Override
@@ -61,7 +64,7 @@ public class GcpFieldEncryptionProperties extends FieldEncryptionProperties {
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, String.join(",", ruleNames));
     for (String ruleName : ruleNames) {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
-          FieldEncryptionExecutor.class.getName());
+          getRuleExecutor().getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
               + ".param." + CLIENT_ID,
           clientId);

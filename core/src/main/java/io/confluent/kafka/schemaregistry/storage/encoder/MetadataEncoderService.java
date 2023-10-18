@@ -17,7 +17,6 @@ package io.confluent.kafka.schemaregistry.storage.encoder;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.KeyManager;
 import com.google.crypto.tink.KeyTemplate;
 import com.google.crypto.tink.KeyTemplates;
 import com.google.crypto.tink.KeysetHandle;
@@ -66,6 +65,7 @@ public class MetadataEncoderService implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(MetadataEncoderService.class);
 
+  private static final String AES_GCM_KEY = "type.googleapis.com/google.crypto.tink.AesGcmKey";
   private static final byte[] EMPTY_AAD = new byte[0];
   private static final String KEY_TEMPLATE_NAME = "AES128_GCM";
 
@@ -129,15 +129,13 @@ public class MetadataEncoderService implements Closeable {
     if (secret == null) {
       throw new IllegalArgumentException("Secret is null");
     }
-    KeyManager<Aead> keyManager = Registry.getKeyManager(
-        "type.googleapis.com/google.crypto.tink.AesGcmKey", Aead.class);
     byte[] keyBytes = Hkdf.computeHkdf(
         "HmacSha256", secret.getBytes(StandardCharsets.UTF_8), null, null, 16);
     AesGcmKey key = AesGcmKey.newBuilder()
         .setVersion(0)
         .setKeyValue(ByteString.copyFrom(keyBytes))
         .build();
-    return keyManager.getPrimitive(key);
+    return Registry.getPrimitive(AES_GCM_KEY, key.toByteString(), Aead.class);
   }
 
   protected static String encoderSecret(SchemaRegistryConfig config) {

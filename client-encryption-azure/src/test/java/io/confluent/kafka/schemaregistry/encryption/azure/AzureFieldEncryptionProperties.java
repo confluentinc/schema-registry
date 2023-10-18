@@ -40,6 +40,10 @@ public class AzureFieldEncryptionProperties extends FieldEncryptionProperties {
     super(ruleNames);
   }
 
+  public AzureFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+    super(ruleNames, ruleExecutor);
+  }
+
   @Override
   public String getKmsType() {
     return "azure-kms";
@@ -62,7 +66,7 @@ public class AzureFieldEncryptionProperties extends FieldEncryptionProperties {
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, String.join(",", ruleNames));
     for (String ruleName : ruleNames) {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
-          FieldEncryptionExecutor.class.getName());
+          getRuleExecutor().getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
               + ".param." + TEST_CLIENT,
           getTestClient());

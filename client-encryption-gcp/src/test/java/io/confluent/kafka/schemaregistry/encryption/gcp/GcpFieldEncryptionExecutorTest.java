@@ -27,8 +27,9 @@ public class GcpFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new GcpFieldEncryptionProperties(ruleNames);
+  protected FieldEncryptionProperties getFieldEncryptionProperties(
+      List<String> ruleNames, Class<?> ruleExecutor) {
+    return new GcpFieldEncryptionProperties(ruleNames, ruleExecutor);
   }
 }
 

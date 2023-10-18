@@ -27,8 +27,9 @@ public class HcVaultFieldEncryptionExecutorTest extends FieldEncryptionExecutorT
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new HcVaultFieldEncryptionProperties(ruleNames);
+  protected FieldEncryptionProperties getFieldEncryptionProperties(
+      List<String> ruleNames, Class<?> ruleExecutor) {
+    return new HcVaultFieldEncryptionProperties(ruleNames, ruleExecutor);
   }
 }
 

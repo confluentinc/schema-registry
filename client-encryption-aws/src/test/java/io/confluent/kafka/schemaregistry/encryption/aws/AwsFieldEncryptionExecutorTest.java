@@ -27,7 +27,8 @@ public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new AwsFieldEncryptionProperties(ruleNames);
+  protected FieldEncryptionProperties getFieldEncryptionProperties(
+      List<String> ruleNames, Class<?> ruleExecutor) {
+    return new AwsFieldEncryptionProperties(ruleNames, ruleExecutor);
   }
 }

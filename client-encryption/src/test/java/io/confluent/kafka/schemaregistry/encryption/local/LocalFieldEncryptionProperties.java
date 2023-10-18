@@ -17,7 +17,6 @@ package io.confluent.kafka.schemaregistry.encryption.local;
 import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.OLD_SECRETS;
 import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.SECRET;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Collections;
@@ -29,6 +28,10 @@ public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
 
   public LocalFieldEncryptionProperties(List<String> ruleNames) {
     super(ruleNames);
+  }
+
+  public LocalFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+    super(ruleNames, ruleExecutor);
   }
 
   @Override
@@ -57,7 +60,7 @@ public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, String.join(",", ruleNames));
     for (String ruleName : ruleNames) {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
-          FieldEncryptionExecutor.class.getName());
+          getRuleExecutor().getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
           + ".param." + SECRET, "mysecret");
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName

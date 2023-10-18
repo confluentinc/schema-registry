@@ -40,6 +40,10 @@ public class HcVaultFieldEncryptionProperties extends FieldEncryptionProperties 
     super(ruleNames);
   }
 
+  public HcVaultFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+    super(ruleNames, ruleExecutor);
+  }
+
   @Override
   public String getKmsType() {
     return "hcvault";
@@ -61,7 +65,7 @@ public class HcVaultFieldEncryptionProperties extends FieldEncryptionProperties 
     props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS, String.join(",", ruleNames));
     for (String ruleName : ruleNames) {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
-          FieldEncryptionExecutor.class.getName());
+          getRuleExecutor().getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
               + ".param." + TOKEN_ID,
           "dev-only-token");
