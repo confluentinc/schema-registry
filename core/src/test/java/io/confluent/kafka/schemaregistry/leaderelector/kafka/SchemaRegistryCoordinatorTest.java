@@ -424,28 +424,28 @@ public class SchemaRegistryCoordinatorTest {
                         int revokedCount,
                         int assignedCount,
                         boolean assignmentFailed,
-                        String groupLeader,
+                        String leaderElector,
                         SchemaRegistryIdentity leaderIdentity) {
     assertFalse(memberCoordinator.rejoinNeededOrPending());
     assertEquals(revokedCount, memberRebalanceListener.revokedCount);
     assertEquals(assignedCount, memberRebalanceListener.assignedCount);
     assertEquals(assignmentFailed, memberRebalanceListener.assignments.get(assignedCount - 1).failed());
-    assertEquals(groupLeader, memberRebalanceListener.assignments.get(assignedCount - 1).leader());
+    assertEquals(leaderElector, memberRebalanceListener.assignments.get(assignedCount - 1).leader());
     assertEquals(leaderIdentity, memberRebalanceListener.assignments.get(assignedCount - 1).leaderIdentity());
   }
 
   private void initiateJoinSyncFlow(String member,
                                     SchemaRegistryCoordinator memberCoordinator,
                                     Map<String, SchemaRegistryIdentity> groupMembership,
-                                    boolean isGroupLeader,
-                                    String leader,
+                                    boolean isLeaderElector,
+                                    String leaderElector,
                                     SchemaRegistryIdentity leaderIdentity,
                                     short assignmentError) {
     // normal join group
-    if (isGroupLeader) {
+    if (isLeaderElector) {
       client.prepareResponse(joinGroupLeaderResponse(1, member, groupMembership, Errors.NONE));
       SyncGroupResponse syncGroupResponse = syncGroupResponse(assignmentError,
-              leader,
+              leaderElector,
               leaderIdentity,
               Errors.NONE);
       client.prepareResponse(body -> {
@@ -456,9 +456,9 @@ public class SchemaRegistryCoordinatorTest {
       }, syncGroupResponse);
     }
     else {
-      client.prepareResponse(joinGroupFollowerResponse(1, member, leader, Errors.NONE));
+      client.prepareResponse(joinGroupFollowerResponse(1, member, leaderElector, Errors.NONE));
       SyncGroupResponse syncGroupResponse = syncGroupResponse(assignmentError,
-              leader,
+              leaderElector,
               leaderIdentity,
               Errors.NONE);
       client.prepareResponse(body -> {
@@ -474,15 +474,15 @@ public class SchemaRegistryCoordinatorTest {
   private void initiateFindJoinSyncFlow(String member,
                                         SchemaRegistryCoordinator memberCoordinator,
                                         Map<String, SchemaRegistryIdentity> groupMembership,
-                                        boolean isGroupLeader,
-                                        String leader,
+                                        boolean isLeaderElector,
+                                        String leaderElector,
                                         SchemaRegistryIdentity leaderIdentity,
                                         short assignmentError) {
     client.prepareResponse(groupCoordinatorResponse(node, member, Errors.NONE));
     memberCoordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
     // normal join group
-    initiateJoinSyncFlow(member, memberCoordinator, groupMembership, isGroupLeader, leader, leaderIdentity, assignmentError);
+    initiateJoinSyncFlow(member, memberCoordinator, groupMembership, isLeaderElector, leaderElector, leaderIdentity, assignmentError);
   }
 
   private FindCoordinatorResponse groupCoordinatorResponse(Node node, String key,  Errors error) {

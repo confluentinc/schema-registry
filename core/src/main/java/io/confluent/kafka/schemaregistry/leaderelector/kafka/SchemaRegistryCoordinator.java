@@ -170,7 +170,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
 
   @Override
   protected Map<String, ByteBuffer> onLeaderElected(
-      String kafkaLeaderId, // Kafka group "leader" who does assignment, *not* the SR leader
+      String leaderElector, // Kafka group "leader" who does assignment, *not* the SR leader
       String protocol,
       List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata,
       boolean skipAssignment
@@ -212,7 +212,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
         leaderKafkaId = kafkaMemberId;
         leaderIdentity = memberIdentity;
       }
-      if (eligible && memberIdentity.isLeader() && !multipleLeadersFound) {
+      if (!stickyLeaderElection && eligible && memberIdentity.isLeader() && !multipleLeadersFound) {
         if (existingLeaderIdentity != null) {
           log.warn("Multiple leaders found in group [{}, {}].",
                   existingLeaderIdentity, memberIdentity);
