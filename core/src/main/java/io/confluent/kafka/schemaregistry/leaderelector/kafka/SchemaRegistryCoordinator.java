@@ -53,6 +53,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   private SchemaRegistryProtocol.Assignment assignmentSnapshot;
   private final SchemaRegistryRebalanceListener listener;
   private final SchemaRegistryMetric nodeCountMetric;
+  private final boolean stickyLeaderElection;
 
   /**
    * Initialize the coordination manager.
@@ -70,7 +71,8 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
           long retryBackoffMs,
           SchemaRegistryIdentity identity,
           SchemaRegistryRebalanceListener listener,
-          SchemaRegistryMetric nodeCountMetric) {
+          SchemaRegistryMetric nodeCountMetric,
+          boolean stickyLeaderElection) {
     super(
         new GroupRebalanceConfig(
             sessionTimeoutMs,
@@ -91,6 +93,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     this.assignmentSnapshot = null;
     this.listener = listener;
     this.nodeCountMetric = nodeCountMetric;
+    this.stickyLeaderElection = stickyLeaderElection;
   }
 
   @Override
@@ -158,7 +161,8 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       ByteBuffer memberAssignment
   ) {
     assignmentSnapshot = SchemaRegistryProtocol.deserializeAssignment(memberAssignment);
-    if (assignmentSnapshot != null && assignmentSnapshot.leaderIdentity() != null) {
+    if (assignmentSnapshot != null && assignmentSnapshot.leaderIdentity() != null
+            && !stickyLeaderElection) {
       identity.setLeader(assignmentSnapshot.leaderIdentity().equals(identity));
     }
     listener.onAssigned(assignmentSnapshot, generation);
@@ -233,7 +237,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     }
 
     Map<String, ByteBuffer> groupAssignment = new HashMap<>();
-    if (existingLeaderKafkaId != null) {
+    if (!stickyLeaderElection && existingLeaderKafkaId != null && existingLeaderIdentity != null) {
       leaderKafkaId = existingLeaderKafkaId;
       leaderIdentity = existingLeaderIdentity;
       if (!identity.equals(leaderIdentity) && identity.isLeader()) {

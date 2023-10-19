@@ -108,6 +108,13 @@ public class SchemaRegistryCoordinatorTest {
   private SchemaRegistryCoordinator member0Coordinator;
   private SchemaRegistryCoordinator member1Coordinator;
   private SchemaRegistryCoordinator member2Coordinator;
+  private LogContext logContext;
+  private ConsumerNetworkClient consumerClient;
+  private final String groupId = "test-group";
+  private final int sessionTimeoutMs = 10;
+  private final int rebalanceTimeoutMs = 60;
+  private final int heartbeatIntervalMs = 2;
+  private final long retryBackoffMs = 100;
 
   @Before
   public void setup() {
@@ -130,19 +137,15 @@ public class SchemaRegistryCoordinatorTest {
       }
     });
 
-    LogContext logContext = new LogContext();
-    ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000, Integer.MAX_VALUE);
+
+    this.logContext = new LogContext();
+    this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000, Integer.MAX_VALUE);
     this.metrics = new Metrics(time);
     this.rebalanceListener = new MockRebalanceListener();
     this.member0RebalanceListener = new MockRebalanceListener();
     this.member1RebalanceListener = new MockRebalanceListener();
     this.member2RebalanceListener = new MockRebalanceListener();
 
-    String groupId = "test-group";
-    int sessionTimeoutMs = 10;
-    int rebalanceTimeoutMs = 60;
-    int heartbeatIntervalMs = 2;
-    long retryBackoffMs = 100;
     this.coordinator = new SchemaRegistryCoordinator(
         logContext,
         consumerClient,
@@ -156,47 +159,9 @@ public class SchemaRegistryCoordinatorTest {
         retryBackoffMs,
         LEADER_INFO,
         rebalanceListener,
-        null
+        null,
+        true
     );
-    this.member0Coordinator = new SchemaRegistryCoordinator(logContext,
-            consumerClient,
-            groupId,
-            rebalanceTimeoutMs,
-            sessionTimeoutMs,
-            heartbeatIntervalMs,
-            new Metrics(time),
-            "sr-" + groupId,
-            time,
-            retryBackoffMs,
-            MEMBER_0_INFO,
-            member0RebalanceListener,
-            null);
-    this.member1Coordinator = new SchemaRegistryCoordinator(logContext,
-            consumerClient,
-            groupId,
-            rebalanceTimeoutMs,
-            sessionTimeoutMs,
-            heartbeatIntervalMs,
-            new Metrics(time),
-            "sr-" + groupId,
-            time,
-            retryBackoffMs,
-            MEMBER_1_INFO,
-            member1RebalanceListener,
-            null);
-    this.member2Coordinator = new SchemaRegistryCoordinator(logContext,
-            consumerClient,
-            groupId,
-            rebalanceTimeoutMs,
-            sessionTimeoutMs,
-            heartbeatIntervalMs,
-            new Metrics(time),
-            "sr-" + groupId,
-            time,
-            retryBackoffMs,
-            MEMBER_2_INFO,
-            member2RebalanceListener,
-            null);
   }
 
   @After
@@ -256,6 +221,7 @@ public class SchemaRegistryCoordinatorTest {
    */
   @Test
   public void testCoordinatorDuringRoll() {
+    initializeCoordinators(false);
     // member 0 joins group
     Map<String, SchemaRegistryIdentity> groupMembership = new HashMap<>();
     groupMembership.put(MEMBER_0, MEMBER_0_INFO);
@@ -329,6 +295,128 @@ public class SchemaRegistryCoordinatorTest {
     validate(member0Coordinator, member0RebalanceListener, 6, 8, false, MEMBER_0, MEMBER_1_INFO);
     validate(member1Coordinator, member1RebalanceListener, 5, 7, false, MEMBER_0, MEMBER_1_INFO);
     validate(member2Coordinator, member2RebalanceListener, 4, 6, false, MEMBER_0, MEMBER_1_INFO);
+  }
+
+  @Test
+  public void testCoordinatorDuringRollWithStickyLeaderElection() {
+    initializeCoordinators(true);
+    // member 0 joins group
+    Map<String, SchemaRegistryIdentity> groupMembership = new HashMap<>();
+    groupMembership.put(MEMBER_0, MEMBER_0_INFO);
+    initiateFindJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 0, 1, false, MEMBER_0, MEMBER_0_INFO);
+
+    // member 1 joins group
+    groupMembership.put(MEMBER_1, MEMBER_1_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateFindJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 1, 2, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 0, 1, false, MEMBER_0, MEMBER_0_INFO);
+
+    // member 2 joins group
+    groupMembership.put(MEMBER_2, MEMBER_2_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateFindJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 2, 3, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 1, 2, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 0, 1, false, MEMBER_0, MEMBER_0_INFO);
+
+    // member 2 leaves group
+    groupMembership.remove(MEMBER_2);
+    member2Coordinator.setAssignmentSnapshot(null);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 3, 4, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 2, 3, false, MEMBER_0, MEMBER_0_INFO);
+
+    // member 2 re-joins group
+    groupMembership.put(MEMBER_2, MEMBER_2_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 4, 5, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 3, 4, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 0, 2, false, MEMBER_0, MEMBER_0_INFO);
+
+    // member 1 leaves group
+    groupMembership.remove(MEMBER_1);
+    member1Coordinator.setAssignmentSnapshot(null);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 5, 6, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 1, 3, false, MEMBER_0, MEMBER_0_INFO);
+
+    // member 1 re-joins group
+    groupMembership.put(MEMBER_1, MEMBER_1_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 6, 7, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 3, 5, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 2, 4, false, MEMBER_0, MEMBER_0_INFO);
+
+    // member 0 leaves group
+    groupMembership.remove(MEMBER_0);
+    member0Coordinator.setAssignmentSnapshot(null);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, true, MEMBER_1, MEMBER_1_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_1, MEMBER_1_INFO, Assignment.NO_ERROR);
+    validate(member1Coordinator, member1RebalanceListener, 4, 6, false, MEMBER_1, MEMBER_1_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 3, 5, false, MEMBER_1, MEMBER_1_INFO);
+
+    // member 0 re-joins group
+    groupMembership.put(MEMBER_0, MEMBER_0_INFO);
+    initiateJoinSyncFlow(MEMBER_0, member0Coordinator, groupMembership, true, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_1, member1Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    initiateJoinSyncFlow(MEMBER_2, member2Coordinator, groupMembership, false, MEMBER_0, MEMBER_0_INFO, Assignment.NO_ERROR);
+    validate(member0Coordinator, member0RebalanceListener, 6, 8, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member1Coordinator, member1RebalanceListener, 5, 7, false, MEMBER_0, MEMBER_0_INFO);
+    validate(member2Coordinator, member2RebalanceListener, 4, 6, false, MEMBER_0, MEMBER_0_INFO);
+  }
+
+  private void initializeCoordinators(boolean stickyLeaderElection) {
+    this.member0Coordinator = new SchemaRegistryCoordinator(logContext,
+            consumerClient,
+            groupId,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            heartbeatIntervalMs,
+            new Metrics(time),
+            "sr-" + groupId,
+            time,
+            retryBackoffMs,
+            MEMBER_0_INFO,
+            member0RebalanceListener,
+            null,
+            stickyLeaderElection);
+    this.member1Coordinator = new SchemaRegistryCoordinator(logContext,
+            consumerClient,
+            groupId,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            heartbeatIntervalMs,
+            new Metrics(time),
+            "sr-" + groupId,
+            time,
+            retryBackoffMs,
+            MEMBER_1_INFO,
+            member1RebalanceListener,
+            null,
+            stickyLeaderElection);
+    this.member2Coordinator = new SchemaRegistryCoordinator(logContext,
+            consumerClient,
+            groupId,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            heartbeatIntervalMs,
+            new Metrics(time),
+            "sr-" + groupId,
+            time,
+            retryBackoffMs,
+            MEMBER_2_INFO,
+            member2RebalanceListener,
+            null,
+            stickyLeaderElection);
   }
 
   private void validate(SchemaRegistryCoordinator memberCoordinator,

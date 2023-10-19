@@ -145,6 +145,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final int searchMaxLimit;
   private final boolean isEligibleForLeaderElector;
   private final boolean delayLeaderElection;
+  private final boolean stickyLeaderElection;
   private final boolean allowModeChanges;
   private SchemaRegistryIdentity leaderIdentity;
   private RestService leaderRestService;
@@ -178,6 +179,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
     this.isEligibleForLeaderElector = leaderEligibility;
     this.delayLeaderElection = config.getBoolean(SchemaRegistryConfig.LEADER_ELECTION_DELAY);
+    this.stickyLeaderElection = config.getBoolean(SchemaRegistryConfig.LEADER_ELECTION_STICKY);
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
 
     String interInstanceListenerNameConfig = config.interInstanceListenerName();
