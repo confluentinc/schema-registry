@@ -315,13 +315,21 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       return kek;
     }
 
-    private int getDekExpiryDays(RuleContext ctx) {
+    private int getDekExpiryDays(RuleContext ctx) throws RuleException {
       String expiryStr = ctx.getParameter(ENCRYPT_DEK_EXPIRY_DAYS);
-      try {
-        return Integer.parseInt(expiryStr);
-      } catch (NumberFormatException e) {
+      if (expiryStr == null || expiryStr.isEmpty()) {
         return 0;
       }
+      int dekExpiryDays;
+      try {
+        dekExpiryDays = Integer.parseInt(expiryStr);
+      } catch (NumberFormatException e) {
+        throw new RuleException("Invalid value for " + ENCRYPT_DEK_EXPIRY_DAYS + ": " + expiryStr);
+      }
+      if (dekExpiryDays < 0) {
+        throw new RuleException("Invalid value for " + ENCRYPT_DEK_EXPIRY_DAYS + ": " + expiryStr);
+      }
+      return dekExpiryDays;
     }
 
     private KekInfo retrieveKekFromRegistry(RuleContext ctx, KekId key) throws RuleException {
