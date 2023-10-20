@@ -317,6 +317,9 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
 
     private int getDekExpiryDays(RuleContext ctx) throws RuleException {
       String expiryStr = ctx.getParameter(ENCRYPT_DEK_EXPIRY_DAYS);
+      if (expiryStr == null || expiryStr.isEmpty()) {
+        return 0;
+      }
       int dekExpiryDays;
       try {
         dekExpiryDays = Integer.parseInt(expiryStr);
