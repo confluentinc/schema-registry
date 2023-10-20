@@ -161,8 +161,8 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       ByteBuffer memberAssignment
   ) {
     assignmentSnapshot = SchemaRegistryProtocol.deserializeAssignment(memberAssignment);
-    if (assignmentSnapshot != null && assignmentSnapshot.leaderIdentity() != null
-            && !stickyLeaderElection) {
+    if (stickyLeaderElection && assignmentSnapshot != null
+            && assignmentSnapshot.leaderIdentity() != null) {
       identity.setLeader(assignmentSnapshot.leaderIdentity().equals(identity));
     }
     listener.onAssigned(assignmentSnapshot, generation);
@@ -212,7 +212,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
         leaderKafkaId = kafkaMemberId;
         leaderIdentity = memberIdentity;
       }
-      if (!stickyLeaderElection && eligible && memberIdentity.isLeader() && !multipleLeadersFound) {
+      if (stickyLeaderElection && eligible && memberIdentity.isLeader() && !multipleLeadersFound) {
         if (existingLeaderIdentity != null) {
           log.warn("Multiple leaders found in group [{}, {}].",
                   existingLeaderIdentity, memberIdentity);
@@ -237,7 +237,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     }
 
     Map<String, ByteBuffer> groupAssignment = new HashMap<>();
-    if (!stickyLeaderElection && existingLeaderKafkaId != null && existingLeaderIdentity != null) {
+    if (stickyLeaderElection && existingLeaderKafkaId != null && existingLeaderIdentity != null) {
       leaderKafkaId = existingLeaderKafkaId;
       leaderIdentity = existingLeaderIdentity;
       if (!identity.equals(leaderIdentity) && identity.isLeader()) {

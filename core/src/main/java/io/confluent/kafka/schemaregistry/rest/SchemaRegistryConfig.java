@@ -366,9 +366,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String LEADER_ELECTION_DELAY_DOC =
       "Whether to delay leader election until after initialization.";
   protected static final String LEADER_ELECTION_STICKY_DOC =
-      "If true, this ensures that the the same node is always selected as the leader during "
-      + "leadership assignment. This is a cluster wide setting i.e all nodes should have either "
-      + "true or false.";
+      "If true, leader election will prefer to keep the current leader if possible. This is a "
+      + "cluster wide setting i.e all nodes should have either true or false.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =

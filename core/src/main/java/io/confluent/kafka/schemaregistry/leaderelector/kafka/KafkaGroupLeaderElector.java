@@ -269,14 +269,14 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
   }
 
   /**
-   * This is a no-op during leader election if stickyLeaderElection is not enabled as we're not
+   * This is a no-op during leader election if stickyLeaderElection is enabled as we're not
    * revoking previous leader assignment. The expectation is that the sync group response will
    * notify the group members if there's a leadership change.
    */
   @Override
   public void onRevoked() {
     log.info("Rebalance started");
-    if (stickyLeaderElection) {
+    if (!stickyLeaderElection) {
       try {
         schemaRegistry.setLeader(null);
       } catch (SchemaRegistryException e) {

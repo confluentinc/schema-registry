@@ -160,7 +160,7 @@ public class SchemaRegistryCoordinatorTest {
         LEADER_INFO,
         rebalanceListener,
         null,
-        true
+        false
     );
   }
 
@@ -220,8 +220,8 @@ public class SchemaRegistryCoordinatorTest {
   Tests to check leader assignment changes during roll
    */
   @Test
-  public void testCoordinatorDuringRoll() {
-    initializeCoordinators(false);
+  public void testCoordinatorDuringRollWithStickyLeaderElection() {
+    initializeCoordinators(true);
     // member 0 joins group
     Map<String, SchemaRegistryIdentity> groupMembership = new HashMap<>();
     groupMembership.put(MEMBER_0, MEMBER_0_INFO);
@@ -298,8 +298,8 @@ public class SchemaRegistryCoordinatorTest {
   }
 
   @Test
-  public void testCoordinatorDuringRollWithStickyLeaderElection() {
-    initializeCoordinators(true);
+  public void testCoordinatorDuringRoll() {
+    initializeCoordinators(false);
     // member 0 joins group
     Map<String, SchemaRegistryIdentity> groupMembership = new HashMap<>();
     groupMembership.put(MEMBER_0, MEMBER_0_INFO);
