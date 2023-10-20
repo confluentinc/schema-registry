@@ -459,6 +459,23 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals(3, dek.getVersion());
   }
 
+  @Test(expected = SerializationException.class)
+  public void testKafkaAvroDekRotationInvalidExpiry() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("encrypt.dek.expiry.days", "-1", "preserve.source.fields", "true"),
+        null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    avroSerializer.serialize(topic, headers, avroRecord);
+  }
+
   @Test
   public void testKafkaAvroSerializerWithAlgorithm() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
