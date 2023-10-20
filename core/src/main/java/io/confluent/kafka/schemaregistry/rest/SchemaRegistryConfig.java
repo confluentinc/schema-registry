@@ -147,6 +147,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_ELECTION_DELAY = "leader.election.delay";
   public static final boolean DEFAULT_LEADER_ELECTION_DELAY = false;
   /**
+   * <code>leader.election.sticky</code>*
+   */
+  public static final String LEADER_ELECTION_STICKY = "leader.election.sticky";
+  public static final boolean DEFAULT_LEADER_ELECTION_STICKY = false;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -360,6 +365,9 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for reading responses after forwarding requests to the leader.";
   protected static final String LEADER_ELECTION_DELAY_DOC =
       "Whether to delay leader election until after initialization.";
+  protected static final String LEADER_ELECTION_STICKY_DOC =
+      "If true, leader election will prefer to keep the current leader if possible. This is a "
+      + "cluster wide setting i.e all nodes should have either true or false.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
@@ -567,6 +575,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_ELECTION_DELAY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_DELAY,
         ConfigDef.Importance.LOW, LEADER_ELECTION_DELAY_DOC
+    )
+    .define(LEADER_ELECTION_STICKY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_STICKY,
+            ConfigDef.Importance.LOW, LEADER_ELECTION_STICKY_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
