@@ -56,6 +56,7 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.reflect.ReflectDatumWriter;
+import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.SerializationException;
@@ -76,14 +77,26 @@ import static io.confluent.kafka.schemaregistry.avro.AvroSchema.NAME_FIELD;
 
 public class AvroSchemaUtils {
 
-  private static final GenericData INSTANCE = new GenericData();
+  private static final GenericData GENERIC_DATA_INSTANCE = new GenericData();
+  private static final ReflectData REFLECT_DATA_INSTANCE = new ReflectData();
+  private static final SpecificData SPECIFIC_DATA_INSTANCE = new SpecificData();
 
   static {
-    addLogicalTypeConversion(INSTANCE);
+    addLogicalTypeConversion(GENERIC_DATA_INSTANCE);
+    addLogicalTypeConversion(REFLECT_DATA_INSTANCE);
+    addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE);
   }
 
   public static GenericData getGenericData() {
-    return INSTANCE;
+    return GENERIC_DATA_INSTANCE;
+  }
+
+  public static ReflectData getReflectData() {
+    return REFLECT_DATA_INSTANCE;
+  }
+
+  public static SpecificData getSpecificData() {
+    return SPECIFIC_DATA_INSTANCE;
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
@@ -311,15 +324,14 @@ public class AvroSchemaUtils {
   public static DatumWriter<?> getDatumWriter(
       Object value, Schema schema, boolean avroUseLogicalTypeConverters) {
     if (value instanceof SpecificRecord) {
-      return new SpecificDatumWriter<>(schema);
+      return new SpecificDatumWriter<>(schema,
+          avroUseLogicalTypeConverters ? getSpecificData() : SpecificData.get());
     } else if (value instanceof GenericRecord) {
-      if (avroUseLogicalTypeConverters) {
-        return new GenericDatumWriter<>(schema, getGenericData());
-      } else {
-        return new GenericDatumWriter<>(schema);
-      }
+      return new GenericDatumWriter<>(schema,
+          avroUseLogicalTypeConverters ? getGenericData() : GenericData.get());
     } else {
-      return new ReflectDatumWriter<>(schema);
+      return new GenericDatumWriter<>(schema,
+          avroUseLogicalTypeConverters ? getReflectData() : ReflectData.get());
     }
   }
 
