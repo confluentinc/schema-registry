@@ -255,7 +255,8 @@ public class AvroSchemaUtils {
   }
 
   public static Object toObject(JsonNode value, AvroSchema schema) throws IOException {
-    return toObject(value, schema, new GenericDatumReader<>(schema.rawSchema()));
+    return toObject(value, schema, new GenericDatumReader<>(
+        schema.rawSchema(), schema.rawSchema(), getGenericData()));
   }
 
   public static Object toObject(
@@ -271,7 +272,8 @@ public class AvroSchemaUtils {
   }
 
   public static Object toObject(String value, AvroSchema schema) throws IOException {
-    return toObject(value, schema, new GenericDatumReader<>(schema.rawSchema()));
+    return toObject(value, schema, new GenericDatumReader<>(
+        schema.rawSchema(), schema.rawSchema(), getGenericData()));
   }
 
   public static Object toObject(

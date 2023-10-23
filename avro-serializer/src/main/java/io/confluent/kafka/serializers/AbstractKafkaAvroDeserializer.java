@@ -490,7 +490,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         DatumReader<?> reader;
         if (!migrations.isEmpty()) {
           // if migration is required, then initially use GenericDatumReader
-          reader = new GenericDatumReader<>(writerSchema);
+          reader = avroUseLogicalTypeConverters
+              ? new GenericDatumReader<>(
+                  writerSchema, writerSchema, AvroSchemaUtils.getGenericData())
+              : new GenericDatumReader<>(writerSchema);
         } else {
           reader = getDatumReader(writerSchema, readerSchema);
         }
