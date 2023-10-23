@@ -330,7 +330,7 @@ public class AvroSchemaUtils {
       return new GenericDatumWriter<>(schema,
           avroUseLogicalTypeConverters ? getGenericData() : GenericData.get());
     } else {
-      return new GenericDatumWriter<>(schema,
+      return new ReflectDatumWriter<>(schema,
           avroUseLogicalTypeConverters ? getReflectData() : ReflectData.get());
     }
   }
