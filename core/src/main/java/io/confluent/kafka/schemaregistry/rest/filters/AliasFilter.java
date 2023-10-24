@@ -15,6 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.rest.filters;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.TENANT_DELIMITER;
+
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
@@ -30,7 +33,7 @@ import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.UriBuilder;
 
 @PreMatching
-@Priority(Priorities.ENTITY_CODER + 100) // ensure runs after ContextFilter
+@Priority(Priorities.USER + 100) // ensure runs after ContextFilter and MultiTenantSubjectFilter
 public class AliasFilter implements ContainerRequestFilter {
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -127,6 +130,13 @@ public class AliasFilter implements ContainerRequestFilter {
       return subject;
     }
     String alias = config.getAlias();
-    return alias != null && !alias.isEmpty() ? alias : subject;
+    if (alias != null && !alias.isEmpty()) {
+      if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
+        alias = schemaRegistry.tenant() + TENANT_DELIMITER + alias;
+      }
+      return alias;
+    } else {
+      return subject;
+    }
   }
 }
