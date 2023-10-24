@@ -4,6 +4,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.filters;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -26,6 +27,7 @@ public class AliasFilterTest {
   @Before
   public void setUp() throws Exception {
     KafkaSchemaRegistry schemaRegistry = mock(KafkaSchemaRegistry.class);
+    when(schemaRegistry.tenant()).thenReturn(DEFAULT_TENANT);
     aliasFilter = new AliasFilter(schemaRegistry);
 
     Config config = new Config();
