@@ -29,6 +29,7 @@ import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -59,9 +60,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.SortedMap;
+import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.reflect.ReflectData;
 import org.junit.Test;
 
 public class JsonataExecutorTest {
@@ -83,6 +84,7 @@ public class JsonataExecutorTest {
   private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   private final KafkaJsonSchemaDeserializer<NewWidget> specificJsonSchemaDeserializer;
   private final String topic;
+  private final UUID id = UUID.fromString("2182b6f9-6422-43d8-819e-822b2b678eec");
 
   public JsonataExecutorTest() {
     topic = "test";
@@ -95,6 +97,7 @@ public class JsonataExecutorTest {
     defaultConfig.put(KafkaAvroSerializerConfig.USE_LATEST_VERSION, "false");
     defaultConfig.put(KafkaAvroSerializerConfig.USE_LATEST_WITH_METADATA,
         "application.version=v1");
+    defaultConfig.put(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, "true");
     defaultConfig.put(KafkaAvroSerializerConfig.LATEST_COMPATIBILITY_STRICT, "false");
     defaultConfig.put(KafkaAvroSerializerConfig.RULE_EXECUTORS, "jsonata");
     defaultConfig.put(KafkaAvroSerializerConfig.RULE_EXECUTORS + ".jsonata.class",
@@ -143,7 +146,10 @@ public class JsonataExecutorTest {
         "\"name\": \"NewGenericWidget\"," +
         "\"fields\": [{\"name\": \"name\", \"type\": \"string\"},"
         + "{\"name\": \"height\", \"type\": \"int\"},"
-        + "{\"name\": \"version\", \"type\": \"int\"}]}";
+        + "{\"name\": \"version\", \"type\": \"int\"},"
+        + "{\"name\": \"id\", \"type\":"
+        + "{\"type\": \"string\", \"logicalType\": \"uuid\"}}]}";
+
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
     return schema;
@@ -157,9 +163,9 @@ public class JsonataExecutorTest {
     String ruleString =
         "$merge([$sift($, function($v, $k) {$k != 'size'}), {'height': $.'size'}])";
 
-    OldWidget widget = new OldWidget("alice");
+    OldWidget widget = new OldWidget(id, "alice");
     widget.setSize(123);
-    Schema schema = ReflectData.get().getSchema(OldWidget.class);
+    Schema schema = AvroSchemaUtils.getReflectData().getSchema(OldWidget.class);
     AvroSchema avroSchema = new AvroSchema(schema);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
@@ -188,6 +194,10 @@ public class JsonataExecutorTest {
         123,
         ((GenericRecord)obj).get("height")
     );
+    assertEquals(
+        id,
+        ((GenericRecord)obj).get("id")
+    );
   }
 
   @Test
@@ -198,16 +208,16 @@ public class JsonataExecutorTest {
     String ruleString =
         "$merge([$sift($, function($v, $k) {$k != 'size'}), {'height': $.'size'}])";
 
-    OldWidget widget = new OldWidget("alice");
+    OldWidget widget = new OldWidget(id, "alice");
     widget.setSize(123);
-    Schema schema = ReflectData.get().getSchema(OldWidget.class);
+    Schema schema = AvroSchemaUtils.getReflectData().getSchema(OldWidget.class);
     AvroSchema avroSchema = new AvroSchema(schema);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
     avroSchema = avroSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", avroSchema);
 
-    schema = ReflectData.get().getSchema(NewWidget.class);
+    schema = AvroSchemaUtils.getReflectData().getSchema(NewWidget.class);
     avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.UPGRADE,
         JsonataExecutor.TYPE, null, null, ruleString, null, null, false);
@@ -239,9 +249,9 @@ public class JsonataExecutorTest {
     String ruleString =
         "$merge([$sift($, function($v, $k) {$k != 'size'}), {'height': $.'size'}])";
 
-    OldWidget widget = new OldWidget("alice");
+    OldWidget widget = new OldWidget(id, "alice");
     widget.setSize(123);
-    Schema schema = ReflectData.get().getSchema(OldWidget.class);
+    Schema schema = AvroSchemaUtils.getReflectData().getSchema(OldWidget.class);
     AvroSchema avroSchema = new AvroSchema(schema);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
@@ -285,16 +295,16 @@ public class JsonataExecutorTest {
     String rule3To2 =
         "$merge([$sift($, function($v, $k) {$k != 'length'}), {'height': $.'length'}])";
 
-    OldWidget widget = new OldWidget("alice");
+    OldWidget widget = new OldWidget(id, "alice");
     widget.setSize(123);
-    Schema schema = ReflectData.get().getSchema(OldWidget.class);
+    Schema schema = AvroSchemaUtils.getReflectData().getSchema(OldWidget.class);
     AvroSchema avroSchema = new AvroSchema(schema);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
     avroSchema = avroSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", avroSchema);
 
-    schema = ReflectData.get().getSchema(NewWidget.class);
+    schema = AvroSchemaUtils.getReflectData().getSchema(NewWidget.class);
     avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule1", null, RuleKind.TRANSFORM, RuleMode.UPGRADE,
         JsonataExecutor.TYPE, null, null, rule1To2, null, null, false);
@@ -306,7 +316,7 @@ public class JsonataExecutorTest {
     avroSchema = avroSchema.copy(metadata, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
-    schema = ReflectData.get().getSchema(NewerWidget.class);
+    schema = AvroSchemaUtils.getReflectData().getSchema(NewerWidget.class);
     avroSchema = new AvroSchema(schema);
     rule = new Rule("myRule1", null, RuleKind.TRANSFORM, RuleMode.UPGRADE,
         JsonataExecutor.TYPE, null, null, rule2To3, null, null, false);
@@ -322,13 +332,13 @@ public class JsonataExecutorTest {
 
     deserializeWithAllVersions(bytes);
 
-    NewWidget newWidget = new NewWidget("alice");
+    NewWidget newWidget = new NewWidget(id, "alice");
     newWidget.setHeight(123);
     bytes = reflectionAvroSerializer2.serialize(topic, newWidget);
 
     deserializeWithAllVersions(bytes);
 
-    NewerWidget newerWidget = new NewerWidget("alice");
+    NewerWidget newerWidget = new NewerWidget(id, "alice");
     newerWidget.setLength(123);
     bytes = reflectionAvroSerializer3.serialize(topic, newerWidget);
 
@@ -464,7 +474,7 @@ public class JsonataExecutorTest {
     String ruleString =
         "$merge([$sift($, function($v, $k) {$k != 'size'}), {'height': $.'size'}])";
 
-    OldWidget widget = new OldWidget("alice");
+    OldWidget widget = new OldWidget(id, "alice");
     widget.setSize(123);
     JsonSchema jsonSchema = JsonSchemaUtils.getSchema(widget);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
@@ -472,7 +482,7 @@ public class JsonataExecutorTest {
     jsonSchema = jsonSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
-    NewWidget newWidget = new NewWidget("alice");
+    NewWidget newWidget = new NewWidget(id, "alice");
     jsonSchema = JsonSchemaUtils.getSchema(newWidget);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.UPGRADE,
         JsonataExecutor.TYPE, null, null, ruleString, null, null, false);
@@ -504,7 +514,7 @@ public class JsonataExecutorTest {
     String ruleString =
         "$merge([$sift($, function($v, $k) {$k != 'size'}), {'height': $.'size'}])";
 
-    OldWidget widget = new OldWidget("alice");
+    OldWidget widget = new OldWidget(id, "alice");
     widget.setSize(123);
     JsonSchema jsonSchema = JsonSchemaUtils.getSchema(widget);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
@@ -512,7 +522,7 @@ public class JsonataExecutorTest {
     jsonSchema = jsonSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
-    NewWidget newWidget = new NewWidget("alice");
+    NewWidget newWidget = new NewWidget(id, "alice");
     jsonSchema = JsonSchemaUtils.getSchema(newWidget);
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.UPGRADE,
         JsonataExecutor.TYPE, null, null, ruleString, null, null, false);
@@ -539,12 +549,14 @@ public class JsonataExecutorTest {
   @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
       value= "io.confluent.kafka.schemaregistry.rules.jsonata.JsonataExecutorTest$OldWidget")})
   public static class OldWidget {
+    private UUID id;
     private String name;
     private int size;
     private int version;
 
     public OldWidget() {}
-    public OldWidget(String name) {
+    public OldWidget(UUID id, String name) {
+      this.id = id;
       this.name = name;
     }
 
@@ -572,6 +584,14 @@ public class JsonataExecutorTest {
       this.version = version;
     }
 
+    public UUID getId() {
+      return id;
+    }
+
+    public void setId(UUID id) {
+      this.id = id;
+    }
+
     @Override
     public boolean equals(Object o) {
       if (this == o) return true;
@@ -579,25 +599,36 @@ public class JsonataExecutorTest {
       OldWidget widget = (OldWidget) o;
       return name.equals(widget.name)
           && size == widget.size
-          && version == widget.version;
+          && version == widget.version
+          && Objects.equals(id, widget.id);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(name, size, version);
+      return Objects.hash(id, name, size, version);
     }
   }
 
   @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
       value= "io.confluent.kafka.schemaregistry.rules.jsonata.JsonataExecutorTest$NewWidget")})
   public static class NewWidget {
+    private UUID id;
     private String name;
     private int height;
     private int version;
 
     public NewWidget() {}
-    public NewWidget(String name) {
+    public NewWidget(UUID id, String name) {
+      this.id = id;
       this.name = name;
+    }
+
+    public UUID getId() {
+      return id;
+    }
+
+    public void setId(UUID id) {
+      this.id = id;
     }
 
     public String getName() {
@@ -631,25 +662,36 @@ public class JsonataExecutorTest {
       NewWidget widget = (NewWidget) o;
       return name.equals(widget.name)
           && height == widget.height
-          && version == widget.version;
+          && version == widget.version
+          && Objects.equals(id, widget.id);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(name, height, version);
+      return Objects.hash(id, name, height, version);
     }
   }
 
   @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
       value= "io.confluent.kafka.schemaregistry.rules.jsonata.JsonataExecutorTest$NewerWidget")})
   public static class NewerWidget {
+    private UUID id;
     private String name;
     private int length;
     private int version;
 
     public NewerWidget() {}
-    public NewerWidget(String name) {
+    public NewerWidget(UUID id, String name) {
+      this.id = id;
       this.name = name;
+    }
+
+    public UUID getId() {
+      return id;
+    }
+
+    public void setId(UUID id) {
+      this.id = id;
     }
 
     public String getName() {
@@ -683,12 +725,13 @@ public class JsonataExecutorTest {
       NewerWidget widget = (NewerWidget) o;
       return name.equals(widget.name)
           && length == widget.length
-          && version == widget.version;
+          && version == widget.version
+          && Objects.equals(id, widget.id);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(name, length, version);
+      return Objects.hash(id, name, length, version);
     }
   }
 }

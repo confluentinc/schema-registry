@@ -28,6 +28,7 @@ import com.google.protobuf.DynamicMessage;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
@@ -74,10 +75,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.SortedMap;
+import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.reflect.ReflectData;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -103,6 +104,8 @@ public class JsonataExecutorIntegrationTest extends ClusterTestHarness {
   private static final String SCHEMA_REGISTRY_URL = "schema.registry.url";
 
   private static final String TOPIC = "widget";
+
+  private static final UUID ID = UUID.fromString("2182b6f9-6422-43d8-819e-822b2b678eec");
 
   public JsonataExecutorIntegrationTest() {
     super(1, true);
@@ -139,6 +142,7 @@ public class JsonataExecutorIntegrationTest extends ClusterTestHarness {
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     props.put(SCHEMA_REGISTRY_URL, schemaRegistryUrl);
     props.put("use.latest.with.metadata", "application.version=" + applicationVersion);
+    props.put("avro.use.logical.type.converters", "true");
     props.putAll(additionalProps);
     return props;
   }
@@ -174,6 +178,7 @@ public class JsonataExecutorIntegrationTest extends ClusterTestHarness {
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
     props.put("auto.register.schemas", "false");
     props.put("use.latest.with.metadata", "application.version=" + applicationVersion);
+    props.put("avro.use.logical.type.converters", "true");
     props.put("latest.compatibility.strict", "false");
     props.putAll(additionalProps);
     return props;
@@ -196,13 +201,13 @@ public class JsonataExecutorIntegrationTest extends ClusterTestHarness {
     additionalProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
     additionalProps.put(KafkaAvroSerializerConfig.SCHEMA_REFLECTION_CONFIG, "true");
     List<Object> payloads = new ArrayList<>();
-    OldWidget widget = new OldWidget("alice");
+    OldWidget widget = new OldWidget(ID, "alice");
     widget.setSize(123);
     payloads.add(widget);
-    NewWidget newWidget = new NewWidget("alice");
+    NewWidget newWidget = new NewWidget(ID, "alice");
     newWidget.setHeight(123);
     payloads.add(newWidget);
-    NewerWidget newerWidget = new NewerWidget("alice");
+    NewerWidget newerWidget = new NewerWidget(ID, "alice");
     newerWidget.setLength(123);
     payloads.add(newerWidget);
     produceAndConsume(additionalProps, payloads);
@@ -231,14 +236,14 @@ public class JsonataExecutorIntegrationTest extends ClusterTestHarness {
     config.setCompatibilityLevel("NONE");
     schemaRegistry.updateConfig(TOPIC + "-value", config);
 
-    Schema schema = ReflectData.get().getSchema(OldWidget.class);
+    Schema schema = AvroSchemaUtils.getReflectData().getSchema(OldWidget.class);
     AvroSchema avroSchema = new AvroSchema(schema);
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
     avroSchema = avroSchema.copy(metadata, null);
     schemaRegistry.register(TOPIC + "-value", avroSchema);
 
-    schema = ReflectData.get().getSchema(NewWidget.class);
+    schema = AvroSchemaUtils.getReflectData().getSchema(NewWidget.class);
     avroSchema = new AvroSchema(schema);
     Rule rule = new Rule("myRule1", null, RuleKind.TRANSFORM, RuleMode.UPGRADE,
         JsonataExecutor.TYPE, null, null, rule1To2, null, null, false);
@@ -250,7 +255,7 @@ public class JsonataExecutorIntegrationTest extends ClusterTestHarness {
     avroSchema = avroSchema.copy(metadata, ruleSet);
     schemaRegistry.register(TOPIC + "-value", avroSchema);
 
-    schema = ReflectData.get().getSchema(NewerWidget.class);
+    schema = AvroSchemaUtils.getReflectData().getSchema(NewerWidget.class);
     avroSchema = new AvroSchema(schema);
     rule = new Rule("myRule1", null, RuleKind.TRANSFORM, RuleMode.UPGRADE,
         JsonataExecutor.TYPE, null, null, rule2To3, null, null, false);
@@ -474,13 +479,13 @@ public class JsonataExecutorIntegrationTest extends ClusterTestHarness {
     additionalProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaJsonSchemaSerializer.class);
     additionalProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaJsonSchemaDeserializer.class);
     List<Object> payloads = new ArrayList<>();
-    OldWidget widget = new OldWidget("alice");
+    OldWidget widget = new OldWidget(ID, "alice");
     widget.setSize(123);
     payloads.add(widget);
-    NewWidget newWidget = new NewWidget("alice");
+    NewWidget newWidget = new NewWidget(ID, "alice");
     newWidget.setHeight(123);
     payloads.add(newWidget);
-    NewerWidget newerWidget = new NewerWidget("alice");
+    NewerWidget newerWidget = new NewerWidget(ID, "alice");
     newerWidget.setLength(123);
     payloads.add(newerWidget);
     produceAndConsume(additionalProps, payloads);
@@ -494,13 +499,13 @@ public class JsonataExecutorIntegrationTest extends ClusterTestHarness {
     additionalProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaJsonSchemaDeserializer.class);
     additionalProps.put(KafkaJsonSchemaDeserializerConfig.JSON_VALUE_TYPE, JsonNode.class);
     List<Object> payloads = new ArrayList<>();
-    OldWidget widget = new OldWidget("alice");
+    OldWidget widget = new OldWidget(ID, "alice");
     widget.setSize(123);
     payloads.add(mapper.valueToTree(widget));
-    NewWidget newWidget = new NewWidget("alice");
+    NewWidget newWidget = new NewWidget(ID, "alice");
     newWidget.setHeight(123);
     payloads.add(mapper.valueToTree(newWidget));
-    NewerWidget newerWidget = new NewerWidget("alice");
+    NewerWidget newerWidget = new NewerWidget(ID, "alice");
     newerWidget.setLength(123);
     payloads.add(mapper.valueToTree(newerWidget));
     produceAndConsume(additionalProps, payloads);
