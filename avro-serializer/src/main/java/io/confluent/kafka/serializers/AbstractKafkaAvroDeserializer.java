@@ -29,6 +29,7 @@ import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
@@ -74,23 +75,25 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             boolean writerSchemaIsPrimitive =
                 AvroSchemaUtils.getPrimitiveSchemas().containsValue(writerSchema);
             if (writerSchemaIsPrimitive) {
-              if (avroUseLogicalTypeConverters) {
-                return new GenericDatumReader<>(writerSchema, finalReaderSchema,
-                    AvroSchemaUtils.getGenericData());
-              } else {
-                return new GenericDatumReader<>(writerSchema, finalReaderSchema);
-              }
+              return new GenericDatumReader<>(writerSchema, finalReaderSchema,
+                  avroUseLogicalTypeConverters
+                      ? AvroSchemaUtils.getGenericData()
+                      : GenericData.get());
             } else if (useSchemaReflection) {
-              return new ReflectDatumReader<>(writerSchema, finalReaderSchema);
+              return new ReflectDatumReader<>(writerSchema, finalReaderSchema,
+                  avroUseLogicalTypeConverters
+                      ? AvroSchemaUtils.getReflectData()
+                      : ReflectData.get());
             } else if (useSpecificAvroReader) {
-              return new SpecificDatumReader<>(writerSchema, finalReaderSchema);
+              return new SpecificDatumReader<>(writerSchema, finalReaderSchema,
+                  avroUseLogicalTypeConverters
+                      ? AvroSchemaUtils.getSpecificData()
+                      : SpecificData.get());
             } else {
-              if (avroUseLogicalTypeConverters) {
-                return new GenericDatumReader<>(writerSchema, finalReaderSchema,
-                    AvroSchemaUtils.getGenericData());
-              } else {
-                return new GenericDatumReader<>(writerSchema, finalReaderSchema);
-              }
+              return new GenericDatumReader<>(writerSchema, finalReaderSchema,
+                  avroUseLogicalTypeConverters
+                      ? AvroSchemaUtils.getGenericData()
+                      : GenericData.get());
             }
           }
         };
@@ -490,7 +493,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         DatumReader<?> reader;
         if (!migrations.isEmpty()) {
           // if migration is required, then initially use GenericDatumReader
-          reader = new GenericDatumReader<>(writerSchema);
+          reader = new GenericDatumReader<>(
+              writerSchema, writerSchema, AvroSchemaUtils.getGenericData());
         } else {
           reader = getDatumReader(writerSchema, readerSchema);
         }
