@@ -28,6 +28,8 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -907,16 +909,49 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         Collections.emptySet());
     mergedMetadata = Metadata.mergeMetadata(mergedMetadata, newMetadata);
 
+    RuleSet ruleSet = maybeModifyPreviousRuleSet(subject, request);
+
     try {
       ParsedSchema newSchema = parsedSchema
           .copy(TagSchemaRequest.schemaTagsListToMap(request.getTagsToAdd()),
               TagSchemaRequest.schemaTagsListToMap(request.getTagsToRemove()))
-          .copy(mergedMetadata, request.getRuleSet())
+          .copy(mergedMetadata, ruleSet)
           .copy(newVersion);
       return register(subject, new Schema(subject, newVersion, -1, newSchema), false);
     } catch (IllegalArgumentException e) {
       throw new InvalidSchemaException(e);
     }
+  }
+
+  private RuleSet maybeModifyPreviousRuleSet(String subject, TagSchemaRequest request)
+      throws SchemaRegistryException {
+    if (request.getRulesToMerge() == null && request.getRulesToRemove() == null) {
+      return request.getRuleSet();
+    }
+    int oldVersion = request.getNewVersion() != null ? request.getNewVersion() - 1 : -1;
+    Schema oldSchema = get(subject, oldVersion, false);
+    // Use the previous ruleSet instead of the passed in one
+    RuleSet ruleSet = oldSchema != null ? oldSchema.getRuleSet() : null;
+    if (request.getRulesToMerge() != null) {
+      ruleSet = mergeRuleSets(ruleSet, request.getRulesToMerge());
+    }
+    if (ruleSet != null && request.getRulesToRemove() != null) {
+      List<String> rulesToRemove = request.getRulesToRemove();
+      List<Rule> migrationRules = ruleSet.getMigrationRules();
+      if (migrationRules != null) {
+        migrationRules = migrationRules.stream()
+            .filter(r -> !rulesToRemove.contains(r.getName()))
+            .collect(Collectors.toList());
+      }
+      List<Rule> domainRules = ruleSet.getDomainRules();
+      if (domainRules != null) {
+        domainRules = domainRules.stream()
+            .filter(r -> !rulesToRemove.contains(r.getName()))
+            .collect(Collectors.toList());
+      }
+      ruleSet = new RuleSet(migrationRules, domainRules);
+    }
+    return ruleSet;
   }
 
   public Schema modifySchemaTagsOrForward(String subject,
