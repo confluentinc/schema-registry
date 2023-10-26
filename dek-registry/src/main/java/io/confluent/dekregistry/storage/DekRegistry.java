@@ -450,10 +450,6 @@ public class DekRegistry implements Closeable {
     if (metricsManager.getKeyCount(tenant, KeyType.KEK) > config.maxKeys()) {
       throw new TooManyKeysException(KeyType.KEK.name());
     }
-    KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, request.getName());
-    if (keys.containsKey(keyId)) {
-      throw new AlreadyExistsException(request.getName());
-    }
 
     String kmsType = normalizeKmsType(request.getKmsType());
 
@@ -462,6 +458,13 @@ public class DekRegistry implements Closeable {
         : Collections.emptySortedMap();
     KeyEncryptionKey key = new KeyEncryptionKey(request.getName(), kmsType,
         request.getKmsKeyId(), kmsProps, request.getDoc(), request.isShared(), false);
+
+    KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, request.getName());
+    KeyEncryptionKey oldKey = (KeyEncryptionKey) keys.get(keyId);
+    // Allow create to act like undelete if the kek is deleted
+    if (oldKey != null && (!oldKey.isDeleted() || !oldKey.isEquivalent(key))) {
+      throw new AlreadyExistsException(request.getName());
+    }
     keys.put(keyId, key);
     // Retrieve key with ts set
     key = (KeyEncryptionKey) keys.get(keyId);
@@ -537,11 +540,6 @@ public class DekRegistry implements Closeable {
         ? request.getAlgorithm()
         : DekFormat.AES256_GCM;
     int version = request.getVersion() != null ? request.getVersion() : MIN_VERSION;
-    DataEncryptionKeyId keyId = new DataEncryptionKeyId(
-        tenant, kekName, request.getSubject(), algorithm, version);
-    if (keys.containsKey(keyId)) {
-      throw new AlreadyExistsException(request.getSubject());
-    }
     DataEncryptionKey key = new DataEncryptionKey(kekName, request.getSubject(),
         algorithm, version, request.getEncryptedKeyMaterial(), false);
     KeyEncryptionKey kek = getKek(key.getKekName(), true);
@@ -551,6 +549,13 @@ public class DekRegistry implements Closeable {
       } else {
         throw new InvalidKeyException("encryptedKeyMaterial");
       }
+    }
+    DataEncryptionKeyId keyId = new DataEncryptionKeyId(
+        tenant, kekName, request.getSubject(), algorithm, version);
+    DataEncryptionKey oldKey = (DataEncryptionKey) keys.get(keyId);
+    // Allow create to act like undelete if the dek is deleted
+    if (oldKey != null && (!oldKey.isDeleted() || !oldKey.isEquivalent(key))) {
+      throw new AlreadyExistsException(request.getSubject());
     }
     keys.put(keyId, key);
     // Retrieve key with ts set

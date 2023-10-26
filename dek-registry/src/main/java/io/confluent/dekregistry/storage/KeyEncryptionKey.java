@@ -16,6 +16,7 @@
 package io.confluent.dekregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -88,6 +89,16 @@ public class KeyEncryptionKey extends EncryptionKey {
   @JsonProperty("shared")
   public boolean isShared() {
     return this.shared;
+  }
+
+  @JsonIgnore
+  public boolean isEquivalent(KeyEncryptionKey that) {
+    return shared == that.shared
+        && Objects.equals(name, that.name)
+        && Objects.equals(kmsType, that.kmsType)
+        && Objects.equals(kmsKeyId, that.kmsKeyId)
+        && Objects.equals(kmsProps, that.kmsProps)
+        && Objects.equals(doc, that.doc);
   }
 
   @Override

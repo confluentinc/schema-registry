@@ -134,6 +134,13 @@ public class RestApiTest extends ClusterTestHarness {
     Kek newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false);
     assertEquals(kek, newKek);
 
+    // Delete kek
+    client.deleteKek(headers, kekName, false);
+
+    // Allow create to act like undelete
+    newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false);
+    assertEquals(kek, newKek);
+
     newKek = client.getKek(kekName, false);
     assertEquals(kek, newKek);
 
@@ -215,6 +222,12 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Create dek
     Dek newDek = client.createDek(headers, kekName, subject, null, algorithm, encryptedDekStr);
+    assertEquals(dek, newDek);
+
+    client.deleteDek(headers, kekName, subject, algorithm, false);
+
+    // Allow create to act like undelete
+    newDek = client.createDek(headers, kekName, subject, null, algorithm, encryptedDekStr);
     assertEquals(dek, newDek);
 
     newDek = client.getDek(kekName, subject, algorithm, false);
