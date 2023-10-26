@@ -89,6 +89,15 @@ public class DataEncryptionKey extends EncryptionKey {
     this.keyMaterial = keyMaterial;
   }
 
+  @JsonIgnore
+  public boolean isEquivalent(DataEncryptionKey that) {
+    return Objects.equals(kekName, that.kekName)
+        && Objects.equals(subject, that.subject)
+        && algorithm == that.algorithm
+        && version == that.version
+        && Objects.equals(encryptedKeyMaterial, that.encryptedKeyMaterial);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
