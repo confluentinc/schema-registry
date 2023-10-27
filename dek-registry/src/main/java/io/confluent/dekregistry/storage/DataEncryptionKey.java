@@ -123,6 +123,11 @@ public class DataEncryptionKey extends EncryptionKey {
         super.hashCode(), kekName, subject, algorithm, version, encryptedKeyMaterial);
   }
 
+  @Override
+  public DataEncryptionKeyId toKey(String tenant) {
+    return new DataEncryptionKeyId(tenant, kekName, subject, algorithm, version);
+  }
+
   public Dek toDekEntity() {
     return new Dek(
         kekName, subject, version, algorithm, encryptedKeyMaterial, keyMaterial, timestamp,

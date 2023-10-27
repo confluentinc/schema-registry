@@ -126,6 +126,11 @@ public class KeyEncryptionKey extends EncryptionKey {
     return Objects.hash(super.hashCode(), name, kmsType, kmsKeyId, kmsProps, doc, shared);
   }
 
+  @Override
+  public KeyEncryptionKeyId toKey(String tenant) {
+    return new KeyEncryptionKeyId(tenant, name);
+  }
+
   public Kek toKekEntity() {
     return new Kek(name, kmsType, kmsKeyId, kmsProps, doc, shared, timestamp,
         deleted ? true : null);
