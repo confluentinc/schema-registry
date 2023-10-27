@@ -95,4 +95,6 @@ public abstract class EncryptionKey {
   public int hashCode() {
     return Objects.hash(type, deleted);
   }
+
+  public abstract EncryptionKeyId toKey(String tenant);
 }

@@ -441,7 +441,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private KeyEncryptionKey createKek(CreateKekRequest request)
+  public KeyEncryptionKey createKek(CreateKekRequest request)
       throws SchemaRegistryException {
     // Ensure cache is up-to-date
     keys.sync();
@@ -527,7 +527,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private DataEncryptionKey createDek(String kekName, CreateDekRequest request)
+  public DataEncryptionKey createDek(String kekName, CreateDekRequest request)
       throws SchemaRegistryException {
     // Ensure cache is up-to-date
     keys.sync();
@@ -650,7 +650,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private KeyEncryptionKey putKek(String name, UpdateKekRequest request)
+  public KeyEncryptionKey putKek(String name, UpdateKekRequest request)
       throws SchemaRegistryException {
     // Ensure cache is up-to-date
     keys.sync();
@@ -718,7 +718,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private void deleteKek(String name, boolean permanentDelete) throws SchemaRegistryException {
+  public void deleteKek(String name, boolean permanentDelete) throws SchemaRegistryException {
     // Ensure cache is up-to-date
     keys.sync();
 
@@ -794,7 +794,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private void deleteDek(String name, String subject, DekFormat algorithm, boolean permanentDelete)
+  public void deleteDek(String name, String subject, DekFormat algorithm, boolean permanentDelete)
       throws SchemaRegistryException {
     // Ensure cache is up-to-date
     keys.sync();
@@ -877,7 +877,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private void deleteDekVersion(String name, String subject, int version,
+  public void deleteDekVersion(String name, String subject, int version,
       DekFormat algorithm, boolean permanentDelete)
       throws SchemaRegistryException {
     // Ensure cache is up-to-date
@@ -948,7 +948,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private void undeleteKek(String name) throws SchemaRegistryException {
+  public void undeleteKek(String name) throws SchemaRegistryException {
     // Ensure cache is up-to-date
     keys.sync();
 
@@ -1012,7 +1012,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private void undeleteDek(String name, String subject, DekFormat algorithm)
+  public void undeleteDek(String name, String subject, DekFormat algorithm)
       throws SchemaRegistryException {
     // Ensure cache is up-to-date
     keys.sync();
@@ -1089,7 +1089,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private void undeleteDekVersion(String name, String subject, int version,
+  public void undeleteDekVersion(String name, String subject, int version,
       DekFormat algorithm) throws SchemaRegistryException {
     // Ensure cache is up-to-date
     keys.sync();
