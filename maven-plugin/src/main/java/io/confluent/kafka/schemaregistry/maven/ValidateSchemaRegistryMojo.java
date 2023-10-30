@@ -38,8 +38,7 @@ public class ValidateSchemaRegistryMojo extends UploadSchemaRegistryMojo {
           String.format("Calling validate('%s', '%s')", subject, schema)
       );
     }
-
-    schema.validate();
+    schema.validate(false);
     return true;
   }
 }

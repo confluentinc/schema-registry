@@ -1992,7 +1992,7 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   @Override
-  public void validate() {
+  public void validate(boolean strict) {
     // Normalization will try to resolve types
     normalize();
   }
