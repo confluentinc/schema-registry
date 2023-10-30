@@ -41,6 +41,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
  */
 public interface ParsedSchema {
 
+  String RESERVED = "confluent:reserved";
+
   /**
    * Returns the schema type.
    *
@@ -178,7 +180,7 @@ public interface ParsedSchema {
    * Validates the schema and ensures all references are resolved properly.
    * Throws an exception if the schema is not valid.
    */
-  default void validate() {
+  default void validate(boolean strict) {
   }
 
   /**
