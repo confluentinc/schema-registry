@@ -81,6 +81,7 @@ import static org.apache.kafka.connect.data.Schema.OPTIONAL_INT16_SCHEMA;
 import static org.apache.kafka.connect.data.Schema.OPTIONAL_INT8_SCHEMA;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 public class ProtobufDataTest {
