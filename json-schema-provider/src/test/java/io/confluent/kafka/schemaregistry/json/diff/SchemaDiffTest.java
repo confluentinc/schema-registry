@@ -48,7 +48,7 @@ public class SchemaDiffTest {
 
   @Test
   public void checkJsonSchemaCompatibility_2020_12() {
-    final JSONArray testCases = new JSONArray(readFile("diff-schema-examples-2020-12.json"));
+    final JSONArray testCases = new JSONArray(Objects.requireNonNull(readFile("diff-schema-examples-2020-12.json")));
     checkJsonSchemaCompatibility(testCases);
   }
 
@@ -60,11 +60,10 @@ public class SchemaDiffTest {
 
   @Test
   public void checkJsonSchemaCompatibilityForCombinedSchemas_2020_12() {
-    final JSONArray testCases = new JSONArray(readFile("diff-combined-schema-examples-2020-12.json"));
+    final JSONArray testCases = new JSONArray(Objects.requireNonNull(readFile("diff-combined-schema-examples-2020-12.json")));
     checkJsonSchemaCompatibility(testCases);
   }
 
-  @SuppressWarnings("unchecked")
   private void checkJsonSchemaCompatibility(JSONArray testCases) {
     for (final Object testCaseObject : testCases) {
       final JSONObject testCase = (JSONObject) testCaseObject;
