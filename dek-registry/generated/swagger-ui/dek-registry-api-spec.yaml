@@ -20,24 +20,29 @@ paths:
         schema:
           type: boolean
       responses:
-        default:
-          description: default response
+        "200":
+          description: List of dek subjects
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
                 type: array
                 items:
                   type: string
+                  example: User
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: array
                 items:
                   type: string
+                  example: User
             application/json; qs=0.5:
               schema:
                 type: array
                 items:
                   type: string
+                  example: User
+        "404":
+          description: Error code 40470 -- Key not found
     post:
       summary: Create a dek.
       operationId: createDek
@@ -88,24 +93,27 @@ paths:
         schema:
           type: boolean
       responses:
-        default:
-          description: default response
+        "200":
+          description: List of kek names
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
                 type: array
                 items:
                   type: string
+                  example: mykek
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: array
                 items:
                   type: string
+                  example: mykek
             application/json; qs=0.5:
               schema:
                 type: array
                 items:
                   type: string
+                  example: mykek
     post:
       summary: Create a kek.
       operationId: createKek
@@ -277,8 +285,8 @@ paths:
         "404":
           description: Error code 40470 -- Key not found
     delete:
-      summary: Delete a dek.
-      operationId: deleteDek
+      summary: Delete all versions of a dek.
+      operationId: deleteDekVersions
       parameters:
       - name: name
         in: path
@@ -311,6 +319,247 @@ paths:
           description: No Content
         "404":
           description: Error code 40470 -- Key not found
+  /dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}:
+    get:
+      summary: Get a dek by subject and version.
+      operationId: getDekByVersion
+      parameters:
+      - name: name
+        in: path
+        description: Name of the kek
+        required: true
+        schema:
+          type: string
+      - name: subject
+        in: path
+        description: Subject of the dek
+        required: true
+        schema:
+          type: string
+      - name: version
+        in: path
+        description: Version of the dek
+        required: true
+        schema:
+          type: string
+      - name: algorithm
+        in: query
+        description: Algorithm of the dek
+        schema:
+          type: string
+          enum:
+          - AES128_GCM
+          - AES256_GCM
+          - AES256_SIV
+      - name: deleted
+        in: query
+        description: Whether to include deleted keys
+        schema:
+          type: boolean
+      responses:
+        "200":
+          description: The dek info
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/Dek'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/Dek'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/Dek'
+        "404":
+          description: Error code 40470 -- Key not found
+        "422":
+          description: Error code 42202 -- Invalid version
+    delete:
+      summary: Delete a dek version.
+      operationId: deleteDekVersion
+      parameters:
+      - name: name
+        in: path
+        description: Name of the kek
+        required: true
+        schema:
+          type: string
+      - name: subject
+        in: path
+        description: Subject of the dek
+        required: true
+        schema:
+          type: string
+      - name: version
+        in: path
+        description: Version of the dek
+        required: true
+        schema:
+          type: string
+      - name: algorithm
+        in: query
+        description: Algorithm of the dek
+        schema:
+          type: string
+          enum:
+          - AES128_GCM
+          - AES256_GCM
+          - AES256_SIV
+      - name: permanent
+        in: query
+        description: Whether to perform a permanent delete
+        schema:
+          type: boolean
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Error code 40470 -- Key not found
+        "422":
+          description: Error code 42202 -- Invalid version
+  /dek-registry/v1/keks/{name}/deks/{subject}/versions:
+    get:
+      summary: List versions of dek.
+      operationId: getDekVersions
+      parameters:
+      - name: name
+        in: path
+        description: Name of the kek
+        required: true
+        schema:
+          type: string
+      - name: subject
+        in: path
+        description: Subject of the dek
+        required: true
+        schema:
+          type: string
+      - name: algorithm
+        in: query
+        description: Algorithm of the dek
+        schema:
+          type: string
+          enum:
+          - AES128_GCM
+          - AES256_GCM
+          - AES256_SIV
+      - name: deleted
+        in: query
+        description: Whether to include deleted keys
+        schema:
+          type: boolean
+      responses:
+        "200":
+          description: List of version numbers for dek
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int32
+                  example: 1
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int32
+                  example: 1
+            application/json; qs=0.5:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int32
+                  example: 1
+        "404":
+          description: Error code 40470 -- Key not found
+  /dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}/undelete:
+    post:
+      summary: Undelete a dek version.
+      operationId: undeleteDekVersion
+      parameters:
+      - name: name
+        in: path
+        description: Name of the kek
+        required: true
+        schema:
+          type: string
+      - name: subject
+        in: path
+        description: Subject of the dek
+        required: true
+        schema:
+          type: string
+      - name: version
+        in: path
+        description: Version of the dek
+        required: true
+        schema:
+          type: string
+      - name: algorithm
+        in: query
+        description: Algorithm of the dek
+        schema:
+          type: string
+          enum:
+          - AES128_GCM
+          - AES256_GCM
+          - AES256_SIV
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Error code 40470 -- Key not found
+        "422":
+          description: Error code 42202 -- Invalid version
+  /dek-registry/v1/keks/{name}/deks/{subject}/undelete:
+    post:
+      summary: Undelete all versions of a dek.
+      operationId: undeleteDekVersions
+      parameters:
+      - name: name
+        in: path
+        description: Name of the kek
+        required: true
+        schema:
+          type: string
+      - name: subject
+        in: path
+        description: Subject of the dek
+        required: true
+        schema:
+          type: string
+      - name: algorithm
+        in: query
+        description: Algorithm of the dek
+        schema:
+          type: string
+          enum:
+          - AES128_GCM
+          - AES256_GCM
+          - AES256_SIV
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Error code 40470 -- Key not found
+  /dek-registry/v1/keks/{name}/undelete:
+    post:
+      summary: Undelete a kek.
+      operationId: undeleteKek
+      parameters:
+      - name: name
+        in: path
+        description: Name of the kek
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Error code 40470 -- Key not found
 components:
   schemas:
     Dek:
@@ -336,11 +585,16 @@ components:
         ts:
           type: integer
           format: int64
+        deleted:
+          type: boolean
     CreateDekRequest:
       type: object
       properties:
         subject:
           type: string
+        version:
+          type: integer
+          format: int32
         algorithm:
           type: string
           enum:
@@ -369,6 +623,8 @@ components:
         ts:
           type: integer
           format: int64
+        deleted:
+          type: boolean
     CreateKekRequest:
       type: object
       properties:
