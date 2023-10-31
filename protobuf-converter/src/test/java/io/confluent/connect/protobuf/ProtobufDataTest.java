@@ -1266,6 +1266,49 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testDiamond() throws Exception {
+    String schema = "syntax = \"proto3\";\n"
+        + "package com.mycorp.mynamespace;\n"
+        + "\n"
+        + "import \"google/type/date.proto\";\n"
+        + "import \"google/type/money.proto\";\n"
+        + "import \"google/type/postal_address.proto\";\n"
+        + "\n"
+        + "message SampleRecord {\n"
+        + "  int32 my_field1 = 1;\n"
+        + "  google.type.Date invoiceDate = 2;\n"
+        + "  google.type.Money totalAmount = 3;\n"
+        + "  Org payee = 4;\n"
+        + "}\n"
+        + "message Org {\n"
+        + "  string id = 1;\n"
+        + "  string name = 2;\n"
+        + "  PAdd contactAddress = 3;\n"
+        + "  repeated Location locations = 4;\n"
+        + "}\n"
+        + "message PAdd {\n"
+        + "  google.type.PostalAddress postalAddress = 1;\n"
+        + "  PAddType type = 2;\n"
+        + "}\n"
+        + "message Location {\n"
+        + "  string id = 1;\n"
+        + "  string name = 2;\n"
+        + "  PAdd physicalAddress = 3;\n"
+        + "}\n"
+        + "enum PAddType {\n"
+        + "  POSTAL_ADDRESS_TYPE_UNSPECIFIED = 0;\n"
+        + "  POSTAL = 1;\n"
+        + "  PHYSICAL = 2;\n"
+        + "}";
+    ProtobufSchema protobufSchema = new ProtobufSchema(schema);
+    Map<String, Object> configs = new HashMap<>();
+    ProtobufData protobufData = new ProtobufData(new ProtobufDataConfig(configs));
+    Schema connectSchema = protobufData.toConnectSchema(protobufSchema);
+    ProtobufSchema protobufSchema2 = protobufData.fromConnectSchema(connectSchema);
+    assertNotNull(protobufSchema2);
+  }
+
+  @Test
   public void testToConnectFullyQualifiedSchema() {
     String schema = "syntax = \"proto3\";\n"
         + "\n"
