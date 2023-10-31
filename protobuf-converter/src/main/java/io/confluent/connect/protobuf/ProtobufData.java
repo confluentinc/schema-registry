@@ -45,6 +45,7 @@ import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.Calendar;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.TimeZone;
@@ -819,8 +820,8 @@ public class ProtobufData {
         oneofDefinitionFromConnectSchema(ctx, schema, message, fieldSchema, unionName);
         return null;
       } else {
-        if (!ctx.contains(message.getName(), type)) {
-          ctx.add(message.getName(), type);
+        if (!ctx.contains(message, type)) {
+          ctx.add(message, type);
           message.addMessageDefinition(messageDefinitionFromConnectSchema(
               ctx,
               schema,
@@ -1904,14 +1905,18 @@ public class ProtobufData {
    * Class that holds the context for performing {@code fromConnectSchema}
    */
   private static class FromConnectContext {
-    private final Map<String, Set<String>> messageNames;
+    private final Map<MessageDefinition.Builder, Set<String>> messageNames;
     private int defaultSchemaNameIndex = 0;
 
     public FromConnectContext() {
-      this.messageNames = new HashMap<>();
+      this.messageNames = new IdentityHashMap<>();
     }
 
-    public boolean contains(String parent, String child) {
+    public boolean contains(MessageDefinition.Builder parent, String child) {
+      // A reference to a type with the same name as the parent is a reference to the parent
+      if (parent.getName().equals(child)) {
+        return true;
+      }
       Set<String> children = messageNames.get(parent);
       if (child == null || children == null) {
         return false;
@@ -1919,7 +1924,7 @@ public class ProtobufData {
       return children.contains(child);
     }
 
-    public void add(String parent, String child) {
+    public void add(MessageDefinition.Builder parent, String child) {
       if (child != null) {
         Set<String> children = messageNames.computeIfAbsent(parent, k -> new HashSet<>());
         children.add(child);
