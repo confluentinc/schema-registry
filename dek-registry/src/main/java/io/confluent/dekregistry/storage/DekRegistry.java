@@ -308,6 +308,7 @@ public class DekRegistry implements Closeable {
     String tenant = schemaRegistry.tenant();
     return getDeks(tenant, kekName, lookupDeleted).stream()
         .map(kv -> ((DataEncryptionKeyId) kv.key).getSubject())
+        .sorted()
         .distinct()
         .collect(Collectors.toList());
   }
