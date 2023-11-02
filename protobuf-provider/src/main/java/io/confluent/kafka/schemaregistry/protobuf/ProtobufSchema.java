@@ -1303,14 +1303,20 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (dynamicSchema == null) {
-      dynamicSchema = toDynamicSchema(name, schemaObj, dependenciesWithLogicalTypes());
+      Map<String, DynamicSchema> cache = new HashMap<>();
+      dynamicSchema = toDynamicSchema(name, schemaObj, dependenciesWithLogicalTypes(), cache);
     }
     return dynamicSchema;
   }
 
   private static DynamicSchema toDynamicSchema(
-      String name, ProtoFileElement rootElem, Map<String, ProtoFileElement> dependencies
+      String name, ProtoFileElement rootElem, Map<String, ProtoFileElement> dependencies, Map<String, DynamicSchema> cache
   ) {
+
+    if (cache.containsKey(name)) {
+      return cache.get(name);
+    }
+
     if (log.isTraceEnabled()) {
       log.trace("*** toDynamicSchema: {}", ProtobufSchemaUtils.toString(rootElem));
     }
@@ -1373,14 +1379,14 @@ public class ProtobufSchema implements ParsedSchema {
         ProtoFileElement dep = dependencies.get(ref);
         if (dep != null) {
           schema.addDependency(ref);
-          schema.addSchema(toDynamicSchema(ref, dep, dependencies));
+          schema.addSchema(toDynamicSchema(ref, dep, dependencies, cache));
         }
       }
       for (String ref : rootElem.getPublicImports()) {
         ProtoFileElement dep = dependencies.get(ref);
         if (dep != null) {
           schema.addPublicDependency(ref);
-          schema.addSchema(toDynamicSchema(ref, dep, dependencies));
+          schema.addSchema(toDynamicSchema(ref, dep, dependencies, cache));
         }
       }
       Map<String, OptionElement> options = mergeOptions(rootElem.getOptions());
@@ -1471,7 +1477,9 @@ public class ProtobufSchema implements ParsedSchema {
       ProtobufMeta meta = findMeta(CONFLUENT_FILE_META, options);
       schema.setMeta(meta);
       schema.setName(name);
-      return schema.build();
+      DynamicSchema dynamicSchema = schema.build();
+      cache.put(name, dynamicSchema);
+      return dynamicSchema;
     } catch (Descriptors.DescriptorValidationException e) {
       throw new IllegalStateException(e);
     }
