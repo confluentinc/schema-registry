@@ -1310,7 +1310,8 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   private static DynamicSchema toDynamicSchema(
-      String name, ProtoFileElement rootElem, Map<String, ProtoFileElement> dependencies, Map<String, DynamicSchema> cache
+      String name, ProtoFileElement rootElem, Map<String, ProtoFileElement> dependencies, 
+      Map<String, DynamicSchema> cache
   ) {
 
     if (cache.containsKey(name)) {
