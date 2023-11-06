@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -56,6 +57,9 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
 
   @Parameter(required = true)
   File outputDirectory;
+
+  @Parameter(required = false)
+  String contextPrefix;
 
   Map<String, ParsedSchema> downloadSchemas(List<String> subjects, List<String> versionsToDownload)
       throws MojoExecutionException {
@@ -163,10 +167,11 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
         downloadSchemas(subjectsToDownload, versionsToDownload);
 
     for (Map.Entry<String, ParsedSchema> kvp : subjectToSchema.entrySet()) {
-      String fileName = String.format("%s%s", kvp.getKey(), getExtension(kvp.getValue()));
+      String baseFileName = resolveBaseFileName(kvp.getKey());
+      String fileName = String.format("%s%s", baseFileName, getExtension(kvp.getValue()));
       File outputFile = new File(this.outputDirectory, fileName);
       getLog().info(
-          String.format("Writing schema for Subject(%s) to %s.", kvp.getKey(), outputFile)
+          String.format("Writing schema for Subject(%s) to %s.", baseFileName, outputFile)
       );
 
       try (OutputStreamWriter writer = new OutputStreamWriter(
@@ -186,6 +191,13 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
     } catch (IOException e) {
       throw new MojoExecutionException("Exception while closing schema registry client", e);
     }
+  }
+
+  private String resolveBaseFileName(String subject) {
+    if (contextPrefix != null) {
+      return StringUtils.removeStart(subject, contextPrefix);
+    }
+    return subject;
   }
 
   public void outputDirValidation() throws MojoExecutionException, MojoFailureException {
