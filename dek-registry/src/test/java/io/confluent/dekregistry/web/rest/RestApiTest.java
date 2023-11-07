@@ -131,14 +131,14 @@ public class RestApiTest extends ClusterTestHarness {
     Kek kek = new Kek(kekName, kmsType, kmsKeyId, null, null, false, null, null);
 
     // Create kek
-    Kek newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false);
+    Kek newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false, false);
     assertEquals(kek, newKek);
 
     // Delete kek
     client.deleteKek(headers, kekName, false);
 
     // Allow create to act like undelete
-    newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false);
+    newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false, false);
     assertEquals(kek, newKek);
 
     newKek = client.getKek(kekName, false);
@@ -205,7 +205,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(Collections.emptyList(), keks);
 
     // Recreate kek
-    newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false);
+    newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false, false);
     assertEquals(kek, newKek);
 
     newKek = client.getKek(kekName, false);
@@ -221,13 +221,13 @@ public class RestApiTest extends ClusterTestHarness {
     Dek dek = new Dek(kekName, subject, 1, algorithm, encryptedDekStr, null, null, null);
 
     // Create dek
-    Dek newDek = client.createDek(headers, kekName, subject, null, algorithm, encryptedDekStr);
+    Dek newDek = client.createDek(headers, kekName, subject, null, algorithm, encryptedDekStr, false);
     assertEquals(dek, newDek);
 
     client.deleteDek(headers, kekName, subject, algorithm, false);
 
     // Allow create to act like undelete
-    newDek = client.createDek(headers, kekName, subject, null, algorithm, encryptedDekStr);
+    newDek = client.createDek(headers, kekName, subject, null, algorithm, encryptedDekStr, false);
     assertEquals(dek, newDek);
 
     newDek = client.getDek(kekName, subject, algorithm, false);
@@ -236,7 +236,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Create dek w/o key material
     try {
-      newDek = client.createDek(headers, kekName, badSubject, null, algorithm, null);
+      newDek = client.createDek(headers, kekName, badSubject, null, algorithm, null, false);
       fail();
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.INVALID_KEY_ERROR_CODE, e.getErrorCode());
@@ -262,13 +262,13 @@ public class RestApiTest extends ClusterTestHarness {
     assertNotNull(newDek.getTimestamp());
 
     // Create dek w/o key material, receive both encrypted and decrypted key material
-    newDek = client.createDek(headers, kekName, subject2, null, algorithm, null);
+    newDek = client.createDek(headers, kekName, subject2, null, algorithm, null, false);
     assertNotNull(newDek.getEncryptedKeyMaterial());
     assertNotNull(newDek.getKeyMaterial());
     assertNotNull(newDek.getTimestamp());
 
     // Create versioned dek
-    newDek = client.createDek(headers, kekName, subject2, 2, algorithm, null);
+    newDek = client.createDek(headers, kekName, subject2, 2, algorithm, null, false);
     assertEquals(2, newDek.getVersion());
 
     List<String> deks = client.listDeks(kekName, false);
