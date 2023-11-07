@@ -98,7 +98,9 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
       final Map<String, String> metricTags) {
     super.configureBaseApplication(config, metricTags);
 
-    schemaRegistry = initSchemaRegistry(getConfiguration());
+    SchemaRegistryConfig schemaRegistryConfig = getConfiguration();
+    registerPreInitExtensions(config, schemaRegistryConfig);
+    schemaRegistry = initSchemaRegistry(schemaRegistryConfig);
   }
 
   @Override
@@ -128,6 +130,26 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
         }
       } catch (SchemaRegistryException e) {
         log.error("Error starting the schema registry", e);
+        System.exit(1);
+      }
+    }
+  }
+
+  public void registerPreInitExtensions(
+      Configurable<?> config,
+      SchemaRegistryConfig schemaRegistryConfig) {
+    List<SchemaRegistryResourceExtension> preInitResourceExtensions =
+        schemaRegistryConfig.getConfiguredInstances(
+          SchemaRegistryConfig.PRE_INIT_RESOURCE_EXTENSION_CONFIG,
+          SchemaRegistryResourceExtension.class);
+    if (preInitResourceExtensions != null) {
+      try {
+        for (SchemaRegistryResourceExtension
+            schemaRegistryResourceExtension : preInitResourceExtensions) {
+          schemaRegistryResourceExtension.register(config, schemaRegistryConfig, schemaRegistry);
+        }
+      } catch (SchemaRegistryException e) {
+        log.error("Error starting the schema registry resource extension", e);
         System.exit(1);
       }
     }
