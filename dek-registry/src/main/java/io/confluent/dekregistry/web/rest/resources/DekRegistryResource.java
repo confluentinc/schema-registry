@@ -340,7 +340,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     checkName(kekName);
     checkSubject(request.getSubject());
 
-    KeyEncryptionKey kek = dekRegistry.getKek(kekName, false);
+    KeyEncryptionKey kek = dekRegistry.getKek(kekName, request.isDeleted());
     if (kek == null) {
       throw DekRegistryErrors.keyNotFoundException(kekName);
     }
@@ -577,7 +577,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (KeyReferenceExistsException e) {
       throw DekRegistryErrors.referenceExistsException(e.getMessage());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while deleting key", e);
+      throw Errors.schemaRegistryException("Error while undeleting key", e);
     }
   }
 
@@ -622,7 +622,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (KeySoftDeletedException e) {
       throw DekRegistryErrors.keySoftDeletedException(e.getName());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while deleting key", e);
+      throw Errors.schemaRegistryException("Error while undeleting key", e);
     }
   }
 

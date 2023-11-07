@@ -163,12 +163,27 @@ public class MockDekRegistryClient implements DekRegistryClient {
       String doc,
       boolean shared)
       throws IOException, RestClientException {
+    return createKek(name, kmsType, kmsKeyId, kmsProps, doc, shared, false);
+  }
+
+  @Override
+  public Kek createKek(
+      String name,
+      String kmsType,
+      String kmsKeyId,
+      Map<String, String> kmsProps,
+      String doc,
+      boolean shared,
+      boolean deleted)
+      throws IOException, RestClientException {
     KekId keyId = new KekId(name);
-    if (keks.containsKey(keyId)) {
+    Kek oldKey = keks.get(keyId);
+    Kek key = new Kek(name, kmsType, kmsKeyId,
+        kmsProps, doc, shared, System.currentTimeMillis(), deleted);
+    if (oldKey != null
+        && (deleted == oldKey.isDeleted() || !oldKey.equals(key))) {
       throw new RestClientException("Key " + name + " already exists", 409, 40972);
     }
-    Kek key = new Kek(name, kmsType, kmsKeyId,
-        kmsProps, doc, shared, System.currentTimeMillis(), false);
     keks.put(keyId, key);
     return key;
   }
@@ -180,7 +195,7 @@ public class MockDekRegistryClient implements DekRegistryClient {
       DekFormat algorithm,
       String encryptedKeyMaterial)
       throws IOException, RestClientException {
-    return createDek(kekName, subject, 1, algorithm, encryptedKeyMaterial);
+    return createDek(kekName, subject, 1, algorithm, encryptedKeyMaterial, false);
   }
 
   @Override
@@ -191,15 +206,29 @@ public class MockDekRegistryClient implements DekRegistryClient {
       DekFormat algorithm,
       String encryptedKeyMaterial)
       throws IOException, RestClientException {
+    return createDek(kekName, subject, version, algorithm, encryptedKeyMaterial, false);
+  }
+
+  @Override
+  public Dek createDek(
+      String kekName,
+      String subject,
+      int version,
+      DekFormat algorithm,
+      String encryptedKeyMaterial,
+      boolean deleted)
+      throws IOException, RestClientException {
     DekId keyId = new DekId(kekName, subject, version, algorithm);
-    if (deks.containsKey(keyId)) {
-      throw new RestClientException("Key " + subject + " already exists", 409, 40972);
-    }
+    Dek oldKey = deks.get(keyId);
     Dek key = new Dek(kekName, subject, version, algorithm,
-        encryptedKeyMaterial, null, System.currentTimeMillis(), false);
+        encryptedKeyMaterial, null, System.currentTimeMillis(), deleted);
     key = maybeGenerateEncryptedDek(key);
     if (key.getEncryptedKeyMaterial() == null) {
       throw new RestClientException("Could not generate dek for " + subject, 500, 50070);
+    }
+    if (oldKey != null
+        && (deleted == oldKey.isDeleted() || !oldKey.equals(key))) {
+      throw new RestClientException("Key " + subject + " already exists", 409, 40972);
     }
     deks.put(keyId, key);
     key = maybeGenerateRawDek(key);

@@ -67,6 +67,16 @@ public interface DekRegistryClient extends Closeable {
       boolean shared)
       throws IOException, RestClientException;
 
+  Kek createKek(
+      String name,
+      String kmsType,
+      String kmsKeyId,
+      Map<String, String> kmsProps,
+      String doc,
+      boolean shared,
+      boolean deleted)
+      throws IOException, RestClientException;
+
   Dek createDek(
       String kekName,
       String subject,
@@ -80,6 +90,15 @@ public interface DekRegistryClient extends Closeable {
       int version,
       DekFormat algorithm,
       String encryptedKeyMaterial)
+      throws IOException, RestClientException;
+
+  Dek createDek(
+      String kekName,
+      String subject,
+      int version,
+      DekFormat algorithm,
+      String encryptedKeyMaterial,
+      boolean deleted)
       throws IOException, RestClientException;
 
   Kek updateKek(
