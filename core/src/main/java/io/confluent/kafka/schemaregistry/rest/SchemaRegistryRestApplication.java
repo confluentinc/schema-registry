@@ -99,7 +99,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     super.configureBaseApplication(config, metricTags);
 
     SchemaRegistryConfig schemaRegistryConfig = getConfiguration();
-    registerPreInitExtensions(config, schemaRegistryConfig);
+    registerInitResourceExtensions(config, schemaRegistryConfig);
     schemaRegistry = initSchemaRegistry(schemaRegistryConfig);
   }
 
@@ -135,12 +135,12 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     }
   }
 
-  public void registerPreInitExtensions(
+  public void registerInitResourceExtensions(
       Configurable<?> config,
       SchemaRegistryConfig schemaRegistryConfig) {
     List<SchemaRegistryResourceExtension> preInitResourceExtensions =
         schemaRegistryConfig.getConfiguredInstances(
-          SchemaRegistryConfig.PRE_INIT_RESOURCE_EXTENSION_CONFIG,
+          SchemaRegistryConfig.INIT_RESOURCE_EXTENSION_CONFIG,
           SchemaRegistryResourceExtension.class);
     if (preInitResourceExtensions != null) {
       try {
