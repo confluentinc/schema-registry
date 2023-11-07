@@ -35,6 +35,7 @@ public class CreateKekRequest {
   private Map<String, String> kmsProps;
   private String doc;
   private boolean shared;
+  private boolean deleted;
 
   public static CreateKekRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, CreateKekRequest.class);
@@ -100,6 +101,16 @@ public class CreateKekRequest {
     this.shared = shared;
   }
 
+  @JsonProperty("deleted")
+  public boolean isDeleted() {
+    return this.deleted;
+  }
+
+  @JsonProperty("deleted")
+  public void setDeleted(boolean deleted) {
+    this.deleted = deleted;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -110,6 +121,7 @@ public class CreateKekRequest {
     }
     CreateKekRequest kek = (CreateKekRequest) o;
     return shared == kek.shared
+        && deleted == kek.deleted
         && Objects.equals(name, kek.name)
         && Objects.equals(kmsType, kek.kmsType)
         && Objects.equals(kmsKeyId, kek.kmsKeyId)
@@ -119,7 +131,7 @@ public class CreateKekRequest {
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, kmsType, kmsKeyId, kmsProps, doc, shared);
+    return Objects.hash(name, kmsType, kmsKeyId, kmsProps, doc, shared, deleted);
   }
 
   @Override

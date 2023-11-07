@@ -603,6 +603,8 @@ components:
           - AES256_SIV
         encryptedKeyMaterial:
           type: string
+        deleted:
+          type: boolean
     Kek:
       type: object
       properties:
@@ -641,6 +643,8 @@ components:
         doc:
           type: string
         shared:
+          type: boolean
+        deleted:
           type: boolean
     UpdateKekRequest:
       type: object

@@ -192,7 +192,22 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       String doc,
       boolean shared)
       throws IOException, RestClientException {
-    return createKek(DEFAULT_REQUEST_PROPERTIES, name, kmsType, kmsKeyId, kmsProps, doc, shared);
+    return createKek(DEFAULT_REQUEST_PROPERTIES, name, kmsType, kmsKeyId,
+        kmsProps, doc, shared, false);
+  }
+
+  @Override
+  public Kek createKek(
+      String name,
+      String kmsType,
+      String kmsKeyId,
+      Map<String, String> kmsProps,
+      String doc,
+      boolean shared,
+      boolean deleted)
+      throws IOException, RestClientException {
+    return createKek(DEFAULT_REQUEST_PROPERTIES, name, kmsType, kmsKeyId,
+        kmsProps, doc, shared, deleted);
   }
 
   public Kek createKek(
@@ -202,7 +217,8 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       String kmsKeyId,
       Map<String, String> kmsProps,
       String doc,
-      boolean shared)
+      boolean shared,
+      boolean deleted)
       throws IOException, RestClientException {
     CreateKekRequest request = new CreateKekRequest();
     request.setName(name);
@@ -211,8 +227,9 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setKmsProps(kmsProps);
     request.setDoc(doc);
     request.setShared(shared);
+    request.setDeleted(deleted);
     Kek kek = restService.createKek(requestProperties, request);
-    kekCache.put(new KekId(name, false), kek);
+    kekCache.put(new KekId(name, deleted), kek);
     return kek;
   }
 
@@ -224,7 +241,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       String encryptedKeyMaterial)
       throws IOException, RestClientException {
     return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, subject, null,
-        algorithm, encryptedKeyMaterial);
+        algorithm, encryptedKeyMaterial, false);
   }
 
   @Override
@@ -236,7 +253,20 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       String encryptedKeyMaterial)
       throws IOException, RestClientException {
     return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, subject, version,
-        algorithm, encryptedKeyMaterial);
+        algorithm, encryptedKeyMaterial, false);
+  }
+
+  @Override
+  public Dek createDek(
+      String kekName,
+      String subject,
+      int version,
+      DekFormat algorithm,
+      String encryptedKeyMaterial,
+      boolean deleted)
+      throws IOException, RestClientException {
+    return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, subject, version,
+        algorithm, encryptedKeyMaterial, deleted);
   }
 
   public Dek createDek(
@@ -245,15 +275,17 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       String subject,
       Integer version,
       DekFormat algorithm,
-      String encryptedKeyMaterial)
+      String encryptedKeyMaterial,
+      boolean deleted)
       throws IOException, RestClientException {
     CreateDekRequest request = new CreateDekRequest();
     request.setSubject(subject);
     request.setVersion(version);
     request.setAlgorithm(algorithm);
     request.setEncryptedKeyMaterial(encryptedKeyMaterial);
+    request.setDeleted(deleted);
     Dek dek = restService.createDek(requestProperties, kekName, request);
-    dekCache.put(new DekId(kekName, subject, version, algorithm, false), dek);
+    dekCache.put(new DekId(kekName, subject, version, algorithm, deleted), dek);
     dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, false));
     dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, true));
     return dek;

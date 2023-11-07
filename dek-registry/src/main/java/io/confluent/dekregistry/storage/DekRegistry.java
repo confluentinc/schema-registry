@@ -458,12 +458,13 @@ public class DekRegistry implements Closeable {
         ? new TreeMap<>(request.getKmsProps())
         : Collections.emptySortedMap();
     KeyEncryptionKey key = new KeyEncryptionKey(request.getName(), kmsType,
-        request.getKmsKeyId(), kmsProps, request.getDoc(), request.isShared(), false);
+        request.getKmsKeyId(), kmsProps, request.getDoc(), request.isShared(), request.isDeleted());
 
     KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, request.getName());
     KeyEncryptionKey oldKey = (KeyEncryptionKey) keys.get(keyId);
     // Allow create to act like undelete if the kek is deleted
-    if (oldKey != null && (!oldKey.isDeleted() || !oldKey.isEquivalent(key))) {
+    if (oldKey != null
+        && (request.isDeleted() == oldKey.isDeleted() || !oldKey.isEquivalent(key))) {
       throw new AlreadyExistsException(request.getName());
     }
     keys.put(keyId, key);
@@ -542,7 +543,7 @@ public class DekRegistry implements Closeable {
         : DekFormat.AES256_GCM;
     int version = request.getVersion() != null ? request.getVersion() : MIN_VERSION;
     DataEncryptionKey key = new DataEncryptionKey(kekName, request.getSubject(),
-        algorithm, version, request.getEncryptedKeyMaterial(), false);
+        algorithm, version, request.getEncryptedKeyMaterial(), request.isDeleted());
     KeyEncryptionKey kek = getKek(key.getKekName(), true);
     if (key.getEncryptedKeyMaterial() == null) {
       if (kek.isShared()) {
@@ -555,7 +556,8 @@ public class DekRegistry implements Closeable {
         tenant, kekName, request.getSubject(), algorithm, version);
     DataEncryptionKey oldKey = (DataEncryptionKey) keys.get(keyId);
     // Allow create to act like undelete if the dek is deleted
-    if (oldKey != null && (!oldKey.isDeleted() || !oldKey.isEquivalent(key))) {
+    if (oldKey != null
+        && ((request.isDeleted() == oldKey.isDeleted()) || !oldKey.isEquivalent(key))) {
       throw new AlreadyExistsException(request.getSubject());
     }
     keys.put(keyId, key);
@@ -669,6 +671,9 @@ public class DekRegistry implements Closeable {
     boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
         key.getKmsKeyId(), kmsProps, doc, shared, false);
+    if (newKey.isEquivalent(key)) {
+      return key;
+    }
     keys.put(keyId, newKey);
     // Retrieve key with ts set
     newKey = (KeyEncryptionKey) keys.get(keyId);
