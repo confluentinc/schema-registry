@@ -33,6 +33,7 @@ public class CreateDekRequest {
   private Integer version;
   private DekFormat algorithm;
   private String encryptedKeyMaterial;
+  private boolean deleted;
 
   public static CreateDekRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, CreateDekRequest.class);
@@ -78,6 +79,16 @@ public class CreateDekRequest {
     this.encryptedKeyMaterial = encryptedKeyMaterial;
   }
 
+  @JsonProperty("deleted")
+  public boolean isDeleted() {
+    return this.deleted;
+  }
+
+  @JsonProperty("deleted")
+  public void setDeleted(boolean deleted) {
+    this.deleted = deleted;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -90,12 +101,13 @@ public class CreateDekRequest {
     return Objects.equals(subject, dek.subject)
         && Objects.equals(version, dek.version)
         && Objects.equals(algorithm, dek.algorithm)
-        && Objects.equals(encryptedKeyMaterial, dek.encryptedKeyMaterial);
+        && Objects.equals(encryptedKeyMaterial, dek.encryptedKeyMaterial)
+        && deleted == dek.deleted;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(subject, version, algorithm, encryptedKeyMaterial);
+    return Objects.hash(subject, version, algorithm, encryptedKeyMaterial, deleted);
   }
 
   @Override
