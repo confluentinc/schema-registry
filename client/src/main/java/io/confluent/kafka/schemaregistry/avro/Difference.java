@@ -22,15 +22,49 @@ import org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType;
 public class Difference {
   private final Incompatibility incompatibility;
 
-  public Difference(final SchemaCompatibility.Incompatibility incompatibility) {
-    this.incompatibility = incompatibility;
+  private final Type type;
+
+  private final String path;
+
+  public enum Type {
+    RESERVED_FIELD_REMOVED, FIELD_CONFLICTS_WITH_RESERVED_FIELD
   }
 
+  public Difference(final SchemaCompatibility.Incompatibility incompatibility) {
+    this.incompatibility = incompatibility;
+    this.type = null;
+    this.path = null;
+  }
+
+  public Difference(final Type type, final String path) {
+    this.incompatibility = null;
+    this.type = type;
+    this.path = path;
+  }
+
+  @SuppressWarnings("CyclomaticComplexity")
   public String error() {
+    String errorDescription;
+    if (type != null && path != null) {
+      switch (type) {
+        case RESERVED_FIELD_REMOVED:
+          errorDescription = "The %s schema has reserved field " + path + " removed from its "
+                  + "metadata which is present in the %s schema's metadata.";
+          break;
+        case FIELD_CONFLICTS_WITH_RESERVED_FIELD:
+          errorDescription = "The %s schema has field that conflicts with the reserved field "
+                  + path + " which is missing in the %s schema.";
+          break;
+        default:
+          errorDescription = "";
+          break;
+      }
+      return "{errorType:'" + type + '\''
+              + ", description:'" + errorDescription + "'}";
+    }
     SchemaIncompatibilityType errorType = incompatibility.getType();
     String path = incompatibility.getLocation();
 
-    String errorDescription = "";
     switch (errorType) {
       case FIXED_SIZE_MISMATCH:
         errorDescription = "The size of FIXED type field at path '" + path + "' in the %s "

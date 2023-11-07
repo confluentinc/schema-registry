@@ -15,6 +15,19 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
+import com.google.common.collect.Sets;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.EmptySchema;
@@ -26,14 +39,6 @@ import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
-
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-
-import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
 
 public class SchemaDiff {
   public static final Set<Difference.Type> COMPATIBLE_CHANGES;
@@ -108,10 +113,17 @@ public class SchemaDiff {
     COMPATIBLE_CHANGES = Collections.unmodifiableSet(changes);
   }
 
-  public static List<Difference> compare(final Schema original, final Schema update) {
+  public static List<Difference> compare(final Schema original,
+                                         final Schema update,
+                                         Metadata originalMetadata,
+                                         Metadata updatedMetadata) {
     final Context ctx = new Context(COMPATIBLE_CHANGES);
+    List<Difference> differences = compareMetadata(update,
+            originalMetadata != null ? originalMetadata.getProperties() : Collections.emptyMap(),
+            updatedMetadata != null ? updatedMetadata.getProperties() : Collections.emptyMap());
     compare(ctx, original, update);
-    return ctx.getDifferences();
+    differences.addAll(ctx.getDifferences());
+    return differences;
   }
 
   @SuppressWarnings("ConstantConditions")
@@ -206,6 +218,43 @@ public class SchemaDiff {
         }
       }
     }
+  }
+
+  private static List<Difference> compareMetadata(Schema update,
+                                                  Map<String, String> originalProperties,
+                                                  Map<String, String> updatedProperties) {
+    List<Difference> differences = new ArrayList<>();
+    Set<String> originalReservedPropertyKeys =
+            Arrays.stream(originalProperties.getOrDefault(JsonSchema.RESERVED, "").split(","))
+                    .map(String::trim)
+                    .filter(field -> !field.isEmpty())
+                    .collect(Collectors.toSet());
+    Set<String> updatedReservedPropertyKeys =
+            Arrays.stream(updatedProperties.getOrDefault(JsonSchema.RESERVED, "").split(","))
+                    .map(String::trim)
+                    .filter(field -> !field.isEmpty())
+                    .collect(Collectors.toSet());
+    // backward compatibility check to ensure that original reserved properties are not removed in
+    // the updated version
+    Sets.SetView<String> removedProperties =
+            Sets.difference(originalReservedPropertyKeys, updatedReservedPropertyKeys);
+    if (!removedProperties.isEmpty()) {
+      removedProperties.forEach(property ->
+              differences.add(new Difference(Type.RESERVED_PROPERTY_REMOVED, property)));
+    }
+    if (update instanceof ObjectSchema) {
+      ObjectSchema updatedObjectSchema = (ObjectSchema) update;
+      Set<String> updatedPropertyKeys = updatedObjectSchema.getPropertySchemas().keySet();
+      // check if updated properties conflict with reserved properties
+      Sets.SetView<String> conflictingProperties = Sets.intersection(updatedPropertyKeys,
+              updatedReservedPropertyKeys);
+      if (!conflictingProperties.isEmpty()) {
+        conflictingProperties.forEach(property ->
+                differences.add(new Difference(Type.RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY,
+                        String.format("#/properties/%s", property))));
+      }
+    }
+    return differences;
   }
 
   private static Schema normalizeSchema(final Schema schema) {
