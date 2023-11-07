@@ -23,36 +23,35 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
-import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.reflect.ReflectData;
@@ -325,19 +324,65 @@ public class AvroSchema implements ParsedSchema {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
     try {
+      List<String> differences = getMetadataCompatibility(previousSchema);
       SchemaCompatibility.SchemaPairCompatibility result =
           SchemaCompatibility.checkReaderWriterCompatibility(
               this.schemaObj,
               ((AvroSchema) previousSchema).schemaObj);
-      return result.getResult().getIncompatibilities().stream()
-          .map(Difference::new)
-          .map(Difference::toString)
-          .collect(Collectors.toCollection(ArrayList::new));
+      differences.addAll(result.getResult().getIncompatibilities().stream()
+              .map(Difference::new)
+              .map(Difference::toString)
+              .collect(Collectors.toCollection(ArrayList::new)));
+      return differences;
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
       return Lists.newArrayList(
               "Unexpected exception during compatibility check: " + e.getMessage());
     }
+  }
+
+  private List<String> getMetadataCompatibility(ParsedSchema previousSchema) {
+    List<String> differences = new ArrayList<>();
+    Map<String, String> originalProperties = previousSchema.metadata() != null
+            ? previousSchema.metadata().getProperties()
+            : Collections.emptyMap();
+    Set<String> originalReservedFields =
+            Arrays.stream(originalProperties.getOrDefault(AvroSchema.RESERVED, "").split(","))
+                    .map(String::trim)
+                    .filter(field -> !field.isEmpty())
+                    .collect(Collectors.toSet());
+    Map<String, String> updatedProperties = metadata != null
+            ? metadata.getProperties()
+            : Collections.emptyMap();
+    Set<String> updatedReservedFields =
+            Arrays.stream(updatedProperties.getOrDefault(AvroSchema.RESERVED, "").split(","))
+                    .map(String::trim)
+                    .filter(field -> !field.isEmpty())
+                    .collect(Collectors.toSet());
+    // backward compatibility check to ensure that original reserved fields are not removed in
+    // the updated version
+    Sets.SetView<String> removedFields =
+            Sets.difference(originalReservedFields, updatedReservedFields);
+    if (!removedFields.isEmpty()) {
+      removedFields.forEach(field ->
+              differences.add(new Difference(Difference.Type.RESERVED_FIELD_REMOVED,
+                      field).error()));
+    }
+    if (schemaObj.getType() == Schema.Type.RECORD) {
+      Set<String> updatedFields = schemaObj.getFields()
+              .stream()
+              .map(Schema.Field::name)
+              .collect(Collectors.toSet());
+      // check if updated fields conflict with reserved fields
+      Sets.SetView<String> conflictingFields =
+              Sets.intersection(updatedFields, updatedReservedFields);
+      if (!conflictingFields.isEmpty()) {
+        conflictingFields.forEach(field ->
+                differences.add(new Difference(Difference.Type.FIELD_CONFLICTS_WITH_RESERVED_FIELD,
+                        field).error()));
+      }
+    }
+    return differences;
   }
 
   @Override
