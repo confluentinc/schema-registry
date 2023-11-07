@@ -34,7 +34,7 @@ public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
   DownloadSchemaRegistryMojo mojo;
 
   @Before
-  public void createMojo() throws IOException {
+  public void createMojo() {
     this.mojo = new DownloadSchemaRegistryMojo();
     this.mojo.client(new MockSchemaRegistryClient());
     this.mojo.outputDirectory = tempDirectory;
