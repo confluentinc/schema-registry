@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[7.5.2-0, 7.5.3-0)</version>
+        <version>[7.6.0-0, 7.6.1-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>7.5.2-0</version>
+    <version>7.6.0-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -87,7 +87,7 @@
         <podam.version>7.2.11.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
-        <kotlin.version>1.6.0</kotlin.version>
+        <kotlin.version>1.9.10</kotlin.version>
         <antlr.version>4.11.1</antlr.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.3.12</cel-version>
@@ -95,6 +95,7 @@
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.4.3</jsonata-version>
         <json-schema.version>1.14.3</json-schema.version>
+        <json-skema.version>0.10.0</json-skema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
@@ -102,9 +103,9 @@
         <tink.version>1.11.0</tink.version>
         <tink.aws.kms.version>1.9.1</tink.aws.kms.version>
         <tink.gcp.kms.version>1.9.0</tink.gcp.kms.version>
-        <wire.version>4.8.0</wire.version>
+        <wire.version>4.9.0</wire.version>
         <swagger.version>2.1.10</swagger.version>
-        <io.confluent.schema-registry.version>7.5.2-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>7.6.0-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
         <commons.lang3.version>3.12.0</commons.lang3.version>
     </properties>
@@ -244,6 +245,11 @@
                 <groupId>com.github.erosb</groupId>
                 <artifactId>everit-json-schema</artifactId>
                 <version>${json-schema.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.erosb</groupId>
+                <artifactId>json-sKema</artifactId>
+                <version>${json-skema.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.kjetland</groupId>

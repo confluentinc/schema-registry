@@ -317,7 +317,8 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
             .collect(Collectors.toList()),
         getMetadata() == null ? null : getMetadata().toMetadataEntity(),
         getRuleSet() == null ? null : getRuleSet().toRuleSetEntity(),
-        getSchema()
+        getSchema(),
+        getTimestamp()
     );
   }
 }
