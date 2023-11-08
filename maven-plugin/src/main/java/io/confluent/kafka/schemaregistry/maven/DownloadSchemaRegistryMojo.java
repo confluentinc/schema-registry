@@ -207,11 +207,12 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
     }
   }
 
-  protected static String encode(String subject) {
+  protected String encode(String subject) {
     try {
       String newSubject = URLEncoder.encode(subject, "UTF-8");
       return newSubject.replaceAll("%", PERCENT_REPLACEMENT);
     } catch (Exception e) {
+      getLog().warn(String.format("Could not encode subject '%s'", subject));
       return subject;
     }
   }
