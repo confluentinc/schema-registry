@@ -228,6 +228,7 @@ public class KafkaAvroSerializerTest {
     return ExtendedUser.newBuilder()
         .setName("testUser")
         .setAge(99)
+        .setUpdatedAt(Instant.ofEpochMilli(1613646696368L))
         .build();
   }
 
