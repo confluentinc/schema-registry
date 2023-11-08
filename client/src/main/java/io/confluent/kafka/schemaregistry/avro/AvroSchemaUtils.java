@@ -56,7 +56,6 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.reflect.ReflectDatumWriter;
-import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.SerializationException;
@@ -79,12 +78,10 @@ public class AvroSchemaUtils {
 
   private static final GenericData GENERIC_DATA_INSTANCE = new GenericData();
   private static final ReflectData REFLECT_DATA_INSTANCE = new ReflectData();
-  private static final SpecificData SPECIFIC_DATA_INSTANCE = new SpecificData();
 
   static {
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE);
-    addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE);
   }
 
   public static GenericData getGenericData() {
@@ -93,10 +90,6 @@ public class AvroSchemaUtils {
 
   public static ReflectData getReflectData() {
     return REFLECT_DATA_INSTANCE;
-  }
-
-  public static SpecificData getSpecificData() {
-    return SPECIFIC_DATA_INSTANCE;
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
@@ -324,8 +317,7 @@ public class AvroSchemaUtils {
   public static DatumWriter<?> getDatumWriter(
       Object value, Schema schema, boolean avroUseLogicalTypeConverters) {
     if (value instanceof SpecificRecord) {
-      return new SpecificDatumWriter<>(schema,
-          avroUseLogicalTypeConverters ? getSpecificData() : SpecificData.get());
+      return new SpecificDatumWriter<>(schema);
     } else if (value instanceof GenericRecord) {
       return new GenericDatumWriter<>(schema,
           avroUseLogicalTypeConverters ? getGenericData() : GenericData.get());
