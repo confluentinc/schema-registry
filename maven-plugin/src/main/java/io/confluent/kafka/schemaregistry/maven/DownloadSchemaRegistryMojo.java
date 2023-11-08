@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import java.net.URLEncoder;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -46,6 +47,8 @@ import java.util.regex.Pattern;
 @Mojo(name = "download")
 public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
 
+  public static final String PERCENT_REPLACEMENT = "_x";
+
   @Parameter(required = false)
   String schemaExtension;
 
@@ -54,6 +57,9 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
 
   @Parameter(required = true)
   File outputDirectory;
+
+  @Parameter(required = false)
+  boolean encodeSubject = true;
 
   Map<String, ParsedSchema> downloadSchemas(Collection<String> subjects)
       throws MojoExecutionException {
@@ -157,11 +163,13 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
     Map<String, ParsedSchema> subjectToSchema = downloadSchemas(subjectsToDownload);
 
     for (Map.Entry<String, ParsedSchema> kvp : subjectToSchema.entrySet()) {
-      String fileName = String.format("%s%s", kvp.getKey(), getExtension(kvp.getValue()));
+      String subject = kvp.getKey();
+      String encodedSubject = encodeSubject ? encode(subject) : subject;
+      String fileName = String.format("%s%s", encodedSubject, getExtension(kvp.getValue()));
       File outputFile = new File(this.outputDirectory, fileName);
 
       getLog().info(
-          String.format("Writing schema for Subject(%s) to %s.", kvp.getKey(), outputFile)
+          String.format("Writing schema for Subject(%s) to %s.", subject, outputFile)
       );
 
       try (OutputStreamWriter writer = new OutputStreamWriter(
@@ -170,7 +178,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
         writer.write(kvp.getValue().toString());
       } catch (Exception ex) {
         throw new MojoExecutionException(
-            String.format("Exception thrown while writing subject('%s') schema to %s", kvp.getKey(),
+            String.format("Exception thrown while writing subject('%s') schema to %s", subject,
                           outputFile),
             ex
         );
@@ -196,6 +204,16 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
         return ".proto";
       default:
         return ".txt";
+    }
+  }
+
+  protected String encode(String subject) {
+    try {
+      String newSubject = URLEncoder.encode(subject, "UTF-8");
+      return newSubject.replaceAll("%", PERCENT_REPLACEMENT);
+    } catch (Exception e) {
+      getLog().warn(String.format("Could not encode subject '%s'", subject));
+      return subject;
     }
   }
 }
