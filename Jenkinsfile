@@ -7,5 +7,4 @@ common {
   nanoVersion = true
   timeoutHours = 3
   disableConcurrentBuilds = true
-  mvnSkipDeploy = true
 }
