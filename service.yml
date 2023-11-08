@@ -1,5 +1,6 @@
 name: schema-registry
 lang: unknown
+lang_version: unknown
 codeowners:
   enable: true
 semaphore:
