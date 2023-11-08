@@ -54,11 +54,19 @@ public class KafkaProtobufSerde<T extends Message> implements Serde<T> {
    * For testing purposes only.
    */
   public KafkaProtobufSerde(final SchemaRegistryClient client) {
+    this(client, null);
+  }
+
+  /**
+   * For testing purposes only.
+   */
+  public KafkaProtobufSerde(final SchemaRegistryClient client, final Class<T> specificClass) {
     if (client == null) {
       throw new IllegalArgumentException("schema registry client must not be null");
     }
+    this.specificProtobufClass = specificClass;
     inner = Serdes.serdeFrom(new KafkaProtobufSerializer<>(client),
-        new KafkaProtobufDeserializer<>(client));
+            new KafkaProtobufDeserializer<>(client));
   }
 
   @Override

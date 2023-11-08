@@ -695,15 +695,15 @@ public class RestService implements Closeable, Configurable {
     return config;
   }
 
-  public Config deleteSubjectConfig(String subject)
+  public Config deleteConfig(String subject)
       throws IOException, RestClientException {
-    return deleteSubjectConfig(DEFAULT_REQUEST_PROPERTIES, subject);
+    return deleteConfig(DEFAULT_REQUEST_PROPERTIES, subject);
   }
 
-  public Config deleteSubjectConfig(Map<String, String> requestProperties, String subject)
+  public Config deleteConfig(Map<String, String> requestProperties, String subject)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/config/{subject}");
-    String path = builder.build(subject).toString();
+    String path = subject != null
+        ? UriBuilder.fromPath("/config/{subject}").build(subject).toString() : "/config";
 
     Config response = httpRequest(path, "DELETE", null, requestProperties,
         DELETE_SUBJECT_CONFIG_RESPONSE_TYPE);

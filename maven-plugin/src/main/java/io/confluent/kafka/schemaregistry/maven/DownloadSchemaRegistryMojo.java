@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Confluent Inc.
+ * Copyright 2022 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,11 +36,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -55,36 +53,55 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
   @Parameter(required = true)
   List<String> subjectPatterns = new ArrayList<>();
 
+  @Parameter(required = false)
+  List<String> versions = new ArrayList<>();
+
   @Parameter(required = true)
   File outputDirectory;
 
   @Parameter(required = false)
   boolean encodeSubject = true;
 
-  Map<String, ParsedSchema> downloadSchemas(Collection<String> subjects)
+  Map<String, ParsedSchema> downloadSchemas(List<String> subjects, List<String> versionsToDownload)
       throws MojoExecutionException {
     Map<String, ParsedSchema> results = new LinkedHashMap<>();
 
-    for (String subject : subjects) {
+    if (versionsToDownload.size() != subjects.size()) {
+      throw new MojoExecutionException("Number of versions specified should "
+          + "be same as number of subjects");
+    }
+    for (int i = 0; i < subjects.size(); i++) {
       SchemaMetadata schemaMetadata;
       try {
-        getLog().info(String.format("Downloading latest metadata for %s.", subject));
-        schemaMetadata = this.client().getLatestSchemaMetadata(subject);
+        getLog().info(String.format("Downloading metadata "
+            + "for %s.for version %s", subjects.get(i), versionsToDownload.get(i)));
+        schemaMetadata = this.client().getLatestSchemaMetadata(subjects.get(i));
+        if (!versionsToDownload.get(i).equalsIgnoreCase("latest")) {
+          Integer maxVersion = schemaMetadata.getVersion();
+          if (maxVersion < Integer.parseInt(versionsToDownload.get(i))) {
+            throw new MojoExecutionException(
+                String.format("Max possible version "
+                    + "for %s is %d", subjects.get(i), maxVersion));
+          } else {
+            schemaMetadata = this.client().getSchemaMetadata(subjects.get(i),
+                Integer.parseInt(versionsToDownload.get(i)));
+          }
+        }
         Optional<ParsedSchema> schema =
             this.client().parseSchema(
                 schemaMetadata.getSchemaType(),
                 schemaMetadata.getSchema(),
                 schemaMetadata.getReferences());
         if (schema.isPresent()) {
-          results.put(subject, schema.get());
+          results.put(subjects.get(i), schema.get());
         } else {
           throw new MojoExecutionException(
-              String.format("Error while parsing schema for %s", subject)
+              String.format("Error while parsing schema for %s", subjects.get(i))
           );
         }
       } catch (Exception ex) {
         throw new MojoExecutionException(
-            String.format("Exception thrown while downloading metadata for %s.", subject),
+            String.format("Exception thrown while downloading metadata for %s.", subjects.get(i)),
             ex
         );
       }
@@ -99,26 +116,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       getLog().info("Plugin execution has been skipped");
       return;
     }
-
-    try {
-      getLog().debug(
-          String.format("Checking if '%s' exists and is not a directory.", this.outputDirectory));
-      if (outputDirectory.exists() && !outputDirectory.isDirectory()) {
-        throw new IllegalStateException("outputDirectory must be a directory");
-      }
-      getLog()
-          .debug(String.format("Checking if outputDirectory('%s') exists.", this.outputDirectory));
-      if (!outputDirectory.isDirectory()) {
-        getLog().debug(String.format("Creating outputDirectory('%s').", this.outputDirectory));
-        if (!outputDirectory.mkdirs()) {
-          throw new IllegalStateException(
-              "Could not create output directory " + this.outputDirectory);
-        }
-      }
-    } catch (Exception ex) {
-      throw new MojoExecutionException("Exception thrown while creating outputDirectory", ex);
-    }
-
+    outputDirValidation();
     List<Pattern> patterns = new ArrayList<>();
 
     for (String subject : subjectPatterns) {
@@ -133,7 +131,6 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
         );
       }
     }
-
     Collection<String> allSubjects;
     try {
       getLog().info("Getting all subjects on schema registry...");
@@ -141,33 +138,44 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
     } catch (Exception ex) {
       throw new MojoExecutionException("Exception thrown", ex);
     }
-
     getLog().info(String.format("Schema Registry has %s subject(s).", allSubjects.size()));
-    Set<String> subjectsToDownload = new LinkedHashSet<>();
+    List<String> subjectsToDownload = new ArrayList<>();
+    List<String> versionsToDownload = new ArrayList<>();
 
+    if (!versions.isEmpty()) {
+      if (versions.size() != subjectPatterns.size()) {
+        throw new IllegalStateException("versions size should be same as subjectPatterns size");
+      }
+    }
     for (String subject : allSubjects) {
-      for (Pattern pattern : patterns) {
+      for (int i = 0 ; i < patterns.size() ; i++) {
         getLog()
-            .debug(String.format("Checking '%s' against pattern '%s'", subject, pattern.pattern()));
-        Matcher matcher = pattern.matcher(subject);
+            .debug(String.format("Checking '%s' against pattern '%s'",
+                subject, patterns.get(i).pattern()));
+        Matcher matcher = patterns.get(i).matcher(subject);
 
         if (matcher.matches()) {
-          getLog().debug(String.format("'%s' matches pattern '%s' so downloading.", subject,
-                                       pattern.pattern()));
+          getLog().debug(String.format("'%s' matches "
+                  + "pattern '%s' so downloading.", subject,
+                                       patterns.get(i).pattern()));
+          if (versions.isEmpty()) {
+            versionsToDownload.add("latest");
+          } else {
+            versionsToDownload.add(versions.get(i));
+          }
           subjectsToDownload.add(subject);
           break;
         }
       }
     }
-
-    Map<String, ParsedSchema> subjectToSchema = downloadSchemas(subjectsToDownload);
+    Map<String, ParsedSchema> subjectToSchema =
+        downloadSchemas(subjectsToDownload, versionsToDownload);
 
     for (Map.Entry<String, ParsedSchema> kvp : subjectToSchema.entrySet()) {
       String subject = kvp.getKey();
       String encodedSubject = encodeSubject ? encode(subject) : subject;
       String fileName = String.format("%s%s", encodedSubject, getExtension(kvp.getValue()));
       File outputFile = new File(this.outputDirectory, fileName);
-
       getLog().info(
           String.format("Writing schema for Subject(%s) to %s.", subject, outputFile)
       );
@@ -188,6 +196,27 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       close();
     } catch (IOException e) {
       throw new MojoExecutionException("Exception while closing schema registry client", e);
+    }
+  }
+
+  public void outputDirValidation() throws MojoExecutionException, MojoFailureException {
+    try {
+      getLog().debug(
+          String.format("Checking if '%s' exists and is not a directory.", this.outputDirectory));
+      if (outputDirectory.exists() && !outputDirectory.isDirectory()) {
+        throw new IllegalStateException("outputDirectory must be a directory");
+      }
+      getLog()
+          .debug(String.format("Checking if outputDirectory('%s') exists.", this.outputDirectory));
+      if (!outputDirectory.isDirectory()) {
+        getLog().debug(String.format("Creating outputDirectory('%s').", this.outputDirectory));
+        if (!outputDirectory.mkdirs()) {
+          throw new IllegalStateException(
+              "Could not create output directory " + this.outputDirectory);
+        }
+      }
+    } catch (Exception ex) {
+      throw new MojoExecutionException("Exception thrown while creating outputDirectory", ex);
     }
   }
 
