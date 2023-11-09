@@ -1428,7 +1428,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           throws InvalidSchemaException {
     try {
       if (validate) {
-        boolean isStrict = config.isValidateFields() != null ? config.isValidateFields() : true;
+        boolean isStrict = config.isValidateFields() != null ? config.isValidateFields() : false;
         parsedSchema.validate(isStrict);
       }
       if (normalize) {
