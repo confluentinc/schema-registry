@@ -497,11 +497,11 @@ public class JsonSchema implements ParsedSchema {
         Optional<String> restrictedField = schema.getPropertySchemas()
                 .keySet()
                 .stream()
-                .filter(field -> field.startsWith("$"))
+                .filter(field -> field.startsWith("$$"))
                 .findAny();
         if (restrictedField.isPresent()) {
           throw new ValidationException(schema,
-                  "Field names cannot start with $ symbol",
+                  "Field names cannot start with $$ prefix",
                   "properties",
                   String.format("#/properties/%s", restrictedField.get()));
         }
