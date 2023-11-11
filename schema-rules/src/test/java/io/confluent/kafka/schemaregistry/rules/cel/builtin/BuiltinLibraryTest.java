@@ -125,9 +125,8 @@ public class BuiltinLibraryTest {
     }
 
     @Test
-    public void uuidSuccess() {
-        System.out.println(UUID.randomUUID());
-        assertSuccess("fa02a430-892f-4160-97cd-6e3d1bc14494", BuiltinOverload::validateUuid);
+    public void illegalCharFailure() {
+        assertFailure("\\\\WINDOWS\\fileshare", BuiltinOverload::validateUriRef);
     }
 
     @Test
@@ -136,10 +135,10 @@ public class BuiltinLibraryTest {
     }
 
     @Test
-    public void illegalCharFailure() {
-        assertFailure("\\\\WINDOWS\\fileshare", BuiltinOverload::validateUriRef);
+    public void uuidSuccess() {
+        System.out.println(UUID.randomUUID());
+        assertSuccess("fa02a430-892f-4160-97cd-6e3d1bc14494", BuiltinOverload::validateUuid);
     }
-
     static void assertSuccess(String input, Predicate<String> format) {
         assertTrue(format.test(input));
     }
