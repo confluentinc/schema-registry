@@ -39,6 +39,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroRegistry;
+import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
@@ -116,6 +117,7 @@ public class CelExecutor implements RuleExecutor {
               default:
                 throw new IllegalArgumentException("Unsupported type " + ruleWithArgs.getType());
             }
+            scriptBuilder = scriptBuilder.withLibraries(new BuiltinLibrary());
             return scriptBuilder.build();
           }
         });

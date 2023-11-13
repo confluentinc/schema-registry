@@ -46,6 +46,10 @@
             <artifactId>cel-tools</artifactId>
         </dependency>
         <dependency>
+            <groupId>commons-validator</groupId>
+            <artifactId>commons-validator</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.ibm.jsonata4java</groupId>
             <artifactId>JSONata4Java</artifactId>
         </dependency>
