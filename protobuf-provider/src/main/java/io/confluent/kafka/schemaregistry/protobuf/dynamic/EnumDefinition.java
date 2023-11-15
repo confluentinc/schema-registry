@@ -23,9 +23,9 @@ import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto.EnumReservedRange;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
-import java.util.Map;
 
 /**
  * EnumDefinition
@@ -72,12 +72,12 @@ public class EnumDefinition {
     }
 
     public Builder addValue(String name, int num) {
-      return addValue(name, num, null, null, null);
+      return addValue(name, num, null, null);
     }
 
     // Note: added
     public Builder addValue(
-        String name, int num, String doc, Map<String, String> params, Boolean isDeprecated) {
+        String name, int num, ProtobufMeta meta, Boolean isDeprecated) {
       EnumValueDescriptorProto.Builder enumValBuilder = EnumValueDescriptorProto.newBuilder();
       enumValBuilder.setName(name).setNumber(num);
       if (isDeprecated != null) {
@@ -86,11 +86,11 @@ public class EnumDefinition {
         optionsBuilder.setDeprecated(isDeprecated);
         enumValBuilder.mergeOptions(optionsBuilder.build());
       }
-      Meta meta = toMeta(doc, params);
-      if (meta != null) {
+      Meta m = toMeta(meta);
+      if (m != null) {
         DescriptorProtos.EnumValueOptions.Builder optionsBuilder =
                 DescriptorProtos.EnumValueOptions.newBuilder();
-        optionsBuilder.setExtension(MetaProto.enumValueMeta, meta);
+        optionsBuilder.setExtension(MetaProto.enumValueMeta, m);
         enumValBuilder.mergeOptions(optionsBuilder.build());
       }
       mEnumTypeBuilder.addValue(enumValBuilder.build());
@@ -112,12 +112,12 @@ public class EnumDefinition {
     }
 
     // Note: added
-    public Builder setMeta(String doc, Map<String, String> params) {
-      Meta meta = toMeta(doc, params);
-      if (meta != null) {
+    public Builder setMeta(ProtobufMeta meta) {
+      Meta m = toMeta(meta);
+      if (m != null) {
         DescriptorProtos.EnumOptions.Builder optionsBuilder =
                 DescriptorProtos.EnumOptions.newBuilder();
-        optionsBuilder.setExtension(MetaProto.enumMeta, meta);
+        optionsBuilder.setExtension(MetaProto.enumMeta, m);
         mEnumTypeBuilder.mergeOptions(optionsBuilder.build());
       }
       return this;

@@ -79,7 +79,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     jaasSections.addAll(CollectionConverters.asJavaCollection(JaasTestUtils.zkSections()));
     String jaasFilePath = JaasTestUtils.writeJaasContextsToFile(JavaConverters.asScalaBuffer(jaasSections).toSeq()).getAbsolutePath();
 
-    log.info("Using KDC home: " + kdcHome.getAbsolutePath());
+    log.info("Using KDC home: {}", kdcHome.getAbsolutePath());
     kdc = new MiniKdc(kdcProps, kdcHome);
     kdc.start();
 

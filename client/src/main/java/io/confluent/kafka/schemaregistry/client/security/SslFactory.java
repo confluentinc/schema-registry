@@ -363,7 +363,7 @@ public class SslFactory {
       try {
         return Files.getLastModifiedTime(Paths.get(path)).toMillis();
       } catch (IOException e) {
-        log.error("Modification time of key store could not be obtained: " + path, e);
+        log.error("Modification time of key store could not be obtained: {}", path, e);
         return null;
       }
     }
