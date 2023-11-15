@@ -19,11 +19,14 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.Objects;
 
 /**
  * Generic JSON error message.
  */
+@Schema(description = "Error message")
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ErrorMessage {
@@ -37,6 +40,7 @@ public class ErrorMessage {
     this.message = message;
   }
 
+  @Schema(description = "Error code")
   @JsonProperty("error_code")
   public int getErrorCode() {
     return errorCode;
@@ -47,6 +51,7 @@ public class ErrorMessage {
     this.errorCode = error_code;
   }
 
+  @Schema(description = "Detailed error message")
   @JsonProperty
   public String getMessage() {
     return message;

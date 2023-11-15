@@ -100,8 +100,7 @@ public class MessageDefinition {
         JSType jstype,
         Boolean isDeprecated
     ) {
-      FieldDescriptorProto.Label protoLabel = sLabelMap.get(label);
-      doAddField(protoLabel, false, type, name, num,
+      doAddField(label, false, type, name, num,
               defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated, null);
       return this;
     }
@@ -156,6 +155,37 @@ public class MessageDefinition {
       return this;
     }
 
+    public Builder addExtensionRange(int start, int end) {
+      DescriptorProto.ExtensionRange.Builder rangeBuilder =
+          DescriptorProto.ExtensionRange.newBuilder();
+      rangeBuilder.setStart(start).setEnd(end);
+      mMsgTypeBuilder.addExtensionRange(rangeBuilder.build());
+      return this;
+    }
+
+    public Builder addExtendDefinition(
+        String extendee,
+        String label,
+        String type,
+        String name,
+        int num,
+        String defaultVal,
+        String jsonName,
+        String doc,
+        Map<String, String> params,
+        CType ctype,
+        Boolean isPacked,
+        JSType jstype,
+        Boolean isDeprecated
+    ) {
+      FieldDescriptorProto.Builder fieldBuilder = MessageDefinition.getFieldBuilder(label, false,
+          type, name, num, defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated,
+          null);
+      fieldBuilder.setExtendee(extendee);
+      mMsgTypeBuilder.addExtension(fieldBuilder.build());
+      return this;
+    }
+
     // Note: added
     public Builder setNoStandardDescriptorAccessor(boolean noStandardDescriptorAccessor) {
       DescriptorProtos.MessageOptions.Builder optionsBuilder =
@@ -207,7 +237,7 @@ public class MessageDefinition {
     }
 
     private void doAddField(
-        FieldDescriptorProto.Label label,
+        String label,
         boolean isProto3Optional,
         String type,
         String name,
@@ -222,67 +252,10 @@ public class MessageDefinition {
         Boolean isDeprecated,
         OneofBuilder oneofBuilder
     ) {
-      FieldDescriptorProto.Builder fieldBuilder = FieldDescriptorProto.newBuilder();
-      // Note: changed
-      if (label != null) {
-        fieldBuilder.setLabel(label);
-      }
-      if (isProto3Optional) {
-        fieldBuilder.setProto3Optional(isProto3Optional);
-      }
-      FieldDescriptorProto.Type primType = sTypeMap.get(type);
-      if (primType != null) {
-        fieldBuilder.setType(primType);
-      } else {
-        fieldBuilder.setTypeName(type);
-      }
-      fieldBuilder.setName(name).setNumber(num);
-      if (defaultVal != null) {
-        fieldBuilder.setDefaultValue(defaultVal);
-      }
-      if (oneofBuilder != null) {
-        fieldBuilder.setOneofIndex(oneofBuilder.getIdx());
-      }
-      if (jsonName != null) {
-        fieldBuilder.setJsonName(jsonName);
-      }
-      if (ctype != null) {
-        DescriptorProtos.FieldOptions.Builder optionsBuilder =
-            DescriptorProtos.FieldOptions.newBuilder();
-        optionsBuilder.setCtype(ctype);
-        fieldBuilder.mergeOptions(optionsBuilder.build());
-      }
-      if (isPacked != null) {
-        DescriptorProtos.FieldOptions.Builder optionsBuilder =
-            DescriptorProtos.FieldOptions.newBuilder();
-        optionsBuilder.setPacked(isPacked);
-        fieldBuilder.mergeOptions(optionsBuilder.build());
-      }
-      if (jstype != null) {
-        DescriptorProtos.FieldOptions.Builder optionsBuilder =
-            DescriptorProtos.FieldOptions.newBuilder();
-        optionsBuilder.setJstype(jstype);
-        fieldBuilder.mergeOptions(optionsBuilder.build());
-      }
-      if (isDeprecated != null) {
-        DescriptorProtos.FieldOptions.Builder optionsBuilder =
-            DescriptorProtos.FieldOptions.newBuilder();
-        optionsBuilder.setDeprecated(isDeprecated);
-        fieldBuilder.mergeOptions(optionsBuilder.build());
-      }
-      setFieldMeta(fieldBuilder, doc, params);
+      FieldDescriptorProto.Builder fieldBuilder = getFieldBuilder(label, isProto3Optional,
+          type, name, num, defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated,
+          oneofBuilder);
       mMsgTypeBuilder.addField(fieldBuilder.build());
-    }
-
-    private void setFieldMeta(
-            FieldDescriptorProto.Builder fieldBuilder, String doc, Map<String, String> params) {
-      Meta meta = toMeta(doc, params);
-      if (meta != null) {
-        DescriptorProtos.FieldOptions.Builder optionsBuilder =
-                DescriptorProtos.FieldOptions.newBuilder();
-        optionsBuilder.setExtension(MetaProto.fieldMeta, meta);
-        fieldBuilder.mergeOptions(optionsBuilder.build());
-      }
     }
 
     private DescriptorProto.Builder mMsgTypeBuilder;
@@ -331,7 +304,7 @@ public class MessageDefinition {
         Boolean deprecated
     ) {
       mMsgBuilder.doAddField(
-          FieldDescriptorProto.Label.LABEL_OPTIONAL,
+          "optional",
           isProto3Optional,
           type,
           name,
@@ -368,7 +341,87 @@ public class MessageDefinition {
     private int mIdx;
   }
 
+  public static FieldDescriptorProto.Builder getFieldBuilder(
+      String label,
+      boolean isProto3Optional,
+      String type,
+      String name,
+      int num,
+      String defaultVal,
+      String jsonName,
+      String doc,
+      Map<String, String> params,
+      CType ctype,
+      Boolean isPacked,
+      JSType jstype,
+      Boolean isDeprecated,
+      OneofBuilder oneofBuilder
+  ) {
+    FieldDescriptorProto.Label protoLabel = sLabelMap.get(label);
+    FieldDescriptorProto.Builder fieldBuilder = FieldDescriptorProto.newBuilder();
+    // Note: changed
+    if (label != null) {
+      fieldBuilder.setLabel(protoLabel);
+    }
+    if (isProto3Optional) {
+      fieldBuilder.setProto3Optional(isProto3Optional);
+    }
+    FieldDescriptorProto.Type primType = sTypeMap.get(type);
+    if (primType != null) {
+      fieldBuilder.setType(primType);
+    } else {
+      fieldBuilder.setTypeName(type);
+    }
+    fieldBuilder.setName(name).setNumber(num);
+    if (defaultVal != null) {
+      fieldBuilder.setDefaultValue(defaultVal);
+    }
+    if (oneofBuilder != null) {
+      fieldBuilder.setOneofIndex(oneofBuilder.getIdx());
+    }
+    if (jsonName != null) {
+      fieldBuilder.setJsonName(jsonName);
+    }
+    if (ctype != null) {
+      DescriptorProtos.FieldOptions.Builder optionsBuilder =
+          DescriptorProtos.FieldOptions.newBuilder();
+      optionsBuilder.setCtype(ctype);
+      fieldBuilder.mergeOptions(optionsBuilder.build());
+    }
+    if (isPacked != null) {
+      DescriptorProtos.FieldOptions.Builder optionsBuilder =
+          DescriptorProtos.FieldOptions.newBuilder();
+      optionsBuilder.setPacked(isPacked);
+      fieldBuilder.mergeOptions(optionsBuilder.build());
+    }
+    if (jstype != null) {
+      DescriptorProtos.FieldOptions.Builder optionsBuilder =
+          DescriptorProtos.FieldOptions.newBuilder();
+      optionsBuilder.setJstype(jstype);
+      fieldBuilder.mergeOptions(optionsBuilder.build());
+    }
+    if (isDeprecated != null) {
+      DescriptorProtos.FieldOptions.Builder optionsBuilder =
+          DescriptorProtos.FieldOptions.newBuilder();
+      optionsBuilder.setDeprecated(isDeprecated);
+      fieldBuilder.mergeOptions(optionsBuilder.build());
+    }
+    setFieldMeta(fieldBuilder, doc, params);
+    return fieldBuilder;
+  }
+
   // --- private static ---
+
+  private static void setFieldMeta(
+      FieldDescriptorProto.Builder fieldBuilder, String doc, Map<String, String> params) {
+    Meta meta = toMeta(doc, params);
+    if (meta != null) {
+      DescriptorProtos.FieldOptions.Builder optionsBuilder =
+          DescriptorProtos.FieldOptions.newBuilder();
+      optionsBuilder.setExtension(MetaProto.fieldMeta, meta);
+      fieldBuilder.mergeOptions(optionsBuilder.build());
+    }
+  }
 
   private static Map<String, FieldDescriptorProto.Type> sTypeMap;
   private static Map<String, FieldDescriptorProto.Label> sLabelMap;

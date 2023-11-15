@@ -296,6 +296,7 @@ public class ProtobufData {
   private final Map<Schema, ProtobufSchema> fromConnectSchemaCache;
   private final Map<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean generalizedSumTypeSupport;
+  private boolean ignoreDefaultForNullables;
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
   private boolean useIntForEnums;
@@ -303,6 +304,8 @@ public class ProtobufData {
   private boolean supportOptionalForProto2;
   private boolean useWrapperForNullables;
   private boolean useWrapperForRawPrimitives;
+  private boolean generateStructForNulls;
+  private boolean generateIndexForUnions;
 
   public ProtobufData() {
     this(new ProtobufDataConfig.Builder().with(
@@ -318,7 +321,8 @@ public class ProtobufData {
   public ProtobufData(ProtobufDataConfig protobufDataConfig) {
     fromConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
     toConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
-    this.generalizedSumTypeSupport = protobufDataConfig.isGeneralizedSumTypeSupportDefault();
+    this.generalizedSumTypeSupport = protobufDataConfig.isGeneralizedSumTypeSupport();
+    this.ignoreDefaultForNullables = protobufDataConfig.ignoreDefaultForNullables();
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
     this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
     this.useIntForEnums = protobufDataConfig.useIntForEnums();
@@ -326,6 +330,8 @@ public class ProtobufData {
     this.supportOptionalForProto2 = protobufDataConfig.supportOptionalForProto2();
     this.useWrapperForNullables = protobufDataConfig.useWrapperForNullables();
     this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
+    this.generateStructForNulls = protobufDataConfig.generateStructForNulls();
+    this.generateIndexForUnions = protobufDataConfig.generateIndexForUnions();
   }
 
   /**
@@ -494,7 +500,8 @@ public class ProtobufData {
           // one of the union types.
           if (isUnionSchema(schema)) {
             for (Field field : schema.fields()) {
-              Object object = struct.get(field);
+              Object object = ignoreDefaultForNullables
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
               if (object != null) {
                 String fieldName = scrubName(field.name());
                 Object fieldCtx = getFieldType(ctx, fieldName);
@@ -514,11 +521,13 @@ public class ProtobufData {
             for (Field field : schema.fields()) {
               String fieldName = scrubName(field.name());
               Object fieldCtx = getFieldType(ctx, fieldName);
+              Object connectFieldVal = ignoreDefaultForNullables
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
               Object fieldValue = fromConnectData(
                   fieldCtx,
                   field.schema(),
                   scopedStructName + ".",
-                  struct.get(field),
+                  connectFieldVal,
                   protobufSchema
               );
               if (fieldValue != null) {
@@ -1352,7 +1361,11 @@ public class ProtobufData {
   }
 
   private String unionFieldName(OneofDescriptor oneofDescriptor) {
-    return oneofDescriptor.getName() + "_" + oneofDescriptor.getIndex();
+    String name = oneofDescriptor.getName();
+    if (generateIndexForUnions) {
+      name += "_" + oneofDescriptor.getIndex();
+    }
+    return name;
   }
 
   private void setStructField(
@@ -1364,7 +1377,7 @@ public class ProtobufData {
     final String fieldName = fieldDescriptor.getName();
     final Field field = schema.field(fieldName);
     if ((isPrimitiveOrRepeated(fieldDescriptor) && !isOptional(fieldDescriptor))
-        || message.hasField(fieldDescriptor)) {
+        || (generateStructForNulls || message.hasField(fieldDescriptor))) {
       Object obj = message.getField(fieldDescriptor);
       result.put(fieldName, toConnectData(field.schema(), obj));
     }

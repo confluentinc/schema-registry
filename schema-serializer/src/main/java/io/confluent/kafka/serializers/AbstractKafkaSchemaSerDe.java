@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 
 import java.io.Closeable;
@@ -40,10 +41,8 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
@@ -68,23 +67,17 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected void configureClientProperties(
       AbstractKafkaSchemaSerDeConfig config,
       SchemaProvider provider) {
-    if (null == schemaRegistry) {
+    if (schemaRegistry == null) {
       List<String> urls = config.getSchemaRegistryUrls();
       int maxSchemaObject = config.getMaxSchemasPerSubject();
       Map<String, Object> originals = config.originalsWithPrefix("");
-      String mockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(urls);
-      List<SchemaProvider> providers = Collections.singletonList(provider);
-      if (mockScope != null) {
-        schemaRegistry = MockSchemaRegistry.getClientForScope(mockScope, providers);
-      } else {
-        schemaRegistry = new CachedSchemaRegistryClient(
-            urls,
-            maxSchemaObject,
-            providers,
-            originals,
-            config.requestHeaders()
-        );
-      }
+      schemaRegistry = SchemaRegistryClientFactory.newClient(
+          urls,
+          maxSchemaObject,
+          Collections.singletonList(provider),
+          originals,
+          config.requestHeaders()
+      );
     }
 
     contextNameStrategy = config.contextNameStrategy();
@@ -225,9 +218,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestSchemaMetadata(subject);
       Optional<ParsedSchema> optSchema =
           schemaRegistry.parseSchema(
-              schemaMetadata.getSchemaType(),
-              schemaMetadata.getSchema(),
-              schemaMetadata.getReferences());
+              new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
+                  null, schemaMetadata));
       latestVersion = optSchema.orElseThrow(
           () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
               + " with refs " + schemaMetadata.getReferences()

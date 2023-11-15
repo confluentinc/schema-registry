@@ -15,10 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOBAL_RESOURCE_NAME;
-
-import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
@@ -35,6 +33,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,6 +63,7 @@ import java.util.Map;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ModeResource {
 
+  public static final String apiTag = "Modes (v1)";
   private static final Logger log = LoggerFactory.getLogger(ModeResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -74,18 +75,25 @@ public class ModeResource {
 
   @Path("/{subject}")
   @PUT
+  @DocumentedName("updateSubjectMode")
   @Operation(summary = "Update subject mode",
       description = "Update mode for the specified subject. "
         + "On success, echoes the original request back to the client.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The original request",
+        @ApiResponse(responseCode = "200", description = "The original request.",
             content = @Content(schema = @Schema(implementation = ModeUpdateRequest.class))),
-        @ApiResponse(responseCode = "422", description = "Error code 42204 -- Invalid mode\n"
-            + "Error code 42205 -- Operation not permitted"),
+        @ApiResponse(responseCode = "422",
+          description = "Unprocessable Entity. "
+                  + "Error code 42204 indicates an invalid mode. "
+                  + "Error code 42205 indicates operation not permitted.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
-            description = "Error code 50001 -- Error in the backend data store\n"
-            + "Error code 50003 -- Error while forwarding the request to the primary\n"
-            + "Error code 50004 -- Unknown leader")})
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store. "
+                  + "Error code 50003 indicates a failure forwarding the request to the primary. "
+                  + "Error code 50004 indicates unknown leader.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   public ModeUpdateRequest updateMode(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -97,9 +105,7 @@ public class ModeResource {
       @QueryParam("force") boolean force
   ) {
 
-    if (subject != null && (CharMatcher.javaIsoControl().matchesAnyOf(subject)
-        || QualifiedSubject.create(this.schemaRegistry.tenant(), subject).getSubject()
-            .equals(GLOBAL_RESOURCE_NAME))) {
+    if (subject != null && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
       throw Errors.invalidSubjectException(subject);
     }
 
@@ -132,15 +138,20 @@ public class ModeResource {
 
   @Path("/{subject}")
   @GET
+  @DocumentedName("getSubjectMode")
   @Operation(summary = "Get subject mode",
       description = "Retrieves the subject mode.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The subject mode",
-            content = @Content(schema = @Schema(implementation = Mode.class))),
-        @ApiResponse(responseCode = "404", description = "Subject not found"),
+        @ApiResponse(responseCode = "200", description = "The subject mode.",
+          content = @Content(schema = @Schema(implementation = Mode.class))),
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. Error code 40401 indicates subject not found.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
-            description = "Error code 50001 -- Error in the backend data store")
-      })
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   public Mode getMode(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -163,18 +174,25 @@ public class ModeResource {
   }
 
   @PUT
+  @DocumentedName("updateGlobalMode")
   @Operation(summary = "Update global mode",
       description = "Update global mode. "
         + "On success, echoes the original request back to the client.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The original request",
-            content = @Content(schema = @Schema(implementation = ModeUpdateRequest.class))),
-        @ApiResponse(responseCode = "422", description = "Error code 42204 -- Invalid mode\n"
-            + "Error code 42205 -- Operation not permitted"),
-        @ApiResponse(responseCode = "500", description =
-            "Error code 50001 -- Error in the backend data store\n"
-                + "Error code 50003 -- Error while forwarding the request to the primary\n"
-                + "Error code 50004 -- Unknown leader")})
+        @ApiResponse(responseCode = "200", description = "The original request.",
+          content = @Content(schema = @Schema(implementation = ModeUpdateRequest.class))),
+        @ApiResponse(responseCode = "422",
+          description = "Unprocessable Entity. "
+                  + "Error code 42204 indicates an invalid mode. "
+                  + "Error code 42205 indicates operation not permitted.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store. "
+                  + "Error code 50003 indicates a failure forwarding the request to the primary. "
+                  + "Error code 50004 indicates unknown leader.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   public ModeUpdateRequest updateTopLevelMode(
       @Context HttpHeaders headers,
       @Parameter(description = "Update Request", required = true)
@@ -186,6 +204,7 @@ public class ModeResource {
   }
 
   @GET
+  @DocumentedName("getGlobalMode")
   @Operation(summary = "Get global mode",
       description = "Retrieves global mode.",
       responses = {
@@ -194,28 +213,34 @@ public class ModeResource {
         @ApiResponse(responseCode = "500",
             description = "Error code 50001 -- Error in the backend data store")
       })
+  @Tags(@Tag(name = apiTag))
   public Mode getTopLevelMode() {
     return getMode(null, false);
   }
 
   @DELETE
   @Path("/{subject}")
+  @DocumentedName("deleteSubjectMode")
   @Operation(summary = "Delete subject mode",
       description = "Deletes the specified subject-level mode and reverts to "
         + "the global default.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "Operation succeeded. Returns old mode",
+        @ApiResponse(responseCode = "200", description = "Operation succeeded. Returns old mode.",
           content = @Content(schema = @Schema(implementation = Mode.class))),
-        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
-        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
-          + "datastore")
-      })
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. Error code 40401 indicates subject not found.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   public void deleteSubjectMode(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
-    log.info("Deleting mode for subject {}", subject);
+    log.debug("Deleting mode for subject {}", subject);
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 

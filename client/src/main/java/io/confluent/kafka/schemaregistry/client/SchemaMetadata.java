@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import java.util.Collections;
 import java.util.List;
 
@@ -48,6 +49,14 @@ public class SchemaMetadata {
     this.schemaType = schemaType;
     this.schema = schema;
     this.references = references;
+  }
+
+  public SchemaMetadata(Schema schema) {
+    this.id = schema.getId();
+    this.version = schema.getVersion();
+    this.schemaType = schema.getSchemaType();
+    this.schema = schema.getSchema();
+    this.references = schema.getReferences();
   }
 
   public int getId() {
