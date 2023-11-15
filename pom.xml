@@ -98,7 +98,7 @@
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
-        <okio.version>3.0.0</okio.version>
+        <okio.version>3.4.0</okio.version>
         <tink.version>1.11.0</tink.version>
         <tink.aws.kms.version>1.9.1</tink.aws.kms.version>
         <tink.gcp.kms.version>1.9.0</tink.gcp.kms.version>
