@@ -26,6 +26,8 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.v3.oas.annotations.Operation;
@@ -101,12 +103,28 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
+
+    schemaRegistry.getCompositeUpdateRequestHandler().handle(subject, request);
+
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
-    if (compatibilityLevel == null) {
+    if (request.getCompatibilityLevel() != null && compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
     }
-
+    if (request.getDefaultRuleSet() != null) {
+      try {
+        request.getDefaultRuleSet().validate();
+      } catch (RuleException e) {
+        throw new RestInvalidRuleSetException(e.getMessage());
+      }
+    }
+    if (request.getOverrideRuleSet() != null) {
+      try {
+        request.getOverrideRuleSet().validate();
+      } catch (RuleException e) {
+        throw new RestInvalidRuleSetException(e.getMessage());
+      }
+    }
     if (subject != null && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
       throw Errors.invalidSubjectException(subject);
     }
@@ -116,7 +134,7 @@ public class ConfigResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.updateConfigOrForward(subject, compatibilityLevel, headerProperties);
+      schemaRegistry.updateConfigOrForward(subject, new Config(request), headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -159,14 +177,13 @@ public class ConfigResource {
 
     Config config;
     try {
-      CompatibilityLevel compatibilityLevel =
+      config =
           defaultToGlobal
-          ? schemaRegistry.getCompatibilityLevelInScope(subject)
-          : schemaRegistry.getCompatibilityLevel(subject);
-      if (compatibilityLevel == null) {
+          ? schemaRegistry.getConfigInScope(subject)
+          : schemaRegistry.getConfig(subject);
+      if (config == null) {
         throw Errors.subjectLevelCompatibilityNotConfiguredException(subject);
       }
-      config = new Config(compatibilityLevel.name);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get the configs for subject "
                                   + subject, e);
@@ -196,15 +213,32 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
+
+    schemaRegistry.getCompositeUpdateRequestHandler().handle(request);
+
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
-    if (compatibilityLevel == null) {
+    if (request.getCompatibilityLevel() != null && compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
+    }
+    if (request.getDefaultRuleSet() != null) {
+      try {
+        request.getDefaultRuleSet().validate();
+      } catch (RuleException e) {
+        throw new RestInvalidRuleSetException(e.getMessage());
+      }
+    }
+    if (request.getOverrideRuleSet() != null) {
+      try {
+        request.getOverrideRuleSet().validate();
+      } catch (RuleException e) {
+        throw new RestInvalidRuleSetException(e.getMessage());
+      }
     }
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.updateConfigOrForward(null, compatibilityLevel, headerProperties);
+      schemaRegistry.updateConfigOrForward(null, new Config(request), headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -233,8 +267,7 @@ public class ConfigResource {
   public Config getTopLevelConfig() {
     Config config;
     try {
-      CompatibilityLevel compatibilityLevel = schemaRegistry.getCompatibilityLevel(null);
-      config = new Config(compatibilityLevel == null ? null : compatibilityLevel.name);
+      config = schemaRegistry.getConfig(null);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get compatibility level", e);
     }
@@ -262,11 +295,10 @@ public class ConfigResource {
 
     Config deletedConfig;
     try {
-      CompatibilityLevel currentCompatibility = schemaRegistry.getCompatibilityLevel(null);
+      deletedConfig = schemaRegistry.getConfig(null);
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteCompatibilityConfigOrForward(null, headerProperties);
-      deletedConfig = new Config(currentCompatibility.name);
+      schemaRegistry.deleteConfigOrForward(null, headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -309,15 +341,14 @@ public class ConfigResource {
 
     Config deletedConfig;
     try {
-      CompatibilityLevel currentCompatibility = schemaRegistry.getCompatibilityLevel(subject);
-      if (currentCompatibility == null) {
+      deletedConfig = schemaRegistry.getConfig(subject);
+      if (deletedConfig == null) {
         throw Errors.subjectNotFoundException(subject);
       }
 
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteCompatibilityConfigOrForward(subject, headerProperties);
-      deletedConfig = new Config(currentCompatibility.name);
+      schemaRegistry.deleteConfigOrForward(subject, headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {

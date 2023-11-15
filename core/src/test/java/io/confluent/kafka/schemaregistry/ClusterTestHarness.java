@@ -165,7 +165,7 @@ public abstract class ClusterTestHarness {
     restApp.start();
   }
 
-  protected Properties getSchemaRegistryProperties() {
+  protected Properties getSchemaRegistryProperties() throws Exception {
     return new Properties();
   }
 
