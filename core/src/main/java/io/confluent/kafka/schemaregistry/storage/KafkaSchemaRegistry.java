@@ -1454,7 +1454,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           boolean isNew,
           boolean normalize) throws InvalidSchemaException {
     try {
-      ParsedSchema parsedSchema = schemaCache.get(new RawSchema(schema, isNew, normalize));
+      ParsedSchema parsedSchema = schemaCache.get(new RawSchema(schema.copy(), isNew, normalize));
       if (schema.getVersion() != null) {
         parsedSchema = parsedSchema.copy(schema.getVersion());
       }
@@ -2356,6 +2356,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     @Override
     public int hashCode() {
       return Objects.hash(schema, isNew, normalize);
+    }
+
+    @Override
+    public String toString() {
+      return "RawSchema{"
+          + "schema=" + schema
+          + ", isNew=" + isNew
+          + ", normalize=" + normalize
+          + '}';
     }
   }
 
