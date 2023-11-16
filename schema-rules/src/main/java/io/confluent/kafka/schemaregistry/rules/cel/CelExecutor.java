@@ -52,6 +52,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.pb.Checked;
+import org.projectnessie.cel.extension.StringsLib;
 import org.projectnessie.cel.tools.Script;
 import org.projectnessie.cel.tools.ScriptException;
 import org.projectnessie.cel.tools.ScriptHost;
@@ -117,7 +118,7 @@ public class CelExecutor implements RuleExecutor {
               default:
                 throw new IllegalArgumentException("Unsupported type " + ruleWithArgs.getType());
             }
-            scriptBuilder = scriptBuilder.withLibraries(new BuiltinLibrary());
+            scriptBuilder = scriptBuilder.withLibraries(new StringsLib(), new BuiltinLibrary());
             return scriptBuilder.build();
           }
         });

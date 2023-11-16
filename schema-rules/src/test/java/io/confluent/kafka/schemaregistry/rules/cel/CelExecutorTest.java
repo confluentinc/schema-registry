@@ -945,6 +945,30 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerStringFunctions() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITEREAD,
+        CelExecutor.TYPE, null, null,
+        "message.name.charAt(0) == 't'"
+            + " && message.name.indexOf('e') == 1"
+            + " && [message.name,'1'].join() == 'testUser1'"
+            + " && message.name.lastIndexOf('e') == 6"
+            + " && message.name.lowerAscii() == 'testuser'"
+            + " && message.name.replace('User','Customer') == 'testCustomer'"
+            + " && message.name.split('U') == ['test', 'ser']"
+            + " && ' testUser '.trim() == 'testUser'"
+            + " && message.name.upperAscii() == 'TESTUSER'",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+  }
+
+  @Test
   public void testKafkaAvroSerializerBuiltinFunctions() throws Exception {
     IndexedRecord avroRecord = createUserRecord("bob@confluent.com");
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
