@@ -135,7 +135,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
 
   @Override
   public JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
-    log.debug("Updating metadata");
+    log.info("Updating metadata");
     ByteBuffer metadata = SchemaRegistryProtocol.serializeMetadata(identity);
     return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
             Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
@@ -163,6 +163,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     assignmentSnapshot = SchemaRegistryProtocol.deserializeAssignment(memberAssignment);
     if (stickyLeaderElection && assignmentSnapshot != null
             && assignmentSnapshot.leaderIdentity() != null) {
+      log.info("assignmentLeaderIdentity: {}, myIdentity: {}", assignmentSnapshot.leaderIdentity(), identity);
       identity.setLeader(assignmentSnapshot.leaderIdentity().equals(identity));
     }
     listener.onAssigned(assignmentSnapshot, generation);
@@ -175,7 +176,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata,
       boolean skipAssignment
   ) {
-    log.debug("Performing assignment");
+    log.info("Performing assignment");
 
     Map<String, SchemaRegistryIdentity> memberConfigs = new HashMap<>();
     for (JoinGroupResponseData.JoinGroupResponseMember entry : allMemberMetadata) {
@@ -184,7 +185,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       memberConfigs.put(entry.memberId(), identity);
     }
 
-    log.debug("Member information: {}", memberConfigs);
+    log.info("Member information: {}", memberConfigs);
 
     if (nodeCountMetric != null) {
       nodeCountMetric.record(memberConfigs.size());
@@ -247,7 +248,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     // All members currently receive the same assignment information since it is just the leader ID
     SchemaRegistryProtocol.Assignment assignment
         = new SchemaRegistryProtocol.Assignment(error, leaderKafkaId, leaderIdentity);
-    log.debug("Assignment: {}", assignment);
+    log.info("Assignment: {}", assignment);
     for (String member : memberConfigs.keySet()) {
       groupAssignment.put(member, SchemaRegistryProtocol.serializeAssignment(assignment));
     }
