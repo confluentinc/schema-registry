@@ -88,12 +88,12 @@
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.6.0</kotlin.version>
-        <antlr.version>4.11.1</antlr.version>
+        <antlr.version>4.13.1</antlr.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.3.12</cel-version>
         <google.api-client.version>1.35.2</google.api-client.version>
         <guice.version>5.1.0</guice.version>
-        <jsonata-version>2.4.3</jsonata-version>
+        <jsonata-version>2.4.5</jsonata-version>
         <json-schema.version>1.14.3</json-schema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
