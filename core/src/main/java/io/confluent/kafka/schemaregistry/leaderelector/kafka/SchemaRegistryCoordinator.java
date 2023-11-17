@@ -163,7 +163,8 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     assignmentSnapshot = SchemaRegistryProtocol.deserializeAssignment(memberAssignment);
     if (stickyLeaderElection && assignmentSnapshot != null
             && assignmentSnapshot.leaderIdentity() != null) {
-      log.info("assignmentLeaderIdentity: {}, myIdentity: {}", assignmentSnapshot.leaderIdentity(), identity);
+      log.info("assignmentLeaderIdentity: {}, myIdentity: {}",
+              assignmentSnapshot.leaderIdentity(), identity);
       identity.setLeader(assignmentSnapshot.leaderIdentity().equals(identity));
     }
     listener.onAssigned(assignmentSnapshot, generation);
