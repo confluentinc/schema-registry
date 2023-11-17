@@ -253,6 +253,8 @@ public class SchemaRegistryConfig extends RestConfig {
   @Deprecated
   public static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG =
       "schema.registry.resource.extension.class";
+  public static final String INIT_RESOURCE_EXTENSION_CONFIG =
+      "init.resource.extension.class";
   public static final String RESOURCE_EXTENSION_CONFIG =
       "resource.extension.class";
   public static final String RESOURCE_STATIC_LOCATIONS_CONFIG =
@@ -427,6 +429,11 @@ public class SchemaRegistryConfig extends RestConfig {
       + " like filters to Schema Registry. Typically used to add custom capability like logging, "
       + " security, etc. The schema.registry.resource.extension.class name is deprecated; "
       + "prefer using resource.extension.class instead.";
+  protected static final String INIT_RESOURCE_EXTENSION_DOC =
+      "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
+      + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
+      + " to Schema Registry. These resources will be injected before Schema Registry is "
+      + "initialized.";
   protected static final String RESOURCE_STATIC_LOCATIONS_DOC =
       "  A list of classpath resources containing static resources to serve using the default "
           + "servlet.";
@@ -674,6 +681,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
+    )
+    .define(INIT_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
+            ConfigDef.Importance.LOW, INIT_RESOURCE_EXTENSION_DOC
     )
     .define(RESOURCE_STATIC_LOCATIONS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, RESOURCE_STATIC_LOCATIONS_DOC
