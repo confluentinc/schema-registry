@@ -481,7 +481,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public void setLeader(@Nullable SchemaRegistryIdentity newLeader)
       throws SchemaRegistryTimeoutException, SchemaRegistryStoreException, IdGenerationException {
     final long started = time.hiResClockMs();
-    log.debug("Setting the leader to {}", newLeader);
+    log.info("Setting the leader to {}", newLeader);
 
     // Only schema registry instances eligible for leader can be set to leader
     if (newLeader != null && !newLeader.getLeaderEligibility()) {
@@ -512,7 +512,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       isLeader = isLeader();
       leaderChanged = leaderIdentity != null && !leaderIdentity.equals(previousLeader);
       if (leaderChanged) {
-        log.debug("Leader changed from {} to {}", previousLeader, leaderIdentity);
+        log.info("Leader changed from {} to {}", previousLeader, leaderIdentity);
         if (isLeader) {
           // The new leader may not know the exact last offset in the Kafka log. So, mark the
           // last offset invalid here
