@@ -302,7 +302,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
   }
 
   private void stop(boolean swallowException) {
-    log.trace("Stopping the schema registry group member.");
+    log.info("Stopping the schema registry group member.");
 
     // Interrupt any outstanding poll calls
     if (client != null) {
@@ -336,7 +336,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           firstException.get()
       );
     } else {
-      log.debug("The schema registry group member has stopped.");
+      log.info("The schema registry group member has stopped.");
     }
   }
 
