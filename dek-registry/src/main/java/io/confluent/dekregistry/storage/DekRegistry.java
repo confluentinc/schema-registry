@@ -243,6 +243,10 @@ public class DekRegistry implements Closeable {
     initLatch.await();
   }
 
+  public boolean initialized() {
+    return initialized.get();
+  }
+
   public boolean isLeader() {
     return schemaRegistry.isLeader();
   }
