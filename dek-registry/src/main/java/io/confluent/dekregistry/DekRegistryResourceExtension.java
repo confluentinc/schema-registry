@@ -59,7 +59,7 @@ public class DekRegistryResourceExtension implements SchemaRegistryResourceExten
 
   @Override
   public boolean initialized() {
-    return dekRegistry.initialized();
+    return dekRegistry != null && dekRegistry.initialized();
   }
 
   @Override
