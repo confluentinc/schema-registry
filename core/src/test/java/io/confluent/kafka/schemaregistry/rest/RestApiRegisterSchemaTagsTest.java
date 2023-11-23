@@ -261,15 +261,15 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
     TagSchemaRequest tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setNewVersion(2);
     Rule migrationRule = new Rule("myMigrationRule", null, null, RuleMode.UPGRADE,
-        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
+        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE", false);
     Rule migrationRule2 = new Rule("myMigrationRule2", null, null, RuleMode.UPGRADE,
-        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
+        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE", false);
     Rule domainRule = new Rule("myRule", null, null, null,
-        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
+        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE", false);
     Rule domainRule2 = new Rule("myRule2", null, null, null,
-        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
+        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE", false);
     Rule domainRule3 = new Rule("myRule3", null, null, null,
-        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE,NONE", false);
+        "fooType", ImmutableSortedSet.of("PII"), null, null, null, "NONE", false);
     RuleSet ruleSet = new RuleSet(ImmutableList.of(migrationRule, migrationRule2),
         ImmutableList.of(domainRule, domainRule2, domainRule3));
     tagSchemaRequest.setRulesToMerge(ruleSet);
@@ -287,13 +287,13 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
     tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setNewVersion(3);
     Rule migrationRule3 = new Rule("myMigrationRule3", null, null, RuleMode.UPGRADE,
-        "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE,NONE", false);
+        "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE", false);
     Rule domainRule5 = new Rule("myRule5", null, null, null,
-        "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE,NONE", false);
+        "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE", false);
     Rule domainRule4 = new Rule("myRule4", null, null, null,
-        "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE,NONE", false);
+        "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE", false);
     domainRule2 = new Rule("myRule2", null, null, null,
-        "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE,NONE", false);
+        "fooType", ImmutableSortedSet.of("PII2"), null, null, null, "NONE", false);
     ruleSet = new RuleSet(ImmutableList.of(migrationRule3),
         ImmutableList.of(domainRule5, domainRule4, domainRule2));
     tagSchemaRequest.setRulesToMerge(ruleSet);
