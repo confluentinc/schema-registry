@@ -253,6 +253,8 @@ public class Rule {
     if (type == null) {
       throw new RuleException("Missing rule type");
     }
+    validateAction(mode, onSuccess);
+    validateAction(mode, onFailure);
   }
 
   private static void validateName(String name) throws RuleException {
@@ -275,6 +277,16 @@ public class Rule {
       if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) {
         throw new RuleException("Illegal character in rule name: " + name);
       }
+    }
+  }
+
+  private static void validateAction(RuleMode mode, String action) throws RuleException {
+    if (mode != null
+        && mode != RuleMode.WRITEREAD
+        && mode != RuleMode.UPDOWN
+        && action != null
+        && action.indexOf(',') >= 0) {
+      throw new RuleException("Multiple actions only valid with WRITEREAD and UPDOWN");
     }
   }
 }
