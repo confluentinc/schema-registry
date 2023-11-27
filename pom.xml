@@ -84,6 +84,7 @@
         <swagger.version>1.6.2</swagger.version>
         <io.confluent.schema-registry.version>6.2.14-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
+        <dropwizard.version>4.1.12.1</dropwizard.version>
     </properties>
 
     <repositories>
@@ -334,12 +335,12 @@
                     <configuration>
                         <documentationUrl>https://docs.confluent.io/${io.confluent.schema-registry.version}/schema-registry/docs/connect.html</documentationUrl>
                         <sourceUrl>https://github.com/confluentinc/schema-registry</sourceUrl>
-                        
+
                         <supportProviderName>${project.organization.name}</supportProviderName>
                         <supportSummary>Confluent supports the Avro Converter alongside community members as part of its Confluent Platform offering.</supportSummary>
                         <supportUrl>https://docs.confluent.io/current/</supportUrl>
                         <supportLogo>logos/confluent.png</supportLogo>
-                        
+
                         <ownerUsername>confluentinc</ownerUsername>
                         <ownerType>organization</ownerType>
                         <ownerName>${project.organization.name}</ownerName>
