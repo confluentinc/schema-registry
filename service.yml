@@ -1,0 +1,14 @@
+name: schema-registry
+lang: unknown
+lang_version: unknown
+codeowners:
+  enable: true
+semaphore:
+  enable: true
+  pipeline_type: cp
+  nano_version: true
+  downstream_projects: ["kafka-rest", "ksql",
+    "confluent-security-plugins", "kafka-connect-replicator",
+    "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
+git:
+  enable: true
