@@ -323,6 +323,11 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
+  public boolean hasTopLevelField(String field) {
+    return schemaObj != null && schemaObj.definesProperty(field);
+  }
+
+  @Override
   public String schemaType() {
     return TYPE;
   }
@@ -470,10 +475,7 @@ public class JsonSchema implements ParsedSchema {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
     final List<Difference> differences =
-            SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(),
-                    rawSchema(),
-                    previousSchema.metadata(),
-                    metadata());
+            SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
     final List<Difference> incompatibleDiffs = differences.stream()
         .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
         .collect(Collectors.toList());
@@ -519,7 +521,7 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
-  public Object fromJson(JsonNode json) throws IOException {
+  public Object fromJson(JsonNode json) {
     return json;
   }
 
@@ -586,22 +588,21 @@ public class JsonSchema implements ParsedSchema {
       Schema subschema = ((ArraySchema)schema).getAllItemSchema();
       List<Object> result = new ArrayList<>();
       int i = 0;
-      for (Iterator<? extends Object> it = ((Iterable<?>) message).iterator(); it.hasNext();) {
-        result.add(toTransformedMessage(
-            ctx, subschema, path + "[" + i + "]", it.next(), transform));
+      for (Object o : (Iterable<?>) message) {
+        result.add(toTransformedMessage(ctx, subschema, path + "[" + i + "]", o, transform));
         i++;
       }
       return result;
     } else if (schema instanceof ObjectSchema) {
       if (message == null) {
-        return message;
+        return null;
       }
       Map<String, Schema> propertySchemas = ((ObjectSchema) schema).getPropertySchemas();
       for (Map.Entry<String, Schema> entry : propertySchemas.entrySet()) {
         String propertyName = entry.getKey();
         Schema propertySchema = entry.getValue();
         String fullName = path + "." + propertyName;
-        try (FieldContext fc = ctx.enterField(ctx, message, fullName, propertyName,
+        try (FieldContext ignored = ctx.enterField(ctx, message, fullName, propertyName,
             getType(propertySchema), getInlineTags(propertySchema))) {
           PropertyAccessor propertyAccessor =
               getPropertyAccessor(ctx, message, propertyName);
@@ -613,7 +614,7 @@ public class JsonSchema implements ParsedSchema {
       return message;
     } else if (schema instanceof ReferenceSchema) {
       if (message == null) {
-        return message;
+        return null;
       }
       return toTransformedMessage(ctx, ((ReferenceSchema)schema).getReferredSchema(),
           path, message, transform);
@@ -678,7 +679,7 @@ public class JsonSchema implements ParsedSchema {
 
   private static boolean isMap(final ObjectSchema objectSchema) {
     return objectSchema.getPropertySchemas() == null
-        || objectSchema.getPropertySchemas().size() == 0;
+        || objectSchema.getPropertySchemas().isEmpty();
   }
 
   @Override
@@ -836,7 +837,6 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  @SuppressWarnings("unchecked")
   private static BeanPropertyWriter getBeanGetter(
       RuleContext ctx, Object message, String propertyName) {
     Map<String, BeanPropertyWriter> props = beanGetters.computeIfAbsent(
@@ -862,7 +862,6 @@ public class JsonSchema implements ParsedSchema {
     return props.get(propertyName);
   }
 
-  @SuppressWarnings("unchecked")
   private static SettableBeanProperty getBeanSetter(
       RuleContext ctx, Object message, String propertyName) {
     Map<String, SettableBeanProperty> props = beanSetters.computeIfAbsent(
