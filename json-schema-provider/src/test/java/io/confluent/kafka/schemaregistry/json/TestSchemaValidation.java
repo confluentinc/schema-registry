@@ -61,7 +61,7 @@ import static io.confluent.kafka.schemaregistry.json.TestSchemas.list;
 
 public class TestSchemaValidation {
 
-  public static final List<ReaderWriter> COMPATIBLE_READER_WRITER_TEST_CASES =
+  private static final List<ReaderWriter> COMPATIBLE_READER_WRITER_TEST_CASES =
       list(new ReaderWriter(NUMBER_SCHEMA,
           INT_SCHEMA
       ),
@@ -87,7 +87,7 @@ public class TestSchemaValidation {
       new ReaderWriter(A_INT_B_DINT_REQUIRED_RECORD1, A_INT_RECORD1)
   );
 
-  public static final List<ReaderWriter> INCOMPATIBLE_READER_WRITER_TEST_CASES =
+  private static final List<ReaderWriter> INCOMPATIBLE_READER_WRITER_TEST_CASES =
       list(new ReaderWriter(BOOLEAN_SCHEMA,
           INT_SCHEMA
       ),

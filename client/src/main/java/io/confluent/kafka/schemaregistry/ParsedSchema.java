@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -24,6 +25,7 @@ import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,6 +34,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import java.util.stream.Collectors;
 
 /**
  * A parsed schema.
@@ -219,6 +222,12 @@ public interface ParsedSchema {
   Object rawSchema();
 
   /**
+   * @param field name of the field to check
+   * @return true, if the schema has {@param field} in its top level fields. false, otherwise.
+   */
+  boolean hasTopLevelField(String field);
+
+  /**
    * Returns whether the underlying raw representations are equal.
    *
    * @return whether the underlying raw representations are equal
@@ -244,5 +253,15 @@ public interface ParsedSchema {
   default Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     throw new UnsupportedOperationException();
+  }
+
+  default Set<String> getReservedFields() {
+    Map<String, String> updatedProperties = metadata() != null
+            ? metadata().getProperties()
+            : Collections.emptyMap();
+    return Arrays.stream(updatedProperties.getOrDefault(AvroSchema.RESERVED, "").split(","))
+            .map(String::trim)
+            .filter(field -> !field.isEmpty())
+            .collect(Collectors.toSet());
   }
 }
