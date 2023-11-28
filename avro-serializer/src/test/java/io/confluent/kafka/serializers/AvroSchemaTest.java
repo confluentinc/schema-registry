@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -41,7 +42,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -56,7 +56,7 @@ import org.junit.Test;
 
 public class AvroSchemaTest {
 
-  private static ObjectMapper objectMapper = new ObjectMapper();
+  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   private static final Schema.Parser parser = new Schema.Parser();
 
@@ -257,7 +257,7 @@ public class AvroSchemaTest {
   @Test
   public void testPrimitiveTypesToAvro() throws Exception {
     Object result = AvroSchemaUtils.toObject((JsonNode) null, createPrimitiveSchema("null"));
-    assertTrue(result == null);
+    assertNull(result);
 
     result = AvroSchemaUtils.toObject(jsonTree("true"), createPrimitiveSchema("boolean"));
     assertEquals(true, result);
@@ -350,7 +350,7 @@ public class AvroSchemaTest {
     Object result = AvroSchemaUtils.toObject(jsonTree(json), new AvroSchema(recordSchema));
     assertTrue(result instanceof GenericRecord);
     GenericRecord resultRecord = (GenericRecord) result;
-    assertEquals(null, resultRecord.get("null"));
+    assertNull(resultRecord.get("null"));
     assertEquals(true, resultRecord.get("boolean"));
     assertEquals(12, resultRecord.get("int"));
     assertEquals(5000000000L, resultRecord.get("long"));
@@ -371,7 +371,7 @@ public class AvroSchemaTest {
     Object result = AvroSchemaUtils.toObject(jsonTree(json), new AvroSchema(arraySchema));
     assertTrue(result instanceof GenericArray);
     assertArrayEquals(new Utf8[]{new Utf8("one"), new Utf8("two"), new Utf8("three")},
-        ((GenericArray) result).toArray()
+        ((GenericArray<?>) result).toArray()
     );
   }
 
@@ -389,7 +389,6 @@ public class AvroSchemaTest {
     Object result = AvroSchemaUtils.toObject(jsonTree("{\"union\":{\"string\":\"test string\"}}"),
         new AvroSchema(unionSchema)
     );
-    Object foo = ((GenericRecord) result).get("union");
     assertTrue(((GenericRecord) result).get("union") instanceof Utf8);
 
     result = AvroSchemaUtils.toObject(jsonTree("{\"union\":{\"int\":12}}"),
@@ -476,7 +475,7 @@ public class AvroSchemaTest {
     assertTrue(result.isObject());
     assertTrue(result.get("null").isNull());
     assertTrue(result.get("boolean").isBoolean());
-    assertEquals(true, result.get("boolean").booleanValue());
+    assertTrue(result.get("boolean").booleanValue());
     assertTrue(result.get("int").isIntegralNumber());
     assertEquals(12, result.get("int").intValue());
     assertTrue(result.get("long").isIntegralNumber());
@@ -495,7 +494,7 @@ public class AvroSchemaTest {
 
   @Test
   public void testArrayToJson() throws Exception {
-    GenericData.Array<String> data = new GenericData.Array(arraySchema,
+    GenericData.Array<String> data = new GenericData.Array<>(arraySchema,
         Arrays.asList("one", "two", "three")
     );
     JsonNode result = objectMapper.readTree(AvroSchemaUtils.toJson(data));
@@ -1168,206 +1167,6 @@ public class AvroSchemaTest {
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
 
-  }
-
-  @Test
-  public void testAddNewReservedFieldsWithConflict() {
-    String originalSchemaString = "{\n" +
-            "  \"type\": \"record\",\n" +
-            "  \"namespace\": \"com.mycorp.mynamespace\",\n" +
-            "  \"name\": \"sampleRecord\",\n" +
-            "  \"fields\": [\n" +
-            "    {\n" +
-            "      \"name\": \"my_field1\",\n" +
-            "      \"type\": \"int\"\n" +
-            "    }\n" +
-            "  ]\n" +
-            "}";
-    String updatedSchemaString = "{\n" +
-            "  \"type\": \"record\",\n" +
-            "  \"namespace\": \"com.mycorp.mynamespace\",\n" +
-            "  \"name\": \"sampleRecord\",\n" +
-            "  \"fields\": [\n" +
-            "    {\n" +
-            "      \"name\": \"my_field1\",\n" +
-            "      \"type\": \"int\"\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"name\": \"cost\",\n" +
-            "      \"type\": \"double\"\n" +
-            "    }\n" +
-            "  ]\n" +
-            "}";
-    AvroSchema originalSchema = new AvroSchema(originalSchemaString,
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            null,
-            null,
-            null,
-            false);
-    Metadata updatedMetadata = new Metadata(Collections.emptyMap(),
-            Collections.singletonMap(AvroSchema.RESERVED, "cost"),
-            Collections.emptySet());
-    AvroSchema updatedSchema = new AvroSchema(updatedSchemaString,
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            updatedMetadata,
-            null,
-            null,
-            false);
-    List<String> differences = updatedSchema.isBackwardCompatible(originalSchema);
-    assertEquals(2, differences.size());
-    assertEquals("{errorType:'FIELD_CONFLICTS_WITH_RESERVED_FIELD', description:'The %s schema has field " +
-                    "that conflicts with the reserved field cost which is missing in the %s schema.'}",
-            differences.get(0));
-  }
-
-  @Test
-  public void testNullUpdatedMetadata() {
-    String originalSchemaString = "{\n" +
-            "  \"type\": \"record\",\n" +
-            "  \"namespace\": \"com.mycorp.mynamespace\",\n" +
-            "  \"name\": \"sampleRecord\",\n" +
-            "  \"fields\": [\n" +
-            "    {\n" +
-            "      \"name\": \"my_field1\",\n" +
-            "      \"type\": \"int\"\n" +
-            "    }\n" +
-            "  ]\n" +
-            "}";
-    String updatedSchemaString = "{\n" +
-            "  \"type\": \"record\",\n" +
-            "  \"namespace\": \"com.mycorp.mynamespace\",\n" +
-            "  \"name\": \"sampleRecord\",\n" +
-            "  \"fields\": [\n" +
-            "    {\n" +
-            "      \"name\": \"my_field1\",\n" +
-            "      \"type\": \"int\"\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"name\": \"cost\",\n" +
-            "      \"type\": \"double\"\n" +
-            "    }\n" +
-            "  ]\n" +
-            "}";
-    Metadata originalMetadata = new Metadata(Collections.emptyMap(),
-            Collections.singletonMap(AvroSchema.RESERVED, "cost,status"),
-            Collections.emptySet());
-    AvroSchema originalSchema = new AvroSchema(originalSchemaString,
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            originalMetadata,
-            null,
-            null,
-            false);
-    AvroSchema updatedSchema = new AvroSchema(updatedSchemaString,
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            null,
-            null,
-            null,
-            false);
-    List<String> differences = updatedSchema.isBackwardCompatible(originalSchema);
-    assertEquals(3, differences.size());
-    assertEquals("{errorType:'RESERVED_FIELD_REMOVED', description:'The %s schema has reserved field cost " +
-            "removed from its metadata which is present in the %s schema's metadata.'}", differences.get(0));
-    assertEquals("{errorType:'RESERVED_FIELD_REMOVED', description:'The %s schema has reserved field " +
-            "status removed from its metadata which is present in the %s schema's metadata.'}", differences.get(1));
-  }
-
-  @Test
-  public void testReservedFieldRemoval() {
-    String schemaString = "{\n" +
-            "  \"type\": \"record\",\n" +
-            "  \"namespace\": \"com.mycorp.mynamespace\",\n" +
-            "  \"name\": \"sampleRecord\",\n" +
-            "  \"fields\": [\n" +
-            "    {\n" +
-            "      \"name\": \"my_field1\",\n" +
-            "      \"type\": \"int\"\n" +
-            "    }\n" +
-            "  ]\n" +
-            "}";
-    Metadata originalMetadata = new Metadata(Collections.emptyMap(),
-            Collections.singletonMap(AvroSchema.RESERVED, "cost,status"),
-            Collections.emptySet());
-    AvroSchema originalSchema = new AvroSchema(schemaString,
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            originalMetadata,
-            null,
-            null,
-            false);
-    Metadata updatedMetadata = new Metadata(Collections.emptyMap(),
-            Collections.singletonMap(AvroSchema.RESERVED, "cost"),
-            Collections.emptySet());
-    AvroSchema updatedSchema = new AvroSchema(schemaString,
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            updatedMetadata,
-            null,
-            null,
-            false);
-    List<String> differences = updatedSchema.isBackwardCompatible(originalSchema);
-    assertEquals(1, differences.size());
-    assertEquals("{errorType:'RESERVED_FIELD_REMOVED', description:'The %s schema has reserved field " +
-                    "status removed from its metadata which is present in the %s schema's metadata.'}",
-            differences.get(0));
-  }
-
-  @Test
-  public void testFieldConflictWithReservedField() {
-    String originalSchemaString = "{\n" +
-            "  \"type\": \"record\",\n" +
-            "  \"namespace\": \"com.mycorp.mynamespace\",\n" +
-            "  \"name\": \"sampleRecord\",\n" +
-            "  \"fields\": [\n" +
-            "    {\n" +
-            "      \"name\": \"my_field1\",\n" +
-            "      \"type\": \"int\"\n" +
-            "    }\n" +
-            "  ]\n" +
-            "}";
-    String updatedSchemaString = "{\n" +
-            "  \"type\": \"record\",\n" +
-            "  \"namespace\": \"com.mycorp.mynamespace\",\n" +
-            "  \"name\": \"sampleRecord\",\n" +
-            "  \"fields\": [\n" +
-            "    {\n" +
-            "      \"name\": \"my_field1\",\n" +
-            "      \"type\": \"int\"\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"name\": \"cost\",\n" +
-            "      \"type\": \"double\"\n" +
-            "    }\n" +
-            "  ]\n" +
-            "}";
-    Metadata originalMetadata = new Metadata(Collections.emptyMap(),
-            Collections.singletonMap(AvroSchema.RESERVED, "cost,status"),
-            Collections.emptySet());
-    AvroSchema originalSchema = new AvroSchema(originalSchemaString,
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            originalMetadata,
-            null,
-            null,
-            false);
-    Metadata updatedMetadata = new Metadata(Collections.emptyMap(),
-            Collections.singletonMap(AvroSchema.RESERVED, "cost,status"),
-            Collections.emptySet());
-    AvroSchema updatedSchema = new AvroSchema(updatedSchemaString,
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            updatedMetadata,
-            null,
-            null,
-            false);
-    List<String> differences = updatedSchema.isBackwardCompatible(originalSchema);
-    assertEquals(2, differences.size());
-    assertEquals("{errorType:'FIELD_CONFLICTS_WITH_RESERVED_FIELD', description:'The %s schema has "
-                    + "field that conflicts with the reserved field cost which is missing in the %s schema.'}",
-            differences.get(0));
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {

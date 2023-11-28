@@ -113,6 +113,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -644,7 +645,7 @@ public class ProtobufSchema implements ParsedSchema {
   private static ProtoFileElement toProtoFile(FileDescriptorProto file) {
     String packageName = file.getPackage();
     // Don't set empty package name
-    if ("".equals(packageName)) {
+    if (packageName.isEmpty()) {
       packageName = null;
     }
     Syntax syntax = null;
@@ -997,11 +998,11 @@ public class ProtobufSchema implements ParsedSchema {
   private static OptionElement toOption(String name, Meta meta) {
     Map<String, Object> map = new LinkedHashMap<>();
     String doc = meta.getDoc();
-    if (doc != null && !doc.isEmpty()) {
+    if (!doc.isEmpty()) {
       map.put(DOC_FIELD, doc);
     }
     Map<String, String> params = meta.getParamsMap();
-    if (params != null && !params.isEmpty()) {
+    if (!params.isEmpty()) {
       List<Map<String, String>> keyValues = new ArrayList<>();
       for (Map.Entry<String, String> entry : params.entrySet()) {
         Map<String, String> keyValue = new LinkedHashMap<>();
@@ -1019,7 +1020,7 @@ public class ProtobufSchema implements ParsedSchema {
       map.put(PARAMS_FIELD, keyValues);
     }
     List<String> tags = meta.getTagsList();
-    if (tags != null && !tags.isEmpty()) {
+    if (!tags.isEmpty()) {
       map.put(TAGS_FIELD, tags);
     }
     return map.isEmpty() ? null : new OptionElement(name, Kind.MAP, map, true);
@@ -1492,7 +1493,7 @@ public class ProtobufSchema implements ParsedSchema {
     return options.stream()
         .collect(Collectors.toMap(
             o -> o.getName().startsWith(".") ? o.getName().substring(1) : o.getName(),
-            o -> transform(o),
+            ProtobufSchema::transform,
             ProtobufSchema::merge));
   }
 
@@ -1726,22 +1727,15 @@ public class ProtobufSchema implements ParsedSchema {
       }
     }
     Map<String, OptionElement> options = mergeOptions(messageElem.getOptions());
-    Boolean noStandardDescriptorAccessor =
-        findOption(NO_STANDARD_DESCRIPTOR_ACCESSOR, options)
-            .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-    if (noStandardDescriptorAccessor != null) {
-      message.setNoStandardDescriptorAccessor(noStandardDescriptorAccessor);
-    }
-    Boolean isDeprecated = findOption(DEPRECATED, options)
-        .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-    if (isDeprecated != null) {
-      message.setDeprecated(isDeprecated);
-    }
-    Boolean isMapEntry = findOption(MAP_ENTRY, options)
-        .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-    if (isMapEntry != null) {
-      message.setMapEntry(isMapEntry);
-    }
+    findOption(NO_STANDARD_DESCRIPTOR_ACCESSOR, options)
+            .map(o -> Boolean.valueOf(o.getValue().toString()))
+            .ifPresent(message::setNoStandardDescriptorAccessor);
+    findOption(DEPRECATED, options)
+            .map(o -> Boolean.valueOf(o.getValue().toString()))
+            .ifPresent(message::setDeprecated);
+    findOption(MAP_ENTRY, options)
+            .map(o -> Boolean.valueOf(o.getValue().toString()))
+            .ifPresent(message::setMapEntry);
     ProtobufMeta meta = findMeta(CONFLUENT_MESSAGE_META, options);
     message.setMeta(meta);
     return message.build();
@@ -1862,11 +1856,9 @@ public class ProtobufSchema implements ParsedSchema {
     ServiceDefinition.Builder service =
         ServiceDefinition.newBuilder(serviceElement.getName());
     Map<String, OptionElement> serviceOptions = mergeOptions(serviceElement.getOptions());
-    Boolean isDeprecated = findOption(DEPRECATED, serviceOptions)
-        .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-    if (isDeprecated != null) {
-      service.setDeprecated(isDeprecated);
-    }
+    findOption(DEPRECATED, serviceOptions)
+            .map(o -> Boolean.valueOf(o.getValue().toString()))
+            .ifPresent(service::setDeprecated);
     for (RpcElement method : serviceElement.getRpcs()) {
       Map<String, OptionElement> methodOptions = mergeOptions(method.getOptions());
       Boolean isMethodDeprecated = findOption(DEPRECATED, methodOptions)
@@ -1883,6 +1875,15 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public ProtoFileElement rawSchema() {
     return schemaObj;
+  }
+
+  @Override
+  public boolean hasTopLevelField(String field) {
+    return schemaObj != null && schemaObj.getTypes()
+            .stream()
+            .map(ProtobufSchema::getFieldNames)
+            .flatMap(Collection::stream)
+            .anyMatch(property -> property.equals(field));
   }
 
   @Override
@@ -2284,7 +2285,7 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   @Override
-  public Object copyMessage(Object message) throws IOException {
+  public Object copyMessage(Object message) {
     // Protobuf messages are already immutable
     return message;
   }
@@ -2322,7 +2323,7 @@ public class ProtobufSchema implements ParsedSchema {
       Message.Builder copy = ((Message) message).toBuilder();
       for (FieldDescriptor fd : copy.getDescriptorForType().getFields()) {
         FieldDescriptor schemaFd = desc.findFieldByName(fd.getName());
-        try (FieldContext fc = ctx.enterField(
+        try (FieldContext ignored = ctx.enterField(
             ctx, message, fd.getFullName(), fd.getName(), getType(fd),
             getInlineTags(schemaFd)) // use schema-based fd which has the tags
         ) {
@@ -2587,6 +2588,16 @@ public class ProtobufSchema implements ParsedSchema {
     return result.toString();
   }
 
+  private static List<String> getFieldNames(TypeElement typeElement) {
+    if (typeElement instanceof MessageElement) {
+      return ((MessageElement) typeElement).getFields()
+              .stream()
+              .map(FieldElement::getName)
+              .collect(Collectors.toList());
+    }
+    return Collections.emptyList();
+  }
+
   public enum Format {
     DEFAULT("default"),
     IGNORE_EXTENSIONS("ignore_extensions"),
@@ -2626,9 +2637,9 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public static class ProtobufMeta {
-    private String doc;
-    private Map<String, String> params;
-    private List<String> tags;
+    private final String doc;
+    private final Map<String, String> params;
+    private final List<String> tags;
 
     public ProtobufMeta(String doc, Map<String, String> params, List<String> tags) {
       this.doc = doc;
