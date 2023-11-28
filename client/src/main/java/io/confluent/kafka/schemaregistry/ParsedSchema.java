@@ -17,10 +17,10 @@
 package io.confluent.kafka.schemaregistry;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
@@ -32,8 +32,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import java.util.stream.Collectors;
 
 /**
@@ -259,7 +257,7 @@ public interface ParsedSchema {
     Map<String, String> updatedProperties = metadata() != null
             ? metadata().getProperties()
             : Collections.emptyMap();
-    return Arrays.stream(updatedProperties.getOrDefault(AvroSchema.RESERVED, "").split(","))
+    return Arrays.stream(updatedProperties.getOrDefault(RESERVED, "").split(","))
             .map(String::trim)
             .filter(field -> !field.isEmpty())
             .collect(Collectors.toSet());
