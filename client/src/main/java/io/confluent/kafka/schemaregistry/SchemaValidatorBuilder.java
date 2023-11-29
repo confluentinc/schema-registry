@@ -21,12 +21,11 @@
 package io.confluent.kafka.schemaregistry;
 
 import com.google.common.collect.Lists;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * <p>
@@ -39,17 +38,21 @@ public final class SchemaValidatorBuilder {
   private SchemaValidationStrategy strategy;
   private static final String NEW_PREFIX = "new";
   private static final String OLD_PREFIX = "old";
-  private static int MAX_SCHEMA_SIZE_FOR_LOGGING = 10 * 1024;
-  private static String DIFFERENT_SCHEMA_TYPE = "Incompatible because of different schema type";
+  private static final int MAX_SCHEMA_SIZE_FOR_LOGGING = 10 * 1024;
+  private static final String DIFFERENT_SCHEMA_TYPE = "Incompatible because of different schema "
+          + "type";
 
   /**
    * Use a strategy that validates that a schema can be used to read existing
    * schema(s) according to the JSON default schema resolution.
    */
   public SchemaValidatorBuilder canReadStrategy() {
-    this.strategy = (toValidate, existing) -> formatErrorMessages(
-      toValidate.isBackwardCompatible(existing),
-      existing, NEW_PREFIX, OLD_PREFIX, true);
+    this.strategy = (toValidate, existing) ->
+                      formatErrorMessages(toValidate.isBackwardCompatible(existing),
+                        existing,
+                        NEW_PREFIX,
+                        OLD_PREFIX,
+                        true);
     return this;
   }
 
@@ -58,9 +61,12 @@ public final class SchemaValidatorBuilder {
    * schema(s) according to the JSON default schema resolution.
    */
   public SchemaValidatorBuilder canBeReadStrategy() {
-    this.strategy = (toValidate, existing) -> formatErrorMessages(
-      existing.isBackwardCompatible(toValidate),
-      existing, OLD_PREFIX, NEW_PREFIX, true);
+    this.strategy = (toValidate, existing) ->
+                      formatErrorMessages(existing.isBackwardCompatible(toValidate),
+                        existing,
+                        OLD_PREFIX,
+                        NEW_PREFIX,
+                        true);
     return this;
   }
 
@@ -86,15 +92,7 @@ public final class SchemaValidatorBuilder {
       Iterator<ParsedSchemaHolder> schemas = schemasInOrder.iterator();
       if (schemas.hasNext()) {
         ParsedSchemaHolder existing = schemas.next();
-        ParsedSchema existingSchema = existing.schema();
-        List<String> errorMessages;
-        if (toValidate.schemaType().equals(existingSchema.schemaType())) {
-          errorMessages = strategy.validate(toValidate, existingSchema);
-        } else {
-          errorMessages = Lists.newArrayList(DIFFERENT_SCHEMA_TYPE);
-        }
-        existing.clear();
-        return errorMessages;
+        return validate(toValidate, existing);
       }
       return new ArrayList<>();
     };
@@ -104,20 +102,25 @@ public final class SchemaValidatorBuilder {
     valid();
     return (toValidate, schemasInOrder) -> {
       for (ParsedSchemaHolder existing : schemasInOrder) {
-        ParsedSchema existingSchema = existing.schema();
-        List<String> errorMessages;
-        if (toValidate.schemaType().equals(existingSchema.schemaType())) {
-          errorMessages = strategy.validate(toValidate, existingSchema);
-        } else {
-          errorMessages = Lists.newArrayList(DIFFERENT_SCHEMA_TYPE);
-        }
-        existing.clear();
+        List<String> errorMessages = validate(toValidate, existing);
         if (!errorMessages.isEmpty()) {
           return errorMessages;
         }
       }
       return new ArrayList<>();
     };
+  }
+
+  private List<String> validate(ParsedSchema toValidate, ParsedSchemaHolder parsedSchemaHolder) {
+    ParsedSchema existingSchema = parsedSchemaHolder.schema();
+    List<String> errorMessages;
+    if (toValidate.schemaType().equals(existingSchema.schemaType())) {
+      errorMessages = strategy.validate(toValidate, existingSchema);
+    } else {
+      errorMessages = Lists.newArrayList(DIFFERENT_SCHEMA_TYPE);
+    }
+    parsedSchemaHolder.clear();
+    return errorMessages;
   }
 
   private void valid() {
@@ -128,7 +131,7 @@ public final class SchemaValidatorBuilder {
 
   private List<String> formatErrorMessages(List<String> messages, ParsedSchema existing,
                                            String reader, String writer, boolean appendSchema) {
-    if (messages.size() > 0) {
+    if (!messages.isEmpty()) {
       try {
         messages.replaceAll(e -> String.format(e, reader, writer));
         if (appendSchema) {
