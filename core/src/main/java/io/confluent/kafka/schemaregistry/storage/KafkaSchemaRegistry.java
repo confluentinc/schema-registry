@@ -208,7 +208,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.defaultMode = Mode.READWRITE;
     this.kafkaClusterId = kafkaClusterId(config);
     this.groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
-    this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
+    this.metricsContainer = new MetricsContainer(config);
     this.providers = initProviders(config);
     this.schemaCache = Caffeine.newBuilder()
         .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
