@@ -17,6 +17,8 @@
 package io.confluent.kafka.schemaregistry;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.collect.Sets;
+import io.confluent.kafka.schemaregistry.avro.Difference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -25,6 +27,7 @@ import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -251,6 +254,34 @@ public interface ParsedSchema {
   default Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Checks whether any reserved fields were removed in the current schema. Also ensures that no
+   * top-level fields conflict with the reserved fields.
+   *
+   * @param previousSchema schema to be checked against
+   * @return {@link List<String>} of error messages if any.
+   */
+  default List<String> validateReservedFields(ParsedSchemaHolder previousSchema) {
+    List<String> differences = new ArrayList<>();
+    Set<String> updatedReservedFields = getReservedFields();
+    // check to ensure that original reserved fields are not removed in the updated version
+    Sets.SetView<String> removedFields =
+            Sets.difference(previousSchema.schema().getReservedFields(), updatedReservedFields);
+    if (!removedFields.isEmpty()) {
+      removedFields.forEach(field ->
+              differences.add(new Difference(Difference.Type.RESERVED_FIELD_REMOVED,
+                      field).error()));
+    }
+    updatedReservedFields.forEach(reservedField -> {
+      // check if updated fields conflict with reserved fields
+      if (hasTopLevelField(reservedField)) {
+        differences.add(new Difference(Difference.Type.FIELD_CONFLICTS_WITH_RESERVED_FIELD,
+                reservedField).error());
+      }
+    });
+    return differences;
   }
 
   default Set<String> getReservedFields() {

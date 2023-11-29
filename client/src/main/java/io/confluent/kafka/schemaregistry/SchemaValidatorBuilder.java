@@ -21,12 +21,9 @@
 package io.confluent.kafka.schemaregistry;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-import io.confluent.kafka.schemaregistry.avro.Difference;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,39 +47,13 @@ public final class SchemaValidatorBuilder {
    * schema(s) according to the JSON default schema resolution.
    */
   public SchemaValidatorBuilder canReadStrategy() {
-    this.strategy = (toValidate, existing) -> {
-      List<String> result = canReadMetadataStrategy(toValidate, existing);
-      result.addAll(formatErrorMessages(toValidate.isBackwardCompatible(existing),
-              existing,
-              NEW_PREFIX,
-              OLD_PREFIX,
-              true));
-      return result;
-    };
+    this.strategy = (toValidate, existing) ->
+                      formatErrorMessages(toValidate.isBackwardCompatible(existing),
+                        existing,
+                        NEW_PREFIX,
+                        OLD_PREFIX,
+                        true);
     return this;
-  }
-
-  private List<String> canReadMetadataStrategy(ParsedSchema toValidate,
-                                               ParsedSchema existingSchema) {
-    List<String> differences = new ArrayList<>();
-    Set<String> updatedReservedFields = toValidate.getReservedFields();
-    // backward compatibility check to ensure that original reserved fields are not removed in
-    // the updated version
-    Sets.SetView<String> removedFields =
-            Sets.difference(existingSchema.getReservedFields(), updatedReservedFields);
-    if (!removedFields.isEmpty()) {
-      removedFields.forEach(field ->
-              differences.add(new Difference(Difference.Type.RESERVED_FIELD_REMOVED,
-                      field).error()));
-    }
-    updatedReservedFields.forEach(reservedField -> {
-      // check if updated fields conflict with reserved fields
-      if (toValidate.hasTopLevelField(reservedField)) {
-        differences.add(new Difference(Difference.Type.FIELD_CONFLICTS_WITH_RESERVED_FIELD,
-                reservedField).error());
-      }
-    });
-    return differences;
   }
 
   /**
@@ -90,34 +61,13 @@ public final class SchemaValidatorBuilder {
    * schema(s) according to the JSON default schema resolution.
    */
   public SchemaValidatorBuilder canBeReadStrategy() {
-    this.strategy = (toValidate, existing) -> {
-      List<String> result = canBeReadMetadataStrategy(toValidate, existing);
-      result.addAll(formatErrorMessages(existing.isBackwardCompatible(toValidate),
-              existing,
-              OLD_PREFIX,
-              NEW_PREFIX,
-              true));
-      return result;
-    };
+    this.strategy = (toValidate, existing) ->
+                      formatErrorMessages(existing.isBackwardCompatible(toValidate),
+                        existing,
+                        OLD_PREFIX,
+                        NEW_PREFIX,
+                        true);
     return this;
-  }
-
-  private List<String> canBeReadMetadataStrategy(ParsedSchema toValidate,
-                                                 ParsedSchema existingSchema) {
-    List<String> differences = new ArrayList<>();
-    toValidate.getReservedFields().forEach(reservedField -> {
-      // check if existing fields conflict with reserved fields
-      if (existingSchema.hasTopLevelField(reservedField)) {
-        differences.add(new Difference(Difference.Type.FIELD_CONFLICTS_WITH_RESERVED_FIELD,
-                reservedField).error());
-      }
-      // check if updated fields conflict with reserved fields
-      if (toValidate.hasTopLevelField(reservedField)) {
-        differences.add(new Difference(Difference.Type.FIELD_CONFLICTS_WITH_RESERVED_FIELD,
-                reservedField).error());
-      }
-    });
-    return differences;
   }
 
   /**
@@ -127,10 +77,8 @@ public final class SchemaValidatorBuilder {
   public SchemaValidatorBuilder mutualReadStrategy() {
 
     this.strategy = (toValidate, existing) -> {
-      List<String> result = canReadMetadataStrategy(toValidate, existing);
-      result.addAll(canBeReadMetadataStrategy(toValidate, existing));
-      result.addAll(formatErrorMessages(existing.isBackwardCompatible(toValidate),
-          existing, OLD_PREFIX, NEW_PREFIX, false));
+      List<String> result = formatErrorMessages(existing.isBackwardCompatible(toValidate),
+          existing, OLD_PREFIX, NEW_PREFIX, false);
       result.addAll(formatErrorMessages(toValidate.isBackwardCompatible(existing),
           existing, NEW_PREFIX, OLD_PREFIX, true));
       return result;
