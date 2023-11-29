@@ -16,6 +16,8 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
+import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
@@ -47,6 +49,13 @@ import static io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGI
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class SchemaRegistryConfig extends RestConfig {
+
+  public static final String RESOURCE_LABEL_PREFIX = "resource.";
+  public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
+  public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
+  public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
+  public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
+  public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryConfig.class);
   public static final String LISTENER_NAME_PREFIX = "listener.name.";
@@ -723,6 +732,7 @@ public class SchemaRegistryConfig extends RestConfig {
     if (compatibilityType == null) {
       throw new RestConfigException("Unknown compatibility level: " + compatibilityTypeString);
     }
+    buildMetricsContextLabels();
   }
 
   private static String getDefaultHost() {
@@ -872,4 +882,14 @@ public class SchemaRegistryConfig extends RestConfig {
     System.out.println(config.toRst());
   }
 
+  private void buildMetricsContextLabels() {
+    RestMetricsContext context = getMetricsContext();
+    String srGroupId = getString(SCHEMAREGISTRY_GROUP_ID_CONFIG);
+
+    context.setLabel(RESOURCE_LABEL_CLUSTER_ID, srGroupId);
+    context.setLabel(RESOURCE_LABEL_GROUP_ID, srGroupId);
+    context.setLabel(RESOURCE_LABEL_TYPE,  "schema_registry");
+    context.setLabel(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
+    context.setLabel(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+  }
 }
