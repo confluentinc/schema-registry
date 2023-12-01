@@ -223,8 +223,4 @@ public class Config {
         + ", overrideRuleSet=" + overrideRuleSet
         + '}';
   }
-
-  public boolean isSchemaFieldValidationEnabled() {
-    return isValidateFields() != null ? isValidateFields() : false;
-  }
 }

@@ -25,12 +25,15 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_C
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Sets;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.Difference;
+import io.confluent.kafka.schemaregistry.avro.Difference.Type;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -174,7 +177,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     if (leaderEligibility == null) {
       leaderEligibility = config.getBoolean(SchemaRegistryConfig.LEADER_ELIGIBILITY);
     }
-    boolean isEligibleForLeaderElector = leaderEligibility;
     this.delayLeaderElection = config.getBoolean(SchemaRegistryConfig.LEADER_ELECTION_DELAY);
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
 
@@ -183,7 +185,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         interInstanceListenerNameConfig,
         config.interInstanceProtocol());
     log.info("Found internal listener: {}", internalListener);
-
+    boolean isEligibleForLeaderElector = leaderEligibility;
     this.myIdentity = getMyIdentity(internalListener, isEligibleForLeaderElector, config);
     log.info("Setting my identity to {}",  myIdentity);
 
@@ -667,14 +669,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       boolean isCompatible = true;
       List<String> compatibilityErrorLogs = new ArrayList<>();
-      if (config.isSchemaFieldValidationEnabled() && !undeletedVersions.isEmpty()) {
-        // check reserved fields are not removed
-        compatibilityErrorLogs.addAll(parsedSchema.validateReservedFields(undeletedVersions.get(0)));
-      }
       if (mode != Mode.IMPORT) {
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
-        compatibilityErrorLogs.addAll(isCompatibleWithPrevious(config, parsedSchema, undeletedVersions));
+        compatibilityErrorLogs.addAll(isCompatibleWithPrevious(config,
+            parsedSchema,
+            undeletedVersions));
         isCompatible = compatibilityErrorLogs.isEmpty();
       }
 
@@ -1414,7 +1414,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                                        boolean normalize)
           throws InvalidSchemaException {
     try {
-      parsedSchema.validate(config.isSchemaFieldValidationEnabled());
+      if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
+        parsedSchema.validate(isSchemaFieldValidationEnabled(config));
+      }
       if (normalize) {
         parsedSchema = parsedSchema.normalize();
       }
@@ -2035,7 +2037,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private List<String> isCompatibleWithPrevious(Config config,
                                                 ParsedSchema parsedSchema,
                                                 List<ParsedSchemaHolder> previousSchemas) {
-
+    List<String> errorMessages = new ArrayList<>();
+    if (!previousSchemas.isEmpty()) {
+      errorMessages.addAll(validateReservedFields(parsedSchema,
+          previousSchemas.get(previousSchemas.size() - 1)));
+    }
     CompatibilityLevel compatibility = CompatibilityLevel.forName(config.getCompatibilityLevel());
     String compatibilityGroup = config.getCompatibilityGroup();
     if (compatibilityGroup != null) {
@@ -2047,7 +2053,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
               getCompatibilityGroupValue(s.schema(), compatibilityGroup)))
           .collect(Collectors.toList());
     }
-    List<String> errorMessages = parsedSchema.isCompatible(compatibility, previousSchemas);
+    errorMessages.addAll(parsedSchema.isCompatible(compatibility, previousSchemas));
     if (!errorMessages.isEmpty()) {
       try {
         errorMessages.add(String.format("{compatibility: '%s'}", compatibility));
@@ -2057,6 +2063,28 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
     }
     return errorMessages;
+  }
+
+  private List<String> validateReservedFields(ParsedSchema currentSchema,
+                                              ParsedSchemaHolder previousSchema) {
+    List<String> differences = new ArrayList<>();
+    Set<String> updatedReservedFields = currentSchema.getReservedFields();
+    // check to ensure that original reserved fields are not removed in the updated version
+    Sets.SetView<String> removedFields =
+        Sets.difference(previousSchema.schema().getReservedFields(), updatedReservedFields);
+    if (!removedFields.isEmpty()) {
+      removedFields.forEach(field ->
+                              differences.add(new Difference(Type.RESERVED_FIELD_REMOVED,
+                                field).error()));
+    }
+    updatedReservedFields.forEach(reservedField -> {
+      // check if updated fields conflict with reserved fields
+      if (currentSchema.hasTopLevelField(reservedField)) {
+        differences.add(new Difference(Type.FIELD_CONFLICTS_WITH_RESERVED_FIELD,
+            reservedField).error());
+      }
+    });
+    return differences;
   }
 
   private static String getCompatibilityGroupValue(
@@ -2297,6 +2325,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                     + " "
                     + sslEndpointIdentificationAlgo
                     + " not supported");
+  }
+
+  public boolean isSchemaFieldValidationEnabled(Config config) {
+    return config.isValidateFields() != null ? config.isValidateFields() : false;
   }
 
   private static class RawSchema {
