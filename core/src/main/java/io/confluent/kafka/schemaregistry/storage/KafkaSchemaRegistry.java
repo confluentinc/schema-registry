@@ -32,8 +32,6 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
-import io.confluent.kafka.schemaregistry.avro.Difference;
-import io.confluent.kafka.schemaregistry.avro.Difference.Type;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -125,7 +123,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   public static final String CONFLUENT_VERSION = "confluent:version";
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
-
+  private static final String RESERVED_FIELD_REMOVED = "The new schema has reserved field %s "
+      + "removed from its metadata which is present in the old schema's metadata.";
+  private static final String FIELD_CONFLICTS_WITH_RESERVED_FIELD = "The new schema has field that"
+      + " conflicts with the reserved field %s which is missing in the old schema.";
   private final SchemaRegistryConfig config;
   private final List<SchemaRegistryResourceExtension> resourceExtensions;
   private final Map<String, Object> props;
@@ -2067,24 +2068,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private List<String> validateReservedFields(ParsedSchema currentSchema,
                                               ParsedSchemaHolder previousSchema) {
-    List<String> differences = new ArrayList<>();
+    List<String> errorMessages = new ArrayList<>();
     Set<String> updatedReservedFields = currentSchema.getReservedFields();
     // check to ensure that original reserved fields are not removed in the updated version
     Sets.SetView<String> removedFields =
         Sets.difference(previousSchema.schema().getReservedFields(), updatedReservedFields);
     if (!removedFields.isEmpty()) {
-      removedFields.forEach(field ->
-                              differences.add(new Difference(Type.RESERVED_FIELD_REMOVED,
-                                field).error()));
+      removedFields.forEach(field -> errorMessages.add(String.format(RESERVED_FIELD_REMOVED,
+                                                                     field)));
     }
     updatedReservedFields.forEach(reservedField -> {
       // check if updated fields conflict with reserved fields
       if (currentSchema.hasTopLevelField(reservedField)) {
-        differences.add(new Difference(Type.FIELD_CONFLICTS_WITH_RESERVED_FIELD,
-            reservedField).error());
+        errorMessages.add(String.format(FIELD_CONFLICTS_WITH_RESERVED_FIELD, reservedField));
       }
     });
-    return differences;
+    return errorMessages;
   }
 
   private static String getCompatibilityGroupValue(
@@ -2327,7 +2326,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                     + " not supported");
   }
 
-  public boolean isSchemaFieldValidationEnabled(Config config) {
+  private static boolean isSchemaFieldValidationEnabled(Config config) {
     return config.isValidateFields() != null ? config.isValidateFields() : false;
   }
 
