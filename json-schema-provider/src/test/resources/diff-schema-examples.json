@@ -350,6 +350,22 @@
     "compatible": false
   },
   {
+    "description": "Detect removed enum ",
+    "original_schema": {
+      "type": "string",
+      "enum": [
+        "red"
+      ]
+    },
+    "update_schema": {
+      "type": "string"
+    },
+    "changes": [
+      "PRODUCT_TYPE_NARROWED #/"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect incompatible changes to enum schema",
     "original_schema": {
       "allOf": [
