@@ -1,0 +1,15 @@
+name: schema-registry
+lang: java
+lang_version: 11
+codeowners:
+  enable: true
+semaphore:
+  enable: true
+  pipeline_type: cp
+  nano_version: true
+  execution_time_limit: {"hours": 2}
+  downstream_projects: ["kafka-rest", "ksql",
+    "confluent-security-plugins", "kafka-connect-replicator",
+    "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
+git:
+  enable: true
