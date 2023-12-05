@@ -15,9 +15,11 @@
  */
 package io.confluent.kafka.schemaregistry.maven;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,13 +37,11 @@ public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
   public void createMojo() {
     this.mojo = new DownloadSchemaRegistryMojo();
     this.mojo.client(new MockSchemaRegistryClient());
+    this.mojo.outputDirectory = tempDirectory;
   }
 
   @Test
-  public void specificSubjects() throws IOException, RestClientException {
-    int version = 1;
-
-    List<File> files = new ArrayList<>();
+  public void specificSubjects() throws Exception {
     this.mojo.subjectPatterns.clear();
 
     for (int i = 0; i < 100; i++) {
@@ -51,16 +51,62 @@ public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
       Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
       this.mojo.client().register(keySubject, new AvroSchema(keySchema));
       this.mojo.client().register(valueSubject, new AvroSchema(valueSchema));
-      File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
-      File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
 
       if (i % 10 == 0) {
-        String subjectPattern = String.format("^TestSubject%03d-(Key|Value)$", i);
-        files.add(keySchemaFile);
-        files.add(valueSchemaFile);
+        String subjectPattern = String.format("^TestSubject%03d-(key|value)$", i);
         this.mojo.subjectPatterns.add(subjectPattern);
+      }
+    }
+
+    this.mojo.execute();
+
+    for (int i = 0; i < 100; i++) {
+      String keySubject = String.format("TestSubject%03d-key", i);
+      String valueSubject = String.format("TestSubject%03d-value", i);
+      File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
+      File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
+      if (i % 10 == 0) {
+        assertTrue(keySchemaFile.exists());
+        assertTrue(valueSchemaFile.exists());
+      } else {
+        assertFalse(keySchemaFile.exists());
+        assertFalse(valueSchemaFile.exists());
       }
     }
   }
 
+  @Test
+  public void specificContexts() throws Exception {
+    this.mojo.subjectPatterns.clear();
+
+    for (int i = 0; i < 100; i++) {
+      String keySubject = String.format(":.ctx:TestSubject%03d-key", i);
+      String valueSubject = String.format(":.ctx:TestSubject%03d-value", i);
+      Schema keySchema = Schema.create(Schema.Type.STRING);
+      Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+      this.mojo.client().register(keySubject, new AvroSchema(keySchema));
+      this.mojo.client().register(valueSubject, new AvroSchema(valueSchema));
+
+      if (i % 10 == 0) {
+        String subjectPattern = String.format("^:.ctx:TestSubject%03d-(key|value)$", i);
+        this.mojo.subjectPatterns.add(subjectPattern);
+      }
+    }
+
+    this.mojo.execute();
+
+    for (int i = 0; i < 100; i++) {
+      String keySubject = String.format("_x3A.ctx_x3ATestSubject%03d-key", i);
+      String valueSubject = String.format("_x3A.ctx_x3ATestSubject%03d-value", i);
+      File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
+      File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
+      if (i % 10 == 0) {
+        assertTrue(keySchemaFile.exists());
+        assertTrue(valueSchemaFile.exists());
+      } else {
+        assertFalse(keySchemaFile.exists());
+        assertFalse(valueSchemaFile.exists());
+      }
+    }
+  }
 }

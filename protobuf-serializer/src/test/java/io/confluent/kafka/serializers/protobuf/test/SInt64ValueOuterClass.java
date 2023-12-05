@@ -31,7 +31,7 @@ public final class SInt64ValueOuterClass {
    *
    * Protobuf type {@code SInt64Value}
    */
-  public  static final class SInt64Value extends
+  public static final class SInt64Value extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:SInt64Value)
       SInt64ValueOrBuilder {
@@ -116,6 +116,7 @@ public final class SInt64ValueOuterClass {
      * <code>sint64 value = 1;</code>
      * @return The value.
      */
+    @java.lang.Override
     public long getValue() {
       return value_;
     }
@@ -432,6 +433,7 @@ public final class SInt64ValueOuterClass {
        * <code>sint64 value = 1;</code>
        * @return The value.
        */
+      @java.lang.Override
       public long getValue() {
         return value_;
       }
