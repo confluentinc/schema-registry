@@ -70,7 +70,7 @@ public class RestApiSchemaTooLargeTest extends ClusterTestHarness {
   protected void injectProperties(Properties props) {
     super.injectProperties(props);
     // Lower the message max bytes to induce schema too large exception
-    props.setProperty("message.max.bytes", "600");
+    props.setProperty("message.max.bytes", "900");
   }
 }
 
