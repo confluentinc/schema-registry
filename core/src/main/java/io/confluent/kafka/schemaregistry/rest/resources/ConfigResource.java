@@ -235,6 +235,9 @@ public class ConfigResource {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
     }
+    if (request.isValidateFields() == null) {
+      request.setValidateFields(schemaRegistry.isDefaultValidateFields());
+    }
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
