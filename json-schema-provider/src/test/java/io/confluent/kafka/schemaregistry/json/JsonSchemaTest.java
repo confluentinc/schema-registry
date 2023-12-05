@@ -89,6 +89,44 @@ public class JsonSchemaTest {
       + "  \"additionalProperties\": false\n"
       + "}";
 
+  private static final String schema = "{\n"
+      + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+      + "  \"$id\": \"task.schema.json\",\n"
+      + "  \"title\": \"Task\",\n"
+      + "  \"description\": \"A task\",\n"
+      + "  \"type\": [\"null\", \"object\"],\n"
+      + "  \"properties\": {\n"
+      + "    \"parent\": {\n"
+      + "        \"$ref\": \"task.schema.json\"\n"
+      + "    },    \n"
+      + "    \"title\": {\n"
+      + "        \"description\": \"Task title\",\n"
+      + "        \"type\": \"string\"\n"
+      + "    }\n"
+      + "  }\n"
+      + "}";
+
+  @Test
+  public void testHasTopLevelField() {
+    ParsedSchema parsedSchema = new JsonSchema(schema);
+    assertTrue(parsedSchema.hasTopLevelField("parent"));
+    assertFalse(parsedSchema.hasTopLevelField("doesNotExist"));
+  }
+
+  @Test
+  public void testGetReservedFields() {
+    Metadata reservedFieldMetadata = new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "name, city"),
+        Collections.emptySet());
+    ParsedSchema parsedSchema = new JsonSchema(schema,
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        reservedFieldMetadata,
+        null,
+        null);
+    assertEquals(Set.of("name", "city"), parsedSchema.getReservedFields());
+  }
+
   @Test
   public void testPrimitiveTypesToJsonSchema() throws Exception {
     Object envelope = JsonSchemaUtils.toObject((String) null, createPrimitiveSchema("null"));

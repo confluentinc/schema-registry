@@ -31,6 +31,7 @@ import com.fasterxml.jackson.databind.deser.SettableBeanProperty;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BinaryNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
+import com.fasterxml.jackson.databind.node.JsonNodeType;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -98,6 +99,8 @@ public class JsonSchema implements ParsedSchema {
   public static final String TAGS = "confluent:tags";
 
   private static final String SCHEMA_KEYWORD = "$schema";
+
+  private static final String PROPERTIES_KEYWORD = "properties";
 
   private static final Object NONE_MARKER = new Object();
 
@@ -322,7 +325,11 @@ public class JsonSchema implements ParsedSchema {
 
   @Override
   public boolean hasTopLevelField(String field) {
-    return schemaObj != null && schemaObj.definesProperty(field);
+    if (jsonNode != null) {
+      JsonNode properties = jsonNode.get(PROPERTIES_KEYWORD);
+      return properties instanceof ObjectNode && properties.has(field);
+    }
+    return false;
   }
 
   @Override

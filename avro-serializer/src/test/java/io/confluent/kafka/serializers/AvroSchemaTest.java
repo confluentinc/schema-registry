@@ -255,6 +255,28 @@ public class AvroSchemaTest {
       + "}");
 
   @Test
+  public void testHasTopLevelField() {
+    ParsedSchema parsedSchema = new AvroSchema(recordSchema);
+    assertTrue(parsedSchema.hasTopLevelField("null"));
+    assertFalse(parsedSchema.hasTopLevelField("doesNotExist"));
+  }
+
+  @Test
+  public void testGetReservedFields() {
+    Metadata reservedFieldMetadata = new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "null, boolean"),
+        Collections.emptySet());
+    ParsedSchema parsedSchema = new AvroSchema(recordSchema.toString(),
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        reservedFieldMetadata,
+        null,
+        null,
+        false);
+    assertEquals(Set.of("null", "boolean"), parsedSchema.getReservedFields());
+  }
+
+  @Test
   public void testPrimitiveTypesToAvro() throws Exception {
     Object result = AvroSchemaUtils.toObject((JsonNode) null, createPrimitiveSchema("null"));
     assertNull(result);
@@ -303,7 +325,7 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testPrimitiveTypeToAvroSchemaMismatches() throws Exception {
+  public void testPrimitiveTypeToAvroSchemaMismatches() {
     expectConversionException(jsonTree("12"), createPrimitiveSchema("null"));
 
     expectConversionException(jsonTree("12"), createPrimitiveSchema("boolean"));
@@ -423,7 +445,7 @@ public class AvroSchemaTest {
 
   @Test
   public void testPrimitiveTypesToJson() throws Exception {
-    JsonNode result = objectMapper.readTree(AvroSchemaUtils.toJson((int) 0));
+    JsonNode result = objectMapper.readTree(AvroSchemaUtils.toJson(0));
     assertTrue(result.isNumber());
 
     result = objectMapper.readTree(AvroSchemaUtils.toJson((long) 0));
@@ -453,7 +475,7 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testUnsupportedJavaPrimitivesToJson() throws Exception {
+  public void testUnsupportedJavaPrimitivesToJson() {
     expectConversionException((byte) 0);
     expectConversionException((char) 0);
     expectConversionException((short) 0);
@@ -508,7 +530,7 @@ public class AvroSchemaTest {
 
   @Test
   public void testMapToJson() throws Exception {
-    Map<String, Object> data = new HashMap<String, Object>();
+    Map<String, Object> data = new HashMap<>();
     data.put("first", "one");
     data.put("second", "two");
     JsonNode result = objectMapper.readTree(AvroSchemaUtils.toJson(data));
@@ -532,7 +554,7 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testInvalidDefault() throws Exception {
+  public void testInvalidDefault() {
     AvroSchemaProvider provider = new AvroSchemaProvider();
     Map<String, String> configs = Collections.singletonMap(AvroSchemaProvider.AVRO_VALIDATE_DEFAULTS, "false");
     provider.configure(configs);
@@ -546,14 +568,14 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testInvalidDefaultDuringNormalize() throws Exception {
+  public void testInvalidDefaultDuringNormalize() {
     AvroSchemaProvider provider = new AvroSchemaProvider();
     Optional<ParsedSchema> schema = provider.parseSchema(recordInvalidDefaultSchema, Collections.emptyList(), true, true);
     assertFalse(schema.isPresent());
   }
 
   @Test
-  public void testMetaInequalities() throws Exception {
+  public void testMetaInequalities() {
     AvroSchema schema = new AvroSchema(recordSchema);
     AvroSchema schema1 = new AvroSchema(recordWithDocSchema);
     AvroSchema schema2 = new AvroSchema(recordWithAliasesSchema);
@@ -566,7 +588,7 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testNormalization() throws Exception {
+  public void testNormalization() {
     String schemaString = "{\"type\":\"record\","
         + "\"name\":\"myrecord\","
         + "\"doc\":\"hi\\\"there\","
@@ -586,7 +608,7 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testNormalizationPreservesMetadataForPrimitiveTypes() throws Exception {
+  public void testNormalizationPreservesMetadataForPrimitiveTypes() {
     String schemaString = "{"
         + "\"connect.name\": \"some.scope.Envelope\","
         + "\"fields\": ["
@@ -679,22 +701,22 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testArrayWithDefault() throws Exception {
+  public void testArrayWithDefault() {
     assertNotEquals(new AvroSchema(mapSchema), new AvroSchema(mapSchemaWithDefault));
   }
 
   @Test
-  public void testMapWithDefault() throws Exception {
+  public void testMapWithDefault() {
     assertNotEquals(new AvroSchema(arraySchema), new AvroSchema(arraySchemaWithDefault));
   }
 
   @Test
-  public void testUnionWithDefault() throws Exception {
+  public void testUnionWithDefault() {
     assertNotEquals(new AvroSchema(unionSchema), new AvroSchema(unionSchemaWithDefault));
   }
 
   @Test
-  public void testEnumWithDefault() throws Exception {
+  public void testEnumWithDefault() {
     assertNotEquals(new AvroSchema(enumSchema), new AvroSchema(enumSchemaWithDefault));
   }
 
@@ -1187,7 +1209,7 @@ public class AvroSchemaTest {
       AvroSchemaUtils.getSchema(obj);
       fail("Expected conversion of "
           + (
-          obj == null ? "null" : (obj.toString() + " (" + obj.getClass().getName() + ")"))
+          obj == null ? "null" : (obj + " (" + obj.getClass().getName() + ")"))
           + " to fail");
     } catch (Exception e) {
       // Expected

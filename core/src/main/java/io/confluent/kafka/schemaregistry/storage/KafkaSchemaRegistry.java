@@ -126,7 +126,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private static final String RESERVED_FIELD_REMOVED = "The new schema has reserved field %s "
       + "removed from its metadata which is present in the old schema's metadata.";
   private static final String FIELD_CONFLICTS_WITH_RESERVED_FIELD = "The new schema has field that"
-      + " conflicts with the reserved field %s which is missing in the old schema.";
+      + " conflicts with the reserved field %s.";
   private final SchemaRegistryConfig config;
   private final List<SchemaRegistryResourceExtension> resourceExtensions;
   private final Map<String, Object> props;
@@ -140,6 +140,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
   private final CompatibilityLevel defaultCompatibilityLevel;
+  private final boolean defaultValidateFields;
   private final Mode defaultMode;
   private final int kafkaStoreTimeoutMs;
   private final int initTimeout;
@@ -202,6 +203,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_MAX_RETRIES_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
+    this.defaultValidateFields =
+        config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_FIELDS_CONFIG);
     this.defaultMode = Mode.READWRITE;
     this.kafkaClusterId = kafkaClusterId(config);
     this.groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
@@ -1991,7 +1994,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Config getConfig(String subject)
       throws SchemaRegistryStoreException {
     try {
-      return lookupCache.config(subject, false, new Config(defaultCompatibilityLevel.name));
+      return lookupCache.config(subject,
+          false,
+          new Config(defaultCompatibilityLevel.name, defaultValidateFields));
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
@@ -2000,7 +2005,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Config getConfigInScope(String subject)
       throws SchemaRegistryStoreException {
     try {
-      return lookupCache.config(subject, true, new Config(defaultCompatibilityLevel.name));
+      return lookupCache.config(subject,
+          true,
+          new Config(defaultCompatibilityLevel.name, defaultValidateFields));
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
@@ -2039,9 +2046,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                                 ParsedSchema parsedSchema,
                                                 List<ParsedSchemaHolder> previousSchemas) {
     List<String> errorMessages = new ArrayList<>();
-    if (!previousSchemas.isEmpty()) {
-      errorMessages.addAll(validateReservedFields(parsedSchema,
-          previousSchemas.get(previousSchemas.size() - 1)));
+    ParsedSchemaHolder previousSchemaHolder = !previousSchemas.isEmpty()
+                                                  ? previousSchemas.get(previousSchemas.size() - 1)
+                                                  : null;
+    if (isSchemaFieldValidationEnabled(config)) {
+      errorMessages.addAll(validateReservedFields(parsedSchema, previousSchemaHolder));
     }
     CompatibilityLevel compatibility = CompatibilityLevel.forName(config.getCompatibilityLevel());
     String compatibilityGroup = config.getCompatibilityGroup();
@@ -2057,10 +2066,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     errorMessages.addAll(parsedSchema.isCompatible(compatibility, previousSchemas));
     if (!errorMessages.isEmpty()) {
       try {
-        errorMessages.add(String.format("{compatibility: '%s'}", compatibility));
+        errorMessages.add(String.format("{validateFields: '%b', compatibility: '%s'}",
+            config.isValidateFields(),
+            compatibility));
       } catch (UnsupportedOperationException e) {
         // Ignore and return errorMessages
-        log.warn("Failed to append 'compabitibility' to error messages");
+        log.warn("Failed to append 'compatibility' to error messages");
       }
     }
     return errorMessages;
@@ -2070,12 +2081,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                               ParsedSchemaHolder previousSchema) {
     List<String> errorMessages = new ArrayList<>();
     Set<String> updatedReservedFields = currentSchema.getReservedFields();
-    // check to ensure that original reserved fields are not removed in the updated version
-    Sets.SetView<String> removedFields =
-        Sets.difference(previousSchema.schema().getReservedFields(), updatedReservedFields);
-    if (!removedFields.isEmpty()) {
-      removedFields.forEach(field -> errorMessages.add(String.format(RESERVED_FIELD_REMOVED,
-                                                                     field)));
+    if (previousSchema != null) {
+      // check to ensure that original reserved fields are not removed in the updated version
+      Sets.SetView<String> removedFields =
+          Sets.difference(previousSchema.schema().getReservedFields(), updatedReservedFields);
+      if (!removedFields.isEmpty()) {
+        removedFields.forEach(field -> errorMessages.add(String.format(RESERVED_FIELD_REMOVED,
+            field)));
+      }
     }
     updatedReservedFields.forEach(reservedField -> {
       // check if updated fields conflict with reserved fields
@@ -2325,6 +2338,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                     + sslEndpointIdentificationAlgo
                     + " not supported");
   }
+
+  public boolean isDefaultValidateFields() {
+    return defaultValidateFields;
+  }
+
 
   private static boolean isSchemaFieldValidationEnabled(Config config) {
     return config.isValidateFields() != null ? config.isValidateFields() : false;
