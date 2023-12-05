@@ -26,6 +26,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -1042,7 +1043,7 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       TestUtils.registerAndVerifySchema(restApp.restClient,
           TestUtils.getRandomCanonicalAvroString(1).get(0),
-          List.of(new SchemaReference("bad", "bad", 100)), 1, subject1);
+          ImmutableList.of(new SchemaReference("bad", "bad", 100)), 1, subject1);
       fail("Registering bad reference should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
     } catch (RestClientException rce) {
       assertEquals("Invalid schema",
