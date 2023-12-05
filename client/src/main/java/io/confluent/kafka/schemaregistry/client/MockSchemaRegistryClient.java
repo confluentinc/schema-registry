@@ -88,7 +88,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     modes = new ConcurrentHashMap<>();
     ids = new ConcurrentHashMap<>();
     this.providers = providers != null && !providers.isEmpty()
-                     ? providers.stream().collect(Collectors.toMap(SchemaProvider::schemaType, p -> p))
+                     ? providers.stream()
+                           .collect(Collectors.toMap(SchemaProvider::schemaType, p -> p))
                      : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
     Map<String, Object> schemaProviderConfigs = new HashMap<>();
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
