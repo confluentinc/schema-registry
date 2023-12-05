@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingEntity;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JavaType;
@@ -29,6 +31,7 @@ import com.fasterxml.jackson.databind.deser.SettableBeanProperty;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BinaryNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
+import com.fasterxml.jackson.databind.node.JsonNodeType;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -36,22 +39,35 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.fasterxml.jackson.databind.ser.PropertyWriter;
 import com.google.common.collect.Lists;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.json.diff.Difference;
+import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
+import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
-import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
@@ -74,23 +90,6 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.net.URI;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
-import java.util.ArrayList;
-
-import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import io.confluent.kafka.schemaregistry.json.diff.Difference;
-import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
-import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
-
-import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingEntity;
-
 public class JsonSchema implements ParsedSchema {
 
   private static final Logger log = LoggerFactory.getLogger(JsonSchema.class);
@@ -100,6 +99,8 @@ public class JsonSchema implements ParsedSchema {
   public static final String TAGS = "confluent:tags";
 
   private static final String SCHEMA_KEYWORD = "$schema";
+
+  private static final String PROPERTIES_KEYWORD = "properties";
 
   private static final Object NONE_MARKER = new Object();
 
@@ -323,6 +324,15 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
+  public boolean hasTopLevelField(String field) {
+    if (jsonNode != null) {
+      JsonNode properties = jsonNode.get(PROPERTIES_KEYWORD);
+      return properties instanceof ObjectNode && properties.has(field);
+    }
+    return false;
+  }
+
+  @Override
   public String schemaType() {
     return TYPE;
   }
@@ -470,10 +480,7 @@ public class JsonSchema implements ParsedSchema {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
     final List<Difference> differences =
-            SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(),
-                    rawSchema(),
-                    previousSchema.metadata(),
-                    metadata());
+            SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
     final List<Difference> incompatibleDiffs = differences.stream()
         .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
         .collect(Collectors.toList());
@@ -519,7 +526,7 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
-  public Object fromJson(JsonNode json) throws IOException {
+  public Object fromJson(JsonNode json) {
     return json;
   }
 
@@ -586,22 +593,21 @@ public class JsonSchema implements ParsedSchema {
       Schema subschema = ((ArraySchema)schema).getAllItemSchema();
       List<Object> result = new ArrayList<>();
       int i = 0;
-      for (Iterator<? extends Object> it = ((Iterable<?>) message).iterator(); it.hasNext();) {
-        result.add(toTransformedMessage(
-            ctx, subschema, path + "[" + i + "]", it.next(), transform));
+      for (Object o : (Iterable<?>) message) {
+        result.add(toTransformedMessage(ctx, subschema, path + "[" + i + "]", o, transform));
         i++;
       }
       return result;
     } else if (schema instanceof ObjectSchema) {
       if (message == null) {
-        return message;
+        return null;
       }
       Map<String, Schema> propertySchemas = ((ObjectSchema) schema).getPropertySchemas();
       for (Map.Entry<String, Schema> entry : propertySchemas.entrySet()) {
         String propertyName = entry.getKey();
         Schema propertySchema = entry.getValue();
         String fullName = path + "." + propertyName;
-        try (FieldContext fc = ctx.enterField(ctx, message, fullName, propertyName,
+        try (FieldContext ignored = ctx.enterField(ctx, message, fullName, propertyName,
             getType(propertySchema), getInlineTags(propertySchema))) {
           PropertyAccessor propertyAccessor =
               getPropertyAccessor(ctx, message, propertyName);
@@ -613,7 +619,7 @@ public class JsonSchema implements ParsedSchema {
       return message;
     } else if (schema instanceof ReferenceSchema) {
       if (message == null) {
-        return message;
+        return null;
       }
       return toTransformedMessage(ctx, ((ReferenceSchema)schema).getReferredSchema(),
           path, message, transform);
@@ -678,7 +684,7 @@ public class JsonSchema implements ParsedSchema {
 
   private static boolean isMap(final ObjectSchema objectSchema) {
     return objectSchema.getPropertySchemas() == null
-        || objectSchema.getPropertySchemas().size() == 0;
+        || objectSchema.getPropertySchemas().isEmpty();
   }
 
   @Override
@@ -836,7 +842,6 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  @SuppressWarnings("unchecked")
   private static BeanPropertyWriter getBeanGetter(
       RuleContext ctx, Object message, String propertyName) {
     Map<String, BeanPropertyWriter> props = beanGetters.computeIfAbsent(
@@ -862,7 +867,6 @@ public class JsonSchema implements ParsedSchema {
     return props.get(propertyName);
   }
 
-  @SuppressWarnings("unchecked")
   private static SettableBeanProperty getBeanSetter(
       RuleContext ctx, Object message, String propertyName) {
     Map<String, SettableBeanProperty> props = beanSetters.computeIfAbsent(
