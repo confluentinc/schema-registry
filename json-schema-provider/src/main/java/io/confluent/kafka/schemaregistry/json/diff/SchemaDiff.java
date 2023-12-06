@@ -173,6 +173,16 @@ public class SchemaDiff {
           ctx.addDifferences(subctx.getDifferences());
           return;
         }
+      } else if (combinedSchema.getCriterion() == CombinedSchema.ALL_CRITERION) {
+        for (Schema subschema : combinedSchema.getSubschemas()) {
+          final Context subctx = ctx.getSubcontext();
+          compare(subctx, subschema, update);
+          if (subctx.isCompatible()) {
+            ctx.addDifferences(subctx.getDifferences());
+            ctx.addDifference(Type.PRODUCT_TYPE_NARROWED);
+            return;
+          }
+        }
       }
     }
 
