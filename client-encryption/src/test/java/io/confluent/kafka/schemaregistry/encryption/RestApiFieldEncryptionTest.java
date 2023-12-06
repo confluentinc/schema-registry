@@ -179,6 +179,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     registerAndVerifySchema(schemaRegistry, ruleSchema, 2, subject);
 
     fakeTicker.advance(61, TimeUnit.SECONDS);
+    dekRegistry.reset();
     bytes = avroSerializer.serialize(topic, headers, avroRecord);
     record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     assertEquals("testUser", record.get("name").toString());
@@ -245,6 +246,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     registerAndVerifySchema(schemaRegistry, ruleSchema, 2, subject);
 
     fakeTicker.advance(61, TimeUnit.SECONDS);
+    dekRegistry.reset();
     bytes = avroSerializer.serialize(topic, headers, avroRecord);
     record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     assertEquals("testUser", record.get("name").toString());
