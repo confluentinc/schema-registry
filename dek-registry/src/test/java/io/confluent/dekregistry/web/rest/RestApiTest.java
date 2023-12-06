@@ -254,6 +254,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Advance ticker
     fakeTicker.advance(61, TimeUnit.SECONDS);
+    client.reset();
 
     // Dek now has decrypted key material
     Dek dek2 = new Dek(kekName, subject, 1, algorithm, encryptedDekStr, rawDekStr, null, null);
@@ -444,6 +445,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Advance ticker
     fakeTicker.advance(61, TimeUnit.SECONDS);
+    client.reset();
 
     // Dek still does not have decrypted key material because kms type is unknown
     Dek dek2 = new Dek(kekName, subject, 1, algorithm, encryptedDekStr, null, null, null);
