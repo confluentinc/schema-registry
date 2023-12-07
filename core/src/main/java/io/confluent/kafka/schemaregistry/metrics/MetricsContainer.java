@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
+import io.confluent.rest.metrics.RestMetricsContext;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -41,6 +42,11 @@ import java.util.concurrent.TimeUnit;
 public class MetricsContainer {
 
   public static final String JMX_PREFIX = "kafka.schema.registry";
+
+  public static final String RESOURCE_LABEL_PREFIX = "resource.";
+
+  public static final String RESOURCE_LABEL_KAFKA_CLUSTER_ID =
+          RESOURCE_LABEL_PREFIX + "kafka.cluster.id";
 
   public static final String METRIC_NAME_MASTER_SLAVE_ROLE = "master-slave-role";
   public static final String METRIC_NAME_NODE_COUNT = "node-count";
@@ -92,7 +98,7 @@ public class MetricsContainer {
 
     reporters.add(getJmxReporter(config));
 
-    metricsContext = config.getMetricsContext();
+    metricsContext = buildMetricsContext(config, kafkaClusterId);
 
     MetricConfig metricConfig =
             new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -223,5 +229,12 @@ public class MetricsContainer {
 
   public SchemaRegistryMetric getLeaderInitializationLatencyMetric() {
     return leaderInitializationLatency;
+  }
+
+  private static MetricsContext buildMetricsContext(
+          SchemaRegistryConfig config, String kafkaClusterId) {
+    RestMetricsContext context = config.getMetricsContext();
+    context.setLabel(RESOURCE_LABEL_KAFKA_CLUSTER_ID, kafkaClusterId);
+    return context;
   }
 }
