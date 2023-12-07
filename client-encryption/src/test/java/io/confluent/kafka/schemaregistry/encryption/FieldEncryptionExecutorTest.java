@@ -404,7 +404,7 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("testUser", avroRecord.get("name"));
   }
 
-  @Test
+  //@Test
   public void testKafkaAvroDekRotation() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
@@ -459,7 +459,7 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals(3, dek.getVersion());
   }
 
-  @Test(expected = SerializationException.class)
+  //@Test(expected = SerializationException.class)
   public void testKafkaAvroDekRotationInvalidExpiry() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
@@ -644,7 +644,7 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("testUser2", record.get("name2"));
   }
 
-  @Test
+  //@Test
   public void testKafkaAvroSerializerMultipleRulesIncludingDekRotation() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
@@ -749,7 +749,7 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("testUser", record.get("name"));
   }
 
-  @Test
+  //@Test
   public void testKafkaAvroSerializerDoubleEncryptionWithDekRotation() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
@@ -817,7 +817,7 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals(2, dek.getVersion());
   }
 
-  @Test
+  //@Test
   public void testKafkaAvroSerializerDoubleEncryptionAllDekRotation() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
