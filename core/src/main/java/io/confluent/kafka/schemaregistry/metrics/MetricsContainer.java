@@ -19,11 +19,15 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
+import org.apache.kafka.clients.CommonClientConfigs;
+import io.confluent.rest.metrics.RestMetricsContext;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -41,6 +45,11 @@ import java.util.concurrent.TimeUnit;
 public class MetricsContainer {
 
   public static final String JMX_PREFIX = "kafka.schema.registry";
+
+  public static final String RESOURCE_LABEL_PREFIX = "resource.";
+
+  public static final String RESOURCE_LABEL_KAFKA_CLUSTER_ID =
+          RESOURCE_LABEL_PREFIX + "kafka.cluster.id";
 
   public static final String METRIC_NAME_MASTER_SLAVE_ROLE = "master-slave-role";
   public static final String METRIC_NAME_NODE_COUNT = "node-count";
@@ -92,7 +101,7 @@ public class MetricsContainer {
 
     reporters.add(getJmxReporter(config));
 
-    metricsContext = config.getMetricsContext();
+    metricsContext = buildMetricsContext(config, kafkaClusterId);
 
     MetricConfig metricConfig =
             new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -223,5 +232,14 @@ public class MetricsContainer {
 
   public SchemaRegistryMetric getLeaderInitializationLatencyMetric() {
     return leaderInitializationLatency;
+  }
+
+  private static MetricsContext buildMetricsContext(
+          SchemaRegistryConfig config, String kafkaClusterId) {
+
+    Map<String, String> metadata = config.getMetricsContext().contextLabels();
+    metadata.put(RESOURCE_LABEL_KAFKA_CLUSTER_ID, kafkaClusterId);
+
+    return new KafkaMetricsContext(JMX_PREFIX, metadata);
   }
 }
