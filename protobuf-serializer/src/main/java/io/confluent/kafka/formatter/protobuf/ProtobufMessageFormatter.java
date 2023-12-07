@@ -96,9 +96,9 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
   }
 
   @Override
-  protected void writeTo(String topic, Headers headers, byte[] data, PrintStream output)
-      throws IOException {
-    Message object = deserializer.deserialize(topic, headers, data);
+  protected void writeTo(String topic, Boolean isKey, Headers headers,
+      byte[] data, PrintStream output) throws IOException {
+    Message object = deserializer.deserialize(topic, isKey, headers, data);
     try {
       JsonFormat.Printer printer = JsonFormat.printer()
               .includingDefaultValueFields()
@@ -144,7 +144,7 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
     }
 
     @Override
-    public Message deserialize(String topic, Headers headers, byte[] payload)
+    public Message deserialize(String topic, Boolean isKey, Headers headers, byte[] payload)
         throws SerializationException {
       return (Message) super.deserialize(false, topic, isKey, headers, payload);
     }
