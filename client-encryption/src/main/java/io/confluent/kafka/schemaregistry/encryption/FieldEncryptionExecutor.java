@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.time.Clock;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Arrays;
 import java.util.Base64;
@@ -53,6 +54,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.config.ConfigException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * In envelope encryption, a user generates a data encryption key (DEK) locally, encrypts data with
@@ -62,6 +65,8 @@ import org.apache.kafka.common.config.ConfigException;
  * the data.
  */
 public class FieldEncryptionExecutor extends FieldRuleExecutor {
+
+  private static final Logger log = LoggerFactory.getLogger(FieldEncryptionExecutor.class);
 
   public static final String TYPE = "ENCRYPT";
 
@@ -75,7 +80,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
   public static final byte[] EMPTY_AAD = new byte[0];
   public static final String CACHE_EXPIRY_SECS = "cache.expiry.secs";
   public static final String CACHE_SIZE = "cache.size";
-  public static final String TICKER = "ticker";
+  public static final String CLOCK = "clock";
 
   protected static final int LATEST_VERSION = -1;
   protected static final byte MAGIC_BYTE = 0x0;
@@ -86,6 +91,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
   private Map<String, ?> configs;
   private int cacheExpirySecs = -1;
   private int cacheSize = 10000;
+  private Clock clock = Clock.systemUTC();
   private DekRegistryClient client;
 
   public FieldEncryptionExecutor() {
@@ -115,6 +121,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       } catch (NumberFormatException e) {
         throw new ConfigException("Cannot parse " + CACHE_SIZE);
       }
+    }
+    Object clock = configs.get(CLOCK);
+    if (clock instanceof Clock) {
+      this.clock = (Clock) clock;
     }
     Object url = configs.get(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
@@ -368,6 +378,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       Aead aead = null;
       DekInfo dek = retrieveDekFromRegistry(dekId);
       boolean isExpired = isExpired(ctx, dek);
+      if (isExpired) {
+        log.info("Dek with ts " + dek.getTimestamp()
+            + " expired after " + dekExpiryDays + " day(s)");
+      }
       if (dek == null || isExpired) {
         if (isRead) {
           throw new RuleException("No dek found for " + kekName + " during consume");
@@ -404,11 +418,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
     }
 
     private boolean isExpired(RuleContext ctx, DekInfo dek) {
-      long now = System.currentTimeMillis();
       return ctx.ruleMode() != RuleMode.READ
           && dekExpiryDays > 0
           && dek != null
-          && (now - dek.getTimestamp()) / MILLIS_IN_DAY >= dekExpiryDays;
+          && (clock.millis() - dek.getTimestamp()) / MILLIS_IN_DAY >= dekExpiryDays;
     }
 
     private DekInfo retrieveDekFromRegistry(DekId key)
