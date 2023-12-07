@@ -33,7 +33,8 @@ public interface SchemaMessageDeserializer<T> extends Closeable {
 
   Object deserializeKey(String topic, Headers headers, byte[] payload);
 
-  T deserialize(String topic, Headers headers, byte[] payload) throws SerializationException;
+  T deserialize(String topic, Boolean isKey, Headers headers, byte[] payload)
+      throws SerializationException;
 
   SchemaRegistryClient getSchemaRegistryClient();
 
