@@ -242,7 +242,8 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
                                       : nullLiteral);
         } else {
           if (consumerRecord.key() != null) {
-            writeTo(consumerRecord.topic(), consumerRecord.headers(), consumerRecord.key(), output);
+            writeTo(consumerRecord.topic(), true, consumerRecord.headers(),
+                consumerRecord.key(), output);
           } else {
             output.write(nullLiteral);
           }
@@ -263,7 +264,8 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     }
     try {
       if (consumerRecord.value() != null) {
-        writeTo(consumerRecord.topic(), consumerRecord.headers(), consumerRecord.value(), output);
+        writeTo(consumerRecord.topic(), false, consumerRecord.headers(),
+            consumerRecord.value(), output);
       } else {
         output.write(nullLiteral);
       }
@@ -278,8 +280,8 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     }
   }
 
-  protected abstract void writeTo(String topic, Headers headers, byte[] data, PrintStream output)
-      throws IOException;
+  protected abstract void writeTo(String topic, Boolean isKey, Headers headers,
+      byte[] data, PrintStream output) throws IOException;
 
   @Override
   public void close() {
