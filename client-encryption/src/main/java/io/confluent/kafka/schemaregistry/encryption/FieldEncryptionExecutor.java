@@ -410,10 +410,11 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
     }
 
     private boolean isExpired(RuleContext ctx, DekInfo dek) {
+      long now = System.currentTimeMillis();
       return ctx.ruleMode() != RuleMode.READ
           && dekExpiryDays > 0
           && dek != null
-          && (ticker.read() - dek.getTimestamp()) / MILLIS_IN_DAY >= dekExpiryDays;
+          && (now - dek.getTimestamp()) / MILLIS_IN_DAY >= dekExpiryDays;
     }
 
     private DekInfo retrieveDekFromRegistry(DekId key)
