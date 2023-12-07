@@ -16,7 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
-import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.TICKER;
+import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.CLOCK;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 import static org.junit.Assert.assertEquals;
@@ -33,11 +33,9 @@ import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
-import com.google.common.testing.FakeTicker;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
@@ -64,6 +62,7 @@ import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.PiiBytes;
 import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.WidgetBytes;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
+import io.confluent.kafka.schemaregistry.testutil.FakeClock;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -128,14 +127,14 @@ public abstract class FieldEncryptionExecutorTest {
   private final KafkaAvroSerializer goodDekSerializer;
   private final KafkaAvroSerializer badDekSerializer;
   private final String topic;
-  private final FakeTicker fakeTicker = new FakeTicker();
+  private final FakeClock fakeClock = new FakeClock();
 
   public FieldEncryptionExecutorTest() throws Exception {
     topic = "test";
     List<String> ruleNames = ImmutableList.of("rule1", "rule2");
     fieldEncryptionProps = getFieldEncryptionProperties(ruleNames, FieldEncryptionExecutor.class);
     Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties("mock://");
-    clientProps.put(TICKER, fakeTicker);
+    clientProps.put(CLOCK, fakeClock);
     schemaRegistry = SchemaRegistryClientFactory.newClient(Collections.singletonList(
         "mock://"),
         1000,
@@ -431,7 +430,7 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals(1, dek.getVersion());
 
     // Advance 2 days
-    fakeTicker.advance(Duration.of(2, ChronoUnit.DAYS));
+    fakeClock.advance(2, ChronoUnit.DAYS);
 
     cryptor = addSpyToCryptor(avroSerializer);
     bytes = avroSerializer.serialize(topic, headers, avroRecord);
@@ -445,7 +444,7 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals(2, dek.getVersion());
 
     // Advance 2 days
-    fakeTicker.advance(Duration.of(2, ChronoUnit.DAYS));
+    fakeClock.advance(2, ChronoUnit.DAYS);
 
     cryptor = addSpyToCryptor(avroSerializer);
     bytes = avroSerializer.serialize(topic, headers, avroRecord);
@@ -685,7 +684,7 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("testUser2", record.get("name2"));
 
     // Advance 2 days
-    fakeTicker.advance(Duration.of(2, ChronoUnit.DAYS));
+    fakeClock.advance(2, ChronoUnit.DAYS);
 
     expectedEncryptions += 1;
     cryptor = addSpyToCryptor(avroSerializer, "rule1");
@@ -789,7 +788,7 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("testUser", record.get("name"));
 
     // Advance 2 days
-    fakeTicker.advance(Duration.of(2, ChronoUnit.DAYS));
+    fakeClock.advance(2, ChronoUnit.DAYS);
 
     expectedEncryptions += 1;
     headers = new RecordHeaders();
@@ -857,7 +856,7 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("testUser", record.get("name"));
 
     // Advance 2 days
-    fakeTicker.advance(Duration.of(3, ChronoUnit.DAYS));
+    fakeClock.advance(3, ChronoUnit.DAYS);
 
     expectedEncryptions += 1;
     headers = new RecordHeaders();
