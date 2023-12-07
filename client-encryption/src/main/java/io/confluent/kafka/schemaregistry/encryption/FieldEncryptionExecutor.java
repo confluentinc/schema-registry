@@ -54,6 +54,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.config.ConfigException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * In envelope encryption, a user generates a data encryption key (DEK) locally, encrypts data with
@@ -63,6 +65,8 @@ import org.apache.kafka.common.config.ConfigException;
  * the data.
  */
 public class FieldEncryptionExecutor extends FieldRuleExecutor {
+
+  private static final Logger log = LoggerFactory.getLogger(FieldEncryptionExecutor.class);
 
   public static final String TYPE = "ENCRYPT";
 
@@ -374,6 +378,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       Aead aead = null;
       DekInfo dek = retrieveDekFromRegistry(dekId);
       boolean isExpired = isExpired(ctx, dek);
+      if (isExpired) {
+        log.info("Dek with ts " + dek.getTimestamp()
+            + " expired after " + dekExpiryDays + " day(s)");
+      }
       if (dek == null || isExpired) {
         if (isRead) {
           throw new RuleException("No dek found for " + kekName + " during consume");
