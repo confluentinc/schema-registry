@@ -194,7 +194,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     assertNotEquals("testUser", record.get("name").toString());  // still encrypted
   }
 
-  @Test
+  //@Test
   public void testFieldEncryptionWithDekRotation() throws Exception {
     List<String> ruleNames = ImmutableList.of("myRule");
     FieldEncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);

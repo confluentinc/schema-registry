@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
-import com.google.common.base.Ticker;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.proto.AesGcmKey;
@@ -87,7 +86,6 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
   private Map<String, ?> configs;
   private int cacheExpirySecs = -1;
   private int cacheSize = 10000;
-  private Ticker ticker = Ticker.systemTicker();
   private DekRegistryClient client;
 
   public FieldEncryptionExecutor() {
@@ -117,10 +115,6 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       } catch (NumberFormatException e) {
         throw new ConfigException("Cannot parse " + CACHE_SIZE);
       }
-    }
-    Object ticker = configs.get(TICKER);
-    if (ticker instanceof Ticker) {
-      this.ticker = (Ticker) ticker;
     }
     Object url = configs.get(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
@@ -410,10 +404,11 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
     }
 
     private boolean isExpired(RuleContext ctx, DekInfo dek) {
+      long now = System.currentTimeMillis();
       return ctx.ruleMode() != RuleMode.READ
           && dekExpiryDays > 0
           && dek != null
-          && (ticker.read() - dek.getTimestamp()) / MILLIS_IN_DAY >= dekExpiryDays;
+          && (now - dek.getTimestamp()) / MILLIS_IN_DAY >= dekExpiryDays;
     }
 
     private DekInfo retrieveDekFromRegistry(DekId key)
