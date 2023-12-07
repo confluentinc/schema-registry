@@ -86,7 +86,7 @@ public class MetricsContainer {
 
   private final MetricsContext metricsContext;
 
-  public MetricsContainer(SchemaRegistryConfig config, String kafkaClusterId) {
+  public MetricsContainer(SchemaRegistryConfig config) {
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
 
