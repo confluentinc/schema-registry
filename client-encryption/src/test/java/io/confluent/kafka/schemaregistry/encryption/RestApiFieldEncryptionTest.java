@@ -14,6 +14,7 @@
  */
 package io.confluent.kafka.schemaregistry.encryption;
 
+import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.CLOCK;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
@@ -44,11 +45,13 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
+import io.confluent.kafka.schemaregistry.testutil.FakeClock;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -194,7 +197,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     assertNotEquals("testUser", record.get("name").toString());  // still encrypted
   }
 
-  //@Test
+  @Test
   public void testFieldEncryptionWithDekRotation() throws Exception {
     List<String> ruleNames = ImmutableList.of("myRule");
     FieldEncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
@@ -211,6 +214,8 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties(
         restApp.restClient.getBaseUrls().toString());
     FakeTicker fakeTicker = new FakeTicker();
+    FakeClock fakeClock = new FakeClock();
+    clientProps.put(CLOCK, fakeClock);
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(
         restApp.restClient,
         10,
@@ -249,12 +254,12 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     assertEquals("testUser", record.get("name").toString());
 
-    fakeTicker.advance(2, TimeUnit.DAYS);
+    fakeClock.advance(2, ChronoUnit.DAYS);
     bytes = avroSerializer.serialize(topic, headers, avroRecord);
     record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     assertEquals("testUser", record.get("name").toString());
 
-    fakeTicker.advance(2, TimeUnit.DAYS);
+    fakeClock.advance(2, ChronoUnit.DAYS);
     bytes = avroSerializer.serialize(topic, headers, avroRecord);
     record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     assertEquals("testUser", record.get("name").toString());
