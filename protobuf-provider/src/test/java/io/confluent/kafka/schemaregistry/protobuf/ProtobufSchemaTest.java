@@ -220,7 +220,7 @@ public class ProtobufSchemaTest {
         null,
         null,
         null);
-    assertEquals(Set.of("name", "city"), parsedSchema.getReservedFields());
+    assertEquals(ImmutableSet.of("name", "city"), parsedSchema.getReservedFields());
   }
 
   @Test

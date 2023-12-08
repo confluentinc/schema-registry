@@ -1754,7 +1754,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static ProtobufMeta findMeta(String name, Map<String, OptionElement> options) {
     Optional<OptionElement> meta = findOption(name, options);
-    if (meta.isEmpty()) {
+    if (!meta.isPresent()) {
       return null;
     }
     return new ProtobufMeta(findDoc(meta), findParams(meta), findTags(meta));

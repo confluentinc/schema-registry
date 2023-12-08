@@ -273,7 +273,7 @@ public class AvroSchemaTest {
         null,
         null,
         false);
-    assertEquals(Set.of("null", "boolean"), parsedSchema.getReservedFields());
+    assertEquals(ImmutableSet.of("null", "boolean"), parsedSchema.getReservedFields());
   }
 
   @Test
