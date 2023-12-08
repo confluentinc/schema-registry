@@ -19,12 +19,14 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
-import io.confluent.rest.metrics.RestMetricsContext;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -233,8 +235,19 @@ public class MetricsContainer {
 
   private static MetricsContext buildMetricsContext(
           SchemaRegistryConfig config, String kafkaClusterId) {
-    RestMetricsContext context = config.getMetricsContext();
-    context.setLabel(RESOURCE_LABEL_KAFKA_CLUSTER_ID, kafkaClusterId);
-    return context;
+
+    String srGroupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
+
+    Map<String, Object> metadata =
+            config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX);
+
+    metadata.put(RESOURCE_LABEL_KAFKA_CLUSTER_ID, kafkaClusterId);
+    metadata.put(config.RESOURCE_LABEL_CLUSTER_ID, srGroupId);
+    metadata.put(config.RESOURCE_LABEL_GROUP_ID, srGroupId);
+    metadata.put(config.RESOURCE_LABEL_TYPE,  "schema_registry");
+    metadata.put(config.RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
+    metadata.put(config.RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+
+    return new KafkaMetricsContext(JMX_PREFIX, metadata);
   }
 }
