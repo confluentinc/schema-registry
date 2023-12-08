@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
 import com.google.crypto.tink.KmsClient;
-import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
 import io.github.jopenlibs.vault.api.Logical;
 import java.security.GeneralSecurityException;
@@ -46,17 +45,17 @@ public class HcVaultKmsDriver implements KmsDriver {
   }
 
   @Override
-  public KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
+  public KmsClient newKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
     Logical testClient = (Logical) getTestClient(configs);
     Optional<String> creds = testClient != null
         ? Optional.empty()
         : Optional.ofNullable(getToken(configs));
     Optional<String> namespace = Optional.ofNullable(getNamespace(configs));
-    return registerWithHcVaultKms(kekUrl, creds, namespace, testClient);
+    return newKmsClientWithHcVaultKms(kekUrl, creds, namespace, testClient);
   }
 
-  public static KmsClient registerWithHcVaultKms(
+  protected static KmsClient newKmsClientWithHcVaultKms(
       Optional<String> keyUri, Optional<String> credentials,
       Optional<String> namespace, Logical vault)
       throws GeneralSecurityException {
@@ -74,7 +73,6 @@ public class HcVaultKmsDriver implements KmsDriver {
     if (vault != null) {
       client.withVault(vault);
     }
-    KmsClients.add(client);
     return client;
   }
 }

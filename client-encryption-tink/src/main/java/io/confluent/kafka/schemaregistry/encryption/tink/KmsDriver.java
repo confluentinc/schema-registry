@@ -30,6 +30,9 @@ public interface KmsDriver {
 
   String getKeyUrlPrefix();
 
+  KmsClient newKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
+      throws GeneralSecurityException;
+
   /**
    * @return true if this client does support {@code keyUri}
    */
@@ -41,8 +44,12 @@ public interface KmsDriver {
     return KmsClients.get(kekUrl);
   }
 
-  KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
-      throws GeneralSecurityException;
+  default KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
+      throws GeneralSecurityException {
+    KmsClient client = newKmsClient(configs, kekUrl);
+    KmsClients.add(client);
+    return client;
+  }
 
   default Object getTestClient(Map<String, ?> configs) {
     return configs.get(TEST_CLIENT);

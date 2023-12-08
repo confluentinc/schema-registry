@@ -21,7 +21,6 @@ import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.google.crypto.tink.KmsClient;
-import com.google.crypto.tink.KmsClients;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
 import java.security.GeneralSecurityException;
 import java.util.Map;
@@ -57,16 +56,16 @@ public class AzureKmsDriver implements KmsDriver {
   }
 
   @Override
-  public KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
+  public KmsClient newKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
     CryptographyClient testClient = (CryptographyClient) getTestClient(configs);
     Optional<TokenCredential> creds = testClient != null
         ? Optional.empty()
         : Optional.of(getCredentials(configs));
-    return registerWithAzureKms(kekUrl, creds, testClient);
+    return newKmsClientWithAzureKms(kekUrl, creds, testClient);
   }
 
-  public static KmsClient registerWithAzureKms(
+  protected static KmsClient newKmsClientWithAzureKms(
       Optional<String> keyUri, Optional<TokenCredential> credentials,
       CryptographyClient cryptographyClient)
       throws GeneralSecurityException {
@@ -84,7 +83,6 @@ public class AzureKmsDriver implements KmsDriver {
     if (cryptographyClient != null) {
       client.withCryptographyClient(cryptographyClient);
     }
-    KmsClients.add(client);
     return client;
   }
 }

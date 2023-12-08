@@ -19,7 +19,6 @@ package io.confluent.kafka.schemaregistry.encryption.gcp;
 import com.google.api.services.cloudkms.v1.CloudKMS;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.crypto.tink.KmsClient;
-import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.integration.gcpkms.GcpKmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
 import java.io.ByteArrayInputStream;
@@ -73,16 +72,16 @@ public class GcpKmsDriver implements KmsDriver {
   }
 
   @Override
-  public KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
+  public KmsClient newKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
     CloudKMS testClient = (CloudKMS) getTestClient(configs);
     Optional<GoogleCredentials> creds = testClient != null
         ? Optional.empty()
         : Optional.ofNullable(getCredentials(configs));
-    return registerWithCloudKms(kekUrl, creds, testClient);
+    return newKmsClientWithCloudKms(kekUrl, creds, testClient);
   }
 
-  public static KmsClient registerWithCloudKms(
+  protected static KmsClient newKmsClientWithCloudKms(
       Optional<String> keyUri, Optional<GoogleCredentials> credentials, CloudKMS cloudKms)
       throws GeneralSecurityException {
     GcpKmsClient client;
@@ -100,7 +99,6 @@ public class GcpKmsDriver implements KmsDriver {
     } else {
       setCloudKms(client, cloudKms);
     }
-    KmsClients.add(client);
     return client;
   }
 

@@ -21,7 +21,6 @@ import com.azure.core.http.HttpPipeline;
 import com.azure.core.http.HttpPipelineBuilder;
 import com.azure.core.http.policy.ExponentialBackoff;
 import com.azure.core.http.policy.RetryPolicy;
-import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder;
@@ -29,12 +28,10 @@ import com.azure.security.keyvault.keys.cryptography.models.EncryptionAlgorithm;
 import com.azure.security.keyvault.keys.implementation.KeyVaultCredentialPolicy;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KmsClient;
-import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.subtle.Validators;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.Locale;
-import java.util.Optional;
 
 /**
  * An implementation of {@link KmsClient} for <a
@@ -170,60 +167,5 @@ public final class AzureKmsClient implements KmsClient {
           .buildClient();
     }
     return new AzureKmsAead(client, this.algorithm);
-  }
-
-  /**
-   * Creates and registers a {@link #AzureKmsClient} with the Tink runtime.
-   *
-   * <p></p>Utilize {@link #AzureKmsClient(String)} to create client. loads credentials using
-   * {@link DefaultAzureCredentialBuilder} which expects credentials to provided as environment
-   * variables.
-   *
-   * @throws GeneralSecurityException if keyUrl is missing
-   */
-  public static void register(Optional<String> keyUri) throws GeneralSecurityException {
-    AzureKmsClient client;
-    if (keyUri.isPresent()) {
-      client = new AzureKmsClient(keyUri.get());
-    } else {
-      throw new GeneralSecurityException("key url missing while registering KmsClient");
-    }
-    client.withDefaultCredentials();
-    KmsClients.add(client);
-  }
-
-  /**
-   * Creates and registers a {@link #AzureKmsClient} with the Tink runtime.
-   *
-   * @param keyUri       - azure keyvault key uri
-   * @param tenantId     - keyvault  tenantId
-   * @param clientId     - keyvault  clientId
-   * @param clientSecret - keyvault  clientSecret
-   * @throws GeneralSecurityException if keyUrl is missing
-   */
-  public static void register(Optional<String> keyUri, Optional<String> tenantId,
-      Optional<String> clientId, Optional<String> clientSecret) throws GeneralSecurityException {
-
-    if (!tenantId.isPresent()) {
-      throw new IllegalArgumentException("tenantId must be present");
-    }
-    if (!clientId.isPresent()) {
-      throw new IllegalArgumentException("clientId must be present");
-    }
-    if (!clientSecret.isPresent()) {
-      throw new IllegalArgumentException("clientSecret must be present");
-    }
-
-    AzureKmsClient client;
-    if (keyUri.isPresent()) {
-      client = new AzureKmsClient(keyUri.get());
-    } else {
-      throw new GeneralSecurityException("key url missing while registering KmsClient");
-    }
-    client.withCredentialsProvider(new ClientSecretCredentialBuilder()
-        .clientId(clientId.get())
-        .tenantId(tenantId.get())
-        .clientSecret(clientSecret.get()).build());
-    KmsClients.add(client);
   }
 }
