@@ -34,25 +34,19 @@ import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ON
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.PACKAGE_CHANGED;
 
 import com.google.common.base.Objects;
-import com.google.common.collect.Sets;
 import com.squareup.wire.schema.internal.parser.EnumElement;
-import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public class SchemaDiff {
   public static final Set<Type> COMPATIBLE_CHANGES;
@@ -85,10 +79,8 @@ public class SchemaDiff {
     final Context ctx = new Context(COMPATIBLE_CHANGES);
     ctx.collectTypeInfo(original, true);
     ctx.collectTypeInfo(update, false);
-    List<Difference> differences = compareMetadata(original, update);
     compare(ctx, original.rawSchema(), update.rawSchema());
-    differences.addAll(ctx.getDifferences());
-    return differences;
+    return ctx.getDifferences();
   }
 
   static void compare(final Context ctx, ProtoFileElement original, ProtoFileElement update) {
@@ -96,48 +88,6 @@ public class SchemaDiff {
       ctx.addDifference(PACKAGE_CHANGED);
     }
     compareTypeElements(ctx, original.getTypes(), update.getTypes());
-  }
-
-  private static List<Difference> compareMetadata(ProtobufSchema original, ProtobufSchema update) {
-    List<Difference> differences = new ArrayList<>();
-    Map<String, String> originalProperties = original.metadata() != null
-            ? original.metadata().getProperties()
-            : Collections.emptyMap();
-    Set<String> originalReservedFields =
-            Arrays.stream(originalProperties.getOrDefault(ProtobufSchema.RESERVED, "").split(","))
-                    .map(String::trim)
-                    .filter(field -> !field.isEmpty())
-                    .collect(Collectors.toSet());
-    Map<String, String> updatedProperties = update.metadata() != null
-            ? update.metadata().getProperties()
-            : Collections.emptyMap();
-    Set<String> updatedReservedFields =
-            Arrays.stream(updatedProperties.getOrDefault(ProtobufSchema.RESERVED, "").split(","))
-                    .map(String::trim)
-                    .filter(field -> !field.isEmpty())
-                    .collect(Collectors.toSet());
-    // backward compatibility check to ensure that original reserved fields are not removed in
-    // the updated version
-    Sets.SetView<String> removedFields =
-            Sets.difference(originalReservedFields, updatedReservedFields);
-    if (!removedFields.isEmpty()) {
-      removedFields.forEach(field ->
-              differences.add(new Difference(Type.RESERVED_FIELD_REMOVED, field)));
-    }
-    Set<String> updatedFields = update.rawSchema()
-              .getTypes()
-              .stream()
-              .map(SchemaDiff::getFieldNames)
-              .flatMap(Collection::stream)
-              .collect(Collectors.toSet());
-    // check if updated fields conflict with reserved fields
-    Sets.SetView<String> conflictingFields =
-            Sets.intersection(updatedFields, updatedReservedFields);
-    if (!conflictingFields.isEmpty()) {
-      conflictingFields.forEach(field ->
-              differences.add(new Difference(Type.FIELD_CONFLICTS_WITH_RESERVED_FIELD, field)));
-    }
-    return differences;
   }
 
   public static void compareTypeElements(
@@ -158,7 +108,7 @@ public class SchemaDiff {
     allEnumNames.addAll(updateEnums.keySet());
 
     for (String name : allMessageNames) {
-      try (Context.NamedScope nameScope = ctx.enterName(name)) {
+      try (Context.NamedScope ignored = ctx.enterName(name)) {
         MessageElement originalMessage = originalMessages.get(name);
         MessageElement updateMessage = updateMessages.get(name);
         if (updateMessage == null) {
@@ -185,7 +135,7 @@ public class SchemaDiff {
     }
 
     for (String name : allEnumNames) {
-      try (Context.NamedScope nameScope = ctx.enterName(name)) {
+      try (Context.NamedScope ignored = ctx.enterName(name)) {
         EnumElement originalEnum = originalEnums.get(name);
         EnumElement updateEnum = updateEnums.get(name);
         if (updateEnum == null) {
@@ -216,15 +166,5 @@ public class SchemaDiff {
         enums.put(enumElement.getName(), enumElement);
       }
     }
-  }
-
-  private static List<String> getFieldNames(TypeElement typeElement) {
-    if (typeElement instanceof MessageElement) {
-      return ((MessageElement) typeElement).getFields()
-              .stream()
-              .map(FieldElement::getName)
-              .collect(Collectors.toList());
-    }
-    return Collections.emptyList();
   }
 }
