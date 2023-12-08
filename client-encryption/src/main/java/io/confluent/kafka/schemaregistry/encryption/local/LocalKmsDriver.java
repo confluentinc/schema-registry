@@ -65,9 +65,10 @@ public class LocalKmsDriver implements KmsDriver {
   }
 
   @Override
-  public KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
+  public KmsClient newKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
-    return LocalKmsClient.register(kekUrl, getSecret(configs), getOldSecrets(configs));
+    return new LocalKmsClient(
+        kekUrl.orElse(LocalKmsClient.PREFIX), getSecret(configs), getOldSecrets(configs));
   }
 }
 
