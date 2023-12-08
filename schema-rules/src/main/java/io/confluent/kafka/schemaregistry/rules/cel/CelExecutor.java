@@ -54,6 +54,7 @@ import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.pb.Checked;
 import org.projectnessie.cel.extension.StringsLib;
 import org.projectnessie.cel.tools.Script;
+import org.projectnessie.cel.tools.ScriptCreateException;
 import org.projectnessie.cel.tools.ScriptException;
 import org.projectnessie.cel.tools.ScriptHost;
 import org.projectnessie.cel.tools.ScriptHost.ScriptBuilder;
@@ -162,8 +163,13 @@ public class CelExecutor implements RuleExecutor {
       if (index >= 0) {
         String guard = expr.substring(0, index);
         if (!guard.trim().isEmpty()) {
-          Object guardResult = execute(guard, obj, args);
-          if (!Boolean.TRUE.equals(guardResult)) {
+          Object guardResult = Boolean.FALSE;
+          try {
+            guardResult = execute(guard, obj, args);
+          } catch (RuleException e) {
+            // ignore
+          }
+          if (Boolean.FALSE.equals(guardResult)) {
             // Skip the expr
             return ctx.rule().getKind() == RuleKind.CONDITION ? Boolean.TRUE : obj;
           }
