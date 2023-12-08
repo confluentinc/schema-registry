@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.encryption.local;
 
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KmsClient;
-import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.PrimitiveSet;
 import com.google.crypto.tink.Registry;
 import com.google.crypto.tink.proto.AesGcmKey;
@@ -35,7 +34,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
@@ -57,7 +55,7 @@ public final class LocalKmsClient implements KmsClient {
   private LocalKmsClient() {
   }
 
-  private LocalKmsClient(String uri, String secret, List<String> oldSecrets)
+  public LocalKmsClient(String uri, String secret, List<String> oldSecrets)
       throws GeneralSecurityException {
     if (!uri.toLowerCase(Locale.US).startsWith(PREFIX)) {
       throw new IllegalArgumentException("key URI must start with " + PREFIX);
@@ -145,19 +143,5 @@ public final class LocalKmsClient implements KmsClient {
     }
 
     return aead;
-  }
-
-  /**
-   * Creates and registers a {@link #LocalKmsClient} with the Tink runtime.
-   *
-   * <p>If {@code keyUri} is present, it is the only key that the new client will support.
-   * Otherwise
-   * the new client supports all local KMS keys.
-   */
-  public static KmsClient register(Optional<String> keyUri, String secret, List<String> oldSecrets)
-      throws GeneralSecurityException {
-    KmsClient client = new LocalKmsClient(keyUri.orElse(PREFIX), secret, oldSecrets);
-    KmsClients.add(client);
-    return client;
   }
 }
