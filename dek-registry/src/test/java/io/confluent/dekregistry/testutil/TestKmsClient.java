@@ -18,7 +18,6 @@ package io.confluent.dekregistry.testutil;
 
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KmsClient;
-import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.PrimitiveSet;
 import com.google.crypto.tink.Registry;
 import com.google.crypto.tink.proto.AesGcmKey;
@@ -34,7 +33,6 @@ import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
-import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
@@ -53,7 +51,7 @@ public final class TestKmsClient implements KmsClient {
   private TestKmsClient() {
   }
 
-  private TestKmsClient(String uri, String secret)
+  public TestKmsClient(String uri, String secret)
       throws GeneralSecurityException {
     if (!uri.toLowerCase(Locale.US).startsWith(PREFIX)) {
       throw new IllegalArgumentException("key URI must start with " + PREFIX);
@@ -138,19 +136,5 @@ public final class TestKmsClient implements KmsClient {
     }
 
     return aead;
-  }
-
-  /**
-   * Creates and registers a {@link #TestKmsClient} with the Tink runtime.
-   *
-   * <p>If {@code keyUri} is present, it is the only key that the new client will support.
-   * Otherwise
-   * the new client supports all local KMS keys.
-   */
-  public static KmsClient register(Optional<String> keyUri, String secret)
-      throws GeneralSecurityException {
-    KmsClient client = new TestKmsClient(keyUri.orElse(PREFIX), secret);
-    KmsClients.add(client);
-    return client;
   }
 }

@@ -22,7 +22,6 @@ import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.kms.AWSKMS;
 import com.google.crypto.tink.KmsClient;
-import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.integration.awskms.AwsKmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
 import java.io.ByteArrayInputStream;
@@ -63,16 +62,16 @@ public class AwsKmsDriver implements KmsDriver {
   }
 
   @Override
-  public KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
+  public KmsClient newKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
     AWSKMS testClient = (AWSKMS) getTestClient(configs);
     Optional<AWSCredentialsProvider> creds = testClient != null
         ? Optional.empty()
         : Optional.of(getCredentials(configs));
-    return registerWithAwsKms(kekUrl, creds, testClient);
+    return newKmsClientWithAwsKms(kekUrl, creds, testClient);
   }
 
-  public static KmsClient registerWithAwsKms(
+  protected static KmsClient newKmsClientWithAwsKms(
       Optional<String> keyUri, Optional<AWSCredentialsProvider> credentials, AWSKMS awsKms)
       throws GeneralSecurityException {
     AwsKmsClient client;
@@ -89,7 +88,6 @@ public class AwsKmsDriver implements KmsDriver {
     if (awsKms != null) {
       setAwsKms(client, awsKms);
     }
-    KmsClients.add(client);
     return client;
   }
 

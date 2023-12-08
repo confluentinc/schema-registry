@@ -35,9 +35,9 @@ public class TestKmsDriver implements KmsDriver {
   }
 
   @Override
-  public KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
+  public KmsClient newKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
-    return TestKmsClient.register(kekUrl, SECRET);
+    return new TestKmsClient(kekUrl.orElse(TestKmsClient.PREFIX), SECRET);
   }
 }
 
