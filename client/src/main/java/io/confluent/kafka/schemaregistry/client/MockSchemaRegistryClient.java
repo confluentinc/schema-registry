@@ -63,7 +63,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private static final String WILDCARD = "*";
 
-  private Config defaultConfig = new Config("BACKWARD", true);
+  private Config defaultConfig = new Config("BACKWARD");
   private final Map<String, Map<ParsedSchema, Integer>> schemaToIdCache;
   private final Map<String, Map<ParsedSchema, Integer>> registeredSchemaCache;
   private final Map<String, Map<Integer, ParsedSchema>> idToSchemaCache;

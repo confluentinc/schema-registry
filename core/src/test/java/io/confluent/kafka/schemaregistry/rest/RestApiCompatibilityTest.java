@@ -189,7 +189,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
             restApp.restClient.registerSchema(schemaString1, subject));
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
-            new Config(CompatibilityLevel.BACKWARD.name, false),
+            new Config(CompatibilityLevel.BACKWARD.name),
             restApp.restClient.getConfig(null));
     // change it to forward
     assertEquals("Changing compatibility level should succeed",
@@ -200,7 +200,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     // verify that new compatibility level is forward
     assertEquals("New compatibility level should be forward",
-            new Config(CompatibilityLevel.FORWARD.name, false),
+            new Config(CompatibilityLevel.FORWARD.name),
             restApp.restClient.getConfig(null));
 
     // register schema that is forward compatible with schemaString1
@@ -222,7 +222,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     // verify that new compatibility level is backward
     assertEquals("Updated compatibility level should be backward",
-            new Config(CompatibilityLevel.BACKWARD.name, false),
+            new Config(CompatibilityLevel.BACKWARD.name),
             restApp.restClient.getConfig(null));
 
             // register forward compatible schema, which should fail

@@ -1994,9 +1994,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Config getConfig(String subject)
       throws SchemaRegistryStoreException {
     try {
-      return lookupCache.config(subject,
-          false,
-          new Config(defaultCompatibilityLevel.name, defaultValidateFields));
+      return lookupCache.config(subject, false, new Config(defaultCompatibilityLevel.name));
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
@@ -2005,9 +2003,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Config getConfigInScope(String subject)
       throws SchemaRegistryStoreException {
     try {
-      return lookupCache.config(subject,
-          true,
-          new Config(defaultCompatibilityLevel.name, defaultValidateFields));
+      return lookupCache.config(subject, true, new Config(defaultCompatibilityLevel.name));
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
@@ -2339,13 +2335,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                     + " not supported");
   }
 
-  public boolean isDefaultValidateFields() {
-    return defaultValidateFields;
-  }
-
-
-  private static boolean isSchemaFieldValidationEnabled(Config config) {
-    return config.isValidateFields() != null ? config.isValidateFields() : false;
+  private boolean isSchemaFieldValidationEnabled(Config config) {
+    return config.isValidateFields() != null ? config.isValidateFields() : defaultValidateFields;
   }
 
   private static class RawSchema {

@@ -106,17 +106,13 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param subject the subject
    * @param returnTopLevelIfNotFound whether to return the top level scope if not found
    * @param defaultForTopLevel default value for the top level scope
-   * @param defaultForValidateFields default value for the top level scope
    * @return the compatibility level if found, otherwise null
    */
   default CompatibilityLevel compatibilityLevel(String subject,
                                                 boolean returnTopLevelIfNotFound,
-                                                CompatibilityLevel defaultForTopLevel,
-                                                boolean defaultForValidateFields)
+                                                CompatibilityLevel defaultForTopLevel)
       throws StoreException {
-    Config config = config(subject,
-        returnTopLevelIfNotFound,
-        new Config(defaultForTopLevel.name, defaultForValidateFields));
+    Config config = config(subject, returnTopLevelIfNotFound, new Config(defaultForTopLevel.name));
     return CompatibilityLevel.forName(config.getCompatibilityLevel());
   }
 

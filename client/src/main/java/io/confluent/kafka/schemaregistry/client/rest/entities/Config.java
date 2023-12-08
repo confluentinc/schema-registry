@@ -66,12 +66,6 @@ public class Config {
     this.compatibilityLevel = compatibilityLevel;
   }
 
-  public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel,
-                @JsonProperty("validateFields") Boolean validateFields) {
-    this.compatibilityLevel = compatibilityLevel;
-    this.validateFields = validateFields;
-  }
-
   public Config() {
   }
 
