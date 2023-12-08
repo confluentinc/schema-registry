@@ -54,7 +54,6 @@ import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.pb.Checked;
 import org.projectnessie.cel.extension.StringsLib;
 import org.projectnessie.cel.tools.Script;
-import org.projectnessie.cel.tools.ScriptCreateException;
 import org.projectnessie.cel.tools.ScriptException;
 import org.projectnessie.cel.tools.ScriptHost;
 import org.projectnessie.cel.tools.ScriptHost.ScriptBuilder;
