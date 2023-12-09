@@ -4,7 +4,7 @@
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
  * License at
- *
+ *`
  * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -63,6 +63,18 @@ public class JsonSchemaTest {
       + "}";
 
   private static final JsonSchema recordSchema = new JsonSchema(recordSchemaString);
+
+  private static final String recordWithDefaultsSchemaString = "{\"properties\": {\n"
+      + "     \"null\": {\"type\": \"null\", \"default\": null},\n"
+      + "     \"boolean\": {\"type\": \"boolean\", \"default\": true},\n"
+      + "     \"number\": {\"type\": \"number\", \"default\": 123},\n"
+      + "     \"string\": {\"type\": \"string\", \"default\": \"abc\"}\n"
+      + "  },\n"
+      + "  \"additionalProperties\": false\n"
+      + "}";
+
+  private static final JsonSchema recordWithDefaultsSchema =
+      new JsonSchema(recordWithDefaultsSchemaString);
 
   private static final String arraySchemaString = "{\"type\": \"array\", \"items\": { \"type\": "
       + "\"string\" } }";
@@ -137,21 +149,41 @@ public class JsonSchemaTest {
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertTrue(result.asBoolean());
 
+    envelope = JsonSchemaUtils.toObject(BooleanNode.getTrue(), createPrimitiveSchema("boolean"));
+    result = (JsonNode) JsonSchemaUtils.getValue(envelope);
+    assertEquals(BooleanNode.getTrue(), result);
+
     envelope = JsonSchemaUtils.toObject("false", createPrimitiveSchema("boolean"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertFalse(result.asBoolean());
+
+    envelope = JsonSchemaUtils.toObject(BooleanNode.getFalse(), createPrimitiveSchema("boolean"));
+    result = (JsonNode) JsonSchemaUtils.getValue(envelope);
+    assertEquals(BooleanNode.getFalse(), result);
 
     envelope = JsonSchemaUtils.toObject("12", createPrimitiveSchema("number"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(12, result.asInt());
 
+    envelope = JsonSchemaUtils.toObject(IntNode.valueOf(12), createPrimitiveSchema("number"));
+    result = (JsonNode) JsonSchemaUtils.getValue(envelope);
+    assertEquals(IntNode.valueOf(12), result);
+
     envelope = JsonSchemaUtils.toObject("23.2", createPrimitiveSchema("number"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(23.2, result.asDouble(), 0.1);
 
+    envelope = JsonSchemaUtils.toObject(FloatNode.valueOf(23.2f), createPrimitiveSchema("number"));
+    result = (JsonNode) JsonSchemaUtils.getValue(envelope);
+    assertEquals(FloatNode.valueOf(23.2f), result);
+
     envelope = JsonSchemaUtils.toObject("\"a string\"", createPrimitiveSchema("string"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals("a string", result.asText());
+
+    envelope = JsonSchemaUtils.toObject(TextNode.valueOf("a string"), createPrimitiveSchema("string"));
+    result = (JsonNode) JsonSchemaUtils.getValue(envelope);
+    assertEquals(TextNode.valueOf("a string"), result);
   }
 
   @Test
@@ -169,6 +201,18 @@ public class JsonSchemaTest {
     assertTrue(result.get("boolean").booleanValue());
     assertEquals(12, result.get("number").intValue());
     assertEquals("string", result.get("string").textValue());
+  }
+
+  @Test
+  public void testRecordWithDefaultsToJsonSchema() throws Exception {
+    String json = "{}";
+
+    JsonNode envelope = (JsonNode) JsonSchemaUtils.toObject(json, recordWithDefaultsSchema);
+    JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
+    assertEquals(true, result.get("null").isNull());
+    assertEquals(true, result.get("boolean").booleanValue());
+    assertEquals(123, result.get("number").intValue());
+    assertEquals("abc", result.get("string").textValue());
   }
 
   @Test(expected = ValidationException.class)

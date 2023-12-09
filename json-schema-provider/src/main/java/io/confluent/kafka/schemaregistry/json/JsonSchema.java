@@ -37,6 +37,21 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.fasterxml.jackson.databind.ser.PropertyWriter;
+import com.github.erosb.jsonsKema.IJsonValue;
+import com.github.erosb.jsonsKema.JsonArray;
+import com.github.erosb.jsonsKema.JsonBoolean;
+import com.github.erosb.jsonsKema.JsonNull;
+import com.github.erosb.jsonsKema.JsonNumber;
+import com.github.erosb.jsonsKema.JsonObject;
+import com.github.erosb.jsonsKema.JsonParser;
+import com.github.erosb.jsonsKema.JsonString;
+import com.github.erosb.jsonsKema.JsonValue;
+import com.github.erosb.jsonsKema.SchemaClient;
+import com.github.erosb.jsonsKema.SchemaLoaderConfig;
+import com.github.erosb.jsonsKema.SchemaLoadingException;
+import com.github.erosb.jsonsKema.UnknownSource;
+import com.github.erosb.jsonsKema.ValidationFailure;
+import com.github.erosb.jsonsKema.Validator;
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -46,16 +61,25 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import io.confluent.kafka.schemaregistry.json.schema.SchemaTranslator;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -80,9 +104,9 @@ import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
+import org.everit.json.schema.TrueSchema;
 import org.everit.json.schema.ValidationException;
 import org.everit.json.schema.loader.SchemaLoader;
-import org.everit.json.schema.loader.SpecificationVersion;
 import org.everit.json.schema.loader.internal.ReferenceResolver;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -92,6 +116,8 @@ import org.slf4j.LoggerFactory;
 public class JsonSchema implements ParsedSchema {
 
   private static final Logger log = LoggerFactory.getLogger(JsonSchema.class);
+
+  public static final String DEFAULT_BASE_URI = "mem://input";
 
   public static final String TYPE = "JSON";
 
@@ -106,6 +132,8 @@ public class JsonSchema implements ParsedSchema {
   private final JsonNode jsonNode;
 
   private transient Schema schemaObj;
+
+  private transient com.github.erosb.jsonsKema.Schema skemaObj;
 
   private final Integer version;
 
@@ -288,38 +316,99 @@ public class JsonSchema implements ParsedSchema {
     }
     if (schemaObj == null) {
       try {
-        // Extract the $schema to use for determining the id keyword
-        SpecificationVersion spec = SpecificationVersion.DRAFT_7;
-        if (jsonNode.has(SCHEMA_KEYWORD)) {
-          String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
-          if (schema != null) {
-            spec = SpecificationVersion.lookupByMetaSchemaUrl(schema)
-                    .orElse(SpecificationVersion.DRAFT_7);
+        if (jsonNode.isBoolean()) {
+          schemaObj = jsonNode.booleanValue()
+              ? TrueSchema.builder().build()
+              : FalseSchema.builder().build();
+        } else {
+          // Extract the $schema to use for determining the id keyword
+          SpecificationVersion spec = SpecificationVersion.DRAFT_7;
+          if (jsonNode.has(SCHEMA_KEYWORD)) {
+            String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
+            SpecificationVersion s = SpecificationVersion.getFromUrl(schema);
+            if (s != null) {
+              spec = s;
+            }
+          }
+          switch (spec) {
+            case DRAFT_2020_12:
+            case DRAFT_2019_09:
+              loadLatestDraft();
+              break;
+            default:
+              loadPreviousDraft(spec);
+              break;
           }
         }
-        // Extract the $id to use for resolving relative $ref URIs
-        URI idUri = null;
-        if (jsonNode.has(spec.idKeyword())) {
-          String id = jsonNode.get(spec.idKeyword()).asText();
-          if (id != null) {
-            idUri = ReferenceResolver.resolve((URI) null, id);
-          }
-        }
-        SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
-            .useDefaults(true).draftV7Support();
-        for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
-          URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-          builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
-        }
-        JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
-        builder.schemaJson(jsonObject);
-        SchemaLoader loader = builder.build();
-        schemaObj = loader.load().build();
-      } catch (IOException e) {
-        throw new IllegalArgumentException("Invalid JSON", e);
+      } catch (Throwable e) {
+        throw new IllegalArgumentException("Invalid JSON Schema", e);
       }
     }
     return schemaObj;
+  }
+
+  private void loadLatestDraft() throws URISyntaxException {
+    URI idUri = null;
+    if (jsonNode.has("$id")) {
+      String id = jsonNode.get("$id").asText();
+      if (id != null) {
+        idUri = ReferenceResolver.resolve((URI) null, id);
+      }
+    } else {
+      idUri = new URI(DEFAULT_BASE_URI);
+    }
+    Map<URI, String> references = new HashMap<>();
+    for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+      URI child = ReferenceResolver.resolve(idUri, dep.getKey());
+      references.put(child, dep.getValue());
+    }
+    SchemaLoaderConfig config = new SchemaLoaderConfig(
+        new ReferenceSchemaClient(references), DEFAULT_BASE_URI);
+
+    JsonValue schemaJson = objectMapper.convertValue(jsonNode, JsonObject.class);
+    skemaObj = new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
+    SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator());
+    assert ctx != null;
+    ctx.close();
+    schemaObj = ctx.schema();
+  }
+
+  private void loadPreviousDraft(SpecificationVersion spec)
+      throws JsonProcessingException {
+    org.everit.json.schema.loader.SpecificationVersion loaderSpec =
+        org.everit.json.schema.loader.SpecificationVersion.DRAFT_7;
+    switch (spec) {
+      case DRAFT_7:
+        loaderSpec = org.everit.json.schema.loader.SpecificationVersion.DRAFT_7;
+        break;
+      case DRAFT_6:
+        loaderSpec = org.everit.json.schema.loader.SpecificationVersion.DRAFT_6;
+        break;
+      case DRAFT_4:
+        loaderSpec = org.everit.json.schema.loader.SpecificationVersion.DRAFT_4;
+        break;
+      default:
+        break;
+    }
+
+    // Extract the $id to use for resolving relative $ref URIs
+    URI idUri = null;
+    if (jsonNode.has(loaderSpec.idKeyword())) {
+      String id = jsonNode.get(loaderSpec.idKeyword()).asText();
+      if (id != null) {
+        idUri = ReferenceResolver.resolve((URI) null, id);
+      }
+    }
+    SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
+        .useDefaults(true).draftV7Support();
+    for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+      URI child = ReferenceResolver.resolve(idUri, dep.getKey());
+      builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
+    }
+    JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
+    builder.schemaJson(jsonObject);
+    SchemaLoader loader = builder.build();
+    schemaObj = loader.load().build();
   }
 
   @Override
@@ -429,11 +518,48 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  public void validate(Object value) throws JsonProcessingException, ValidationException {
-    validate(rawSchema(), value);
+  public JsonNode validate(JsonNode value) throws JsonProcessingException, ValidationException {
+    if (skemaObj != null) {
+      return validate(skemaObj, value);
+    } else {
+      return validate(rawSchema(), value);
+    }
   }
 
-  public static void validate(Schema schema, Object value)
+  public static JsonNode validate(com.github.erosb.jsonsKema.Schema schema, JsonNode value)
+      throws JsonProcessingException, ValidationException {
+    Validator validator = Validator.forSchema(schema);
+    JsonValue primitiveValue = null;
+    if (value instanceof BinaryNode) {
+      primitiveValue = new JsonString(((BinaryNode) value).asText(), UnknownSource.INSTANCE);
+    } else if (value instanceof BooleanNode) {
+      primitiveValue = new JsonBoolean(((BooleanNode) value).asBoolean(), UnknownSource.INSTANCE);
+    } else if (value instanceof NullNode) {
+      primitiveValue = new JsonNull(UnknownSource.INSTANCE);
+    } else if (value instanceof NumericNode) {
+      primitiveValue = new JsonNumber(((NumericNode) value).numberValue(), UnknownSource.INSTANCE);
+    } else if (value instanceof TextNode) {
+      primitiveValue = new JsonString(((TextNode) value).asText(), UnknownSource.INSTANCE);
+    }
+    ValidationFailure failure = null;
+    if (primitiveValue != null) {
+      failure = validator.validate(primitiveValue);
+    } else {
+      JsonValue jsonObject;
+      if (value instanceof ArrayNode) {
+        jsonObject = objectMapper.convertValue(value, JsonArray.class);
+      } else {
+        jsonObject = objectMapper.convertValue(value, JsonObject.class);
+      }
+      failure = validator.validate(jsonObject);
+    }
+    if (failure != null) {
+      throw new ValidationException(failure.toString());
+    }
+    return value;
+  }
+
+  public static JsonNode validate(Schema schema, Object value)
       throws JsonProcessingException, ValidationException {
     Object primitiveValue = NONE_MARKER;
     if (isPrimitive(value)) {
@@ -451,6 +577,9 @@ public class JsonSchema implements ParsedSchema {
     }
     if (primitiveValue != NONE_MARKER) {
       schema.validate(primitiveValue);
+      return value instanceof JsonNode
+          ? (JsonNode) value
+          : objectMapper.convertValue(primitiveValue, JsonNode.class);
     } else {
       Object jsonObject;
       if (value instanceof ArrayNode) {
@@ -463,6 +592,7 @@ public class JsonSchema implements ParsedSchema {
         jsonObject = objectMapper.convertValue(value, JSONObject.class);
       }
       schema.validate(jsonObject);
+      return objectMapper.convertValue(jsonObject, JsonNode.class);
     }
   }
 
@@ -917,6 +1047,35 @@ public class JsonSchema implements ParsedSchema {
         ((ObjectNode) fieldNodePtr).remove(TAGS);
       } else {
         ((ObjectNode) fieldNodePtr).replace(TAGS, objectMapper.valueToTree(allTags));
+      }
+    }
+  }
+
+  public static class ReferenceSchemaClient implements SchemaClient {
+
+    private Map<URI, String> references;
+
+    public ReferenceSchemaClient(Map<URI, String> references) {
+      this.references = references;
+    }
+
+    @Override
+    public InputStream get(URI uri) {
+      String reference = references.get(uri);
+      if (reference == null) {
+        throw new UncheckedIOException(new FileNotFoundException(uri.toString()));
+      }
+      return new ByteArrayInputStream(reference.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Override
+    public IJsonValue getParsed(URI uri) {
+      try (BufferedReader reader = new BufferedReader(
+          new InputStreamReader(get(uri), StandardCharsets.UTF_8))) {
+        String string = reader.lines().collect(Collectors.joining());
+        return new JsonParser(string, uri).parse();
+      } catch (Exception ex) {
+        throw new SchemaLoadingException("failed to parse json content returned from $uri", ex);
       }
     }
   }
