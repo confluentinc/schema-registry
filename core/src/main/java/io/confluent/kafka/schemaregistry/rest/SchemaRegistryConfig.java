@@ -181,6 +181,9 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
   public static final String SCHEMA_COMPATIBILITY_CONFIG = "schema.compatibility.level";
 
+  public static final String SCHEMA_VALIDATE_FIELDS_CONFIG = "schema.validate.fields";
+  public static final boolean SCHEMA_VALIDATE_FIELDS_DEFAULT = false;
+
   /**
    * <code>schema.cache.size</code>
    */
@@ -348,6 +351,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "forward_transitive (new schema is forward compatible with all previous versions), "
       + "full_transitive (new schema is backward and forward compatible with all previous "
       + "versions)";
+  protected static final String VALIDATE_FIELDS_DOC = "Determines whether field validation is "
+      + "enabled or not. If enabled, it checks whether any top level fields conflict with the "
+      + "reserved fields in metadata. It also checks for the presence of any field names "
+      + "beginning with $$";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
@@ -469,7 +476,7 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String HTTPS = "https";
   public static final String HTTP = "http";
 
-  private Properties originalProperties;
+  private final Properties originalProperties;
 
   static {
     config = baseSchemaRegistryConfigDef();
@@ -550,6 +557,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
         ConfigDef.Importance.HIGH, COMPATIBILITY_DOC
+    )
+    .define(SCHEMA_VALIDATE_FIELDS_CONFIG, ConfigDef.Type.BOOLEAN, SCHEMA_VALIDATE_FIELDS_DEFAULT,
+        ConfigDef.Importance.LOW, VALIDATE_FIELDS_DOC
     )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
@@ -877,7 +887,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
     Map<String, Object> overridden = originals();
     for (Map.Entry<String, ?> entry:originals().entrySet()) {
-      String key = (String) entry.getKey();
+      String key = entry.getKey();
       if (key.toLowerCase().startsWith(prefix) && key.length() > prefix.length()) {
         key = key.substring(prefix.length());
         if (config.names().contains(key)) {

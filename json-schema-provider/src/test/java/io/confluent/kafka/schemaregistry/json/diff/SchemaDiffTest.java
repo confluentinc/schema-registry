@@ -20,13 +20,9 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -77,12 +73,7 @@ public class SchemaDiffTest {
           .collect(toList());
       final String description = (String) testCase.get("description");
 
-      Schema originalRaw = original.rawSchema();
-      Schema updateRaw = update.rawSchema();
-      List<Difference> differences = SchemaDiff.compare(
-          originalRaw, updateRaw,
-          getMetadata(testCase, "original"),
-          getMetadata(testCase, "update"));
+      List<Difference> differences = SchemaDiff.compare(original.rawSchema(), update.rawSchema());
       final List<Difference> incompatibleDiffs = differences.stream()
           .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
           .collect(Collectors.toList());
@@ -96,37 +87,11 @@ public class SchemaDiffTest {
     }
   }
 
-  private Metadata getMetadata(JSONObject testCase, String version) {
-    ObjectMapper mapper = new ObjectMapper();
-    try {
-      switch (version) {
-        case "original":
-          if (testCase.has("original_metadata")) {
-            return mapper.readValue(testCase.getJSONObject("original_metadata").toString(), Metadata.class);
-          }
-          break;
-        case "update":
-          if (testCase.has("update_metadata")) {
-            return mapper.readValue(testCase.getJSONObject("update_metadata").toString(), Metadata.class);
-          }
-          break;
-        default:
-          return null;
-      }
-    } catch (JsonProcessingException e) {
-      return new Metadata(Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
-    }
-    return null;
-  }
-
   @Test
   public void testRecursiveCheck() {
     final Schema original = SchemaLoader.load(new JSONObject(Objects.requireNonNull(readFile("recursive-schema.json"))));
     final Schema newOne = SchemaLoader.load(new JSONObject(Objects.requireNonNull(readFile("recursive-schema.json"))));
-    Assert.assertTrue(SchemaDiff.compare(original,
-            newOne,
-            new Metadata(Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet()),
-            new Metadata(Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet())).isEmpty());
+    Assert.assertTrue(SchemaDiff.compare(original, newOne).isEmpty());
   }
 
   @Test
@@ -134,10 +99,7 @@ public class SchemaDiffTest {
     final Schema first = SchemaLoader.load(new JSONObject("{}"));
 
     final Schema second = SchemaLoader.load(new JSONObject(("{\"properties\": {}}")));
-    final List<Difference> changes = SchemaDiff.compare(first,
-            second,
-            new Metadata(Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet()),
-            new Metadata(Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet()));
+    final List<Difference> changes = SchemaDiff.compare(first, second);
     // Changing from empty schema to empty object schema is incompatible
     Assert.assertFalse(changes.isEmpty());
   }
