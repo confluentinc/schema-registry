@@ -28,7 +28,6 @@ public class Difference {
     REQUIRED_FIELD_ADDED, REQUIRED_FIELD_REMOVED,
     ONEOF_ADDED, ONEOF_REMOVED,
     ONEOF_FIELD_ADDED, ONEOF_FIELD_REMOVED, MULTIPLE_FIELDS_MOVED_TO_ONEOF,
-    RESERVED_FIELD_REMOVED, FIELD_CONFLICTS_WITH_RESERVED_FIELD
   }
 
   private final String fullPath;
@@ -103,14 +102,6 @@ public class Difference {
       case MULTIPLE_FIELDS_MOVED_TO_ONEOF:
         errorDescription = "Multiple fields in the oneof at path '" + fullPath
                              + "' in the %s schema are outside a oneof in the %s schema";
-        break;
-      case RESERVED_FIELD_REMOVED:
-        errorDescription = "The %s schema has reserved property '" + fullPath + "' removed from "
-                + "its metadata which is present in the %s schema.";
-        break;
-      case FIELD_CONFLICTS_WITH_RESERVED_FIELD:
-        errorDescription = "The %s schema has property at path " + fullPath + " that conflicts "
-                + "with the reserved properties which is missing in the %s schema.";
         break;
       default:
         errorDescription = "";
