@@ -162,8 +162,13 @@ public class CelExecutor implements RuleExecutor {
       if (index >= 0) {
         String guard = expr.substring(0, index);
         if (!guard.trim().isEmpty()) {
-          Object guardResult = execute(guard, obj, args);
-          if (!Boolean.TRUE.equals(guardResult)) {
+          Object guardResult = Boolean.FALSE;
+          try {
+            guardResult = execute(guard, obj, args);
+          } catch (RuleException e) {
+            // ignore
+          }
+          if (Boolean.FALSE.equals(guardResult)) {
             // Skip the expr
             return ctx.rule().getKind() == RuleKind.CONDITION ? Boolean.TRUE : obj;
           }
