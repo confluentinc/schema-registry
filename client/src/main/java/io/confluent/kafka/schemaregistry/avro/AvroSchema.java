@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -38,7 +37,6 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -232,6 +230,12 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
+  public boolean hasTopLevelField(String field) {
+    return schemaObj != null && schemaObj.getType() == Schema.Type.RECORD
+            && schemaObj.getField(field) != null;
+  }
+
+  @Override
   public String schemaType() {
     return TYPE;
   }
@@ -324,65 +328,19 @@ public class AvroSchema implements ParsedSchema {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
     try {
-      List<String> differences = getMetadataCompatibility(previousSchema);
       SchemaCompatibility.SchemaPairCompatibility result =
           SchemaCompatibility.checkReaderWriterCompatibility(
               this.schemaObj,
               ((AvroSchema) previousSchema).schemaObj);
-      differences.addAll(result.getResult().getIncompatibilities().stream()
+      return result.getResult().getIncompatibilities().stream()
               .map(Difference::new)
               .map(Difference::toString)
-              .collect(Collectors.toCollection(ArrayList::new)));
-      return differences;
+              .collect(Collectors.toCollection(ArrayList::new));
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
       return Lists.newArrayList(
               "Unexpected exception during compatibility check: " + e.getMessage());
     }
-  }
-
-  private List<String> getMetadataCompatibility(ParsedSchema previousSchema) {
-    List<String> differences = new ArrayList<>();
-    Map<String, String> originalProperties = previousSchema.metadata() != null
-            ? previousSchema.metadata().getProperties()
-            : Collections.emptyMap();
-    Set<String> originalReservedFields =
-            Arrays.stream(originalProperties.getOrDefault(AvroSchema.RESERVED, "").split(","))
-                    .map(String::trim)
-                    .filter(field -> !field.isEmpty())
-                    .collect(Collectors.toSet());
-    Map<String, String> updatedProperties = metadata != null
-            ? metadata.getProperties()
-            : Collections.emptyMap();
-    Set<String> updatedReservedFields =
-            Arrays.stream(updatedProperties.getOrDefault(AvroSchema.RESERVED, "").split(","))
-                    .map(String::trim)
-                    .filter(field -> !field.isEmpty())
-                    .collect(Collectors.toSet());
-    // backward compatibility check to ensure that original reserved fields are not removed in
-    // the updated version
-    Sets.SetView<String> removedFields =
-            Sets.difference(originalReservedFields, updatedReservedFields);
-    if (!removedFields.isEmpty()) {
-      removedFields.forEach(field ->
-              differences.add(new Difference(Difference.Type.RESERVED_FIELD_REMOVED,
-                      field).error()));
-    }
-    if (schemaObj.getType() == Schema.Type.RECORD) {
-      Set<String> updatedFields = schemaObj.getFields()
-              .stream()
-              .map(Schema.Field::name)
-              .collect(Collectors.toSet());
-      // check if updated fields conflict with reserved fields
-      Sets.SetView<String> conflictingFields =
-              Sets.intersection(updatedFields, updatedReservedFields);
-      if (!conflictingFields.isEmpty()) {
-        conflictingFields.forEach(field ->
-                differences.add(new Difference(Difference.Type.FIELD_CONFLICTS_WITH_RESERVED_FIELD,
-                        field).error()));
-      }
-    }
-    return differences;
   }
 
   @Override
@@ -555,7 +513,7 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
-  public Object copyMessage(Object message) throws IOException {
+  public Object copyMessage(Object message) {
     GenericData data = getData(message);
     return data.deepCopy(rawSchema(), message);
   }
@@ -610,12 +568,12 @@ public class AvroSchema implements ParsedSchema {
                 (e1, e2) -> e1));
       case RECORD:
         if (message == null) {
-          return message;
+          return null;
         }
         data = getData(message);
         for (Schema.Field f : schema.getFields()) {
           String fullName = schema.getFullName() + "." + f.name();
-          try (FieldContext fc = ctx.enterField(
+          try (FieldContext ignored = ctx.enterField(
               ctx, message, fullName, f.name(), getType(f.schema()), getInlineTags(f))) {
             Object value = data.getField(message, f.name(), f.pos());
             if (value instanceof Utf8) {
