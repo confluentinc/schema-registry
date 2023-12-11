@@ -78,20 +78,23 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
    */
   public SchemaMessageReader(
       SchemaRegistryClient schemaRegistryClient, ParsedSchema keySchema, ParsedSchema valueSchema,
-      String topic, boolean parseKey, BufferedReader reader, boolean autoRegister, boolean useLatest
+      String topic, boolean parseKey, BufferedReader reader,
+      boolean normalizeSchema, boolean autoRegister, boolean useLatest
   ) {
     this.keySchema = keySchema;
     this.valueSchema = valueSchema;
     this.topic = topic;
-    this.keySubject = topic + "-key";
-    this.valueSubject = topic + "-value";
+    this.keySubject = topic != null ? topic + "-key" : null;
+    this.valueSubject = topic != null ? topic + "-value" : null;
     this.parseKey = parseKey;
     this.reader = reader;
-    this.serializer = createSerializer(schemaRegistryClient, autoRegister, useLatest, null);
+    this.serializer = createSerializer(
+        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, null);
   }
 
   protected abstract SchemaMessageSerializer<T> createSerializer(
       SchemaRegistryClient schemaRegistryClient,
+      boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest,
       Serializer keySerializer
@@ -122,6 +125,12 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
 
     Serializer keySerializer = getKeySerializer(props);
 
+    boolean normalizeSchema;
+    if (props.containsKey("normalize.schemas")) {
+      normalizeSchema = Boolean.parseBoolean(props.getProperty("normalize.schemas").trim());
+    } else {
+      normalizeSchema = false;
+    }
     boolean autoRegisterSchema;
     if (props.containsKey("auto.register")) {
       autoRegisterSchema = Boolean.parseBoolean(props.getProperty("auto.register").trim());
@@ -139,7 +148,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
 
     if (this.serializer == null) {
       this.serializer = createSerializer(
-          schemaRegistry, autoRegisterSchema, useLatest, keySerializer);
+          schemaRegistry, normalizeSchema, autoRegisterSchema, useLatest, keySerializer);
     }
 
     // This class is only used in a scenario where a single schema is used. It does not support

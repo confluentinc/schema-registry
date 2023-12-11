@@ -66,8 +66,6 @@ public class StoreUtils {
     props.put(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG,
             SecurityProtocol.SASL_PLAINTEXT.toString());
 
-    props.put(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG, false);
-
     Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
     return createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore, props);
   }

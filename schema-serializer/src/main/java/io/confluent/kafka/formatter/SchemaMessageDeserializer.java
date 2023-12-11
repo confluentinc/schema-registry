@@ -28,7 +28,7 @@ public interface SchemaMessageDeserializer<T> extends Closeable {
 
   Object deserializeKey(String topic, byte[] payload);
 
-  T deserialize(byte[] payload) throws SerializationException;
+  T deserialize(String topic, byte[] payload) throws SerializationException;
 
   @Override
   default void close() throws IOException {}

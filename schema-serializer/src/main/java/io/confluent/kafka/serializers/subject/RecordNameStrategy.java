@@ -42,6 +42,11 @@ public class RecordNameStrategy implements SubjectNameStrategy,
   }
 
   @Override
+  public boolean usesSchema() {
+    return true;
+  }
+
+  @Override
   public String subjectName(String topic, boolean isKey, ParsedSchema schema) {
     if (schema == null) {
       return null;

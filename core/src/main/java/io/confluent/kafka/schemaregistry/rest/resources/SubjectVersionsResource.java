@@ -15,7 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
@@ -57,6 +59,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -100,6 +103,9 @@ public class SubjectVersionsResource {
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version,
       @QueryParam("deleted") boolean lookupDeletedSchema) {
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);
@@ -113,7 +119,15 @@ public class SubjectVersionsResource {
           + version
           + " from the schema registry";
     try {
-      schema = schemaRegistry.validateAndGetSchema(subject, versionId, lookupDeletedSchema);
+      schema = schemaRegistry.getUsingContexts(
+          subject, versionId.getVersionId(), lookupDeletedSchema);
+      if (schema == null) {
+        if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
+          throw Errors.subjectNotFoundException(subject);
+        } else {
+          throw Errors.versionNotFoundException(versionId.getVersionId());
+        }
+      }
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -153,9 +167,14 @@ public class SubjectVersionsResource {
   public List<Integer> getReferencedBy(
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
+
+    Schema schema = getSchemaByVersion(subject, version, true);
+    if (schema == null) {
+      return new ArrayList<>();
+    }
     VersionId versionId = null;
     try {
-      versionId = new VersionId(version);
+      versionId = new VersionId(schema.getVersion());
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     }
@@ -165,7 +184,7 @@ public class SubjectVersionsResource {
         + version
         + " from the schema registry";
     try {
-      return schemaRegistry.getReferencedBy(subject, versionId);
+      return schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -186,6 +205,9 @@ public class SubjectVersionsResource {
       @ApiParam(value = "Name of the Subject", required = true)
         @PathParam("subject") String subject,
       @QueryParam("deleted") boolean lookupDeletedSchema) {
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
@@ -245,11 +267,17 @@ public class SubjectVersionsResource {
       @Context HttpHeaders headers,
       @ApiParam(value = "Name of the Subject", required = true)
         @PathParam("subject") String subjectName,
+      @QueryParam("normalize") boolean normalize,
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
+
+    if (subjectName != null && CharMatcher.javaIsoControl().matchesAnyOf(subjectName)) {
+      throw Errors.invalidSubjectException(subjectName);
+    }
+    subjectName = QualifiedSubject.normalize(schemaRegistry.tenant(), subjectName);
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
@@ -264,11 +292,13 @@ public class SubjectVersionsResource {
     );
     int id;
     try {
-      id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
+      id = schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
+    } catch (SchemaTooLargeException e) {
+      throw Errors.schemaTooLargeException("Register operation failed because schema is too large");
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
@@ -316,6 +346,9 @@ public class SubjectVersionsResource {
         @PathParam("version") String version,
       @QueryParam("permanent") boolean permanentDelete) {
     log.info("Deleting schema version {} from subject {}", version, subject);
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);
@@ -337,7 +370,14 @@ public class SubjectVersionsResource {
           throw Errors.schemaVersionSoftDeletedException(subject, version);
         }
       }
-      schema = schemaRegistry.validateAndGetSchema(subject, versionId, true);
+      schema = schemaRegistry.get(subject, versionId.getVersionId(), true);
+      if (schema == null) {
+        if (!schemaRegistry.hasSubjects(subject, true)) {
+          throw Errors.subjectNotFoundException(subject);
+        } else {
+          throw Errors.versionNotFoundException(versionId.getVersionId());
+        }
+      }
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);

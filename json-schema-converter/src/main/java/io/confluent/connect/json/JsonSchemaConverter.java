@@ -20,9 +20,11 @@ import com.google.common.annotations.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.Converter;
 
 import java.util.Collections;
@@ -88,6 +90,12 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     JsonNode jsonValue = jsonSchemaData.fromConnectData(schema, value);
     try {
       return serializer.serialize(topic, isKey, jsonValue, jsonSchema);
+    } catch (TimeoutException e) {
+      throw new RetriableException(String.format("Converting Kafka Connect data to byte[] failed "
+          + "due to serialization error of topic %s: ",
+          topic),
+          e
+      );
     } catch (SerializationException e) {
       throw new DataException(String.format("Converting Kafka Connect data to byte[] failed due to "
           + "serialization error of topic %s: ",
@@ -115,6 +123,12 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       Schema schema = jsonSchemaData.toConnectSchema(jsonSchema);
       return new SchemaAndValue(schema, jsonSchemaData.toConnectData(schema,
           (JsonNode) deserialized.getValue()));
+    } catch (TimeoutException e) {
+      throw new RetriableException(String.format("Converting byte[] to Kafka Connect data failed "
+          + "due to serialization error of topic %s: ",
+          topic),
+          e
+      );
     } catch (SerializationException e) {
       throw new DataException(String.format("Converting byte[] to Kafka Connect data failed due to "
           + "serialization error of topic %s: ",

@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package io.confluent.kafka.serializers.protobuf.test;
+
+option java_package = "io.confluent.kafka.serializers.protobuf.test";
+option java_outer_classname = "TestMessageOptionalProtos";
+
+message TestMessageOptional {
+    string test_string = 1;
+    optional string test_optional_string = 2;
+}
