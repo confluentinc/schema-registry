@@ -22,6 +22,16 @@ import java.util.Map;
 
 public class KafkaAvroSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
 
+  public static final String AVRO_REFLECTION_ALLOW_NULL_CONFIG = "avro.reflection.allow.null";
+  public static final boolean AVRO_REFLECTION_ALLOW_NULL_DEFAULT = false;
+  public static final String AVRO_REFLECTION_ALLOW_NULL_DOC =
+      "If true, allows null field values used in ReflectionAvroSerializer";
+  public static final String AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG =
+          "avro.use.logical.type.converters";
+  public static final boolean AVRO_USE_LOGICAL_TYPE_CONVERTERS_DEFAULT = false;
+  public static final String AVRO_USE_LOGICAL_TYPE_CONVERTERS_DOC =
+          "If true, use logical type converter in generic record";
+
   public static final String AVRO_REMOVE_JAVA_PROPS_CONFIG = "avro.remove.java.properties";
   public static final boolean AVRO_REMOVE_JAVA_PROPS_DEFAULT = false;
   public static final String AVRO_REMOVE_JAVA_PROPS_DOC =
@@ -31,6 +41,12 @@ public class KafkaAvroSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
 
   static {
     config = baseConfigDef()
+        .define(AVRO_REFLECTION_ALLOW_NULL_CONFIG, ConfigDef.Type.BOOLEAN,
+            AVRO_REFLECTION_ALLOW_NULL_DEFAULT, ConfigDef.Importance.MEDIUM,
+            AVRO_REFLECTION_ALLOW_NULL_DOC)
+        .define(AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, ConfigDef.Type.BOOLEAN,
+            AVRO_USE_LOGICAL_TYPE_CONVERTERS_DEFAULT, ConfigDef.Importance.MEDIUM,
+            AVRO_USE_LOGICAL_TYPE_CONVERTERS_DOC)
         .define(AVRO_REMOVE_JAVA_PROPS_CONFIG, ConfigDef.Type.BOOLEAN,
             AVRO_REMOVE_JAVA_PROPS_DEFAULT, ConfigDef.Importance.MEDIUM,
             AVRO_REMOVE_JAVA_PROPS_DOC);

@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+option java_package = "io.confluent.connect.protobuf.test";
+option java_outer_classname = "KeyValueWrapper";
+
+import "google/protobuf/descriptor.proto";
+import "google/protobuf/wrappers.proto";
+
+message KeyValueWrapperMessage {
+    int32 key = 1;
+    google.protobuf.StringValue wrappedValue = 2;
+    google.protobuf.UInt32Value wrappedValue2 = 3;
+}

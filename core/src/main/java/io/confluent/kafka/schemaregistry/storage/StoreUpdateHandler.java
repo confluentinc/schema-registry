@@ -26,8 +26,20 @@ public interface StoreUpdateHandler<K, V> extends Configurable, Closeable {
 
   String SCHEMA_REGISTRY = "schemaRegistry";
 
+  enum ValidationStatus {
+    SUCCESS,
+    ROLLBACK_FAILURE,
+    IGNORE_FAILURE
+  }
+
   @Override
   default void configure(Map<String, ?> map) {
+  }
+
+  /**
+   * Invoked after the cache is initialized.
+   */
+  default void cacheInitialized() {
   }
 
   /**
@@ -39,8 +51,9 @@ public interface StoreUpdateHandler<K, V> extends Configurable, Closeable {
    * @param offset Offset of record
    * @param timestamp Timestamp of record
    */
-  default boolean validateUpdate(K key, V value, TopicPartition tp, long offset, long timestamp) {
-    return true;
+  default ValidationStatus validateUpdate(
+      K key, V value, TopicPartition tp, long offset, long timestamp) {
+    return ValidationStatus.SUCCESS;
   }
 
   /**
@@ -59,8 +72,10 @@ public interface StoreUpdateHandler<K, V> extends Configurable, Closeable {
    * Invoked after a batch of updates.
    *
    * @param count batch count
+   * @return the offsets to checkpoint, or null
    */
-  default void checkpoint(int count) {
+  default Map<TopicPartition, Long> checkpoint(int count) {
+    return null;
   }
 
   @Override

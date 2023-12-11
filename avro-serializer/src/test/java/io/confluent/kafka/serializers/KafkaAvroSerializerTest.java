@@ -21,10 +21,15 @@ import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Arrays;
-import org.apache.avro.AvroRuntimeException;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
+
+import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -126,6 +131,31 @@ public class KafkaAvroSerializerTest {
     return avroRecord;
   }
 
+  private Schema createExtendUserSchema() {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
+        "\"name\": \"User\"," +
+        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}, " +
+        "{\"name\": \"age\", \"type\": [\"null\", \"int\"]}]}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(userSchema);
+    return schema;
+  }
+
+  private IndexedRecord createExtendUserRecordWithNullField() {
+    Schema schema = createExtendUserSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", "testUser");
+    return avroRecord;
+  }
+
+  private IndexedRecord createExtendUserRecord() {
+    Schema schema = createExtendUserSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", "testUser");
+    avroRecord.put("age", 30);
+    return avroRecord;
+  }
+
   private IndexedRecord createUserRecordUtf8() {
     Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
@@ -146,6 +176,42 @@ public class KafkaAvroSerializerTest {
     Schema schema = createAccountSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("accountNumber", "0123456789");
+    return avroRecord;
+  }
+
+  private Schema createBalanceSchema() {
+    String balanceSchema = "{\n" +
+            "\t\"namespace\": \"example.avro\", \"type\": \"record\",\n" +
+            "    \"name\": \"Account\",\n" +
+            "    \"fields\": [\n" +
+            "    \t{\"name\": \"accountNumber\", \"type\": \"string\"},\n" +
+            "        {\"name\": \"balance\", \"type\": {\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":4,\"scale\":2}},\n" +
+            "        {\"name\": \"date\", \"type\": {\"type\":\"int\",\"logicalType\":\"date\"}},\n" +
+            "        {\"name\": \"timeMs\", \"type\": {\"type\":\"int\",\"logicalType\":\"time-millis\"}},\n" +
+            "        {\"name\": \"timeMicros\", \"type\": {\"type\":\"long\",\"logicalType\":\"time-micros\"}},\n" +
+            "        {\"name\": \"tsMs\", \"type\": {\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},\n" +
+            "        {\"name\": \"tsMicros\", \"type\": {\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},\n" +
+            "        {\"name\": \"localTsMs\", \"type\": {\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},\n" +
+            "        {\"name\": \"localTsMicros\", \"type\": {\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}}\n" +
+            "    ]\n" +
+            "}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(balanceSchema);
+    return schema;
+  }
+
+  private IndexedRecord createBalanceRecord() {
+    Schema schema = createBalanceSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("accountNumber", "0123456789");
+    avroRecord.put("balance", new BigDecimal("10.00"));
+    avroRecord.put("date", LocalDate.of(2021,1, 1));
+    avroRecord.put("timeMs", LocalTime.of(1, 1, 1, 1000000));
+    avroRecord.put("timeMicros", LocalTime.of(1, 1, 1, 1001000));
+    avroRecord.put("tsMs", Instant.ofEpochMilli(1613646696368L));
+    avroRecord.put("tsMicros", Instant.ofEpochMilli(1613646696368009L));
+    avroRecord.put("localTsMs", LocalDateTime.of(2021,1, 1, 1, 1, 1, 1000000));
+    avroRecord.put("localTsMicros", LocalDateTime.of(2021,1, 1, 1, 1, 1, 1001000));
     return avroRecord;
   }
 
@@ -205,6 +271,16 @@ public class KafkaAvroSerializerTest {
     bytes = avroSerializer.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
     assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+
+    IndexedRecord avroRecordWithAllField = createExtendUserRecord();
+    bytes = avroSerializer.serialize(topic, avroRecordWithAllField);
+    assertEquals(avroRecordWithAllField, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecordWithAllField, avroDecoder.fromBytes(bytes));
+
+    IndexedRecord avroRecordWithoutOptional = createExtendUserRecordWithNullField();
+    bytes = avroSerializer.serialize(topic, avroRecordWithoutOptional);
+    assertEquals(avroRecordWithoutOptional, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecordWithoutOptional, avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, null);
     assertEquals(null, avroDeserializer.deserialize(topic, bytes));
@@ -759,18 +835,60 @@ public class KafkaAvroSerializerTest {
 
     obj = reflectionAvroDecoder.fromBytes(bytes, schema);
     assertTrue(
-            "Returned object should be a io.confluent.kafka.example.User",
+            "Returned object should be a io.confluent.kafka.example.Widget",
             Widget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue(
-            "Returned object should be a io.confluent.kafka.example.User",
+            "Returned object should be a io.confluent.kafka.example.Widget",
             Widget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
   }
+
+  @Test
+  public void testKafkaAvroSerializerReflectionRecordWithNullField() {
+    byte[] bytes;
+    Object obj;
+
+    ExtendedWidget widget = new ExtendedWidget();
+    // intentionally miss setting Age field
+    widget.setName("alice");
+    Schema schema = ReflectData.AllowNull.get().getSchema(widget.getClass());
+
+    try {
+      reflectionAvroSerializer.serialize(topic, widget);
+      fail("Sending instance with null field should fail reflection serializer");
+    } catch (SerializationException e){
+      //this is expected
+    }
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus",
+        AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, true,
+        KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG, true
+    );
+    reflectionAvroDeserializer.configure(configs, false);
+    reflectionAvroSerializer.configure(configs, false);
+
+    bytes = reflectionAvroSerializer.serialize(topic, widget);
+    obj = reflectionAvroDecoder.fromBytes(bytes, schema);
+    assertTrue(
+        "Returned object should be a io.confluent.kafka.example.ExtendedWidget",
+        ExtendedWidget.class.isInstance(obj)
+    );
+    assertEquals(widget, obj);
+
+    obj = reflectionAvroDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a io.confluent.kafka.example.ExtendedWidget",
+        ExtendedWidget.class.isInstance(obj)
+    );
+    assertEquals(widget, obj);
+  }
+
 
   @Test
   public void testKafkaAvroSerializerReflectionRecordWithProjection() {
@@ -913,6 +1031,25 @@ public class KafkaAvroSerializerTest {
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue("Returned object should be a String", String.class.isInstance(obj));
     assertEquals(message, obj);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerGenericRecordWithConverters() {
+    Map configs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+            TopicRecordNameStrategy.class.getName(),
+            KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG,
+            true
+    );
+
+    avroSerializer.configure(configs, false);
+    avroDeserializer.configure(configs, false);
+
+    IndexedRecord record1 = createBalanceRecord();
+    byte[] bytes1 = avroSerializer.serialize(topic, record1);
+    assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
   }
 
 }

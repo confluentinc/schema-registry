@@ -1442,6 +1442,31 @@ public class RestApiTest extends ClusterTestHarness {
     }
   }
 
+  @Test
+  public void testGlobalMode() throws Exception {
+    // test default globalMode
+    assertEquals("READWRITE", restApp.restClient.getMode().getMode());
+
+    //test subjectMode override globalMode
+    String subject = "testSubject";
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
+    restApp.restClient.setMode("READONLY", null);
+    restApp.restClient.setMode("READWRITE", subject);
+    assertEquals("READWRITE", restApp.restClient.getMode(subject).getMode());
+
+    //test READONLY_OVERRIDE globalMode override subjectMode
+    restApp.restClient.setMode("READONLY_OVERRIDE", null);
+    assertEquals("READONLY_OVERRIDE", restApp.restClient.getMode(subject).getMode());
+    try {
+      restApp.restClient.registerSchema(schema, "testSubject2");
+      fail(String.format("Subject %s is in read-only mode", "testSubject2"));
+    } catch (RestClientException rce) {
+      assertEquals("Subject is in read-only mode", Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
+          .getErrorCode());
+    }
+  }
+
   @Override
   protected Properties getSchemaRegistryProperties() {
     Properties schemaRegistryProps = new Properties();

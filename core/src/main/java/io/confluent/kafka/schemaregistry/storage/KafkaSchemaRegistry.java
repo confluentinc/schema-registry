@@ -423,6 +423,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
+  public RestService leaderRestService() {
+    return leaderRestService;
+  }
+
   public Set<String> schemaTypes() {
     return providers.keySet();
   }
@@ -540,7 +544,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private void checkRegisterMode(
       String subject, Schema schema
   ) throws OperationNotPermittedException, SchemaRegistryStoreException {
-    if (getModeInScope(subject) == Mode.READONLY) {
+    if (isReadOnlyMode(subject)) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
 
@@ -555,6 +559,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         );
       }
     }
+  }
+
+  private boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
+    Mode subjectMode = getModeInScope(subject);
+    return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
   }
 
   public int registerOrForward(String subject,
@@ -596,7 +605,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                   boolean permanentDelete)
       throws SchemaRegistryException {
     try {
-      if (getModeInScope(subject) == Mode.READONLY) {
+      if (isReadOnlyMode(subject)) {
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
@@ -661,7 +670,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                      boolean permanentDelete) throws SchemaRegistryException {
     // Ensure cache is up-to-date before any potential writes
     try {
-      if (getModeInScope(subject) == Mode.READONLY) {
+      if (isReadOnlyMode(subject)) {
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
@@ -1274,7 +1283,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public void updateCompatibilityLevel(String subject, CompatibilityLevel newCompatibilityLevel)
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
-    if (getModeInScope(subject) == Mode.READONLY) {
+    if (isReadOnlyMode(subject)) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
     ConfigKey configKey = new ConfigKey(subject);
@@ -1406,7 +1415,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public Mode getMode(String subject) throws SchemaRegistryStoreException {
     try {
-      return lookupCache.mode(subject, false, defaultMode);
+      Mode globalMode = lookupCache.mode(null, false, defaultMode);
+      Mode subjectMode = lookupCache.mode(subject, false, defaultMode);
+
+      return globalMode == Mode.READONLY_OVERRIDE ? globalMode : subjectMode;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
@@ -1414,7 +1426,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private Mode getModeInScope(String subject) throws SchemaRegistryStoreException {
     try {
-      return lookupCache.mode(subject, true, defaultMode);
+      Mode globalMode = lookupCache.mode(null, true, defaultMode);
+      Mode subjectMode = lookupCache.mode(subject, true, defaultMode);
+
+      return globalMode == Mode.READONLY_OVERRIDE ? globalMode : subjectMode;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }

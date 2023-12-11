@@ -54,7 +54,7 @@ public final class RecursiveKeyValue {
   /**
    * Protobuf type {@code RecursiveKeyValueMessage}
    */
-  public  static final class RecursiveKeyValueMessage extends
+  public static final class RecursiveKeyValueMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:RecursiveKeyValueMessage)
       RecursiveKeyValueMessageOrBuilder {
@@ -159,6 +159,7 @@ public final class RecursiveKeyValue {
      * <code>int32 key = 1;</code>
      * @return The key.
      */
+    @java.lang.Override
     public int getKey() {
       return key_;
     }
@@ -169,6 +170,7 @@ public final class RecursiveKeyValue {
      * <code>string value = 2;</code>
      * @return The value.
      */
+    @java.lang.Override
     public java.lang.String getValue() {
       java.lang.Object ref = value_;
       if (ref instanceof java.lang.String) {
@@ -185,6 +187,7 @@ public final class RecursiveKeyValue {
      * <code>string value = 2;</code>
      * @return The bytes for value.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString
         getValueBytes() {
       java.lang.Object ref = value_;
@@ -205,6 +208,7 @@ public final class RecursiveKeyValue {
      * <code>.RecursiveKeyValueMessage key_value = 10;</code>
      * @return Whether the keyValue field is set.
      */
+    @java.lang.Override
     public boolean hasKeyValue() {
       return keyValue_ != null;
     }
@@ -212,12 +216,14 @@ public final class RecursiveKeyValue {
      * <code>.RecursiveKeyValueMessage key_value = 10;</code>
      * @return The keyValue.
      */
+    @java.lang.Override
     public io.confluent.connect.protobuf.test.RecursiveKeyValue.RecursiveKeyValueMessage getKeyValue() {
       return keyValue_ == null ? io.confluent.connect.protobuf.test.RecursiveKeyValue.RecursiveKeyValueMessage.getDefaultInstance() : keyValue_;
     }
     /**
      * <code>.RecursiveKeyValueMessage key_value = 10;</code>
      */
+    @java.lang.Override
     public io.confluent.connect.protobuf.test.RecursiveKeyValue.RecursiveKeyValueMessageOrBuilder getKeyValueOrBuilder() {
       return getKeyValue();
     }
@@ -239,7 +245,7 @@ public final class RecursiveKeyValue {
       if (key_ != 0) {
         output.writeInt32(1, key_);
       }
-      if (!getValueBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(value_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 2, value_);
       }
       if (keyValue_ != null) {
@@ -258,7 +264,7 @@ public final class RecursiveKeyValue {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(1, key_);
       }
-      if (!getValueBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(value_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, value_);
       }
       if (keyValue_ != null) {
@@ -576,6 +582,7 @@ public final class RecursiveKeyValue {
        * <code>int32 key = 1;</code>
        * @return The key.
        */
+      @java.lang.Override
       public int getKey() {
         return key_;
       }

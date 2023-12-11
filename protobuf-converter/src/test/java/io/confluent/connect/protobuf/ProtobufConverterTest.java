@@ -727,6 +727,231 @@ public class ProtobufConverterTest {
   }
 
   @Test
+  public void testComplexWrappers() {
+    Map<String, Object> config = new HashMap<>();
+    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost");
+    config.put(ProtobufDataConfig.WRAPPER_FOR_NULLABLES_CONFIG, true);
+    ProtobufConverter converter = new ProtobufConverter(schemaRegistry);
+    converter.configure(config, false);
+
+    SchemaBuilder builder = SchemaBuilder.struct()
+        .field(
+            "int32_null",
+            SchemaBuilder.int32()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "1")
+                .build()
+        )
+        .field(
+            "int64_null",
+            SchemaBuilder.int64()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "2")
+                .build()
+        )
+        .field(
+            "float32_null",
+            SchemaBuilder.float32()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "3")
+                .build()
+        )
+        .field(
+            "float64_null",
+            SchemaBuilder.float64()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "4")
+                .build()
+        )
+        .field(
+            "boolean_null",
+            SchemaBuilder.bool()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "5")
+                .build()
+        )
+        .field(
+            "string_null",
+            SchemaBuilder.string()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "6")
+                .build()
+        )
+        .field(
+            "bytes_null",
+            SchemaBuilder.bytes()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "7")
+                .build()
+        )
+        .field(
+            "int32_opt",
+            SchemaBuilder.int32()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "8")
+                .build()
+        )
+        .field(
+            "int64_opt",
+            SchemaBuilder.int64()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "9")
+                .build()
+        )
+        .field(
+            "float32_opt",
+            SchemaBuilder.float32()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "10")
+                .build()
+        )
+        .field(
+            "float64_opt",
+            SchemaBuilder.float64()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "11")
+                .build()
+        )
+        .field(
+            "boolean_opt",
+            SchemaBuilder.bool()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "12")
+                .build()
+        )
+        .field(
+            "string_opt",
+            SchemaBuilder.string()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "13")
+                .build()
+        )
+        .field(
+            "bytes_opt",
+            SchemaBuilder.bytes()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "14")
+                .build()
+        )
+        .field(
+            "int32",
+            SchemaBuilder.int32()
+                .parameter("io.confluent.connect.protobuf.Tag", "15")
+                .build()
+        )
+        .field(
+            "int64",
+            SchemaBuilder.int64()
+                .parameter("io.confluent.connect.protobuf.Tag", "16")
+                .build()
+        )
+        .field(
+            "float32",
+            SchemaBuilder.float32()
+                .parameter("io.confluent.connect.protobuf.Tag", "17")
+                .build()
+        )
+        .field(
+            "float64",
+            SchemaBuilder.float64()
+                .parameter("io.confluent.connect.protobuf.Tag", "18")
+                .build()
+        )
+        .field(
+            "boolean",
+            SchemaBuilder.bool()
+                .parameter("io.confluent.connect.protobuf.Tag", "19")
+                .build()
+        )
+        .field(
+            "string",
+            SchemaBuilder.string()
+                .parameter("io.confluent.connect.protobuf.Tag", "20")
+                .build()
+        )
+        .field(
+            "bytes",
+            SchemaBuilder.bytes()
+                .parameter("io.confluent.connect.protobuf.Tag", "21")
+                .build()
+        )
+        .field(
+            "array",
+            SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA)
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "22")
+                .build()
+        )
+        .field("map", SchemaBuilder.map(SchemaBuilder.string()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "1")
+                .build(),
+            SchemaBuilder.int32()
+                .optional()
+                .parameter("io.confluent.connect.protobuf.Tag", "2")
+                .build()
+        )
+            .name("connect_default2")
+            .optional()
+            .parameter("io.confluent.connect.protobuf.Tag", "23")
+            .build());
+    Schema schema = builder.build();
+    Struct original = new Struct(schema).put("int32_null", null)
+        .put("int64_null", null)
+        .put("float32_null", null)
+        .put("float64_null", null)
+        .put("boolean_null", null)
+        .put("string_null", null)
+        .put("bytes_null", null)
+        .put("int32_opt", 0)
+        .put("int64_opt", 0L)
+        .put("float32_opt", 0.0f)
+        .put("float64_opt", 0.0)
+        .put("boolean_opt", false)
+        .put("string_opt", "")
+        .put("bytes_opt", ByteBuffer.wrap("".getBytes()))
+        .put("int32", 12)
+        .put("int64", 12L)
+        .put("float32", 12.2f)
+        .put("float64", 12.2)
+        .put("boolean", true)
+        .put("string", "foo")
+        .put("bytes", ByteBuffer.wrap("foo".getBytes()))
+        .put("array", Arrays.asList("a", "b", "c"))
+        .put("map", Collections.singletonMap("field", 1));
+    // Because of registration in schema registry and lookup, we'll have added a version number
+    Schema expectedSchema = builder.name("ConnectDefault1").version(1).build();
+    Struct expected = new Struct(expectedSchema).put("int32_null", null)
+        .put("int64_null", null)
+        .put("float32_null", null)
+        .put("float64_null", null)
+        .put("boolean_null", null)
+        .put("string_null", null)
+        .put("bytes_null", null)
+        .put("int32_opt", 0)
+        .put("int64_opt", 0L)
+        .put("float32_opt", 0.0f)
+        .put("float64_opt", 0.0)
+        .put("boolean_opt", false)
+        .put("string_opt", "")
+        .put("bytes_opt", ByteBuffer.wrap("".getBytes()).asReadOnlyBuffer())
+        .put("int32", 12)
+        .put("int64", 12L)
+        .put("float32", 12.2f)
+        .put("float64", 12.2)
+        .put("boolean", true)
+        .put("string", "foo")
+        .put("bytes", ByteBuffer.wrap("foo".getBytes()).asReadOnlyBuffer())
+        .put("array", Arrays.asList("a", "b", "c"))
+        .put("map", Collections.singletonMap("field", 1));
+
+    byte[] converted = converter.fromConnectData(TOPIC, original.schema(), original);
+    SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
+    assertEquals(expected.schema(), ((Struct) schemaAndValue.value()).schema());
+    assertEquals(expected, schemaAndValue.value());
+  }
+
+  @Test
   public void testNull() {
     Schema schema = SchemaBuilder.struct().build();
     byte[] converted = converter.fromConnectData(TOPIC, schema, null);

@@ -17,9 +17,14 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.dynamic;
 
+import static io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema.toMeta;
+
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
+import io.confluent.protobuf.MetaProto;
+import io.confluent.protobuf.MetaProto.Meta;
+import java.util.Map;
 
 /**
  * EnumDefinition
@@ -66,9 +71,33 @@ public class EnumDefinition {
     }
 
     public Builder addValue(String name, int num) {
+      return addValue(name, num, null, null);
+    }
+
+    // Note: added
+    public Builder addValue(String name, int num, String doc, Map<String, String> params) {
       EnumValueDescriptorProto.Builder enumValBuilder = EnumValueDescriptorProto.newBuilder();
       enumValBuilder.setName(name).setNumber(num);
+      Meta meta = toMeta(doc, params);
+      if (meta != null) {
+        DescriptorProtos.EnumValueOptions.Builder optionsBuilder =
+                DescriptorProtos.EnumValueOptions.newBuilder();
+        optionsBuilder.setExtension(MetaProto.enumValueMeta, meta);
+        enumValBuilder.mergeOptions(optionsBuilder.build());
+      }
       mEnumTypeBuilder.addValue(enumValBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setMeta(String doc, Map<String, String> params) {
+      Meta meta = toMeta(doc, params);
+      if (meta != null) {
+        DescriptorProtos.EnumOptions.Builder optionsBuilder =
+                DescriptorProtos.EnumOptions.newBuilder();
+        optionsBuilder.setExtension(MetaProto.enumMeta, meta);
+        mEnumTypeBuilder.mergeOptions(optionsBuilder.build());
+      }
       return this;
     }
 

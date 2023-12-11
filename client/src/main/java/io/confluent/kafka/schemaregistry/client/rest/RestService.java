@@ -359,12 +359,22 @@ public class RestService implements Closeable, Configurable {
     }
   }
 
-  // Allow subclasses to call
-  protected <T> T httpRequest(String path,
-                              String method,
-                              byte[] requestBodyData,
-                              Map<String, String> requestProperties,
-                              TypeReference<T> responseFormat)
+  /**
+   * Send an HTTP request.
+   *
+   * @param path              The relative path
+   * @param method            HTTP method ("GET", "POST", "PUT", etc.)
+   * @param requestBodyData   Bytes to be sent in the request body.
+   * @param requestProperties HTTP header properties.
+   * @param responseFormat    Expected format of the response to the HTTP request.
+   * @param <T>               The type of the deserialized response to the HTTP request.
+   * @return The deserialized response to the HTTP request, or null if no data is expected.
+   */
+  public <T> T httpRequest(String path,
+                           String method,
+                           byte[] requestBodyData,
+                           Map<String, String> requestProperties,
+                           TypeReference<T> responseFormat)
       throws IOException, RestClientException {
     for (int i = 0, n = baseUrls.size(); i < n; i++) {
       String baseUrl = baseUrls.current();

@@ -89,6 +89,11 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
 
   @Override
   public void execute() throws MojoExecutionException, MojoFailureException {
+    if (skip) {
+      getLog().info("Plugin execution has been skipped");
+      return;
+    }
+
     try {
       getLog().debug(
           String.format("Checking if '%s' exists and is not a directory.", this.outputDirectory));

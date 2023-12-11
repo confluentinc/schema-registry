@@ -383,7 +383,6 @@ public class SchemaRegistryConfig extends RestConfig {
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
-  // TODO: move to Apache's ConfigDef
   private static final ConfigDef config;
 
   public static final String HTTPS = "https";

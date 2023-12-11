@@ -10,7 +10,7 @@
               files="ErrorMessage.java"/>
 
     <suppress checks="ParameterNumber"
-              files="(AbstractKafkaProtobufSerializer|SchemaRegistryCoordinator).java"/>
+              files="(AbstractKafkaProtobufSerializer|MessageDefinition|SchemaRegistryCoordinator).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroConverter|AvroData|KafkaGroupLeaderElector|ProtobufSchema|ProtobufData|JsonSchemaData|InMemoryCache|SchemaMessageReader|JsonSchemaConverter|MetricsContainer).java"/>
@@ -44,5 +44,8 @@
 
     <suppress checks="MemberName"
               files="(DynamicSchema|EnumDefinition|MessageDefinition).java"/>
+
+    <suppress checks="[a-zA-Z0-9]*"
+              files="(DecimalOrBuilder|DecimalProto|Decimal|MetaProto).java"/>
 
 </suppressions>

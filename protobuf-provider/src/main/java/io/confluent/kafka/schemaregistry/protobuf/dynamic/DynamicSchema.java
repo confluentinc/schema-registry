@@ -30,6 +30,8 @@ import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DynamicMessage;
 
+import io.confluent.protobuf.MetaProto;
+import io.confluent.protobuf.MetaProto.Meta;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -334,6 +336,20 @@ public class DynamicSchema {
     mEnumDescriptorMapShort.put(enumTypeNameShort, enumType);
   }
 
+  static Meta toMeta(String doc, Map<String, String> params) {
+    if (doc == null && params == null) {
+      return null;
+    }
+    Meta.Builder metaBuilder = Meta.newBuilder();
+    if (doc != null) {
+      metaBuilder.setDoc(doc);
+    }
+    if (params != null) {
+      metaBuilder.putAllParams(params);
+    }
+    return metaBuilder.build();
+  }
+
   private FileDescriptorSet mFileDescSet;
   private Map<String, Descriptor> mMsgDescriptorMapFull = new HashMap<String, Descriptor>();
   private Map<String, Descriptor> mMsgDescriptorMapShort = new HashMap<String, Descriptor>();
@@ -457,6 +473,18 @@ public class DynamicSchema {
           DescriptorProtos.FileOptions.newBuilder();
       optionsBuilder.setJavaMultipleFiles(javaMultipleFiles);
       mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setMeta(String doc, Map<String, String> params) {
+      Meta meta = toMeta(doc, params);
+      if (meta != null) {
+        DescriptorProtos.FileOptions.Builder optionsBuilder =
+                DescriptorProtos.FileOptions.newBuilder();
+        optionsBuilder.setExtension(MetaProto.fileMeta, meta);
+        mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      }
       return this;
     }
 

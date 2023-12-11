@@ -90,8 +90,8 @@ public class SchemaDiff {
             SchemaReference::getName,
             r -> r,
             (existing, replacement) -> replacement));
-    Map<String, ProtoFileElement> originalDependencies = original.dependencies();
-    Map<String, ProtoFileElement> updateDependencies = update.dependencies();
+    Map<String, ProtoFileElement> originalDependencies = original.dependenciesWithLogicalTypes();
+    Map<String, ProtoFileElement> updateDependencies = update.dependenciesWithLogicalTypes();
     final Context ctx = new Context(COMPATIBLE_CHANGES);
     collectContextInfoForRefs(ctx, originalReferences, originalDependencies, true);
     collectContextInfoForRefs(ctx, updateReferences, updateDependencies, false);

@@ -20,6 +20,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Message;
 import com.google.protobuf.UnknownFieldSet;
+import io.confluent.kafka.schemaregistry.utils.ResourceLoader;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -141,18 +142,22 @@ public class RestApiTest extends ClusterTestHarness {
   @Test
   public void testSchemaReferences() throws Exception {
     Map<String, String> schemas = getProtobufSchemaWithDependencies();
-    String subject = "reference";
-    registerAndVerifySchema(restApp.restClient, schemas.get("ref.proto"), 1, subject);
+    String subject = "confluent/meta.proto";
+    registerAndVerifySchema(restApp.restClient, schemas.get("confluent/meta.proto"), 1, subject);
+    subject = "reference";
+    registerAndVerifySchema(restApp.restClient, schemas.get("ref.proto"), 2, subject);
 
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemas.get("root.proto"));
     request.setSchemaType(ProtobufSchema.TYPE);
     SchemaReference ref = new SchemaReference("ref.proto", "reference", 1);
-    request.setReferences(Collections.singletonList(ref));
+    SchemaReference meta = new SchemaReference("confluent/meta.proto", "confluent/meta.proto", 1);
+    List<SchemaReference> refs = Arrays.asList(ref, meta);
+    request.setReferences(refs);
     int registeredId = restApp.restClient.registerSchema(request, "referrer");
-    assertEquals("Registering a new schema should succeed", 2, registeredId);
+    assertEquals("Registering a new schema should succeed", 3, registeredId);
 
-    SchemaString schemaString = restApp.restClient.getId(2);
+    SchemaString schemaString = restApp.restClient.getId(3);
     // the newly registered schema should be immediately readable on the leader
     assertEquals("Registered schema should be found",
         schemas.get("root.proto"),
@@ -160,16 +165,16 @@ public class RestApiTest extends ClusterTestHarness {
     );
 
     assertEquals("Schema dependencies should be found",
-        Collections.singletonList(ref),
+        refs,
         schemaString.getReferences()
     );
 
     Root.ReferrerMessage referrer = Root.ReferrerMessage.newBuilder().build();
     ProtobufSchema schema = ProtobufSchemaUtils.getSchema(referrer);
-    schema = schema.copy(Collections.singletonList(ref));
+    schema = schema.copy(refs);
     Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
             ProtobufSchema.TYPE, schema.references(), "referrer", false);
-    assertEquals("Registered schema should be found", 2, registeredSchema.getId().intValue());
+    assertEquals("Registered schema should be found", 3, registeredSchema.getId().intValue());
   }
 
   @Test
@@ -324,8 +329,8 @@ public class RestApiTest extends ClusterTestHarness {
     );
     Assert.assertEquals(
         "Registered schema should be found",
-        schemaString,
-        restService.getId(expectedId).getSchemaString()
+        schemaString.trim(),
+        restService.getId(expectedId).getSchemaString().trim()
     );
   }
 
@@ -344,15 +349,28 @@ public class RestApiTest extends ClusterTestHarness {
 
   public static Map<String, String> getProtobufSchemaWithDependencies() {
     Map<String, String> schemas = new HashMap<>();
+    String meta = ResourceLoader.DEFAULT.toString("confluent/meta.proto");
+    schemas.put("confluent/meta.proto", meta);
     String reference =
         "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n\n"
             + "message ReferencedMessage {\n  string ref_id = 1;\n  bool is_active = 2;\n}\n";
     schemas.put("ref.proto", reference);
-    String schemaString =
-        "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n\n"
-            + "import \"ref.proto\";\n\n"
-            + "message ReferrerMessage {\n  string root_id = 1;\n"
-            + "  .io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;\n}\n";
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"ref.proto\";\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "\n"
+        + "message ReferrerMessage {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    doc: \"ReferrerMessage\"\n"
+        + "  };\n"
+        + "\n"
+        + "  string root_id = 1;\n"
+        + "  .io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(confluent.field_meta) = {\n"
+        + "    doc: \"ReferencedMessage\"\n"
+        + "  }];\n"
+        + "}\n";
     schemas.put("root.proto", schemaString);
     return schemas;
   }

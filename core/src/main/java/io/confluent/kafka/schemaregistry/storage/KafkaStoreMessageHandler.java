@@ -48,8 +48,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
    * @param value Data written to the store
    */
   @Override
-  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
-                                TopicPartition tp, long offset, long timestamp) {
+  public ValidationStatus validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
+                                         TopicPartition tp, long offset, long timestamp) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
       if (schemaObj != null) {
@@ -63,16 +63,18 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
               log.error("Found a schema with duplicate ID {}.  This schema will not be "
                       + "registered since a schema already exists with this ID.",
                   schemaObj.getId());
-              return false;
+              return schemaRegistry.isLeader()
+                  ? ValidationStatus.ROLLBACK_FAILURE : ValidationStatus.IGNORE_FAILURE;
             }
           }
         } catch (StoreException e) {
           log.error("Error while retrieving schema", e);
-          return false;
+          return schemaRegistry.isLeader()
+              ? ValidationStatus.ROLLBACK_FAILURE : ValidationStatus.IGNORE_FAILURE;
         }
       }
     }
-    return true;
+    return ValidationStatus.SUCCESS;
   }
 
   @VisibleForTesting

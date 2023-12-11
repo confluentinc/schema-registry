@@ -446,6 +446,64 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testMeta() throws Exception {
+    ResourceLoader resourceLoader = new ResourceLoader("/");
+
+    String metaName = "confluent/meta.proto";
+    ProtoFileElement meta = resourceLoader.readObj(metaName);
+    SchemaReference metaRef = new SchemaReference(metaName, metaName, 1);
+
+    String decimalName = "confluent/type/decimal.proto";
+    ProtoFileElement decimal = resourceLoader.readObj(decimalName);
+    SchemaReference decimalRef = new SchemaReference(decimalName, decimalName, 1);
+
+    String descriptorName = "google/protobuf/descriptor.proto";
+    ProtoFileElement descriptor = resourceLoader.readObj(descriptorName);
+    SchemaReference descriptorRef = new SchemaReference(descriptorName, descriptorName, 1);
+
+    ProtoFileElement original = resourceLoader.readObj(
+        "io/confluent/kafka/schemaregistry/protobuf/diff/DecimalValue2.proto");
+    List<SchemaReference> refs = new ArrayList<>();
+    refs.add(metaRef);
+    refs.add(decimalRef);
+    refs.add(descriptorRef);
+    Map<String, ProtoFileElement> deps = new HashMap<>();
+    deps.put(metaName, meta);
+    deps.put(decimalName, decimal);
+    deps.put(descriptorName, descriptor);
+    ProtobufSchema schema = new ProtobufSchema(original, refs, deps);
+    Descriptor desc = schema.toDescriptor();
+    ProtobufSchema schema2 = new ProtobufSchema(desc);
+
+    assertTrue(schema.isCompatible(
+        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
+    assertEquals(schema.canonicalString(), schema2.canonicalString());
+  }
+
+  @Test
+  public void testNativeDependencies() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "\n"
+        + "message DecimalValue {\n"
+        + "  confluent.type.Decimal value = 1 [(confluent.field_meta) = { params: [\n"
+        + "    { value: \"8\", key: \"precision\" },\n"
+        + "    { value: \"3\", key: \"scale\" }\n"
+        + "  ]}];\n"
+        + "}";
+
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    Descriptor desc = schema.toDescriptor();
+    ProtobufSchema schema2 = new ProtobufSchema(desc);
+
+    assertTrue(schema.isCompatible(
+            CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
+    assertEquals(schema.canonicalString(), schema2.canonicalString());
+  }
+
+  @Test
   public void testFileDescriptorProto() throws Exception {
     ResourceLoader resourceLoader = new ResourceLoader(
         "/io/confluent/kafka/schemaregistry/protobuf/diff/");
@@ -478,7 +536,7 @@ public class ProtobufSchemaTest {
   @Test
   public void testDefaultOmittedInProto3String() throws Exception {
     MessageDefinition.Builder message = MessageDefinition.newBuilder("msg1");
-    message.addField(null, "string", "field1", 1, "defaultVal");
+    message.addField(null, "string", "field1", 1, "defaultVal", null, null);
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     schema.setSyntax(PROTO3);
     schema.addMessageDefinition(message.build());

@@ -39,7 +39,7 @@ public final class KeyValue {
   /**
    * Protobuf type {@code KeyValueMessage}
    */
-  public  static final class KeyValueMessage extends
+  public static final class KeyValueMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:KeyValueMessage)
       KeyValueMessageOrBuilder {
@@ -131,6 +131,7 @@ public final class KeyValue {
      * <code>int32 key = 1;</code>
      * @return The key.
      */
+    @java.lang.Override
     public int getKey() {
       return key_;
     }
@@ -141,6 +142,7 @@ public final class KeyValue {
      * <code>string value = 2;</code>
      * @return The value.
      */
+    @java.lang.Override
     public java.lang.String getValue() {
       java.lang.Object ref = value_;
       if (ref instanceof java.lang.String) {
@@ -157,6 +159,7 @@ public final class KeyValue {
      * <code>string value = 2;</code>
      * @return The bytes for value.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString
         getValueBytes() {
       java.lang.Object ref = value_;
@@ -188,7 +191,7 @@ public final class KeyValue {
       if (key_ != 0) {
         output.writeInt32(1, key_);
       }
-      if (!getValueBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(value_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 2, value_);
       }
       unknownFields.writeTo(output);
@@ -204,7 +207,7 @@ public final class KeyValue {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(1, key_);
       }
-      if (!getValueBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(value_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, value_);
       }
       size += unknownFields.getSerializedSize();
@@ -495,6 +498,7 @@ public final class KeyValue {
        * <code>int32 key = 1;</code>
        * @return The key.
        */
+      @java.lang.Override
       public int getKey() {
         return key_;
       }

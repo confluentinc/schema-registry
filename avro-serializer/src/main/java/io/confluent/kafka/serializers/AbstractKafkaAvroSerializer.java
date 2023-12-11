@@ -18,7 +18,15 @@ package io.confluent.kafka.serializers;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -31,16 +39,6 @@ import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import kafka.utils.VerifiableProperties;
-
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSerDe {
 
   private final EncoderFactory encoderFactory = EncoderFactory.get();
@@ -48,6 +46,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean removeJavaProperties;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
+  protected boolean avroReflectionAllowNull = false;
+  protected boolean avroUseLogicalTypeConverters = false;
   private final Cache<Schema, DatumWriter<Object>> datumWriterCache;
 
   public AbstractKafkaAvroSerializer() {
@@ -66,6 +66,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
     useLatestVersion = config.useLatestVersion();
     latestCompatStrict = config.getLatestCompatibilityStrict();
+    avroReflectionAllowNull = config
+        .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
+    avroUseLogicalTypeConverters = config
+            .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -74,6 +78,20 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   protected KafkaAvroSerializerConfig serializerConfig(VerifiableProperties props) {
     return new KafkaAvroSerializerConfig(props.props());
+  }
+
+  protected DatumWriter<?> getDatumWriter(Object value, Schema schema) {
+    if (value instanceof SpecificRecord) {
+      return new SpecificDatumWriter<>(schema);
+    } else if (useSchemaReflection) {
+      return new ReflectDatumWriter<>(schema);
+    } else {
+      if (avroUseLogicalTypeConverters) {
+        return new GenericDatumWriter<>(schema, AvroData.getGenericData());
+      } else {
+        return new GenericDatumWriter<>(schema);
+      }
+    }
   }
 
   protected byte[] serializeImpl(
@@ -119,16 +137,11 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         }
       } else {
         BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
+
         DatumWriter<Object> writer;
-        writer = datumWriterCache.get(rawSchema, () -> {
-          if (value instanceof SpecificRecord) {
-            return new SpecificDatumWriter<>(rawSchema);
-          } else if (useSchemaReflection) {
-            return new ReflectDatumWriter<>(rawSchema);
-          } else {
-            return new GenericDatumWriter<>(rawSchema);
-          }
-        });
+        writer = datumWriterCache.get(rawSchema,
+            () -> (DatumWriter<Object>) getDatumWriter(value, rawSchema)
+        );
         writer.write(value, encoder);
         encoder.flush();
       }

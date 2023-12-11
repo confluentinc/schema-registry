@@ -103,6 +103,14 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
 
     <!-- exclude generated code -->
     <Match>
+        <Class name="~io.confluent.protobuf.*"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.protobuf.type.*"/>
+    </Match>
+
+    <Match>
         <Class name="~io.confluent.schemaregistry.benchmark.generated.*"/>
     </Match>
 

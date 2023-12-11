@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package confluent.type;
+
+option java_package = "io.confluent.protobuf.type";
+option java_multiple_files = true;
+option java_outer_classname = "DecimalProto";
+
+message Decimal {
+
+  // The two's-complement representation of the unscaled integer value in big-endian byte order
+  bytes value = 1;
+
+  // The precision
+  uint32 precision = 2;
+
+  // The scale
+  int32 scale = 3;
+}

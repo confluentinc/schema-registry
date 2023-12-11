@@ -17,12 +17,16 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.dynamic;
 
+import static io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema.toMeta;
+
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 
+import io.confluent.protobuf.MetaProto;
+import io.confluent.protobuf.MetaProto.Meta;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,8 +71,16 @@ public class MessageDefinition {
       return mMsgTypeBuilder.getName();
     }
 
-    public Builder addField(String label, String type, String name, int num, String defaultVal) {
-      return addField(label, type, name, num, defaultVal, null, null);
+    public Builder addField(
+        String label,
+        String type,
+        String name,
+        int num,
+        String defaultVal,
+        String doc,
+        Map<String, String> params
+    ) {
+      return addField(label, type, name, num, defaultVal, null, doc, params, null);
     }
 
     public Builder addField(
@@ -78,10 +90,13 @@ public class MessageDefinition {
         int num,
         String defaultVal,
         String jsonName,
+        String doc,
+        Map<String, String> params,
         Boolean isPacked
     ) {
       FieldDescriptorProto.Label protoLabel = sLabelMap.get(label);
-      doAddField(protoLabel, type, name, num, defaultVal, jsonName, isPacked, null);
+      doAddField(protoLabel, type, name, num,
+              defaultVal, jsonName, doc, params, isPacked, null);
       return this;
     }
 
@@ -144,6 +159,18 @@ public class MessageDefinition {
       return this;
     }
 
+    // Note: added
+    public Builder setMeta(String doc, Map<String, String> params) {
+      Meta meta = toMeta(doc, params);
+      if (meta != null) {
+        DescriptorProtos.MessageOptions.Builder optionsBuilder =
+                DescriptorProtos.MessageOptions.newBuilder();
+        optionsBuilder.setExtension(MetaProto.messageMeta, meta);
+        mMsgTypeBuilder.mergeOptions(optionsBuilder.build());
+      }
+      return this;
+    }
+
     public MessageDefinition build() {
       return new MessageDefinition(mMsgTypeBuilder.build());
     }
@@ -162,6 +189,8 @@ public class MessageDefinition {
         int num,
         String defaultVal,
         String jsonName,
+        String doc,
+        Map<String, String> params,
         Boolean isPacked,
         OneofBuilder oneofBuilder
     ) {
@@ -192,7 +221,19 @@ public class MessageDefinition {
         optionsBuilder.setPacked(isPacked);
         fieldBuilder.mergeOptions(optionsBuilder.build());
       }
+      setFieldMeta(fieldBuilder, doc, params);
       mMsgTypeBuilder.addField(fieldBuilder.build());
+    }
+
+    private void setFieldMeta(
+            FieldDescriptorProto.Builder fieldBuilder, String doc, Map<String, String> params) {
+      Meta meta = toMeta(doc, params);
+      if (meta != null) {
+        DescriptorProtos.FieldOptions.Builder optionsBuilder =
+                DescriptorProtos.FieldOptions.newBuilder();
+        optionsBuilder.setExtension(MetaProto.fieldMeta, meta);
+        fieldBuilder.mergeOptions(optionsBuilder.build());
+      }
     }
 
     private DescriptorProto.Builder mMsgTypeBuilder;
@@ -205,8 +246,14 @@ public class MessageDefinition {
   public static class OneofBuilder {
     // --- public ---
 
-    public OneofBuilder addField(String type, String name, int num, String defaultVal) {
-      return addField(type, name, num, defaultVal, null);
+    public OneofBuilder addField(
+        String type,
+        String name,
+        int num,
+        String defaultVal,
+        String doc,
+        Map<String, String> params) {
+      return addField(type, name, num, defaultVal, null, doc, params);
     }
 
     public OneofBuilder addField(
@@ -214,7 +261,9 @@ public class MessageDefinition {
         String name,
         int num,
         String defaultVal,
-        String jsonName
+        String jsonName,
+        String doc,
+        Map<String, String> params
     ) {
       mMsgBuilder.doAddField(
           FieldDescriptorProto.Label.LABEL_OPTIONAL,
@@ -223,6 +272,8 @@ public class MessageDefinition {
           num,
           defaultVal,
           jsonName,
+          doc,
+          params,
           null,
           this
       );

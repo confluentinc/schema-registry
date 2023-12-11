@@ -45,6 +45,9 @@ public abstract class SchemaRegistryMojo extends AbstractMojo implements Closeab
   @Parameter
   String userInfoConfig;
 
+  @Parameter(property = "kafka-schema-registry.skip")
+  boolean skip;
+
   @Parameter(required = false)
   List<String> schemaProviders = new ArrayList<>();
 

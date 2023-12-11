@@ -14,10 +14,6 @@
  */
 package io.confluent.kafka.schemaregistry.utils;
 
-import org.apache.avro.Protocol;
-import org.apache.avro.Schema;
-import org.apache.avro.Schemas;
-
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;

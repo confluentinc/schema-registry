@@ -41,6 +41,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.LinkedList;
+import java.util.stream.Stream;
 
 /**
  * Mock implementation of SchemaRegistryClient that can be used for tests. This version is NOT
@@ -249,6 +250,45 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       idSchemaMap.put(id, schema);
       return schema;
     }
+  }
+
+  private Stream<ParsedSchema> getSchemasForSubject(
+      String subject,
+      boolean latestOnly) {
+    try {
+      List<Integer> versions = getAllVersions(subject);
+      if (latestOnly) {
+        int length = versions.size();
+        versions = versions.subList(length - 1, length);
+      }
+
+      List<SchemaMetadata> schemaMetadata = new LinkedList<>();
+      for (Integer version: versions) {
+        schemaMetadata.add(getSchemaMetadata(subject, version));
+      }
+
+      List<ParsedSchema> schemas = new LinkedList<>();
+      for (SchemaMetadata metadata: schemaMetadata) {
+        schemas.add(getSchemaBySubjectAndId(subject, metadata.getId()));
+      }
+      return schemas.stream();
+    } catch (IOException | RestClientException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
+  public synchronized List<ParsedSchema> getSchemas(
+      String subjectPrefix,
+      boolean lookupDeletedSchema,
+      boolean latestOnly)
+      throws IOException, RestClientException {
+    Stream<String> validSubjects = getAllSubjects().stream()
+        .filter(subject -> subject.startsWith(subjectPrefix));
+
+    return validSubjects
+        .flatMap(subject -> getSchemasForSubject(subject, latestOnly))
+        .collect(Collectors.toList());
   }
 
   @Override

@@ -327,6 +327,27 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public synchronized List<ParsedSchema> getSchemas(
+          String subjectPrefix,
+          boolean lookupDeletedSchema,
+          boolean latestOnly)
+          throws IOException, RestClientException {
+    List<Schema> restSchemas = restService.getSchemas(
+            subjectPrefix,
+            lookupDeletedSchema,
+            latestOnly);
+    return restSchemas.stream()
+        .map(restSchema -> parseSchema(
+                  restSchema.getSchemaType(),
+                  restSchema.getSchema(),
+                  restSchema.getReferences())
+        )
+        .filter(Optional::isPresent)
+        .map(Optional::get)
+        .collect(Collectors.toList());
+  }
+
+  @Override
   public Collection<String> getAllSubjectsById(int id) throws IOException, RestClientException {
     return restService.getAllSubjectsById(id);
   }
