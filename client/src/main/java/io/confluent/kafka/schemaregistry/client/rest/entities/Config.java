@@ -19,10 +19,11 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = "Config")
 public class Config {
 
   private String compatibilityLevel;
@@ -35,7 +36,7 @@ public class Config {
     compatibilityLevel = null;
   }
 
-  @ApiModelProperty(value = "Compatability Level",
+  @Schema(description = "Compatibility Level",
       allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
           + "FULL_TRANSITIVE, NONE")
   @JsonProperty("compatibilityLevel")
@@ -59,22 +60,16 @@ public class Config {
 
     Config that = (Config) o;
 
-    if (!this.compatibilityLevel.equals(that.compatibilityLevel)) {
-      return false;
-    }
-    return true;
+    return this.compatibilityLevel.equals(that.compatibilityLevel);
   }
 
   @Override
   public int hashCode() {
-    int result = 31 * compatibilityLevel.hashCode();
-    return result;
+    return 31 * compatibilityLevel.hashCode();
   }
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{compatibilityLevel=" + this.compatibilityLevel + "}");
-    return sb.toString();
+    return "{compatibilityLevel=" + this.compatibilityLevel + "}";
   }
 }

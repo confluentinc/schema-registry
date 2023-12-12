@@ -25,6 +25,7 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@io.swagger.v3.oas.annotations.media.Schema(description = "Subject version pair")
 public class SubjectVersion implements Comparable<SubjectVersion> {
 
   private String subject;
@@ -37,6 +38,7 @@ public class SubjectVersion implements Comparable<SubjectVersion> {
     this.version = version;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.SUBJECT_DESC)
   @JsonProperty("subject")
   public String getSubject() {
     return subject;
@@ -47,6 +49,7 @@ public class SubjectVersion implements Comparable<SubjectVersion> {
     this.subject = subject;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.VERSION_DESC)
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;

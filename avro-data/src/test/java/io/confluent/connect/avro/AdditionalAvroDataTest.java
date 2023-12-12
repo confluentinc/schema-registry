@@ -169,30 +169,6 @@ public class AdditionalAvroDataTest
         avroData.fromConnectSchema(connectSchema);
     }
 
-    @Test
-    public void testArrayOfRecordsWithDefaultValue() throws IOException
-    {
-        Schema avroSchema =
-            new Parser().parse(new File("src/test/avro/ArrayOfRecordsWithDefault.avsc"));
-
-        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
-
-        Object object = connectSchema.field("records").schema().defaultValue();
-
-        Assert.assertTrue(object instanceof List);
-
-        List arrayList = (List) object;
-        Assert.assertEquals(arrayList.size(), 2);
-
-        Struct item1 = (Struct) arrayList.get(0);
-        Assert.assertEquals(item1.get("itemName"), "item1");
-        Assert.assertEquals(item1.get("itemValue"), "value1");
-
-        Struct item2 = (Struct) arrayList.get(1);
-        Assert.assertEquals(item2.get("itemName"), "item2");
-        Assert.assertEquals(item2.get("itemValue"), "value2");
-    }
-
     @Union({MyImpl1.class, MyImpl2.class})
     interface MyInterface {}
     static class MyImpl1 implements MyInterface
@@ -381,6 +357,30 @@ public class AdditionalAvroDataTest
         Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
         Assert.assertEquals("B", outputAvroSchema.getField("enumFieldWithDiffDefault").defaultVal());
         Assert.assertNull(outputAvroSchema.getField("enumFieldWithDiffDefault").schema().getEnumDefault());
+    }
+
+    @Test
+    public void testArrayOfRecordsWithDefaultValue() throws IOException
+    {
+        Schema avroSchema =
+            new Parser().parse(new File("src/test/avro/ArrayOfRecordsWithDefault.avsc"));
+
+        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
+
+        Object object = connectSchema.field("records").schema().defaultValue();
+
+        Assert.assertTrue(object instanceof List);
+
+        List arrayList = (List) object;
+        Assert.assertEquals(arrayList.size(), 2);
+
+        Struct item1 = (Struct) arrayList.get(0);
+        Assert.assertEquals(item1.get("itemName"), "item1");
+        Assert.assertEquals(item1.get("itemValue"), "value1");
+
+        Struct item2 = (Struct) arrayList.get(1);
+        Assert.assertEquals(item2.get("itemName"), "item2");
+        Assert.assertEquals(item2.get("itemValue"), "value2");
     }
 
     /**

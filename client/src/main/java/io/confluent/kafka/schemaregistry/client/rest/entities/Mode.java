@@ -23,12 +23,19 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.IOException;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = Mode.MODE_DESC)
 public class Mode {
 
+  public static final String MODE_DESC = "Schema Registry operating mode";
+
+  @Schema(description = MODE_DESC,
+          allowableValues = "READWRITE, READONLY, READONLY_OVERRIDE, IMPORT")
   private String mode;
 
   public static Mode fromJson(String json) throws IOException {

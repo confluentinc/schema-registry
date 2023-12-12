@@ -129,7 +129,9 @@ public class SerdeBenchmark {
   }
 
   static class Record {
-    Record() {}
+    Record() {
+
+    }
 
     Record(String f1) {
       this.f1 = f1;

@@ -25,12 +25,14 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@io.swagger.v3.oas.annotations.media.Schema(description = "Schema register request")
 public class RegisterSchemaRequest {
 
   private Integer version;
@@ -43,6 +45,7 @@ public class RegisterSchemaRequest {
     return JacksonMapper.INSTANCE.readValue(json, RegisterSchemaRequest.class);
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.VERSION_DESC)
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
@@ -53,6 +56,7 @@ public class RegisterSchemaRequest {
     this.version = version;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.ID_DESC)
   @JsonProperty("id")
   public Integer getId() {
     return this.id;
@@ -63,6 +67,7 @@ public class RegisterSchemaRequest {
     this.id = id;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC)
   @JsonProperty("schemaType")
   @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
@@ -74,6 +79,7 @@ public class RegisterSchemaRequest {
     this.schemaType = schemaType;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.REFERENCES_DESC)
   @JsonProperty("references")
   public List<SchemaReference> getReferences() {
     return this.references;
@@ -84,6 +90,7 @@ public class RegisterSchemaRequest {
     this.references = references;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.SCHEMA_DESC)
   @JsonProperty("schema")
   public String getSchema() {
     return this.schema;

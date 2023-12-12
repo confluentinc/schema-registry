@@ -23,12 +23,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.IOException;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Schema(description = "Compatibility check response")
 public class CompatibilityCheckResponse {
 
   private boolean isCompatible;
@@ -38,6 +40,7 @@ public class CompatibilityCheckResponse {
     return JacksonMapper.INSTANCE.readValue(json, CompatibilityCheckResponse.class);
   }
 
+  @Schema(description = "Whether the compared schemas are compatible")
   @JsonProperty("is_compatible")
   public boolean getIsCompatible() {
     return isCompatible;
@@ -52,6 +55,7 @@ public class CompatibilityCheckResponse {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
+  @Schema(description = "Error messages")
   @JsonProperty("messages")
   public List<String> getMessages() {
     return messages;

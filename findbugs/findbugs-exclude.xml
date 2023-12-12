@@ -73,16 +73,6 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <Class name="io.confluent.kafka.schemaregistry.storage.MD5"/>
-        <Bug pattern="EI_EXPOSE_REP"/>
-    </Match>
-
-    <Match>
-        <Class name="io.confluent.kafka.schemaregistry.storage.MD5"/>
-        <Bug pattern="EI_EXPOSE_REP2"/>
-    </Match>
-
-    <Match>
         <Class name="io.confluent.connect.avro.AvroData"/>
         <Bug pattern="RC_REF_COMPARISON_BAD_PRACTICE"/>
     </Match>
@@ -108,6 +98,11 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
+        <Class name="otherns.Subrecord"/>
+        <Bug pattern="MS_EXPOSE_REP"/>
+    </Match>
+
+    <Match>
         <Class name="~io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap.*"/>
     </Match>
 
@@ -117,11 +112,24 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <Class name="~io.confluent.protobuf.type.*"/>
+        <Class name="~io.confluent.schemaregistry.benchmark.generated.*"/>
+    </Match>
+
+    <!-- false positive, see https://github.com/spotbugs/spotbugs/issues/1539 -->
+    <Match>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
 
     <Match>
-        <Class name="~io.confluent.schemaregistry.benchmark.generated.*"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <Match>
+        <Bug pattern="MS_EXPOSE_REP"/>
     </Match>
 
     <Match>
