@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.encryption.tink;
 
 import com.google.crypto.tink.KmsClient;
-import com.google.crypto.tink.KmsClients;
 import java.security.GeneralSecurityException;
 import java.util.Locale;
 import java.util.Map;
