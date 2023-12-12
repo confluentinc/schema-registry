@@ -15,6 +15,10 @@
 
 package io.confluent.dekregistry.storage;
 
+import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.KMS_TYPE_SUFFIX;
+
+import io.confluent.kafka.schemaregistry.encryption.tink.KmsClients;
+import java.util.Objects;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +70,14 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
       }
     } else if (oldValue == null) {
       dekRegistry.getMetricsManager().incrementKeyCount(tenant, key.getType());
+    }
+    if (value instanceof KeyEncryptionKey && oldValue instanceof KeyEncryptionKey) {
+      KeyEncryptionKey kek = (KeyEncryptionKey) value;
+      KeyEncryptionKey oldKek = (KeyEncryptionKey) oldValue;
+      if (!Objects.equals(kek.getKmsProps(), oldKek.getKmsProps())) {
+        String kekUrl = kek.getKmsType() + KMS_TYPE_SUFFIX + kek.getKmsKeyId();
+        KmsClients.remove(kekUrl);
+      }
     }
   }
 
