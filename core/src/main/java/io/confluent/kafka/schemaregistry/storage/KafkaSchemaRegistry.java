@@ -2063,7 +2063,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     if (!errorMessages.isEmpty()) {
       try {
         errorMessages.add(String.format("{validateFields: '%b', compatibility: '%s'}",
-            config.isValidateFields(),
+            isSchemaFieldValidationEnabled(config),
             compatibility));
       } catch (UnsupportedOperationException e) {
         // Ignore and return errorMessages
