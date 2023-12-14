@@ -34,10 +34,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.concurrent.Callable;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -52,7 +50,7 @@ public class RegisterDeks implements Callable<Integer> {
 
   private static final Logger LOG = LoggerFactory.getLogger(RegisterDeks.class);
 
-  private static final String RULE_PARAM_PREFIX = "rule.executors._default_.param.";
+  private static final String DEFAULT_RULE_PARAM_PREFIX = "rule.executors._default_.param.";
 
   @Parameters(index = "0",
       description = "SR (Schema Registry) URL", paramLabel = "<url>")
@@ -95,16 +93,15 @@ public class RegisterDeks implements Callable<Integer> {
         LOG.info("No rules found");
         return 0;
       }
-      try (FieldEncryptionExecutor executor = new FieldEncryptionExecutor()) {
-        Map<String, Object> ruleConfigs = configs.entrySet().stream()
-            .collect(Collectors.toMap(e -> stripPrefix(e.getKey()), Entry::getValue));
-        executor.configure(ruleConfigs);
-        List<Rule> rules = parsedSchema.ruleSet().getDomainRules();
-        for (int i = 0; i < rules.size(); i++) {
-          Rule rule = rules.get(i);
-          if (rule.isDisabled() || !FieldEncryptionExecutor.TYPE.equals(rule.getType())) {
-            continue;
-          }
+      List<Rule> rules = parsedSchema.ruleSet().getDomainRules();
+      for (int i = 0; i < rules.size(); i++) {
+        Rule rule = rules.get(i);
+        if (rule.isDisabled() || !FieldEncryptionExecutor.TYPE.equals(rule.getType())) {
+          continue;
+        }
+        try (FieldEncryptionExecutor executor = new FieldEncryptionExecutor()) {
+          Map<String, String> ruleConfigs = configsWithoutPrefix(rule, configs);
+          executor.configure(ruleConfigs);
           RuleContext ctx = new RuleContext(configs, null, parsedSchema,
               subject, null, null, null, null, false, RuleMode.WRITE, rule, i, rules);
           FieldEncryptionExecutorTransform transform = executor.newTransform(ctx);
@@ -140,10 +137,23 @@ public class RegisterDeks implements Callable<Integer> {
     return provider.parseSchema(new Schema(null, schemaMetadata), false, false);
   }
 
-  private static String stripPrefix(String name) {
-    return name.startsWith(RULE_PARAM_PREFIX)
-        ? name.substring(RULE_PARAM_PREFIX.length())
-        : name;
+  private Map<String, String> configsWithoutPrefix(Rule rule, Map<String, String> configs) {
+    Map<String, String> ruleConfigs = new HashMap<>(configs);
+    for (Map.Entry<String, String> entry: configs.entrySet()) {
+      String name = entry.getKey();
+      if (name.startsWith(DEFAULT_RULE_PARAM_PREFIX)) {
+        ruleConfigs.put(name.substring(DEFAULT_RULE_PARAM_PREFIX.length()), entry.getValue());
+      }
+    }
+    // Specific params override default params
+    String prefix = "rule.executors." + rule.getName() + ".param.";
+    for (Map.Entry<String, String> entry: configs.entrySet()) {
+      String name = entry.getKey();
+      if (name.startsWith(prefix)) {
+        ruleConfigs.put(name.substring(prefix.length()), entry.getValue());
+      }
+    }
+    return ruleConfigs;
   }
 
   public static void main(String[] args) {
