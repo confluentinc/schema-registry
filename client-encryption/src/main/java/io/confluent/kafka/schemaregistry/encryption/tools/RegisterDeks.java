@@ -57,7 +57,7 @@ public class RegisterDeks implements Callable<Integer> {
       description = "Subject", paramLabel = "<subject>")
   private String subject;
   @Parameters(index = "2", arity = "0..1", defaultValue = "-1",
-      description = "Version", paramLabel = "<version>")
+      description = "Version, defaults to latest", paramLabel = "<version>")
   private int version;
   @Option(names = {"-X", "--property"},
       description = "Set configuration property.", paramLabel = "<prop=val>")
@@ -99,7 +99,7 @@ public class RegisterDeks implements Callable<Integer> {
           if (rule.isDisabled() || !FieldEncryptionExecutor.TYPE.equals(rule.getType())) {
             continue;
           }
-          RuleContext ctx = new RuleContext(Collections.emptyMap(), null, parsedSchema,
+          RuleContext ctx = new RuleContext(configs, null, parsedSchema,
               subject, null, null, null, null, false, RuleMode.WRITE, rule, i, rules);
           FieldEncryptionExecutorTransform transform = executor.newTransform(ctx);
           transform.getOrCreateDek(ctx, transform.isDekRotated() ? -1 : null);
