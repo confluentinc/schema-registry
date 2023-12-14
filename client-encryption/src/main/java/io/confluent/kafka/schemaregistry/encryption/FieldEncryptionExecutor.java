@@ -142,8 +142,8 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
   }
 
   @Override
-  public FieldTransform newTransform(RuleContext ctx) throws RuleException {
-    FieldTransform transform = new FieldEncryptionExecutorTransform();
+  public FieldEncryptionExecutorTransform newTransform(RuleContext ctx) throws RuleException {
+    FieldEncryptionExecutorTransform transform = new FieldEncryptionExecutorTransform();
     transform.init(ctx);
     return transform;
   }
@@ -241,7 +241,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
     }
   }
 
-  class FieldEncryptionExecutorTransform implements FieldTransform {
+  public class FieldEncryptionExecutorTransform implements FieldTransform {
     private Cryptor cryptor;
     private String kekName;
     private KekInfo kek;
@@ -250,7 +250,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
     public void init(RuleContext ctx) throws RuleException {
       cryptor = getCryptor(ctx);
       kekName = getKekName(ctx);
-      kek = getKek(ctx, kekName);
+      kek = getOrCreateKek(ctx);
       dekExpiryDays = getDekExpiryDays(ctx);
     }
 
@@ -280,7 +280,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       return name;
     }
 
-    protected KekInfo getKek(RuleContext ctx, String kekName) throws RuleException {
+    protected KekInfo getOrCreateKek(RuleContext ctx) throws RuleException {
       boolean isRead = ctx.ruleMode() == RuleMode.READ;
       KekId kekId = new KekId(kekName, isRead);
 
@@ -370,7 +370,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       }
     }
 
-    protected DekInfo getDek(RuleContext ctx, String kekName, KekInfo kek, Integer version)
+    public DekInfo getOrCreateDek(RuleContext ctx, Integer version)
         throws RuleException, GeneralSecurityException {
       boolean isRead = ctx.ruleMode() == RuleMode.READ;
       DekId dekId = new DekId(kekName, ctx.subject(), version, cryptor.getDekFormat(), isRead);
@@ -506,7 +506,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
               throw new RuleException(
                   "Type '" + fieldCtx.getType() + "' not supported for encryption");
             }
-            dek = getDek(ctx, kekName, kek, isDekRotated() ? LATEST_VERSION : null);
+            dek = getOrCreateDek(ctx, isDekRotated() ? LATEST_VERSION : null);
             ciphertext = cryptor.encrypt(dek.getRawDek(), plaintext, EMPTY_AAD);
             if (isDekRotated()) {
               ciphertext = prefixVersion(dek.getVersion(), ciphertext);
@@ -529,7 +529,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
               version = kv.getKey();
               ciphertext = kv.getValue();
             }
-            dek = getDek(ctx, kekName, kek, version);
+            dek = getOrCreateDek(ctx, version);
             plaintext = cryptor.decrypt(dek.getRawDek(), ciphertext, EMPTY_AAD);
             return toObject(fieldCtx.getType(), plaintext);
           default:
