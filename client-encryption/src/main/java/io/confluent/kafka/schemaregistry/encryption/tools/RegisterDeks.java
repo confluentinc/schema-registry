@@ -29,7 +29,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.FieldEncryptionExecutorTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -99,16 +101,21 @@ public class RegisterDeks implements Callable<Integer> {
         if (rule.isDisabled() || !FieldEncryptionExecutor.TYPE.equals(rule.getType())) {
           continue;
         }
-        try (FieldEncryptionExecutor executor = new FieldEncryptionExecutor()) {
-          Map<String, String> ruleConfigs = configsWithoutPrefix(rule, configs);
-          executor.configure(ruleConfigs);
-          RuleContext ctx = new RuleContext(configs, null, parsedSchema,
-              subject, null, null, null, null, false, RuleMode.WRITE, rule, i, rules);
-          FieldEncryptionExecutorTransform transform = executor.newTransform(ctx);
-          transform.getOrCreateDek(ctx, transform.isDekRotated() ? -1 : null);
-        }
+        processRule(configs, parsedSchema, rules, i, rule);
       }
       return 0;
+    }
+  }
+
+  private void processRule(Map<String, String> configs, ParsedSchema parsedSchema, List<Rule> rules,
+      int i, Rule rule) throws RuleException, GeneralSecurityException {
+    try (FieldEncryptionExecutor executor = new FieldEncryptionExecutor()) {
+      Map<String, String> ruleConfigs = configsWithoutPrefix(rule, configs);
+      executor.configure(ruleConfigs);
+      RuleContext ctx = new RuleContext(configs, null, parsedSchema,
+          subject, null, null, null, null, false, RuleMode.WRITE, rule, i, rules);
+      FieldEncryptionExecutorTransform transform = executor.newTransform(ctx);
+      transform.getOrCreateDek(ctx, transform.isDekRotated() ? -1 : null);
     }
   }
 
@@ -163,4 +170,3 @@ public class RegisterDeks implements Callable<Integer> {
     System.exit(exitCode);
   }
 }
-
