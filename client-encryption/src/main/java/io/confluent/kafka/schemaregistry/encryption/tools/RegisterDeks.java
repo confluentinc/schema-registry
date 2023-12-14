@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.encryption.tools;
 
+import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.CLOCK;
+
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -29,7 +31,10 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.FieldEncryptionExecutorTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import java.security.GeneralSecurityException;
+import java.time.Clock;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -50,6 +55,8 @@ public class RegisterDeks implements Callable<Integer> {
 
   private static final Logger LOG = LoggerFactory.getLogger(RegisterDeks.class);
 
+  private static final String DEFAULT_RULE_PARAM_PREFIX = "rule.executors._default_.param.";
+
   @Parameters(index = "0",
       description = "SR (Schema Registry) URL", paramLabel = "<url>")
   private String baseUrl;
@@ -63,15 +70,28 @@ public class RegisterDeks implements Callable<Integer> {
       description = "Set configuration property.", paramLabel = "<prop=val>")
   private Map<String, String> configs;
 
+  private Clock clock;
+
   public RegisterDeks() {
+  }
+
+  public Clock getClock() {
+    return clock;
+  }
+
+  public void setClock(Clock clock) {
+    this.clock = clock;
   }
 
   @Override
   public Integer call() throws Exception {
-    Map<String, String> configs = this.configs != null
+    Map<String, Object> configs = this.configs != null
         ? new HashMap<>(this.configs)
         : new HashMap<>();
     configs.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, baseUrl);
+    if (clock != null) {
+      configs.put(CLOCK, clock);
+    }
 
     try (SchemaRegistryClient client = SchemaRegistryClientFactory.newClient(
         Collections.singletonList(baseUrl),
@@ -80,7 +100,9 @@ public class RegisterDeks implements Callable<Integer> {
         configs,
         Collections.emptyMap()
     )) {
-      SchemaMetadata schemaMetadata = client.getSchemaMetadata(subject, version);
+      SchemaMetadata schemaMetadata = version >= 0
+          ? client.getSchemaMetadata(subject, version)
+          : client.getLatestSchemaMetadata(subject);
       Optional<ParsedSchema> schema = parseSchema(schemaMetadata);
       if (!schema.isPresent()) {
         LOG.error("No schema found");
@@ -91,21 +113,27 @@ public class RegisterDeks implements Callable<Integer> {
         LOG.info("No rules found");
         return 0;
       }
-      try (FieldEncryptionExecutor executor = new FieldEncryptionExecutor()) {
-        executor.configure(configs);
-        List<Rule> rules = parsedSchema.ruleSet().getDomainRules();
-        for (int i = 0; i < rules.size(); i++) {
-          Rule rule = rules.get(i);
-          if (rule.isDisabled() || !FieldEncryptionExecutor.TYPE.equals(rule.getType())) {
-            continue;
-          }
-          RuleContext ctx = new RuleContext(configs, null, parsedSchema,
-              subject, null, null, null, null, false, RuleMode.WRITE, rule, i, rules);
-          FieldEncryptionExecutorTransform transform = executor.newTransform(ctx);
-          transform.getOrCreateDek(ctx, transform.isDekRotated() ? -1 : null);
+      List<Rule> rules = parsedSchema.ruleSet().getDomainRules();
+      for (int i = 0; i < rules.size(); i++) {
+        Rule rule = rules.get(i);
+        if (rule.isDisabled() || !FieldEncryptionExecutor.TYPE.equals(rule.getType())) {
+          continue;
         }
+        processRule(configs, parsedSchema, rules, i, rule);
       }
       return 0;
+    }
+  }
+
+  private void processRule(Map<String, Object> configs, ParsedSchema parsedSchema, List<Rule> rules,
+      int i, Rule rule) throws RuleException, GeneralSecurityException {
+    try (FieldEncryptionExecutor executor = new FieldEncryptionExecutor()) {
+      Map<String, Object> ruleConfigs = configsWithoutPrefix(rule, configs);
+      executor.configure(ruleConfigs);
+      RuleContext ctx = new RuleContext(configs, null, parsedSchema,
+          subject, null, null, null, null, false, RuleMode.WRITE, rule, i, rules);
+      FieldEncryptionExecutorTransform transform = executor.newTransform(ctx);
+      transform.getOrCreateDek(ctx, transform.isDekRotated() ? -1 : null);
     }
   }
 
@@ -134,6 +162,25 @@ public class RegisterDeks implements Callable<Integer> {
     return provider.parseSchema(new Schema(null, schemaMetadata), false, false);
   }
 
+  private Map<String, Object> configsWithoutPrefix(Rule rule, Map<String, Object> configs) {
+    Map<String, Object> ruleConfigs = new HashMap<>(configs);
+    for (Map.Entry<String, Object> entry: configs.entrySet()) {
+      String name = entry.getKey();
+      if (name.startsWith(DEFAULT_RULE_PARAM_PREFIX)) {
+        ruleConfigs.put(name.substring(DEFAULT_RULE_PARAM_PREFIX.length()), entry.getValue());
+      }
+    }
+    // Specific params override default params
+    String prefix = "rule.executors." + rule.getName() + ".param.";
+    for (Map.Entry<String, Object> entry: configs.entrySet()) {
+      String name = entry.getKey();
+      if (name.startsWith(prefix)) {
+        ruleConfigs.put(name.substring(prefix.length()), entry.getValue());
+      }
+    }
+    return ruleConfigs;
+  }
+
   public static void main(String[] args) {
     CommandLine commandLine = new CommandLine(new RegisterDeks());
     commandLine.setUsageHelpLongOptionsMaxWidth(30);
@@ -141,4 +188,3 @@ public class RegisterDeks implements Callable<Integer> {
     System.exit(exitCode);
   }
 }
-
