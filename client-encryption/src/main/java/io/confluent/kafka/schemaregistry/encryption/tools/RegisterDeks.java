@@ -28,11 +28,13 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.FieldEncryptionExecutorTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.time.Clock;
 import java.util.Collections;
@@ -100,9 +102,7 @@ public class RegisterDeks implements Callable<Integer> {
         configs,
         Collections.emptyMap()
     )) {
-      SchemaMetadata schemaMetadata = version >= 0
-          ? client.getSchemaMetadata(subject, version)
-          : client.getLatestSchemaMetadata(subject);
+      SchemaMetadata schemaMetadata = getSchemaMetadata(client);
       Optional<ParsedSchema> schema = parseSchema(schemaMetadata);
       if (!schema.isPresent()) {
         LOG.error("No schema found");
@@ -123,6 +123,14 @@ public class RegisterDeks implements Callable<Integer> {
       }
       return 0;
     }
+  }
+
+  private SchemaMetadata getSchemaMetadata(SchemaRegistryClient client)
+      throws IOException, RestClientException {
+    SchemaMetadata schemaMetadata = version >= 0
+        ? client.getSchemaMetadata(subject, version)
+        : client.getLatestSchemaMetadata(subject);
+    return schemaMetadata;
   }
 
   private void processRule(Map<String, Object> configs, ParsedSchema parsedSchema, List<Rule> rules,
