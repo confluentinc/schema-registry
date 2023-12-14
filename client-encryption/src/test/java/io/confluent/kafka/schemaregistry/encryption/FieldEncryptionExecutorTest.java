@@ -63,6 +63,7 @@ import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.WidgetBytes;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
 import io.confluent.kafka.schemaregistry.testutil.FakeClock;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -351,7 +352,7 @@ public abstract class FieldEncryptionExecutorTest {
 
   @After
   public void tearDown() {
-    schemaRegistry.reset();
+    MockSchemaRegistry.clear();
     MockDekRegistryClientFactory.clear();
   }
 

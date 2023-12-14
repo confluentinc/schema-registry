@@ -36,6 +36,7 @@ import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.schemaregistry.encryption.local.LocalFieldEncryptionProperties;
 import io.confluent.kafka.schemaregistry.testutil.FakeClock;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashMap;
@@ -87,7 +88,7 @@ public class RegisterDeksTest {
 
   @After
   public void tearDown() {
-    schemaRegistry.reset();
+    MockSchemaRegistry.clear();
     MockDekRegistryClientFactory.clear();
   }
 
