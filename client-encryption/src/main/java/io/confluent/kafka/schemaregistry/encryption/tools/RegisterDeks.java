@@ -97,11 +97,7 @@ public class RegisterDeks implements Callable<Integer> {
       }
       try (FieldEncryptionExecutor executor = new FieldEncryptionExecutor()) {
         Map<String, Object> ruleConfigs = configs.entrySet().stream()
-            .collect(Collectors.toMap(
-                e -> e.getKey().startsWith(RULE_PARAM_PREFIX)
-                    ? e.getKey().substring(RULE_PARAM_PREFIX.length())
-                    : e.getKey(),
-                Entry::getValue));
+            .collect(Collectors.toMap(e -> stripPrefix(e.getKey()), Entry::getValue));
         executor.configure(ruleConfigs);
         List<Rule> rules = parsedSchema.ruleSet().getDomainRules();
         for (int i = 0; i < rules.size(); i++) {
@@ -142,6 +138,12 @@ public class RegisterDeks implements Callable<Integer> {
             + schemaMetadata.getSchemaType());
     }
     return provider.parseSchema(new Schema(null, schemaMetadata), false, false);
+  }
+
+  private static String stripPrefix(String name) {
+    return name.startsWith(RULE_PARAM_PREFIX)
+        ? name.substring(RULE_PARAM_PREFIX.length())
+        : name;
   }
 
   public static void main(String[] args) {
