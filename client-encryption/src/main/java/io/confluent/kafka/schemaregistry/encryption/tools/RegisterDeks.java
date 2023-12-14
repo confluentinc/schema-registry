@@ -34,8 +34,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -49,6 +51,8 @@ import picocli.CommandLine.Parameters;
 public class RegisterDeks implements Callable<Integer> {
 
   private static final Logger LOG = LoggerFactory.getLogger(RegisterDeks.class);
+
+  private static final String RULE_PARAM_PREFIX = "rule.executors._default_.param.";
 
   @Parameters(index = "0",
       description = "SR (Schema Registry) URL", paramLabel = "<url>")
@@ -92,7 +96,13 @@ public class RegisterDeks implements Callable<Integer> {
         return 0;
       }
       try (FieldEncryptionExecutor executor = new FieldEncryptionExecutor()) {
-        executor.configure(configs);
+        Map<String, Object> ruleConfigs = configs.entrySet().stream()
+            .collect(Collectors.toMap(
+                e -> e.getKey().startsWith(RULE_PARAM_PREFIX)
+                    ? e.getKey().substring(RULE_PARAM_PREFIX.length())
+                    : e.getKey(),
+                Entry::getValue));
+        executor.configure(ruleConfigs);
         List<Rule> rules = parsedSchema.ruleSet().getDomainRules();
         for (int i = 0; i < rules.size(); i++) {
           Rule rule = rules.get(i);
