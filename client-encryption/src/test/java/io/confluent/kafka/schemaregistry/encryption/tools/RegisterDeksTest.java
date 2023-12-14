@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.DekRegistryClientFactory;
+import io.confluent.dekregistry.client.MockDekRegistryClientFactory;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
@@ -40,6 +41,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.avro.Schema;
+import org.junit.After;
 import org.junit.Test;
 import picocli.CommandLine;
 
@@ -81,6 +83,12 @@ public class RegisterDeksTest {
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
     return schema;
+  }
+
+  @After
+  public void tearDown() {
+    schemaRegistry.reset();
+    MockDekRegistryClientFactory.clear();
   }
 
   @Test
