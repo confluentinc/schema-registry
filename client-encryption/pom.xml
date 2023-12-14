@@ -47,6 +47,10 @@
             <groupId>com.google.crypto.tink</groupId>
             <artifactId>tink</artifactId>
         </dependency>
+        <dependency>
+            <groupId>info.picocli</groupId>
+            <artifactId>picocli</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>io.confluent</groupId>
