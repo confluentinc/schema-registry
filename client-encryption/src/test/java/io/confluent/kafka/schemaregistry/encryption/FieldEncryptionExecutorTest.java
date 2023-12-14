@@ -74,7 +74,6 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
