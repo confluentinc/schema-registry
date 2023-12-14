@@ -50,13 +50,17 @@ public class RegisterDeks implements Callable<Integer> {
 
   private static final Logger LOG = LoggerFactory.getLogger(RegisterDeks.class);
 
-  @Parameters(index = "0")
+  @Parameters(index = "0",
+      description = "SR (Schema Registry) URL", paramLabel = "<url>")
   private String baseUrl;
-  @Parameters(index = "1")
+  @Parameters(index = "1",
+      description = "Subject", paramLabel = "<subject>")
   private String subject;
-  @Parameters(index = "2", arity = "0..1", defaultValue = "-1")
+  @Parameters(index = "2", arity = "0..1", defaultValue = "-1",
+      description = "Version", paramLabel = "<version>")
   private int version;
-  @Option(names = {"-p", "--property"})
+  @Option(names = {"-X", "--property"},
+      description = "Set configuration property.", paramLabel = "<prop=val>")
   private Map<String, String> configs;
 
   public RegisterDeks() {
@@ -68,6 +72,7 @@ public class RegisterDeks implements Callable<Integer> {
         ? new HashMap<>(this.configs)
         : new HashMap<>();
     configs.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, baseUrl);
+    System.out.println(configs);
 
     try (SchemaRegistryClient client = SchemaRegistryClientFactory.newClient(
         Collections.singletonList(baseUrl),
