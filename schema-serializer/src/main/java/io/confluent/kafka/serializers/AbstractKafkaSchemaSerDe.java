@@ -745,7 +745,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       }
       try {
         ruleAction.run(ctx, message, ex);
-      } catch (Exception e) {
+      } catch (RuleException e) {
         log.error("Could not run post-rule action {}", action, e);
       }
     }
