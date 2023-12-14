@@ -359,14 +359,15 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         Kek kek = client.createKek(
             key.getName(), kekInfo.getKmsType(), kekInfo.getKmsKeyId(),
             null, null, kekInfo.isShared());
+        log.info("Registered kek " + key.getName());
         return new KekInfo(kek.getKmsType(), kek.getKmsKeyId(), kek.isShared());
       } catch (RestClientException e) {
         if (e.getStatus() == 409) {
           return null;
         }
-        throw new RuleException("Could not store kek", e);
+        throw new RuleException("Could not register kek", e);
       } catch (IOException e) {
-        throw new RuleException("Could not store kek", e);
+        throw new RuleException("Could not register kek", e);
       }
     }
 
@@ -479,14 +480,15 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         encryptedDek = dek.getEncryptedKeyMaterial() != null
             ? Base64.getDecoder().decode(toBytes(Type.STRING, dek.getEncryptedKeyMaterial()))
             : null;
+        log.info("Registered dek for kek " + key.getKekName() + " and subject " + key.getSubject());
         return new DekInfo(dek.getVersion(), rawDek, encryptedDek, dek.getTimestamp());
       } catch (RestClientException e) {
         if (e.getStatus() == 409) {
           return null;
         }
-        throw new RuleException("Could not store dek", e);
+        throw new RuleException("Could not register dek", e);
       } catch (IOException e) {
-        throw new RuleException("Could not store dek", e);
+        throw new RuleException("Could not register dek", e);
       }
     }
 
