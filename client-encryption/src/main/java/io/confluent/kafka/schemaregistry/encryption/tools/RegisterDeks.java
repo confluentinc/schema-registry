@@ -72,7 +72,6 @@ public class RegisterDeks implements Callable<Integer> {
         ? new HashMap<>(this.configs)
         : new HashMap<>();
     configs.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, baseUrl);
-    System.out.println(configs);
 
     try (SchemaRegistryClient client = SchemaRegistryClientFactory.newClient(
         Collections.singletonList(baseUrl),
