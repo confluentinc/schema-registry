@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.encryption.tools;
 
+import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.CLOCK;
+
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -32,6 +34,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.security.GeneralSecurityException;
+import java.time.Clock;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -67,15 +70,28 @@ public class RegisterDeks implements Callable<Integer> {
       description = "Set configuration property.", paramLabel = "<prop=val>")
   private Map<String, String> configs;
 
+  private Clock clock;
+
   public RegisterDeks() {
+  }
+
+  public Clock getClock() {
+    return clock;
+  }
+
+  public void setClock(Clock clock) {
+    this.clock = clock;
   }
 
   @Override
   public Integer call() throws Exception {
-    Map<String, String> configs = this.configs != null
+    Map<String, Object> configs = this.configs != null
         ? new HashMap<>(this.configs)
         : new HashMap<>();
     configs.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, baseUrl);
+    if (clock != null) {
+      configs.put(CLOCK, clock);
+    }
 
     try (SchemaRegistryClient client = SchemaRegistryClientFactory.newClient(
         Collections.singletonList(baseUrl),
@@ -84,7 +100,9 @@ public class RegisterDeks implements Callable<Integer> {
         configs,
         Collections.emptyMap()
     )) {
-      SchemaMetadata schemaMetadata = client.getSchemaMetadata(subject, version);
+      SchemaMetadata schemaMetadata = version >= 0
+          ? client.getSchemaMetadata(subject, version)
+          : client.getLatestSchemaMetadata(subject);
       Optional<ParsedSchema> schema = parseSchema(schemaMetadata);
       if (!schema.isPresent()) {
         LOG.error("No schema found");
@@ -107,10 +125,10 @@ public class RegisterDeks implements Callable<Integer> {
     }
   }
 
-  private void processRule(Map<String, String> configs, ParsedSchema parsedSchema, List<Rule> rules,
+  private void processRule(Map<String, Object> configs, ParsedSchema parsedSchema, List<Rule> rules,
       int i, Rule rule) throws RuleException, GeneralSecurityException {
     try (FieldEncryptionExecutor executor = new FieldEncryptionExecutor()) {
-      Map<String, String> ruleConfigs = configsWithoutPrefix(rule, configs);
+      Map<String, Object> ruleConfigs = configsWithoutPrefix(rule, configs);
       executor.configure(ruleConfigs);
       RuleContext ctx = new RuleContext(configs, null, parsedSchema,
           subject, null, null, null, null, false, RuleMode.WRITE, rule, i, rules);
@@ -144,9 +162,9 @@ public class RegisterDeks implements Callable<Integer> {
     return provider.parseSchema(new Schema(null, schemaMetadata), false, false);
   }
 
-  private Map<String, String> configsWithoutPrefix(Rule rule, Map<String, String> configs) {
-    Map<String, String> ruleConfigs = new HashMap<>(configs);
-    for (Map.Entry<String, String> entry: configs.entrySet()) {
+  private Map<String, Object> configsWithoutPrefix(Rule rule, Map<String, Object> configs) {
+    Map<String, Object> ruleConfigs = new HashMap<>(configs);
+    for (Map.Entry<String, Object> entry: configs.entrySet()) {
       String name = entry.getKey();
       if (name.startsWith(DEFAULT_RULE_PARAM_PREFIX)) {
         ruleConfigs.put(name.substring(DEFAULT_RULE_PARAM_PREFIX.length()), entry.getValue());
@@ -154,7 +172,7 @@ public class RegisterDeks implements Callable<Integer> {
     }
     // Specific params override default params
     String prefix = "rule.executors." + rule.getName() + ".param.";
-    for (Map.Entry<String, String> entry: configs.entrySet()) {
+    for (Map.Entry<String, Object> entry: configs.entrySet()) {
       String name = entry.getKey();
       if (name.startsWith(prefix)) {
         ruleConfigs.put(name.substring(prefix.length()), entry.getValue());
