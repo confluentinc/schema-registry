@@ -347,9 +347,9 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         if (e.getStatus() == 404) {
           return null;
         }
-        throw new RuleException("Could not get kek", e);
+        throw new RuleException("Could not get kek " + key.getName(), e);
       } catch (IOException e) {
-        throw new RuleException("Could not get kek", e);
+        throw new RuleException("Could not get kek " + key.getName(), e);
       }
     }
 
@@ -365,9 +365,9 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         if (e.getStatus() == 409) {
           return null;
         }
-        throw new RuleException("Could not register kek", e);
+        throw new RuleException("Could not register kek " + key.getName(), e);
       } catch (IOException e) {
-        throw new RuleException("Could not register kek", e);
+        throw new RuleException("Could not register kek " + key.getName(), e);
       }
     }
 
@@ -453,9 +453,11 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         if (e.getStatus() == 404) {
           return null;
         }
-        throw new RuleException("Could not get dek", e);
+        throw new RuleException("Could not get dek for kek " + key.getKekName()
+            + ", subject " + key.getSubject(), e);
       } catch (IOException e) {
-        throw new RuleException("Could not get dek", e);
+        throw new RuleException("Could not get dek for kek " + key.getKekName()
+            + ", subject " + key.getSubject(), e);
       }
     }
 
@@ -480,15 +482,17 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         encryptedDek = dek.getEncryptedKeyMaterial() != null
             ? Base64.getDecoder().decode(toBytes(Type.STRING, dek.getEncryptedKeyMaterial()))
             : null;
-        log.info("Registered dek for kek " + key.getKekName() + " and subject " + key.getSubject());
+        log.info("Registered dek for kek " + key.getKekName() + ", subject " + key.getSubject());
         return new DekInfo(dek.getVersion(), rawDek, encryptedDek, dek.getTimestamp());
       } catch (RestClientException e) {
         if (e.getStatus() == 409) {
           return null;
         }
-        throw new RuleException("Could not register dek", e);
+        throw new RuleException("Could not register dek for kek " + key.getKekName()
+            + ", subject " + key.getSubject(), e);
       } catch (IOException e) {
-        throw new RuleException("Could not register dek", e);
+        throw new RuleException("Could not register dek for kek " + key.getKekName()
+            + ", subject " + key.getSubject(), e);
       }
     }
 
