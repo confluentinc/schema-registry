@@ -130,7 +130,7 @@ public class DlqAction implements RuleAction {
       if (autoFlush) {
         producer.flush();
       }
-    } catch (IOException e) {
+    } catch (Exception e) {
       log.error("Could not produce message to DLQ topic {}", dlqTopic, e);
     }
 
