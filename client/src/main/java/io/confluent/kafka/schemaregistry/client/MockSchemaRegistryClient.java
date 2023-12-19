@@ -348,11 +348,18 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   public Collection<SubjectVersion> getAllVersionsById(int id) {
     return idToSchemaCache.entrySet().stream()
         .filter(entry -> entry.getValue().containsKey(id))
-        .map(e -> {
+        .flatMap(e -> {
           ParsedSchema schema = e.getValue().get(id);
-          int version = schemaToVersionCache.get(e.getKey()).get(schema);
-          return new SubjectVersion(e.getKey(), version);
-        }).collect(Collectors.toList());
+          Map<ParsedSchema, Integer> schemaVersionMap = schemaToVersionCache.get(e.getKey());
+          if (schemaVersionMap != null) {
+            int version = schemaVersionMap.get(schema);
+            return Stream.of(new SubjectVersion(e.getKey(), version));
+          } else {
+            return Stream.empty();
+          }
+        })
+        .distinct()
+        .collect(Collectors.toList());
   }
 
   private int getLatestVersion(String subject)
