@@ -352,7 +352,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
           ParsedSchema schema = e.getValue().get(id);
           Map<ParsedSchema, Integer> schemaVersionMap = schemaToVersionCache.get(e.getKey());
           if (schemaVersionMap != null) {
-            int version = schemaToVersionCache.get(e.getKey()).get(schema);
+            int version = schemaVersionMap.get(schema);
             return Stream.of(new SubjectVersion(e.getKey(), version));
           } else {
             return Stream.empty();
