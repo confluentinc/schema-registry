@@ -23,8 +23,11 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.collect.ImmutableSet;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
@@ -39,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -394,6 +398,441 @@ public class JsonSchemaTest {
     JsonSchema jsonSchema1 = new JsonSchema(schema1);
     JsonSchema jsonSchema2 = new JsonSchema(schema2);
     assertNotEquals(jsonSchema1, jsonSchema2);
+  }
+
+  @Test
+  public void testBasicAddAndRemoveTags() {
+    String schemaString = "{\n" +
+      "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+      "  \"$id\": \"http://example.com/myURI.schema.json\",\n" +
+      "  \"title\": \"SampleRecord\",\n" +
+      "  \"description\": \"Sample schema to help you get started.\",\n" +
+      "  \"type\": \"object\",\n" +
+      "  \"additionalProperties\": false,\n" +
+      "  \"properties\": {\n" +
+      "    \"myfield1\": {\n" +
+      "      \"type\": \"array\",\n" +
+      "      \"items\": {\n" +
+      "        \"type\": \"object\",\n" +
+      "        \"title\": \"arrayRecord\",\n" +
+      "        \"properties\": {\n" +
+      "          \"field1\" : {\n" +
+      "            \"type\": \"string\"\n" +
+      "          },\n" +
+      "          \"field2\": {\n" +
+      "            \"type\": \"number\"\n" +
+      "          }\n" +
+      "        }\n" +
+      "      }\n" +
+      "    },\n" +
+      "    \"myfield2\": {\n" +
+      "      \"allOf\": [\n" +
+      "        { \"type\": \"string\" },\n" +
+      "        { \"type\": \"object\",\n" +
+      "          \"title\": \"nestedUnion\",\n" +
+      "          \"properties\": {\n" +
+      "            \"nestedUnionField1\": { \"type\": \"boolean\"},\n" +
+      "            \"nestedUnionField2\": { \"type\": \"number\"}\n" +
+      "          }\n" +
+      "        }\n" +
+      "      ]\n" +
+      "    },\n" +
+      "    \"myfield3\": {\n" +
+      "      \"not\": {\n" +
+      "        \"type\": \"object\",\n" +
+      "        \"title\": \"nestedNot\",\n" +
+      "        \"properties\": {\n" +
+      "          \"nestedNotField1\": { \"type\": \"boolean\"},\n" +
+      "          \"nestedNotField2\": { \"type\": \"string\"}\n" +
+      "        }\n" +
+      "      }\n" +
+      "    },\n" +
+      "    \"myfield4\": { \"enum\": [\"red\", \"amber\", \"green\"]}\n" +
+      "  }\n" +
+      "}";
+
+    String addedTagSchema = "{\n" +
+      "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+      "  \"$id\": \"http://example.com/myURI.schema.json\",\n" +
+      "  \"title\": \"SampleRecord\",\n" +
+      "  \"description\": \"Sample schema to help you get started.\",\n" +
+      "  \"type\": \"object\",\n" +
+      "  \"additionalProperties\": false,\n" +
+      "  \"properties\": {\n" +
+      "    \"myfield1\": {\n" +
+      "      \"type\": \"array\",\n" +
+      "      \"items\": {\n" +
+      "        \"type\": \"object\",\n" +
+      "        \"title\": \"arrayRecord\",\n" +
+      "        \"properties\": {\n" +
+      "          \"field1\" : {\n" +
+      "            \"type\": \"string\",\n" +
+      "            \"confluent:tags\": [ \"PII\" ]\n" +
+      "          },\n" +
+      "          \"field2\": {\n" +
+      "            \"type\": \"number\"\n" +
+      "          }\n" +
+      "        },\n" +
+      "        \"confluent:tags\": [ \"record\" ]\n" +
+      "      }\n" +
+      "    },\n" +
+      "    \"myfield2\": {\n" +
+      "      \"allOf\": [\n" +
+      "        { \"type\": \"string\" },\n" +
+      "        { \"type\": \"object\",\n" +
+      "          \"title\": \"nestedUnion\",\n" +
+      "          \"properties\": {\n" +
+      "            \"nestedUnionField1\": { \"type\": \"boolean\"},\n" +
+      "            \"nestedUnionField2\": { \n" +
+      "              \"type\": \"number\", \n" +
+      "              \"confluent:tags\": [ \"PII\" ]\n" +
+      "            }\n" +
+      "          },\n" +
+      "          \"confluent:tags\": [ \"record\" ]\n" +
+      "        }\n" +
+      "      ]\n" +
+      "    },\n" +
+      "    \"myfield3\": {\n" +
+      "      \"not\": {\n" +
+      "        \"type\": \"object\",\n" +
+      "        \"title\": \"nestedNot\",\n" +
+      "        \"properties\": {\n" +
+      "          \"nestedNotField1\": { \"type\": \"boolean\" },\n" +
+      "          \"nestedNotField2\": {\n" +
+      "            \"type\": \"string\",\n" +
+      "            \"confluent:tags\": [ \"PII\" ]\n" +
+      "          }\n" +
+      "        },\n" +
+      "        \"confluent:tags\": [ \"record\" ]\n" +
+      "      }\n" +
+      "    },\n" +
+      "    \"myfield4\": { \n" +
+      "      \"enum\": [\"red\", \"amber\", \"green\"],\n" +
+      "      \"confluent:tags\": [ \"PII\" ]\n" +
+      "    }\n" +
+      "  }\n" +
+      "}\n";
+
+    JsonSchema schema = new JsonSchema(schemaString);
+    JsonSchema expectSchema = new JsonSchema(addedTagSchema);
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("object.myfield1.array.object.field1",
+      SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity("object.myfield2.allof.0.object.nestedUnionField2",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity("object.myfield3.not.object.nestedNotField2",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity("object.myfield4",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+    tags.put(new SchemaEntity("object.myfield1.array.object",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("record"));
+    tags.put(new SchemaEntity("object.myfield2.allof.0.object",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("record"));
+    tags.put(new SchemaEntity("object.myfield3.not.object",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("record"));
+
+    ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
+    assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("record", "PII"), resultSchema.inlineTags());
+
+    resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
+    assertEquals(schema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of(), resultSchema.inlineTags());
+
+    Map<String, Set<String>> pathTags =
+        Collections.singletonMap("some.path", Collections.singleton("EXTERNAL"));
+    Metadata metadata = new Metadata(pathTags, null, null);
+    resultSchema = resultSchema.copy(metadata, null);
+    assertEquals(ImmutableSet.of("EXTERNAL"), resultSchema.tags());
+  }
+
+  @Test
+  public void testAddTagsToConditional() {
+    String schemaString = "{\n" +
+      "  \"else\": {\n" +
+      "    \"properties\": {\n" +
+      "      \"postal_code\": {\n" +
+      "        \"pattern\": \"[A-Z][0-9][A-Z] [0-9][A-Z][0-9]\"\n" +
+      "      }\n" +
+      "    }\n" +
+      "  },\n" +
+      "  \"if\": {\n" +
+      "    \"properties\": {\n" +
+      "      \"country\": {\n" +
+      "        \"const\": \"United States of America\"\n" +
+      "      }\n" +
+      "    }\n" +
+      "  },\n" +
+      "  \"properties\": {\n" +
+      "    \"country\": {\n" +
+      "      \"default\": \"United States of America\",\n" +
+      "      \"enum\": [\n" +
+      "        \"United States of America\",\n" +
+      "        \"Canada\"\n" +
+      "      ]\n" +
+      "    },\n" +
+      "    \"street_address\": {\n" +
+      "      \"type\": \"string\"\n" +
+      "    }\n" +
+      "  },\n" +
+      "  \"then\": {\n" +
+      "    \"properties\": {\n" +
+      "      \"postal_code\": {\n" +
+      "        \"pattern\": \"[0-9]{5}(-[0-9]{4})?\"\n" +
+      "      }\n" +
+      "    }\n" +
+      "  },\n" +
+      "  \"type\": \"object\"\n" +
+      "}\n";
+
+    String addedTagSchema = "{\n" +
+      "  \"else\": {\n" +
+      "    \"properties\": {\n" +
+      "      \"postal_code\": {\n" +
+      "        \"pattern\": \"[A-Z][0-9][A-Z] [0-9][A-Z][0-9]\",\n" +
+      "        \"confluent:tags\": [ \"testConditional\" ]\n" +
+      "      }\n" +
+      "    }\n" +
+      "  },\n" +
+      "  \"if\": {\n" +
+      "    \"properties\": {\n" +
+      "      \"country\": {\n" +
+      "        \"const\": \"United States of America\"\n" +
+      "      }\n" +
+      "    },\n" +
+      "    \"confluent:tags\": [ \"record\" ]\n" +
+      "  },\n" +
+      "  \"properties\": {\n" +
+      "    \"country\": {\n" +
+      "      \"default\": \"United States of America\",\n" +
+      "      \"enum\": [\n" +
+      "        \"United States of America\",\n" +
+      "        \"Canada\"\n" +
+      "      ],\n" +
+      "      \"confluent:tags\": [ \"testConditional\" ]\n" +
+      "    },\n" +
+      "    \"street_address\": {\n" +
+      "      \"type\": \"string\"\n" +
+      "    }\n" +
+      "  },\n" +
+      "  \"then\": {\n" +
+      "    \"properties\": {\n" +
+      "      \"postal_code\": {\n" +
+      "        \"pattern\": \"[0-9]{5}(-[0-9]{4})?\"\n" +
+      "      }\n" +
+      "    }\n" +
+      "  },\n" +
+      "  \"type\": \"object\",\n" +
+      "  \"confluent:tags\": [ \"record\" ]\n" +
+      "}\n";
+
+    JsonSchema schema = new JsonSchema(schemaString);
+    JsonSchema expectSchema = new JsonSchema(addedTagSchema);
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("allof.0.conditional.else.object.postal_code",
+      SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("testConditional"));
+    tags.put(new SchemaEntity("allof.1.object.country",
+        SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("testConditional"));
+    tags.put(new SchemaEntity("allof.1.object",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("record"));
+    tags.put(new SchemaEntity("allof.0.conditional.if.object",
+        SchemaEntity.EntityType.SR_RECORD),
+      Collections.singleton("record"));
+
+    ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
+    assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("record", "testConditional"), resultSchema.inlineTags());
+  }
+
+  @Test
+  public void testAddTagToRecursiveSchema() {
+    String schema = "{\n" +
+      "  \"$id\": \"task.schema.json\",\n" +
+      "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+      "  \"description\": \"A task\",\n" +
+      "  \"properties\": {\n" +
+      "    \"parent\": {\n" +
+      "      \"$ref\": \"task.schema.json\",\n" +
+      "      \"confluent:tags\": [ \"testRecursive\" ]\n" +
+      "    },\n" +
+      "    \"title\": {\n" +
+      "      \"description\": \"Task title\",\n" +
+      "      \"type\": \"string\"\n" +
+      "    }\n" +
+      "  },\n" +
+      "  \"title\": \"Task\",\n" +
+      "  \"type\": [\n" +
+      "    \"null\",\n" +
+      "    \"object\"\n" +
+      "  ]\n" +
+      "}\n";
+
+    String addedTagSchema = "{\n" +
+      "  \"$id\": \"task.schema.json\",\n" +
+      "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+      "  \"description\": \"A task\",\n" +
+      "  \"properties\": {\n" +
+      "    \"parent\": {\n" +
+      "      \"$ref\": \"task.schema.json\",\n" +
+      "      \"confluent:tags\": [ \"testRecursive\", \"PII\" ]\n" +
+      "    },\n" +
+      "    \"title\": {\n" +
+      "      \"description\": \"Task title\",\n" +
+      "      \"type\": \"string\"\n" +
+      "    }\n" +
+      "  },\n" +
+      "  \"title\": \"Task\",\n" +
+      "  \"type\": [\n" +
+      "    \"null\",\n" +
+      "    \"object\"\n" +
+      "  ]\n" +
+      "}\n";
+
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchema expectSchema = new JsonSchema(addedTagSchema);
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("anyof.1.object.parent",
+      SchemaEntity.EntityType.SR_FIELD),
+      Collections.singleton("PII"));
+
+    ParsedSchema resultSchema = jsonSchema.copy(tags, Collections.emptyMap());
+    assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("testRecursive", "PII"), resultSchema.inlineTags());
+  }
+
+  @Test
+  public void testAddTagToCompositeField() {
+    String schema = "{\n" +
+        "    \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "    \"title\": \"Customer\",\n" +
+        "    \"type\": \"object\",\n" +
+        "    \"additionalProperties\": false,\n" +
+        "    \"properties\": {\n" +
+        "        \"cc_details\": {\n" +
+        "            \"oneOf\": [\n" +
+        "                {\n" +
+        "                    \"type\": \"null\",\n" +
+        "                    \"title\": \"Not included\"\n" +
+        "                },\n" +
+        "                {\n" +
+        "                    \"$ref\": \"#/definitions/CardDetails\"\n" +
+        "                }\n" +
+        "            ]\n" +
+        "        }\n" +
+        "    },\n" +
+        "    \"definitions\": {\n" +
+        "        \"Another.Details\": {\n" +
+        "            \"additionalProperties\": false,\n" +
+        "            \"properties\": {\n" +
+        "              \"additional.field1\": {\n" +
+        "                \"type\": \"string\"\n" +
+        "              },\n" +
+        "              \"field2\": {\n" +
+        "                \"type\": \"number\"\n" +
+        "              }\n" +
+        "            },\n" +
+        "            \"type\": \"object\"\n" +
+        "          },\n" +
+        "        \"CardDetails\": {\n" +
+        "            \"type\": \"object\",\n" +
+        "            \"additionalProperties\": false,\n" +
+        "            \"properties\": {\n" +
+        "                \"credit_card\": {\n" +
+        "                    \"oneOf\": [\n" +
+        "                        {\n" +
+        "                            \"type\": \"null\",\n" +
+        "                            \"title\": \"Not included\"\n" +
+        "                        },\n" +
+        "                        {\n" +
+        "                            \"type\": \"string\"\n" +
+        "                        }\n" +
+        "                    ]\n" +
+        "                }\n" +
+        "            }\n" +
+        "        }\n" +
+        "    }\n" +
+        "}";
+
+    String addedTagSchema = "{\n" +
+        "    \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "    \"title\": \"Customer\",\n" +
+        "    \"type\": \"object\",\n" +
+        "    \"additionalProperties\": false,\n" +
+        "    \"properties\": {\n" +
+        "        \"cc_details\": {\n" +
+        "            \"oneOf\": [\n" +
+        "                {\n" +
+        "                    \"type\": \"null\",\n" +
+        "                    \"title\": \"Not included\"\n" +
+        "                },\n" +
+        "                {\n" +
+        "                    \"$ref\": \"#/definitions/CardDetails\"\n" +
+        "                }\n" +
+        "            ]\n" +
+        "        }\n" +
+        "    },\n" +
+        "    \"definitions\": {\n" +
+        "        \"Another.Details\": {\n" +
+        "            \"additionalProperties\": false,\n" +
+        "            \"properties\": {\n" +
+        "              \"additional.field1\": {\n" +
+        "                \"type\": \"string\",\n" +
+        "                \"confluent:tags\": [ \"TEST2\" ]\n" +
+        "              },\n" +
+        "              \"field2\": {\n" +
+        "                \"type\": \"number\"\n" +
+        "              }\n" +
+        "            },\n" +
+        "            \"type\": \"object\"\n" +
+        "          },\n" +
+        "        \"CardDetails\": {\n" +
+        "            \"type\": \"object\",\n" +
+        "            \"additionalProperties\": false,\n" +
+        "            \"properties\": {\n" +
+        "                \"credit_card\": {\n" +
+        "                    \"oneOf\": [\n" +
+        "                        {\n" +
+        "                            \"type\": \"null\",\n" +
+        "                            \"title\": \"Not included\"\n" +
+        "                        },\n" +
+        "                        {\n" +
+        "                            \"type\": \"string\"\n" +
+        "                        }\n" +
+        "                    ],\n" +
+        "                    \"confluent:tags\": [ \"PII\" ]\n" +
+        "                }\n" +
+        "            },\n" +
+        "            \"confluent:tags\": [ \"TEST3\" ]\n" +
+        "        }\n" +
+        "    }\n" +
+        "}";
+
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchema expectSchema = new JsonSchema(addedTagSchema);
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("object.definitions.CardDetails.object.credit_card",
+            SchemaEntity.EntityType.SR_FIELD),
+        Collections.singleton("PII"));
+    tags.put(new SchemaEntity("object.definitions.Another.Details.object.additional.field1",
+            SchemaEntity.EntityType.SR_FIELD),
+        Collections.singleton("TEST2"));
+    tags.put(new SchemaEntity("object.definitions.CardDetails.object",
+            SchemaEntity.EntityType.SR_RECORD),
+        Collections.singleton("TEST3"));
+
+    ParsedSchema resultSchema = jsonSchema.copy(tags, Collections.emptyMap());
+    assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+    assertEquals(ImmutableSet.of("PII", "TEST2", "TEST3"), resultSchema.inlineTags());
   }
 
   private static Map<String, String> getJsonSchemaWithReferences() {

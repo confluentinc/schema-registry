@@ -17,7 +17,10 @@ package io.confluent.kafka.formatter.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializerConfig;
+import java.util.Map;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
@@ -73,25 +76,20 @@ public class JsonSchemaMessageFormatter extends SchemaMessageFormatter<JsonNode>
   /**
    * For testing only.
    */
-  JsonSchemaMessageFormatter(
-      SchemaRegistryClient schemaRegistryClient,
-      Deserializer keyDeserializer
-  ) {
-    super(schemaRegistryClient, keyDeserializer);
+  JsonSchemaMessageFormatter(String url, Deserializer keyDeserializer) {
+    super(url, keyDeserializer);
   }
 
   @Override
-  protected SchemaMessageDeserializer<JsonNode> createDeserializer(
-      SchemaRegistryClient schemaRegistryClient,
-      Deserializer keyDeserializer
-  ) {
-    return new JsonSchemaMessageDeserializer(schemaRegistryClient, keyDeserializer);
+  protected SchemaMessageDeserializer<JsonNode> createDeserializer(Deserializer keyDeserializer) {
+    return new JsonSchemaMessageDeserializer(keyDeserializer);
   }
 
 
   @Override
-  protected void writeTo(String topic, byte[] data, PrintStream output) throws IOException {
-    JsonNode object = deserializer.deserialize(topic, data);
+  protected void writeTo(String topic, Boolean isKey, Headers headers,
+      byte[] data, PrintStream output) throws IOException {
+    JsonNode object = deserializer.deserialize(topic, isKey, headers, data);
     output.print(objectMapper.writeValueAsString(object));
   }
 
@@ -108,11 +106,17 @@ public class JsonSchemaMessageFormatter extends SchemaMessageFormatter<JsonNode>
     /**
      * For testing only.
      */
-    JsonSchemaMessageDeserializer(SchemaRegistryClient schemaRegistryClient,
-                                  Deserializer keyDeserializer) {
-      this.schemaRegistry = schemaRegistryClient;
+    JsonSchemaMessageDeserializer(Deserializer keyDeserializer) {
       this.keyDeserializer = keyDeserializer;
-      this.validate = true;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+      if (!configs.containsKey(KafkaJsonSchemaDeserializerConfig.FAIL_INVALID_SCHEMA)) {
+        ((Map<String, Object>) configs).put(
+            KafkaJsonSchemaDeserializerConfig.FAIL_INVALID_SCHEMA, "true");
+      }
+      configure(deserializerConfig(configs), null);
     }
 
     @Override
@@ -121,13 +125,19 @@ public class JsonSchemaMessageFormatter extends SchemaMessageFormatter<JsonNode>
     }
 
     @Override
-    public Object deserializeKey(String topic, byte[] payload) {
-      return keyDeserializer.deserialize(topic, payload);
+    public Object deserializeKey(String topic, Headers headers, byte[] payload) {
+      return keyDeserializer.deserialize(topic, headers, payload);
     }
 
     @Override
-    public JsonNode deserialize(String topic, byte[] payload) throws SerializationException {
-      return (JsonNode) super.deserialize(false, topic, isKey, payload);
+    public JsonNode deserialize(String topic, Boolean isKey, Headers headers, byte[] payload)
+        throws SerializationException {
+      return (JsonNode) super.deserialize(false, topic, isKey, headers, payload);
+    }
+
+    @Override
+    public SchemaRegistryClient getSchemaRegistryClient() {
+      return schemaRegistry;
     }
 
     @Override

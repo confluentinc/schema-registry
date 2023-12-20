@@ -182,7 +182,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       consumer.seekToBeginning(topicPartitions);
     }
 
-    log.info("Initialized last consumed offset to " + offsetInSchemasTopic);
+    log.info("Initialized last consumed offset to {}", offsetInSchemasTopic);
 
     log.debug("Kafka store reader thread started");
   }
