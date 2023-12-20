@@ -40,7 +40,7 @@ class CombinedSchemaDiff {
       final CombinedSchema original,
       final CombinedSchema update
   ) {
-    Difference.Type type = compareCriteria(ctx, original.getCriterion(), update.getCriterion());
+    Difference.Type type = compareCriteria(ctx, original, update);
     if (type != COMBINED_TYPE_CHANGED) {
       // Use sets to collapse duplicate entries
       final Set<JsonSchema> originalSubschemas = original.getSubschemas().stream()
@@ -96,14 +96,31 @@ class CombinedSchemaDiff {
 
   private static Difference.Type compareCriteria(
       final Context ctx,
-      final ValidationCriterion original,
-      final ValidationCriterion update
+      final CombinedSchema original,
+      final CombinedSchema update
   ) {
+    ValidationCriterion originalCriterion = original.getCriterion();
+    ValidationCriterion updateCriterion = update.getCriterion();
     Difference.Type type;
-    if (original.equals(update)) {
+    if (originalCriterion.equals(updateCriterion)) {
       type = null;
-    } else if (update == CombinedSchema.ANY_CRITERION) {
+    } else if (updateCriterion == CombinedSchema.ANY_CRITERION) {
+      // Allow allOf/oneOf to anyOf
       type = COMBINED_TYPE_EXTENDED;
+    } else if (updateCriterion == CombinedSchema.ONE_CRITERION) {
+      if (isSingleton(original)) {
+        // Allow singleton anyOf/allOf to oneOf
+        type = COMBINED_TYPE_EXTENDED;
+      } else {
+        type = COMBINED_TYPE_CHANGED;
+      }
+    } else if (updateCriterion == CombinedSchema.ALL_CRITERION) {
+      if (isSingleton(original) && isSingleton(update)) {
+        // Allow singleton oneOf/anyOf to singleton allOf
+        type = COMBINED_TYPE_EXTENDED;
+      } else {
+        type = COMBINED_TYPE_CHANGED;
+      }
     } else {
       type = COMBINED_TYPE_CHANGED;
     }
@@ -111,5 +128,9 @@ class CombinedSchemaDiff {
       ctx.addDifference(type);
     }
     return type;
+  }
+
+  private static boolean isSingleton(CombinedSchema schema) {
+    return schema.getSubschemas().size() == 1;
   }
 }
