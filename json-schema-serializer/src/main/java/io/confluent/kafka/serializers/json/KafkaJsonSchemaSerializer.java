@@ -57,7 +57,7 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props,
                                    int cacheCapacity) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
     configure(serializerConfig(props));
     this.nodeToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.classToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
