@@ -959,7 +959,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to validation criteria in composed schema type",
+    "description": "Detect changes to validation criteria in composed schema type for singleton",
     "original_schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
