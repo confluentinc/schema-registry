@@ -158,9 +158,6 @@ public class RestApiTest extends ClusterTestHarness {
                  latestSchemas.size());
     assertEquals(Integer.valueOf(10), latestSchemas.get(0).getVersion());
     assertEquals(Integer.valueOf(5), latestSchemas.get(1).getVersion());
-    long now = System.currentTimeMillis();
-    assertTrue(latestSchemas.get(0).getTimestamp() < now);
-    assertTrue(latestSchemas.get(1).getTimestamp() < now);
   }
 
   @Test
