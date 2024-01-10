@@ -143,14 +143,15 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
           SchemaRegistryConfig.INIT_RESOURCE_EXTENSION_CONFIG,
           SchemaRegistryResourceExtension.class);
     boolean fipsExtensionProvided = false;
-    String fipsResourceExtensionClassName =
+    final String fipsResourceExtensionClassName =
         "io.confluent.kafka.schemaregistry.security.SchemaRegistryFipsResourceExtension";
     if (preInitResourceExtensions != null) {
       try {
         for (SchemaRegistryResourceExtension
             schemaRegistryResourceExtension : preInitResourceExtensions) {
           schemaRegistryResourceExtension.register(config, schemaRegistryConfig, schemaRegistry);
-          if (schemaRegistryResourceExtension.toString().equals(fipsResourceExtensionClassName)) {
+          if (fipsResourceExtensionClassName.equals(
+              schemaRegistryResourceExtension.getClass().getCanonicalName())) {
             fipsExtensionProvided = true;
           }
         }
