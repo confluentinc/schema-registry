@@ -163,7 +163,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     if (schemaRegistryConfig.getBoolean(SchemaRegistryConfig.ENABLE_FIPS_CONFIG)
         && !fipsExtensionProvided) {
       log.error("Error enabling the FIPS resource extension: `enable.fips` is set to true but the "
-          + "`init.resource.extension.class` config does not contain \""
+          + "`init.resource.extension.class` config is either not configured or does not contain \""
           + fipsResourceExtensionClassName + "\"");
       System.exit(1);
     }
