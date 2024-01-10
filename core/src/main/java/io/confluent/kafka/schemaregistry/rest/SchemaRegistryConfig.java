@@ -269,7 +269,7 @@ public class SchemaRegistryConfig extends RestConfig {
       "init.resource.extension.class";
   public static final String RESOURCE_EXTENSION_CONFIG =
       "resource.extension.class";
-  protected static final String ENABLE_FIPS_CONFIG =
+  public static final String ENABLE_FIPS_CONFIG =
       "enable.fips";
   public static final String RESOURCE_STATIC_LOCATIONS_CONFIG =
       "resource.static.locations";
