@@ -269,6 +269,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "init.resource.extension.class";
   public static final String RESOURCE_EXTENSION_CONFIG =
       "resource.extension.class";
+  protected static final String ENABLE_FIPS_CONFIG =
+      "enable.fips";
   public static final String RESOURCE_STATIC_LOCATIONS_CONFIG =
       "resource.static.locations";
   @Deprecated
@@ -697,6 +699,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
+    )
+    .define(ENABLE_FIPS_CONFIG, ConfigDef.Type.BOOLEAN, "false",
+        ConfigDef.Importance.LOW, ""
     )
     .define(RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
