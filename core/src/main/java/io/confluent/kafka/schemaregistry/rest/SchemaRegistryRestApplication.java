@@ -142,16 +142,30 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
         schemaRegistryConfig.getConfiguredInstances(
           SchemaRegistryConfig.INIT_RESOURCE_EXTENSION_CONFIG,
           SchemaRegistryResourceExtension.class);
+    boolean fipsExtensionProvided = false;
+    final String fipsResourceExtensionClassName =
+        "io.confluent.kafka.schemaregistry.security.SchemaRegistryFipsResourceExtension";
     if (preInitResourceExtensions != null) {
       try {
         for (SchemaRegistryResourceExtension
             schemaRegistryResourceExtension : preInitResourceExtensions) {
           schemaRegistryResourceExtension.register(config, schemaRegistryConfig, schemaRegistry);
+          if (fipsResourceExtensionClassName.equals(
+              schemaRegistryResourceExtension.getClass().getCanonicalName())) {
+            fipsExtensionProvided = true;
+          }
         }
       } catch (SchemaRegistryException e) {
         log.error("Error starting the schema registry resource extension", e);
         System.exit(1);
       }
+    }
+    if (schemaRegistryConfig.getBoolean(SchemaRegistryConfig.ENABLE_FIPS_CONFIG)
+        && !fipsExtensionProvided) {
+      log.error("Error enabling the FIPS resource extension: `enable.fips` is set to true but the "
+          + "`init.resource.extension.class` config does not contain \""
+          + fipsResourceExtensionClassName + "\"");
+      System.exit(1);
     }
   }
 
