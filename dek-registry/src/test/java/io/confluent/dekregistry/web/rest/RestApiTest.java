@@ -405,7 +405,7 @@ public class RestApiTest extends ClusterTestHarness {
       assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
     }
   }
-  
+
   @Test
   public void testUnknownKmsType() throws Exception {
     String kekName = "kek1";
