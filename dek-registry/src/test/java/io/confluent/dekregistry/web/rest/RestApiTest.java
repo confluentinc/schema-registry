@@ -17,6 +17,7 @@ package io.confluent.dekregistry.web.rest;
 import static io.confluent.dekregistry.storage.DekRegistry.X_FORWARD_HEADER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -43,6 +44,7 @@ import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -109,7 +111,7 @@ public class RestApiTest extends ClusterTestHarness {
   public void testBasic() throws Exception {
     Map<String, String> headers = new HashMap<>();
     headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
-    testBasic(headers);
+    testBasic(headers, false);
   }
 
   @Test
@@ -117,10 +119,17 @@ public class RestApiTest extends ClusterTestHarness {
     Map<String, String> headers = new HashMap<>();
     headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
     headers.put(X_FORWARD_HEADER, "false");
-    testBasic(headers);
+    testBasic(headers, false);
   }
 
-  private void testBasic(Map<String, String> headers) throws Exception {
+  @Test
+  public void testBasicImport() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    testBasic(headers, true);
+  }
+
+  private void testBasic(Map<String, String> headers, boolean isImport) throws Exception {
     String kekName = "kek1";
     String kmsType = "test-kms";
     String kmsKeyId = "myid";
@@ -129,6 +138,10 @@ public class RestApiTest extends ClusterTestHarness {
     String subject2 = "mysubject2";
     DekFormat algorithm = DekFormat.AES256_GCM;
     Kek kek = new Kek(kekName, kmsType, kmsKeyId, null, null, false, null, null);
+
+    if (isImport) {
+      client.setMode("IMPORT");
+    }
 
     // Create kek
     Kek newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false, false);
@@ -264,7 +277,11 @@ public class RestApiTest extends ClusterTestHarness {
     // Create dek w/o key material, receive both encrypted and decrypted key material
     newDek = client.createDek(headers, kekName, subject2, null, algorithm, null, false);
     assertNotNull(newDek.getEncryptedKeyMaterial());
-    assertNotNull(newDek.getKeyMaterial());
+    if (isImport) {
+      assertNull(newDek.getKeyMaterial());
+    } else {
+      assertNotNull(newDek.getKeyMaterial());
+    }
     assertNotNull(newDek.getTimestamp());
 
     // Create versioned dek
@@ -388,7 +405,7 @@ public class RestApiTest extends ClusterTestHarness {
       assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
     }
   }
-
+  
   @Test
   public void testUnknownKmsType() throws Exception {
     String kekName = "kek1";
