@@ -119,7 +119,7 @@ public class RestApiTest extends ClusterTestHarness {
     Map<String, String> headers = new HashMap<>();
     headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
     headers.put(X_FORWARD_HEADER, "false");
-    testBasic(headers, true);
+    testBasic(headers, false);
   }
 
   @Test
