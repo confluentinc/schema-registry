@@ -55,6 +55,7 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.reflect.ReflectData;
+import org.apache.avro.reflect.ReflectData.AllowNull;
 import org.apache.avro.reflect.ReflectDatumWriter;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
@@ -78,10 +79,12 @@ public class AvroSchemaUtils {
 
   private static final GenericData GENERIC_DATA_INSTANCE = new GenericData();
   private static final ReflectData REFLECT_DATA_INSTANCE = new ReflectData();
+  private static final ReflectData REFLECT_DATA_ALLOW_NULL_INSTANCE = new AllowNull();
 
   static {
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE);
+    addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE);
   }
 
   public static GenericData getGenericData() {
@@ -90,6 +93,10 @@ public class AvroSchemaUtils {
 
   public static ReflectData getReflectData() {
     return REFLECT_DATA_INSTANCE;
+  }
+
+  public static ReflectData getReflectDataAllowNull() {
+    return REFLECT_DATA_ALLOW_NULL_INSTANCE;
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
@@ -169,6 +176,13 @@ public class AvroSchemaUtils {
   public static Schema getSchema(Object object, boolean useReflection,
                                  boolean reflectionAllowNull, boolean removeJavaProperties,
                                  boolean throwError) {
+    return getSchema(object, useReflection, reflectionAllowNull, false,
+        removeJavaProperties, throwError);
+  }
+
+  public static Schema getSchema(Object object, boolean useReflection,
+                                 boolean reflectionAllowNull, boolean useLogicalTypeConverters,
+                                 boolean removeJavaProperties, boolean throwError) {
     if (object == null) {
       return primitiveSchemas.get("Null");
     } else if (object instanceof Boolean) {
@@ -186,8 +200,10 @@ public class AvroSchemaUtils {
     } else if (object instanceof byte[] || object instanceof ByteBuffer) {
       return primitiveSchemas.get("Bytes");
     } else if (useReflection) {
-      Schema schema = reflectionAllowNull ? ReflectData.AllowNull.get().getSchema(object.getClass())
-          : ReflectData.get().getSchema(object.getClass());
+      ReflectData reflectData = reflectionAllowNull
+          ? (useLogicalTypeConverters ? getReflectDataAllowNull() : ReflectData.AllowNull.get())
+          : (useLogicalTypeConverters ? getReflectData() : ReflectData.get());
+      Schema schema = reflectData.getSchema(object.getClass());
       if (schema == null) {
         throw new SerializationException("Schema is null for object of class " + object.getClass()
             .getCanonicalName());
@@ -221,8 +237,10 @@ public class AvroSchemaUtils {
 
     } else {
       // Try reflection as last resort
-      Schema schema = reflectionAllowNull ? ReflectData.AllowNull.get().getSchema(object.getClass())
-          : ReflectData.get().getSchema(object.getClass());
+      ReflectData reflectData = reflectionAllowNull
+          ? (useLogicalTypeConverters ? getReflectDataAllowNull() : ReflectData.AllowNull.get())
+          : (useLogicalTypeConverters ? getReflectData() : ReflectData.get());
+      Schema schema = reflectData.getSchema(object.getClass());
       if (schema == null) {
         throw new SerializationException("Schema is null for object of class " + object.getClass()
             .getCanonicalName());
