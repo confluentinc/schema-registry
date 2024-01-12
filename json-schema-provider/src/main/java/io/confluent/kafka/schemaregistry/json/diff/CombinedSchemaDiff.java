@@ -56,10 +56,11 @@ class CombinedSchemaDiff {
           ctx.addDifference(SUM_TYPE_EXTENDED);
         }
       } else if (originalSize > updateSize) {
-        if (update.getCriterion() == CombinedSchema.ALL_CRITERION) {
-          ctx.addDifference(PRODUCT_TYPE_NARROWED);
-        } else {
+        if (original.getCriterion() == CombinedSchema.ANY_CRITERION
+            || original.getCriterion() == CombinedSchema.ONE_CRITERION) {
           ctx.addDifference(SUM_TYPE_NARROWED);
+        } else {
+          ctx.addDifference(PRODUCT_TYPE_NARROWED);
         }
       }
 
@@ -104,23 +105,11 @@ class CombinedSchemaDiff {
     Difference.Type type;
     if (originalCriterion.equals(updateCriterion)) {
       type = null;
-    } else if (updateCriterion == CombinedSchema.ANY_CRITERION) {
-      // Allow allOf/oneOf to anyOf
+    } else if (updateCriterion == CombinedSchema.ANY_CRITERION
+        || (isSingleton(original) && isSingleton(update))
+        || (isSingleton(original) && updateCriterion == CombinedSchema.ONE_CRITERION)
+        || (isSingleton(update) && originalCriterion == CombinedSchema.ALL_CRITERION)) {
       type = COMBINED_TYPE_EXTENDED;
-    } else if (updateCriterion == CombinedSchema.ONE_CRITERION) {
-      if (isSingleton(original)) {
-        // Allow singleton anyOf/allOf to oneOf
-        type = COMBINED_TYPE_EXTENDED;
-      } else {
-        type = COMBINED_TYPE_CHANGED;
-      }
-    } else if (updateCriterion == CombinedSchema.ALL_CRITERION) {
-      if (isSingleton(original) && isSingleton(update)) {
-        // Allow singleton oneOf/anyOf to singleton allOf
-        type = COMBINED_TYPE_EXTENDED;
-      } else {
-        type = COMBINED_TYPE_CHANGED;
-      }
     } else {
       type = COMBINED_TYPE_CHANGED;
     }
