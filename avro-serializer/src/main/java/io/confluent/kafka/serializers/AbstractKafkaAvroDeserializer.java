@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.serializers;
 
+import static io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils.getReflectData;
+import static io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils.getReflectDataAllowNull;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -82,7 +85,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             } else if (useSchemaReflection) {
               return new ReflectDatumReader<>(writerSchema, finalReaderSchema,
                   avroUseLogicalTypeConverters
-                      ? AvroSchemaUtils.getReflectData()
+                      ? getReflectData()
                       : ReflectData.get());
             } else if (useSpecificAvroReader) {
               return new SpecificDatumReader<>(writerSchema, finalReaderSchema);
@@ -357,8 +360,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   private Schema getReflectionReaderSchema(Schema writerSchema) {
-    ReflectData reflectData = avroReflectionAllowNull ? ReflectData.AllowNull.get()
-        : ReflectData.get();
+    ReflectData reflectData = avroReflectionAllowNull
+        ? (avroUseLogicalTypeConverters ? getReflectDataAllowNull() : ReflectData.AllowNull.get())
+        : (avroUseLogicalTypeConverters ? getReflectData() : ReflectData.get());
     Class<?> readerClass = reflectData.getClass(writerSchema);
     if (readerClass == null) {
       throw new SerializationException("Could not find class "
