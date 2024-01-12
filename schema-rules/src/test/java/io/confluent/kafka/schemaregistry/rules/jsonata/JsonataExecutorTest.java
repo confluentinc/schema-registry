@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.rules.jsonata;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,6 +26,8 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Timestamp;
+import com.google.protobuf.util.Timestamps;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -42,6 +45,8 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.rules.ExpiringSpecificWidget;
+import io.confluent.kafka.schemaregistry.rules.ExpiringSpecificWidgetProto;
 import io.confluent.kafka.schemaregistry.rules.NewSpecificWidget;
 import io.confluent.kafka.schemaregistry.rules.NewWidgetProto;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto;
@@ -55,6 +60,7 @@ import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -63,6 +69,7 @@ import java.util.SortedMap;
 import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 public class JsonataExecutorTest {
@@ -78,9 +85,11 @@ public class JsonataExecutorTest {
   private final KafkaAvroDeserializer reflectionAvroDeserializer3;
   private final KafkaAvroDeserializer specificAvroDeserializer;
   private final KafkaProtobufSerializer<WidgetProto.Widget> protobufSerializer;
+  private final KafkaProtobufSerializer<ExpiringSpecificWidgetProto.ExpiringSpecificWidget> protobufSerializer2;
   private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   private final KafkaProtobufDeserializer<NewWidgetProto.NewWidget> specificProtobufDeserializer;
   private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
+  private final KafkaJsonSchemaSerializer<ExpiringWidget> jsonSchemaSerializer2;
   private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   private final KafkaJsonSchemaDeserializer<NewWidget> specificJsonSchemaDeserializer;
   private final String topic;
@@ -128,12 +137,14 @@ public class JsonataExecutorTest {
     specificAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, specificProps2);
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
+    protobufSerializer2 = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
     protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, defaultConfig2);
 
     specificProps2.put(KafkaProtobufDeserializerConfig.DERIVE_TYPE_CONFIG, "true");
     specificProtobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, specificProps2);
 
     jsonSchemaSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, defaultConfig);
+    jsonSchemaSerializer2 = new KafkaJsonSchemaSerializer<>(schemaRegistry, defaultConfig);
     jsonSchemaDeserializer =
         new KafkaJsonSchemaDeserializer<>(schemaRegistry, defaultConfig2, JsonNode.class);
 
@@ -148,7 +159,25 @@ public class JsonataExecutorTest {
         + "{\"name\": \"height\", \"type\": \"int\"},"
         + "{\"name\": \"version\", \"type\": \"int\"},"
         + "{\"name\": \"id\", \"type\":"
-        + "{\"type\": \"string\", \"logicalType\": \"uuid\"}}]}";
+        + "{\"type\": \"string\", \"logicalType\": \"uuid\"}}"
+        + "]}";
+
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(userSchema);
+    return schema;
+  }
+
+  private Schema createExpiringWidgetSchema() {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
+        "\"name\": \"ExpiringWidget\"," +
+        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"},"
+        + "{\"name\": \"size\", \"type\": \"int\"},"
+        + "{\"name\": \"version\", \"type\": \"int\"},"
+        + "{\"name\": \"id\", \"type\":"
+        + "{\"type\": \"string\", \"logicalType\": \"uuid\"}},"
+        + "{\"name\": \"expiration\", \"type\":"
+        + "{\"type\": \"string\", \"logicalType\": \"date\"}}"
+        + "]}";
 
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
@@ -380,6 +409,27 @@ public class JsonataExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroCondition() throws Exception {
+    String ruleString = "$.expiration * 86400000 > $millis()";
+
+    ExpiringSpecificWidget widget = new ExpiringSpecificWidget();
+    widget.setName("alice");
+    widget.setSize(123);
+    widget.setExpiration(LocalDate.now());
+    Schema schema = ExpiringSpecificWidget.getClassSchema();
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        JsonataExecutor.TYPE, null, null, ruleString, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
+    Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    assertThrows(SerializationException.class, () -> avroSerializer.serialize(topic, widget));
+  }
+
+  @Test
   public void testKafkaProtobufSerializerGeneric() throws Exception {
     byte[] bytes;
     Object obj;
@@ -467,6 +517,29 @@ public class JsonataExecutorTest {
   }
 
   @Test
+  public void testKafkaProtobufCondition() throws Exception {
+    String ruleString = "$toMillis($.expiration) > $millis()";
+
+    ExpiringSpecificWidgetProto.ExpiringSpecificWidget widget =
+        ExpiringSpecificWidgetProto.ExpiringSpecificWidget.newBuilder()
+            .setName("alice")
+            .setSize(123)
+            .setExpiration(Timestamps.fromMillis(System.currentTimeMillis()))
+            .build();
+
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        JsonataExecutor.TYPE, null, null, ruleString, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
+    Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
+    protobufSchema = protobufSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    assertThrows(SerializationException.class, () -> protobufSerializer2.serialize(topic, widget));
+  }
+
+  @Test
   public void testKafkaJsonSerializerGeneric() throws Exception {
     byte[] bytes;
     Object obj;
@@ -544,6 +617,26 @@ public class JsonataExecutorTest {
         123,
         ((NewWidget)obj).getHeight()
     );
+  }
+
+  @Test
+  public void testKafkaJsonCondition() throws Exception {
+    String ruleString = "$toMillis($.expiration) > $millis()";
+
+    ExpiringWidget widget = new ExpiringWidget();
+    widget.setName("alice");
+    widget.setSize(123);
+    widget.setExpiration(LocalDate.now());
+    JsonSchema jsonSchema = JsonSchemaUtils.getSchema(widget);
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        JsonataExecutor.TYPE, null, null, ruleString, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
+    Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    assertThrows(SerializationException.class, () -> jsonSchemaSerializer2.serialize(topic, widget));
   }
 
   @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
@@ -732,6 +825,79 @@ public class JsonataExecutorTest {
     @Override
     public int hashCode() {
       return Objects.hash(id, name, length, version);
+    }
+  }
+
+  @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
+      value= "io.confluent.kafka.schemaregistry.rules.jsonata.JsonataExecutorTest$ExpiringWidget")})
+  public static class ExpiringWidget {
+    private UUID id;
+    private String name;
+    private int size;
+    private int version;
+    private LocalDate expiration;
+
+    public ExpiringWidget() {}
+    public ExpiringWidget(UUID id, String name) {
+      this.id = id;
+      this.name = name;
+    }
+
+    public UUID getId() {
+      return id;
+    }
+
+    public void setId(UUID id) {
+      this.id = id;
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    public void setName(String name) {
+      this.name = name;
+    }
+
+    public int getSize() {
+      return size;
+    }
+
+    public void setSize(int size) {
+      this.size = size;
+    }
+
+    public int getVersion() {
+      return version;
+    }
+
+    public void setVersion(int version) {
+      this.version = version;
+    }
+
+    public LocalDate getExpiration() {
+      return expiration;
+    }
+
+    public void setExpiration(LocalDate expiration) {
+      this.expiration = expiration;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      ExpiringWidget widget = (ExpiringWidget) o;
+      return name.equals(widget.name)
+          && size == widget.size
+          && version == widget.version
+          && Objects.equals(id, widget.id)
+          && Objects.equals(expiration, widget.expiration);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(id, name, size, version, expiration);
     }
   }
 }

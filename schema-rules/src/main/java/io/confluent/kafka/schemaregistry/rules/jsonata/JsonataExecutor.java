@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
@@ -96,7 +97,16 @@ public class JsonataExecutor implements RuleExecutor {
   @Override
   public Object transform(RuleContext ctx, Object message)
       throws RuleException {
-    JsonNode jsonObj = (JsonNode) message;
+    JsonNode jsonObj;
+    if (message instanceof JsonNode) {
+      jsonObj = (JsonNode) message;
+    } else {
+      try {
+        jsonObj = ctx.target().toJson(message);
+      } catch (IOException e) {
+        throw new RuleException(e);
+      }
+    }
     Expressions expr;
     try {
       expr = cache.get(ctx.rule().getExpr());
@@ -109,7 +119,7 @@ public class JsonataExecutor implements RuleExecutor {
     }
     try {
       JsonNode result = expr.evaluate(jsonObj, timeoutMs, maxDepth);
-      return result;
+      return ctx.rule().getKind() == RuleKind.CONDITION ? result.asBoolean(true) : result;
     } catch (EvaluateException e) {
       throw new RuleException("Could not evaluate expression", e);
     }
