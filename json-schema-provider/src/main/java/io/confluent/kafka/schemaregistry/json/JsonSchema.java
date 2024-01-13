@@ -1135,7 +1135,8 @@ public class JsonSchema implements ParsedSchema {
       try {
         return uri.toURL();
       } catch (IllegalArgumentException e) {
-        throw new IllegalArgumentException("URI '$uri' can't be converted to URL: ${e.message}", e);
+        throw new IllegalArgumentException(
+            String.format("URI '%s' can't be converted to URL: %s", uri, e.getMessage()), e);
       }
     }
   }
