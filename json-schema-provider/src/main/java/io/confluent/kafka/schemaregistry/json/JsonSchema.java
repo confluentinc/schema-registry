@@ -1055,7 +1055,7 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  public static abstract class JsonSchemaClient implements SchemaClient {
+  public abstract static class JsonSchemaClient implements SchemaClient {
 
     @Override
     public IJsonValue getParsed(URI uri) {
