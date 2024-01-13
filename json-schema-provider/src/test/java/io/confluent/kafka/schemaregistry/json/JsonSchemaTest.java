@@ -391,12 +391,25 @@ public class JsonSchemaTest {
 
   @Test
   public void testEnvelopeWithReferences() throws Exception {
-    Map<String, String> schemas = getJsonSchemaWithReferences();
+    String draft = "\"$schema\": \"http://json-schema.org/draft-07/schema#\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
+  public void testEnvelopeWithReferencesDraft_2020_12() throws Exception {
+    String draft = "\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  private void testEnvelopeWithReferences(String draft) throws Exception {
+    Map<String, String> schemas = getJsonSchemaWithReferences(draft);
     SchemaReference ref = new SchemaReference("ref.json", "reference", 1);
     JsonSchema schema = new JsonSchema(schemas.get("main.json"), Collections.singletonList(ref),
         Collections.singletonMap("ref.json", schemas.get("ref.json")), null);
+    schema.validate(true);
     Object envelope = JsonSchemaUtils.envelope(schema, null);
     JsonSchema schema2 = JsonSchemaUtils.getSchema(envelope);
+    schema2.validate(true);
     assertEquals(schema, schema2);
   }
 
@@ -921,59 +934,111 @@ public class JsonSchemaTest {
   @Test
   public void testRestrictedFields() {
     String schema = "{\n"
-            + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
-            + "  \"$id\": \"task.schema.json\",\n"
-            + "  \"title\": \"Task\",\n"
-            + "  \"description\": \"A task\",\n"
-            + "  \"type\": \"object\",\n"
-            + "  \"properties\": {\n"
-            + "    \"$id\": {\n"
-            + "        \"type\": \"string\"\n"
-            + "    },    \n"
-            + "    \"$$title\": {\n"
-            + "        \"description\": \"Task title\",\n"
-            + "        \"type\": \"string\"\n"
-            + "    },    \n"
-            + "    \"status\": {\n"
-            + "        \"type\": \"string\"\n"
-            + "    }\n"
-            + "  }\n"
-            + "}";
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"$id\": \"task.schema.json\",\n"
+        + "  \"title\": \"Task\",\n"
+        + "  \"description\": \"A task\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"$id\": {\n"
+        + "        \"type\": \"string\"\n"
+        + "    },    \n"
+        + "    \"$$title\": {\n"
+        + "        \"description\": \"Task title\",\n"
+        + "        \"type\": \"string\"\n"
+        + "    },    \n"
+        + "    \"status\": {\n"
+        + "        \"type\": \"string\"\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
     JsonSchema jsonSchema = new JsonSchema(schema);
     jsonSchema.validate(false);
     assertThrows(ValidationException.class, () -> jsonSchema.validate(true));
     String stringSchema = "{\n"
-            + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
-            + "  \"$id\": \"task.schema.json\",\n"
-            + "  \"title\": \"Task\",\n"
-            + "  \"description\": \"A task\",\n"
-            + "  \"type\": \"object\",\n"
-            + "  \"properties\": {\n"
-            + "    \"$id\": {\n"
-            + "        \"type\": \"string\"\n"
-            + "    },    \n"
-            + "    \"title\": {\n"
-            + "        \"description\": \"Task title\",\n"
-            + "        \"type\": \"string\"\n"
-            + "    },    \n"
-            + "    \"status\": {\n"
-            + "        \"type\": \"string\"\n"
-            + "    }\n"
-            + "  }\n"
-            + "}";
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"$id\": \"task.schema.json\",\n"
+        + "  \"title\": \"Task\",\n"
+        + "  \"description\": \"A task\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"$id\": {\n"
+        + "        \"type\": \"string\"\n"
+        + "    },    \n"
+        + "    \"title\": {\n"
+        + "        \"description\": \"Task title\",\n"
+        + "        \"type\": \"string\"\n"
+        + "    },    \n"
+        + "    \"status\": {\n"
+        + "        \"type\": \"string\"\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
     JsonSchema validSchema = new JsonSchema(stringSchema);
     validSchema.validate(true);
   }
 
-  private static Map<String, String> getJsonSchemaWithReferences() {
+  @Test
+  public void testLocalReferenceDraft_2020_12() {
+    String parent = "{\n"
+        + "    \"$id\": \"acme.webhooks.checkout-application_updated.jsonschema.json\",\n"
+        + "    \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "    \"$scope\": \"r:application\",\n"
+        + "    \"title\": \"ApplicationUpdatedEvent\",\n"
+        + "    \"description\": \"Application updated event representing a state change in application data.\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": {\n"
+        + "        \"identity\": {\n"
+        + "            \"$ref\": \"https://getbread.github.io/docs/oas/v2/models.openapi3.json#/components/schemas/Identity\"\n"
+        + "        },\n"
+        + "        \"application\": {\n"
+        + "            \"$ref\": \"./checkout.common.webhooks.jsonschema.json#/components/schemas/Application\"\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"required\": [\n"
+        + "        \"identity\",\n"
+        + "        \"application\"\n"
+        + "    ]\n"
+        + "}";
+    String child = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"components\": {\n"
+        + "    \"schemas\": {\n"
+        + "      \"Application\": {\n"
+        + "        \"properties\": {\n"
+        + "          \"id\": {\n"
+        + "            \"description\": \"The unique identifier of the Application.\",\n"
+        + "            \"format\": \"uuid\",\n"
+        + "            \"readOnly\": true,\n"
+        + "            \"type\": \"string\"\n"
+        + "          },\n"
+        + "          \"shippingContact\": {\n"
+        + "            \"$ref\": \"https://getbread.github.io/docs/oas/v2/models.openapi3.json#/components/schemas/Contact\"\n"
+        + "          }\n"
+        + "        },\n"
+        + "        \"title\": \"Application\",\n"
+        + "        \"type\": \"object\"\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    SchemaReference ref = new SchemaReference("checkout.common.webhooks.jsonschema.json", "reference", 1);
+    JsonSchema jsonSchema = new JsonSchema(parent, Collections.singletonList(ref),
+        Collections.singletonMap("checkout.common.webhooks.jsonschema.json", child), null);
+    jsonSchema.validate(true);
+  }
+
+  private static Map<String, String> getJsonSchemaWithReferences(String draft) {
     Map<String, String> schemas = new HashMap<>();
-    String reference = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
+    String reference = "{"
+        + draft
+        + ",\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
         + "{\"ExternalType\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},"
         + "\"additionalProperties\":false}}}";
     schemas.put("ref.json", new JsonSchema(reference).canonicalString());
     String schemaString = "{"
-        + "\"$id\": \"https://acme.com/referrer.json\","
-        + "\"$schema\": \"http://json-schema.org/draft-07/schema#\","
+        + draft
+        + ",\"$id\": \"https://acme.com/referrer.json\","
         + "\"type\":\"object\",\"properties\":{\"Ref\":"
         + "{\"$ref\":\"ref.json#/definitions/ExternalType\"}},\"additionalProperties\":false}";
     schemas.put("main.json", schemaString);
