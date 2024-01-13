@@ -391,12 +391,25 @@ public class JsonSchemaTest {
 
   @Test
   public void testEnvelopeWithReferences() throws Exception {
-    Map<String, String> schemas = getJsonSchemaWithReferences();
+    String draft = "\"$schema\": \"http://json-schema.org/draft-07/schema#\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
+  public void testEnvelopeWithReferencesDraft_2020_12() throws Exception {
+    String draft = "\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  private void testEnvelopeWithReferences(String draft) throws Exception {
+    Map<String, String> schemas = getJsonSchemaWithReferences(draft);
     SchemaReference ref = new SchemaReference("ref.json", "reference", 1);
     JsonSchema schema = new JsonSchema(schemas.get("main.json"), Collections.singletonList(ref),
         Collections.singletonMap("ref.json", schemas.get("ref.json")), null);
+    schema.validate(true);
     Object envelope = JsonSchemaUtils.envelope(schema, null);
     JsonSchema schema2 = JsonSchemaUtils.getSchema(envelope);
+    schema2.validate(true);
     assertEquals(schema, schema2);
   }
 
@@ -966,9 +979,9 @@ public class JsonSchemaTest {
   }
 
   @Test
-  public void testDraft2020_12WithReference() {
+  public void testLocalReferenceDraft_2020_12() {
     String parent = "{\n"
-        + "    \"$id\": \"breadpayments.webhooks.checkout-application_updated.jsonschema.json\",\n"
+        + "    \"$id\": \"acme.webhooks.checkout-application_updated.jsonschema.json\",\n"
         + "    \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
         + "    \"$scope\": \"r:application\",\n"
         + "    \"title\": \"ApplicationUpdatedEvent\",\n"
@@ -1015,15 +1028,17 @@ public class JsonSchemaTest {
     jsonSchema.validate(true);
   }
 
-  private static Map<String, String> getJsonSchemaWithReferences() {
+  private static Map<String, String> getJsonSchemaWithReferences(String draft) {
     Map<String, String> schemas = new HashMap<>();
-    String reference = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
+    String reference = "{"
+        + draft
+        + ",\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
         + "{\"ExternalType\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},"
         + "\"additionalProperties\":false}}}";
     schemas.put("ref.json", new JsonSchema(reference).canonicalString());
     String schemaString = "{"
-        + "\"$id\": \"https://acme.com/referrer.json\","
-        + "\"$schema\": \"http://json-schema.org/draft-07/schema#\","
+        + draft
+        + ",\"$id\": \"https://acme.com/referrer.json\","
         + "\"type\":\"object\",\"properties\":{\"Ref\":"
         + "{\"$ref\":\"ref.json#/definitions/ExternalType\"}},\"additionalProperties\":false}";
     schemas.put("main.json", schemaString);
