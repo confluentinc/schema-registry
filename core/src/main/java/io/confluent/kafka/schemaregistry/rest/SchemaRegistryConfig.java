@@ -269,6 +269,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "init.resource.extension.class";
   public static final String RESOURCE_EXTENSION_CONFIG =
       "resource.extension.class";
+  public static final String ENABLE_FIPS_CONFIG =
+      "enable.fips";
   public static final String RESOURCE_STATIC_LOCATIONS_CONFIG =
       "resource.static.locations";
   @Deprecated
@@ -439,6 +441,9 @@ public class SchemaRegistryConfig extends RestConfig {
       "Login thread will sleep until the specified window factor of time from last refresh to "
       + "ticket's expiry has "
       + "been reached, at which time it will try to renew the ticket.";
+  protected static final String ENABLE_FIPS_DOC =
+      "Enable FIPS mode on the server. If FIPS mode is enabled, broker listener security protocols,"
+      + " TLS versions and cipher suites will be validated based on FIPS compliance requirement.";
   protected static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC =
       "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
       + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
@@ -697,6 +702,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
+    )
+    .define(ENABLE_FIPS_CONFIG, ConfigDef.Type.BOOLEAN, false,
+        ConfigDef.Importance.LOW, ENABLE_FIPS_DOC
     )
     .define(RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
