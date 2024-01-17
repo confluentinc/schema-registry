@@ -49,6 +49,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.RestConfigException;
@@ -568,7 +569,10 @@ public class DekRegistry implements Closeable {
     // Retrieve key with ts set
     key = (DataEncryptionKey) keys.get(keyId);
     if (kek.isShared()) {
-      key = generateRawDek(kek, key);
+      Mode mode = schemaRegistry.getModeInScope(request.getSubject());
+      if (mode != Mode.IMPORT) {
+        key = generateRawDek(kek, key);
+      }
     }
     return key;
   }
