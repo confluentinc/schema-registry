@@ -498,12 +498,17 @@ public class AvroDataTest {
 
   @Test
   public void testNameScrubbing() {
+    assertEquals(null, AvroData.doScrubName(null));
+    assertEquals("", AvroData.doScrubName(""));
+    assertEquals("abc_DEF_123", AvroData.doScrubName("abc_DEF_123")); // nothing to scrub
+
     assertEquals("abc_2B____", AvroData.doScrubName("abc+-.*_"));
     assertEquals("abc_def", AvroData.doScrubName("abc-def"));
     assertEquals("abc_2Bdef", AvroData.doScrubName("abc+def"));
     assertEquals("abc__def", AvroData.doScrubName("abc  def"));
     assertEquals("abc_def", AvroData.doScrubName("abc.def"));
-    assertEquals("x0abc_def", AvroData.doScrubName("0abc.def"));
+    assertEquals("x0abc_def", AvroData.doScrubName("0abc.def")); // invalid start char
+    assertEquals("x0abc", AvroData.doScrubName("0abc")); // (only) invalid start char
   }
 
   @Test
