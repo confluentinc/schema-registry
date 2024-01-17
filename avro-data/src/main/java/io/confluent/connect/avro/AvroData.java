@@ -27,7 +27,6 @@ import io.confluent.connect.schema.ConnectUnion;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.util.regex.Pattern;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
@@ -122,9 +121,6 @@ public class AvroData {
       GENERALIZED_TYPE_UNION_PREFIX + "field_";
 
   private static final Map<String, Schema.Type> NON_AVRO_TYPES_BY_TYPE_CODE = new HashMap<>();
-
-  private static Pattern NAME_START_CHAR = Pattern.compile("^[A-Za-z_]");
-  private static Pattern NAME_INVALID_CHARS = Pattern.compile("[^A-Za-z0-9_]");
 
   static {
     NON_AVRO_TYPES_BY_TYPE_CODE.put(CONNECT_TYPE_INT8, Schema.Type.INT8);
@@ -1151,15 +1147,45 @@ public class AvroData {
   // Visible for testing
   protected static String doScrubName(String name) {
     try {
-      if (name == null) {
+      if (name == null || name.isEmpty()) {
         return name;
       }
+
+      // This function was originally written more simply using regular expressions, but this was
+      // observed to significantly cut performance by half when locally sourcing data:
+      // https://github.com/confluentinc/schema-registry/issues/2929
+
+      // Fast code path for returning: avoids making a single memory allocation if the name does
+      // not need to be modified.
+      boolean nameOK = true;
+      for (int i = 0, n = name.length(); i < n; i++) {
+        char ch = name.charAt(i);
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
+                || (ch >= '0' && ch <= '9') || ch == '_') {
+          continue;
+        }
+        nameOK = false;
+      }
+      nameOK = nameOK && (name.charAt(0) < '0' || name.charAt(0) > '9');
+      if (nameOK) {
+        return name;
+      }
+
+      // String needs to be scrubbed
       String encoded = URLEncoder.encode(name, "UTF-8");
-      if (!NAME_START_CHAR.matcher(encoded).lookingAt()) {
+      if (encoded.charAt(0) >= '0' && encoded.charAt(0) <= '9') {
         encoded = "x" + encoded;  // use an arbitrary valid prefix
       }
-      encoded = NAME_INVALID_CHARS.matcher(encoded).replaceAll("_");
-      return encoded;
+      StringBuilder sb = new StringBuilder(encoded);
+      for (int i = 0, n = sb.length(); i < n; i++) {
+        char ch = sb.charAt(i);
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
+                || (ch >= '0' && ch <= '9') || ch == '_') {
+          continue;
+        }
+        sb.setCharAt(i, '_');
+      }
+      return sb.toString();
     } catch (UnsupportedEncodingException e) {
       return name;
     }
