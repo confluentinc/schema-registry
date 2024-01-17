@@ -2039,13 +2039,19 @@ public class ProtobufDataTest {
 
   @Test
   public void testNameScrubbing() {
+    assertEquals(null, ProtobufData.doScrubName(null));
+    assertEquals("", ProtobufData.doScrubName(""));
+    assertEquals("abc_DEF_123", ProtobufData.doScrubName("abc_DEF_123")); // nothing to scrub
+
     assertEquals("abc_2B____", ProtobufData.doScrubName("abc+-.*_"));
     assertEquals("abc_def", ProtobufData.doScrubName("abc-def"));
     assertEquals("abc_2Bdef", ProtobufData.doScrubName("abc+def"));
     assertEquals("abc__def", ProtobufData.doScrubName("abc  def"));
     assertEquals("abc_def", ProtobufData.doScrubName("abc.def"));
-    assertEquals("x0abc_def", ProtobufData.doScrubName("0abc.def"));
-    assertEquals("x_abc_def", ProtobufData.doScrubName("_abc.def"));
+    assertEquals("x0abc_def", ProtobufData.doScrubName("0abc.def")); // invalid start char
+    assertEquals("x_abc_def", ProtobufData.doScrubName("_abc.def")); // invalid start char
+    assertEquals("x0abc", ProtobufData.doScrubName("0abc")); // (only) invalid start char
+    assertEquals("x_abc", ProtobufData.doScrubName("_abc")); // (only) invalid start char
   }
 
   @Test
