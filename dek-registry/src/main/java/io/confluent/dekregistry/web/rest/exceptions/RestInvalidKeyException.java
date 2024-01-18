@@ -20,7 +20,7 @@ import io.confluent.rest.exceptions.RestConstraintViolationException;
 public class RestInvalidKeyException extends RestConstraintViolationException {
 
   public static final int ERROR_CODE = DekRegistryErrors.INVALID_KEY_ERROR_CODE;
-  public static final String INVALID_KEY_MESSAGE_FORMAT = "Invalid value for field '%s' of key";
+  public static final String INVALID_KEY_MESSAGE_FORMAT = "Invalid or missing value for field '%s' of key";
 
   public RestInvalidKeyException(String field) {
     super(String.format(INVALID_KEY_MESSAGE_FORMAT, field), ERROR_CODE);
