@@ -80,7 +80,8 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
         if (!((KeyEncryptionKey)oldValue).isShared() && ((KeyEncryptionKey)value).isShared()) {
           // Not Shared -> Shared
           dekRegistry.getMetricsManager().incrementSharedKeyCount(tenant);
-        } else if (((KeyEncryptionKey)oldValue).isShared() && !((KeyEncryptionKey)value).isShared()) {
+        } else if (((KeyEncryptionKey)oldValue).isShared()
+            && !((KeyEncryptionKey)value).isShared()) {
           // Shared -> Not Shared
           dekRegistry.getMetricsManager().decrementSharedKeyCount(tenant);
         }
