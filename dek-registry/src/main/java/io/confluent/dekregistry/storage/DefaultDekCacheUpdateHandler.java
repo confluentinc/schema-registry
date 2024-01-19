@@ -62,10 +62,29 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
     String tenant = key.getTenant();
     if (value == null) {
       if (oldValue != null) {
+        // Delete KEK/DEK case
         dekRegistry.getMetricsManager().decrementKeyCount(tenant, key.getType());
+        if (oldValue instanceof KeyEncryptionKey && ((KeyEncryptionKey)oldValue).isShared()) {
+          dekRegistry.getMetricsManager().decrementSharedKeyCount(tenant);
+        }
       }
     } else if (oldValue == null) {
+      // Add KEK/DEK case
       dekRegistry.getMetricsManager().incrementKeyCount(tenant, key.getType());
+      if (value instanceof KeyEncryptionKey && ((KeyEncryptionKey)value).isShared()) {
+        dekRegistry.getMetricsManager().incrementSharedKeyCount(tenant);
+      }
+    } else {
+      // Update KEK case
+      if (value instanceof KeyEncryptionKey && oldValue instanceof KeyEncryptionKey) {
+        if (!((KeyEncryptionKey)oldValue).isShared() && ((KeyEncryptionKey)value).isShared()) {
+          // Not Shared -> Shared
+          dekRegistry.getMetricsManager().incrementSharedKeyCount(tenant);
+        } else if (((KeyEncryptionKey)oldValue).isShared() && !((KeyEncryptionKey)value).isShared()) {
+          // Shared -> Not Shared
+          dekRegistry.getMetricsManager().decrementSharedKeyCount(tenant);
+        }
+      }
     }
   }
 
