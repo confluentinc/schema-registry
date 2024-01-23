@@ -82,6 +82,7 @@
         <swagger.version>1.6.2</swagger.version>
         <spotbugs.plugin.version>4.0.0</spotbugs.plugin.version>
         <commons.compress.version>1.21</commons.compress.version>
+        <bouncycastle.jdk18.version>1.77</bouncycastle.jdk18.version>
     </properties>
 
     <repositories>
