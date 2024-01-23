@@ -57,7 +57,7 @@ public final class DependencyTestProto {
   /**
    * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.DependencyMessage}
    */
-  public  static final class DependencyMessage extends
+  public static final class DependencyMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.DependencyMessage)
       DependencyMessageOrBuilder {
@@ -168,6 +168,7 @@ public final class DependencyTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.NestedMessage nested_message = 1;</code>
      * @return Whether the nestedMessage field is set.
      */
+    @java.lang.Override
     public boolean hasNestedMessage() {
       return nestedMessage_ != null;
     }
@@ -175,12 +176,14 @@ public final class DependencyTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.NestedMessage nested_message = 1;</code>
      * @return The nestedMessage.
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage getNestedMessage() {
       return nestedMessage_ == null ? io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage.getDefaultInstance() : nestedMessage_;
     }
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.NestedMessage nested_message = 1;</code>
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessageOrBuilder getNestedMessageOrBuilder() {
       return getNestedMessage();
     }
@@ -191,6 +194,7 @@ public final class DependencyTestProto {
      * <code>bool is_active = 2;</code>
      * @return The isActive.
      */
+    @java.lang.Override
     public boolean getIsActive() {
       return isActive_;
     }
@@ -201,6 +205,7 @@ public final class DependencyTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
      * @return Whether the testMesssage field is set.
      */
+    @java.lang.Override
     public boolean hasTestMesssage() {
       return testMesssage_ != null;
     }
@@ -208,12 +213,14 @@ public final class DependencyTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
      * @return The testMesssage.
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage getTestMesssage() {
       return testMesssage_ == null ? io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.getDefaultInstance() : testMesssage_;
     }
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder getTestMesssageOrBuilder() {
       return getTestMesssage();
     }
@@ -705,6 +712,7 @@ public final class DependencyTestProto {
        * <code>bool is_active = 2;</code>
        * @return The isActive.
        */
+      @java.lang.Override
       public boolean getIsActive() {
         return isActive_;
       }

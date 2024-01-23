@@ -84,6 +84,10 @@ public final class EnumUnionOuter {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
+      if (this == UNRECOGNIZED) {
+        throw new java.lang.IllegalStateException(
+            "Can't get the descriptor of an unrecognized enum value.");
+      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -124,6 +128,11 @@ public final class EnumUnionOuter {
 
     /**
      * <code>string one_id = 1;</code>
+     * @return Whether the oneId field is set.
+     */
+    boolean hasOneId();
+    /**
+     * <code>string one_id = 1;</code>
      * @return The oneId.
      */
     java.lang.String getOneId();
@@ -136,10 +145,20 @@ public final class EnumUnionOuter {
 
     /**
      * <code>int32 other_id = 2;</code>
+     * @return Whether the otherId field is set.
+     */
+    boolean hasOtherId();
+    /**
+     * <code>int32 other_id = 2;</code>
      * @return The otherId.
      */
     int getOtherId();
 
+    /**
+     * <code>.io.confluent.kafka.serializers.protobuf.test.Status some_status = 3;</code>
+     * @return Whether the someStatus field is set.
+     */
+    boolean hasSomeStatus();
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.Status some_status = 3;</code>
      * @return The enum numeric value on the wire for someStatus.
@@ -167,7 +186,7 @@ public final class EnumUnionOuter {
   /**
    * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.EnumUnion}
    */
-  public  static final class EnumUnion extends
+  public static final class EnumUnion extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.EnumUnion)
       EnumUnionOrBuilder {
@@ -311,6 +330,13 @@ public final class EnumUnionOuter {
     public static final int ONE_ID_FIELD_NUMBER = 1;
     /**
      * <code>string one_id = 1;</code>
+     * @return Whether the oneId field is set.
+     */
+    public boolean hasOneId() {
+      return someValCase_ == 1;
+    }
+    /**
+     * <code>string one_id = 1;</code>
      * @return The oneId.
      */
     public java.lang.String getOneId() {
@@ -356,8 +382,17 @@ public final class EnumUnionOuter {
     public static final int OTHER_ID_FIELD_NUMBER = 2;
     /**
      * <code>int32 other_id = 2;</code>
+     * @return Whether the otherId field is set.
+     */
+    @java.lang.Override
+    public boolean hasOtherId() {
+      return someValCase_ == 2;
+    }
+    /**
+     * <code>int32 other_id = 2;</code>
      * @return The otherId.
      */
+    @java.lang.Override
     public int getOtherId() {
       if (someValCase_ == 2) {
         return (java.lang.Integer) someVal_;
@@ -366,6 +401,13 @@ public final class EnumUnionOuter {
     }
 
     public static final int SOME_STATUS_FIELD_NUMBER = 3;
+    /**
+     * <code>.io.confluent.kafka.serializers.protobuf.test.Status some_status = 3;</code>
+     * @return Whether the someStatus field is set.
+     */
+    public boolean hasSomeStatus() {
+      return someValCase_ == 3;
+    }
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.Status some_status = 3;</code>
      * @return The enum numeric value on the wire for someStatus.
@@ -396,14 +438,14 @@ public final class EnumUnionOuter {
      * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 4;</code>
      * @return The enum numeric value on the wire for status.
      */
-    public int getStatusValue() {
+    @java.lang.Override public int getStatusValue() {
       return status_;
     }
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 4;</code>
      * @return The status.
      */
-    public io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status getStatus() {
+    @java.lang.Override public io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status getStatus() {
       @SuppressWarnings("deprecation")
       io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status result = io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.valueOf(status_);
       return result == null ? io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.UNRECOGNIZED : result;
@@ -813,8 +855,17 @@ public final class EnumUnionOuter {
 
       /**
        * <code>string one_id = 1;</code>
+       * @return Whether the oneId field is set.
+       */
+      @java.lang.Override
+      public boolean hasOneId() {
+        return someValCase_ == 1;
+      }
+      /**
+       * <code>string one_id = 1;</code>
        * @return The oneId.
        */
+      @java.lang.Override
       public java.lang.String getOneId() {
         java.lang.Object ref = "";
         if (someValCase_ == 1) {
@@ -836,6 +887,7 @@ public final class EnumUnionOuter {
        * <code>string one_id = 1;</code>
        * @return The bytes for oneId.
        */
+      @java.lang.Override
       public com.google.protobuf.ByteString
           getOneIdBytes() {
         java.lang.Object ref = "";
@@ -900,6 +952,13 @@ public final class EnumUnionOuter {
 
       /**
        * <code>int32 other_id = 2;</code>
+       * @return Whether the otherId field is set.
+       */
+      public boolean hasOtherId() {
+        return someValCase_ == 2;
+      }
+      /**
+       * <code>int32 other_id = 2;</code>
        * @return The otherId.
        */
       public int getOtherId() {
@@ -934,8 +993,17 @@ public final class EnumUnionOuter {
 
       /**
        * <code>.io.confluent.kafka.serializers.protobuf.test.Status some_status = 3;</code>
+       * @return Whether the someStatus field is set.
+       */
+      @java.lang.Override
+      public boolean hasSomeStatus() {
+        return someValCase_ == 3;
+      }
+      /**
+       * <code>.io.confluent.kafka.serializers.protobuf.test.Status some_status = 3;</code>
        * @return The enum numeric value on the wire for someStatus.
        */
+      @java.lang.Override
       public int getSomeStatusValue() {
         if (someValCase_ == 3) {
           return ((java.lang.Integer) someVal_).intValue();
@@ -957,6 +1025,7 @@ public final class EnumUnionOuter {
        * <code>.io.confluent.kafka.serializers.protobuf.test.Status some_status = 3;</code>
        * @return The someStatus.
        */
+      @java.lang.Override
       public io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status getSomeStatus() {
         if (someValCase_ == 3) {
           @SuppressWarnings("deprecation")
@@ -998,7 +1067,7 @@ public final class EnumUnionOuter {
        * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 4;</code>
        * @return The enum numeric value on the wire for status.
        */
-      public int getStatusValue() {
+      @java.lang.Override public int getStatusValue() {
         return status_;
       }
       /**
@@ -1007,6 +1076,7 @@ public final class EnumUnionOuter {
        * @return This builder for chaining.
        */
       public Builder setStatusValue(int value) {
+        
         status_ = value;
         onChanged();
         return this;
@@ -1015,6 +1085,7 @@ public final class EnumUnionOuter {
        * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 4;</code>
        * @return The status.
        */
+      @java.lang.Override
       public io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status getStatus() {
         @SuppressWarnings("deprecation")
         io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status result = io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.valueOf(status_);

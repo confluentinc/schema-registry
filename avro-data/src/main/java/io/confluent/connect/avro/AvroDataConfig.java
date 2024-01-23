@@ -101,7 +101,7 @@ public class AvroDataConfig extends AbstractConfig {
   }
 
   public int getSchemasCacheSize() {
-    return this.getInt(SCHEMAS_CACHE_SIZE_CONFIG);
+    return Math.max(1, this.getInt(SCHEMAS_CACHE_SIZE_CONFIG));
   }
 
   public boolean isDiscardTypeDocDefault() {

@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.storage.serialization;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 
+import io.confluent.kafka.schemaregistry.storage.ContextKey;
+import io.confluent.kafka.schemaregistry.storage.ContextValue;
 import java.io.IOException;
 import java.util.Map;
 
@@ -91,6 +93,8 @@ public class SchemaRegistrySerializer
           schemaKey = JacksonMapper.INSTANCE.readValue(key, ModeKey.class);
         } else if (keyType == SchemaRegistryKeyType.NOOP) {
           schemaKey = JacksonMapper.INSTANCE.readValue(key, NoopKey.class);
+        } else if (keyType == SchemaRegistryKeyType.CONTEXT) {
+          schemaKey = JacksonMapper.INSTANCE.readValue(key, ContextKey.class);
         } else if (keyType == SchemaRegistryKeyType.DELETE_SUBJECT) {
           schemaKey = JacksonMapper.INSTANCE.readValue(key, DeleteSubjectKey.class);
         } else if (keyType == SchemaRegistryKeyType.CLEAR_SUBJECT) {
@@ -147,6 +151,12 @@ public class SchemaRegistrySerializer
         schemaRegistryValue = JacksonMapper.INSTANCE.readValue(value, SchemaValue.class);
       } catch (IOException e) {
         throw new SerializationException("Error while deserializing schema", e);
+      }
+    } else if (key.getKeyType().equals(SchemaRegistryKeyType.CONTEXT)) {
+      try {
+        schemaRegistryValue = JacksonMapper.INSTANCE.readValue(value, ContextValue.class);
+      } catch (IOException e) {
+        throw new SerializationException("Error while deserializing Delete Subject message", e);
       }
     } else if (key.getKeyType().equals(SchemaRegistryKeyType.DELETE_SUBJECT)) {
       try {

@@ -17,16 +17,18 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 
 import java.io.Closeable;
 import java.util.Objects;
 import java.util.Optional;
+
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import io.confluent.kafka.serializers.context.NullContextNameStrategy;
+import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -55,20 +57,21 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   protected SchemaRegistryClient schemaRegistry;
+  protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
-  protected Cache<SubjectSchema, ParsedSchema> latestVersions =
-      new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
+  protected Map<SubjectSchema, ParsedSchema> latestVersions =
+      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   protected boolean useSchemaReflection;
 
 
   protected void configureClientProperties(
       AbstractKafkaSchemaSerDeConfig config,
       SchemaProvider provider) {
-    List<String> urls = config.getSchemaRegistryUrls();
-    int maxSchemaObject = config.getMaxSchemasPerSubject();
-    Map<String, Object> originals = config.originalsWithPrefix("");
     if (null == schemaRegistry) {
+      List<String> urls = config.getSchemaRegistryUrls();
+      int maxSchemaObject = config.getMaxSchemasPerSubject();
+      Map<String, Object> originals = config.originalsWithPrefix("");
       String mockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(urls);
       List<SchemaProvider> providers = Collections.singletonList(provider);
       if (mockScope != null) {
@@ -83,6 +86,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         );
       }
     }
+
+    contextNameStrategy = config.contextNameStrategy();
     keySubjectNameStrategy = config.keySubjectNameStrategy();
     valueSubjectNameStrategy = config.valueSubjectNameStrategy();
     useSchemaReflection = config.useSchemaReflection();
@@ -93,11 +98,37 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
    */
   protected String getSubjectName(String topic, boolean isKey, Object value, ParsedSchema schema) {
     Object subjectNameStrategy = subjectNameStrategy(isKey);
+    String subject;
     if (subjectNameStrategy instanceof SubjectNameStrategy) {
-      return ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
+      subject = ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
     } else {
-      return ((io.confluent.kafka.serializers.subject.SubjectNameStrategy) subjectNameStrategy)
+      subject = ((io.confluent.kafka.serializers.subject.SubjectNameStrategy) subjectNameStrategy)
           .getSubjectName(topic, isKey, value);
+    }
+    return getContextName(topic, subject);
+  }
+
+  protected String getContextName(String topic) {
+    return getContextName(topic, null);
+  }
+
+  // Visible for testing
+  protected String getContextName(String topic, String subject) {
+    String contextName = contextNameStrategy.contextName(topic);
+    if (contextName != null) {
+      contextName = QualifiedSubject.normalizeContext(contextName);
+      return subject != null ? contextName + subject : contextName;
+    } else {
+      return subject;
+    }
+  }
+
+  protected boolean strategyUsesSchema(boolean isKey) {
+    Object subjectNameStrategy = subjectNameStrategy(isKey);
+    if (subjectNameStrategy instanceof SubjectNameStrategy) {
+      return ((SubjectNameStrategy) subjectNameStrategy).usesSchema();
+    } else {
+      return false;
     }
   }
 
@@ -133,6 +164,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return schemaRegistry.register(subject, schema);
   }
 
+  public int register(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    return schemaRegistry.register(subject, schema, normalize);
+  }
+
   @Deprecated
   public Schema getById(int id) throws IOException, RestClientException {
     return schemaRegistry.getById(id);
@@ -153,6 +189,20 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
 
+  protected ParsedSchema lookupSchemaBySubjectAndId(
+      String subject, int id, ParsedSchema schema, boolean idCompatStrict)
+      throws IOException, RestClientException {
+    ParsedSchema lookupSchema = getSchemaBySubjectAndId(subject, id);
+    if (idCompatStrict && !lookupSchema.isBackwardCompatible(schema).isEmpty()) {
+      throw new IOException("Incompatible schema " + lookupSchema.canonicalString()
+          + " with refs " + lookupSchema.references()
+          + " of type " + lookupSchema.schemaType()
+          + " for schema " + schema.canonicalString()
+          + ". Set id.compatibility.strict=false to disable this check");
+    }
+    return lookupSchema;
+  }
+
   protected ParsedSchema lookupLatestVersion(
       String subject, ParsedSchema schema, boolean latestCompatStrict)
       throws IOException, RestClientException {
@@ -163,7 +213,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       SchemaRegistryClient schemaRegistry,
       String subject,
       ParsedSchema schema,
-      Cache<SubjectSchema, ParsedSchema> cache,
+      Map<SubjectSchema, ParsedSchema> cache,
       boolean latestCompatStrict)
       throws IOException, RestClientException {
     SubjectSchema ss = new SubjectSchema(subject, schema);
@@ -188,7 +238,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         throw new IOException("Incompatible schema " + schemaMetadata.getSchema()
             + " with refs " + schemaMetadata.getReferences()
             + " of type " + schemaMetadata.getSchemaType()
-            + " for schema " + schema.canonicalString());
+            + " for schema " + schema.canonicalString()
+            + ". Set latest.compatibility.strict=false to disable this check");
       }
       if (cache != null) {
         cache.put(ss, latestVersion);
