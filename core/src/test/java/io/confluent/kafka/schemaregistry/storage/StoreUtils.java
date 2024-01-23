@@ -14,6 +14,8 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
+import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 
@@ -37,7 +39,7 @@ public class StoreUtils {
    */
   public static KafkaStore<String, String> createAndInitKafkaStoreInstance(String bootstrapServers)
       throws RestConfigException, StoreInitializationException, SchemaRegistryException {
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
     return createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore);
   }
   /**
@@ -66,7 +68,7 @@ public class StoreUtils {
 
     props.put(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG, false);
 
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
     return createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore, props);
   }
 
@@ -93,7 +95,7 @@ public class StoreUtils {
               ((Password) sslConfigs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)).value());
     }
 
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
     return createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore, props);
   }
 
@@ -117,5 +119,4 @@ public class StoreUtils {
     kafkaStore.init();
     return kafkaStore;
   }
-
 }

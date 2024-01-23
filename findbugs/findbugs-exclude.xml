@@ -68,6 +68,11 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
 
     <Match>
         <Class name="io.confluent.kafka.schemaregistry.storage.MD5"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.storage.MD5"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
 

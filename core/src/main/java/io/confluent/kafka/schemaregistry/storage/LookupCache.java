@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.DEFAULT_TENANT;
+
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
@@ -39,7 +41,7 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param schema schema object; never {@code null}
    * @return the schema id and subjects associated with the schema, null otherwise.
    */
-  SchemaIdAndSubjects schemaIdAndSubjects(Schema schema);
+  SchemaIdAndSubjects schemaIdAndSubjects(Schema schema) throws StoreException;
 
   /**
    * Checks if a schema is registered in any subject.
@@ -47,7 +49,7 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param schema schema object
    * @return true if the schema is already registered else false
    */
-  boolean containsSchema(Schema schema);
+  boolean containsSchema(Schema schema) throws StoreException;
 
   /**
    * Returns schemas that reference the given schema.
@@ -55,7 +57,7 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param schema schema object
    * @return the ids of schemas that reference the given schema
    */
-  Set<Integer> referencesSchema(SchemaKey schema);
+  Set<Integer> referencesSchema(SchemaKey schema) throws StoreException;
 
   /**
    * Provides the {@link SchemaKey} for the provided schema id.
@@ -63,7 +65,7 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param id the schema id; never {@code null}
    * @return the {@link SchemaKey} if found, otherwise null.
    */
-  SchemaKey schemaKeyById(Integer id);
+  SchemaKey schemaKeyById(Integer id) throws StoreException;
 
   /**
    * Callback that is invoked when a schema is registered.
@@ -103,7 +105,8 @@ public interface LookupCache<K,V> extends Store<K,V> {
    */
   CompatibilityLevel compatibilityLevel(String subject,
                                         boolean returnTopLevelIfNotFound,
-                                        CompatibilityLevel defaultForTopLevel);
+                                        CompatibilityLevel defaultForTopLevel)
+      throws StoreException;
 
   /**
    * Retrieves the mode for a subject.
@@ -113,7 +116,16 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param defaultForTopLevel default value for the top level scope
    * @return the mode if found, otherwise null.
    */
-  Mode mode(String subject, boolean returnTopLevelIfNotFound, Mode defaultForTopLevel);
+  Mode mode(String subject, boolean returnTopLevelIfNotFound, Mode defaultForTopLevel)
+      throws StoreException;
+
+  /**
+   * Returns subjects that have schemas (that are not deleted) that match the given subject.
+   *
+   * @param subject the subject, or null for all subjects
+   * @return the subjects with matching schemas
+   */
+  Set<String> subjects(String subject, boolean lookupDeletedSubjects) throws StoreException;
 
   /**
    * Returns whether there exist schemas (that are not deleted) that match the given subject.
@@ -129,4 +141,16 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param subject the subject, or null for all subjects
    */
   void clearSubjects(String subject) throws StoreException;
+
+  default String tenant() {
+    return DEFAULT_TENANT;
+  }
+
+  /**
+   * Can be used by subclasses to implement multi-tenancy
+   *
+   * @param tenant the tenant
+   */
+  default void setTenant(String tenant) {
+  }
 }

@@ -17,6 +17,9 @@
 package io.confluent.kafka.formatter;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import kafka.common.KafkaException;
 import kafka.common.MessageReader;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -49,6 +52,9 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 
 public abstract class SchemaMessageReader<T> implements MessageReader {
+
+  public static final String VALUE_SCHEMA = "value.schema";
+  public static final String KEY_SCHEMA = "key.schema";
 
   private String topic = null;
   private BufferedReader reader = null;
@@ -94,6 +100,9 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   @Override
   public void init(java.io.InputStream inputStream, Properties props) {
     topic = props.getProperty("topic");
+    if (topic == null) {
+      throw new ConfigException("Missing topic!");
+    }
     if (props.containsKey("parse.key")) {
       parseKey = props.getProperty("parse.key").trim().toLowerCase().equals("true");
     }
@@ -109,17 +118,10 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       throw new ConfigException("Missing schema registry url!");
     }
 
-    Map<String, Object> originals = getPropertiesMap(props);
+    SchemaRegistryClient schemaRegistry = getSchemaRegistryClient(props, url);
 
-    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(url,
-        AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
-        Collections.singletonList(getProvider()),
-        originals
-    );
     Serializer keySerializer = getKeySerializer(props);
 
-    keySubject = topic + "-key";
-    valueSubject = topic + "-value";
     boolean autoRegisterSchema;
     if (props.containsKey("auto.register")) {
       autoRegisterSchema = Boolean.parseBoolean(props.getProperty("auto.register").trim());
@@ -140,9 +142,60 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
           schemaRegistry, autoRegisterSchema, useLatest, keySerializer);
     }
 
+    // This class is only used in a scenario where a single schema is used. It does not support
+    // writing data which has a different schema for each record. Therefore, we can calculate the
+    // subject names and schemas once rather than per-message in
+    // AbstractKafkaSchemaSerDe#getSubjectName(...) as would otherwise happen.
+    final AbstractKafkaSchemaSerDeConfig config =
+            new AbstractKafkaSchemaSerDeConfig(AbstractKafkaSchemaSerDeConfig.baseConfigDef(),
+                    props, false);
+
     valueSchema = getSchema(schemaRegistry, props, false);
+    final Object valueSubjectNameStrategy = config.valueSubjectNameStrategy();
+    valueSubject = getSubjectName(valueSubjectNameStrategy, topic, false, valueSchema);
+
     if (needsKeySchema()) {
       keySchema = getSchema(schemaRegistry, props, true);
+      final Object keySubjectNameStrategy = config.keySubjectNameStrategy();
+      keySubject = getSubjectName(keySubjectNameStrategy, topic, true, keySchema);
+    }
+  }
+
+  private SchemaRegistryClient getSchemaRegistryClient(Properties props, String url) {
+    Map<String, Object> originals = getPropertiesMap(props);
+
+    final List<String> schemaRegistryUrls = Collections.singletonList(url);
+    final List<SchemaProvider> schemaProviders = Collections.singletonList(getProvider());
+    final String maybeMockScope =
+            MockSchemaRegistry.validateAndMaybeGetMockScope(schemaRegistryUrls);
+    SchemaRegistryClient schemaRegistry;
+    if (maybeMockScope == null) {
+      schemaRegistry = new CachedSchemaRegistryClient(
+              url,
+              AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
+              schemaProviders,
+              originals
+      );
+    } else {
+      schemaRegistry = MockSchemaRegistry.getClientForScope(maybeMockScope, schemaProviders);
+    }
+    return schemaRegistry;
+  }
+
+  /**
+   * @see AbstractKafkaSchemaSerDe#getSubjectName(String, boolean, Object, ParsedSchema)
+   */
+  private String getSubjectName(Object subjectNameStrategy, String topic, boolean isKey,
+                                ParsedSchema schema) {
+    if (subjectNameStrategy instanceof SubjectNameStrategy) {
+      return ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
+    } else {
+      // We don't have an instance of an object, only a schema, so we can't provide the necessary
+      // params to the deprecated strategy.
+      throw new RuntimeException("Classes extending deprecated "
+              + io.confluent.kafka.serializers.subject.SubjectNameStrategy.class.getCanonicalName()
+              + " are not supported. Use classes extending "
+              + SubjectNameStrategy.class.getCanonicalName() + " instead.");
     }
   }
 
@@ -171,6 +224,9 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     return parseSchema(schemaRegistry, schemaString, refs);
   }
 
+  /**
+   * @return schema, if props identifies one by ID, otherwise null
+   */
   private ParsedSchema getSchemaById(SchemaRegistryClient schemaRegistry,
                                      Properties props,
                                      boolean isKey) {
@@ -192,7 +248,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   }
 
   private String getSchemaString(Properties props, boolean isKey) {
-    String propKeyRaw = isKey ? "key.schema" : "value.schema";
+    String propKeyRaw = isKey ? KEY_SCHEMA : VALUE_SCHEMA;
     String propKeyFile = isKey ? "key.schema.file" : "value.schema.file";
     if (props.containsKey(propKeyRaw)) {
       return props.getProperty(propKeyRaw);

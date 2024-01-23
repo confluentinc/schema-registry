@@ -20,6 +20,8 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import java.util.List;
+
 /**
  * An interface for validating the compatibility of a single schema against
  * another.
@@ -34,6 +36,7 @@ public interface SchemaValidationStrategy {
    *
    * @param toValidate The schema to validate
    * @param existing The schema to validate against
+   * @return List of error message, otherwise empty list
    */
-  boolean validate(ParsedSchema toValidate, ParsedSchema existing);
+  List<String> validate(ParsedSchema toValidate, ParsedSchema existing);
 }

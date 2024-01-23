@@ -20,11 +20,12 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 /**
  * The identity of a schema registry instance. The leader will store the json representation of its
@@ -165,13 +166,11 @@ public class SchemaRegistryIdentity {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("SchemaRegistryIdentity{");
     sb.append("version=" + this.version + ",");
     sb.append("host=" + this.host + ",");
     sb.append("port=" + this.port + ",");
     sb.append("scheme=" + this.scheme + ",");
     sb.append("leaderEligibility=" + this.leaderEligibility);
-    sb.append("}");
     return sb.toString();
   }
 

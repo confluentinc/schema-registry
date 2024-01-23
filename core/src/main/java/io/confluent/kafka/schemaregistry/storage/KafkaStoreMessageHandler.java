@@ -54,21 +54,21 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       SchemaValue schemaObj = (SchemaValue) value;
       if (schemaObj != null) {
         normalize(schemaObj);
-        SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
-        if (oldKey != null) {
-          SchemaValue oldSchema;
-          try {
+        try {
+          SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
+          if (oldKey != null) {
+            SchemaValue oldSchema;
             oldSchema = (SchemaValue) lookupCache.get(oldKey);
-          } catch (StoreException e) {
-            log.error("Error while retrieving schema", e);
-            return false;
+            if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
+              log.error("Found a schema with duplicate ID {}.  This schema will not be "
+                      + "registered since a schema already exists with this ID.",
+                  schemaObj.getId());
+              return false;
+            }
           }
-          if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
-            log.error("Found a schema with duplicate ID {}.  This schema will not be "
-                    + "registered since a schema already exists with this ID.",
-                schemaObj.getId());
-            return false;
-          }
+        } catch (StoreException e) {
+          log.error("Error while retrieving schema", e);
+          return false;
         }
       }
     }

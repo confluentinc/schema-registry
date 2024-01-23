@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import java.util.Arrays;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -634,6 +635,46 @@ public class KafkaAvroSerializerTest {
     //Age field was hidden by projection
     try {
       deserializeProjection.get("age");
+      fail("Getting invalid schema field should fail");
+    } catch (AvroRuntimeException e){
+      //this is expected
+    }
+  }
+
+  @Test
+  public void testKafkaAvroSerializerSupportsSchemaEvolution() throws IOException, RestClientException {
+    final String fieldToDelete = "fieldToDelete";
+    final String newOptionalField = "newOptionalField";
+
+    Schema schemaV1 = SchemaBuilder
+            .record("SchemaEvolution")
+            .namespace("example.avro")
+            .fields()
+            .requiredString(fieldToDelete)
+            .endRecord();
+    Schema schemaV2 = SchemaBuilder
+            .record("SchemaEvolution")
+            .namespace("example.avro")
+            .fields()
+            .nullableString(newOptionalField, "optional")
+            .endRecord();
+
+    AvroSchema avroSchemaV1 = new AvroSchema(schemaV1);
+    AvroSchema avroSchemaV2 = new AvroSchema(schemaV2);
+    assertTrue("Schema V2 should be backwards compatible", avroSchemaV2.isBackwardCompatible(avroSchemaV1).isEmpty());
+
+    GenericRecord recordV1 = new GenericData.Record(avroSchemaV1.rawSchema());
+    recordV1.put(fieldToDelete, "present");
+
+    byte[] bytes = avroSerializer.serialize(topic, recordV1);
+    GenericRecord genericRecordV2 = (GenericRecord) avroDeserializer.deserialize(topic, bytes, avroSchemaV2.rawSchema());
+
+    // In version 2 of the schema, newOptionalField field has a non-null default value
+    assertNotNull("Optional field should have a non-null default value", genericRecordV2.get(newOptionalField));
+
+    // In version 2 of the schema, the fieldToDelete field is gone
+    try {
+      genericRecordV2.get(fieldToDelete);
       fail("Getting invalid schema field should fail");
     } catch (AvroRuntimeException e){
       //this is expected

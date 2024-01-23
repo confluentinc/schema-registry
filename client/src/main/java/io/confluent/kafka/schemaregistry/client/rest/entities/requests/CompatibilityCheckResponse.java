@@ -23,13 +23,16 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.IOException;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+
+import java.util.List;
 import java.util.Objects;
 
-@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CompatibilityCheckResponse {
 
   private boolean isCompatible;
+  private List<String> messages = null;
 
   public static CompatibilityCheckResponse fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, CompatibilityCheckResponse.class);
@@ -47,6 +50,16 @@ public class CompatibilityCheckResponse {
 
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+
+  @JsonProperty("messages")
+  public List<String> getMessages() {
+    return messages;
+  }
+
+  @JsonProperty("messages")
+  public void setMessages(List<String> messages) {
+    this.messages = messages;
   }
 
   @Override

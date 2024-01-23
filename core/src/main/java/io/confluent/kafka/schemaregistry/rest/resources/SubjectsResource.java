@@ -110,8 +110,7 @@ public class SubjectsResource {
       matchingSchema =
           schemaRegistry.lookUpSchemaUnderSubject(subject, schema, lookupDeletedSchema);
     } catch (InvalidSchemaException e) {
-      throw Errors.invalidSchemaException("Either the input schema or"
-          + " one its references is invalid", e);
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);

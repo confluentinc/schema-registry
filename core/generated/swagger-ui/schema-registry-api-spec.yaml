@@ -95,6 +95,10 @@ paths:
         required: true
         schema:
           $ref: "#/definitions/RegisterSchemaRequest"
+      - name: "verbose"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -348,6 +352,56 @@ paths:
           description: "Error code 50001 -- Error in the backend data store\nError\
             \ code 50003 -- Error while forwarding the request to the primary\nError\
             \ code 50004 -- Unknown leader"
+  /schemas:
+    get:
+      summary: "Get the schemas."
+      description: ""
+      operationId: "getSchemas"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters:
+      - name: "subjectPrefix"
+        in: "query"
+        required: false
+        type: "string"
+      - name: "deleted"
+        in: "query"
+        required: false
+        type: "boolean"
+        default: false
+      - name: "latestOnly"
+        in: "query"
+        required: false
+        type: "boolean"
+        default: false
+      - name: "offset"
+        in: "query"
+        required: false
+        type: "integer"
+        default: 0
+        format: "int32"
+      - name: "limit"
+        in: "query"
+        required: false
+        type: "integer"
+        default: -1
+        format: "int32"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/Schema"
+        500:
+          description: "Error code 50001 -- Error in the backend data store\n"
   /schemas/ids/{id}:
     get:
       summary: "Get the schema string identified by the input ID."
@@ -408,6 +462,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "deleted"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -441,6 +499,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "deleted"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -884,6 +946,10 @@ definitions:
     properties:
       is_compatible:
         type: "boolean"
+      messages:
+        type: "array"
+        items:
+          type: "string"
   Config:
     type: "object"
     properties:

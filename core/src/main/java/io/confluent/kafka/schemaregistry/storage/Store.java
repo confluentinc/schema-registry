@@ -15,13 +15,21 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import java.util.Iterator;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 
 public interface Store<K, V> {
+
+  /**
+   * Whether the store is persistent.
+   *
+   * @return whether the store is persistent
+   */
+  default boolean isPersistent() {
+    return false;
+  }
 
   public void init() throws StoreInitializationException;
 
@@ -37,13 +45,15 @@ public interface Store<K, V> {
    * @return Iterator over keys in the half-open interval [key1, key2). If both keys are null,
    *     return an iterator over all keys in the database
    */
-  public Iterator<V> getAll(K key1, K key2) throws StoreException;
+  public CloseableIterator<V> getAll(K key1, K key2) throws StoreException;
 
   public void putAll(Map<K, V> entries) throws StoreException;
 
   public V delete(K key) throws StoreException;
 
-  public Iterator<K> getAllKeys() throws StoreException;
+  public CloseableIterator<K> getAllKeys() throws StoreException;
 
-  public void close();
+  public void flush() throws StoreException;
+
+  public void close() throws StoreException;
 }

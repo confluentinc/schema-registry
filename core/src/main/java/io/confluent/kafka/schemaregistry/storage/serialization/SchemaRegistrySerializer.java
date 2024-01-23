@@ -41,8 +41,9 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 public class SchemaRegistrySerializer
     implements Serializer<SchemaRegistryKey, SchemaRegistryValue> {
 
-  public SchemaRegistrySerializer() {
+  private static final long serialVersionUID = -2564877824075394626L;
 
+  public SchemaRegistrySerializer() {
   }
 
   /**

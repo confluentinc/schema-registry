@@ -29,6 +29,8 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
 public interface SchemaRegistry extends SchemaVersionFetcher {
 
+  String DEFAULT_TENANT = "default";
+
   void init() throws SchemaRegistryException;
 
   Set<String> schemaTypes();
@@ -58,6 +60,10 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Iterator<Schema> getAllVersions(String subject, boolean filterDeletes)
       throws SchemaRegistryException;
 
+  Iterator<Schema> getVersionsWithSubjectPrefix(
+      String prefix, boolean filterDeletes, boolean latestOnly)
+      throws SchemaRegistryException;
+
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
 
   List<Integer> deleteSubject(String subject, boolean permanentDelete)
@@ -66,13 +72,13 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException;
 
-  boolean isCompatible(String subject,
-                       Schema newSchema,
-                       Schema targetSchema) throws SchemaRegistryException;
+  List<String> isCompatible(String subject,
+                            Schema newSchema,
+                            Schema targetSchema) throws SchemaRegistryException;
 
-  boolean isCompatible(String subject,
-                       Schema newSchema,
-                       List<Schema> previousSchemas) throws SchemaRegistryException;
+  List<String> isCompatible(String subject,
+                            Schema newSchema,
+                            List<Schema> previousSchemas) throws SchemaRegistryException;
 
   void close() throws IOException;
 
@@ -80,7 +86,15 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
                            boolean permanentDelete) throws SchemaRegistryException;
 
   default String tenant() {
-    return "default";
+    return DEFAULT_TENANT;
+  }
+
+  /**
+   * Can be used by subclasses to implement multi-tenancy
+   *
+   * @param tenant the tenant
+   */
+  default void setTenant(String tenant) {
   }
 
   SchemaRegistryConfig config();

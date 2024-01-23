@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.serializers;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -45,6 +48,16 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean removeJavaProperties;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
+  private final Cache<Schema, DatumWriter<Object>> datumWriterCache;
+
+  public AbstractKafkaAvroSerializer() {
+    // use identity (==) comparison for keys
+    datumWriterCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        .weakKeys()
+        .build();
+
+  }
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
@@ -78,14 +91,14 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     try {
       int id;
       if (autoRegisterSchema) {
-        restClientErrorMsg = "Error registering Avro schema: ";
+        restClientErrorMsg = "Error registering Avro schema";
         id = schemaRegistry.register(subject, schema);
       } else if (useLatestVersion) {
-        restClientErrorMsg = "Error retrieving latest version: ";
+        restClientErrorMsg = "Error retrieving latest version of Avro schema";
         schema = (AvroSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
         id = schemaRegistry.getId(subject, schema);
       } else {
-        restClientErrorMsg = "Error retrieving Avro schema: ";
+        restClientErrorMsg = "Error retrieving Avro schema";
         id = schemaRegistry.getId(subject, schema);
       }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -107,19 +120,23 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       } else {
         BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
         DatumWriter<Object> writer;
-        if (value instanceof SpecificRecord) {
-          writer = new SpecificDatumWriter<>(rawSchema);
-        } else if (useSchemaReflection) {
-          writer = new ReflectDatumWriter<>(rawSchema);
-        } else {
-          writer = new GenericDatumWriter<>(rawSchema);
-        }
+        writer = datumWriterCache.get(rawSchema, () -> {
+          if (value instanceof SpecificRecord) {
+            return new SpecificDatumWriter<>(rawSchema);
+          } else if (useSchemaReflection) {
+            return new ReflectDatumWriter<>(rawSchema);
+          } else {
+            return new GenericDatumWriter<>(rawSchema);
+          }
+        });
         writer.write(value, encoder);
         encoder.flush();
       }
       byte[] bytes = out.toByteArray();
       out.close();
       return bytes;
+    } catch (ExecutionException ex) {
+      throw new SerializationException("Error serializing Avro message", ex.getCause());
     } catch (IOException | RuntimeException e) {
       // avro serialization can throw AvroRuntimeException, NullPointerException,
       // ClassCastException, etc

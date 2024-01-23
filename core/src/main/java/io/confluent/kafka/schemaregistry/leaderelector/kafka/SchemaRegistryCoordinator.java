@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -148,9 +147,6 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   ) {
     assignmentSnapshot = SchemaRegistryProtocol.deserializeAssignment(memberAssignment);
     listener.onAssigned(assignmentSnapshot, generation);
-    if (nodeCountMetric != null && assignmentSnapshot.nodes() != null) {
-      nodeCountMetric.set(assignmentSnapshot.nodes().size());
-    }
   }
 
   @Override
@@ -161,14 +157,11 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   ) {
     log.debug("Performing assignment");
 
-    List<SchemaRegistryIdentity> nodes = new ArrayList<>();
-
     Map<String, SchemaRegistryIdentity> memberConfigs = new HashMap<>();
     for (JoinGroupResponseData.JoinGroupResponseMember entry : allMemberMetadata) {
       SchemaRegistryIdentity identity
           = SchemaRegistryProtocol.deserializeMetadata(ByteBuffer.wrap(entry.metadata()));
       memberConfigs.put(entry.memberId(), identity);
-      nodes.add(identity);
     }
 
     log.debug("Member information: {}", memberConfigs);
@@ -209,7 +202,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     // All members currently receive the same assignment information since it is just the leader ID
     Map<String, ByteBuffer> groupAssignment = new HashMap<>();
     SchemaRegistryProtocol.Assignment assignment
-        = new SchemaRegistryProtocol.Assignment(error, leaderKafkaId, leaderIdentity, nodes);
+        = new SchemaRegistryProtocol.Assignment(error, leaderKafkaId, leaderIdentity);
     log.debug("Assignment: {}", assignment);
     for (String member : memberConfigs.keySet()) {
       groupAssignment.put(member, SchemaRegistryProtocol.serializeAssignment(assignment));

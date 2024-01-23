@@ -35,7 +35,9 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
   }
 
   @Override
-  public Optional<ParsedSchema> parseSchema(String schemaString, List<SchemaReference> references) {
+  public Optional<ParsedSchema> parseSchema(String schemaString,
+                                            List<SchemaReference> references,
+                                            boolean isNew) {
     try {
       return Optional.of(new JsonSchema(
           schemaString,

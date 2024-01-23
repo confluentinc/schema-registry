@@ -21,9 +21,10 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.SchemaCompatibility.SchemaCompatibilityType;
+import org.apache.avro.SchemaCompatibility.Incompatibility;
 import org.apache.avro.Schemas;
 
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,6 +47,7 @@ public class AvroSchema implements ParsedSchema {
   private final Integer version;
   private final List<SchemaReference> references;
   private final Map<String, String> resolvedReferences;
+  private final boolean isNew;
 
   private transient int hashCode = NO_HASHCODE;
 
@@ -58,6 +61,15 @@ public class AvroSchema implements ParsedSchema {
                     List<SchemaReference> references,
                     Map<String, String> resolvedReferences,
                     Integer version) {
+    this(schemaString, references, resolvedReferences, version, false);
+  }
+
+  public AvroSchema(String schemaString,
+                    List<SchemaReference> references,
+                    Map<String, String> resolvedReferences,
+                    Integer version,
+                    boolean isNew) {
+    this.isNew = isNew;
     Schema.Parser parser = getParser();
     for (String schema : resolvedReferences.values()) {
       parser.parse(schema);
@@ -73,6 +85,7 @@ public class AvroSchema implements ParsedSchema {
   }
 
   public AvroSchema(Schema schemaObj, Integer version) {
+    this.isNew = false;
     this.schemaObj = schemaObj;
     this.references = Collections.emptyList();
     this.resolvedReferences = Collections.emptyMap();
@@ -84,8 +97,10 @@ public class AvroSchema implements ParsedSchema {
       String canonicalString,
       List<SchemaReference> references,
       Map<String, String> resolvedReferences,
-      Integer version
+      Integer version,
+      boolean isNew
   ) {
+    this.isNew = isNew;
     this.schemaObj = schemaObj;
     this.canonicalString = canonicalString;
     this.references = references;
@@ -99,13 +114,14 @@ public class AvroSchema implements ParsedSchema {
         this.canonicalString,
         this.references,
         this.resolvedReferences,
-        this.version
+        this.version,
+        this.isNew
     );
   }
 
   protected Schema.Parser getParser() {
     Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(false);
+    parser.setValidateDefaults(isNew());
     return parser;
   }
 
@@ -157,20 +173,27 @@ public class AvroSchema implements ParsedSchema {
     return resolvedReferences;
   }
 
+  public boolean isNew() {
+    return isNew;
+  }
+
   @Override
-  public boolean isBackwardCompatible(ParsedSchema previousSchema) {
+  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
-      return false;
+      return Collections.singletonList("Incompatible because of different schema type");
     }
     try {
       SchemaCompatibility.SchemaPairCompatibility result =
           SchemaCompatibility.checkReaderWriterCompatibility(
               this.schemaObj,
               ((AvroSchema) previousSchema).schemaObj);
-      return result.getResult().getCompatibility() == SchemaCompatibilityType.COMPATIBLE;
+      return result.getResult().getIncompatibilities().stream()
+          .map(Incompatibility::toString)
+          .collect(Collectors.toList());
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
-      return false;
+      return Collections.singletonList(
+              "Unexpected exception during compatibility check: " + e.getMessage());
     }
   }
 

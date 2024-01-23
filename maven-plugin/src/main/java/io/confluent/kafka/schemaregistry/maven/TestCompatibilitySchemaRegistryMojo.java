@@ -19,14 +19,19 @@ package io.confluent.kafka.schemaregistry.maven;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Mojo(name = "test-compatibility", configurator = "custom-basic")
 public class TestCompatibilitySchemaRegistryMojo extends UploadSchemaRegistryMojo {
+
+  @Parameter(required = false)
+  boolean verbose = true;
 
   Map<String, Boolean> schemaCompatibility = new HashMap<>();
 
@@ -43,7 +48,8 @@ public class TestCompatibilitySchemaRegistryMojo extends UploadSchemaRegistryMoj
       );
     }
 
-    boolean compatible = this.client().testCompatibility(subject, schema);
+    List<String> errorMessages = this.client().testCompatibilityVerbose(subject, schema);
+    boolean compatible = errorMessages.isEmpty();
 
     if (compatible) {
       getLog().info(
@@ -54,13 +60,12 @@ public class TestCompatibilitySchemaRegistryMojo extends UploadSchemaRegistryMoj
           )
       );
     } else {
-      getLog().error(
-          String.format(
-              "Schema %s is not compatible with subject(%s)",
-              schemaPath,
-              subject
-          )
-      );
+      String errorLog = String.format(
+          "Schema %s is not compatible with subject(%s)", schemaPath, subject);
+      if (verbose) {
+        errorLog += " with error " + errorMessages.toString();
+      }
+      getLog().error(errorLog);
     }
 
     this.schemaCompatibility.put(subject, compatible);

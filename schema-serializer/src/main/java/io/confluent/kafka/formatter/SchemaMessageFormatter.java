@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.formatter;
 
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import kafka.common.MessageFormatter;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.ConfigException;
@@ -29,6 +30,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -213,12 +215,19 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       String schemaRegistryUrl,
       Map<String, Object> originals
   ) {
-    return new CachedSchemaRegistryClient(
-        schemaRegistryUrl,
-        AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
-        Collections.singletonList(getProvider()),
-        originals
-    );
+    final String maybeMockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(
+            Collections.singletonList(schemaRegistryUrl));
+    final List<SchemaProvider> providers = Collections.singletonList(getProvider());
+    if (maybeMockScope == null) {
+      return new CachedSchemaRegistryClient(
+              schemaRegistryUrl,
+              AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
+              providers,
+              originals
+      );
+    } else {
+      return MockSchemaRegistry.getClientForScope(maybeMockScope, providers);
+    }
   }
 
   protected abstract SchemaProvider getProvider();

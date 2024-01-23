@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.LinkedList;
 
 /**
  * Mock implementation of SchemaRegistryClient that can be used for tests. This version is NOT
@@ -120,6 +121,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         }
       }
     } else {
+      if (!registerRequest) {
+        throw new RestClientException("Subject Not Found", 404, 40401);
+      }
       idSchemaMap = new HashMap<Integer, ParsedSchema>();
     }
     if (registerRequest) {
@@ -136,12 +140,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       generateVersion(subject, schema);
       return schemaId;
     } else {
-      throw new RestClientException("Schema Not Found", 404, 404001);
+      throw new RestClientException("Schema Not Found", 404, 40403);
     }
   }
 
-  private void generateVersion(String subject, ParsedSchema schema) {
-    List<Integer> versions = getAllVersions(subject);
+  private void generateVersion(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
+    List<Integer> versions = allVersions(subject);
     Map<ParsedSchema, Integer> schemaVersionMap;
     int currentVersion;
     if (versions.isEmpty()) {
@@ -156,7 +161,16 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized List<Integer> getAllVersions(String subject) {
+  public synchronized List<Integer> getAllVersions(String subject)
+      throws IOException, RestClientException {
+    if (versionCache.containsKey(subject)) {
+      return allVersions(subject);
+    } else {
+      throw new RestClientException("Subject Not Found", 404, 40401);
+    }
+  }
+
+  private synchronized List<Integer> allVersions(String subject) {
     ArrayList<Integer> versions = new ArrayList<Integer>();
     if (versionCache.containsKey(subject)) {
       versions.addAll(versionCache.get(subject).values());
@@ -166,12 +180,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   private ParsedSchema getSchemaBySubjectAndIdFromRegistry(String subject, int id)
-      throws IOException {
+      throws IOException, RestClientException {
     if (idCache.containsKey(subject)) {
       Map<Integer, ParsedSchema> idSchemaMap = idCache.get(subject);
       if (idSchemaMap.containsKey(id)) {
         return idSchemaMap.get(id);
       }
+    } else {
+      throw new RestClientException("Subject Not Found", 404, 40401);
     }
     throw new IOException("Cannot get schema from schema registry!");
   }
@@ -299,9 +315,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized SchemaMetadata getSchemaMetadata(String subject, int version) {
+  public synchronized SchemaMetadata getSchemaMetadata(String subject, int version)
+      throws IOException, RestClientException {
     ParsedSchema schema = null;
     Map<ParsedSchema, Integer> schemaVersionMap = versionCache.get(subject);
+    if (schemaVersionMap == null) {
+      throw new RestClientException("Subject Not Found", 404, 40401);
+    }
     for (Map.Entry<ParsedSchema, Integer> entry : schemaVersionMap.entrySet()) {
       if (entry.getValue() == version) {
         schema = entry.getKey();
@@ -332,7 +352,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       Map<ParsedSchema, Integer> versions = versionCache.get(subject);
       return versions.get(schema);
     } else {
-      throw new IOException("Cannot get version from schema registry!");
+      throw new RestClientException("Subject Not Found", 404, 40401);
     }
   }
 
@@ -350,7 +370,30 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     List<ParsedSchema> schemaHistory = new ArrayList<>();
-    for (int version : getAllVersions(subject)) {
+    for (int version : allVersions(subject)) {
+      SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
+      schemaHistory.add(getSchemaBySubjectAndIdFromRegistry(subject,
+          schemaMetadata.getId()));
+    }
+
+    return newSchema.isCompatible(compatibilityLevel, schemaHistory).isEmpty();
+  }
+
+  @Override
+  public List<String> testCompatibilityVerbose(String subject, ParsedSchema newSchema)
+          throws IOException, RestClientException {
+    String compatibility = compatibilityCache.get(subject);
+    if (compatibility == null) {
+      compatibility = defaultCompatibility;
+    }
+
+    CompatibilityLevel compatibilityLevel = CompatibilityLevel.forName(compatibility);
+    if (compatibilityLevel == null) {
+      return new LinkedList<>(Arrays.asList("Compatibility level not specified."));
+    }
+
+    List<ParsedSchema> schemaHistory = new ArrayList<>();
+    for (int version : allVersions(subject)) {
       SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
       schemaHistory.add(getSchemaBySubjectAndIdFromRegistry(subject,
           schemaMetadata.getId()));
@@ -373,9 +416,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public String getCompatibility(String subject) throws IOException, RestClientException {
+    if (subject == null) {
+      return defaultCompatibility;
+    }
     String compatibility = compatibilityCache.get(subject);
     if (compatibility == null) {
-      compatibility = defaultCompatibility;
+      throw new RestClientException("Subject Not Found", 404, 40401);
     }
     return compatibility;
   }
@@ -401,7 +447,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public String getMode(String subject) throws IOException, RestClientException {
-    return modes.getOrDefault(subject, "READWRITE");
+    String mode = modes.get(subject);
+    if (mode == null) {
+      throw new RestClientException("Subject Not Found", 404, 40401);
+    }
+    return mode;
   }
 
   @Override
@@ -418,14 +468,16 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public List<Integer> deleteSubject(String subject) throws IOException, RestClientException {
-    return deleteSubject(null, subject);
+  public List<Integer> deleteSubject(String subject, boolean isPermanent)
+          throws IOException, RestClientException {
+    return deleteSubject(null, subject, isPermanent);
   }
 
   @Override
   public List<Integer> deleteSubject(
       Map<String, String> requestProperties,
-      String subject)
+      String subject,
+      boolean isPermanent)
       throws IOException, RestClientException {
     schemaCache.remove(subject);
     idCache.remove(subject);
@@ -435,20 +487,31 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public Integer deleteSchemaVersion(String subject, String version)
+  public Integer deleteSchemaVersion(String subject, String version, boolean isPermanent)
       throws IOException, RestClientException {
-    return deleteSchemaVersion(null, subject, version);
+    return deleteSchemaVersion(null, subject, version, isPermanent);
   }
 
   @Override
   public Integer deleteSchemaVersion(
       Map<String, String> requestProperties,
       String subject,
-      String version)
+      String version,
+      boolean isPermanent)
       throws IOException, RestClientException {
     if (versionCache.containsKey(subject)) {
-      versionCache.get(subject).values().remove(Integer.valueOf(version));
-      return 0;
+      Map<ParsedSchema, Integer> schemaVersionMap = versionCache.get(subject);
+      for (Map.Entry<ParsedSchema, Integer> entry : schemaVersionMap.entrySet()) {
+        if (entry.getValue().equals(Integer.valueOf(version))) {
+          schemaVersionMap.values().remove(entry.getValue());
+
+          if (isPermanent) {
+            idCache.get(subject).remove(entry.getValue());
+            schemaCache.get(subject).remove(entry.getKey());
+          }
+          return Integer.valueOf(version);
+        }
+      }
     }
     return -1;
   }

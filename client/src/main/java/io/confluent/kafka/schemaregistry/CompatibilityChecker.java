@@ -63,7 +63,9 @@ public class CompatibilityChecker {
   public static final CompatibilityChecker FULL_TRANSITIVE_CHECKER = new CompatibilityChecker(
       FULL_TRANSITIVE_VALIDATOR);
 
-  private static final SchemaValidator NO_OP_VALIDATOR = (schema, schemas) -> true;
+  private static final SchemaValidator NO_OP_VALIDATOR =
+      (schema, schemas) -> Collections.emptyList();
+
   public static final CompatibilityChecker NO_OP_CHECKER =
       new CompatibilityChecker(NO_OP_VALIDATOR);
 
@@ -74,7 +76,7 @@ public class CompatibilityChecker {
   }
 
   // visible for testing
-  public boolean isCompatible(
+  public List<String> isCompatible(
       ParsedSchema newSchema, List<? extends ParsedSchema> previousSchemas
   ) {
     List<? extends ParsedSchema> previousSchemasCopy = new ArrayList<>(previousSchemas);

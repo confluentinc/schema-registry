@@ -271,8 +271,11 @@ public class CachedSchemaRegistryClientTest {
         .andReturn(ID_25)
         .once();
 
-    expect(restService.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT_0))
+    expect(restService.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT_0, false))
         .andReturn(Arrays.asList(0));
+
+    expect(restService.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT_0, true))
+            .andReturn(Arrays.asList(1));
 
     replay(restService);
 
@@ -280,6 +283,7 @@ public class CachedSchemaRegistryClientTest {
     assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0)); // hit the cache
 
     assertEquals(Arrays.asList(0), client.deleteSubject(SUBJECT_0));
+    assertEquals(Arrays.asList(1), client.deleteSubject(SUBJECT_0, true));
 
     verify(restService);
   }
@@ -300,9 +304,12 @@ public class CachedSchemaRegistryClientTest {
             ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
 
     expect(restService.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
-        SUBJECT_0,
-                                           String.valueOf(version)))
+        SUBJECT_0, String.valueOf(version), false))
         .andReturn(0);
+
+    expect(restService.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+            SUBJECT_0, String.valueOf(version), true))
+            .andReturn(1);
 
     replay(restService);
 
@@ -311,7 +318,10 @@ public class CachedSchemaRegistryClientTest {
     assertEquals(version, client.getVersion(SUBJECT_0, AVRO_SCHEMA_0)); // hit the cache
 
     assertEquals(Integer.valueOf(0),
-        client.deleteSchemaVersion(SUBJECT_0, String.valueOf(version)));
+            client.deleteSchemaVersion(SUBJECT_0, String.valueOf(version)));
+
+    assertEquals(Integer.valueOf(1),
+            client.deleteSchemaVersion(SUBJECT_0, String.valueOf(version), true));
 
     verify(restService);
   }
@@ -364,6 +374,11 @@ public class CachedSchemaRegistryClientTest {
   @Test(expected = NullPointerException.class)
   public void testDeleteNullSubjectThrows() throws Exception {
     client.deleteSubject(null);
+  }
+
+  @Test(expected = NullPointerException.class)
+  public void testDeleteNullSubjectThrowsPermanent() throws Exception {
+    client.deleteSubject(null, true);
   }
 
   @Test

@@ -20,7 +20,10 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * <p>
@@ -53,8 +56,13 @@ public final class SchemaValidatorBuilder {
    * and vice-versa, according to the JSON default schema resolution.
    */
   public SchemaValidatorBuilder mutualReadStrategy() {
-    this.strategy = (toValidate, existing) -> existing.isBackwardCompatible(toValidate)
-        && toValidate.isBackwardCompatible(existing);
+
+    this.strategy = (toValidate, existing) -> {
+      List<String> result = new ArrayList<>();
+      result.addAll(existing.isBackwardCompatible(toValidate));
+      result.addAll(toValidate.isBackwardCompatible(existing));
+      return result;
+    };
     return this;
   }
 
@@ -66,7 +74,7 @@ public final class SchemaValidatorBuilder {
         ParsedSchema existing = schemas.next();
         return strategy.validate(toValidate, existing);
       }
-      return true;
+      return Collections.emptyList();
     };
   }
 
@@ -74,11 +82,12 @@ public final class SchemaValidatorBuilder {
     valid();
     return (toValidate, schemasInOrder) -> {
       for (ParsedSchema existing : schemasInOrder) {
-        if (!strategy.validate(toValidate, existing)) {
-          return false;
+        List<String> errorMessages = strategy.validate(toValidate, existing);
+        if (!errorMessages.isEmpty()) {
+          return errorMessages;
         }
       }
-      return true;
+      return Collections.emptyList();
     };
   }
 

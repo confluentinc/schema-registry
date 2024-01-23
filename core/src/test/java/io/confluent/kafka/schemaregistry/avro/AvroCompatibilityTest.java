@@ -97,23 +97,23 @@ public class AvroCompatibilityTest {
   public void testBasicBackwardsCompatibility() {
     CompatibilityChecker checker = CompatibilityChecker.BACKWARD_CHECKER;
     assertTrue("adding a field with default is a backward compatible change",
-               checker.isCompatible(schema2, Collections.singletonList(schema1)));
+               checker.isCompatible(schema2, Collections.singletonList(schema1)).isEmpty());
     assertFalse("adding a field w/o default is not a backward compatible change",
-                checker.isCompatible(schema3, Collections.singletonList(schema1)));
+                checker.isCompatible(schema3, Collections.singletonList(schema1)).isEmpty());
     assertTrue("changing field name with alias is a backward compatible change",
-                checker.isCompatible(schema4, Collections.singletonList(schema1)));
+                checker.isCompatible(schema4, Collections.singletonList(schema1)).isEmpty());
     assertTrue("evolving a field type to a union is a backward compatible change",
-               checker.isCompatible(schema6, Collections.singletonList(schema1)));
+               checker.isCompatible(schema6, Collections.singletonList(schema1)).isEmpty());
     assertFalse("removing a type from a union is not a backward compatible change",
-                checker.isCompatible(schema1, Collections.singletonList(schema6)));
+                checker.isCompatible(schema1, Collections.singletonList(schema6)).isEmpty());
     assertTrue("adding a new type in union is a backward compatible change",
-               checker.isCompatible(schema7, Collections.singletonList(schema6)));
+               checker.isCompatible(schema7, Collections.singletonList(schema6)).isEmpty());
     assertFalse("removing a type from a union is not a backward compatible change",
-                checker.isCompatible(schema6, Collections.singletonList(schema7)));
+                checker.isCompatible(schema6, Collections.singletonList(schema7)).isEmpty());
     
     // Only schema 2 is checked
     assertTrue("removing a default is not a transitively compatible change",
-        checker.isCompatible(schema3, Arrays.asList(schema1, schema2)));
+        checker.isCompatible(schema3, Arrays.asList(schema1, schema2)).isEmpty());
   }
   
   /*
@@ -125,15 +125,15 @@ public class AvroCompatibilityTest {
     CompatibilityChecker checker = CompatibilityChecker.BACKWARD_TRANSITIVE_CHECKER;
     // All compatible
     assertTrue("iteratively adding fields with defaults is a compatible change",
-        checker.isCompatible(schema8, Arrays.asList(schema1, schema2)));
+        checker.isCompatible(schema8, Arrays.asList(schema1, schema2)).isEmpty());
     
     // 1 == 2, 2 == 3, 3 != 1
     assertTrue("adding a field with default is a backward compatible change",
-        checker.isCompatible(schema2, Collections.singletonList(schema1)));
+        checker.isCompatible(schema2, Collections.singletonList(schema1)).isEmpty());
     assertTrue("removing a default is a compatible change, but not transitively",
-        checker.isCompatible(schema3, Arrays.asList(schema2)));
+        checker.isCompatible(schema3, Arrays.asList(schema2)).isEmpty());
     assertFalse("removing a default is not a transitively compatible change",
-        checker.isCompatible(schema3, Arrays.asList(schema2, schema1)));
+        checker.isCompatible(schema3, Arrays.asList(schema2, schema1)).isEmpty());
   }
   
   /*
@@ -144,17 +144,17 @@ public class AvroCompatibilityTest {
   public void testBasicForwardsCompatibility() {
     CompatibilityChecker checker = CompatibilityChecker.FORWARD_CHECKER;
     assertTrue("adding a field is a forward compatible change",
-        checker.isCompatible(schema2, Collections.singletonList(schema1)));
+        checker.isCompatible(schema2, Collections.singletonList(schema1)).isEmpty());
     assertTrue("adding a field is a forward compatible change",
-        checker.isCompatible(schema3, Collections.singletonList(schema1)));
+        checker.isCompatible(schema3, Collections.singletonList(schema1)).isEmpty());
     assertTrue("adding a field is a forward compatible change",
-        checker.isCompatible(schema3, Collections.singletonList(schema2)));
+        checker.isCompatible(schema3, Collections.singletonList(schema2)).isEmpty());
     assertTrue("adding a field is a forward compatible change",
-        checker.isCompatible(schema2, Collections.singletonList(schema3)));
+        checker.isCompatible(schema2, Collections.singletonList(schema3)).isEmpty());
     
     // Only schema 2 is checked
     assertTrue("removing a default is not a transitively compatible change",
-        checker.isCompatible(schema1, Arrays.asList(schema3, schema2)));
+        checker.isCompatible(schema1, Arrays.asList(schema3, schema2)).isEmpty());
   }
   
   /*
@@ -166,15 +166,15 @@ public class AvroCompatibilityTest {
     CompatibilityChecker checker = CompatibilityChecker.FORWARD_TRANSITIVE_CHECKER;
     // All compatible
     assertTrue("iteratively removing fields with defaults is a compatible change",
-        checker.isCompatible(schema1, Arrays.asList(schema8, schema2)));
+        checker.isCompatible(schema1, Arrays.asList(schema8, schema2)).isEmpty());
     
     // 1 == 2, 2 == 3, 3 != 1
     assertTrue("adding default to a field is a compatible change",
-        checker.isCompatible(schema2, Collections.singletonList(schema3)));
+        checker.isCompatible(schema2, Collections.singletonList(schema3)).isEmpty());
     assertTrue("removing a field with a default is a compatible change",
-        checker.isCompatible(schema1, Arrays.asList(schema2)));
+        checker.isCompatible(schema1, Arrays.asList(schema2)).isEmpty());
     assertFalse("removing a default is not a transitively compatible change",
-        checker.isCompatible(schema1, Arrays.asList(schema2, schema3)));
+        checker.isCompatible(schema1, Arrays.asList(schema2, schema3)).isEmpty());
   }
   
   /*
@@ -184,14 +184,14 @@ public class AvroCompatibilityTest {
   public void testBasicFullCompatibility() {
     CompatibilityChecker checker = CompatibilityChecker.FULL_CHECKER;
     assertTrue("adding a field with default is a backward and a forward compatible change",
-        checker.isCompatible(schema2, Collections.singletonList(schema1)));
+        checker.isCompatible(schema2, Collections.singletonList(schema1)).isEmpty());
     
     // Only schema 2 is checked!
     assertTrue("transitively adding a field without a default is not a compatible change",
-        checker.isCompatible(schema3, Arrays.asList(schema1, schema2)));
+        checker.isCompatible(schema3, Arrays.asList(schema1, schema2)).isEmpty());
     // Only schema 2 is checked!
     assertTrue("transitively removing a field without a default is not a compatible change",
-        checker.isCompatible(schema1, Arrays.asList(schema3, schema2)));
+        checker.isCompatible(schema1, Arrays.asList(schema3, schema2)).isEmpty());
   }
   
   /*
@@ -204,24 +204,24 @@ public class AvroCompatibilityTest {
     
     // Simple check
     assertTrue("iteratively adding fields with defaults is a compatible change",
-        checker.isCompatible(schema8, Arrays.asList(schema1, schema2)));
+        checker.isCompatible(schema8, Arrays.asList(schema1, schema2)).isEmpty());
     assertTrue("iteratively removing fields with defaults is a compatible change",
-        checker.isCompatible(schema1, Arrays.asList(schema8, schema2)));
+        checker.isCompatible(schema1, Arrays.asList(schema8, schema2)).isEmpty());
     
     assertTrue("adding default to a field is a compatible change",
-        checker.isCompatible(schema2, Collections.singletonList(schema3)));
+        checker.isCompatible(schema2, Collections.singletonList(schema3)).isEmpty());
     assertTrue("removing a field with a default is a compatible change",
-        checker.isCompatible(schema1, Arrays.asList(schema2)));
+        checker.isCompatible(schema1, Arrays.asList(schema2)).isEmpty());
     
     assertTrue("adding a field with default is a compatible change",
-        checker.isCompatible(schema2, Collections.singletonList(schema1)));
+        checker.isCompatible(schema2, Collections.singletonList(schema1)).isEmpty());
     assertTrue("removing a default from a field compatible change",
-        checker.isCompatible(schema3, Arrays.asList(schema2)));
+        checker.isCompatible(schema3, Arrays.asList(schema2)).isEmpty());
 
     assertFalse("transitively adding a field without a default is not a compatible change",
-        checker.isCompatible(schema3, Arrays.asList(schema2, schema1)));
+        checker.isCompatible(schema3, Arrays.asList(schema2, schema1)).isEmpty());
     assertFalse("transitively removing a field without a default is not a compatible change",
-        checker.isCompatible(schema1, Arrays.asList(schema2, schema3)));
+        checker.isCompatible(schema1, Arrays.asList(schema2, schema3)).isEmpty());
   }
   
 }

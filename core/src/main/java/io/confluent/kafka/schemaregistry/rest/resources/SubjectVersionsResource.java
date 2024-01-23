@@ -268,8 +268,7 @@ public class SubjectVersionsResource {
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
-      throw Errors.invalidSchemaException("Either the input schema or"
-                                          + " one its references is invalid", e);
+      throw Errors.invalidSchemaException(e);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {

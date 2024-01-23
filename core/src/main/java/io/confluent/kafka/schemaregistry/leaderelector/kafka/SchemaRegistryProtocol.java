@@ -24,7 +24,6 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.List;
 
 
 /**
@@ -66,17 +65,14 @@ class SchemaRegistryProtocol {
     private final short error;
     private final String leader;
     private final SchemaRegistryIdentity leaderIdentity;
-    private final List<SchemaRegistryIdentity> nodes;
 
     public Assignment(@JsonProperty("error") short error,
                       @JsonProperty("master") String leader,
-                      @JsonProperty("master_identity") SchemaRegistryIdentity leaderIdentity,
-                      @JsonProperty("nodes") List<SchemaRegistryIdentity> nodes) {
+                      @JsonProperty("master_identity") SchemaRegistryIdentity leaderIdentity) {
       this.version = CURRENT_VERSION;
       this.error = error;
       this.leader = leader;
       this.leaderIdentity = leaderIdentity;
-      this.nodes = nodes;
     }
 
     public static Assignment fromJson(ByteBuffer json) {
@@ -109,11 +105,6 @@ class SchemaRegistryProtocol {
       return leaderIdentity;
     }
 
-    @JsonProperty("nodes")
-    public List<SchemaRegistryIdentity> nodes() {
-      return nodes;
-    }
-
     public boolean failed() {
       return error != NO_ERROR;
     }
@@ -133,7 +124,6 @@ class SchemaRegistryProtocol {
              + ", error=" + error
              + ", leader='" + leader + '\''
              + ", leaderIdentity=" + leaderIdentity
-             + ", nodes=" + nodes
              + '}';
     }
   }

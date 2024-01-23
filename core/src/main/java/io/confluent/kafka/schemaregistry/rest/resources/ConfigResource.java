@@ -23,7 +23,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-import java.util.Set;
 
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
@@ -41,7 +40,6 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
@@ -81,16 +79,6 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @ApiParam(value = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
-    Set<String> subjects = null;
-    try {
-      subjects = schemaRegistry.listSubjects(false);
-    } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Failed to retrieve a list of all subjects"
-                                  + " from the registry", e);
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Failed to retrieve a list of all subjects"
-                                           + " from the registry", e);
-    }
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
     if (compatibilityLevel == null) {
@@ -109,13 +97,6 @@ public class ConfigResource {
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding update config request"
                                                     + " to the leader", e);
-    }
-    if (!subjects.contains(subject)) {
-      log.debug("Updated compatibility level for unregistered subject " + subject + " to "
-                + request.getCompatibilityLevel());
-    } else {
-      log.debug("Updated compatibility level for subject " + subject + " to "
-                + request.getCompatibilityLevel());
     }
 
     return request;

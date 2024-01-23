@@ -27,14 +27,12 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -54,8 +52,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
-  private static int DEFAULT_CACHE_CAPACITY = 1000;
-  private static final String MOCK_URL_PREFIX = "mock://";
+  protected static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   protected SchemaRegistryClient schemaRegistry;
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
@@ -72,7 +69,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     int maxSchemaObject = config.getMaxSchemasPerSubject();
     Map<String, Object> originals = config.originalsWithPrefix("");
     if (null == schemaRegistry) {
-      String mockScope = validateAndMaybeGetMockScope(urls);
+      String mockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(urls);
       List<SchemaProvider> providers = Collections.singletonList(provider);
       if (mockScope != null) {
         schemaRegistry = MockSchemaRegistry.getClientForScope(mockScope, providers);
@@ -89,29 +86,6 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     keySubjectNameStrategy = config.keySubjectNameStrategy();
     valueSubjectNameStrategy = config.valueSubjectNameStrategy();
     useSchemaReflection = config.useSchemaReflection();
-  }
-
-  private static String validateAndMaybeGetMockScope(final List<String> urls) {
-    final List<String> mockScopes = new LinkedList<>();
-    for (final String url : urls) {
-      if (url.startsWith(MOCK_URL_PREFIX)) {
-        mockScopes.add(url.substring(MOCK_URL_PREFIX.length()));
-      }
-    }
-
-    if (mockScopes.isEmpty()) {
-      return null;
-    } else if (mockScopes.size() > 1) {
-      throw new ConfigException(
-              "Only one mock scope is permitted for 'schema.registry.url'. Got: " + urls
-      );
-    } else if (urls.size() > mockScopes.size()) {
-      throw new ConfigException(
-              "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
-      );
-    } else {
-      return mockScopes.get(0);
-    }
   }
 
   /**
@@ -210,7 +184,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
               + " of type " + schemaMetadata.getSchemaType()));
       // Sanity check by testing latest is backward compatibility with schema
       // Don't test for forward compatibility so unions can be handled properly
-      if (latestCompatStrict && !latestVersion.isBackwardCompatible(schema)) {
+      if (latestCompatStrict && !latestVersion.isBackwardCompatible(schema).isEmpty()) {
         throw new IOException("Incompatible schema " + schemaMetadata.getSchema()
             + " with refs " + schemaMetadata.getReferences()
             + " of type " + schemaMetadata.getSchemaType()

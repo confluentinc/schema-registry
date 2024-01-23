@@ -419,45 +419,54 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public List<Integer> deleteSubject(String subject) throws IOException, RestClientException {
-    return deleteSubject(DEFAULT_REQUEST_PROPERTIES, subject);
+  public List<Integer> deleteSubject(String subject,
+           boolean isPermanent) throws IOException, RestClientException {
+    return deleteSubject(DEFAULT_REQUEST_PROPERTIES, subject, isPermanent);
   }
 
   @Override
   public synchronized List<Integer> deleteSubject(
-      Map<String, String> requestProperties, String subject)
+      Map<String, String> requestProperties, String subject, boolean isPermanent)
       throws IOException, RestClientException {
     Objects.requireNonNull(subject, "subject");
     versionCache.remove(subject);
     idCache.remove(subject);
     schemaCache.remove(subject);
-    return restService.deleteSubject(requestProperties, subject);
+    return restService.deleteSubject(requestProperties, subject, isPermanent);
   }
 
   @Override
-  public Integer deleteSchemaVersion(String subject, String version)
+  public Integer deleteSchemaVersion(String subject, String version, boolean isPermanent)
       throws IOException, RestClientException {
-    return deleteSchemaVersion(DEFAULT_REQUEST_PROPERTIES, subject, version);
+    return deleteSchemaVersion(DEFAULT_REQUEST_PROPERTIES, subject, version, isPermanent);
   }
 
   @Override
   public synchronized Integer deleteSchemaVersion(
       Map<String, String> requestProperties,
       String subject,
-      String version)
+      String version,
+      boolean isPermanent)
       throws IOException, RestClientException {
     versionCache
         .getOrDefault(subject, Collections.emptyMap())
         .values()
         .remove(Integer.valueOf(version));
-    return restService.deleteSchemaVersion(requestProperties, subject, version);
+    return restService.deleteSchemaVersion(requestProperties, subject, version, isPermanent);
   }
 
   @Override
   public boolean testCompatibility(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     return restService.testCompatibility(schema.canonicalString(), schema.schemaType(),
-        schema.references(), subject, "latest");
+        schema.references(), subject, "latest", false).isEmpty();
+  }
+
+  @Override
+  public List<String> testCompatibilityVerbose(String subject, ParsedSchema schema)
+          throws IOException, RestClientException {
+    return restService.testCompatibility(schema.canonicalString(), schema.schemaType(),
+            schema.references(), subject, "latest", true);
   }
 
   @Override

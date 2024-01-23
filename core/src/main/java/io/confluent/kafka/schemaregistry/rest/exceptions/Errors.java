@@ -137,8 +137,8 @@ public class Errors {
     return new RestIdDoesNotMatchException(cause.getMessage());
   }
 
-  public static RestInvalidSchemaException invalidSchemaException(String message, Throwable cause) {
-    return new RestInvalidSchemaException(message);
+  public static RestInvalidSchemaException invalidSchemaException(Throwable cause) {
+    return new RestInvalidSchemaException(cause.getMessage());
   }
 
   public static RestInvalidVersionException invalidVersionException(String version) {
