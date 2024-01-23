@@ -119,7 +119,7 @@ public class DekRegistry implements Closeable {
   private final DekRegistryConfig config;
   // visible for testing
   final Cache<EncryptionKeyId, EncryptionKey> keys;
-  private final Map<String, KeyEncryptionKey> sharedKeys = new ConcurrentHashMap<>();
+  private final Map<String, KeyEncryptionKeyId> sharedKeys = new ConcurrentHashMap<>();
   private final Map<DekFormat, Cryptor> cryptors;
   private final Map<String, Lock> tenantToLock = new ConcurrentHashMap<>();
   private final AtomicBoolean initialized = new AtomicBoolean();
@@ -218,7 +218,7 @@ public class DekRegistry implements Closeable {
     return config;
   }
 
-  protected Map<String, KeyEncryptionKey> getSharedKeys() {
+  protected Map<String, KeyEncryptionKeyId> getSharedKeys() {
     return sharedKeys;
   }
 

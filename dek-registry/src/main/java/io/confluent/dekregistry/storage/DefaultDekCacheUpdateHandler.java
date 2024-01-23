@@ -78,7 +78,7 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
       if (value instanceof KeyEncryptionKey) {
         KeyEncryptionKey kek = (KeyEncryptionKey) value;
         if (kek.isShared()) {
-          dekRegistry.getSharedKeys().put(kek.getKmsKeyId(), kek);
+          dekRegistry.getSharedKeys().put(kek.getKmsKeyId(), (KeyEncryptionKeyId) key);
           dekRegistry.getMetricsManager().incrementSharedKeyCount(tenant);
         }
       }
@@ -89,7 +89,7 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
         KeyEncryptionKey oldKek = (KeyEncryptionKey) oldValue;
         if (!oldKek.isShared() && kek.isShared()) {
           // Not Shared -> Shared
-          dekRegistry.getSharedKeys().put(kek.getKmsKeyId(), kek);
+          dekRegistry.getSharedKeys().put(kek.getKmsKeyId(), (KeyEncryptionKeyId) key);
           dekRegistry.getMetricsManager().incrementSharedKeyCount(tenant);
         } else if (oldKek.isShared() && !kek.isShared()) {
           // Shared -> Not Shared
