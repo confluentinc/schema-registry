@@ -394,6 +394,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
         throw DekRegistryErrors.keyNotFoundException(name);
       }
       asyncResponse.resume(kek);
+    } catch (AlreadyExistsException e) {
+      throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while creating key", e);
     }

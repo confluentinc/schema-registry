@@ -35,7 +35,7 @@ public class DekRegistryErrors {
 
   // HTTP 409
   public static final String ALREADY_EXISTS_MESSAGE_FORMAT =
-      "Key '%s' already exists";
+      "Key '%s' already exists; use a different value";
   public static final int ALREADY_EXISTS_ERROR_CODE = 40971;
 
   public static final String TOO_MANY_KEYS_MESSAGE_FORMAT =
