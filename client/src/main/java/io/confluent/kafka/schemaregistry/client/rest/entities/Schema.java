@@ -295,7 +295,8 @@ public class Schema implements Comparable<Schema> {
 
   @Override
   public int hashCode() {
-    return Objects.hash(subject, version, id, schemaType, references, metadata, ruleSet, schema);
+    return Objects.hash(
+        subject, version, id, schemaType, references, metadata, ruleSet, schema);
   }
 
   @Override

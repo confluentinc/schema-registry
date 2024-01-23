@@ -273,7 +273,7 @@ public class JsonSchemaUtils {
   public static Object toObject(JsonNode value, JsonSchema schema, boolean validate)
       throws IOException {
     if (validate) {
-      schema.validate(value);
+      value = schema.validate(value);
     }
     return envelope(schema, value);
   }
