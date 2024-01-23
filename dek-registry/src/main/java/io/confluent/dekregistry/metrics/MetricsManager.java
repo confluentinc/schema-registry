@@ -45,6 +45,8 @@ public class MetricsManager implements Closeable {
 
   static final String NUM_KEKS = "num_keks";
 
+  static final String NUM_KEKS_SHARED = "num_keks_shared";
+
   static final String NUM_DEKS = "num_deks";
 
   private final Map<String, TenantMetrics> tenantMetrics = new ConcurrentHashMap<>();
@@ -71,6 +73,16 @@ public class MetricsManager implements Closeable {
   public void decrementKeyCount(String tenant, KeyType keyType) {
     TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
     tenantMetrics.getSensor(getMetricDescriptor(keyType), null, null).add(-1);
+  }
+
+  public void incrementSharedKeyCount(String tenant) {
+    TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
+    tenantMetrics.getSensor(MetricDescriptor.NUM_KEKS_SHARED_MD, null, null).add(1);
+  }
+
+  public void decrementSharedKeyCount(String tenant) {
+    TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
+    tenantMetrics.getSensor(MetricDescriptor.NUM_KEKS_SHARED_MD, null, null).add(-1);
   }
 
   private TenantMetrics getOrCreateTenantMetrics(String tenant) {
@@ -151,6 +163,8 @@ public class MetricsManager implements Closeable {
   private enum MetricDescriptor {
     NUM_KEKS_MD(NUM_KEKS, METRIC_GROUP,
         "Number of keks"),
+    NUM_KEKS_SHARED_MD(NUM_KEKS_SHARED, METRIC_GROUP,
+        "Number of keks shared"),
     NUM_DEKS_MD(NUM_DEKS, METRIC_GROUP,
         "Number of deks");
 
