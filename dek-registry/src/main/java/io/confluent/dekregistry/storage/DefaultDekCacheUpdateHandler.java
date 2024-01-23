@@ -64,25 +64,36 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
       if (oldValue != null) {
         // Delete KEK/DEK case
         dekRegistry.getMetricsManager().decrementKeyCount(tenant, key.getType());
-        if (oldValue instanceof KeyEncryptionKey && ((KeyEncryptionKey)oldValue).isShared()) {
-          dekRegistry.getMetricsManager().decrementSharedKeyCount(tenant);
+        if (oldValue instanceof KeyEncryptionKey) {
+          KeyEncryptionKey oldKek = (KeyEncryptionKey) oldValue;
+          if (oldKek.isShared()) {
+            dekRegistry.getSharedKeys().remove(oldKek.getKmsKeyId());
+            dekRegistry.getMetricsManager().decrementSharedKeyCount(tenant);
+          }
         }
       }
     } else if (oldValue == null) {
       // Add KEK/DEK case
       dekRegistry.getMetricsManager().incrementKeyCount(tenant, key.getType());
-      if (value instanceof KeyEncryptionKey && ((KeyEncryptionKey)value).isShared()) {
-        dekRegistry.getMetricsManager().incrementSharedKeyCount(tenant);
+      if (value instanceof KeyEncryptionKey) {
+        KeyEncryptionKey kek = (KeyEncryptionKey) value;
+        if (kek.isShared()) {
+          dekRegistry.getSharedKeys().put(kek.getKmsKeyId(), (KeyEncryptionKeyId) key);
+          dekRegistry.getMetricsManager().incrementSharedKeyCount(tenant);
+        }
       }
     } else {
       // Update KEK case
       if (value instanceof KeyEncryptionKey && oldValue instanceof KeyEncryptionKey) {
-        if (!((KeyEncryptionKey)oldValue).isShared() && ((KeyEncryptionKey)value).isShared()) {
+        KeyEncryptionKey kek = (KeyEncryptionKey) value;
+        KeyEncryptionKey oldKek = (KeyEncryptionKey) oldValue;
+        if (!oldKek.isShared() && kek.isShared()) {
           // Not Shared -> Shared
+          dekRegistry.getSharedKeys().put(kek.getKmsKeyId(), (KeyEncryptionKeyId) key);
           dekRegistry.getMetricsManager().incrementSharedKeyCount(tenant);
-        } else if (((KeyEncryptionKey)oldValue).isShared()
-            && !((KeyEncryptionKey)value).isShared()) {
+        } else if (oldKek.isShared() && !kek.isShared()) {
           // Shared -> Not Shared
+          dekRegistry.getSharedKeys().remove(oldKek.getKmsKeyId());
           dekRegistry.getMetricsManager().decrementSharedKeyCount(tenant);
         }
       }
