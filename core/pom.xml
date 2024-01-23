@@ -119,7 +119,8 @@
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>
-            <artifactId>bcpkix-jdk15on</artifactId>
+            <artifactId>bcpkix-jdk18on</artifactId>
+            <version>${bouncycastle.jdk18.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -162,6 +163,10 @@
                     <groupId>org.apache.directory.api</groupId>
                     <artifactId>api-ldap-schema-data</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk15on</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -173,6 +178,10 @@
                 <exclusion>
                     <groupId>org.apache.directory.api</groupId>
                     <artifactId>api-ldap-schema-data</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk15on</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -209,6 +218,10 @@
                 <exclusion>
                     <groupId>org.apache.directory.api</groupId>
                     <artifactId>api-ldap-schema-data</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk15on</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
