@@ -271,8 +271,12 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       }
       if (printValueId) {
         output.write(idSeparator);
-        int schemaId = schemaIdFor(consumerRecord.value());
-        output.print(schemaId);
+        if (consumerRecord.value() != null) {
+          int schemaId = schemaIdFor(consumerRecord.value());
+          output.print(schemaId);
+        } else {
+          output.write(nullLiteral);
+        }
       }
       output.write(lineSeparator);
     } catch (IOException ioe) {
