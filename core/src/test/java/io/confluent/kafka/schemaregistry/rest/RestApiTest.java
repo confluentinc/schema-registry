@@ -380,7 +380,7 @@ public class RestApiTest extends ClusterTestHarness {
     restApp.restClient.updateCompatibility(
         CompatibilityLevel.FULL.name, subject);
 
-    // test that compatibility check for incompatible schema returns false and the appropriate 
+    // test that compatibility check for incompatible schema returns false and the appropriate
     // error response from Avro
     restApp.restClient.registerSchema(schema1, subject);
     int versionOfRegisteredSchema =
@@ -711,6 +711,16 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testGetOnlySchemaById() throws Exception {
+    String schema = String.valueOf(TestUtils.getRandomCanonicalAvroString(1));
+    String subject = "test";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
+    assertEquals("Schema with ID 1 should match.",
+            schema,
+            restApp.restClient.getOnlySchemaById(1));
+  }
+
+  @Test
   public void testGetLatestVersionSchemaOnly() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
@@ -735,18 +745,35 @@ public class RestApiTest extends ClusterTestHarness {
 
   @Test
   public void testSchemaReferences() throws Exception {
+    testSchemaReferencesInContext("", "", 2);
+  }
+
+  @Test
+  public void testSchemaReferencesSameContext() throws Exception {
+    testSchemaReferencesInContext(":.ctx:", ":.ctx:", 2);
+  }
+
+  @Test
+  public void testSchemaReferencesDifferentContext() throws Exception {
+    testSchemaReferencesInContext("", ":.ctx:", 1);
+  }
+
+  private void testSchemaReferencesInContext(String context, String refContext, int parentId)
+      throws Exception {
     List<String> schemas = TestUtils.getAvroSchemaWithReferences();
-    String subject = "reference";
+    String unqualifiedSubject = "my_reference";
+    String subject = refContext + unqualifiedSubject;
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
 
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemas.get(1));
-    SchemaReference ref = new SchemaReference("otherns.Subrecord", "reference", 1);
+    SchemaReference ref = new SchemaReference("otherns.Subrecord", subject, 1);
     request.setReferences(Collections.singletonList(ref));
-    int registeredId = restApp.restClient.registerSchema(request, "referrer", false);
-    assertEquals("Registering a new schema should succeed", 2, registeredId);
+    String subject2 = context + "my_referrer";
+    int registeredId = restApp.restClient.registerSchema(request, subject2, false);
+    assertEquals("Registering a new schema should succeed", parentId, registeredId);
 
-    SchemaString schemaString = restApp.restClient.getId(2);
+    SchemaString schemaString = restApp.restClient.getId(parentId, subject2);
     // the newly registered schema should be immediately readable on the leader
     assertEquals("Registered schema should be found",
         schemas.get(1),
@@ -756,19 +783,19 @@ public class RestApiTest extends ClusterTestHarness {
         Collections.singletonList(ref),
         schemaString.getReferences());
 
-    List<Integer> refs = restApp.restClient.getReferencedBy("reference", 1);
-    assertEquals(2, refs.get(0).intValue());
+    List<Integer> refs = restApp.restClient.getReferencedBy(subject, 1);
+    assertEquals(parentId, refs.get(0).intValue());
 
     ns.MyRecord myrecord = new ns.MyRecord();
     AvroSchema schema = new AvroSchema(AvroSchemaUtils.getSchema(myrecord));
     // Note that we pass an empty list of refs since SR will perform a deep equality check
     Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
-            AvroSchema.TYPE, Collections.emptyList(), "referrer", false);
-    assertEquals("Registered schema should be found", 2, registeredSchema.getId().intValue());
+        AvroSchema.TYPE, Collections.emptyList(), subject2, false);
+    assertEquals("Registered schema should be found", parentId, registeredSchema.getId().intValue());
 
     try {
       restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
-          "reference",
+          subject,
           String.valueOf(1)
       );
       fail("Deleting reference should fail with " + Errors.REFERENCE_EXISTS_ERROR_CODE);
@@ -780,14 +807,14 @@ public class RestApiTest extends ClusterTestHarness {
 
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion
-            (RestService.DEFAULT_REQUEST_PROPERTIES, "referrer", "1"));
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
 
-    refs = restApp.restClient.getReferencedBy("reference", 1);
+    refs = restApp.restClient.getReferencedBy(subject, 1);
     assertTrue(refs.isEmpty());
 
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion
-            (RestService.DEFAULT_REQUEST_PROPERTIES, "reference", "1"));
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
   }
 
   @Test
@@ -949,6 +976,30 @@ public class RestApiTest extends ClusterTestHarness {
         restApp.restClient.lookUpSubjectVersion(lookUpRequest, subject1, true, false).getVersion();
     assertEquals("1st schema under subject1 should have version 1", 1,
         versionOfRegisteredSchema1Subject1);
+
+
+    String recordInvalidDefaultSchema =
+        "{\"namespace\": \"namespace\",\n"
+            + " \"type\": \"record\",\n"
+            + " \"name\": \"test\",\n"
+            + " \"fields\": [\n"
+            + "     {\"name\": \"string_default\", \"type\": \"string\", \"default\": null}\n"
+            + "]\n"
+            + "}";
+    registerRequest = new RegisterSchemaRequest();
+    registerRequest.setSchema(recordInvalidDefaultSchema);
+    try {
+      restApp.restClient.registerSchema(registerRequest, subject1, true);
+      fail("Registering bad schema should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema",
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    List<String> messages = restApp.restClient.testCompatibility(
+        registerRequest, subject1, null, true, true);
+    assertTrue(messages.size() > 0 && messages.get(0).contains("Invalid schema"));
   }
 
   @Test
@@ -1631,6 +1682,35 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testListSoftDeletedSubjectsAndSchemas() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(3);
+    String subject1 = "test1";
+    String subject2 = "test2";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject1);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject1);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(2), 3, subject2);
+
+    assertEquals((Integer) 1,
+        restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "1"));
+    assertEquals((Integer) 1,
+        restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
+
+    assertEquals("List All Versions Match",
+        Collections.singletonList(2), restApp.restClient.getAllVersions(subject1));
+    assertEquals("List All Versions Include deleted Match",
+        Arrays.asList(1, 2), restApp.restClient.getAllVersions(RestService.DEFAULT_REQUEST_PROPERTIES, subject1, true));
+    assertEquals("List Deleted Versions Match",
+        Collections.singletonList(1), restApp.restClient.getDeletedOnlyVersions(subject1));
+
+    assertEquals("List All Subjects Match",
+        Collections.singletonList(subject1), restApp.restClient.getAllSubjects());
+    assertEquals("List All Subjects Include deleted Match",
+        Arrays.asList(subject1, subject2), restApp.restClient.getAllSubjects(true));
+    assertEquals("List Deleted Only Subjects Match",
+        Collections.singletonList(subject2), restApp.restClient.getDeletedOnlySubjects(null));
+  }
+
+  @Test
   public void testDeleteSubjectBasic() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
@@ -1897,6 +1977,5 @@ public class RestApiTest extends ClusterTestHarness {
     // Join base URL and path, collapsing any duplicate forward slash delimiters
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
-  
 }
 

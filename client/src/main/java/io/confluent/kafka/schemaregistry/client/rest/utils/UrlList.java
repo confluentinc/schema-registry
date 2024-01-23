@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class UrlList {
 
-  private static final Random random = new Random();
+  private final Random random = new Random();
 
   private final AtomicInteger index;
   private final List<String> urls;

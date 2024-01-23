@@ -55,7 +55,7 @@ public class CompatibilityCheckResponse {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
-  @Schema(description = "Error messages")
+  @Schema(description = "Error messages", example = "[]")
   @JsonProperty("messages")
   public List<String> getMessages() {
     return messages;

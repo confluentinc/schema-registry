@@ -532,12 +532,19 @@ public class AvroSchemaTest {
     AvroSchemaProvider provider = new AvroSchemaProvider();
     Map<String, String> configs = Collections.singletonMap(AvroSchemaProvider.AVRO_VALIDATE_DEFAULTS, "false");
     provider.configure(configs);
-    Optional<ParsedSchema> schema = provider.parseSchema(recordInvalidDefaultSchema, Collections.emptyList(), true);
+    Optional<ParsedSchema> schema = provider.parseSchema(recordInvalidDefaultSchema, Collections.emptyList(), true, false);
     assertTrue(schema.isPresent());
 
     configs = Collections.singletonMap(AvroSchemaProvider.AVRO_VALIDATE_DEFAULTS, "true");
     provider.configure(configs);
-    schema = provider.parseSchema(recordInvalidDefaultSchema, Collections.emptyList(), true);
+    schema = provider.parseSchema(recordInvalidDefaultSchema, Collections.emptyList(), true, false);
+    assertFalse(schema.isPresent());
+  }
+
+  @Test
+  public void testInvalidDefaultDuringNormalize() throws Exception {
+    AvroSchemaProvider provider = new AvroSchemaProvider();
+    Optional<ParsedSchema> schema = provider.parseSchema(recordInvalidDefaultSchema, Collections.emptyList(), true, true);
     assertFalse(schema.isPresent());
   }
 

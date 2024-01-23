@@ -56,17 +56,20 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   SchemaString get(int id, String subject) throws SchemaRegistryException;
 
   default Set<String> listSubjects() throws SchemaRegistryException {
-    return listSubjects(false);
+    return listSubjects(LookupFilter.DEFAULT);
   }
 
-  Set<String> listSubjects(boolean returnDeletedSubjects)
+  Set<String> listSubjects(LookupFilter filter)
           throws SchemaRegistryException;
 
-  Iterator<Schema> getAllVersions(String subject, boolean returnDeletedSchemas)
+  Set<String> listSubjectsForId(int id, String subject, boolean returnDeleted)
+      throws SchemaRegistryException;
+
+  Iterator<Schema> getAllVersions(String subject, LookupFilter filter)
       throws SchemaRegistryException;
 
   Iterator<Schema> getVersionsWithSubjectPrefix(
-      String prefix, boolean returnDeletedSchemas, boolean latestOnly)
+      String prefix, LookupFilter filter, boolean latestOnly)
       throws SchemaRegistryException;
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
@@ -90,7 +93,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   List<String> isCompatible(String subject,
                             Schema newSchema,
-                            List<Schema> previousSchemas) throws SchemaRegistryException;
+                            List<Schema> previousSchemas,
+                            boolean normalize) throws SchemaRegistryException;
 
   void close() throws IOException;
 

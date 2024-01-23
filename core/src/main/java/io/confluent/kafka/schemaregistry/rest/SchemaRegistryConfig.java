@@ -105,6 +105,20 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>kafkastore.update.handler</code>
    */
   public static final String KAFKASTORE_UPDATE_HANDLERS_CONFIG = "kafkastore.update.handlers";
+  /**
+   * <code>kafkagroup.rebalance.timeout.ms</code>
+   */
+  public static final String KAFKAGROUP_REBALANCE_TIMEOUT_MS_CONFIG =
+      "kafkagroup.rebalance.timeout.ms";
+  /**
+   * <code>kafkagroup.session.timeout.ms</code>
+   */
+  public static final String KAFKAGROUP_SESSION_TIMEOUT_MS_CONFIG = "kafkagroup.session.timeout.ms";
+  /**
+   * <code>kafkagroup.heartbeat.interval.ms</code>
+   */
+  public static final String KAFKAGROUP_HEARTBEAT_INTERVAL_MS_CONFIG =
+      "kafkagroup.heartbeat.interval.ms";
 
   /**
    * <code>leader.eligibility</code>*
@@ -113,6 +127,21 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String MASTER_ELIGIBILITY = "master.eligibility";
   public static final String LEADER_ELIGIBILITY = "leader.eligibility";
   public static final boolean DEFAULT_LEADER_ELIGIBILITY = true;
+  /**
+   * <code>leader.connect.timeout.ms</code>*
+   */
+  public static final String LEADER_CONNECT_TIMEOUT_MS = "leader.connect.timeout.ms";
+  public static final int DEFAULT_LEADER_CONNECT_TIMEOUT_MS = 60000;
+  /**
+   * <code>leader.read.timeout.ms</code>*
+   */
+  public static final String LEADER_READ_TIMEOUT_MS = "leader.read.timeout.ms";
+  public static final int DEFAULT_LEADER_READ_TIMEOUT_MS = 60000;
+  /**
+   * <code>leader.election.delay</code>*
+   */
+  public static final String LEADER_ELECTION_DELAY = "leader.election.delay";
+  public static final boolean DEFAULT_LEADER_ELECTION_DELAY = false;
   /**
    * <code>mode.mutability</code>*
    */
@@ -251,6 +280,13 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_UPDATE_HANDLERS_DOC =
       "  A list of classes to use as StoreUpdateHandler. Implementing the interface "
           + "<code>StoreUpdateHandler</code> allows you to handle Kafka store update events.";
+  protected static final String KAFKAGROUP_REBALANCE_TIMEOUT_DOC =
+      "The maximum allowed time for each worker to join the group once a rebalance has begun.";
+  protected static final String KAFKAGROUP_SESSION_TIMEOUT_DOC =
+      "The timeout used to detect client failures when using Kafka's group management facility.";
+  protected static final String KAFKAGROUP_HEARTBEAT_INTERVAL_DOC =
+      "The expected time between heartbeats to the consumer coordinator when using "
+          + "Kafka's group management facilities.";
   protected static final String HOST_DOC =
       "The host name. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes.";
@@ -276,6 +312,12 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String LEADER_ELIGIBILITY_DOC =
       "If true, this node can participate in leader election. In a multi-colo setup, turn this off "
       + "for clusters in the follower data center.";
+  protected static final String LEADER_CONNECT_TIMEOUT_MS_DOC =
+      "The timeout for connections when forwarding requests to the leader.";
+  protected static final String LEADER_READ_TIMEOUT_MS_DOC =
+      "The timeout for reading responses after forwarding requests to the leader.";
+  protected static final String LEADER_ELECTION_DELAY_DOC =
+      "Whether to delay leader election until after initialization.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
@@ -415,6 +457,15 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(KAFKASTORE_UPDATE_HANDLERS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, KAFKASTORE_UPDATE_HANDLERS_DOC
     )
+    .define(KAFKAGROUP_REBALANCE_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 300000, atLeast(0),
+        ConfigDef.Importance.MEDIUM, KAFKAGROUP_REBALANCE_TIMEOUT_DOC
+    )
+    .define(KAFKAGROUP_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 10000, atLeast(0),
+        ConfigDef.Importance.MEDIUM, KAFKAGROUP_SESSION_TIMEOUT_DOC
+    )
+    .define(KAFKAGROUP_HEARTBEAT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT, 3000, atLeast(0),
+        ConfigDef.Importance.MEDIUM, KAFKAGROUP_HEARTBEAT_INTERVAL_DOC
+    )
     .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
         ConfigDef.Importance.HIGH, HOST_DOC
     )
@@ -441,6 +492,15 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELIGIBILITY,
         ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC
+    )
+    .define(LEADER_CONNECT_TIMEOUT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_CONNECT_TIMEOUT_MS,
+        ConfigDef.Importance.LOW, LEADER_CONNECT_TIMEOUT_MS_DOC
+    )
+    .define(LEADER_READ_TIMEOUT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_READ_TIMEOUT_MS,
+        ConfigDef.Importance.LOW, LEADER_READ_TIMEOUT_MS_DOC
+    )
+    .define(LEADER_ELECTION_DELAY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_DELAY,
+        ConfigDef.Importance.LOW, LEADER_ELECTION_DELAY_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC

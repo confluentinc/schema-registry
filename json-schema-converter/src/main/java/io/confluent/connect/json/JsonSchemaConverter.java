@@ -17,6 +17,7 @@ package io.confluent.connect.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -30,7 +31,6 @@ import org.apache.kafka.connect.storage.Converter;
 import java.util.Collections;
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
@@ -67,7 +67,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     JsonSchemaConverterConfig jsonSchemaConverterConfig = new JsonSchemaConverterConfig(configs);
 
     if (schemaRegistry == null) {
-      schemaRegistry = new CachedSchemaRegistryClient(
+      schemaRegistry = SchemaRegistryClientFactory.newClient(
           jsonSchemaConverterConfig.getSchemaRegistryUrls(),
           jsonSchemaConverterConfig.getMaxSchemasPerSubject(),
           Collections.singletonList(new JsonSchemaProvider()),
