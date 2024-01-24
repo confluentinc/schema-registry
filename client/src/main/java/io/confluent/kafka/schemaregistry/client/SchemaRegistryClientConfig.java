@@ -46,6 +46,7 @@ public class SchemaRegistryClientConfig {
 
   public static final String MISSING_CACHE_SIZE_CONFIG = "missing.cache.size";
   public static final String MISSING_ID_CACHE_TTL_CONFIG = "missing.id.cache.ttl.sec";
+  public static final String MISSING_VERSION_CACHE_TTL_CONFIG = "missing.version.cache.ttl.sec";
   public static final String MISSING_SCHEMA_CACHE_TTL_CONFIG = "missing.schema.cache.ttl.sec";
 
 
@@ -126,6 +127,12 @@ public class SchemaRegistryClientConfig {
   public static long getMissingIdTTL(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_ID_CACHE_TTL_CONFIG)
         ? (Long) configs.get(MISSING_ID_CACHE_TTL_CONFIG)
+        : 0L;
+  }
+
+  public static long getMissingVersionTTL(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(MISSING_VERSION_CACHE_TTL_CONFIG)
+        ? (Long) configs.get(MISSING_VERSION_CACHE_TTL_CONFIG)
         : 0L;
   }
 

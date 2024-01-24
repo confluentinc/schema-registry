@@ -16,8 +16,16 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import com.google.common.collect.Lists;
+import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.LinkedHashSet;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,12 +63,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private static final String WILDCARD = "*";
 
-  private String defaultCompatibility = "BACKWARD";
-  private final Map<String, Map<ParsedSchema, Integer>> schemaCache;
-  private final Map<String, Map<ParsedSchema, Integer>> schemaIdCache;
-  private final Map<String, Map<Integer, ParsedSchema>> idCache;
-  private final Map<String, Map<ParsedSchema, Integer>> versionCache;
-  private final Map<String, String> compatibilityCache;
+  private Config defaultConfig = new Config("BACKWARD");
+  private final Map<String, Map<ParsedSchema, Integer>> schemaToIdCache;
+  private final Map<String, Map<ParsedSchema, Integer>> registeredSchemaCache;
+  private final Map<String, Map<Integer, ParsedSchema>> idToSchemaCache;
+  private final Map<String, Map<ParsedSchema, Integer>> schemaToVersionCache;
+  private final Map<String, Config> configCache;
   private final Map<String, String> modes;
   private final Map<String, AtomicInteger> ids;
   private final Map<String, SchemaProvider> providers;
@@ -72,11 +80,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   public MockSchemaRegistryClient(List<SchemaProvider> providers) {
-    schemaCache = new ConcurrentHashMap<>();
-    schemaIdCache = new ConcurrentHashMap<>();
-    idCache = new ConcurrentHashMap<>();
-    versionCache = new ConcurrentHashMap<>();
-    compatibilityCache = new ConcurrentHashMap<>();
+    schemaToIdCache = new ConcurrentHashMap<>();
+    registeredSchemaCache = new ConcurrentHashMap<>();
+    idToSchemaCache = new ConcurrentHashMap<>();
+    schemaToVersionCache = new ConcurrentHashMap<>();
+    configCache = new ConcurrentHashMap<>();
     modes = new ConcurrentHashMap<>();
     ids = new ConcurrentHashMap<>();
     this.providers = providers != null && !providers.isEmpty()
@@ -99,7 +107,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
     SchemaProvider schemaProvider = providers.get(schemaType);
     if (schemaProvider == null) {
-      log.error("No provider found for schema type " + schemaType);
+      log.error("No provider found for schema type {}", schemaType);
       return Optional.empty();
     }
     return schemaProvider.parseSchema(schemaString, references);
@@ -113,7 +121,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
     SchemaProvider schemaProvider = providers.get(schemaType);
     if (schemaProvider == null) {
-      log.error("Invalid schema type " + schemaType);
+      log.error("Invalid schema type {}", schemaType);
       return Optional.empty();
     }
     return schemaProvider.parseSchema(schema, false, false);
@@ -123,7 +131,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String subject, ParsedSchema schema, boolean registerRequest, int id)
       throws IOException, RestClientException {
     Map<Integer, ParsedSchema> idSchemaMap =
-        idCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+        idToSchemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
     if (!idSchemaMap.isEmpty()) {
       for (Map.Entry<Integer, ParsedSchema> entry : idSchemaMap.entrySet()) {
         if (schemasEqual(entry.getValue(), schema)) {
@@ -145,7 +153,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (registerRequest) {
       String context = toQualifiedContext(subject);
       Map<ParsedSchema, Integer> schemaIdMap =
-          schemaIdCache.computeIfAbsent(context, k -> new ConcurrentHashMap<>());
+          registeredSchemaCache.computeIfAbsent(context, k -> new ConcurrentHashMap<>());
       int schemaId;
       if (id >= 0) {
         schemaId = id;
@@ -176,13 +184,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       currentVersion = versions.get(versions.size() - 1) + 1;
     }
     Map<ParsedSchema, Integer> schemaVersionMap =
-        versionCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+        schemaToVersionCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
     schemaVersionMap.put(schema, currentVersion);
   }
 
   private ParsedSchema getSchemaBySubjectAndIdFromRegistry(String subject, int id)
       throws IOException, RestClientException {
-    Map<Integer, ParsedSchema> idSchemaMap = idCache.get(subject);
+    Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
     if (idSchemaMap != null) {
       ParsedSchema schema = idSchemaMap.get(id);
       if (schema != null) {
@@ -191,7 +199,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
     String context = toQualifiedContext(subject);
     if (!context.equals(subject)) {
-      idSchemaMap = idCache.get(context);
+      idSchemaMap = idToSchemaCache.get(context);
       if (idSchemaMap != null) {
         ParsedSchema schema = idSchemaMap.get(id);
         if (schema != null) {
@@ -211,41 +219,49 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int register(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    return register(subject, schema, 0, -1, normalize);
+    return registerWithResponse(subject, schema, 0, -1, normalize).getId();
   }
 
   @Override
   public int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
-    return register(subject, schema, version, id, false);
+    return registerWithResponse(subject, schema, version, id, false).getId();
   }
 
-  private int register(String subject, ParsedSchema schema, int version, int id, boolean normalize)
+  @Override
+  public RegisterSchemaResponse registerWithResponse(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    return registerWithResponse(subject, schema, 0, -1, normalize);
+  }
+
+  private RegisterSchemaResponse registerWithResponse(
+      String subject, ParsedSchema schema, int version, int id, boolean normalize)
       throws IOException, RestClientException {
     if (normalize) {
       schema = schema.normalize();
     }
     Map<ParsedSchema, Integer> schemaIdMap =
-        schemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+        schemaToIdCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
 
     Integer schemaId = schemaIdMap.get(schema);
     if (schemaId != null && (id < 0 || id == schemaId)) {
-      return schemaId;
+      return new RegisterSchemaResponse(schemaId);
     }
 
     synchronized (this) {
       schemaId = schemaIdMap.get(schema);
       if (schemaId != null && (id < 0 || id == schemaId)) {
-        return schemaId;
+        return new RegisterSchemaResponse(schemaId);
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, true, id);
       schemaIdMap.put(schema, retrievedId);
       String context = toQualifiedContext(subject);
-      final Map<Integer, ParsedSchema> idSchemaMap = idCache.computeIfAbsent(
+      final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schema);
-      return retrievedId;
+      return new RegisterSchemaResponse(retrievedId);
     }
   }
 
@@ -261,7 +277,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       subject = NO_SUBJECT;
     }
 
-    final Map<Integer, ParsedSchema> idSchemaMap = idCache
+    final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache
         .computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
 
     ParsedSchema schema = idSchemaMap.get(id);
@@ -322,7 +338,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public Collection<String> getAllSubjectsById(int id) throws IOException, RestClientException {
-    return idCache.entrySet().stream()
+    return idToSchemaCache.entrySet().stream()
             .filter(entry -> entry.getValue().containsKey(id))
             .map(Map.Entry::getKey).collect(Collectors.toCollection(LinkedHashSet::new));
   }
@@ -330,13 +346,20 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public Collection<SubjectVersion> getAllVersionsById(int id) throws IOException,
       RestClientException {
-    return idCache.entrySet().stream()
+    return idToSchemaCache.entrySet().stream()
         .filter(entry -> entry.getValue().containsKey(id))
-        .map(e -> {
+        .flatMap(e -> {
           ParsedSchema schema = e.getValue().get(id);
-          int version = versionCache.get(e.getKey()).get(schema);
-          return new SubjectVersion(e.getKey(), version);
-        }).collect(Collectors.toList());
+          Map<ParsedSchema, Integer> schemaVersionMap = schemaToVersionCache.get(e.getKey());
+          if (schemaVersionMap != null) {
+            int version = schemaVersionMap.get(schema);
+            return Stream.of(new SubjectVersion(e.getKey(), version));
+          } else {
+            return Stream.empty();
+          }
+        })
+        .distinct()
+        .collect(Collectors.toList());
   }
 
   private int getLatestVersion(String subject)
@@ -352,7 +375,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public Schema getByVersion(String subject, int version, boolean lookupDeletedSchema) {
     ParsedSchema schema = null;
-    Map<ParsedSchema, Integer> schemaVersionMap = versionCache.get(subject);
+    Map<ParsedSchema, Integer> schemaVersionMap = schemaToVersionCache.get(subject);
     if (schemaVersionMap == null) {
       throw new RuntimeException(new RestClientException("Subject Not Found", 404, 40401));
     }
@@ -376,7 +399,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       version = maxVersion;
     }
     int id = -1;
-    Map<Integer, ParsedSchema> idSchemaMap = idCache.get(subject);
+    Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
     for (Map.Entry<Integer, ParsedSchema> entry : idSchemaMap.entrySet()) {
       if (schemasEqual(entry.getValue(), schema)) {
         id = entry.getKey();
@@ -388,8 +411,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public SchemaMetadata getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException {
+    return getSchemaMetadata(subject, version, false);
+  }
+
+  @Override
+  public SchemaMetadata getSchemaMetadata(String subject, int version,
+      boolean lookupDeletedSchema) throws IOException, RestClientException {
     ParsedSchema schema = null;
-    Map<ParsedSchema, Integer> schemaVersionMap = versionCache.get(subject);
+    Map<ParsedSchema, Integer> schemaVersionMap = schemaToVersionCache.get(subject);
     if (schemaVersionMap == null) {
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
@@ -402,7 +431,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
     int id = -1;
-    Map<Integer, ParsedSchema> idSchemaMap = idCache.get(subject);
+    Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
     for (Map.Entry<Integer, ParsedSchema> entry : idSchemaMap.entrySet()) {
       if (schemasEqual(entry.getValue(), schema)) {
         id = entry.getKey();
@@ -419,6 +448,35 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public SchemaMetadata getLatestWithMetadata(String subject, Map<String, String> metadata,
+      boolean lookupDeletedSchema) throws IOException, RestClientException {
+    Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
+    SortedMap<Integer, ParsedSchema> reverseMap = new TreeMap<>(Collections.reverseOrder());
+    for (Map.Entry<ParsedSchema, Integer> entry : versions.entrySet()) {
+      reverseMap.put(entry.getValue(), entry.getKey());
+    }
+    for (Map.Entry<Integer, ParsedSchema> entry : reverseMap.entrySet()) {
+      Integer version = entry.getKey();
+      ParsedSchema schema = entry.getValue();
+      Metadata schemaMetadata = schema.metadata();
+      if (schemaMetadata != null) {
+        Map<String, String> props = schemaMetadata.getProperties();
+        if (props != null && props.entrySet().containsAll(metadata.entrySet())) {
+          int id = -1;
+          Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
+          for (Map.Entry<Integer, ParsedSchema> e : idSchemaMap.entrySet()) {
+            if (schemasEqual(e.getValue(), schema)) {
+              id = e.getKey();
+            }
+          }
+          return new SchemaMetadata(new Schema(subject, version, id, schema));
+        }
+      }
+    }
+    throw new RestClientException("Schema Not Found", 404, 40403);
+  }
+
+  @Override
   public int getVersion(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     return getVersion(subject, schema, false);
@@ -430,7 +488,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (normalize) {
       schema = schema.normalize();
     }
-    Map<ParsedSchema, Integer> versions = versionCache.get(subject);
+    Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
     if (versions != null) {
       return versions.get(schema);
     } else {
@@ -451,7 +509,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private List<Integer> allVersions(String subject) {
     ArrayList<Integer> allVersions = new ArrayList<>();
-    Map<ParsedSchema, Integer> versions = versionCache.get(subject);
+    Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
     if (versions != null) {
       allVersions.addAll(versions.values());
       Collections.sort(allVersions);
@@ -462,21 +520,22 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public boolean testCompatibility(String subject, ParsedSchema newSchema) throws IOException,
                                                                             RestClientException {
-    String compatibility = compatibilityCache.get(subject);
-    if (compatibility == null) {
-      compatibility = defaultCompatibility;
+    Config config = configCache.get(subject);
+    if (config == null) {
+      config = defaultConfig;
     }
 
-    CompatibilityLevel compatibilityLevel = CompatibilityLevel.forName(compatibility);
+    CompatibilityLevel compatibilityLevel =
+        CompatibilityLevel.forName(config.getCompatibilityLevel());
     if (compatibilityLevel == null) {
       return false;
     }
 
-    List<ParsedSchema> schemaHistory = new ArrayList<>();
+    List<ParsedSchemaHolder> schemaHistory = new ArrayList<>();
     for (int version : allVersions(subject)) {
       SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
-      schemaHistory.add(getSchemaBySubjectAndIdFromRegistry(subject,
-          schemaMetadata.getId()));
+      schemaHistory.add(new SimpleParsedSchemaHolder(getSchemaBySubjectAndIdFromRegistry(subject,
+          schemaMetadata.getId())));
     }
 
     return newSchema.isCompatible(compatibilityLevel, schemaHistory).isEmpty();
@@ -494,7 +553,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       schema = schema.normalize();
     }
     Map<ParsedSchema, Integer> schemaIdMap =
-        schemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+        schemaToIdCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
 
     Integer schemaId = schemaIdMap.get(schema);
     if (schemaId != null) {
@@ -510,7 +569,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       int retrievedId = getIdFromRegistry(subject, schema, false, -1);
       schemaIdMap.put(schema, retrievedId);
       String context = toQualifiedContext(subject);
-      final Map<Integer, ParsedSchema> idSchemaMap = idCache.computeIfAbsent(
+      final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schema);
       return retrievedId;
@@ -529,10 +588,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String subject,
       boolean isPermanent)
       throws IOException, RestClientException {
-    schemaCache.remove(subject);
-    idCache.remove(subject);
-    Map<ParsedSchema, Integer> versions = versionCache.remove(subject);
-    compatibilityCache.remove(subject);
+    schemaToIdCache.remove(subject);
+    idToSchemaCache.remove(subject);
+    Map<ParsedSchema, Integer> versions = schemaToVersionCache.remove(subject);
+    configCache.remove(subject);
     return versions != null
         ? versions.values().stream().sorted().collect(Collectors.toList())
         : Collections.emptyList();
@@ -551,15 +610,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String version,
       boolean isPermanent)
       throws IOException, RestClientException {
-    Map<ParsedSchema, Integer> schemaVersionMap = versionCache.get(subject);
+    Map<ParsedSchema, Integer> schemaVersionMap = schemaToVersionCache.get(subject);
     if (schemaVersionMap != null) {
       for (Map.Entry<ParsedSchema, Integer> entry : schemaVersionMap.entrySet()) {
         if (entry.getValue().equals(Integer.valueOf(version))) {
           schemaVersionMap.values().remove(entry.getValue());
 
           if (isPermanent) {
-            idCache.get(subject).remove(entry.getValue());
-            schemaCache.get(subject).remove(entry.getKey());
+            idToSchemaCache.get(subject).remove(entry.getValue());
+            schemaToIdCache.get(subject).remove(entry.getKey());
           }
           return Integer.valueOf(version);
         }
@@ -571,47 +630,48 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public List<String> testCompatibilityVerbose(String subject, ParsedSchema newSchema)
       throws IOException, RestClientException {
-    String compatibility = compatibilityCache.get(subject);
-    if (compatibility == null) {
-      compatibility = defaultCompatibility;
+    Config config = configCache.get(subject);
+    if (config == null) {
+      config = defaultConfig;
     }
 
-    CompatibilityLevel compatibilityLevel = CompatibilityLevel.forName(compatibility);
+    CompatibilityLevel compatibilityLevel =
+        CompatibilityLevel.forName(config.getCompatibilityLevel());
     if (compatibilityLevel == null) {
-      return Collections.singletonList("Compatibility level not specified.");
+      return Lists.newArrayList("Compatibility level not specified.");
     }
 
-    List<ParsedSchema> schemaHistory = new ArrayList<>();
+    List<ParsedSchemaHolder> schemaHistory = new ArrayList<>();
     for (int version : allVersions(subject)) {
       SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
-      schemaHistory.add(getSchemaBySubjectAndIdFromRegistry(subject,
-          schemaMetadata.getId()));
+      schemaHistory.add(new SimpleParsedSchemaHolder(getSchemaBySubjectAndIdFromRegistry(subject,
+          schemaMetadata.getId())));
     }
 
     return newSchema.isCompatible(compatibilityLevel, schemaHistory);
   }
 
   @Override
-  public String updateCompatibility(String subject, String compatibility)
+  public Config updateConfig(String subject, Config config)
       throws IOException, RestClientException {
     if (subject == null) {
-      defaultCompatibility = compatibility;
-      return compatibility;
+      defaultConfig = config;
+      return config;
     }
-    compatibilityCache.put(subject, compatibility);
-    return compatibility;
+    configCache.put(subject, config);
+    return config;
   }
 
   @Override
-  public String getCompatibility(String subject) throws IOException, RestClientException {
+  public Config getConfig(String subject) throws IOException, RestClientException {
     if (subject == null) {
-      return defaultCompatibility;
+      return defaultConfig;
     }
-    String compatibility = compatibilityCache.get(subject);
-    if (compatibility == null) {
+    Config config = configCache.get(subject);
+    if (config == null) {
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
-    return compatibility;
+    return config;
   }
 
   @Override
@@ -651,7 +711,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public Collection<String> getAllSubjects() throws IOException, RestClientException {
-    List<String> results = new ArrayList<>(schemaCache.keySet());
+    List<String> results = new ArrayList<>(schemaToIdCache.keySet());
     Collections.sort(results);
     return results;
   }
@@ -666,11 +726,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public synchronized void reset() {
-    schemaCache.clear();
-    schemaIdCache.clear();
-    idCache.clear();
-    versionCache.clear();
-    compatibilityCache.clear();
+    schemaToIdCache.clear();
+    registeredSchemaCache.clear();
+    idToSchemaCache.clear();
+    schemaToVersionCache.clear();
+    configCache.clear();
     modes.clear();
     ids.clear();
   }

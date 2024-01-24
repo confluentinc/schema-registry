@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
 import kafka.cluster.Broker;
@@ -32,12 +33,14 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Locale;
 import java.util.Properties;
+import java.util.List;
+import java.util.LinkedList;
+import java.util.HashSet;
 import java.util.Set;
+import java.util.Map;
+import java.util.Locale;
+import java.util.Optional;
 
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES;
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT;
@@ -46,6 +49,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 public class SchemaRegistryConfig extends RestConfig {
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryConfig.class);
+  public static final String LISTENER_NAME_PREFIX = "listener.name.";
 
   private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
   // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
@@ -152,6 +156,8 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String HOST_NAME_CONFIG = "host.name";
 
+  public static final String HOST_PORT_CONFIG = "host.port";
+
   public static final String SCHEMA_PROVIDERS_CONFIG = "schema.providers";
 
   /**
@@ -178,6 +184,24 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG =
       "schema.canonicalize.on.consume";
+
+  /**
+   * <code>schema.search.default.limit</code>
+   */
+  public static final String SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG = "schema.search.default.limit";
+  public static final int SCHEMA_SEARCH_DEFAULT_LIMIT_DEFAULT = 1000;
+
+  /**
+   * <code>schema.search.max.limit</code>
+   */
+  public static final String SCHEMA_SEARCH_MAX_LIMIT_CONFIG = "schema.search.max.limit";
+  public static final int SCHEMA_SEARCH_MAX_LIMIT_DEFAULT = 1000;
+
+  public static final String METADATA_ENCODER_SECRET_CONFIG = "metadata.encoder.secret";
+  public static final String METADATA_ENCODER_OLD_SECRET_CONFIG = "metadata.encoder.old.secret";
+
+  public static final String METADATA_ENCODER_TOPIC_CONFIG = "metadata.encoder.topic";
+  public static final String METADATA_ENCODER_TOPIC_DEFAULT = "_schema_encoders";
 
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
@@ -235,6 +259,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "inter.instance.protocol";
   public static final String INTER_INSTANCE_HEADERS_WHITELIST_CONFIG =
       "inter.instance.headers.whitelist";
+  public static final String INTER_INSTANCE_LISTENER_NAME_CONFIG =
+      "inter.instance.listener.name";
 
   protected static final String SCHEMAREGISTRY_GROUP_ID_DOC =
       "Use this setting to override the group.id for the Kafka group used when Kafka is used for "
@@ -289,7 +315,10 @@ public class SchemaRegistryConfig extends RestConfig {
           + "Kafka's group management facilities.";
   protected static final String HOST_DOC =
       "The host name. Make sure to set this if running SchemaRegistry "
-      + "with multiple nodes.";
+      + "with multiple nodes. This name is also used in the endpoint for inter instance "
+      + "communication";
+  protected static final String HOST_PORT_DOC =
+      "The host port. This port is used in the endpoint for inter instance communication";
   protected static final String SCHEMA_PROVIDERS_DOC =
       "  A list of classes to use as SchemaProvider. Implementing the interface "
           + "<code>SchemaProvider</code> allows you to add custom schema types to Schema Registry.";
@@ -309,6 +338,19 @@ public class SchemaRegistryConfig extends RestConfig {
       "The expiration in seconds for entries accessed in the cache.";
   protected static final String SCHEMA_CANONICALIZE_ON_CONSUME_DOC =
       "A list of schema types to canonicalize on consume, to be used if canonicalization changes.";
+  protected static final String SCHEMA_SEARCH_DEFAULT_LIMIT_DOC =
+      "The default limit for schema searches.";
+  protected static final String SCHEMA_SEARCH_MAX_LIMIT_DOC =
+      "The max limit for schema searches.";
+  protected static final String METADATA_ENCODER_SECRET_DOC =
+      "The secret used to encrypt and decrypt encoder keysets. "
+      + "Use a random string with high entropy.";
+  protected static final String METADATA_ENCODER_OLD_SECRET_DOC =
+      "The old secret that was used to encrypt and decrypt encoder keysets.  This is only "
+      + "required when the secret is updated. If specified, all keysets are decrypted using this "
+      + "old secret and re-encrypted using the new secret.";
+  protected static final String METADATA_ENCODER_TOPIC_DOC =
+      "The durable single partition topic that acts as the durable log for the encoder keysets.";
   protected static final String LEADER_ELIGIBILITY_DOC =
       "If true, this node can participate in leader election. In a multi-colo setup, turn this off "
       + "for clusters in the follower data center.";
@@ -384,13 +426,17 @@ public class SchemaRegistryConfig extends RestConfig {
       "The protocol used while making calls between the instances of schema registry. The follower "
       + "to leader node calls for writes and deletes will use the specified protocol. The default "
       + "value would be `http`. When `https` is set, `ssl.keystore.` and "
-      + "`ssl.truststore.` configs are used while making the call. The "
+      + "`ssl.truststore.` configs are used while making the call. If this config and "
+      + " inter.instance.listener.name are both set, inter.instance.listener.name takes precedence."
       + "schema.registry.inter.instance.protocol name is deprecated; prefer using "
       + "inter.instance.protocol instead.";
   protected static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
       = "A list of ``http`` headers to forward from follower to leader, "
-      + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
-
+      + "in addition to ``Content-Type``, ``Accept``, ``Authorization``, ``X-Request-ID``.";
+  protected static final String INTER_INSTANCE_LISTENER_NAME_DOC
+      = "Name of listener used for communication between schema registry instances. If this value "
+      + "is unset, the listener used is defined by inter.instance.protocol. If both properties "
+      + "are set at the same time, inter.instance.listener.name takes precedence.";
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
@@ -469,6 +515,9 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
         ConfigDef.Importance.HIGH, HOST_DOC
     )
+    .define(HOST_PORT_CONFIG, ConfigDef.Type.INT, SCHEMAREGISTRY_PORT_DEFAULT,
+        ConfigDef.Importance.MEDIUM, HOST_PORT_DOC
+    )
     .define(SCHEMA_PROVIDERS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, SCHEMA_PROVIDERS_DOC
     )
@@ -486,6 +535,23 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, SCHEMA_CANONICALIZE_ON_CONSUME_DOC
+    )
+    .define(SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
+        SCHEMA_SEARCH_DEFAULT_LIMIT_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_SEARCH_DEFAULT_LIMIT_DOC
+    )
+    .define(SCHEMA_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
+        SCHEMA_SEARCH_MAX_LIMIT_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_SEARCH_MAX_LIMIT_DOC
+    )
+    .define(METADATA_ENCODER_SECRET_CONFIG, ConfigDef.Type.PASSWORD, null,
+        ConfigDef.Importance.HIGH, METADATA_ENCODER_SECRET_DOC
+    )
+    .define(METADATA_ENCODER_OLD_SECRET_CONFIG, ConfigDef.Type.PASSWORD, null,
+        ConfigDef.Importance.HIGH, METADATA_ENCODER_OLD_SECRET_DOC
+    )
+    .define(METADATA_ENCODER_TOPIC_CONFIG, ConfigDef.Type.STRING, METADATA_ENCODER_TOPIC_DEFAULT,
+        ConfigDef.Importance.HIGH, METADATA_ENCODER_TOPIC_DOC
     )
     .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, null,
         ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC
@@ -604,7 +670,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
     .define(INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, HTTP,
-            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC);
+            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
+    .define(INTER_INSTANCE_LISTENER_NAME_CONFIG, ConfigDef.Type.STRING, "",
+      ConfigDef.Importance.LOW, INTER_INSTANCE_LISTENER_NAME_DOC);
+
   }
 
   private final CompatibilityLevel compatibilityType;
@@ -760,8 +829,32 @@ public class SchemaRegistryConfig extends RestConfig {
     return getString(INTER_INSTANCE_PROTOCOL_CONFIG);
   }
 
+  /**
+   * Gets the inter.instance.listener.name setting.
+   */
+  public String interInstanceListenerName() {
+    return getString(INTER_INSTANCE_LISTENER_NAME_CONFIG);
+  }
+
   public List<String> whitelistHeaders() {
     return getList(INTER_INSTANCE_HEADERS_WHITELIST_CONFIG);
+  }
+
+  public Map<String, Object> getOverriddenSslConfigs(NamedURI listener) {
+    String prefix =
+        LISTENER_NAME_PREFIX + Optional.ofNullable(listener.getName()).orElse("https") + ".";
+
+    Map<String, Object> overridden = originals();
+    for (Map.Entry<String, ?> entry:originals().entrySet()) {
+      String key = (String) entry.getKey();
+      if (key.toLowerCase().startsWith(prefix) && key.length() > prefix.length()) {
+        key = key.substring(prefix.length());
+        if (config.names().contains(key)) {
+          overridden.put(key, entry.getValue());
+        }
+      }
+    }
+    return overridden;
   }
 
   public static void main(String[] args) {

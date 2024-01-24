@@ -68,6 +68,31 @@ public final class MetaProto {
 
     java.lang.String getParamsOrThrow(
         java.lang.String key);
+
+    /**
+     * <code>repeated string tags = 3;</code>
+     * @return A list containing the tags.
+     */
+    java.util.List<java.lang.String>
+        getTagsList();
+    /**
+     * <code>repeated string tags = 3;</code>
+     * @return The count of tags.
+     */
+    int getTagsCount();
+    /**
+     * <code>repeated string tags = 3;</code>
+     * @param index The index of the element to return.
+     * @return The tags at the given index.
+     */
+    java.lang.String getTags(int index);
+    /**
+     * <code>repeated string tags = 3;</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the tags at the given index.
+     */
+    com.google.protobuf.ByteString
+        getTagsBytes(int index);
   }
   /**
    * Protobuf type {@code confluent.Meta}
@@ -83,6 +108,7 @@ public final class MetaProto {
     }
     private Meta() {
       doc_ = "";
+      tags_ = com.google.protobuf.LazyStringArrayList.EMPTY;
     }
 
     @java.lang.Override
@@ -96,63 +122,6 @@ public final class MetaProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private Meta(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      int mutable_bitField0_ = 0;
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              doc_ = s;
-              break;
-            }
-            case 18: {
-              if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                params_ = com.google.protobuf.MapField.newMapField(
-                    ParamsDefaultEntryHolder.defaultEntry);
-                mutable_bitField0_ |= 0x00000001;
-              }
-              com.google.protobuf.MapEntry<java.lang.String, java.lang.String>
-              params__ = input.readMessage(
-                  ParamsDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
-              params_.getMutableMap().put(
-                  params__.getKey(), params__.getValue());
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -298,6 +267,41 @@ public final class MetaProto {
       return map.get(key);
     }
 
+    public static final int TAGS_FIELD_NUMBER = 3;
+    private com.google.protobuf.LazyStringList tags_;
+    /**
+     * <code>repeated string tags = 3;</code>
+     * @return A list containing the tags.
+     */
+    public com.google.protobuf.ProtocolStringList
+        getTagsList() {
+      return tags_;
+    }
+    /**
+     * <code>repeated string tags = 3;</code>
+     * @return The count of tags.
+     */
+    public int getTagsCount() {
+      return tags_.size();
+    }
+    /**
+     * <code>repeated string tags = 3;</code>
+     * @param index The index of the element to return.
+     * @return The tags at the given index.
+     */
+    public java.lang.String getTags(int index) {
+      return tags_.get(index);
+    }
+    /**
+     * <code>repeated string tags = 3;</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the tags at the given index.
+     */
+    public com.google.protobuf.ByteString
+        getTagsBytes(int index) {
+      return tags_.getByteString(index);
+    }
+
     private byte memoizedIsInitialized = -1;
     @java.lang.Override
     public final boolean isInitialized() {
@@ -321,7 +325,10 @@ public final class MetaProto {
           internalGetParams(),
           ParamsDefaultEntryHolder.defaultEntry,
           2);
-      unknownFields.writeTo(output);
+      for (int i = 0; i < tags_.size(); i++) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 3, tags_.getRaw(i));
+      }
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -343,7 +350,15 @@ public final class MetaProto {
         size += com.google.protobuf.CodedOutputStream
             .computeMessageSize(2, params__);
       }
-      size += unknownFields.getSerializedSize();
+      {
+        int dataSize = 0;
+        for (int i = 0; i < tags_.size(); i++) {
+          dataSize += computeStringSizeNoTag(tags_.getRaw(i));
+        }
+        size += dataSize;
+        size += 1 * getTagsList().size();
+      }
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -362,7 +377,9 @@ public final class MetaProto {
           .equals(other.getDoc())) return false;
       if (!internalGetParams().equals(
           other.internalGetParams())) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getTagsList()
+          .equals(other.getTagsList())) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -379,7 +396,11 @@ public final class MetaProto {
         hash = (37 * hash) + PARAMS_FIELD_NUMBER;
         hash = (53 * hash) + internalGetParams().hashCode();
       }
-      hash = (29 * hash) + unknownFields.hashCode();
+      if (getTagsCount() > 0) {
+        hash = (37 * hash) + TAGS_FIELD_NUMBER;
+        hash = (53 * hash) + getTagsList().hashCode();
+      }
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -518,18 +539,13 @@ public final class MetaProto {
 
       // Construct using io.confluent.protobuf.MetaProto.Meta.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -537,6 +553,8 @@ public final class MetaProto {
         doc_ = "";
 
         internalGetMutableParams().clear();
+        tags_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+        bitField0_ = (bitField0_ & ~0x00000002);
         return this;
       }
 
@@ -567,6 +585,11 @@ public final class MetaProto {
         result.doc_ = doc_;
         result.params_ = internalGetParams();
         result.params_.makeImmutable();
+        if (((bitField0_ & 0x00000002) != 0)) {
+          tags_ = tags_.getUnmodifiableView();
+          bitField0_ = (bitField0_ & ~0x00000002);
+        }
+        result.tags_ = tags_;
         onBuilt();
         return result;
       }
@@ -621,7 +644,17 @@ public final class MetaProto {
         }
         internalGetMutableParams().mergeFrom(
             other.internalGetParams());
-        this.mergeUnknownFields(other.unknownFields);
+        if (!other.tags_.isEmpty()) {
+          if (tags_.isEmpty()) {
+            tags_ = other.tags_;
+            bitField0_ = (bitField0_ & ~0x00000002);
+          } else {
+            ensureTagsIsMutable();
+            tags_.addAll(other.tags_);
+          }
+          onChanged();
+        }
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -636,17 +669,49 @@ public final class MetaProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        io.confluent.protobuf.MetaProto.Meta parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                doc_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 10
+              case 18: {
+                com.google.protobuf.MapEntry<java.lang.String, java.lang.String>
+                params__ = input.readMessage(
+                    ParamsDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
+                internalGetMutableParams().getMutableMap().put(
+                    params__.getKey(), params__.getValue());
+                break;
+              } // case 18
+              case 26: {
+                java.lang.String s = input.readStringRequireUtf8();
+                ensureTagsIsMutable();
+                tags_.add(s);
+                break;
+              } // case 26
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (io.confluent.protobuf.MetaProto.Meta) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
       private int bitField0_;
@@ -857,6 +922,116 @@ public final class MetaProto {
             .putAll(values);
         return this;
       }
+
+      private com.google.protobuf.LazyStringList tags_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+      private void ensureTagsIsMutable() {
+        if (!((bitField0_ & 0x00000002) != 0)) {
+          tags_ = new com.google.protobuf.LazyStringArrayList(tags_);
+          bitField0_ |= 0x00000002;
+         }
+      }
+      /**
+       * <code>repeated string tags = 3;</code>
+       * @return A list containing the tags.
+       */
+      public com.google.protobuf.ProtocolStringList
+          getTagsList() {
+        return tags_.getUnmodifiableView();
+      }
+      /**
+       * <code>repeated string tags = 3;</code>
+       * @return The count of tags.
+       */
+      public int getTagsCount() {
+        return tags_.size();
+      }
+      /**
+       * <code>repeated string tags = 3;</code>
+       * @param index The index of the element to return.
+       * @return The tags at the given index.
+       */
+      public java.lang.String getTags(int index) {
+        return tags_.get(index);
+      }
+      /**
+       * <code>repeated string tags = 3;</code>
+       * @param index The index of the value to return.
+       * @return The bytes of the tags at the given index.
+       */
+      public com.google.protobuf.ByteString
+          getTagsBytes(int index) {
+        return tags_.getByteString(index);
+      }
+      /**
+       * <code>repeated string tags = 3;</code>
+       * @param index The index to set the value at.
+       * @param value The tags to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTags(
+          int index, java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  ensureTagsIsMutable();
+        tags_.set(index, value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated string tags = 3;</code>
+       * @param value The tags to add.
+       * @return This builder for chaining.
+       */
+      public Builder addTags(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  ensureTagsIsMutable();
+        tags_.add(value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated string tags = 3;</code>
+       * @param values The tags to add.
+       * @return This builder for chaining.
+       */
+      public Builder addAllTags(
+          java.lang.Iterable<java.lang.String> values) {
+        ensureTagsIsMutable();
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, tags_);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated string tags = 3;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTags() {
+        tags_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+        bitField0_ = (bitField0_ & ~0x00000002);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated string tags = 3;</code>
+       * @param value The bytes of the tags to add.
+       * @return This builder for chaining.
+       */
+      public Builder addTagsBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        ensureTagsIsMutable();
+        tags_.add(value);
+        onChanged();
+        return this;
+      }
       @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -890,7 +1065,18 @@ public final class MetaProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new Meta(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -985,20 +1171,20 @@ public final class MetaProto {
   static {
     java.lang.String[] descriptorData = {
       "\n\nmeta.proto\022\tconfluent\032 google/protobuf" +
-      "/descriptor.proto\"o\n\004Meta\022\013\n\003doc\030\001 \001(\t\022+" +
+      "/descriptor.proto\"}\n\004Meta\022\013\n\003doc\030\001 \001(\t\022+" +
       "\n\006params\030\002 \003(\0132\033.confluent.Meta.ParamsEn" +
-      "try\032-\n\013ParamsEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value" +
-      "\030\002 \001(\t:\0028\001:A\n\tfile_meta\022\034.google.protobu" +
-      "f.FileOptions\030\300\010 \001(\0132\017.confluent.Meta:G\n" +
-      "\014message_meta\022\037.google.protobuf.MessageO" +
-      "ptions\030\300\010 \001(\0132\017.confluent.Meta:C\n\nfield_" +
-      "meta\022\035.google.protobuf.FieldOptions\030\300\010 \001" +
-      "(\0132\017.confluent.Meta:A\n\tenum_meta\022\034.googl" +
-      "e.protobuf.EnumOptions\030\300\010 \001(\0132\017.confluen" +
-      "t.Meta:L\n\017enum_value_meta\022!.google.proto" +
-      "buf.EnumValueOptions\030\300\010 \001(\0132\017.confluent." +
-      "MetaB\"\n\025io.confluent.protobufB\tMetaProto" +
-      "b\006proto3"
+      "try\022\014\n\004tags\030\003 \003(\t\032-\n\013ParamsEntry\022\013\n\003key\030" +
+      "\001 \001(\t\022\r\n\005value\030\002 \001(\t:\0028\001:A\n\tfile_meta\022\034." +
+      "google.protobuf.FileOptions\030\300\010 \001(\0132\017.con" +
+      "fluent.Meta:G\n\014message_meta\022\037.google.pro" +
+      "tobuf.MessageOptions\030\300\010 \001(\0132\017.confluent." +
+      "Meta:C\n\nfield_meta\022\035.google.protobuf.Fie" +
+      "ldOptions\030\300\010 \001(\0132\017.confluent.Meta:A\n\tenu" +
+      "m_meta\022\034.google.protobuf.EnumOptions\030\300\010 " +
+      "\001(\0132\017.confluent.Meta:L\n\017enum_value_meta\022" +
+      "!.google.protobuf.EnumValueOptions\030\300\010 \001(" +
+      "\0132\017.confluent.MetaB\"\n\025io.confluent.proto" +
+      "bufB\tMetaProtob\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -1010,7 +1196,7 @@ public final class MetaProto {
     internal_static_confluent_Meta_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_confluent_Meta_descriptor,
-        new java.lang.String[] { "Doc", "Params", });
+        new java.lang.String[] { "Doc", "Params", "Tags", });
     internal_static_confluent_Meta_ParamsEntry_descriptor =
       internal_static_confluent_Meta_descriptor.getNestedTypes().get(0);
     internal_static_confluent_Meta_ParamsEntry_fieldAccessorTable = new

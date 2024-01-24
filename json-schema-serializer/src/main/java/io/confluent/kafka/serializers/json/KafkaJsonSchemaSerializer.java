@@ -19,6 +19,7 @@ package io.confluent.kafka.serializers.json;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.IOException;
@@ -47,6 +48,7 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client) {
     this.schemaRegistry = client;
+    this.ticker = ticker(client);
     this.nodeToSchemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
     this.classToSchemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
@@ -58,6 +60,7 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props,
                                    int cacheCapacity) {
     this.schemaRegistry = client;
+    this.ticker = ticker(client);
     configure(serializerConfig(props));
     this.nodeToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.classToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
@@ -69,8 +72,14 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     configure(new KafkaJsonSchemaSerializerConfig(config));
   }
 
+
   @Override
   public byte[] serialize(String topic, T record) {
+    return serialize(topic, null, record);
+  }
+
+  @Override
+  public byte[] serialize(String topic, Headers headers, T record) {
     if (record == null) {
       return null;
     }
@@ -83,7 +92,8 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
       schema = classToSchemaCache.computeIfAbsent(record.getClass(), k -> getSchema(record));
     }
     Object value = JsonSchemaUtils.getValue(record);
-    return serializeImpl(getSubjectName(topic, isKey, value, schema), (T) value, schema);
+    return serializeImpl(
+        getSubjectName(topic, isKey, value, schema), topic, headers, (T) value, schema);
   }
 
   private JsonSchema getSchema(T record) {
