@@ -47,6 +47,7 @@ blocks:
           commands:
             - . publish-test-results
             - artifact push workflow target/test-results
+            - artifact push workflow target
 
   - name: Release
     dependencies: ["Test"]
@@ -77,7 +78,8 @@ after_pipeline:
         commands:
           - checkout
           - sem-version java 11
-          - emit-sonarqube-data -a test-results
+          - artifact pull workflow target
+          - emit-sonarqube-data --run_only_sonar_scan
       - name: Trigger downstream projects
         commands:
           - >-
