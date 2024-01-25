@@ -17,6 +17,9 @@ package io.confluent.dekregistry.storage;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.google.common.collect.Multimaps;
+import com.google.common.collect.SetMultimap;
+import com.google.common.collect.TreeMultimap;
 import com.google.crypto.tink.Aead;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -119,7 +122,7 @@ public class DekRegistry implements Closeable {
   private final DekRegistryConfig config;
   // visible for testing
   final Cache<EncryptionKeyId, EncryptionKey> keys;
-  private final Map<String, KeyEncryptionKeyId> sharedKeys = new ConcurrentHashMap<>();
+  private final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
   private final Map<DekFormat, Cryptor> cryptors;
   private final Map<String, Lock> tenantToLock = new ConcurrentHashMap<>();
   private final AtomicBoolean initialized = new AtomicBoolean();
@@ -137,6 +140,7 @@ public class DekRegistry implements Closeable {
       this.config = new DekRegistryConfig(schemaRegistry.config().originalProperties());
       this.keys = createCache(new EncryptionKeyIdSerde(), new EncryptionKeySerde(),
           config.topic(), getCacheUpdateHandler(config));
+      this.sharedKeys = Multimaps.synchronizedSetMultimap(TreeMultimap.create());
       this.cryptors = new ConcurrentHashMap<>();
     } catch (RestConfigException e) {
       throw new IllegalArgumentException("Could not instantiate DekRegistry", e);
@@ -218,7 +222,7 @@ public class DekRegistry implements Closeable {
     return config;
   }
 
-  protected Map<String, KeyEncryptionKeyId> getSharedKeys() {
+  protected SetMultimap<String, KeyEncryptionKeyId> getSharedKeys() {
     return sharedKeys;
   }
 
