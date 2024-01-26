@@ -39,6 +39,10 @@
             <artifactId>kafka-clients</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.glassfish.jersey.ext</groupId>
             <artifactId>jersey-bean-validation</artifactId>
             <exclusions>
