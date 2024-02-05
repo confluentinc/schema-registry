@@ -186,8 +186,8 @@ public class ContextFilterTest {
   public void testKekPartOfUri() {
     String path = "/contexts/.test-ctx/dek-registry/v1/keks/test-kek";
     Assert.assertEquals(
-        "Dek must be prefixed",
-        "/dek-registry/v1/keks/:.test-ctx:test-kek/",
+        "Kek must not be prefixed",
+        "/dek-registry/v1/keks/test-kek/",
         contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
@@ -197,7 +197,7 @@ public class ContextFilterTest {
     String path = "/contexts/.test-ctx/dek-registry/v1/keks/test-kek/deks/test-subject";
     Assert.assertEquals(
         "Dek must be prefixed",
-        "/dek-registry/v1/keks/:.test-ctx:test-kek/deks/:.test-ctx:test-subject/",
+        "/dek-registry/v1/keks/test-kek/deks/:.test-ctx:test-subject/",
         contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
