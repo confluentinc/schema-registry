@@ -571,7 +571,7 @@ public class AvroSchema implements ParsedSchema {
         for (Schema.Field f : schema.getFields()) {
           String fullName = schema.getFullName() + "." + f.name();
           try (FieldContext fc = ctx.enterField(
-              ctx, message, fullName, f.name(), getType(f.schema()), getInlineTags(f))) {
+              message, fullName, f.name(), getType(f.schema()), getInlineTags(f))) {
             Object value = data.getField(message, f.name(), f.pos());
             if (value instanceof Utf8) {
               value = value.toString();
