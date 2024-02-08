@@ -175,10 +175,10 @@ public class RuleContext {
     return fieldContexts.peekLast();
   }
 
-  public FieldContext enterField(RuleContext ctx, Object containingMessage,
+  public FieldContext enterField(Object containingMessage,
       String fullName, String name, RuleContext.Type type, Set<String> tags) {
     Set<String> allTags = new HashSet<>(tags);
-    allTags.addAll(ctx.getTags(fullName));
+    allTags.addAll(getTags(fullName));
     return new FieldContext(containingMessage, fullName, name, type, allTags);
   }
 
