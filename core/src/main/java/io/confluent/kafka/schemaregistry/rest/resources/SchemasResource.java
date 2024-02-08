@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.FindSchemaIdRequest;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -33,21 +34,23 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
-import java.util.function.Predicate;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.PathParam;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
+import javax.validation.constraints.NotNull;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Path("/schemas")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -64,6 +67,48 @@ public class SchemasResource {
 
   public SchemasResource(KafkaSchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
+  }
+
+  @POST
+  @Path("/ids")
+  @DocumentedName("findSchemaId")
+  @Operation(summary = "Find global schema id",
+      description = "Get the schemas id matching the specified schema.",
+      responses = {
+          @ApiResponse(responseCode = "200",
+              description = "Returns the global schema id.", content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+              implementation = Integer.class))),
+          @ApiResponse(responseCode = "404",
+              description = "Not Found. Error code 40403 indicates schema not found.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+              description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("schemas.find-schema-id")
+  public Integer findSchemaId(
+      @Parameter(description = "Schema", required = true)
+      @NotNull FindSchemaIdRequest request
+  ) {
+    Optional<Integer> id;
+    String errorMessage = "Error while finding schema";
+    Schema schema = new Schema(request);
+
+    try {
+      id = schemaRegistry.findSchemaId(schema);
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    }
+
+    if (!id.isPresent()) {
+      throw Errors.schemaNotFoundException();
+    }
+
+    return id.get();
   }
 
   @GET

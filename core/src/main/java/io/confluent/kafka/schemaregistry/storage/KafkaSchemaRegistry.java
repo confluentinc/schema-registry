@@ -93,6 +93,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -1667,6 +1668,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
       return extractUniqueSubjects(allVersions, filter);
     }
+  }
+
+  public Optional<Integer> findSchemaId(Schema schema)
+      throws SchemaRegistryStoreException {
+
+    SchemaIdAndSubjects schemaIdAndSubjects;
+
+    try {
+      schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema", e);
+    }
+
+    return schemaIdAndSubjects!= null ? Optional.of(schemaIdAndSubjects.getSchemaId()) : Optional.empty();
   }
 
   public Set<String> listSubjectsForId(int id, String subject) throws SchemaRegistryException {

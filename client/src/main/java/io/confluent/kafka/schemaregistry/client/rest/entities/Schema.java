@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.FindSchemaIdRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.nio.charset.StandardCharsets;
@@ -161,6 +162,12 @@ public class Schema implements Comparable<Schema> {
         ? request.getReferences() : Collections.emptyList();
     this.metadata = request.getMetadata();
     this.ruleSet = request.getRuleSet();
+    this.schema = request.getSchema();
+  }
+
+  public Schema(FindSchemaIdRequest request) {
+    this.schemaType = request.getSchemaType() != null
+        ? request.getSchemaType() : AvroSchema.TYPE;
     this.schema = request.getSchema();
   }
 
