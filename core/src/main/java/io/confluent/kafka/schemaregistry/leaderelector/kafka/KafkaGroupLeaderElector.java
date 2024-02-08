@@ -70,6 +70,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
   private final Metrics metrics;
   private final Metadata metadata;
   private final long retryBackoffMs;
+  private final boolean stickyLeaderElection;
   private final SchemaRegistryCoordinator coordinator;
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -88,6 +89,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
 
       Map<String, String> metricsTags = new LinkedHashMap<>();
       metricsTags.put("client-id", clientId);
+      this.stickyLeaderElection = config.getBoolean(SchemaRegistryConfig.LEADER_ELECTION_STICKY);
       long sampleWindowMs = config.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG);
       MetricConfig metricConfig = new MetricConfig()
           .samples(config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
@@ -169,7 +171,8 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           retryBackoffMs,
           myIdentity,
           this,
-          schemaRegistry.getMetricsContainer().getNodeCountMetric()
+          schemaRegistry.getMetricsContainer().getNodeCountMetric(),
+          stickyLeaderElection
       );
 
       AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -265,24 +268,32 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
     }
   }
 
+  /**
+   * This is a no-op during leader election if stickyLeaderElection is enabled as we're not
+   * revoking previous leader assignment. The expectation is that the sync group response will
+   * notify the group members if there's a leadership change.
+   */
   @Override
   public void onRevoked() {
     log.info("Rebalance started");
-    try {
-      schemaRegistry.setLeader(null);
-    } catch (SchemaRegistryException e) {
-      // This shouldn't be possible with this implementation. The exceptions from setLeader come
-      // from it calling nextRange in this class, but this implementation doesn't require doing
-      // any IO, so the errors that can occur in the ZK implementation should not be possible here.
-      log.error(
-          "Error when updating leader, we will not be able to forward requests to the leader",
-          e
-      );
+    if (!stickyLeaderElection) {
+      try {
+        schemaRegistry.setLeader(null);
+      } catch (SchemaRegistryException e) {
+        // This shouldn't be possible with this implementation. The exceptions from setLeader come
+        // from it calling nextRange in this class, but this implementation doesn't require doing
+        // any IO, so the errors that can occur in the ZK implementation should not be possible
+        // here.
+        log.error(
+                "Error when updating leader, we will not be able to forward requests to the leader",
+                e
+        );
+      }
     }
   }
 
   private void stop(boolean swallowException) {
-    log.trace("Stopping the schema registry group member.");
+    log.info("Stopping the schema registry group member.");
 
     // Interrupt any outstanding poll calls
     if (client != null) {
@@ -316,7 +327,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           firstException.get()
       );
     } else {
-      log.debug("The schema registry group member has stopped.");
+      log.info("The schema registry group member has stopped.");
     }
   }
 
