@@ -2321,7 +2321,7 @@ public class ProtobufSchema implements ParsedSchema {
       for (FieldDescriptor fd : copy.getDescriptorForType().getFields()) {
         FieldDescriptor schemaFd = desc.findFieldByName(fd.getName());
         try (FieldContext ignored = ctx.enterField(
-            ctx, message, fd.getFullName(), fd.getName(), getType(fd),
+            message, fd.getFullName(), fd.getName(), getType(fd),
             getInlineTags(schemaFd)) // use schema-based fd which has the tags
         ) {
           Object value = copy.getField(fd); // we can't use the schema-based fd
