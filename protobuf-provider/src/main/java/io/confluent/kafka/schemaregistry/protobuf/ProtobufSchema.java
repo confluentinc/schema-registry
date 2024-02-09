@@ -457,6 +457,7 @@ public class ProtobufSchema implements ParsedSchema {
             .map(e -> toOneof(e.getKey(), e.getValue()))
             .collect(Collectors.toList()),
         Collections.emptyList(),
+        Collections.emptyList(),
         Collections.emptyList()
     );
   }
@@ -494,7 +495,7 @@ public class ProtobufSchema implements ParsedSchema {
     log.trace("*** oneof name: {}", name);
     // NOTE: skip groups
     return new OneOfElement(name, "", fields.build(),
-        Collections.emptyList(), Collections.emptyList());
+        Collections.emptyList(), Collections.emptyList(), DEFAULT_LOCATION);
   }
 
   private static EnumElement toEnum(EnumDescriptorProto ed) {
@@ -538,7 +539,8 @@ public class ProtobufSchema implements ParsedSchema {
       }
     }
     // NOTE: skip some options
-    return new EnumElement(DEFAULT_LOCATION, name, "", options.build(), constants.build());
+    return new EnumElement(DEFAULT_LOCATION, name, "", options.build(), constants.build(),
+            Collections.emptyList());
   }
 
   private static FieldElement toField(
