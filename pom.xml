@@ -141,10 +141,6 @@
                         <groupId>org.jetbrains.kotlin</groupId>
                         <artifactId>kotlin-stdlib</artifactId>
                     </exclusion>
-<!--                    <exclusion>-->
-<!--                        <groupId>com.squareup.okio</groupId>-->
-<!--                        <artifactId>okio</artifactId>-->
-<!--                    </exclusion>-->
                 </exclusions>
             </dependency>
             <dependency>
