@@ -443,6 +443,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return kafkaStore.initialized() && initialized.get();
   }
 
+  public boolean healthy() {
+    return initialized();
+  }
+
   /**
    * Add a leader change listener.
    *
