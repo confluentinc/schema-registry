@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_ADDED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_MOVED_TO_EXISTING_ONEOF;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_REMOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.MULTIPLE_FIELDS_MOVED_TO_ONEOF;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_ADDED;
@@ -53,27 +54,39 @@ public class MessageSchemaDiff {
 
         Map<String, OneOfElement> originalOneOfs = new HashMap<>();
         Map<String, OneOfElement> updateOneOfs = new HashMap<>();
+
+        Map<Integer, FieldElement> originalOneOfsByTag = new HashMap<>();
         for (OneOfElement oneOf : original.getOneOfs()) {
           originalOneOfs.put(oneOf.getName(), oneOf);
-        }
-        for (OneOfElement oneOf : update.getOneOfs()) {
-          updateOneOfs.put(oneOf.getName(), oneOf);
+
+          for (FieldElement oneOfField : oneOf.getFields()) {
+            originalOneOfsByTag.put(oneOfField.getTag(), oneOfField);
+          }
         }
 
-        // First check that each oneOf in the updated message maps to
-        // at most one field in the original message
         for (OneOfElement oneOf : update.getOneOfs()) {
+          updateOneOfs.put(oneOf.getName(), oneOf);
+
           try (Context.PathScope pathScope = ctx.enterPath(oneOf.getName())) {
-            int numMatchingOriginal = 0;
+            int numMoved = 0;
+            int numExisting = 0;
             for (FieldElement oneOfField : oneOf.getFields()) {
               // Remove the field so that a FIELD_REMOVED difference is not generated
               FieldElement originalField = originalByTag.remove(oneOfField.getTag());
               if (originalField != null) {
-                numMatchingOriginal++;
+                numMoved++;
+              } else if (originalOneOfsByTag.get(oneOfField.getTag()) != null) {
+                numExisting++;
               }
             }
-            if (numMatchingOriginal > 1) {
+            // Check that each oneOf in the updated message maps to
+            // at most one field in the original message
+            if (numMoved > 1) {
               ctx.addDifference(MULTIPLE_FIELDS_MOVED_TO_ONEOF);
+            // Check that if a single field is moved that each oneOf field
+            // did not exist in a previous oneOf
+            } else if (numMoved == 1 && numExisting > 0) {
+              ctx.addDifference(FIELD_MOVED_TO_EXISTING_ONEOF);
             }
           }
         }

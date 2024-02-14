@@ -195,6 +195,36 @@
     "compatible": false
   },
   {
+    "description": "Detect compatible move field to oneof",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    string test_string2 = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    oneof new_oneof {\n    string test_string2 = 2;\n}\n}",
+    "changes": [
+      "ONEOF_ADDED #/TestMessage/new_oneof"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible move field to oneof",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    oneof new_oneof {\n    string test_string2 = 2;\n    string test_string3 = 3;\n}\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    oneof new_oneof {\n    string test_string = 1;\n    string test_string2 = 2;\n    string test_string3 = 3;\n}\n}",
+    "changes": [
+      "FIELD_MOVED_TO_EXISTING_ONEOF #/TestMessage/new_oneof",
+      "ONEOF_FIELD_ADDED #/TestMessage/new_oneof/1"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect incompatible move field to renamed oneof",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    oneof new_oneof {\n    string test_string2 = 2;\n    string test_string3 = 3;\n}\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    oneof new_oneof_2 {\n    string test_string = 1;\n    string test_string2 = 2;\n    string test_string3 = 3;\n}\n}",
+    "changes": [
+      "FIELD_MOVED_TO_EXISTING_ONEOF #/TestMessage/new_oneof_2",
+      "ONEOF_ADDED #/TestMessage/new_oneof_2",
+      "ONEOF_REMOVED #/TestMessage/new_oneof"
+    ],
+    "compatible": false
+  },
+  {
     "description": "Detect incompatible field type change",
     "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    int32 test_int = 2;\n}",
     "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    TestMessage2 test_int = 2;\n}\nmessage TestMessage2 {\n    string s1 = 1;\n}",
