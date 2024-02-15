@@ -80,7 +80,7 @@
         <kotlin.version>1.9.10</kotlin.version>
         <json-schema.version>1.14.3</json-schema.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
-        <wire.version>4.9.0</wire.version>
+        <wire.version>4.9.7</wire.version>
         <swagger.version>1.6.12</swagger.version>
         <io.confluent.schema-registry.version>6.2.15-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
