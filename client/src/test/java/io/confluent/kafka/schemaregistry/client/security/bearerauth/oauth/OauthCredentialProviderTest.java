@@ -25,6 +25,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Assert;
 import org.junit.Before;
@@ -71,7 +73,8 @@ public class OauthCredentialProviderTest {
         SchemaRegistryClientConfig.BEARER_AUTH_SCOPE_CLAIM_NAME,
         SchemaRegistryClientConfig.BEARER_AUTH_SUB_CLAIM_NAME,
         SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID,
-        SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER);
+        SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER,
+        "schema.registry.ssl.truststore.location");
     for (String missingKey : CONFIG_MAP.keySet()) {
       // ignoring optional keys
       if (optionalConfigs.contains(missingKey)) {
@@ -86,6 +89,21 @@ public class OauthCredentialProviderTest {
           });
 
     }
+  }
+
+  @Test
+  public void testClientSslConfigurations() throws MalformedURLException {
+
+    Map<String, Object> CONFIG_WITH_SSL = new HashMap<>(CONFIG_MAP);
+    CONFIG_WITH_SSL.put("ssl.truststore.location", "truststore.jks");
+    CONFIG_WITH_SSL.put("ssl.truststore.password", "password");
+
+    // SSL configurations should get loaded if present in configuration
+    Assert.assertThrows("Message", KafkaException.class,
+        () -> {
+          oAuthCredentialProvider.configure(CONFIG_WITH_SSL);
+        });
+
   }
 
   private Map<String, Object> getInsufficentConfigs(String missingConfig) {

@@ -16,9 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
-import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
+
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 
 public class SchemaRegistryClientConfig {
@@ -75,6 +78,7 @@ public class SchemaRegistryClientConfig {
   public static final String BEARER_AUTH_CUSTOM_PROVIDER_CLASS =
       "bearer.auth.custom.provider.class";
 
+  public static final String SSL_PREFIX = "ssl.";
 
   public static void withClientSslSupport(ConfigDef configDef, String namespace) {
     org.apache.kafka.common.config.ConfigDef sslConfigDef = new org.apache.kafka.common.config
@@ -164,6 +168,18 @@ public class SchemaRegistryClientConfig {
     return configs != null && configs.containsKey(BEARER_AUTH_SUB_CLAIM_NAME)
         ? (String) configs.get(BEARER_AUTH_SUB_CLAIM_NAME)
         : BEARER_AUTH_SUB_CLAIM_NAME_DEFAULT;
+  }
+
+  public static Map<String, Object> getClientSslConfig(Map<String, ?> configs) {
+    return configs.entrySet().stream()
+        .filter(e -> e.getKey().startsWith(SSL_PREFIX))
+        .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
+  }
+
+  private static void addIfNotNull(Map<String, Object> map, String key, Object value) {
+    if (Objects.nonNull(value)) {
+      map.put(key, value);
+    }
   }
 
 }
