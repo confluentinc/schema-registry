@@ -16,9 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
-import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 
 
 public class SchemaRegistryClientConfig {
@@ -74,6 +78,13 @@ public class SchemaRegistryClientConfig {
   //Custom bearer Auth related
   public static final String BEARER_AUTH_CUSTOM_PROVIDER_CLASS =
       "bearer.auth.custom.provider.class";
+
+  // Client ssl related configurations
+  public static final String SSL_TRUSTSTORE_LOCATION_CONFIG = "ssl.truststore.location";
+  public static final String SSL_TRUSTSTORE_PASSWORD_CONFIG = "ssl.truststore.password";
+  public static final String SSL_TRUSTSTORE_TYPE_CONFIG = "ssl.truststore.type";
+  public static final String SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =
+      "ssl.endpoint.identification.algorithm";
 
 
   public static void withClientSslSupport(ConfigDef configDef, String namespace) {
@@ -164,6 +175,28 @@ public class SchemaRegistryClientConfig {
     return configs != null && configs.containsKey(BEARER_AUTH_SUB_CLAIM_NAME)
         ? (String) configs.get(BEARER_AUTH_SUB_CLAIM_NAME)
         : BEARER_AUTH_SUB_CLAIM_NAME_DEFAULT;
+  }
+
+  public static Map<String, Object> getClientSslConfig(Map<String, ?> configs) {
+    Map<String, Object> map = new HashMap<>();
+
+    if (configs != null) {
+      addIfNotNull(map, SSL_TRUSTSTORE_LOCATION_CONFIG,
+          configs.get(SSL_TRUSTSTORE_LOCATION_CONFIG));
+      addIfNotNull(map, SSL_TRUSTSTORE_PASSWORD_CONFIG,
+          configs.get(SSL_TRUSTSTORE_PASSWORD_CONFIG));
+      addIfNotNull(map, SSL_TRUSTSTORE_TYPE_CONFIG,
+          configs.get(SSL_TRUSTSTORE_TYPE_CONFIG));
+      addIfNotNull(map, SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
+          configs.get(SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG));
+    }
+    return Collections.unmodifiableMap(map);
+  }
+
+  private static void addIfNotNull(Map<String, Object> map, String key, Object value) {
+    if (Objects.nonNull(value)) {
+      map.put(key, value);
+    }
   }
 
 }
