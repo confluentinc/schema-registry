@@ -111,7 +111,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
             brokerId, zkConnect, false, false, TestUtils.RandomPort(), saslInterBrokerSecurityProtocol,
             trustStoreFileOption, EMPTY_SASL_PROPERTIES, false, true, TestUtils.RandomPort(),
             false, TestUtils.RandomPort(),
-            false, TestUtils.RandomPort(), Option.<String>empty(), 1, false, 1, (short) 1);
+            false, TestUtils.RandomPort(), Option.<String>empty(), 1, false, 1, (short) 1, false);
 
     injectProperties(props);
     props.setProperty("zookeeper.connection.timeout.ms", "30000");
