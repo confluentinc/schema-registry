@@ -87,7 +87,7 @@
         <podam.version>7.2.11.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
-        <kotlin.version>1.6.0</kotlin.version>
+        <kotlin.version>1.9.10</kotlin.version>
         <antlr.version>4.13.1</antlr.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.3.12</cel-version>
@@ -102,7 +102,7 @@
         <tink.version>1.12.0</tink.version>
         <tink.aws.kms.version>1.9.1</tink.aws.kms.version>
         <tink.gcp.kms.version>1.9.0</tink.gcp.kms.version>
-        <wire.version>4.8.0</wire.version>
+        <wire.version>4.9.7</wire.version>
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.4.5-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
