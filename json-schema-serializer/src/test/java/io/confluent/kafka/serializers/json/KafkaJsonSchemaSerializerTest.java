@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -68,6 +69,7 @@ public class KafkaJsonSchemaSerializerTest {
     latestConfig.put(KafkaJsonSchemaSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     latestConfig.put(KafkaJsonSchemaSerializerConfig.USE_LATEST_VERSION, true);
     latestConfig.put(KafkaJsonSchemaSerializerConfig.LATEST_COMPATIBILITY_STRICT, false);
+    latestConfig.put(KafkaJsonSchemaSerializerConfig.DEFAULT_PROPERTY_INCLUSION, "NON_NULL");
     latestSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(latestConfig));
     topic = "test";
   }
@@ -102,6 +104,20 @@ public class KafkaJsonSchemaSerializerTest {
 
     bytes = serializer.serialize(topic, "abc");
     assertEquals("abc", deserializer.deserialize(topic, bytes));
+  }
+
+  @Test(expected = InvalidConfigurationException.class)
+  public void testKafkaJsonSchemaSerializerWithoutConfigure() {
+    KafkaJsonSchemaSerializer unconfiguredSerializer = new KafkaJsonSchemaSerializer();
+    User user = new User();
+    unconfiguredSerializer.serialize("foo", user);
+  }
+
+  @Test(expected = InvalidConfigurationException.class)
+  public void testKafkaJsonSchemaDeserializerWithoutConfigure() {
+    KafkaJsonSchemaDeserializer unconfiguredSerializer = new KafkaJsonSchemaDeserializer();
+    byte[] randomBytes = "foo".getBytes();
+    unconfiguredSerializer.deserialize("foo", randomBytes);
   }
 
   @Test
@@ -142,6 +158,17 @@ public class KafkaJsonSchemaSerializerTest {
     User user = new User("john", "doe", (short) -1, "jack", LocalDate.parse("2018-12-27"));
 
     byte[] bytes = serializer.serialize("foo", user);
+    Object deserialized = getDeserializer(User.class).deserialize(topic, bytes);
+    assertEquals(user, deserialized);
+  }
+
+  @Test
+  public void serializeUserIgnoreNulls() throws Exception {
+    User user = new User("john", "doe", (short) 50, "jack", null);
+    JsonSchema userSchema = JsonSchemaUtils.getSchema(user, null, false, null);
+    schemaRegistry.register(topic + "-value", userSchema);
+
+    byte[] bytes = latestSerializer.serialize(topic, user);
     Object deserialized = getDeserializer(User.class).deserialize(topic, bytes);
     assertEquals(user, deserialized);
   }

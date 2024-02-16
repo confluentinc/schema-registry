@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.serializers.json;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
 import io.confluent.kafka.schemaregistry.utils.EnumRecommender;
 import java.util.Locale;
@@ -51,6 +52,10 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
   public static final String ONEOF_FOR_NULLABLES_DOC = "Whether JSON schemas derived from objects "
       + "will use oneOf for nullable fields";
 
+  public static final String DEFAULT_PROPERTY_INCLUSION = "json.default.property.inclusion";
+  public static final String DEFAULT_PROPERTY_INCLUSION_DOC = "Controls the inclusion of "
+      + "properties during serialization";
+
   public static final String JSON_INDENT_OUTPUT = "json.indent.output";
   public static final boolean JSON_INDENT_OUTPUT_DEFAULT = false;
   public static final String JSON_INDENT_OUTPUT_DOC = "Whether JSON output should be indented "
@@ -85,6 +90,12 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
         ONEOF_FOR_NULLABLES_DEFAULT,
         ConfigDef.Importance.MEDIUM,
         ONEOF_FOR_NULLABLES_DOC
+    ).define(DEFAULT_PROPERTY_INCLUSION,
+        ConfigDef.Type.STRING,
+        null,
+        EnumRecommender.in(JsonInclude.Include.values()),
+        ConfigDef.Importance.MEDIUM,
+        DEFAULT_PROPERTY_INCLUSION_DOC
     ).define(JSON_INDENT_OUTPUT,
         ConfigDef.Type.BOOLEAN,
         JSON_INDENT_OUTPUT_DEFAULT,

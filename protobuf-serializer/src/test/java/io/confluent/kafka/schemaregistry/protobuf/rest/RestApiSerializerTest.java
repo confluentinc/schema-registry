@@ -15,12 +15,26 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.rest;
 
+import com.acme.glup.CommonProto.Consent;
 import com.acme.glup.ExampleProtoAcme;
 import com.acme.glup.MetadataProto;
+import com.acme.glup.MetadataProto.DataSet;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
+import io.confluent.connect.protobuf.test.DescriptorRef;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.subject.DefaultReferenceSubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -119,6 +133,14 @@ public class RestApiSerializerTest extends ClusterTestHarness {
       .setUid("myuid")
       .addControlMessage(WATERMARK_MESSAGE)
       .build();
+  private static final Consent CONSENT_MESSAGE =
+      Consent.newBuilder()
+          .setIdentificationForbidden(true)
+          .build();
+  private static final DataSet DATA_SET_MESSAGE =
+      DataSet.newBuilder()
+          .setId("1")
+          .build();
   private static final EnumReference ENUM_REF =
       EnumReference.newBuilder().setEnumRoot(EnumRoot.GOODBYE).build();
 
@@ -139,6 +161,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    serializerConfig.put(KafkaProtobufSerializerConfig.SKIP_KNOWN_TYPES_CONFIG, false);
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
         10,
         Collections.singletonList(new ProtobufSchemaProvider()),
@@ -184,10 +207,72 @@ public class RestApiSerializerTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testDependencyPreregister() throws Exception {
+    Properties serializerConfig = new Properties();
+    serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.REFERENCE_LOOKUP_ONLY_CONFIG, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    serializerConfig.put(KafkaProtobufSerializerConfig.SKIP_KNOWN_TYPES_CONFIG, true);
+    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
+        10,
+        Collections.singletonList(new ProtobufSchemaProvider()),
+        Collections.emptyMap(),
+        Collections.emptyMap()
+    );
+    KafkaProtobufSerializer protobufSerializer = new KafkaProtobufSerializer(schemaRegistry,
+        new HashMap(serializerConfig)
+    );
+    serializerConfig.put(AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY, TestReferenceNameStrategy.class);
+    KafkaProtobufSerializer referenceSerializer = new KafkaProtobufSerializer(schemaRegistry,
+        new HashMap(serializerConfig)
+    );
+
+    Properties deserializerConfig = new Properties();
+    deserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus"
+    );
+    KafkaProtobufDeserializer dataSetMessageDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(deserializerConfig),
+        DataSet.class
+    );
+    KafkaProtobufDeserializer consentMessageDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(deserializerConfig),
+        Consent.class
+    );
+
+    byte[] bytes;
+
+    // first manually register the reference
+    bytes = referenceSerializer.serialize(topic, DATA_SET_MESSAGE);
+    assertEquals(DATA_SET_MESSAGE, dataSetMessageDeserializer.deserialize(topic, bytes));
+
+    // specific -> specific
+    bytes = protobufSerializer.serialize(topic, CONSENT_MESSAGE);
+    assertEquals(CONSENT_MESSAGE, consentMessageDeserializer.deserialize(topic, bytes));
+  }
+
+  public static class TestReferenceNameStrategy implements SubjectNameStrategy {
+    public void configure(Map<String, ?> configs) {
+    }
+
+    public String subjectName(String topic, boolean isKey, ParsedSchema schema) {
+      if (schema.name().endsWith("DataSet")) {
+        return "metadata_proto.proto";
+      } else {
+        throw new IllegalArgumentException();
+      }
+    }
+  }
+
+  @Test
   public void testDependency2() throws Exception {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    serializerConfig.put(KafkaProtobufSerializerConfig.SKIP_KNOWN_TYPES_CONFIG, false);
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
         10,
         Collections.singletonList(new ProtobufSchemaProvider()),
@@ -228,6 +313,128 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     assertEquals(ProtobufSchemaUtils.getSchema(CLICK_CAS_MESSAGE).canonicalString(),
         schema.canonicalString()
     );
+  }
+
+  @Test
+  public void testWellKnownType() throws Exception {
+    String schemaString = getSchemaWithWellKnownType();
+    String subject = "wellknown";
+    registerAndVerifySchema(restApp.restClient, schemaString, Collections.emptyList(), 1, subject);
+
+    DescriptorRef.DescriptorMessage descMessage =
+        DescriptorRef.DescriptorMessage.newBuilder()
+            .setKey(123)
+            .setValue(DescriptorRef.DescriptorMessage.getDescriptor().toProto())
+            .build();
+
+    Properties serializerConfig = new Properties();
+    serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
+        10,
+        Collections.singletonList(new ProtobufSchemaProvider()),
+        Collections.emptyMap(),
+        Collections.emptyMap()
+    );
+    KafkaProtobufSerializer protobufSerializer = new KafkaProtobufSerializer(schemaRegistry,
+        new HashMap(serializerConfig)
+    );
+
+    KafkaProtobufDeserializer protobufDeserializer = new KafkaProtobufDeserializer(schemaRegistry);
+
+    Properties deserializerConfig = new Properties();
+    deserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus"
+    );
+    KafkaProtobufDeserializer descMessageDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(deserializerConfig),
+        DescriptorRef.DescriptorMessage.class
+    );
+
+    byte[] bytes;
+
+    // specific -> specific
+    bytes = protobufSerializer.serialize(topic, descMessage);
+    assertEquals(descMessage, descMessageDeserializer.deserialize(topic, bytes));
+
+    // specific -> dynamic
+    bytes = protobufSerializer.serialize(topic, descMessage);
+    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals(descMessage.getKey(), getField(message, "key"));
+
+    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId(subject, 1);
+    assertEquals(ProtobufSchemaUtils.getSchema(descMessage).canonicalString(),
+        schema.canonicalString()
+    );
+
+    // additional resolve dependencies check
+    ReferenceSubjectNameStrategy strategy = new DefaultReferenceSubjectNameStrategy();
+    ProtobufSchema resolvedSchema = ProtobufSchemaUtils.getSchema(descMessage);
+    resolvedSchema = KafkaProtobufSerializer.resolveDependencies(
+        schemaRegistry, false, false, true, null, true, strategy, subject, false, resolvedSchema);
+    assertEquals(schema, resolvedSchema);
+  }
+
+  @Test(expected = RestClientException.class)
+  public void testInvalidSchema() throws Exception {
+    String schemaString = getInvalidSchema();
+    String subject = "invalid";
+    registerAndVerifySchema(
+        restApp.restClient, schemaString, Collections.emptyList(), 1, subject);
+  }
+
+  private static String getInvalidSchema() {
+    String schema = "syntax = \"proto3\";\n"
+        + "\n"
+        + "option java_outer_classname = \"InvalidSchema\";\n"
+        + "option java_package = \"io.confluent.connect.protobuf.test\";\n"
+        + "\n"
+        + "message MyMessage {\n"
+        + "  int32 key = 1;\n"
+        + "  .org.unknown.BadMessage value = 2;\n"
+        + "}";
+    return schema;
+  }
+
+  public static void registerAndVerifySchema(
+      RestService restService,
+      String schemaString,
+      List<SchemaReference> references,
+      int expectedId,
+      String subject
+  ) throws IOException, RestClientException {
+    int registeredId = restService.registerSchema(schemaString,
+        ProtobufSchema.TYPE,
+        references,
+        subject
+    );
+    assertEquals(
+        "Registering a new schema should succeed",
+        (long) expectedId,
+        (long) registeredId
+    );
+    assertEquals(
+        "Registered schema should be found",
+        schemaString.trim(),
+        restService.getId(expectedId).getSchemaString().trim()
+    );
+  }
+
+  private static String getSchemaWithWellKnownType() {
+    String schema = "syntax = \"proto3\";\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.connect.protobuf.test\";\n"
+        + "option java_outer_classname = \"DescriptorRef\";\n"
+        + "\n"
+        + "message DescriptorMessage {\n"
+        + "  int32 key = 1;\n"
+        + "  .google.protobuf.DescriptorProto value = 2;\n"
+        + "}";
+    return schema;
   }
 
   @Test

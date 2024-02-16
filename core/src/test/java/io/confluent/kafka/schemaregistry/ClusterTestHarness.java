@@ -32,7 +32,6 @@ import java.util.Properties;
 import java.util.Vector;
 
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.utils.ZkUtils;
 
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
@@ -88,10 +87,6 @@ public abstract class ClusterTestHarness {
   // ZK Config
   protected EmbeddedZookeeper zookeeper;
   protected String zkConnect;
-  protected ZkUtils zkUtils;
-  protected int zkConnectionTimeout = 30000; // a larger connection timeout is required for SASL tests
-                                             // because SASL connections tend to take longer.
-  protected int zkSessionTimeout = 6000;
 
   // Kafka Config
   protected List<KafkaConfig> configs = null;
@@ -121,22 +116,10 @@ public abstract class ClusterTestHarness {
     this.compatibilityType = compatibilityType;
   }
 
-  protected boolean setZkAcls() {
-    return getSecurityProtocol() == SecurityProtocol.SASL_PLAINTEXT ||
-           getSecurityProtocol() == SecurityProtocol.SASL_SSL;
-  }
-
   @Before
   public void setUp() throws Exception {
     zookeeper = new EmbeddedZookeeper();
     zkConnect = String.format("localhost:%d", zookeeper.port());
-    zkUtils = new ZkUtils(
-        zkConnect, zkSessionTimeout, zkConnectionTimeout,
-        setZkAcls()
-    ); // true or false doesn't matter because the schema registry Kafka principal is the same as the
-    // Kafka broker principal, so ACLs won't make any difference. The principals are the same because
-    // ZooKeeper, Kafka, and the Schema Registry are run in the same process during testing and hence share
-    // the same JAAS configuration file. Read comments in SASLClusterTestHarness.java for more details.
     configs = new Vector<>();
     servers = new Vector<>();
     for (int i = 0; i < numBrokers; i++) {
@@ -181,7 +164,7 @@ public abstract class ClusterTestHarness {
   }
 
   protected void setupRestApp(Properties schemaRegistryProps) throws Exception {
-    restApp = new RestApp(schemaRegistryPort, zkConnect, null, KAFKASTORE_TOPIC,
+    restApp = new RestApp(schemaRegistryPort, zkConnect, bootstrapServers, KAFKASTORE_TOPIC,
                           compatibilityType, true, schemaRegistryProps);
     restApp.start();
   }
@@ -249,10 +232,6 @@ public abstract class ClusterTestHarness {
       for (KafkaServer server : servers) {
         CoreUtils.delete(server.config().logDirs());
       }
-    }
-
-    if (zkUtils != null) {
-      zkUtils.close();
     }
 
     if (zookeeper != null) {

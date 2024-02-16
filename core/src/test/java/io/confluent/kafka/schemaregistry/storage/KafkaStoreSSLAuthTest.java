@@ -15,7 +15,6 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.SSLClusterTestHarness;
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import org.junit.After;
 import org.junit.Before;
@@ -23,17 +22,13 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.kafka.common.errors.TimeoutException;
-
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
 public class KafkaStoreSSLAuthTest extends SSLClusterTestHarness {
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreSSLAuthTest.class);
 
   @Before
   public void setup() {
-    log.debug("Zk conn url = " + zkConnect);
   }
 
   @After

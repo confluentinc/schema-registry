@@ -21,6 +21,8 @@ import io.confluent.kafka.serializers.jackson.Jackson;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
+
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.junit.Before;
 import org.junit.Test;
 

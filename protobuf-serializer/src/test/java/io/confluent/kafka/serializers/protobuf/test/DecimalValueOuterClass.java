@@ -52,7 +52,7 @@ public final class DecimalValueOuterClass {
    *
    * Protobuf type {@code DecimalValue}
    */
-  public  static final class DecimalValue extends
+  public static final class DecimalValue extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:DecimalValue)
       DecimalValueOrBuilder {
@@ -149,6 +149,7 @@ public final class DecimalValueOuterClass {
      * <code>.confluent.type.Decimal value = 1 [(.confluent.field_meta) = { ... }</code>
      * @return Whether the value field is set.
      */
+    @java.lang.Override
     public boolean hasValue() {
       return value_ != null;
     }
@@ -160,6 +161,7 @@ public final class DecimalValueOuterClass {
      * <code>.confluent.type.Decimal value = 1 [(.confluent.field_meta) = { ... }</code>
      * @return The value.
      */
+    @java.lang.Override
     public io.confluent.protobuf.type.Decimal getValue() {
       return value_ == null ? io.confluent.protobuf.type.Decimal.getDefaultInstance() : value_;
     }
@@ -170,6 +172,7 @@ public final class DecimalValueOuterClass {
      *
      * <code>.confluent.type.Decimal value = 1 [(.confluent.field_meta) = { ... }</code>
      */
+    @java.lang.Override
     public io.confluent.protobuf.type.DecimalOrBuilder getValueOrBuilder() {
       return getValue();
     }

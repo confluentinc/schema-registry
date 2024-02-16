@@ -21,7 +21,8 @@ public enum SchemaRegistryKeyType {
   MODE("MODE"),
   NOOP("NOOP"),
   DELETE_SUBJECT("DELETE_SUBJECT"),
-  CLEAR_SUBJECT("CLEAR_SUBJECT");
+  CLEAR_SUBJECT("CLEAR_SUBJECT"),
+  CONTEXT("CONTEXT");
 
   public final String keyType;
 

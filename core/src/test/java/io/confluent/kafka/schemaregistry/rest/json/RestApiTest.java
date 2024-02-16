@@ -147,7 +147,7 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchemaType(JsonSchema.TYPE);
     SchemaReference ref = new SchemaReference("ref.json", "reference", 1);
     request.setReferences(Collections.singletonList(ref));
-    int registeredId = restApp.restClient.registerSchema(request, "referrer");
+    int registeredId = restApp.restClient.registerSchema(request, "referrer", false);
     assertEquals("Registering a new schema should succeed", 2, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(2);
@@ -218,7 +218,57 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchema(schemas.get("main.json"));
     request.setSchemaType(JsonSchema.TYPE);
     request.setReferences(Collections.emptyList());
-    restApp.restClient.registerSchema(request, "referrer");
+    restApp.restClient.registerSchema(request, "referrer", false);
+  }
+
+  @Test
+  public void testSchemaNormalization() throws Exception {
+    String subject1 = "testSubject1";
+
+    String reference1 = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
+        + "{\"ExternalType\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"additionalProperties\":false}}}";
+    registerAndVerifySchema(restApp.restClient, reference1, 1, "ref1");
+    String reference2 = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
+        + "{\"ExternalType2\":{\"type\":\"object\",\"properties\":{\"name2\":{\"type\":\"string\"}},"
+        + "\"additionalProperties\":false}}}";
+    registerAndVerifySchema(restApp.restClient, reference2, 2, "ref2");
+
+    SchemaReference ref1 = new SchemaReference("ref1.json", "ref1", 1);
+    SchemaReference ref2 = new SchemaReference("ref2.json", "ref2", 1);
+
+    // Two versions of same schema
+    String schemaString1 = "{"
+        + "\"$id\": \"https://acme.com/referrer.json\","
+        + "\"$schema\": \"http://json-schema.org/draft-07/schema#\","
+        + "\"type\":\"object\",\"properties\":{"
+        + "\"Ref1\": {\"$ref\":\"ref1.json#/definitions/ExternalType\"},"
+        + "\"Ref2\": {\"$ref\":\"ref2.json#/definitions/ExternalType2\"}"
+        + "},\"additionalProperties\":false}";
+    String schemaString2 = "{"
+        + "\"$schema\": \"http://json-schema.org/draft-07/schema#\","
+        + "\"$id\": \"https://acme.com/referrer.json\","
+        + "\"type\":\"object\",\"properties\":{"
+        + "\"Ref2\": {\"$ref\":\"ref2.json#/definitions/ExternalType2\"},"
+        + "\"Ref1\": {\"$ref\":\"ref1.json#/definitions/ExternalType\"}"
+        + "},\"additionalProperties\":false}";
+
+    RegisterSchemaRequest registerRequest = new RegisterSchemaRequest();
+    registerRequest.setSchema(schemaString1);
+    registerRequest.setSchemaType(JsonSchema.TYPE);
+    registerRequest.setReferences(Arrays.asList(ref1, ref2));
+    int idOfRegisteredSchema1Subject1 =
+        restApp.restClient.registerSchema(registerRequest, subject1, true);
+    RegisterSchemaRequest lookUpRequest = new RegisterSchemaRequest();
+    lookUpRequest.setSchema(schemaString2);
+    lookUpRequest.setSchemaType(JsonSchema.TYPE);
+    lookUpRequest.setReferences(Arrays.asList(ref2, ref1));
+    int versionOfRegisteredSchema1Subject1 =
+        restApp.restClient.lookUpSubjectVersion(lookUpRequest, subject1, true, false).getVersion();
+    assertEquals("1st schema under subject1 should have version 1", 1,
+        versionOfRegisteredSchema1Subject1);
+    assertEquals("1st schema registered globally should have id 3", 3,
+        idOfRegisteredSchema1Subject1);
   }
 
   @Test

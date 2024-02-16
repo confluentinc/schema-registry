@@ -36,6 +36,9 @@ public class TopicNameStrategy implements SubjectNameStrategy,
 
   @Override
   public String subjectName(String topic, boolean isKey, ParsedSchema schema) {
+    if (topic == null) {
+      return null;
+    }
     return isKey ? topic + "-key" : topic + "-value";
   }
 

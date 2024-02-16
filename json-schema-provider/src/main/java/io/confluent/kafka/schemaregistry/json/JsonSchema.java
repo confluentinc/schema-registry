@@ -77,6 +77,7 @@ public class JsonSchema implements ParsedSchema {
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
+  private static final ObjectMapper objectMapperWithOrderedProps = Jackson.newObjectMapper(true);
 
   public JsonSchema(JsonNode jsonNode) {
     this(jsonNode, Collections.emptyList(), Collections.emptyMap(), null);
@@ -202,7 +203,7 @@ public class JsonSchema implements ParsedSchema {
           URI child = ReferenceResolver.resolve(idUri, dep.getKey());
           builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
         }
-        JSONObject jsonObject = objectMapper.treeToValue((jsonNode), JSONObject.class);
+        JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
         builder.schemaJson(jsonObject);
         SchemaLoader loader = builder.build();
         schemaObj = loader.load().build();
@@ -257,6 +258,25 @@ public class JsonSchema implements ParsedSchema {
 
   public Map<String, String> resolvedReferences() {
     return resolvedReferences;
+  }
+
+  @Override
+  public JsonSchema normalize() {
+    String canonical = canonicalString();
+    if (canonical == null) {
+      return this;
+    }
+    try {
+      JsonNode jsonNode = objectMapperWithOrderedProps.readTree(canonical);
+      return new JsonSchema(
+          jsonNode,
+          this.references.stream().sorted().distinct().collect(Collectors.toList()),
+          this.resolvedReferences,
+          this.version
+      );
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Invalid JSON", e);
+    }
   }
 
   @Override
