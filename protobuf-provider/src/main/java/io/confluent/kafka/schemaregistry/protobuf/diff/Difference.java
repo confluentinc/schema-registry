@@ -64,8 +64,54 @@ public class Difference {
     return Objects.hash(fullPath, type);
   }
 
+  private String error() {
+    String errorDescription = "";
+    switch (type) {
+      case MESSAGE_REMOVED:
+        errorDescription = "The %s schema is missing a field of type MESSAGE at path '"
+                             + fullPath + "' in the %s schema";
+        break;
+      case FIELD_KIND_CHANGED:
+        errorDescription = "The type of a field at path '" + fullPath + "' in the %s schema does  "
+                        + "not match the %s schema";
+        break;
+      case FIELD_SCALAR_KIND_CHANGED:
+        errorDescription = "The kind of a SCALAR field at path '" + fullPath
+                             + "' in the %s schema does not match its kind in the %s schema";
+        break;
+      case FIELD_NAMED_TYPE_CHANGED:
+        errorDescription = "The type of a MESSAGE field at path '" + fullPath
+                             + "' in the %s schema does not match its type in the %s schema";
+        break;
+      case FIELD_NUMERIC_LABEL_CHANGED:
+        errorDescription = "The label for a NUMERIC field at path '" + fullPath
+                             + "' in the %s schema does not match its label in the %s schema";
+        break;
+      case REQUIRED_FIELD_ADDED:
+        errorDescription = "A required field  at path '" + fullPath + "' in the %s schema "
+                             + "is missing in the %s schema";
+        break;
+      case REQUIRED_FIELD_REMOVED:
+        errorDescription = "The %s schema is missing a required field at path: '" + fullPath
+                             + "' in the %s schema";
+        break;
+      case ONEOF_FIELD_REMOVED:
+        errorDescription = "The %s schema is missing a oneof field at path '" + fullPath
+                             + "' in the %s schema";
+        break;
+      case MULTIPLE_FIELDS_MOVED_TO_ONEOF:
+        errorDescription = "Multiple fields in the oneof at path '" + fullPath
+                             + "' in the %s schema are outside a oneof in the %s schema";
+        break;
+      default:
+        errorDescription = "";
+        break;
+    }
+    return errorDescription;
+  }
+
   @Override
   public String toString() {
-    return "Difference{" + "fullPath='" + fullPath + '\'' + ", type=" + type + '}';
+    return "{errorType:\"" + type + '"' + ", description:\"" + error() + "\"}";
   }
 }

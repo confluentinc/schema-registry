@@ -40,7 +40,7 @@ class CombinedSchemaDiff {
       final CombinedSchema original,
       final CombinedSchema update
   ) {
-    Difference.Type type = compareCriteria(ctx, original.getCriterion(), update.getCriterion());
+    Difference.Type type = compareCriteria(ctx, original, update);
     if (type != COMBINED_TYPE_CHANGED) {
       // Use sets to collapse duplicate entries
       final Set<JsonSchema> originalSubschemas = original.getSubschemas().stream()
@@ -56,10 +56,11 @@ class CombinedSchemaDiff {
           ctx.addDifference(SUM_TYPE_EXTENDED);
         }
       } else if (originalSize > updateSize) {
-        if (update.getCriterion() == CombinedSchema.ALL_CRITERION) {
-          ctx.addDifference(PRODUCT_TYPE_NARROWED);
-        } else {
+        if (original.getCriterion() == CombinedSchema.ANY_CRITERION
+            || original.getCriterion() == CombinedSchema.ONE_CRITERION) {
           ctx.addDifference(SUM_TYPE_NARROWED);
+        } else {
+          ctx.addDifference(PRODUCT_TYPE_NARROWED);
         }
       }
 
@@ -96,13 +97,18 @@ class CombinedSchemaDiff {
 
   private static Difference.Type compareCriteria(
       final Context ctx,
-      final ValidationCriterion original,
-      final ValidationCriterion update
+      final CombinedSchema original,
+      final CombinedSchema update
   ) {
+    ValidationCriterion originalCriterion = original.getCriterion();
+    ValidationCriterion updateCriterion = update.getCriterion();
     Difference.Type type;
-    if (original.equals(update)) {
+    if (originalCriterion.equals(updateCriterion)) {
       type = null;
-    } else if (update == CombinedSchema.ANY_CRITERION) {
+    } else if (updateCriterion == CombinedSchema.ANY_CRITERION
+        || (isSingleton(original) && isSingleton(update))
+        || (isSingleton(original) && updateCriterion == CombinedSchema.ONE_CRITERION)
+        || (isSingleton(update) && originalCriterion == CombinedSchema.ALL_CRITERION)) {
       type = COMBINED_TYPE_EXTENDED;
     } else {
       type = COMBINED_TYPE_CHANGED;
@@ -111,5 +117,9 @@ class CombinedSchemaDiff {
       ctx.addDifference(type);
     }
     return type;
+  }
+
+  private static boolean isSingleton(CombinedSchema schema) {
+    return schema.getSubschemas().size() == 1;
   }
 }
