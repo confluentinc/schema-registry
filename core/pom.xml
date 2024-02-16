@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.0.14-0</version>
+        <version>7.1.12-0</version>
     </parent>
 
     <artifactId>kafka-schema-registry</artifactId>
@@ -257,11 +257,11 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>io.swagger</groupId>
+            <groupId>io.swagger.core.v3</groupId>
             <artifactId>swagger-annotations</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.swagger</groupId>
+            <groupId>io.swagger.core.v3</groupId>
             <artifactId>swagger-core</artifactId>
         </dependency>
     </dependencies>
@@ -318,34 +318,23 @@
                 <artifactId>protoc-jar-maven-plugin</artifactId>
             </plugin>
             <plugin>
-                <groupId>com.github.kongchen</groupId>
+                <groupId>io.swagger.core.v3</groupId>
                 <artifactId>swagger-maven-plugin</artifactId>
-                <version>3.1.8</version>
                 <configuration>
-                    <apiSources>
-                        <apiSource>
-                            <springmvc>false</springmvc>
-
-                            <locations><location>io.confluent.kafka.schemaregistry.rest.resources</location></locations>
-                            <schemes>http,https
-                            </schemes>
-                            <info>
-                                <title>Confluent Schema Registry</title>
-                                <version>v1</version>
-                            </info>
-                            <outputFormats>yaml</outputFormats>
-                            <swaggerFileName>schema-registry-api-spec</swaggerFileName>
-                            <outputPath>${basedir}/generated/document.html</outputPath>
-                            <swaggerDirectory>${basedir}/generated/swagger-ui</swaggerDirectory>
-                        </apiSource>
-
-                    </apiSources>
+                    <resourcePackages>
+                        <package>io.confluent.kafka.schemaregistry.rest.resources</package>
+                    </resourcePackages>
+                    <prettyPrint>true</prettyPrint>
+                    <outputFormat>YAML</outputFormat>
+                    <outputFileName>schema-registry-api-spec</outputFileName>
+                    <openapiFilePath>${basedir}/generated/swagger-ui/schema-registry-api-spec.yaml</openapiFilePath>
+                    <outputPath>${basedir}/generated/swagger-ui</outputPath>
                 </configuration>
                 <executions>
                     <execution>
                         <phase>compile</phase>
                         <goals>
-                            <goal>generate</goal>
+                            <goal>resolve</goal>
                         </goals>
                     </execution>
                 </executions>
