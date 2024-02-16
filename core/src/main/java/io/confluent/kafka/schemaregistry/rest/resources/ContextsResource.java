@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -26,6 +27,8 @@ import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -42,6 +45,7 @@ import java.util.List;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ContextsResource {
 
+  public static final String apiTag = "Contexts (v1)";
   private final KafkaSchemaRegistry schemaRegistry;
 
   public ContextsResource(KafkaSchemaRegistry schemaRegistry) {
@@ -49,14 +53,17 @@ public class ContextsResource {
   }
 
   @GET
+  @DocumentedName("getAllContexts")
   @Operation(summary = "List contexts",
       description = "Retrieves a list of contexts.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The contexts", content = @Content(
-            array = @ArraySchema(schema = @Schema(implementation = String.class)))),
+        @ApiResponse(responseCode = "200", description = "The contexts.", content = @Content(
+            array = @ArraySchema(schema = @Schema(example = ".")))),
         @ApiResponse(responseCode = "500",
-                     description = "Error code 50001 -- Error in the backend data store")
-      })
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store. ",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   @PerformanceMetric("contexts.list")
   public List<String> listContexts() {
     try {

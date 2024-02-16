@@ -15,14 +15,12 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
-
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 public class JsonSchemaProvider extends AbstractSchemaProvider {
 
@@ -34,14 +32,12 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
   }
 
   @Override
-  public ParsedSchema parseSchemaOrElseThrow(String schemaString,
-                                             List<SchemaReference> references,
-                                             boolean isNew) {
+  public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize) {
     try {
       return new JsonSchema(
-              schemaString,
-              references,
-              resolveReferences(references),
+              schema.getSchema(),
+              schema.getReferences(),
+              resolveReferences(schema),
               null
       );
     } catch (Exception e) {

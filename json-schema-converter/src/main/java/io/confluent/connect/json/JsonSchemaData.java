@@ -408,7 +408,7 @@ public class JsonSchemaData {
         // Any schema is valid and we don't have a default, so treat this as an optional schema
         return null;
       }
-      if (schema.defaultValue() != null) {
+      if (schema.defaultValue() != null && !config.ignoreDefaultForNullables()) {
         return fromConnectData(schema, schema.defaultValue());
       }
       if (schema.isOptional()) {
@@ -527,7 +527,8 @@ public class JsonSchemaData {
           // one of the union types.
           if (isUnionSchema(schema)) {
             for (Field field : schema.fields()) {
-              Object object = struct.get(field);
+              Object object = config.ignoreDefaultForNullables()
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
               if (object != null) {
                 return fromConnectData(field.schema(), object);
               }
@@ -536,7 +537,9 @@ public class JsonSchemaData {
           } else {
             ObjectNode obj = JSON_NODE_FACTORY.objectNode();
             for (Field field : schema.fields()) {
-              JsonNode jsonNode = fromConnectData(field.schema(), struct.get(field));
+              Object fieldValue = config.ignoreDefaultForNullables()
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
+              JsonNode jsonNode = fromConnectData(field.schema(), fieldValue);
               if (jsonNode != null) {
                 obj.set(field.name(), jsonNode);
               }

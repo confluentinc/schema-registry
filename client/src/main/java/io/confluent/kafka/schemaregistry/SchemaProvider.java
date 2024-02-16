@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import org.apache.kafka.common.Configurable;
 
 import java.util.List;
@@ -47,26 +48,34 @@ public interface SchemaProvider extends Configurable {
   String schemaType();
 
   /**
-   * Parses a string representing a schema.
+   * Parses a schema.
    *
-   * @param schemaString the schema
-   * @param references a list of schema references
+   * @param schema the schema
    * @param isNew whether the schema is new
    * @return an optional parsed schema
    */
-  default Optional<ParsedSchema> parseSchema(String schemaString,
-                                            List<SchemaReference> references,
-                                            boolean isNew) {
+  default Optional<ParsedSchema> parseSchema(Schema schema, boolean isNew) {
     try {
-      return Optional.of(parseSchemaOrElseThrow(schemaString, references, isNew));
+      return Optional.of(parseSchemaOrElseThrow(schema, isNew, false));
     } catch (Exception e) {
       return Optional.empty();
     }
   }
 
-  default Optional<ParsedSchema> parseSchema(String schemaString,
-                                             List<SchemaReference> references) {
-    return parseSchema(schemaString, references, false);
+  /**
+   * Parses a schema.
+   *
+   * @param schema the schema
+   * @param isNew whether the schema is new
+   * @param normalize whether to normalize the schema
+   * @return an optional parsed schema
+   */
+  default Optional<ParsedSchema> parseSchema(Schema schema, boolean isNew, boolean normalize) {
+    try {
+      return Optional.of(parseSchemaOrElseThrow(schema, isNew, normalize));
+    } catch (Exception e) {
+      return Optional.empty();
+    }
   }
 
   /**
@@ -75,9 +84,52 @@ public interface SchemaProvider extends Configurable {
    * @param schemaString the schema
    * @param references a list of schema references
    * @param isNew whether the schema is new
+   * @return an optional parsed schema
+   */
+  default Optional<ParsedSchema> parseSchema(String schemaString,
+                                             List<SchemaReference> references,
+                                             boolean isNew) {
+    try {
+      return Optional.of(parseSchemaOrElseThrow(
+          new Schema(null, null, null, schemaType(), references, schemaString), isNew, false));
+    } catch (Exception e) {
+      return Optional.empty();
+    }
+  }
+
+  /**
+   * Parses a string representing a schema.
+   *
+   * @param schemaString the schema
+   * @param references a list of schema references
+   * @param isNew whether the schema is new
+   * @param normalize whether to normalize the schema
+   * @return an optional parsed schema
+   */
+  default Optional<ParsedSchema> parseSchema(String schemaString,
+                                             List<SchemaReference> references,
+                                             boolean isNew,
+                                             boolean normalize) {
+    try {
+      return Optional.of(parseSchemaOrElseThrow(
+          new Schema(null, null, null, schemaType(), references, schemaString), isNew, normalize));
+    } catch (Exception e) {
+      return Optional.empty();
+    }
+  }
+
+  default Optional<ParsedSchema> parseSchema(String schemaString,
+                                             List<SchemaReference> references) {
+    return parseSchema(schemaString, references, false, false);
+  }
+
+  /**
+   * Parses a string representing a schema.
+   *
+   * @param schema the schema
+   * @param isNew whether the schema is new
+   * @param normalize whether to normalize the schema
    * @return a parsed schema or throw an error
    */
-  ParsedSchema parseSchemaOrElseThrow(String schemaString,
-                                      List<SchemaReference> references,
-                                      boolean isNew);
+  ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize);
 }
