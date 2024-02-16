@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.protobuf;
 
 import static com.squareup.wire.schema.internal.UtilKt.MAX_TAG_VALUE;
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.DEFAULT_LOCATION;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -415,7 +416,7 @@ public class ProtobufSchemaUtils {
               List<FieldElement> fields = new ArrayList<>(o.getFields());
               fields.sort(Comparator.comparing(FieldElement::getTag));
               return new OneOfElement(o.getName(), o.getDocumentation(),
-                  fields, o.getGroups(), o.getOptions());
+                  fields, o.getGroups(), o.getOptions(), DEFAULT_LOCATION);
             })
             .collect(Collectors.toList());
         oneOfs.sort(Comparator.comparing(o -> o.getFields().get(0).getTag()));
