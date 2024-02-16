@@ -713,6 +713,7 @@ public class ProtobufSchema implements ParsedSchema {
             .filter(e -> !e.getFields().isEmpty())
             .collect(Collectors.toList()),
         Collections.emptyList(),
+        Collections.emptyList(),
         Collections.emptyList()
     );
   }
@@ -748,7 +749,7 @@ public class ProtobufSchema implements ParsedSchema {
     log.trace("*** oneof name: {}", name);
     // NOTE: skip groups
     return new OneOfElement(name, "", fields.build(),
-        Collections.emptyList(), Collections.emptyList());
+        Collections.emptyList(), Collections.emptyList(), DEFAULT_LOCATION);
   }
 
   private static EnumElement toEnum(EnumDescriptorProto ed) {
