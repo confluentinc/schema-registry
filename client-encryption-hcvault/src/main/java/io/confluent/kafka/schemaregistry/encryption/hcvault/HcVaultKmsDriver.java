@@ -66,7 +66,7 @@ public class HcVaultKmsDriver implements KmsDriver {
       client = new HcVaultKmsClient();
     }
     if (credentials.isPresent()) {
-      client.withCredentials(credentials.get());
+      client.withCredentials(credentials.get(), namespace);
     } else {
       client.withDefaultCredentials();
     }
