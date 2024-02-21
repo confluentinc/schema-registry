@@ -53,7 +53,7 @@ public class DeriveProtoBufSchemaTest extends DeriveSchemaTest {
   protected void matchAndValidate(String message, JsonNode schemaString, String expectedSchema)
       throws IOException {
     ProtobufSchema schema = new ProtobufSchema(schemaString.asText());
-    schema.validate();
+    schema.validate(false);
     assertEquals(schema.toString(), expectedSchema);
     String formattedString = mapper.readTree(message).toString();
     Object protobufObject = ProtobufSchemaUtils.toObject(formattedString, schema);

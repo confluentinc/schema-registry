@@ -35,6 +35,7 @@ public class ConfigUpdateRequest {
 
   private String alias;
   private Boolean normalize;
+  private Boolean validateFields;
   private String compatibilityLevel;
   private String compatibilityGroup;
   private Metadata defaultMetadata;
@@ -48,6 +49,7 @@ public class ConfigUpdateRequest {
   public ConfigUpdateRequest(Config config) {
     this.alias = config.getAlias();
     this.normalize = config.isNormalize();
+    this.validateFields = config.isValidateFields();
     this.compatibilityLevel = config.getCompatibilityLevel();
     this.compatibilityGroup = config.getCompatibilityGroup();
     this.defaultMetadata = config.getDefaultMetadata();
@@ -78,6 +80,16 @@ public class ConfigUpdateRequest {
   @JsonProperty("normalize")
   public void setNormalize(Boolean normalize) {
     this.normalize = normalize;
+  }
+
+  @JsonProperty("validateFields")
+  public Boolean isValidateFields() {
+    return validateFields;
+  }
+
+  @JsonProperty("validateFields")
+  public void setValidateFields(Boolean validateFields) {
+    this.validateFields = validateFields;
   }
 
   @Schema(description = "Compatibility Level",
@@ -159,6 +171,7 @@ public class ConfigUpdateRequest {
     ConfigUpdateRequest that = (ConfigUpdateRequest) o;
     return Objects.equals(alias, that.alias)
         && Objects.equals(normalize, that.normalize)
+        && Objects.equals(validateFields, that.validateFields)
         && Objects.equals(compatibilityLevel, that.compatibilityLevel)
         && Objects.equals(compatibilityGroup, that.compatibilityGroup)
         && Objects.equals(defaultMetadata, that.defaultMetadata)
@@ -169,7 +182,7 @@ public class ConfigUpdateRequest {
 
   @Override
   public int hashCode() {
-    return Objects.hash(alias, normalize, compatibilityLevel, compatibilityGroup,
+    return Objects.hash(alias, normalize, validateFields, compatibilityLevel, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
 }
