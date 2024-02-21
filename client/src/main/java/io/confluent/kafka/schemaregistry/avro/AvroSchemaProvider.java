@@ -16,11 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import java.util.Map;
-
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +50,8 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
           schema.getSchema(),
           schema.getReferences(),
           resolveReferences(schema),
+          schema.getMetadata(),
+          schema.getRuleSet(),
           null,
           (validateDefaults || normalize) && isNew
       );

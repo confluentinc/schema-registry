@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -83,13 +84,18 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
 
   @Override
   public byte[] fromConnectData(String topic, Schema schema, Object value) {
+    return fromConnectData(topic, null, schema, value);
+  }
+
+  @Override
+  public byte[] fromConnectData(String topic, Headers headers, Schema schema, Object value) {
     if (schema == null && value == null) {
       return null;
     }
     JsonSchema jsonSchema = jsonSchemaData.fromConnectSchema(schema);
     JsonNode jsonValue = jsonSchemaData.fromConnectData(schema, value);
     try {
-      return serializer.serialize(topic, isKey, jsonValue, jsonSchema);
+      return serializer.serialize(topic, headers, isKey, jsonValue, jsonSchema);
     } catch (TimeoutException e) {
       throw new RetriableException(String.format("Converting Kafka Connect data to byte[] failed "
           + "due to serialization error of topic %s: ",
@@ -112,8 +118,13 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
 
   @Override
   public SchemaAndValue toConnectData(String topic, byte[] value) {
+    return toConnectData(topic, null, value);
+  }
+
+  @Override
+  public SchemaAndValue toConnectData(String topic, Headers headers, byte[] value) {
     try {
-      JsonSchemaAndValue deserialized = deserializer.deserialize(topic, isKey, value);
+      JsonSchemaAndValue deserialized = deserializer.deserialize(topic, isKey, headers, value);
 
       if (deserialized == null || deserialized.getValue() == null) {
         return SchemaAndValue.NULL;
@@ -156,11 +167,13 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       configure(new KafkaJsonSchemaSerializerConfig(configs));
     }
 
-    public byte[] serialize(String topic, boolean isKey, Object value, JsonSchema schema) {
+    public byte[] serialize(
+        String topic, Headers headers, boolean isKey, Object value, JsonSchema schema) {
       if (value == null) {
         return null;
       }
-      return serializeImpl(getSubjectName(topic, isKey, value, schema), value, schema);
+      return serializeImpl(
+          getSubjectName(topic, isKey, value, schema), topic, headers, value, schema);
     }
   }
 
@@ -175,8 +188,9 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       configure(new KafkaJsonSchemaDeserializerConfig(configs), null);
     }
 
-    public JsonSchemaAndValue deserialize(String topic, boolean isKey, byte[] payload) {
-      return deserializeWithSchemaAndVersion(topic, isKey, payload);
+    public JsonSchemaAndValue deserialize(
+        String topic, boolean isKey, Headers headers, byte[] payload) {
+      return deserializeWithSchemaAndVersion(topic, isKey, headers, payload);
     }
   }
 }

@@ -17,15 +17,25 @@
 package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import static io.confluent.kafka.serializers.KafkaAvroDeserializerConfig.SPECIFIC_AVRO_KEY_TYPE_CONFIG;
+import static io.confluent.kafka.serializers.KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG;
+import static io.confluent.kafka.serializers.KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG;
+import org.apache.avro.specific.SpecificRecord;
+import org.apache.kafka.common.config.ConfigException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
     implements Deserializer<Object> {
+
+  private static final Logger log = LoggerFactory.getLogger(KafkaAvroDeserializer.class);
 
   /**
    * Constructor used by Kafka consumer.
@@ -35,23 +45,67 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
   }
 
   public KafkaAvroDeserializer(SchemaRegistryClient client) {
-    schemaRegistry = client;
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
   }
 
   public KafkaAvroDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
-    schemaRegistry = client;
-    configure(deserializerConfig(props));
+    this(client, props, false);
   }
 
   @Override
-  public void configure(Map<String, ?> configs, boolean isKey) {
+  public void configure(Map<String, ?> props, boolean isKey) {
     this.isKey = isKey;
-    configure(new KafkaAvroDeserializerConfig(configs));
+    configure(deserializerConfig(props), null);
+  }
+
+  public KafkaAvroDeserializer(SchemaRegistryClient client, Map<String, ?> props, boolean isKey) {
+    this.schemaRegistry = client;
+    this.ticker = ticker(client);
+    this.isKey = isKey;
+
+    final String specificAvroClassLookupKey = isKey
+         ? SPECIFIC_AVRO_KEY_TYPE_CONFIG :
+           SPECIFIC_AVRO_VALUE_TYPE_CONFIG;
+
+    final KafkaAvroDeserializerConfig config = deserializerConfig(props);
+
+    final Class<?> type = config.getClass(specificAvroClassLookupKey);
+
+    if (type != null && !config.getBoolean(SPECIFIC_AVRO_READER_CONFIG)) {
+      if (log.isWarnEnabled()) {
+        log.warn(
+            String.format(
+              "'%s' value of '%s' is ignored because '%s' is false",
+              specificAvroClassLookupKey,
+              type.getName(),
+              SPECIFIC_AVRO_READER_CONFIG
+            )
+        );
+      }
+    }
+
+    if (type != null && !SpecificRecord.class.isAssignableFrom(type)) {
+      throw new ConfigException(
+        String.format("Value '%s' specified for '%s' is not a '%s'",
+          type.getName(),
+          specificAvroClassLookupKey,
+          SpecificRecord.class.getName()
+        )
+      );
+    }
+
+    configure(deserializerConfig(props), type);
   }
 
   @Override
   public Object deserialize(String topic, byte[] bytes) {
-    return deserialize(topic, isKey, bytes, null);
+    return deserialize(topic, null, bytes);
+  }
+
+  @Override
+  public Object deserialize(String topic, Headers headers, byte[] bytes) {
+    return deserialize(topic, isKey, headers, bytes, specificAvroReaderSchema);
   }
 
   /**
@@ -59,6 +113,10 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
    */
   public Object deserialize(String topic, byte[] bytes, Schema readerSchema) {
     return deserialize(topic, isKey, bytes, readerSchema);
+  }
+
+  public Object deserialize(String topic, Headers headers, byte[] bytes, Schema readerSchema) {
+    return deserialize(topic, isKey, headers, bytes, readerSchema);
   }
 
   @Override
