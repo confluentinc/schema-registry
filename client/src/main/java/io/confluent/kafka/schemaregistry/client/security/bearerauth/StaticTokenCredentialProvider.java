@@ -21,10 +21,13 @@ import org.apache.kafka.common.config.ConfigException;
 
 import java.net.URL;
 import java.util.Map;
+import org.apache.kafka.common.security.oauthbearer.secured.ConfigurationUtils;
 
 public class StaticTokenCredentialProvider implements BearerAuthCredentialProvider {
 
   private String bearerToken;
+  private String targetSchemaRegistry;
+  private String targetIdentityPoolId;
 
   @Override
   public String alias() {
@@ -32,7 +35,23 @@ public class StaticTokenCredentialProvider implements BearerAuthCredentialProvid
   }
 
   @Override
+  public String getTargetSchemaRegistry() {
+    return this.targetSchemaRegistry;
+  }
+
+  @Override
+  public String getTargetIdentityPoolId() {
+    return this.targetIdentityPoolId;
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
+    ConfigurationUtils cu = new ConfigurationUtils(configs);
+    targetSchemaRegistry = cu.validateString(
+        SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, false);
+    targetIdentityPoolId = cu.validateString(
+        SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, false);
+
     bearerToken = (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_TOKEN_CONFIG);
     if (bearerToken != null && !bearerToken.isEmpty()) {
       return;

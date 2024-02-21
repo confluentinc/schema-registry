@@ -38,7 +38,8 @@ public class SubjectVersion implements Comparable<SubjectVersion> {
     this.version = version;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.SUBJECT_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.SUBJECT_DESC,
+      example = Schema.SUBJECT_EXAMPLE)
   @JsonProperty("subject")
   public String getSubject() {
     return subject;
@@ -49,7 +50,8 @@ public class SubjectVersion implements Comparable<SubjectVersion> {
     this.subject = subject;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.VERSION_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.VERSION_DESC,
+      example = Schema.VERSION_EXAMPLE)
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;

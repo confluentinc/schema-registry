@@ -16,11 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
-import java.util.List;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,14 +33,12 @@ public class ProtobufSchemaProvider extends AbstractSchemaProvider {
   }
 
   @Override
-  public ParsedSchema parseSchemaOrElseThrow(String schemaString,
-                                             List<SchemaReference> references,
-                                             boolean isNew) {
+  public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize) {
     try {
       return new ProtobufSchema(
-              schemaString,
-              references,
-              resolveReferences(references),
+              schema.getSchema(),
+              schema.getReferences(),
+              resolveReferences(schema),
               null,
               null
       );

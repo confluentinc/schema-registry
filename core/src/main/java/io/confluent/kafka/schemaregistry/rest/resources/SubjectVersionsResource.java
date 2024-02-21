@@ -15,10 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import static io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.GLOBAL_RESOURCE_NAME;
-
-import com.google.common.base.CharMatcher;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -40,6 +36,7 @@ import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,6 +44,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,6 +76,7 @@ import java.util.Map;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SubjectVersionsResource {
 
+  public static final String apiTag = SubjectsResource.apiTag;
   private static final Logger log = LoggerFactory.getLogger(SubjectVersionsResource.class);
 
   private final KafkaSchemaRegistry schemaRegistry;
@@ -94,25 +94,30 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}")
+  @DocumentedName("getSchemaByVersion")
   @PerformanceMetric("subjects.versions.get-schema")
   @Operation(summary = "Get schema by version",
       description = "Retrieves a specific version of the schema registered under this subject.",
       responses = {
-          @ApiResponse(responseCode = "200", description = "The schema",
-              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
-                  implementation = Schema.class))),
-          @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
-              + "Error code 40402 -- Version not found",
+          @ApiResponse(responseCode = "200", description = "The schema.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                    implementation = Schema.class))),
+          @ApiResponse(responseCode = "404",
+            description = "Not Found. "
+                    + "Error code 40401 indicates subject not found. "
+                    + "Error code 40402 indicates version not found.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
-          @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version",
-              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
-                  implementation = ErrorMessage.class))),
-          @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
-              + "backend data store",
-              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
-                  implementation = ErrorMessage.class)))
-      })
+          @ApiResponse(responseCode = "422",
+            description = "Unprocessable Entity. Error code 42202 indicates an invalid version.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                    implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+            description = "Internal Server Error. "
+                    + "Error code 50001 indicates a failure in the backend data store.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                    implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   public Schema getSchemaByVersion(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -158,19 +163,31 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}/schema")
+  @DocumentedName("getVersionSchemaOnly")
   @PerformanceMetric("subjects.versions.get-schema.only")
   @Operation(summary = "Get schema string by version",
       description = "Retrieves the schema for the specified version of this subject. "
         + "Only the unescaped schema string is returned.",
       responses = {
-          @ApiResponse(responseCode = "200", description = "The schema string", content = @Content(
-              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = String.class))),
-          @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
-              + "Error code 40402 -- Version not found"),
-          @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
-          @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
-              + "backend data store")
-      })
+          @ApiResponse(responseCode = "200", description = "The schema string.", content = @Content(
+              schema = @io.swagger.v3.oas.annotations.media.Schema(example =
+                      Schema.SCHEMA_EXAMPLE))),
+          @ApiResponse(responseCode = "404",
+            description = "Not Found. "
+                    + "Error code 40401 indicates subject not found. "
+                    + "Error code 40402 indicates version not found.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                    implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "422",
+            description = "Unprocessable Entity. Error code 42202 indicates an invalid version.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                    implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+            description = "Internal Server Error. "
+                    + "Error code 50001 indicates a failure in the backend data store.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                    ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   public String getSchemaOnly(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -183,19 +200,31 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}/referencedby")
+  @DocumentedName("getReferencedBy")
   @Operation(summary = "List schemas referencing a schema",
       description = "Retrieves the IDs of schemas that reference the specified schema.",
       responses = {
         @ApiResponse(responseCode = "200",
-          description = "The IDs of schemas that reference the specified schema",
+          description = "List of IDs for schemas that reference the specified schema.",
           content = @Content(array = @ArraySchema(
-              schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class)))),
-        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
-          + "Error code 40402 -- Version not found"),
-        @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
+              schema = @io.swagger.v3.oas.annotations.media.Schema(type = "integer",
+                      format = "int32", example = Schema.ID_EXAMPLE)))),
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. "
+                  + "Error code 40401 indicates subject not found. "
+                  + "Error code 40402 indicates version not found.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "422",
+          description = "Unprocessable Entity. Error code 42202 indicates an invalid version.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
-          description = "Error code 50001 -- Error in the backend data store")
-      })
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   public List<Integer> getReferencedBy(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -230,34 +259,45 @@ public class SubjectVersionsResource {
   }
 
   @GET
+  @DocumentedName("getAllVersions")
   @PerformanceMetric("subjects.versions.list")
   @Operation(summary = "List versions under subject",
       description = "Retrieves a list of versions registered under the specified subject.",
       responses = {
           @ApiResponse(responseCode = "200",
-              description = "The version numbers matching the specified parameters",
+              description = "List of version numbers matching the specified parameters.",
               content = @Content(array = @ArraySchema(
-                  schema = @io.swagger.v3.oas.annotations.media.Schema(
-                      implementation = int.class)))),
-          @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
-          @ApiResponse(responseCode = "500", description =
-              "Error code 50001 -- Error in the backend data store")})
+                  schema = @io.swagger.v3.oas.annotations.media.Schema(type = "integer",
+                      format = "int32", example = Schema.VERSION_EXAMPLE)))),
+          @ApiResponse(responseCode = "404",
+            description = "Not Found. "
+                    + "Error code 40401 indicates subject not found. ",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                    implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+            description = "Internal Server Error. "
+                    + "Error code 50001 indicates a failure in the backend data store.",
+            content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                    ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   public List<Integer> listVersions(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = "Whether to include deleted schemas")
-      @QueryParam("deleted") boolean lookupDeletedSchema) {
+      @QueryParam("deleted") boolean lookupDeletedSchema,
+      @Parameter(description = "Whether to return deleted schemas only")
+      @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     // check if subject exists. If not, throw 404
-    Iterator<Schema> allSchemasForThisTopic;
+    Iterator<Schema> resultSchemas;
     List<Integer> allVersions = new ArrayList<>();
     String errorMessage = "Error while validating that subject "
                           + subject
                           + " exists in the registry";
     try {
-      if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
+      if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema || lookupDeletedOnlySchema)) {
         throw Errors.subjectNotFoundException(subject);
       }
     } catch (SchemaRegistryStoreException e) {
@@ -267,22 +307,29 @@ public class SubjectVersionsResource {
     }
     errorMessage = "Error while listing all versions for subject "
                    + subject;
+    LookupFilter filter = LookupFilter.DEFAULT;
+    // if both deleted && deletedOnly are true, return deleted only
+    if (lookupDeletedOnlySchema) {
+      filter = LookupFilter.DELETED_ONLY;
+    } else if (lookupDeletedSchema) {
+      filter = LookupFilter.INCLUDE_DELETED;
+    }
     try {
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject,
-              lookupDeletedSchema);
+      resultSchemas = schemaRegistry.getAllVersions(subject, filter);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    while (allSchemasForThisTopic.hasNext()) {
-      Schema schema = allSchemasForThisTopic.next();
+    while (resultSchemas.hasNext()) {
+      Schema schema = resultSchemas.next();
       allVersions.add(schema.getVersion());
     }
     return allVersions;
   }
 
   @POST
+  @DocumentedName("registerSchema")
   @PerformanceMetric("subjects.versions.register")
   @Operation(summary = "Register schema under a subject",
       description = "Register a new schema under the specified subject. If successfully "
@@ -300,23 +347,31 @@ public class SubjectVersionsResource {
         + "the primary. If the primary is not available, the client will get an error code "
         + "indicating that the forwarding has failed.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema =
-          @io.swagger.v3.oas.annotations.media.Schema(
-             implementation = RegisterSchemaResponse.class))),
-        @ApiResponse(responseCode = "409", description = "Incompatible schema"),
-        @ApiResponse(responseCode = "422", description = "Error code 42201 -- Invalid schema or "
-          + "schema type"),
-        @ApiResponse(responseCode = "500", description =
-          "Error code 50001 -- Error in the backend data store\n"
-              + "Error code 50002 -- Operation timed out\n"
-              + "Error code 50003 -- Error while forwarding the request to the primary")
-      })
+        @ApiResponse(responseCode = "200", description = "Schema successfully registered.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  RegisterSchemaResponse.class))),
+        @ApiResponse(responseCode = "409", description = "Conflict. Incompatible schema.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
+        @ApiResponse(responseCode = "422",
+          description = "Unprocessable entity. "
+                  + "Error code 42201 indicates an invalid schema or schema type. ",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store."
+                  + "Error code 50002 indicates operation timed out. "
+                  + "Error code 50003 indicates a failure forwarding the request to the primary.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   public void register(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subjectName,
-      @Parameter(description = "Whether to register the normalized schema")
+      @Parameter(description = "Whether to normalize the given schema")
       @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
@@ -324,9 +379,8 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
-    if (subjectName != null && (CharMatcher.javaIsoControl().matchesAnyOf(subjectName)
-        || QualifiedSubject.create(this.schemaRegistry.tenant(), subjectName).getSubject()
-            .equals(GLOBAL_RESOURCE_NAME))) {
+    if (subjectName != null
+        && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subjectName)) {
       throw Errors.invalidSubjectException(subjectName);
     }
 
@@ -335,14 +389,7 @@ public class SubjectVersionsResource {
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
 
-    Schema schema = new Schema(
-        subjectName,
-        request.getVersion() != null ? request.getVersion() : 0,
-        request.getId() != null ? request.getId() : -1,
-        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
-        request.getReferences(),
-        request.getSchema()
-    );
+    Schema schema = new Schema(subjectName, request);
     int id;
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
@@ -378,6 +425,7 @@ public class SubjectVersionsResource {
 
   @DELETE
   @Path("/{version}")
+  @DocumentedName("deleteSchemaVersion")
   @PerformanceMetric("subjects.versions.deleteSchemaVersion-schema")
   @Operation(summary = "Delete schema version",
       description = "Deletes a specific version of the schema registered under this subject. "
@@ -388,14 +436,26 @@ public class SubjectVersionsResource {
         + "previously registered schema.",
       responses = {
         @ApiResponse(responseCode = "200", description = "Operation succeeded. "
-          + "Returns the schema version", content = @Content(schema =
-            @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class))),
-        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
-          + "Error code 40402 -- Version not found"),
-        @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
-        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
-          + "data store")
-      })
+          + "Returns the schema version.", content = @Content(schema =
+            @io.swagger.v3.oas.annotations.media.Schema(type = "integer",
+                    format = "int32",
+                    example = Schema.VERSION_EXAMPLE))),
+        @ApiResponse(responseCode = "404",
+          description = "Not Found. "
+                  + "Error code 40401 indicates subject not found. "
+                  + "Error code 40402 indicates version not found.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "422",
+          description = "Unprocessable Entity. Error code 42202 indicates an invalid version.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
   public void deleteSchemaVersion(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
@@ -405,7 +465,7 @@ public class SubjectVersionsResource {
       @PathParam("version") String version,
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
-    log.info("Deleting schema version {} from subject {}", version, subject);
+    log.debug("Deleting schema version {} from subject {}", version, subject);
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
