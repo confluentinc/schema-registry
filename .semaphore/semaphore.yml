@@ -37,6 +37,8 @@ blocks:
       jobs:
         - name: Test
           commands:
+            - pip install confluent-release-tools -q
+            - . sem-pint -c
             - . ci-tools ci-update-version
             - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode --no-transfer-progress clean verify install dependency:analyze validate
             - . cache-maven store
@@ -45,6 +47,7 @@ blocks:
           commands:
             - . publish-test-results
             - artifact push workflow target/test-results
+            - artifact push workflow target
 
   - name: Release
     dependencies: ["Test"]
@@ -54,13 +57,10 @@ blocks:
       jobs:
         - name: Release
           commands:
-            - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-            - git fetch --unshallow || true
             - . ci-tools ci-update-version
             - . ci-tools ci-push-tag
             - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode -DaltDeploymentRepository=confluent-codeartifact-internal::default::https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven-snapshots/
               -DrepositoryId=confluent-codeartifact-internal deploy -DskipTests
-
 
 after_pipeline:
   task:
@@ -78,7 +78,8 @@ after_pipeline:
         commands:
           - checkout
           - sem-version java 11
-          - emit-sonarqube-data -a test-results
+          - artifact pull workflow target
+          - emit-sonarqube-data --run_only_sonar_scan
       - name: Trigger downstream projects
         commands:
           - >-
