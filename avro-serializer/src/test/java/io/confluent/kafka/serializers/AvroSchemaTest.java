@@ -198,11 +198,27 @@ public class AvroSchemaTest {
           + " \"items\": \"string\"\n"
           + "}");
 
+  private static final Schema arraySchemaWithDefault = new Schema.Parser().parse(
+      "{\"namespace\": \"namespace\",\n"
+          + " \"type\": \"array\",\n"
+          + " \"name\": \"test\",\n"
+          + " \"items\": \"string\",\n"
+          + " \"default\": []\n"
+          + "}");
+
   private static final Schema mapSchema = new Schema.Parser().parse(
       "{\"namespace\": \"namespace\",\n"
           + " \"type\": \"map\",\n"
           + " \"name\": \"test\",\n"
           + " \"values\": \"string\"\n"
+          + "}");
+
+  private static final Schema mapSchemaWithDefault = new Schema.Parser().parse(
+      "{\"namespace\": \"namespace\",\n"
+          + " \"type\": \"map\",\n"
+          + " \"name\": \"test\",\n"
+          + " \"values\": \"string\",\n"
+          + " \"default\": {}\n"
           + "}");
 
   private static final Schema unionSchema = new Schema.Parser().parse("{\"type\": \"record\",\n"
@@ -211,6 +227,11 @@ public class AvroSchemaTest {
       + "     {\"name\": \"union\", \"type\": [\"string\", \"int\"]}\n"
       + "]}");
 
+  private static final Schema unionSchemaWithDefault = new Schema.Parser().parse("{\"type\": \"record\",\n"
+      + " \"name\": \"test\",\n"
+      + " \"fields\": [\n"
+      + "     {\"name\": \"union\", \"type\": [\"string\", \"int\"], \"default\": \"\"}\n"
+      + "]}");
 
   private static final Schema enumSchema = new Schema.Parser().parse("{ \"type\": \"enum\",\n"
       + "  \"name\": \"Suit\",\n"
@@ -220,6 +241,12 @@ public class AvroSchemaTest {
   private static final Schema enumSchema2 = new Schema.Parser().parse("{ \"type\": \"enum\",\n"
       + "  \"name\": \"Suit\",\n"
       + "  \"symbols\" : [\"SPADES\", \"HEARTS\", \"DIAMONDS\"]\n"
+      + "}");
+
+  private static final Schema enumSchemaWithDefault = new Schema.Parser().parse("{ \"type\": \"enum\",\n"
+      + "  \"name\": \"Suit\",\n"
+      + "  \"symbols\" : [\"SPADES\", \"HEARTS\", \"DIAMONDS\", \"CLUBS\"],\n"
+      + "  \"default\" : \"HEARTS\"\n"
       + "}");
 
   @Test
@@ -525,6 +552,139 @@ public class AvroSchemaTest {
     assertNotEquals(schema, schema2);
     assertNotEquals(schema, schema3);
     assertNotEquals(schema, schema4);
+  }
+
+  @Test
+  public void testNormalization() throws Exception {
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"doc\":\"hi\\\"there\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\",\"doc\":\"bye\\\"now\"}]"
+        + "}";
+    String normalized = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"doc\":\"hi\\\"there\","
+        + "\"fields\":"
+        + "[{\"name\":\"f1\",\"type\":\"string\",\"doc\":\"bye\\\"now\"}]"
+        + "}";
+    AvroSchema schema = new AvroSchema(schemaString);
+    assertEquals(normalized, schema.canonicalString());
+    AvroSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+  }
+
+  @Test
+  public void testNormalizationPreservesMetadataForPrimitiveTypes() throws Exception {
+    String schemaString = "{"
+        + "\"connect.name\": \"some.scope.Envelope\","
+        + "\"fields\": ["
+        +   "{"
+        +     "\"default\": null,"
+        +     "\"name\": \"before\","
+        +     "\"type\": ["
+        +       "\"null\","
+        +       "{"
+        +         "\"connect.name\": \"some.scope.Value\","
+        +         "\"fields\": ["
+        +           "{"
+        +             "\"name\": \"created_at\","
+        +             "\"type\": {"
+        +               "\"connect.name\": \"io.debezium.time.Timestamp\","
+        +               "\"connect.version\": 1,"
+        +               "\"type\": \"long\""
+        +             "}"
+        +           "},"
+        +           "{"
+        +             "\"name\":\"normal_long\","
+        +             "\"type\":\"long\""
+        +           "}"
+        +         "],"
+        +         "\"name\": \"Value\","
+        +         "\"type\": \"record\""
+        +       "}"
+        +     "]"
+        +   "},"
+        +   "{"
+        +     "\"default\": null,"
+        +     "\"name\": \"after\","
+        +     "\"type\": ["
+        +       "\"null\","
+        +       "\"Value\""
+        +     "]"
+        +   "}"
+        + "],"
+        + "\"name\": \"Envelope\","
+        + "\"namespace\": \"some.scope\","
+        + "\"type\": \"record\""
+        + "}";
+
+    String normalized = "{"
+        + "\"type\":\"record\","    
+        + "\"name\":\"Envelope\","
+        + "\"namespace\":\"some.scope\","
+        + "\"fields\":["
+        +   "{"
+        +     "\"name\":\"before\","
+        +     "\"type\":["
+        +       "\"null\","
+        +       "{"
+        +         "\"type\":\"record\","
+        +         "\"name\":\"Value\","
+        +         "\"fields\":["
+        +           "{"
+        +             "\"name\":\"created_at\","
+        +             "\"type\":{"
+        +               "\"type\":\"long\","
+        +               "\"connect.name\":\"io.debezium.time.Timestamp\","
+        +               "\"connect.version\":1"
+        +             "}"
+        +           "},"
+        +           "{"
+        +             "\"name\":\"normal_long\","
+        +             "\"type\":\"long\""
+        +           "}"
+        +         "],"
+        +         "\"connect.name\":\"some.scope.Value\""
+        +       "}"
+        +     "],"
+        +     "\"default\":null"
+        +   "},"
+        +   "{"
+        +     "\"name\":\"after\","
+        +     "\"type\":["
+        +       "\"null\","
+        +       "\"Value\""
+        +     "],"
+        +     "\"default\":null"
+        +   "}"
+        + "],"
+        + "\"connect.name\":\"some.scope.Envelope\""
+        + "}";
+    AvroSchema schema = new AvroSchema(schemaString);
+    assertEquals(normalized, schema.canonicalString());
+    AvroSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+  }
+
+  @Test
+  public void testArrayWithDefault() throws Exception {
+    assertNotEquals(new AvroSchema(mapSchema), new AvroSchema(mapSchemaWithDefault));
+  }
+
+  @Test
+  public void testMapWithDefault() throws Exception {
+    assertNotEquals(new AvroSchema(arraySchema), new AvroSchema(arraySchemaWithDefault));
+  }
+
+  @Test
+  public void testUnionWithDefault() throws Exception {
+    assertNotEquals(new AvroSchema(unionSchema), new AvroSchema(unionSchemaWithDefault));
+  }
+
+  @Test
+  public void testEnumWithDefault() throws Exception {
+    assertNotEquals(new AvroSchema(enumSchema), new AvroSchema(enumSchemaWithDefault));
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {

@@ -247,6 +247,49 @@
     "compatible": false
   },
   {
+    "description": "Detect compatible name qualification in map",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    map<string, Status> test_map = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    map<string, TestMessage.Status> test_map = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible field label change for message",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    optional Status test_status = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    repeated Status test_status = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible field label change for string",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    optional string test_string = 1;\n    Status test_status = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    repeated string test_string = 1;\n    Status test_status = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "changes": [
+      "FIELD_STRING_OR_BYTES_LABEL_CHANGED #/TestMessage/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible field label change for bytes",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    optional bytes test_bytes = 1;\n    Status test_status = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    repeated bytes test_bytes = 1;\n    Status test_status = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "changes": [
+      "FIELD_STRING_OR_BYTES_LABEL_CHANGED #/TestMessage/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible field label change for number",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    optional int32 test_int = 1;\n    Status test_status = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    repeated int32 test_int = 1;\n    Status test_status = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "changes": [
+      "FIELD_NUMERIC_LABEL_CHANGED #/TestMessage/1"
+    ],
+    "compatible": false
+  },
+  {
     "description": "Detect compatible message addition",
     "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}",
     "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}\nmessage TestMessage2 {\n    string test_string = 1;\n}",

@@ -37,6 +37,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
       String schemaString,
       List<SchemaReference> references);
 
+  /**
+   * @deprecated use {@link #register(String, ParsedSchema)} instead;
+   *     for example, you can convert a {@link Schema} into a {@link ParsedSchema} 
+   *     via {@code new AvroSchema(schema)}
+   */
   @Deprecated
   default int register(String subject, org.apache.avro.Schema schema) throws IOException,
       RestClientException {
@@ -45,6 +50,16 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   public int register(String subject, ParsedSchema schema) throws IOException, RestClientException;
 
+  default int register(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * @deprecated use {@link #register(String, ParsedSchema, int, int)} instead;
+   *     for example, you can convert a {@link Schema} into a {@link ParsedSchema}
+   *     via {@code new AvroSchema(schema)}
+   */
   @Deprecated
   default int register(String subject, org.apache.avro.Schema schema, int version, int id)
       throws IOException,
@@ -55,11 +70,17 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   public int register(String subject, ParsedSchema schema, int version, int id) throws IOException,
       RestClientException;
 
+  /**
+   * @deprecated use {@link #getSchemaById(int)} instead
+   */
   @Deprecated
   default org.apache.avro.Schema getByID(int id) throws IOException, RestClientException {
     return getById(id);
   }
 
+  /**
+   * @deprecated use {@link #getSchemaById(int)} instead
+   */
   @Deprecated
   default org.apache.avro.Schema getById(int id) throws IOException, RestClientException {
     ParsedSchema schema = getSchemaById(id);
@@ -68,12 +89,18 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   public ParsedSchema getSchemaById(int id) throws IOException, RestClientException;
 
+  /**
+   * @deprecated use {@link #getSchemaBySubjectAndId(String, int)} instead
+   */
   @Deprecated
   default org.apache.avro.Schema getBySubjectAndID(String subject, int id)
       throws IOException, RestClientException {
     return getBySubjectAndId(subject, id);
   }
 
+  /**
+   * @deprecated use {@link #getSchemaBySubjectAndId(String, int)} instead
+   */
   @Deprecated
   default org.apache.avro.Schema getBySubjectAndId(String subject, int id)
       throws IOException, RestClientException {
@@ -119,6 +146,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   public int getVersion(String subject, ParsedSchema schema)
       throws IOException, RestClientException;
 
+  default int getVersion(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public List<Integer> getAllVersions(String subject) throws IOException, RestClientException;
 
   @Deprecated
@@ -140,17 +172,35 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   public String getCompatibility(String subject) throws IOException, RestClientException;
 
+  default void deleteCompatibility(String subject) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public String setMode(String mode)
       throws IOException, RestClientException;
 
   public String setMode(String mode, String subject)
       throws IOException, RestClientException;
 
+  default String setMode(String mode, String subject, boolean force)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public String getMode() throws IOException, RestClientException;
 
   public String getMode(String subject) throws IOException, RestClientException;
 
+  default void deleteMode(String subject) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
+
+  default Collection<String> getAllSubjectsByPrefix(String subjectPrefix) throws IOException,
+      RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   @Deprecated
   default int getId(String subject, org.apache.avro.Schema schema)
@@ -159,6 +209,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   }
 
   int getId(String subject, ParsedSchema schema) throws IOException, RestClientException;
+
+  default int getId(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   public default List<Integer> deleteSubject(String subject) throws IOException,
           RestClientException {

@@ -26,16 +26,21 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 
 public interface SchemaRegistry extends SchemaVersionFetcher {
 
-  String DEFAULT_TENANT = "default";
+  String DEFAULT_TENANT = QualifiedSubject.DEFAULT_TENANT;
 
   void init() throws SchemaRegistryException;
 
   Set<String> schemaTypes();
 
-  int register(String subject, Schema schema) throws SchemaRegistryException;
+  default int register(String subject, Schema schema) throws SchemaRegistryException {
+    return register(subject, schema, false);
+  }
+
+  int register(String subject, Schema schema, boolean normalize) throws SchemaRegistryException;
 
   default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {
     try {
@@ -48,7 +53,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Schema get(String subject, int version, boolean returnDeletedSchema)
       throws SchemaRegistryException;
 
-  SchemaString get(int id) throws SchemaRegistryException;
+  SchemaString get(int id, String subject) throws SchemaRegistryException;
 
   default Set<String> listSubjects() throws SchemaRegistryException {
     return listSubjects(false);
@@ -57,11 +62,11 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Set<String> listSubjects(boolean returnDeletedSubjects)
           throws SchemaRegistryException;
 
-  Iterator<Schema> getAllVersions(String subject, boolean filterDeletes)
+  Iterator<Schema> getAllVersions(String subject, boolean returnDeletedSchemas)
       throws SchemaRegistryException;
 
   Iterator<Schema> getVersionsWithSubjectPrefix(
-      String prefix, boolean filterDeletes, boolean latestOnly)
+      String prefix, boolean returnDeletedSchemas, boolean latestOnly)
       throws SchemaRegistryException;
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
@@ -69,7 +74,14 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   List<Integer> deleteSubject(String subject, boolean permanentDelete)
       throws SchemaRegistryException;
 
-  Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
+  default Schema lookUpSchemaUnderSubject(
+      String subject, Schema schema, boolean lookupDeletedSchema)
+      throws SchemaRegistryException {
+    return lookUpSchemaUnderSubject(subject, schema, false, lookupDeletedSchema);
+  }
+
+  Schema lookUpSchemaUnderSubject(
+      String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
       throws SchemaRegistryException;
 
   List<String> isCompatible(String subject,

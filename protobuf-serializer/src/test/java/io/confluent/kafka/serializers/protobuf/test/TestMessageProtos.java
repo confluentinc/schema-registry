@@ -117,7 +117,7 @@ public final class TestMessageProtos {
   /**
    * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.TestMessage}
    */
-  public  static final class TestMessage extends
+  public static final class TestMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.TestMessage)
       TestMessageOrBuilder {
@@ -275,6 +275,7 @@ public final class TestMessageProtos {
      * <code>string test_string = 1;</code>
      * @return The testString.
      */
+    @java.lang.Override
     public java.lang.String getTestString() {
       java.lang.Object ref = testString_;
       if (ref instanceof java.lang.String) {
@@ -291,6 +292,7 @@ public final class TestMessageProtos {
      * <code>string test_string = 1;</code>
      * @return The bytes for testString.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString
         getTestStringBytes() {
       java.lang.Object ref = testString_;
@@ -311,6 +313,7 @@ public final class TestMessageProtos {
      * <code>bool test_bool = 2;</code>
      * @return The testBool.
      */
+    @java.lang.Override
     public boolean getTestBool() {
       return testBool_;
     }
@@ -321,6 +324,7 @@ public final class TestMessageProtos {
      * <code>bytes test_bytes = 3;</code>
      * @return The testBytes.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString getTestBytes() {
       return testBytes_;
     }
@@ -331,6 +335,7 @@ public final class TestMessageProtos {
      * <code>double test_double = 4;</code>
      * @return The testDouble.
      */
+    @java.lang.Override
     public double getTestDouble() {
       return testDouble_;
     }
@@ -341,6 +346,7 @@ public final class TestMessageProtos {
      * <code>float test_float = 5;</code>
      * @return The testFloat.
      */
+    @java.lang.Override
     public float getTestFloat() {
       return testFloat_;
     }
@@ -351,6 +357,7 @@ public final class TestMessageProtos {
      * <code>fixed32 test_fixed32 = 6;</code>
      * @return The testFixed32.
      */
+    @java.lang.Override
     public int getTestFixed32() {
       return testFixed32_;
     }
@@ -361,6 +368,7 @@ public final class TestMessageProtos {
      * <code>fixed64 test_fixed64 = 7;</code>
      * @return The testFixed64.
      */
+    @java.lang.Override
     public long getTestFixed64() {
       return testFixed64_;
     }
@@ -371,6 +379,7 @@ public final class TestMessageProtos {
      * <code>int32 test_int32 = 8;</code>
      * @return The testInt32.
      */
+    @java.lang.Override
     public int getTestInt32() {
       return testInt32_;
     }
@@ -381,6 +390,7 @@ public final class TestMessageProtos {
      * <code>int64 test_int64 = 9;</code>
      * @return The testInt64.
      */
+    @java.lang.Override
     public long getTestInt64() {
       return testInt64_;
     }
@@ -391,6 +401,7 @@ public final class TestMessageProtos {
      * <code>sfixed32 test_sfixed32 = 10;</code>
      * @return The testSfixed32.
      */
+    @java.lang.Override
     public int getTestSfixed32() {
       return testSfixed32_;
     }
@@ -401,6 +412,7 @@ public final class TestMessageProtos {
      * <code>sfixed64 test_sfixed64 = 11;</code>
      * @return The testSfixed64.
      */
+    @java.lang.Override
     public long getTestSfixed64() {
       return testSfixed64_;
     }
@@ -411,6 +423,7 @@ public final class TestMessageProtos {
      * <code>sint32 test_sint32 = 12;</code>
      * @return The testSint32.
      */
+    @java.lang.Override
     public int getTestSint32() {
       return testSint32_;
     }
@@ -421,6 +434,7 @@ public final class TestMessageProtos {
      * <code>sint64 test_sint64 = 13;</code>
      * @return The testSint64.
      */
+    @java.lang.Override
     public long getTestSint64() {
       return testSint64_;
     }
@@ -431,6 +445,7 @@ public final class TestMessageProtos {
      * <code>uint32 test_uint32 = 14;</code>
      * @return The testUint32.
      */
+    @java.lang.Override
     public int getTestUint32() {
       return testUint32_;
     }
@@ -441,6 +456,7 @@ public final class TestMessageProtos {
      * <code>uint64 test_uint64 = 15;</code>
      * @return The testUint64.
      */
+    @java.lang.Override
     public long getTestUint64() {
       return testUint64_;
     }
@@ -1076,6 +1092,7 @@ public final class TestMessageProtos {
        * <code>bool test_bool = 2;</code>
        * @return The testBool.
        */
+      @java.lang.Override
       public boolean getTestBool() {
         return testBool_;
       }
@@ -1106,6 +1123,7 @@ public final class TestMessageProtos {
        * <code>bytes test_bytes = 3;</code>
        * @return The testBytes.
        */
+      @java.lang.Override
       public com.google.protobuf.ByteString getTestBytes() {
         return testBytes_;
       }
@@ -1139,6 +1157,7 @@ public final class TestMessageProtos {
        * <code>double test_double = 4;</code>
        * @return The testDouble.
        */
+      @java.lang.Override
       public double getTestDouble() {
         return testDouble_;
       }
@@ -1169,6 +1188,7 @@ public final class TestMessageProtos {
        * <code>float test_float = 5;</code>
        * @return The testFloat.
        */
+      @java.lang.Override
       public float getTestFloat() {
         return testFloat_;
       }
@@ -1199,6 +1219,7 @@ public final class TestMessageProtos {
        * <code>fixed32 test_fixed32 = 6;</code>
        * @return The testFixed32.
        */
+      @java.lang.Override
       public int getTestFixed32() {
         return testFixed32_;
       }
@@ -1229,6 +1250,7 @@ public final class TestMessageProtos {
        * <code>fixed64 test_fixed64 = 7;</code>
        * @return The testFixed64.
        */
+      @java.lang.Override
       public long getTestFixed64() {
         return testFixed64_;
       }
@@ -1259,6 +1281,7 @@ public final class TestMessageProtos {
        * <code>int32 test_int32 = 8;</code>
        * @return The testInt32.
        */
+      @java.lang.Override
       public int getTestInt32() {
         return testInt32_;
       }
@@ -1289,6 +1312,7 @@ public final class TestMessageProtos {
        * <code>int64 test_int64 = 9;</code>
        * @return The testInt64.
        */
+      @java.lang.Override
       public long getTestInt64() {
         return testInt64_;
       }
@@ -1319,6 +1343,7 @@ public final class TestMessageProtos {
        * <code>sfixed32 test_sfixed32 = 10;</code>
        * @return The testSfixed32.
        */
+      @java.lang.Override
       public int getTestSfixed32() {
         return testSfixed32_;
       }
@@ -1349,6 +1374,7 @@ public final class TestMessageProtos {
        * <code>sfixed64 test_sfixed64 = 11;</code>
        * @return The testSfixed64.
        */
+      @java.lang.Override
       public long getTestSfixed64() {
         return testSfixed64_;
       }
@@ -1379,6 +1405,7 @@ public final class TestMessageProtos {
        * <code>sint32 test_sint32 = 12;</code>
        * @return The testSint32.
        */
+      @java.lang.Override
       public int getTestSint32() {
         return testSint32_;
       }
@@ -1409,6 +1436,7 @@ public final class TestMessageProtos {
        * <code>sint64 test_sint64 = 13;</code>
        * @return The testSint64.
        */
+      @java.lang.Override
       public long getTestSint64() {
         return testSint64_;
       }
@@ -1439,6 +1467,7 @@ public final class TestMessageProtos {
        * <code>uint32 test_uint32 = 14;</code>
        * @return The testUint32.
        */
+      @java.lang.Override
       public int getTestUint32() {
         return testUint32_;
       }
@@ -1469,6 +1498,7 @@ public final class TestMessageProtos {
        * <code>uint64 test_uint64 = 15;</code>
        * @return The testUint64.
        */
+      @java.lang.Override
       public long getTestUint64() {
         return testUint64_;
       }
@@ -1664,7 +1694,7 @@ public final class TestMessageProtos {
   /**
    * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.TestMessage2}
    */
-  public  static final class TestMessage2 extends
+  public static final class TestMessage2 extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.TestMessage2)
       TestMessage2OrBuilder {
@@ -1835,6 +1865,7 @@ public final class TestMessageProtos {
      * <code>string test_string = 1;</code>
      * @return The testString.
      */
+    @java.lang.Override
     public java.lang.String getTestString() {
       java.lang.Object ref = testString_;
       if (ref instanceof java.lang.String) {
@@ -1851,6 +1882,7 @@ public final class TestMessageProtos {
      * <code>string test_string = 1;</code>
      * @return The bytes for testString.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString
         getTestStringBytes() {
       java.lang.Object ref = testString_;
@@ -1871,6 +1903,7 @@ public final class TestMessageProtos {
      * <code>bool test_bool = 2;</code>
      * @return The testBool.
      */
+    @java.lang.Override
     public boolean getTestBool() {
       return testBool_;
     }
@@ -1881,6 +1914,7 @@ public final class TestMessageProtos {
      * <code>bytes test_bytes = 3;</code>
      * @return The testBytes.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString getTestBytes() {
       return testBytes_;
     }
@@ -1891,6 +1925,7 @@ public final class TestMessageProtos {
      * <code>double test_double = 4;</code>
      * @return The testDouble.
      */
+    @java.lang.Override
     public double getTestDouble() {
       return testDouble_;
     }
@@ -1901,6 +1936,7 @@ public final class TestMessageProtos {
      * <code>float test_float = 5;</code>
      * @return The testFloat.
      */
+    @java.lang.Override
     public float getTestFloat() {
       return testFloat_;
     }
@@ -1911,6 +1947,7 @@ public final class TestMessageProtos {
      * <code>fixed32 test_fixed32 = 6;</code>
      * @return The testFixed32.
      */
+    @java.lang.Override
     public int getTestFixed32() {
       return testFixed32_;
     }
@@ -1921,6 +1958,7 @@ public final class TestMessageProtos {
      * <code>fixed64 test_fixed64 = 7;</code>
      * @return The testFixed64.
      */
+    @java.lang.Override
     public long getTestFixed64() {
       return testFixed64_;
     }
@@ -1931,6 +1969,7 @@ public final class TestMessageProtos {
      * <code>int32 test_int32 = 8;</code>
      * @return The testInt32.
      */
+    @java.lang.Override
     public int getTestInt32() {
       return testInt32_;
     }
@@ -1941,6 +1980,7 @@ public final class TestMessageProtos {
      * <code>int64 test_int64 = 9;</code>
      * @return The testInt64.
      */
+    @java.lang.Override
     public long getTestInt64() {
       return testInt64_;
     }
@@ -1951,6 +1991,7 @@ public final class TestMessageProtos {
      * <code>sfixed32 test_sfixed32 = 10;</code>
      * @return The testSfixed32.
      */
+    @java.lang.Override
     public int getTestSfixed32() {
       return testSfixed32_;
     }
@@ -1961,6 +2002,7 @@ public final class TestMessageProtos {
      * <code>sfixed64 test_sfixed64 = 11;</code>
      * @return The testSfixed64.
      */
+    @java.lang.Override
     public long getTestSfixed64() {
       return testSfixed64_;
     }
@@ -1971,6 +2013,7 @@ public final class TestMessageProtos {
      * <code>sint32 test_sint32 = 12;</code>
      * @return The testSint32.
      */
+    @java.lang.Override
     public int getTestSint32() {
       return testSint32_;
     }
@@ -1981,6 +2024,7 @@ public final class TestMessageProtos {
      * <code>sint64 test_sint64 = 13;</code>
      * @return The testSint64.
      */
+    @java.lang.Override
     public long getTestSint64() {
       return testSint64_;
     }
@@ -1991,6 +2035,7 @@ public final class TestMessageProtos {
      * <code>uint32 test_uint32 = 14;</code>
      * @return The testUint32.
      */
+    @java.lang.Override
     public int getTestUint32() {
       return testUint32_;
     }
@@ -2001,6 +2046,7 @@ public final class TestMessageProtos {
      * <code>uint64 test_uint64 = 15;</code>
      * @return The testUint64.
      */
+    @java.lang.Override
     public long getTestUint64() {
       return testUint64_;
     }
@@ -2011,6 +2057,7 @@ public final class TestMessageProtos {
      * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
      * @return Whether the testMessage field is set.
      */
+    @java.lang.Override
     public boolean hasTestMessage() {
       return testMessage_ != null;
     }
@@ -2018,12 +2065,14 @@ public final class TestMessageProtos {
      * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
      * @return The testMessage.
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage getTestMessage() {
       return testMessage_ == null ? io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.getDefaultInstance() : testMessage_;
     }
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder getTestMessageOrBuilder() {
       return getTestMessage();
     }
@@ -2689,6 +2738,7 @@ public final class TestMessageProtos {
        * <code>bool test_bool = 2;</code>
        * @return The testBool.
        */
+      @java.lang.Override
       public boolean getTestBool() {
         return testBool_;
       }
@@ -2719,6 +2769,7 @@ public final class TestMessageProtos {
        * <code>bytes test_bytes = 3;</code>
        * @return The testBytes.
        */
+      @java.lang.Override
       public com.google.protobuf.ByteString getTestBytes() {
         return testBytes_;
       }
@@ -2752,6 +2803,7 @@ public final class TestMessageProtos {
        * <code>double test_double = 4;</code>
        * @return The testDouble.
        */
+      @java.lang.Override
       public double getTestDouble() {
         return testDouble_;
       }
@@ -2782,6 +2834,7 @@ public final class TestMessageProtos {
        * <code>float test_float = 5;</code>
        * @return The testFloat.
        */
+      @java.lang.Override
       public float getTestFloat() {
         return testFloat_;
       }
@@ -2812,6 +2865,7 @@ public final class TestMessageProtos {
        * <code>fixed32 test_fixed32 = 6;</code>
        * @return The testFixed32.
        */
+      @java.lang.Override
       public int getTestFixed32() {
         return testFixed32_;
       }
@@ -2842,6 +2896,7 @@ public final class TestMessageProtos {
        * <code>fixed64 test_fixed64 = 7;</code>
        * @return The testFixed64.
        */
+      @java.lang.Override
       public long getTestFixed64() {
         return testFixed64_;
       }
@@ -2872,6 +2927,7 @@ public final class TestMessageProtos {
        * <code>int32 test_int32 = 8;</code>
        * @return The testInt32.
        */
+      @java.lang.Override
       public int getTestInt32() {
         return testInt32_;
       }
@@ -2902,6 +2958,7 @@ public final class TestMessageProtos {
        * <code>int64 test_int64 = 9;</code>
        * @return The testInt64.
        */
+      @java.lang.Override
       public long getTestInt64() {
         return testInt64_;
       }
@@ -2932,6 +2989,7 @@ public final class TestMessageProtos {
        * <code>sfixed32 test_sfixed32 = 10;</code>
        * @return The testSfixed32.
        */
+      @java.lang.Override
       public int getTestSfixed32() {
         return testSfixed32_;
       }
@@ -2962,6 +3020,7 @@ public final class TestMessageProtos {
        * <code>sfixed64 test_sfixed64 = 11;</code>
        * @return The testSfixed64.
        */
+      @java.lang.Override
       public long getTestSfixed64() {
         return testSfixed64_;
       }
@@ -2992,6 +3051,7 @@ public final class TestMessageProtos {
        * <code>sint32 test_sint32 = 12;</code>
        * @return The testSint32.
        */
+      @java.lang.Override
       public int getTestSint32() {
         return testSint32_;
       }
@@ -3022,6 +3082,7 @@ public final class TestMessageProtos {
        * <code>sint64 test_sint64 = 13;</code>
        * @return The testSint64.
        */
+      @java.lang.Override
       public long getTestSint64() {
         return testSint64_;
       }
@@ -3052,6 +3113,7 @@ public final class TestMessageProtos {
        * <code>uint32 test_uint32 = 14;</code>
        * @return The testUint32.
        */
+      @java.lang.Override
       public int getTestUint32() {
         return testUint32_;
       }
@@ -3082,6 +3144,7 @@ public final class TestMessageProtos {
        * <code>uint64 test_uint64 = 15;</code>
        * @return The testUint64.
        */
+      @java.lang.Override
       public long getTestUint64() {
         return testUint64_;
       }

@@ -70,6 +70,16 @@ public interface ParsedSchema {
   List<SchemaReference> references();
 
   /**
+   * Returns a normalized copy of this schema.
+   * Normalization generally ignores ordering when it is not significant.
+   *
+   * @return the normalized representation
+   */
+  default ParsedSchema normalize() {
+    return this;
+  }
+
+  /**
    * Validates the schema and ensures all references are resolved properly.
    * Throws an exception if the schema is not valid.
    */

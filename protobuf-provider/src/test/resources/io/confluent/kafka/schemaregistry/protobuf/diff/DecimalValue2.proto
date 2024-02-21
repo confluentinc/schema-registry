@@ -35,8 +35,8 @@ enum Status {
     doc: "enum_value",
     params: [
       {
-        value: "enum",
-        key: "type"
+        key: "type",
+        value: "enum"
       }
     ]
   }];
