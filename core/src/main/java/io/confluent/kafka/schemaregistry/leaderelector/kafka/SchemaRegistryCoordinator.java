@@ -150,10 +150,11 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   }
 
   @Override
-  protected Map<String, ByteBuffer> performAssignment(
+  protected Map<String, ByteBuffer> onLeaderElected(
       String kafkaLeaderId, // Kafka group "leader" who does assignment, *not* the SR leader
       String protocol,
-      List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata
+      List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata,
+      boolean skipAssignment
   ) {
     log.debug("Performing assignment");
 
@@ -211,11 +212,16 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   }
 
   @Override
-  protected void onJoinPrepare(int generation, String memberId) {
+  protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
     log.debug("Revoking previous assignment {}", assignmentSnapshot);
     if (assignmentSnapshot != null) {
       listener.onRevoked();
     }
+    // return true if the cleanup succeeds or if it fails with a non-retriable exception.
+    // return false otherwise.
+    // listener.onRevoked() called above removes this instance as the leader
+    // and even if we got an exception, it wouldn't help retrying.
+    return true;
   }
 
   @Override

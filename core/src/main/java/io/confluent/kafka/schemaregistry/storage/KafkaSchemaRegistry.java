@@ -67,6 +67,8 @@ import io.confluent.rest.exceptions.RestException;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -103,6 +105,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    * Schema versions under a particular subject are indexed from MIN_VERSION.
    */
   public static final int MIN_VERSION = 1;
+  // Subject name under which global permissions are stored.
+  public static final String GLOBAL_RESOURCE_NAME = "__GLOBAL";
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
@@ -130,6 +134,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final Map<String, SchemaProvider> providers;
   private final String kafkaClusterId;
   private final String groupId;
+  private final List<Consumer<Boolean>> leaderChangeListeners = new CopyOnWriteArrayList<>();
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -334,6 +339,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return kafkaStore.initialized();
   }
 
+  /**
+   * Add a leader change listener.
+   *
+   * @param listener a function that takes whether this node is a leader
+   */
+  public void addLeaderChangeListener(Consumer<Boolean> listener) {
+    leaderChangeListeners.add(listener);
+  }
+
   public boolean isLeader() {
     kafkaStore.leaderLock().lock();
     try {
@@ -365,9 +379,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           "Tried to set an ineligible node to leader: " + newLeader);
     }
 
+    boolean isLeader;
+    boolean leaderChanged;
     kafkaStore.leaderLock().lock();
     try {
-      SchemaRegistryIdentity previousLeader = leaderIdentity;
+      final SchemaRegistryIdentity previousLeader = leaderIdentity;
       leaderIdentity = newLeader;
 
       if (leaderIdentity == null) {
@@ -380,7 +396,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
 
-      if (leaderIdentity != null && !leaderIdentity.equals(previousLeader) && isLeader()) {
+      isLeader = isLeader();
+      leaderChanged = leaderIdentity != null && !leaderIdentity.equals(previousLeader);
+      if (leaderChanged && isLeader) {
         // The new leader may not know the exact last offset in the Kafka log. So, mark the
         // last offset invalid here
         kafkaStore.markLastWrittenOffsetInvalid();
@@ -396,6 +414,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       metricsContainer.getLeaderNode().record(isLeader() ? 1 : 0);
     } finally {
       kafkaStore.leaderLock().unlock();
+    }
+
+    if (leaderChanged) {
+      for (Consumer<Boolean> listener : leaderChangeListeners) {
+        try {
+          listener.accept(isLeader);
+        } catch (Exception e) {
+          log.error("Could not invoke leader change listener", e);
+        }
+      }
     }
   }
 
@@ -487,8 +515,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       Mode mode = getModeInScope(subject);
       boolean isCompatible = true;
+      List<String> compatibilityErrorLogs = new ArrayList<>();
       if (mode != Mode.IMPORT) {
-        isCompatible = isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions).isEmpty();
+        compatibilityErrorLogs = isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions);
+        isCompatible = compatibilityErrorLogs.isEmpty();
       }
 
       try {
@@ -556,8 +586,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
         return schema.getId();
       } else {
-        throw new IncompatibleSchemaException(
-            "New schema is incompatible with an earlier schema.");
+        throw new IncompatibleSchemaException(compatibilityErrorLogs.toString());
       }
     } catch (EntryTooLargeException e) {
       throw new SchemaTooLargeException("Write failed because schema is too large", e);
@@ -655,7 +684,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             deleteMode(subject);
           }
           if (getCompatibilityLevel(subject) != null) {
-            deleteSubjectCompatibility(subject);
+            deleteCompatibility(subject);
           }
         }
       } else {
@@ -728,7 +757,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           deleteMode(subject);
         }
         if (getCompatibilityLevel(subject) != null) {
-          deleteSubjectCompatibility(subject);
+          deleteCompatibility(subject);
         }
       } else {
         for (Integer version : deletedVersions) {
@@ -959,7 +988,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private void forwardDeleteSubjectCompatibilityConfigToLeader(
+  private void forwardDeleteCompatibilityConfigToLeader(
       Map<String, String> requestProperties,
       String subject
   ) throws SchemaRegistryRequestForwardingException {
@@ -968,7 +997,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     log.debug(String.format("Forwarding delete subject compatibility config request %s to %s",
         subject, baseUrl));
     try {
-      leaderRestService.deleteSubjectConfig(requestProperties, subject);
+      leaderRestService.deleteConfig(requestProperties, subject);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(
@@ -1036,7 +1065,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         parsedSchema = parsedSchema.normalize();
       }
     } catch (Exception e) {
-      String errMsg = "Invalid schema " + schema;
+      String errMsg = "Invalid schema " + schema + ", details: " + e.getMessage();
       log.error(errMsg, e);
       throw new InvalidSchemaException(errMsg, e);
     }
@@ -1097,10 +1126,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
     final String type = schemaType;
 
-    ParsedSchema parsedSchema = provider.parseSchema(schema, references, isNew)
-        .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
-            + " with refs " + references + " of type " + type));
-    return parsedSchema;
+    try {
+      return provider.parseSchemaOrElseThrow(schema, references, isNew);
+    } catch (Exception e) {
+      throw new InvalidSchemaException("Invalid schema " + schema
+              + " with refs " + references + " of type " + type + ", details: " + e.getMessage());
+    }
   }
 
   public Schema getUsingContexts(String subject, int version, boolean
@@ -1567,32 +1598,32 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public void deleteSubjectCompatibilityConfig(String subject)
+  public void deleteCompatibilityConfig(String subject)
       throws SchemaRegistryStoreException, OperationNotPermittedException {
     if (isReadOnlyMode(subject)) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-      deleteSubjectCompatibility(subject);
+      deleteCompatibility(subject);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to delete subject config value from store",
           e);
     }
   }
 
-  public void deleteSubjectCompatibilityConfigOrForward(String subject,
+  public void deleteCompatibilityConfigOrForward(String subject,
                                                         Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownLeaderException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        deleteSubjectCompatibilityConfig(subject);
+        deleteCompatibilityConfig(subject);
       } else {
         // forward delete subject config request to the leader
         if (leaderIdentity != null) {
-          forwardDeleteSubjectCompatibilityConfigToLeader(headerProperties, subject);
+          forwardDeleteCompatibilityConfigToLeader(headerProperties, subject);
         } else {
           throw new UnknownLeaderException("Delete config request failed since leader is "
               + "unknown");
@@ -1694,7 +1725,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.kafkaStore.delete(modeKey);
   }
 
-  private void deleteSubjectCompatibility(String subject) throws StoreException {
+  private void deleteCompatibility(String subject) throws StoreException {
     ConfigKey configKey = new ConfigKey(subject);
     this.kafkaStore.delete(configKey);
   }

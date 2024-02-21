@@ -36,6 +36,7 @@ import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 import com.google.protobuf.DescriptorProtos.ServiceDescriptorProto;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DurationProto;
@@ -378,6 +379,20 @@ public class ProtobufSchema implements ParsedSchema {
     this.descriptor = descriptor;
   }
 
+  public ProtobufSchema(EnumDescriptor enumDescriptor) {
+    this(enumDescriptor, Collections.emptyList());
+  }
+
+  public ProtobufSchema(EnumDescriptor enumDescriptor, List<SchemaReference> references) {
+    Map<String, ProtoFileElement> dependencies = new HashMap<>();
+    this.schemaObj = toProtoFile(enumDescriptor.getFile(), dependencies);
+    this.version = null;
+    this.name = enumDescriptor.getFullName();
+    this.references = Collections.unmodifiableList(references);
+    this.dependencies = Collections.unmodifiableMap(dependencies);
+    this.descriptor = null;
+  }
+
   private ProtobufSchema(
       ProtoFileElement schemaObj,
       Integer version,
@@ -460,7 +475,7 @@ public class ProtobufSchema implements ParsedSchema {
         byte[] bytes = base64Decoder.decode(schema);
         return toProtoFile(FileDescriptorProto.parseFrom(bytes));
       } catch (Exception pe) {
-        throw new IllegalArgumentException("Could not parse Protobuf", e);
+        throw new IllegalArgumentException("Could not parse Protobuf - " + e.getMessage(), e);
       }
     }
   }
@@ -957,6 +972,10 @@ public class ProtobufSchema implements ParsedSchema {
 
   public DynamicMessage.Builder newMessageBuilder(String name) {
     return toDynamicSchema().newMessageBuilder(name);
+  }
+
+  public EnumDescriptor getEnumDescriptor(String enumTypeName) {
+    return toDynamicSchema().getEnumDescriptor(enumTypeName);
   }
 
   public Descriptors.EnumValueDescriptor getEnumValue(String enumTypeName, int enumNumber) {

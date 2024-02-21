@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.1.12-0</version>
+        <version>7.2.10-0</version>
     </parent>
 
     <artifactId>kafka-schema-registry</artifactId>
@@ -61,6 +61,10 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-reload4j</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>logredactor</artifactId>
         </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
