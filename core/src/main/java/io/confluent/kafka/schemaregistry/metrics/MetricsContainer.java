@@ -148,6 +148,14 @@ public class MetricsContainer {
             "Number of deleted Protobuf schemas", new CumulativeCount());
   }
 
+  public Metrics getMetrics() {
+    return metrics;
+  }
+
+  public Map<String, String> getMetricsTags() {
+    return configuredTags;
+  }
+
   public MetricsContext getMetricsContext() {
     return metricsContext;
   }
