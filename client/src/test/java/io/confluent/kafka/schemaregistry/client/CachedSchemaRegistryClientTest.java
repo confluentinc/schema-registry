@@ -594,6 +594,55 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testMissingSubjectCache() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.MISSING_ID_CACHE_TTL_CONFIG, 60L);
+    configs.put(SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, 60L);
+
+    FakeTicker fakeTicker = new FakeTicker();
+    client = new CachedSchemaRegistryClient(
+            restService,
+            CACHE_CAPACITY,
+            null,
+            configs,
+            null,
+            fakeTicker
+    );
+
+    int version = 7;
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+            eq(SUBJECT_0), anyBoolean(),
+            eq(false)))
+            .andThrow(new RestClientException("Subject not found",
+                    404, 40401))
+            .andReturn(
+                    new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, version,
+                            ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+
+    replay(restService);
+
+    try {
+      client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals("Subject not found; error code: 40401", rce.getMessage());
+    }
+
+    fakeTicker.advance(59, TimeUnit.SECONDS);
+
+    try {
+      client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals("Schema not found; error code: 40403", rce.getMessage());
+    }
+
+    fakeTicker.advance(2, TimeUnit.SECONDS);
+    Thread.sleep(100);
+    client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+  }
+
+  @Test
   public void testMissingSchemaCache() throws Exception {
     Map<String, Object> configs = new HashMap<>();
     configs.put(SchemaRegistryClientConfig.MISSING_ID_CACHE_TTL_CONFIG, 60L);
