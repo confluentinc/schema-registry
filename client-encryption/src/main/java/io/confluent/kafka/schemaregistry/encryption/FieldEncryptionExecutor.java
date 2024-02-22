@@ -150,7 +150,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
 
   private Cryptor getCryptor(RuleContext ctx) {
     String algorithm = ctx.getParameter(ENCRYPT_DEK_ALGORITHM);
-    DekFormat dekFormat = algorithm != null
+    DekFormat dekFormat = algorithm != null && !algorithm.isEmpty()
         ? DekFormat.valueOf(algorithm)
         : DekFormat.AES256_GCM;
     return getCryptor(dekFormat);
@@ -292,10 +292,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         if (isRead) {
           throw new RuleException("No kek found for " + kekName + " during consume");
         }
-        if (kmsType == null) {
+        if (kmsType == null || kmsType.isEmpty()) {
           throw new RuleException("No kms type found for " + kekName + " during produce");
         }
-        if (kmsKeyId == null) {
+        if (kmsKeyId == null || kmsKeyId.isEmpty()) {
           throw new RuleException("No kms key id found for " + kekName + " during produce");
         }
         kek = new KekInfo(kmsType, kmsKeyId, false);
@@ -308,13 +308,13 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
           throw new RuleException("No kek found for " + kekName + " during produce");
         }
       }
-      if (kmsType != null && !kmsType.equals(kek.getKmsType())) {
-        throw new RuleException("Found " + kekName + " with different kms type: "
-            + kek.getKmsType());
+      if (kmsType != null && !kmsType.isEmpty() && !kmsType.equals(kek.getKmsType())) {
+        throw new RuleException("Found " + kekName + " with kms type '"
+            + kek.getKmsType() + "' which differs from rule kms type '" + kmsType + "'");
       }
-      if (kmsKeyId != null && !kmsKeyId.equals(kek.getKmsKeyId())) {
-        throw new RuleException("Found " + kekName + " with different kms key id: "
-            + kek.getKmsKeyId());
+      if (kmsKeyId != null && !kmsKeyId.isEmpty() && !kmsKeyId.equals(kek.getKmsKeyId())) {
+        throw new RuleException("Found " + kekName + " with kms key id '"
+            + kek.getKmsKeyId() + "' which differs from rule kms key id '" + kmsKeyId + "'");
       }
       return kek;
     }
