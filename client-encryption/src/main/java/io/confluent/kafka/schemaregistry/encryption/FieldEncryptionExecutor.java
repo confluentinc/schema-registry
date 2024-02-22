@@ -308,11 +308,11 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
           throw new RuleException("No kek found for " + kekName + " during produce");
         }
       }
-      if (kmsType != null && !kmsType.equals(kek.getKmsType())) {
+      if (kmsType != null && !kmsType.isEmpty() && !kmsType.equals(kek.getKmsType())) {
         throw new RuleException("Found " + kekName + " with kms type '"
             + kek.getKmsType() + "' which differs from rule kms type '" + kmsType + "'");
       }
-      if (kmsKeyId != null && !kmsKeyId.equals(kek.getKmsKeyId())) {
+      if (kmsKeyId != null && !kmsKeyId.isEmpty() && !kmsKeyId.equals(kek.getKmsKeyId())) {
         throw new RuleException("Found " + kekName + " with kms key id '"
             + kek.getKmsKeyId() + "' which differs from rule kms key id '" + kmsKeyId + "'");
       }
