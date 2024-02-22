@@ -206,12 +206,6 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     if (schema.getDescription() != null) {
       ctx.schemaBuilder().description(schema.getDescription().getValue());
     }
-    if (schema.getReadOnly() != null) {
-      ctx.schemaBuilder().readOnly(schema.getReadOnly().getValue());
-    }
-    if (schema.getWriteOnly() != null) {
-      ctx.schemaBuilder().writeOnly(schema.getWriteOnly().getValue());
-    }
     if (schema.getDefault() != null) {
       ctx.schemaBuilder().defaultValue(schema.getDefault().accept(new JsonValueVisitor()));
     }
