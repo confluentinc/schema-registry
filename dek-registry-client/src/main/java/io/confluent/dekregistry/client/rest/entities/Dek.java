@@ -25,6 +25,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Objects;
 
 @JsonInclude(Include.NON_NULL)
@@ -36,9 +38,12 @@ public class Dek {
   private final int version;
   private final DekFormat algorithm;
   private final String encryptedKeyMaterial;
-  private final String keyMaterial;
+  private String keyMaterial;
   private final Long timestamp;
   private final Boolean deleted;
+
+  private byte[] encryptedKeyMaterialBytes;
+  private byte[] keyMaterialBytes;
 
   @JsonCreator
   public Dek(
@@ -91,6 +96,14 @@ public class Dek {
     return this.keyMaterial;
   }
 
+  @JsonProperty("keyMaterial")
+  public void setKeyMaterial(byte[] keyMaterialBytes) {
+    if (keyMaterialBytes != null) {
+      this.keyMaterial =
+          new String(Base64.getEncoder().encode(keyMaterialBytes), StandardCharsets.UTF_8);
+    }
+  }
+
   @JsonProperty("ts")
   public Long getTimestamp() {
     return this.timestamp;
@@ -104,6 +117,30 @@ public class Dek {
   @JsonIgnore
   public boolean isDeleted() {
     return Boolean.TRUE.equals(this.deleted);
+  }
+
+  @JsonIgnore
+  public byte[] getEncryptedKeyMaterialBytes() {
+    if (encryptedKeyMaterial == null) {
+      return null;
+    }
+    if (encryptedKeyMaterialBytes == null) {
+      encryptedKeyMaterialBytes =
+          Base64.getDecoder().decode(encryptedKeyMaterial.getBytes(StandardCharsets.UTF_8));
+    }
+    return encryptedKeyMaterialBytes;
+  }
+
+  @JsonIgnore
+  public byte[] getKeyMaterialBytes() {
+    if (keyMaterial == null) {
+      return null;
+    }
+    if (keyMaterialBytes == null) {
+      keyMaterialBytes =
+          Base64.getDecoder().decode(keyMaterial.getBytes(StandardCharsets.UTF_8));
+    }
+    return keyMaterialBytes;
   }
 
   @Override
