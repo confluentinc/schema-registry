@@ -37,23 +37,18 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.fasterxml.jackson.databind.ser.PropertyWriter;
-import com.github.erosb.jsonsKema.IJsonValue;
 import com.github.erosb.jsonsKema.JsonArray;
 import com.github.erosb.jsonsKema.JsonBoolean;
 import com.github.erosb.jsonsKema.JsonNull;
 import com.github.erosb.jsonsKema.JsonNumber;
 import com.github.erosb.jsonsKema.JsonObject;
-import com.github.erosb.jsonsKema.JsonParser;
 import com.github.erosb.jsonsKema.JsonString;
 import com.github.erosb.jsonsKema.JsonValue;
-import com.github.erosb.jsonsKema.SchemaClient;
 import com.github.erosb.jsonsKema.SchemaLoaderConfig;
-import com.github.erosb.jsonsKema.SchemaLoadingException;
 import com.github.erosb.jsonsKema.UnknownSource;
 import com.github.erosb.jsonsKema.ValidationFailure;
 import com.github.erosb.jsonsKema.Validator;
 import com.google.common.collect.Lists;
-import com.google.common.io.ByteStreams;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -69,19 +64,11 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLConnection;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -350,17 +337,14 @@ public class JsonSchema implements ParsedSchema {
   }
 
   private void loadLatestDraft() throws URISyntaxException {
-    URI idUri = null;
-    if (jsonNode.has("$id")) {
-      String id = jsonNode.get("$id").asText();
-      if (id != null) {
-        idUri = ReferenceResolver.resolve((URI) null, id);
-      }
-    }
     Map<URI, String> references = new HashMap<>();
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
-      URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-      references.put(child, dep.getValue());
+      URI uri = new URI(dep.getKey());
+      references.put(uri, dep.getValue());
+      if (!uri.isAbsolute() && !dep.getKey().startsWith(".")) {
+        // For backward compatibility
+        references.put(new URI("./" + dep.getKey()), dep.getValue());
+      }
     }
     SchemaLoaderConfig config = SchemaLoaderConfig.createDefaultConfig(references);
     JsonValue schemaJson = objectMapper.convertValue(jsonNode, JsonObject.class);

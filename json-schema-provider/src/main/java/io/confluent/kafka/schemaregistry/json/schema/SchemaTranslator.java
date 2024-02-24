@@ -65,6 +65,7 @@ import com.github.erosb.jsonsKema.OneOfSchema;
 import com.github.erosb.jsonsKema.PatternSchema;
 import com.github.erosb.jsonsKema.PrefixItemsSchema;
 import com.github.erosb.jsonsKema.PropertyNamesSchema;
+import com.github.erosb.jsonsKema.ReadOnlySchema;
 import com.github.erosb.jsonsKema.ReferenceSchema;
 import com.github.erosb.jsonsKema.Regexp;
 import com.github.erosb.jsonsKema.RequiredSchema;
@@ -75,6 +76,7 @@ import com.github.erosb.jsonsKema.TypeSchema;
 import com.github.erosb.jsonsKema.UnevaluatedItemsSchema;
 import com.github.erosb.jsonsKema.UnevaluatedPropertiesSchema;
 import com.github.erosb.jsonsKema.UniqueItemsSchema;
+import com.github.erosb.jsonsKema.WriteOnlySchema;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -481,6 +483,12 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   }
 
   @Override
+  public SchemaContext visitReadOnlySchema(ReadOnlySchema schema) {
+    // ignore readOnly
+    return super.visitReadOnlySchema(schema);
+  }
+
+  @Override
   public SchemaContext visitReferenceSchema(ReferenceSchema schema) {
     Schema referredSchema = schema.getReferredSchema();
     String refValue = schema.getRef();
@@ -537,6 +545,12 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   public SchemaContext visitUniqueItemsSchema(UniqueItemsSchema schema) {
     return new SchemaContext(schema, ArraySchema.builder().requiresArray(false)
         .uniqueItems(schema.getUnique()));
+  }
+
+  @Override
+  public SchemaContext visitWriteOnlySchema(WriteOnlySchema schema) {
+    // ignore writeOnly
+    return super.visitWriteOnlySchema(schema);
   }
 
   private org.everit.json.schema.Schema.Builder<?> typeToSchema(String type) {
