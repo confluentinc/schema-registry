@@ -1031,7 +1031,7 @@ public class JsonSchemaTest {
   }
 
   @Test
-  public void testLocalReferenceDraft_2020_12_2() {
+  public void testNestedReferenceDraft_2020_12() {
     String parent = "{\n"
         + "  \"$schema\" : \"https://json-schema.org/draft/2020-12/schema\",\n"
         + "  \"type\" : \"object\",\n"
@@ -1049,7 +1049,7 @@ public class JsonSchemaTest {
         + "          \"type\" : \"array\",\n"
         + "          \"minItems\" : 0,\n"
         + "          \"items\" : {\n"
-        + "            \"$ref\" : \"message-schema#/$defs/ProtocolVersionName\"\n"
+        + "            \"$ref\" : \"child.schema.json#/$defs/ProtocolVersionName\"\n"
         + "          }\n"
         + "        }\n"
         + "      },\n"
@@ -1072,7 +1072,7 @@ public class JsonSchemaTest {
         + "            \"type\": \"object\",\n"
         + "            \"properties\": {\n"
         + "                \"messageId\": {\n"
-        + "                    \"$ref\": \"message-id-schema#/$defs/MessageId\"\n"
+        + "                    \"$ref\": \"grandchild.schema.json#/$defs/MessageId\"\n"
         + "                }\n"
         + "            },\n"
         + "            \"additionalProperties\": false\n"
@@ -1096,7 +1096,7 @@ public class JsonSchemaTest {
         + "    },\n"
         + "    \"additionalProperties\": false\n"
         + "}\n";
-    String child2 = "{\n"
+    String grandchild = "{\n"
         + "    \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
         + "    \"type\": \"object\",\n"
         + "    \"properties\": {\n"
@@ -1115,14 +1115,14 @@ public class JsonSchemaTest {
         + "    },\n"
         + "    \"additionalProperties\": false\n"
         + "}\n";
-    SchemaReference ref0 = new SchemaReference("message-id-schema", "reference", 1);
+    SchemaReference ref0 = new SchemaReference("grandchild.schema.json", "reference", 1);
     JsonSchema jsonSchema0 = new JsonSchema(child, Collections.singletonList(ref0),
-        Collections.singletonMap("message-id-schema", child2), null);
+        Collections.singletonMap("grandchild.schema.json", grandchild), null);
     jsonSchema0.validate(true);
-    SchemaReference ref = new SchemaReference("message-schema", "reference", 1);
+    SchemaReference ref = new SchemaReference("child.schema.json", "reference", 1);
     JsonSchema jsonSchema = new JsonSchema(parent, ImmutableList.of(ref, ref0),
-        ImmutableMap.of("message-schema", child,
-            "message-id-schema", child2), null);
+        ImmutableMap.of("child.schema.json", child,
+            "grandchild.schema.json", grandchild), null);
     jsonSchema.validate(true);
   }
 
