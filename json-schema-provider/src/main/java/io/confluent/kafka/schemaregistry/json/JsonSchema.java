@@ -37,23 +37,18 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.fasterxml.jackson.databind.ser.PropertyWriter;
-import com.github.erosb.jsonsKema.IJsonValue;
 import com.github.erosb.jsonsKema.JsonArray;
 import com.github.erosb.jsonsKema.JsonBoolean;
 import com.github.erosb.jsonsKema.JsonNull;
 import com.github.erosb.jsonsKema.JsonNumber;
 import com.github.erosb.jsonsKema.JsonObject;
-import com.github.erosb.jsonsKema.JsonParser;
 import com.github.erosb.jsonsKema.JsonString;
 import com.github.erosb.jsonsKema.JsonValue;
-import com.github.erosb.jsonsKema.SchemaClient;
 import com.github.erosb.jsonsKema.SchemaLoaderConfig;
-import com.github.erosb.jsonsKema.SchemaLoadingException;
 import com.github.erosb.jsonsKema.UnknownSource;
 import com.github.erosb.jsonsKema.ValidationFailure;
 import com.github.erosb.jsonsKema.Validator;
 import com.google.common.collect.Lists;
-import com.google.common.io.ByteStreams;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -69,19 +64,11 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLConnection;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -350,25 +337,16 @@ public class JsonSchema implements ParsedSchema {
   }
 
   private void loadLatestDraft() throws URISyntaxException {
-    URI baseUri = new URI(DEFAULT_BASE_URI);
-    URI idUri = null;
-    if (jsonNode.has("$id")) {
-      String id = jsonNode.get("$id").asText();
-      if (id != null) {
-        idUri = ReferenceResolver.resolve(baseUri, id);
-      }
-    } else {
-      idUri = baseUri;
-    }
     Map<URI, String> references = new HashMap<>();
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
-      URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-      references.put(child, dep.getValue());
+      URI uri = new URI(dep.getKey());
+      references.put(uri, dep.getValue());
+      if (!uri.isAbsolute() && !dep.getKey().startsWith(".")) {
+        // For backward compatibility
+        references.put(new URI("./" + dep.getKey()), dep.getValue());
+      }
     }
-    SchemaLoaderConfig config = new SchemaLoaderConfig(
-        new MemoizingSchemaClient(
-            new ReferenceSchemaClient(references, new DefaultSchemaClient())), DEFAULT_BASE_URI);
-
+    SchemaLoaderConfig config = SchemaLoaderConfig.createDefaultConfig(references);
     JsonValue schemaJson = objectMapper.convertValue(jsonNode, JsonObject.class);
     skemaObj = new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
     SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator());
@@ -1051,92 +1029,6 @@ public class JsonSchema implements ParsedSchema {
         ((ObjectNode) fieldNodePtr).remove(TAGS);
       } else {
         ((ObjectNode) fieldNodePtr).replace(TAGS, objectMapper.valueToTree(allTags));
-      }
-    }
-  }
-
-  public abstract static class JsonSchemaClient implements SchemaClient {
-
-    @Override
-    public IJsonValue getParsed(URI uri) {
-      try (BufferedReader reader = new BufferedReader(
-          new InputStreamReader(get(uri), StandardCharsets.UTF_8))) {
-        String string = reader.lines().collect(Collectors.joining());
-        return new JsonParser(string, uri).parse();
-      } catch (Exception ex) {
-        throw new SchemaLoadingException("failed to parse json content returned from $uri", ex);
-      }
-    }
-  }
-
-  public static class MemoizingSchemaClient extends JsonSchemaClient {
-
-    private final SchemaClient delegate;
-    private final Map<URI, byte[]> cache = new HashMap<>();
-
-    public MemoizingSchemaClient(SchemaClient delegate) {
-      this.delegate = delegate;
-    }
-
-    @Override
-    public InputStream get(URI uri) {
-      byte[] bytes = cache.computeIfAbsent(uri, k -> {
-        try {
-          return ByteStreams.toByteArray(delegate.get(uri));
-        } catch (IOException e) {
-          throw new UncheckedIOException(e);
-        }
-      });
-      return new ByteArrayInputStream(bytes);
-    }
-  }
-
-  public static class ReferenceSchemaClient extends JsonSchemaClient {
-
-    private final SchemaClient fallbackClient;
-
-    private final Map<URI, String> references;
-
-    public ReferenceSchemaClient(Map<URI, String> references, SchemaClient fallbackClient) {
-      this.fallbackClient = fallbackClient;
-      this.references = references;
-    }
-
-    @Override
-    public InputStream get(URI uri) {
-      String reference = references.get(uri);
-      if (reference == null) {
-        return fallbackClient.get(uri);
-      }
-      return new ByteArrayInputStream(reference.getBytes(StandardCharsets.UTF_8));
-    }
-  }
-
-  public static class DefaultSchemaClient extends JsonSchemaClient {
-
-    @Override
-    public InputStream get(URI uri) {
-      try {
-        URL u = toURL(uri);
-        URLConnection conn = u.openConnection();
-        String location = conn.getHeaderField("Location");
-        if (location != null) {
-          return get(new URI(location));
-        }
-        return (InputStream) conn.getContent();
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      } catch (URISyntaxException e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    private URL toURL(URI uri) throws IOException {
-      try {
-        return uri.toURL();
-      } catch (IllegalArgumentException e) {
-        throw new IllegalArgumentException(
-            String.format("URI '%s' can't be converted to URL: %s", uri, e.getMessage()), e);
       }
     }
   }

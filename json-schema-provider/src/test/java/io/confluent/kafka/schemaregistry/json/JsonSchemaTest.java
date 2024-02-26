@@ -33,6 +33,8 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -1025,6 +1027,102 @@ public class JsonSchemaTest {
     SchemaReference ref = new SchemaReference("checkout.common.webhooks.jsonschema.json", "reference", 1);
     JsonSchema jsonSchema = new JsonSchema(parent, Collections.singletonList(ref),
         Collections.singletonMap("checkout.common.webhooks.jsonschema.json", child), null);
+    jsonSchema.validate(true);
+  }
+
+  @Test
+  public void testNestedReferenceDraft_2020_12() {
+    String parent = "{\n"
+        + "  \"$schema\" : \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"type\" : \"object\",\n"
+        + "  \"properties\" : {\n"
+        + "    \"applicationSchema\" : {\n"
+        + "      \"$ref\" : \"#/$defs/ApplicationSchema\"\n"
+        + "    },\n"
+        + "    \"additionalProperties\" : false\n"
+        + "  },\n"
+        + "  \"$defs\" : {\n"
+        + "    \"ApplicationSchema\" : {\n"
+        + "      \"type\" : \"object\",\n"
+        + "      \"properties\" : {\n"
+        + "        \"protocolVersion\" : {\n"
+        + "          \"type\" : \"array\",\n"
+        + "          \"minItems\" : 0,\n"
+        + "          \"items\" : {\n"
+        + "            \"$ref\" : \"child.schema.json#/$defs/ProtocolVersionName\"\n"
+        + "          }\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"additionalProperties\" : false\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"additionalProperties\" : false\n"
+        + "}\n";
+    String child = "{\n"
+        + "    \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": {\n"
+        + "        \"message\": {\n"
+        + "            \"$ref\": \"#/$defs/Message\"\n"
+        + "        },\n"
+        + "        \"additionalProperties\": false\n"
+        + "    },\n"
+        + "    \"$defs\": {\n"
+        + "        \"Message\": {\n"
+        + "            \"type\": \"object\",\n"
+        + "            \"properties\": {\n"
+        + "                \"messageId\": {\n"
+        + "                    \"$ref\": \"grandchild.schema.json#/$defs/MessageId\"\n"
+        + "                }\n"
+        + "            },\n"
+        + "            \"additionalProperties\": false\n"
+        + "        },\n"
+        + "        \"ProtocolVersionName\": {\n"
+        + "            \"type\": \"object\",\n"
+        + "            \"properties\": {\n"
+        + "                \"version\": {\n"
+        + "                    \"type\": \"string\"\n"
+        + "                },\n"
+        + "                \"name\": {\n"
+        + "                    \"type\": \"string\"\n"
+        + "                }\n"
+        + "            },\n"
+        + "            \"required\": [\n"
+        + "                \"name\",\n"
+        + "                \"version\"\n"
+        + "            ],\n"
+        + "            \"additionalProperties\": false\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"additionalProperties\": false\n"
+        + "}\n";
+    String grandchild = "{\n"
+        + "    \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": {\n"
+        + "        \"additionalProperties\": false\n"
+        + "    },\n"
+        + "    \"$defs\": {\n"
+        + "        \"MessageId\": {\n"
+        + "            \"type\": \"object\",\n"
+        + "            \"properties\": {\n"
+        + "                \"id\": {\n"
+        + "                    \"type\": \"string\"\n"
+        + "                }\n"
+        + "            }\n"
+        + "            \"additionalProperties\": false\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"additionalProperties\": false\n"
+        + "}\n";
+    SchemaReference ref0 = new SchemaReference("grandchild.schema.json", "reference", 1);
+    JsonSchema jsonSchema0 = new JsonSchema(child, Collections.singletonList(ref0),
+        Collections.singletonMap("grandchild.schema.json", grandchild), null);
+    jsonSchema0.validate(true);
+    SchemaReference ref = new SchemaReference("child.schema.json", "reference", 1);
+    JsonSchema jsonSchema = new JsonSchema(parent, ImmutableList.of(ref, ref0),
+        ImmutableMap.of("child.schema.json", child,
+            "grandchild.schema.json", grandchild), null);
     jsonSchema.validate(true);
   }
 
