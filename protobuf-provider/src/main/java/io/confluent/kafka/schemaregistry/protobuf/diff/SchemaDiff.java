@@ -54,7 +54,6 @@ public class SchemaDiff {
   static {
     Set<Type> changes = new HashSet<>();
 
-    changes.add(PACKAGE_CHANGED);
     changes.add(MESSAGE_ADDED);
     changes.add(MESSAGE_MOVED);
     changes.add(ENUM_ADDED);
