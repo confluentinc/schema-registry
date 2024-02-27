@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.confluent</groupId>
     <artifactId>kafka-schema-registry-parent</artifactId>
-    <version>7.5.4-0</version>
+    <version>7.6.1-0</version>
   </parent>
 
   <artifactId>kafka-schema-registry-benchmark</artifactId>
@@ -18,7 +18,7 @@
          ref: https://bugs.openjdk.java.net/browse/JDK-8216275
     -->
     <maven.plugins.version>3.0.0-M1</maven.plugins.version>
-    <junit.version>4.12</junit.version>
+    <junit.version>4.13.1</junit.version>
     <jmh.version>1.21</jmh.version>
   </properties>
 
