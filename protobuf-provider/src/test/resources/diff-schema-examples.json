@@ -6,7 +6,7 @@
     "changes": [
       "PACKAGE_CHANGED #/"
     ],
-    "compatible": true
+    "compatible": false
   },
   {
     "description": "Detect change to name qualification",
