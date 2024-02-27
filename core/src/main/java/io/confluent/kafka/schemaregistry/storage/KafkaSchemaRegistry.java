@@ -444,8 +444,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   public boolean healthy() {
-    return initialized() &&
-        getResourceExtensions().stream().allMatch(SchemaRegistryResourceExtension::healthy);
+    return initialized()
+        && getResourceExtensions().stream().allMatch(SchemaRegistryResourceExtension::healthy);
   }
 
   /**
