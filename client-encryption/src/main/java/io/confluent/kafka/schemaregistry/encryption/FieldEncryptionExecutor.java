@@ -481,6 +481,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       }
     }
 
+    @Override
     public Object transform(RuleContext ctx, FieldContext fieldCtx, Object fieldValue)
         throws RuleException {
       try {
