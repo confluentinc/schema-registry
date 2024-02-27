@@ -67,12 +67,16 @@ public class Difference {
   private String error() {
     String errorDescription = "";
     switch (type) {
+      case PACKAGE_CHANGED:
+        errorDescription = "The package at '" + fullPath + "' in the %s schema does "
+                             + "not match the package in the %s schema";
+        break;
       case MESSAGE_REMOVED:
-        errorDescription = "The %s schema is missing a field of type MESSAGE at path '"
+        errorDescription = "The %s schema is missing a MESSAGE type at path '"
                              + fullPath + "' in the %s schema";
         break;
       case FIELD_KIND_CHANGED:
-        errorDescription = "The type of a field at path '" + fullPath + "' in the %s schema does  "
+        errorDescription = "The type of a field at path '" + fullPath + "' in the %s schema does "
                         + "not match the %s schema";
         break;
       case FIELD_SCALAR_KIND_CHANGED:
@@ -102,6 +106,10 @@ public class Difference {
       case MULTIPLE_FIELDS_MOVED_TO_ONEOF:
         errorDescription = "Multiple fields in the oneof at path '" + fullPath
                              + "' in the %s schema are outside a oneof in the %s schema";
+        break;
+      case FIELD_MOVED_TO_EXISTING_ONEOF:
+        errorDescription = "A field in the oneof at path '" + fullPath
+                             + "' in the %s schema is outside an existing oneof in the %s schema";
         break;
       default:
         errorDescription = "";
