@@ -134,6 +134,8 @@ public class JsonSchema implements ParsedSchema {
 
   private final RuleSet ruleSet;
 
+  private final boolean ignoreModernDialects;
+
   private transient String canonicalString;
 
   private transient int hashCode = NO_HASHCODE;
@@ -169,6 +171,7 @@ public class JsonSchema implements ParsedSchema {
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
     this.metadata = null;
     this.ruleSet = null;
+    this.ignoreModernDialects = false;
   }
 
   public JsonSchema(
@@ -195,6 +198,7 @@ public class JsonSchema implements ParsedSchema {
       this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
       this.metadata = metadata;
       this.ruleSet = ruleSet;
+      this.ignoreModernDialects = false;
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON " + schemaString, e);
     }
@@ -213,6 +217,7 @@ public class JsonSchema implements ParsedSchema {
       this.resolvedReferences = Collections.emptyMap();
       this.metadata = null;
       this.ruleSet = null;
+      this.ignoreModernDialects = false;
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON " + schemaObj, e);
     }
@@ -220,21 +225,25 @@ public class JsonSchema implements ParsedSchema {
 
   private JsonSchema(
       JsonNode jsonNode,
+      com.github.erosb.jsonsKema.Schema skemaObj,
       Schema schemaObj,
       Integer version,
       List<SchemaReference> references,
       Map<String, String> resolvedReferences,
       Metadata metadata,
       RuleSet ruleSet,
+      boolean ignoreModernDialects,
       String canonicalString
   ) {
     this.jsonNode = jsonNode;
+    this.skemaObj = skemaObj;
     this.schemaObj = schemaObj;
     this.version = version;
     this.references = references;
     this.resolvedReferences = resolvedReferences;
     this.metadata = metadata;
     this.ruleSet = ruleSet;
+    this.ignoreModernDialects = ignoreModernDialects;
     this.canonicalString = canonicalString;
   }
 
@@ -242,12 +251,14 @@ public class JsonSchema implements ParsedSchema {
   public JsonSchema copy() {
     return new JsonSchema(
         this.jsonNode,
+        this.skemaObj,
         this.schemaObj,
         this.version,
         this.references,
         this.resolvedReferences,
         this.metadata,
         this.ruleSet,
+        this.ignoreModernDialects,
         this.canonicalString
     );
   }
@@ -256,12 +267,14 @@ public class JsonSchema implements ParsedSchema {
   public JsonSchema copy(Integer version) {
     return new JsonSchema(
         this.jsonNode,
+        this.skemaObj,
         this.schemaObj,
         version,
         this.references,
         this.resolvedReferences,
         this.metadata,
         this.ruleSet,
+        this.ignoreModernDialects,
         this.canonicalString
     );
   }
@@ -270,12 +283,14 @@ public class JsonSchema implements ParsedSchema {
   public JsonSchema copy(Metadata metadata, RuleSet ruleSet) {
     return new JsonSchema(
         this.jsonNode,
+        this.skemaObj,
         this.schemaObj,
         this.version,
         this.references,
         this.resolvedReferences,
         metadata,
         ruleSet,
+        this.ignoreModernDialects,
         this.canonicalString
     );
   }
@@ -292,6 +307,21 @@ public class JsonSchema implements ParsedSchema {
       schemaCopy.metadata(),
       schemaCopy.ruleSet(),
       schemaCopy.version());
+  }
+
+  public JsonSchema copyIgnoringModernDialects() {
+    return new JsonSchema(
+        this.jsonNode,
+        null,
+        null,
+        this.version,
+        this.references,
+        this.resolvedReferences,
+        this.metadata,
+        this.ruleSet,
+        true,
+        this.canonicalString
+    );
   }
 
   public JsonNode toJsonNode() {
@@ -322,7 +352,11 @@ public class JsonSchema implements ParsedSchema {
           switch (spec) {
             case DRAFT_2020_12:
             case DRAFT_2019_09:
-              loadLatestDraft();
+              if (ignoreModernDialects) {
+                loadPreviousDraft(spec);
+              } else {
+                loadLatestDraft();
+              }
               break;
             default:
               loadPreviousDraft(spec);
@@ -457,6 +491,10 @@ public class JsonSchema implements ParsedSchema {
   @Override
   public RuleSet ruleSet() {
     return ruleSet;
+  }
+
+  public boolean isIgnoreModernDialects() {
+    return ignoreModernDialects;
   }
 
   @Override
@@ -620,13 +658,15 @@ public class JsonSchema implements ParsedSchema {
         && Objects.equals(references, that.references)
         && Objects.equals(canonicalString(), that.canonicalString())
         && Objects.equals(metadata, that.metadata)
-        && Objects.equals(ruleSet, that.ruleSet);
+        && Objects.equals(ruleSet, that.ruleSet)
+        && ignoreModernDialects == that.ignoreModernDialects;
   }
 
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      hashCode = Objects.hash(jsonNode, references, version, metadata, ruleSet);
+      hashCode = Objects.hash(
+          jsonNode, references, version, metadata, ruleSet, ignoreModernDialects);
     }
     return hashCode;
   }
