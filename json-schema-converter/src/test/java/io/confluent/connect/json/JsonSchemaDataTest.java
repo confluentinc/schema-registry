@@ -1962,7 +1962,7 @@ public class JsonSchemaDataTest {
         new JsonSchemaData(new JsonSchemaDataConfig(
             Collections.singletonMap(JsonSchemaDataConfig.IGNORE_MODERN_DIALECTS_CONFIG, "true")));
     Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
-    System.out.println(connectSchema);
+    assertNotNull(connectSchema.field("object_details").schema());
   }
   
   @Test
