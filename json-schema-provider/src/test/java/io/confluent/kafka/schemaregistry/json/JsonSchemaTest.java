@@ -981,6 +981,51 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testMultiTypeSchemaDraft_2020_12() {
+    String schema = "{ \n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "   \"object_details\": {\n"
+        + "      \"additionalProperties\": true,\n"
+        + "      \"properties\": {\n"
+        + "        \"object_parents\": {\n"
+        + "          \"items\": {\n"
+        + "            \"properties\": {\n"
+        + "              \"object_parents_file_location\": {\n"
+        + "                \"type\": [\n"
+        + "                  \"string\",\n"
+        + "                  \"null\"\n"
+        + "                ]\n"
+        + "              },\n"
+        + "              \"object_parents_id\": {\n"
+        + "                \"type\": [\n"
+        + "                  \"string\",\n"
+        + "                  \"null\"\n"
+        + "                ]\n"
+        + "              }\n"
+        + "            },\n"
+        + "            \"type\": [\n"
+        + "              \"object\",\n"
+        + "              \"null\"\n"
+        + "            ]\n"
+        + "          },\n"
+        + "          \"type\": [\n"
+        + "            \"array\",\n"
+        + "            \"null\"\n"
+        + "          ]\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchema jsonSchema2 = jsonSchema.copyIgnoringModernDialects();
+    assertTrue(jsonSchema2.isBackwardCompatible(jsonSchema).isEmpty());
+    assertTrue(jsonSchema.isBackwardCompatible(jsonSchema2).isEmpty());
+  }
+
+  @Test
   public void testLocalReferenceDraft_2020_12() {
     String parent = "{\n"
         + "    \"$id\": \"acme.webhooks.checkout-application_updated.jsonschema.json\",\n"
