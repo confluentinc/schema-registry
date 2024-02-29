@@ -23,6 +23,7 @@ import java.util.regex.Pattern;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.CombinedSchema.ValidationCriterion;
 import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.ConstSchema.ConstSchemaBuilder;
@@ -387,6 +388,30 @@ public class SchemaUtils {
     if (s.getUnprocessedProperties() != null) {
       builder.unprocessedProperties(s.getUnprocessedProperties());
     }
+  }
+
+  protected static boolean containsType(CombinedSchema combinedSchema, Schema schema) {
+    for (Schema subschema : combinedSchema.getSubschemas()) {
+      if (subschema.getClass().equals(schema.getClass())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  protected static boolean isSyntheticAll(Schema schema) {
+    return schema instanceof CombinedSchema
+        && isSyntheticCombined((CombinedSchema) schema, CombinedSchema.ALL_CRITERION);
+  }
+
+  protected static boolean isSyntheticAny(Schema schema) {
+    return schema instanceof CombinedSchema
+        && isSyntheticCombined((CombinedSchema) schema, CombinedSchema.ANY_CRITERION);
+  }
+
+  protected static boolean isSyntheticCombined(
+      CombinedSchema schema, ValidationCriterion criterion) {
+    return schema.getCriterion() == criterion && isSynthetic(schema);
   }
 
   protected static boolean isSynthetic(CombinedSchema schema) {
