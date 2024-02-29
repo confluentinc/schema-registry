@@ -16,8 +16,11 @@
 package io.confluent.kafka.schemaregistry.json.schema;
 
 import static io.confluent.kafka.schemaregistry.json.JsonSchema.DEFAULT_BASE_URI;
-import static io.confluent.kafka.schemaregistry.json.schema.SchemaUtils.isSynthetic;
+import static io.confluent.kafka.schemaregistry.json.schema.SchemaUtils.containsType;
+import static io.confluent.kafka.schemaregistry.json.schema.SchemaUtils.isSyntheticAll;
+import static io.confluent.kafka.schemaregistry.json.schema.SchemaUtils.isSyntheticAny;
 import static io.confluent.kafka.schemaregistry.json.schema.SchemaUtils.merge;
+import static io.confluent.kafka.schemaregistry.json.schema.SchemaUtils.schemaToBuilder;
 import static io.confluent.kafka.schemaregistry.json.schema.SchemaUtils.toBuilder;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -187,17 +190,18 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
           schema, CombinedSchema.allOf(Collections.emptyList()).isSynthetic(true));
     }
     org.everit.json.schema.Schema ctxSchema = ctx.schema();
-    if (ctxSchema instanceof CombinedSchema) {
+    if (isSyntheticAll(ctxSchema)) {
       CombinedSchema combinedSchema = (CombinedSchema) ctxSchema;
-      if (combinedSchema.getCriterion() == CombinedSchema.ALL_CRITERION
-          && isSynthetic(combinedSchema)) {
-        if (combinedSchema.getSubschemas().isEmpty()) {
-          ctx = new SchemaContext(ctx.source(), EmptySchema.builder());
-        } else if (combinedSchema.getSubschemas().size() == 1) {
-          ctx = new SchemaContext(ctx.source(),
-              SchemaUtils.schemaToBuilder(combinedSchema.getSubschemas().iterator().next()));
-        }
+      if (combinedSchema.getSubschemas().isEmpty()) {
+        ctx = new SchemaContext(ctx.source(), EmptySchema.builder());
+      } else if (combinedSchema.getSubschemas().size() == 1) {
+        ctx = new SchemaContext(ctx.source(),
+            schemaToBuilder(combinedSchema.getSubschemas().iterator().next()));
       }
+    }
+    if (isSyntheticAny(ctxSchema)) {
+      // Clear the synthetic flag or else conversion to string will fail
+      ((CombinedSchema.Builder) ctx.schemaBuilder()).isSynthetic(false);
     }
     if (schema.getId() != null) {
       ctx.schemaBuilder().id(schema.getId().getValue());
@@ -416,7 +420,7 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     List<org.everit.json.schema.Schema> schemas = schema.getTypes().getElements().stream()
         .map(json -> typeToSchema(json.requireString().getValue()).build())
         .collect(Collectors.toList());
-    return new SchemaContext(schema, CombinedSchema.anyOf(schemas));
+    return new SchemaContext(schema, CombinedSchema.anyOf(schemas).isSynthetic(true));
   }
 
   @Override
@@ -662,15 +666,25 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
       if (schema instanceof StringSchema && current instanceof StringSchema) {
         return merge(toBuilder((StringSchema) schema), (StringSchema) current);
       }
-      if (parent instanceof AllOfSchema) {
+      if (isSyntheticAny(schema) && containsType((CombinedSchema) schema, current)) {
+        return CombinedSchema.anyOf(
+            accumulate(new ArrayList<>(((CombinedSchema) schema).getSubschemas()), current))
+            .isSynthetic(true);
+      }
+      if (isSyntheticAny(current) && containsType((CombinedSchema) current, schema)) {
+        return CombinedSchema.anyOf(
+            accumulate(new ArrayList<>(((CombinedSchema) current).getSubschemas()), schema))
+            .isSynthetic(true);
+      }
+      if (parent instanceof AllOfSchema && schema instanceof CombinedSchema) {
         return CombinedSchema.allOf(
             concat(((CombinedSchema) schema).getSubschemas(), flatten(current)));
       }
-      if (parent instanceof AnyOfSchema) {
+      if (parent instanceof AnyOfSchema && schema instanceof CombinedSchema) {
         return CombinedSchema.anyOf(
             concat(((CombinedSchema) schema).getSubschemas(), flatten(current)));
       }
-      if (parent instanceof OneOfSchema) {
+      if (parent instanceof OneOfSchema && schema instanceof CombinedSchema) {
         return CombinedSchema.oneOf(
             concat(((CombinedSchema) schema).getSubschemas(), flatten(current)));
       }
@@ -681,36 +695,37 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     private List<org.everit.json.schema.Schema> accumulate(
         List<org.everit.json.schema.Schema> schemas) {
       List<org.everit.json.schema.Schema> result = new ArrayList<>();
-      for (int i = 0; i < schemas.size(); i++) {
-        accumulate(result, schemas.get(i));
+      for (org.everit.json.schema.Schema schema : schemas) {
+        result = accumulate(result, schema);
       }
       return result;
     }
 
-    private void accumulate(
+    private List<org.everit.json.schema.Schema> accumulate(
         List<org.everit.json.schema.Schema> product, org.everit.json.schema.Schema current) {
       for (int i = 0; i < product.size(); i++) {
         org.everit.json.schema.Schema schema = product.get(i);
         if (schema.getClass() == current.getClass()) {
           if (schema instanceof ArraySchema) {
             product.set(i, merge(toBuilder((ArraySchema) schema), (ArraySchema) current).build());
-            return;
+            return product;
           }
           if (schema instanceof NumberSchema) {
             product.set(i, merge(toBuilder((NumberSchema) schema), (NumberSchema) current).build());
-            return;
+            return product;
           }
           if (schema instanceof ObjectSchema) {
             product.set(i, merge(toBuilder((ObjectSchema) schema), (ObjectSchema) current).build());
-            return;
+            return product;
           }
           if (schema instanceof StringSchema) {
             product.set(i, merge(toBuilder((StringSchema) schema), (StringSchema) current).build());
-            return;
+            return product;
           }
         }
       }
       product.add(current);
+      return product;
     }
 
     private List<org.everit.json.schema.Schema> concat(
@@ -724,13 +739,10 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
 
     private List<org.everit.json.schema.Schema> flatten(
         org.everit.json.schema.Schema schema) {
-      if (schema instanceof CombinedSchema) {
+      if (isSyntheticAll(schema)) {
         CombinedSchema combinedSchema = (CombinedSchema) schema;
-        if (combinedSchema.getCriterion() == CombinedSchema.ALL_CRITERION
-            && isSynthetic(combinedSchema)) {
-          // Unwrap the synthetic allOf
-          return new ArrayList<>(combinedSchema.getSubschemas());
-        }
+        // Unwrap the synthetic allOf
+        return new ArrayList<>(combinedSchema.getSubschemas());
       }
       return Collections.singletonList(schema);
     }
