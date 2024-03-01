@@ -14,6 +14,19 @@
  */
 package io.confluent.kafka.schemaregistry.rest;
 
+import static io.confluent.kafka.schemaregistry.CompatibilityLevel.BACKWARD;
+import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
+import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -26,42 +39,33 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
-
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.SchemaParseException;
-import org.junit.Before;
 import org.junit.Test;
-
-import java.util.*;
-import java.net.URL;
-import java.net.HttpURLConnection;
-
-import static io.confluent.kafka.schemaregistry.CompatibilityLevel.BACKWARD;
-import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
-import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -74,12 +78,12 @@ public class RestApiTest extends ClusterTestHarness {
     String subject1 = "testTopic1";
     String subject2 = "testTopic2";
     int schemasInSubject1 = 10;
-    List<Integer> allVersionsInSubject1 = new ArrayList<Integer>();
+    List<Integer> allVersionsInSubject1 = new ArrayList<>();
     List<String> allSchemasInSubject1 = TestUtils.getRandomCanonicalAvroString(schemasInSubject1);
     int schemasInSubject2 = 5;
-    List<Integer> allVersionsInSubject2 = new ArrayList<Integer>();
+    List<Integer> allVersionsInSubject2 = new ArrayList<>();
     List<String> allSchemasInSubject2 = TestUtils.getRandomCanonicalAvroString(schemasInSubject2);
-    List<String> allSubjects = new ArrayList<String>();
+    List<String> allSubjects = new ArrayList<>();
 
     // test getAllVersions with no existing data
     try {
@@ -440,7 +444,7 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       assertEquals("Schema register should fail since schema is incompatible",
           Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE, e.getErrorCode());
-      assertTrue(e.getMessage().length() > 0);
+      assertFalse(e.getMessage().isEmpty());
       assertTrue(e.getMessage().contains("oldSchemaVersion:"));
       assertTrue(e.getMessage().contains("oldSchema:"));
       assertTrue(e.getMessage().contains("compatibility:"));
@@ -1013,13 +1017,13 @@ public class RestApiTest extends ClusterTestHarness {
 
     List<String> messages = restApp.restClient.testCompatibility(
         registerRequest, subject1, null, true, true);
-    assertTrue(messages.size() > 0 && messages.get(0).contains("Invalid schema"));
+    assertTrue(!messages.isEmpty() && messages.get(0).contains("Invalid schema"));
   }
 
   @Test
   public void testBad() throws Exception {
     String subject1 = "testTopic1";
-    List<String> allSubjects = new ArrayList<String>();
+    List<String> allSubjects = new ArrayList<>();
 
     // test getAllSubjects with no existing data
     assertEquals("Getting all subjects should return empty",
@@ -1039,7 +1043,7 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       TestUtils.registerAndVerifySchema(restApp.restClient,
           TestUtils.getRandomCanonicalAvroString(1).get(0),
-          Arrays.asList(new SchemaReference("bad", "bad", 100)), 1, subject1);
+          ImmutableList.of(new SchemaReference("bad", "bad", 100)), 1, subject1);
       fail("Registering bad reference should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
     } catch (RestClientException rce) {
       assertEquals("Invalid schema",
@@ -1306,7 +1310,7 @@ public class RestApiTest extends ClusterTestHarness {
                       (RestService.DEFAULT_REQUEST_PROPERTIES, subject,
                               "2",
                               true);
-      fail(String.format("Permanent deleting first time should throw schemaVersionNotSoftDeletedException"));
+      fail("Permanent deleting first time should throw schemaVersionNotSoftDeletedException");
     } catch (RestClientException rce) {
       assertEquals("Schema version must be soft deleted first",
               Errors.SCHEMAVERSION_NOT_SOFT_DELETED_ERROR_CODE,
@@ -1327,7 +1331,7 @@ public class RestApiTest extends ClusterTestHarness {
       restApp.restClient
               .deleteSchemaVersion
                       (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
-      fail(String.format("Soft deleting second time should throw schemaVersionSoftDeletedException"));
+      fail("Soft deleting second time should throw schemaVersionSoftDeletedException");
     } catch (RestClientException rce) {
       assertEquals("Schema version already soft deleted",
               Errors.SCHEMAVERSION_SOFT_DELETED_ERROR_CODE,
@@ -1663,7 +1667,7 @@ public class RestApiTest extends ClusterTestHarness {
     String subject1 = "test1";
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject1);
     String subject2 = "test2";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject2);;
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject2);
     List<String> expectedResponse = new ArrayList<>();
     expectedResponse.add(subject1);
     expectedResponse.add(subject2);
@@ -1784,7 +1788,7 @@ public class RestApiTest extends ClusterTestHarness {
       restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES,
               subject,
               true);
-      fail(String.format("Delete permanent should not succeed"));
+      fail("Delete permanent should not succeed");
     } catch (RestClientException rce) {
       assertEquals("Subject '%s' was not deleted first before permanent delete", Errors.SUBJECT_NOT_SOFT_DELETED_ERROR_CODE, rce.getErrorCode());
     }
@@ -1803,7 +1807,7 @@ public class RestApiTest extends ClusterTestHarness {
                     true));
     for (Integer i : expectedResponse) {
       try {
-        restApp.restClient.lookUpSubjectVersion(schemas.get(i-i), subject, false);
+        restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject, false);
         fail(String.format("Subject %s should not be found", subject));
       } catch (RestClientException rce) {
         assertEquals("Subject Not Found", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
@@ -2008,6 +2012,98 @@ public class RestApiTest extends ClusterTestHarness {
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1, subject);
     assertNull(schemaString.getRuleSet());
+  }
+
+  @Test
+  public void testRegisterSchemaWithReservedFields() throws RestClientException, IOException {
+    String subject0 = "testSubject0";
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+                                                     + "\"name\":\"myrecord\","
+                                                     + "\"fields\":"
+                                                     + "[{\"type\":\"string\",\"name\":"
+                                                     + "\"f" + "\"},"
+                                                     + "{\"type\":\"string\",\"name\":"
+                                                     + "\"g\" , \"default\":\"d\"}"
+                                                     + "]}");
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
+    request1.setMetadata(new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "f"),
+        Collections.emptySet()));
+
+    // global validateFields = true
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(BACKWARD.name());
+    configUpdateRequest.setValidateFields(true);
+    assertEquals("Updating config should succeed",
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, null));
+    assertThrows("Fail registering subject0 because of global validateFields",
+        RestClientException.class,
+        () -> restApp.restClient.registerSchema(request1, subject0, false));
+
+    // global validateFields = false
+    configUpdateRequest.setValidateFields(false);
+    assertEquals("Updating config should succeed",
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, null));
+    assertEquals("Should register despite reserved fields",
+        1,
+        restApp.restClient.registerSchema(request1, subject0, false).getId());
+
+    // global validateFields = false; testSubject1 validateFields = true
+    String subject1 = "testSubject1";
+    configUpdateRequest.setValidateFields(true);
+    assertEquals("Updating config should succeed",
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, subject1));
+    assertThrows("Fail registering subject1 because of subject1 validateFields",
+        RestClientException.class,
+        () -> restApp.restClient.registerSchema(request1, subject1, false));
+    String subject2 = "testSubject2";
+    assertEquals("Should register despite reserved fields",
+        1,
+        restApp.restClient.registerSchema(request1, subject2, false).getId());
+
+    // global validateFields = true; testSubject1 validateFields = false
+    configUpdateRequest.setValidateFields(true);
+    assertEquals("Updating config should succeed",
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, null));
+    configUpdateRequest.setValidateFields(false);
+    assertEquals("Updating config should succeed",
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, subject1));
+    assertEquals("Should register despite reserved fields",
+        1,
+        restApp.restClient.registerSchema(request1, subject1, false).getId());
+    String subject3 = "testSubject3";
+    assertThrows("Fail registering because of subject3 validateFields",
+        RestClientException.class,
+        () -> restApp.restClient.registerSchema(request1, subject3, false));
+
+    // remove reserved fields for subject1
+    request1.setMetadata(new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "g"),
+        Collections.emptySet()));
+    assertEquals("Should register despite removal of reserved fields",
+        2,
+        restApp.restClient.registerSchema(request1, subject1, false).getId());
+
+    // remove reserved fields for subject0
+    schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+                                        + "\"name\":\"myrecord\","
+                                        + "\"fields\":"
+                                        + "["
+                                        + "{\"type\":\"string\",\"name\":"
+                                        + "\"g\" , \"default\":\"d\"}"
+                                        + "]}");
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
+    request2.setMetadata(new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "g"),
+        Collections.emptySet()));
+    assertThrows("Fail registering because of removal of reserved fields",
+        RestClientException.class,
+        () -> restApp.restClient.registerSchema(request2, subject0, false));
   }
 
   @Override
