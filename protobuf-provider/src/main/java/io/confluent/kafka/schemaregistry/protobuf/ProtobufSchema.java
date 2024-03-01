@@ -548,12 +548,17 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public ProtobufSchema copy(List<SchemaReference> references) {
+    return copy(references, this.dependencies);
+  }
+
+  public ProtobufSchema copy(
+      List<SchemaReference> references, Map<String, ProtoFileElement> dependencies) {
     return new ProtobufSchema(
         this.schemaObj,
         this.version,
         this.name,
         references,
-        this.dependencies,
+        dependencies,
         this.metadata,
         this.ruleSet,
         this.canonicalString,
