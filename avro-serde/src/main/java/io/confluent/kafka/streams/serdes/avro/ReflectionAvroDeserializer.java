@@ -83,7 +83,7 @@ public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
   @SuppressWarnings("unchecked")
   @Override
   public T deserialize(final String topic, final Headers headers, final byte[] bytes) {
-    return (T) inner.deserialize(topic, headers, bytes);
+    return (T) inner.deserialize(topic, headers, bytes, schema);
   }
 
   @Override
