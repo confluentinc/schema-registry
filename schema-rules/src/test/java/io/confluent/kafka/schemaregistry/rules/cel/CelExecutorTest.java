@@ -58,6 +58,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.DlqAction;
 import io.confluent.kafka.schemaregistry.rules.PiiProto;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Kind;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
@@ -930,6 +931,34 @@ public class CelExecutorTest {
     assertEquals("012-suffix2", ((OldWidget)obj).getPiiArray().get(1).getPii());
     assertEquals("345-suffix2", ((OldWidget)obj).getPiiMap().get("key1").getPii());
     assertEquals("678-suffix2", ((OldWidget)obj).getPiiMap().get("key2").getPii());
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaAvroSerializerReflectionFieldTransformWithBadKind() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    OldWidget widget = new OldWidget("alice");
+    widget.setLastName("");
+    widget.setFullName("");
+    widget.setMyint(1);
+    widget.setMylong(2L);
+    widget.setMyfloat(3.0f);
+    widget.setMydouble(4.0d);
+    widget.setMyboolean(true);
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    widget.setPiiMap(ImmutableMap.of("key1", new OldPii("345"), "key2", new OldPii("678")));
+    Schema schema = createWidgetSchema();
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix2\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    bytes = reflectionAvroSerializer.serialize(topic, widget);
   }
 
   @Test
