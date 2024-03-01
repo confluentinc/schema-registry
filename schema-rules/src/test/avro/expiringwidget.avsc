@@ -1,0 +1,23 @@
+{
+  "namespace": "io.confluent.kafka.schemaregistry.rules",
+  "type": "record",
+  "name": "ExpiringSpecificWidget",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string"
+    },
+    {
+      "name": "size",
+      "type": "int"
+    },
+    {
+      "name": "version",
+      "type": "int"
+    },
+    {
+      "name": "expiration",
+      "type": {"type": "int", "logicalType": "date"}
+    }
+  ]
+}

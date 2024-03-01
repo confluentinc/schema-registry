@@ -107,7 +107,9 @@ public class ContextFilter implements ContainerRequestFilter {
       }
 
       boolean isRootConfigOrMode = isRootConfigOrMode(isFirst, uriPathStr);
-      if (uriPathStr.equals("subjects") || isRootConfigOrMode) {
+      if (uriPathStr.equals("subjects")
+          || uriPathStr.equals("deks")
+          || isRootConfigOrMode) {
         subjectPathFound = true;
         if (isRootConfigOrMode) {
           configOrModeFound = true;
