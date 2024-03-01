@@ -64,8 +64,8 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
     this.isKey = isKey;
 
     final String specificAvroClassLookupKey = isKey
-        ? SPECIFIC_AVRO_KEY_TYPE_CONFIG :
-        SPECIFIC_AVRO_VALUE_TYPE_CONFIG;
+        ? SPECIFIC_AVRO_KEY_TYPE_CONFIG
+        : SPECIFIC_AVRO_VALUE_TYPE_CONFIG;
 
     final KafkaAvroDeserializerConfig config = deserializerConfig(props);
 
