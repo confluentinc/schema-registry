@@ -53,20 +53,19 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
     this(client, props, false);
   }
 
-  @Override
-  public void configure(Map<String, ?> props, boolean isKey) {
-    this.isKey = isKey;
-    configure(deserializerConfig(props), null);
-  }
-
   public KafkaAvroDeserializer(SchemaRegistryClient client, Map<String, ?> props, boolean isKey) {
     this.schemaRegistry = client;
     this.ticker = ticker(client);
+    configure(props, isKey);
+  }
+
+  @Override
+  public void configure(Map<String, ?> props, boolean isKey) {
     this.isKey = isKey;
 
     final String specificAvroClassLookupKey = isKey
-         ? SPECIFIC_AVRO_KEY_TYPE_CONFIG :
-           SPECIFIC_AVRO_VALUE_TYPE_CONFIG;
+        ? SPECIFIC_AVRO_KEY_TYPE_CONFIG
+        : SPECIFIC_AVRO_VALUE_TYPE_CONFIG;
 
     final KafkaAvroDeserializerConfig config = deserializerConfig(props);
 
@@ -76,10 +75,10 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
       if (log.isWarnEnabled()) {
         log.warn(
             String.format(
-              "'%s' value of '%s' is ignored because '%s' is false",
-              specificAvroClassLookupKey,
-              type.getName(),
-              SPECIFIC_AVRO_READER_CONFIG
+                "'%s' value of '%s' is ignored because '%s' is false",
+                specificAvroClassLookupKey,
+                type.getName(),
+                SPECIFIC_AVRO_READER_CONFIG
             )
         );
       }
@@ -87,11 +86,11 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
     if (type != null && !SpecificRecord.class.isAssignableFrom(type)) {
       throw new ConfigException(
-        String.format("Value '%s' specified for '%s' is not a '%s'",
-          type.getName(),
-          specificAvroClassLookupKey,
-          SpecificRecord.class.getName()
-        )
+          String.format("Value '%s' specified for '%s' is not a '%s'",
+              type.getName(),
+              specificAvroClassLookupKey,
+              SpecificRecord.class.getName()
+          )
       );
     }
 
