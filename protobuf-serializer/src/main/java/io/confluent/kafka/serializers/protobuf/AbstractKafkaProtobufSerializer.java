@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.io.InterruptedIOException;
+import java.util.HashMap;
 import java.util.Optional;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -287,6 +288,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       // Dependencies already resolved
       return schema;
     }
+    HashMap<String, ProtoFileElement> dependencies = new HashMap<>(schema.dependencies());
     Schema s = resolveDependencies(schemaRegistry,
         normalizeSchema,
         autoRegisterSchema,
@@ -299,9 +301,9 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         isKey,
         null,
         schema.rawSchema(),
-        schema.dependencies()
+        dependencies
     );
-    return schema.copy(s.getReferences());
+    return schema.copy(s.getReferences(), dependencies);
   }
 
   private static Schema resolveDependencies(
@@ -322,6 +324,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     List<SchemaReference> references = new ArrayList<>();
     for (String dep : protoFileElement.getImports()) {
       if (skipKnownTypes && ProtobufSchema.knownTypes().contains(dep)) {
+        dependencies.remove(dep);
         continue;
       }
       Schema subschema = resolveDependencies(schemaRegistry,
@@ -342,6 +345,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     }
     for (String dep : protoFileElement.getPublicImports()) {
       if (skipKnownTypes && ProtobufSchema.knownTypes().contains(dep)) {
+        dependencies.remove(dep);
         continue;
       }
       Schema subschema = resolveDependencies(schemaRegistry,
