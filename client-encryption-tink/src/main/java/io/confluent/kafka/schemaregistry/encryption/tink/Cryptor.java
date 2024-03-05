@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.encryption.tink;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.DeterministicAead;
 import com.google.crypto.tink.KeyTemplates;
@@ -29,6 +32,7 @@ import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.nio.BufferUnderflowException;
 import java.security.GeneralSecurityException;
+import java.util.concurrent.ExecutionException;
 
 public class Cryptor {
 
@@ -43,26 +47,45 @@ public class Cryptor {
 
   private final DekFormat dekFormat;
   private final KeyTemplate dekTemplate;
+  private final LoadingCache<ByteString, DeterministicAead> deterministicAeads;
+  private final LoadingCache<ByteString, Aead> aeads;
+
+  private static final int DEFAULT_CACHE_SIZE = 100;
 
   public Cryptor(DekFormat dekFormat) throws GeneralSecurityException {
-    KeyTemplate dekTemplate;
+    KeyTemplate keyTemplate;
     try {
-      dekTemplate = KeyTemplate.parseFrom(
+      keyTemplate = KeyTemplate.parseFrom(
           TinkProtoParametersFormat.serialize(dekFormat.getParameters()),
           ExtensionRegistryLite.getEmptyRegistry());
     } catch (GeneralSecurityException e) {
       // Use deprecated Tink APIs to support older versions of Tink
-      com.google.crypto.tink.KeyTemplate keyTemplate = KeyTemplates.get(dekFormat.name());
-      dekTemplate = com.google.crypto.tink.proto.KeyTemplate.newBuilder()
-          .setTypeUrl(keyTemplate.getTypeUrl())
-          .setValue(ByteString.copyFrom(keyTemplate.getValue()))
+      com.google.crypto.tink.KeyTemplate template = KeyTemplates.get(dekFormat.name());
+      keyTemplate = com.google.crypto.tink.proto.KeyTemplate.newBuilder()
+          .setTypeUrl(template.getTypeUrl())
+          .setValue(ByteString.copyFrom(template.getValue()))
           .build();
-
     } catch (InvalidProtocolBufferException e) {
       throw new GeneralSecurityException(e);
     }
     this.dekFormat = dekFormat;
-    this.dekTemplate = dekTemplate;
+    this.dekTemplate = keyTemplate;
+    this.deterministicAeads = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_SIZE)
+        .build(new CacheLoader<ByteString, DeterministicAead>() {
+          @Override
+          public DeterministicAead load(ByteString dek) throws GeneralSecurityException {
+            return Registry.getPrimitive(dekTemplate.getTypeUrl(), dek, DeterministicAead.class);
+          }
+        });
+    this.aeads = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_SIZE)
+        .build(new CacheLoader<ByteString, Aead>() {
+          @Override
+          public Aead load(ByteString dek) throws GeneralSecurityException {
+            return Registry.getPrimitive(dekTemplate.getTypeUrl(), dek, Aead.class);
+          }
+        });
   }
 
   public DekFormat getDekFormat() {
@@ -78,11 +101,10 @@ public class Cryptor {
     // Use DEK to encrypt plaintext.
     byte[] ciphertext;
     if (dekFormat.isDeterministic()) {
-      DeterministicAead aead = Registry.getPrimitive(
-          dekTemplate.getTypeUrl(), dek, DeterministicAead.class);
+      DeterministicAead aead = getDeterministicAead(dek);
       ciphertext = aead.encryptDeterministically(plaintext, associatedData);
     } else {
-      Aead aead = Registry.getPrimitive(dekTemplate.getTypeUrl(), dek, Aead.class);
+      Aead aead = getAead(dek);
       ciphertext = aead.encrypt(plaintext, associatedData);
     }
     return ciphertext;
@@ -93,17 +115,38 @@ public class Cryptor {
     try {
       // Use DEK to decrypt ciphertext.
       if (dekFormat.isDeterministic()) {
-        DeterministicAead aead = Registry.getPrimitive(
-            dekTemplate.getTypeUrl(), dek, DeterministicAead.class);
+        DeterministicAead aead = getDeterministicAead(dek);
         return aead.decryptDeterministically(ciphertext, associatedData);
       } else {
-        Aead aead = Registry.getPrimitive(dekTemplate.getTypeUrl(), dek, Aead.class);
+        Aead aead = getAead(dek);
         return aead.decrypt(ciphertext, associatedData);
       }
     } catch (IndexOutOfBoundsException
              | BufferUnderflowException
              | NegativeArraySizeException e) {
       throw new GeneralSecurityException("invalid ciphertext", e);
+    }
+  }
+
+  private DeterministicAead getDeterministicAead(byte[] dek) throws GeneralSecurityException {
+    try {
+      return deterministicAeads.get(ByteString.copyFrom(dek));
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof GeneralSecurityException) {
+        throw (GeneralSecurityException) e.getCause();
+      }
+      throw new RuntimeException(e.getCause());
+    }
+  }
+
+  private Aead getAead(byte[] dek) throws GeneralSecurityException {
+    try {
+      return aeads.get(ByteString.copyFrom(dek));
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof GeneralSecurityException) {
+        throw (GeneralSecurityException) e.getCause();
+      }
+      throw new RuntimeException(e.getCause());
     }
   }
 }
