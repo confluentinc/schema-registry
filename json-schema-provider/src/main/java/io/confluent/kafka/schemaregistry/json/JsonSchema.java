@@ -40,6 +40,7 @@ import com.fasterxml.jackson.databind.ser.PropertyWriter;
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -47,6 +48,7 @@ import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
@@ -88,6 +90,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingEntity;
 
 public class JsonSchema implements ParsedSchema {
 
@@ -612,7 +616,13 @@ public class JsonSchema implements ParsedSchema {
               getPropertyAccessor(ctx, message, propertyName);
           Object value = propertyAccessor.getPropertyValue();
           Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
-          propertyAccessor.setPropertyValue(newValue);
+          if (ctx.rule().getKind() == RuleKind.CONDITION) {
+            if (Boolean.FALSE.equals(newValue)) {
+              throw new RuntimeException(new RuleConditionException(ctx.rule()));
+            }
+          } else {
+            propertyAccessor.setPropertyValue(newValue);
+          }
         }
       }
       return message;
