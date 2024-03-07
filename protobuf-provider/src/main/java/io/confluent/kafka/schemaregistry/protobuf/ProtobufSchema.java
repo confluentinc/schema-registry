@@ -95,15 +95,24 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Difference;
+import io.confluent.kafka.schemaregistry.protobuf.diff.SchemaDiff;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.EnumDefinition;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
-import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -134,14 +143,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import io.confluent.kafka.schemaregistry.protobuf.diff.Difference;
-import io.confluent.kafka.schemaregistry.protobuf.diff.SchemaDiff;
-import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
-import io.confluent.kafka.schemaregistry.protobuf.dynamic.EnumDefinition;
-import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 
 import static com.google.common.base.CaseFormat.LOWER_UNDERSCORE;
 import static com.google.common.base.CaseFormat.UPPER_CAMEL;
@@ -2338,7 +2339,13 @@ public class ProtobufSchema implements ParsedSchema {
             d = schemaFd.getMessageType();
           }
           Object newValue = toTransformedMessage(ctx, d, value, transform);
-          copy.setField(fd, newValue);
+          if (ctx.rule().getKind() == RuleKind.CONDITION) {
+            if (Boolean.FALSE.equals(newValue)) {
+              throw new RuntimeException(new RuleConditionException(ctx.rule()));
+            }
+          } else {
+            copy.setField(fd, newValue);
+          }
         }
       }
       return copy.build();
