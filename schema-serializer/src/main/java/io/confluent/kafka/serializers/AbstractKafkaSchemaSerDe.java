@@ -41,6 +41,7 @@ import io.confluent.kafka.schemaregistry.rules.DlqAction;
 import io.confluent.kafka.schemaregistry.rules.ErrorAction;
 import io.confluent.kafka.schemaregistry.rules.NoneAction;
 import io.confluent.kafka.schemaregistry.rules.RuleAction;
+import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
@@ -680,14 +681,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
           switch (rule.getKind()) {
             case CONDITION:
               if (Boolean.FALSE.equals(result)) {
-                String errMsg = rule.getDoc();
-                if (errMsg == null || errMsg.isEmpty()) {
-                  String expr = rule.getExpr();
-                  errMsg = expr != null
-                      ? "Expr failed: '" + expr + "'"
-                      : "Condition failed: '" + rule.getName() + "'";
-                }
-                throw new RuleException(errMsg);
+                throw new RuleConditionException(rule);
               }
               break;
             case TRANSFORM:
