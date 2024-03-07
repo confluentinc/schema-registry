@@ -52,10 +52,6 @@ public abstract class FieldRuleExecutor implements RuleExecutor {
 
   @Override
   public Object transform(RuleContext ctx, Object message) throws RuleException {
-    if (ctx.rule().getKind() == RuleKind.CONDITION) {
-      throw new RuleException(
-          "Rules of type " + ctx.rule().getType() + " can only have kind TRANSFORM");
-    }
     if (this.preserveSource == null) {
       String preserveValueConfig = ctx.getParameter(PRESERVE_SOURCE_FIELDS);
       if (preserveValueConfig != null) {
