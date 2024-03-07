@@ -23,16 +23,18 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.Lists;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
-import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
@@ -577,7 +579,13 @@ public class AvroSchema implements ParsedSchema {
               value = value.toString();
             }
             Object newValue = toTransformedMessage(ctx, f.schema(), value, transform);
-            data.setField(message, f.name(), f.pos(), newValue);
+            if (ctx.rule().getKind() == RuleKind.CONDITION) {
+              if (Boolean.FALSE.equals(newValue)) {
+                throw new RuntimeException(new RuleConditionException(ctx.rule()));
+              }
+            } else {
+              data.setField(message, f.name(), f.pos(), newValue);
+            }
           }
         }
         return message;
