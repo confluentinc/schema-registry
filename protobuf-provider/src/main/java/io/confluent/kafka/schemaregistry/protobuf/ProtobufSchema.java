@@ -103,6 +103,7 @@ import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -114,6 +115,7 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.EnumDefinition;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
@@ -2336,7 +2338,13 @@ public class ProtobufSchema implements ParsedSchema {
             d = schemaFd.getMessageType();
           }
           Object newValue = toTransformedMessage(ctx, d, value, transform);
-          copy.setField(fd, newValue);
+          if (ctx.rule().getKind() == RuleKind.CONDITION) {
+            if (Boolean.FALSE.equals(newValue)) {
+              throw new RuntimeException(new RuleConditionException(ctx.rule()));
+            }
+          } else {
+            copy.setField(fd, newValue);
+          }
         }
       }
       return copy.build();
