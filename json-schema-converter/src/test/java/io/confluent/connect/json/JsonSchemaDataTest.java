@@ -16,6 +16,7 @@
 package io.confluent.connect.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BinaryNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
@@ -32,6 +33,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.connect.json.JsonSchemaData.SchemaWrapper;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -334,6 +336,133 @@ public class JsonSchemaDataTest {
         .put("d", "sample string");
     actual = new Struct(connectSchema).put(JSON_TYPE_ONE_OF + ".field.1", struct);
     checkNonObjectConversion(schema, obj, connectSchema, actual);
+  }
+
+  private JsonSchema getCombinedRefs() {
+    String schema = "{\n"
+            + "  \"namespace\": \"com.nykaa.recommendation\",\n"
+            + "  \"oneOf\": [\n"
+            + "    {\n"
+            + "      \"$ref\": \"#/definitions/userxproduct\"\n"
+            + "    },\n"
+            + "    {\n"
+            + "      \"$ref\": \"#/definitions/userxcat\"\n"
+            + "    }\n"
+            + "  ],\n"
+            + "  \"definitions\": {\n"
+            + "    \"userxproduct\": {\n"
+
+            + "  \"additionalProperties\": true,\n"
+            + "  \"description\": \"user_x_product Schema\",\n"
+            + "  \"namespace\": \"com.nykaa.recommendation\",\n"
+            + "  \"properties\": {\n"
+            + "    \"key\": {\n"
+            + "      \"type\": \"string\"\n"
+            + "    },\n"
+            + "    \"reco_json\": {\n"
+            + "      \"properties\": {\n"
+            + "        \"product_ids\": {\n"
+            + "          \"default\": [],\n"
+            + "          \"items\": {\n"
+            + "            \"type\": \"string\"\n"
+            + "          },\n"
+            + "          \"minItems\": 1,\n"
+            + "          \"type\": \"array\",\n"
+            + "          \"uniqueItems\": true\n"
+            + "        }\n"
+            + "      },\n"
+            + "      \"required\": [\n"
+            + "        \"product_ids\"\n"
+            + "      ],\n"
+            + "      \"title\": \"reco_json\",\n"
+            + "      \"type\": \"object\"\n"
+            + "    },\n"
+            + "    \"ttl\": {\n"
+            + "      \"type\": \"integer\"\n"
+            + "    }\n"
+            + "  },\n"
+            + "  \"required\": [\n"
+            + "    \"key\",\n"
+            + "    \"reco_json\",\n"
+            + "    \"ttl\"\n"
+            + "  ],\n"
+            + "  \"title\": \"user_x_product.json\",\n"
+            + "  \"type\": \"object\"\n"
+
+            + "    },\n"
+            + "    \"userxcat\": {\n"
+
+            + "  \"$schema\": \"http://json-schema.org/draft-04/schema#\",\n"
+            + "  \"additionalProperties\": true,\n"
+            + "  \"description\": \"user_x_cat_x_product Schema\",\n"
+            + "  \"namespace\": \"com.nykaa.recommendation\",\n"
+            + "  \"properties\": {\n"
+            + "    \"key\": {\n"
+            + "      \"type\": \"string\"\n"
+            + "    },\n"
+            + "    \"reco_json\": {\n"
+            + "      \"properties\": {\n"
+            + "        \"user_x_category\": {\n"
+            + "          \"items\": {\n"
+            + "            \"properties\": {\n"
+            + "              \"category_id\": {\n"
+            + "                \"type\": \"string\"\n"
+            + "              },\n"
+            + "              \"product_ids\": {\n"
+            + "                \"items\": {\n"
+            + "                  \"type\": \"string\"\n"
+            + "                },\n"
+            + "                \"minItems\": 1,\n"
+            + "                \"type\": \"array\"\n"
+            + "              },\n"
+            + "              \"title\": {\n"
+            + "                \"type\": \"string\"\n"
+            + "              }\n"
+            + "            },\n"
+            + "            \"required\": [\n"
+            + "              \"category_id\",\n"
+            + "              \"product_ids\",\n"
+            + "              \"title\"\n"
+            + "            ],\n"
+            + "            \"type\": \"object\"\n"
+            + "          },\n"
+            + "          \"minItems\": 1,\n"
+            + "          \"type\": \"array\"\n"
+            + "        }\n"
+            + "      },\n"
+            + "      \"required\": [\n"
+            + "        \"user_x_category\"\n"
+            + "      ],\n"
+            + "      \"type\": \"object\"\n"
+            + "    },\n"
+            + "    \"ttl\": {\n"
+            + "      \"type\": \"integer\"\n"
+            + "    }\n"
+            + "  },\n"
+            + "  \"required\": [\n"
+            + "    \"key\",\n"
+            + "    \"reco_json\",\n"
+            + "    \"ttl\"\n"
+            + "  ],\n"
+            + "  \"title\": \"user_x_cat_x_product\",\n"
+            + "  \"type\": \"object\"\n"
+
+            + "    }\n"
+            + "  }\n"
+            + "}";
+    return new JsonSchema(schema);
+  }
+
+  @Test
+  public void testFromConnectOncall() throws Exception {
+    JsonSchema jsonSchema = getCombinedRefs();
+    CombinedSchema schema = (CombinedSchema) jsonSchema.rawSchema();
+
+//    String json = "{\"key\":\"commodo nulla irure veniam\",\"reco_json\":{\"user_x_category\":[{\"category_id\":\"elit aliquip sunt ut fugiat\",\"product_ids\":[\"aute elit in incididunt enim\",\"enim mollit ullamco in\",\"in magna\"],\"title\":\"Excepteur Duis anim sit elit\"},{\"category_id\":\"Duis in\",\"product_ids\":[\"pariatur qui Excepteur\"],\"title\":\"est minim dolor ad\"},{\"category_id\":\"nostrud\",\"product_ids\":[\"officia sit deserunt\"],\"title\":\"et proident do fugiat\"}]},\"ttl\":-35595933}";
+    String json = "{\"key\":\"cupidatat fugiat dolor officia\",\"reco_json\":{\"user_x_category\":[{\"category_id\":\"occaecat in deserunt ut\",\"product_ids\":[\"aliqua Excepteur do aute laboris\",\"minim qui velit\"],\"title\":\"commodo eiusmod eu quis\"},{\"category_id\":\"Lorem ex\",\"product_ids\":[\"Ut ut\",\"sit ex\",\"consectetur\",\"do eu Duis in exercitation\"],\"title\":\"exercitation cillum sit dolore occaecat\"},{\"category_id\":\"sit proident exercitation minim\",\"product_ids\":[\"voluptate elit\",\"ad irure ipsum\"],\"title\":\"aute adipisicing\"},{\"category_id\":\"magna cillum amet\",\"product_ids\":[\"eu nisi ut\",\"sit mollit\",\"exercitation ullamco quis dolor ut\",\"exercitation magna est culpa\",\"Ut\"],\"title\":\"incididunt\"},{\"category_id\":\"in\",\"product_ids\":[\"eu\",\"in\",\"enim in proident anim\",\"irure magna ex\"],\"title\":\"reprehenderit Excepteur do elit\"}]},\"ttl\":67783810}";
+    ObjectNode obj = (ObjectNode) Jackson.newObjectMapper().readTree(json);
+
+    checkNonObjectConversion(null, null, schema, obj);
   }
 
   @Test
