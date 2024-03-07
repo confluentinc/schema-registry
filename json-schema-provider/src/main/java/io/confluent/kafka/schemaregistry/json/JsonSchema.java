@@ -91,8 +91,6 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingEntity;
-
 public class JsonSchema implements ParsedSchema {
 
   private static final Logger log = LoggerFactory.getLogger(JsonSchema.class);
