@@ -15,10 +15,17 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import com.github.benmanes.caffeine.cache.CacheLoader;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Sets;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
@@ -61,11 +68,11 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.leaderelector.kafka.KafkaGroupLeaderElector;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
-import io.confluent.kafka.schemaregistry.rest.handlers.CompositeUpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
+import io.confluent.kafka.schemaregistry.rest.handlers.CompositeUpdateRequestHandler;
+import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
 import io.confluent.kafka.schemaregistry.storage.exceptions.EntryTooLargeException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
@@ -73,47 +80,39 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
-import io.confluent.rest.NamedURI;
-
-import java.util.Map;
-import java.util.List;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Set;
-import java.util.Collections;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Properties;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import javax.net.ssl.HostnameVerifier;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.net.ssl.HostnameVerifier;
-import java.io.IOException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
-
-import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
-import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaRegistry {
 
@@ -124,7 +123,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   public static final String CONFLUENT_VERSION = "confluent:version";
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
-
+  private static final String RESERVED_FIELD_REMOVED = "The new schema has reserved field %s "
+      + "removed from its metadata which is present in the old schema's metadata.";
+  private static final String FIELD_CONFLICTS_WITH_RESERVED_FIELD = "The new schema has field that"
+      + " conflicts with the reserved field %s.";
   private final SchemaRegistryConfig config;
   private final List<SchemaRegistryResourceExtension> resourceExtensions;
   private final Map<String, Object> props;
@@ -134,25 +136,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final MetadataEncoderService metadataEncoder;
   private RuleSetHandler ruleSetHandler;
-  private List<UpdateRequestHandler> updateRequestHandlers = new CopyOnWriteArrayList<>();
+  private final List<UpdateRequestHandler> updateRequestHandlers = new CopyOnWriteArrayList<>();
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
   private final CompatibilityLevel defaultCompatibilityLevel;
+  private final boolean defaultValidateFields;
   private final Mode defaultMode;
   private final int kafkaStoreTimeoutMs;
   private final int initTimeout;
   private final int kafkaStoreMaxRetries;
   private final int searchDefaultLimit;
   private final int searchMaxLimit;
-  private final boolean isEligibleForLeaderElector;
   private final boolean delayLeaderElection;
   private final boolean allowModeChanges;
   private SchemaRegistryIdentity leaderIdentity;
   private RestService leaderRestService;
-  private SslFactory sslFactory;
-  private int leaderConnectTimeoutMs;
-  private int leaderReadTimeoutMs;
-  private IdGenerator idGenerator = null;
+  private final SslFactory sslFactory;
+  private final int leaderConnectTimeoutMs;
+  private final int leaderReadTimeoutMs;
+  private final IdGenerator idGenerator;
   private LeaderElector leaderElector = null;
   private final MetricsContainer metricsContainer;
   private final Map<String, SchemaProvider> providers;
@@ -160,6 +162,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final String groupId;
   private final List<Consumer<Boolean>> leaderChangeListeners = new CopyOnWriteArrayList<>();
   private final AtomicBoolean initialized = new AtomicBoolean(false);
+  private final Time time;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -176,7 +179,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     if (leaderEligibility == null) {
       leaderEligibility = config.getBoolean(SchemaRegistryConfig.LEADER_ELIGIBILITY);
     }
-    this.isEligibleForLeaderElector = leaderEligibility;
     this.delayLeaderElection = config.getBoolean(SchemaRegistryConfig.LEADER_ELECTION_DELAY);
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
 
@@ -184,8 +186,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     NamedURI internalListener = getInterInstanceListener(config.getListeners(),
         interInstanceListenerNameConfig,
         config.interInstanceProtocol());
-    log.info("Found internal listener: {}", internalListener.toString());
-
+    log.info("Found internal listener: {}", internalListener);
+    boolean isEligibleForLeaderElector = leaderEligibility;
     this.myIdentity = getMyIdentity(internalListener, isEligibleForLeaderElector, config);
     log.info("Setting my identity to {}",  myIdentity);
 
@@ -201,6 +203,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_MAX_RETRIES_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
+    this.defaultValidateFields =
+        config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_FIELDS_CONFIG);
     this.defaultMode = Mode.READWRITE;
     this.kafkaClusterId = kafkaClusterId(config);
     this.groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
@@ -208,14 +212,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.providers = initProviders(config);
     this.schemaCache = Caffeine.newBuilder()
         .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
-        .expireAfterAccess(
-            config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
-        .build(new CacheLoader<RawSchema, ParsedSchema>() {
-          @Override
-          public ParsedSchema load(RawSchema s) throws Exception {
-            return loadSchema(s.getSchema(), s.isNew(), s.isNormalize());
-          }
-        });
+        .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
+                TimeUnit.SECONDS)
+        .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
     this.searchDefaultLimit =
         config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
     this.searchMaxLimit = config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_MAX_LIMIT_CONFIG);
@@ -224,6 +223,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.kafkaStore = kafkaStore(config);
     this.metadataEncoder = new MetadataEncoderService(this);
     this.ruleSetHandler = new RuleSetHandler();
+    this.time = config.getTime();
   }
 
   @VisibleForTesting
@@ -277,10 +277,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
       SchemaRegistryConfig config) throws SchemaRegistryException {
-    return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
-        config,
-        getSchemaUpdateHandler(config),
-        this.serializer, lookupCache, new NoopKey());
+    return new KafkaStore<>(
+            config,
+            getSchemaUpdateHandler(config),
+            this.serializer, lookupCache, new NoopKey());
   }
 
   protected SchemaUpdateHandler getSchemaUpdateHandler(SchemaRegistryConfig config) {
@@ -307,7 +307,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache() {
-    return new InMemoryCache<SchemaRegistryKey, SchemaRegistryValue>(serializer);
+    return new InMemoryCache<>(serializer);
   }
 
   public LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache() {
@@ -443,6 +443,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return kafkaStore.initialized() && initialized.get();
   }
 
+  public boolean healthy() {
+    return initialized()
+        && getResourceExtensions().stream().allMatch(SchemaRegistryResourceExtension::healthy);
+  }
+
   /**
    * Add a leader change listener.
    *
@@ -455,11 +460,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public boolean isLeader() {
     kafkaStore.leaderLock().lock();
     try {
-      if (leaderIdentity != null && leaderIdentity.equals(myIdentity)) {
-        return true;
-      } else {
-        return false;
-      }
+      return leaderIdentity != null && leaderIdentity.equals(myIdentity);
     } finally {
       kafkaStore.leaderLock().unlock();
     }
@@ -475,7 +476,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public void setLeader(@Nullable SchemaRegistryIdentity newLeader)
       throws SchemaRegistryTimeoutException, SchemaRegistryStoreException, IdGenerationException {
-    log.debug("Setting the leader to {}", newLeader);
+    final long started = time.hiResClockMs();
+    log.info("Setting the leader to {}", newLeader);
 
     // Only schema registry instances eligible for leader can be set to leader
     if (newLeader != null && !newLeader.getLeaderEligibility()) {
@@ -505,18 +507,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       isLeader = isLeader();
       leaderChanged = leaderIdentity != null && !leaderIdentity.equals(previousLeader);
-      if (leaderChanged && isLeader) {
-        // The new leader may not know the exact last offset in the Kafka log. So, mark the
-        // last offset invalid here
-        kafkaStore.markLastWrittenOffsetInvalid();
-        //ensure the new leader catches up with the offsets before it gets nextid and assigns
-        // leader
-        try {
-          kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
-        } catch (StoreException e) {
-          throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
+      if (leaderChanged) {
+        log.info("Leader changed from {} to {}", previousLeader, leaderIdentity);
+        if (isLeader) {
+          // The new leader may not know the exact last offset in the Kafka log. So, mark the
+          // last offset invalid here
+          kafkaStore.markLastWrittenOffsetInvalid();
+          //ensure the new leader catches up with the offsets before it gets nextid and assigns
+          // leader
+          try {
+            kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
+          } catch (StoreException e) {
+            throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
+          }
+          idGenerator.init();
         }
-        idGenerator.init();
       }
       metricsContainer.getLeaderNode().record(isLeader() ? 1 : 0);
     } finally {
@@ -532,6 +537,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
     }
+    long elapsed = time.hiResClockMs() - started;
+    metricsContainer.getLeaderInitializationLatencyMetric().record(elapsed);
   }
 
   /**
@@ -632,7 +639,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
 
       int schemaId = schema.getId();
-      ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
+      ParsedSchema parsedSchema = canonicalizeSchema(schema, config, schemaId < 0, normalize);
 
       if (mode != Mode.IMPORT && parsedSchema != null) {
         // see if the schema to be registered already exists
@@ -674,7 +681,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (mode != Mode.IMPORT) {
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
-        compatibilityErrorLogs = isCompatibleWithPrevious(config, parsedSchema, undeletedVersions);
+        compatibilityErrorLogs.addAll(isCompatibleWithPrevious(config,
+            parsedSchema,
+            undeletedVersions));
         isCompatible = compatibilityErrorLogs.isEmpty();
       }
 
@@ -779,7 +788,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Config config, Schema schema, List<ParsedSchemaHolder> undeletedVersions, int newVersion)
       throws SchemaRegistryException {
     boolean populatedSchema = false;
-    SchemaValue previousSchemaValue = undeletedVersions.size() > 0
+    SchemaValue previousSchemaValue = !undeletedVersions.isEmpty()
         ? ((LazyParsedSchemaHolder) undeletedVersions.get(0)).schemaValue()
         : null;
     Schema previousSchema = previousSchemaValue != null
@@ -1152,7 +1161,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       // Pass a copy of the schema so the original is not modified during normalization
       // to ensure that invalid defaults are not dropped since default validation is disabled
       Schema newSchema = schema != null ? schema.copy() : null;
-      ParsedSchema parsedSchema = canonicalizeSchema(newSchema, false, normalize);
+      Config config = getConfigInScope(subject);
+      ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, false, normalize);
       if (parsedSchema != null) {
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(newSchema);
         if (schemaIdAndSubjects != null) {
@@ -1402,23 +1412,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private ParsedSchema canonicalizeSchema(Schema schema, boolean isNew, boolean normalize)
-          throws InvalidSchemaException {
+  private ParsedSchema canonicalizeSchema(Schema schema,
+                                          Config config,
+                                          boolean isNew,
+                                          boolean normalize) throws InvalidSchemaException {
     if (schema == null
         || schema.getSchema() == null
         || schema.getSchema().trim().isEmpty()) {
       return null;
     }
     ParsedSchema parsedSchema = parseSchema(schema, isNew, normalize);
-    return maybeValidateAndNormalizeSchema(parsedSchema, schema, true, normalize);
+    return maybeValidateAndNormalizeSchema(parsedSchema, schema, config, normalize);
   }
 
-  private ParsedSchema maybeValidateAndNormalizeSchema(
-      ParsedSchema parsedSchema, Schema schema, boolean validate, boolean normalize)
+  private ParsedSchema maybeValidateAndNormalizeSchema(ParsedSchema parsedSchema,
+                                                       Schema schema,
+                                                       Config config,
+                                                       boolean normalize)
           throws InvalidSchemaException {
     try {
-      if (validate) {
-        parsedSchema.validate();
+      if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
+        parsedSchema.validate(isSchemaFieldValidationEnabled(config));
       }
       if (normalize) {
         parsedSchema = parsedSchema.normalize();
@@ -1546,7 +1560,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       String format,
       boolean fetchMaxId
   ) throws SchemaRegistryException {
-    SchemaValue schema = null;
+    SchemaValue schema;
     try {
       SchemaKey subjectVersionKey = getSchemaKeyUsingContexts(id, subject);
       if (subjectVersionKey == null) {
@@ -1690,7 +1704,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public List<SubjectVersion> listVersionsForId(int id, String subject, boolean lookupDeleted)
       throws SchemaRegistryException {
-    SchemaValue schema = null;
+    SchemaValue schema;
     try {
       SchemaKey subjectVersionKey = getSchemaKeyUsingContexts(id, subject);
       if (subjectVersionKey == null) {
@@ -2028,20 +2042,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       prevParsedSchemas.add(new LazyParsedSchemaHolder(this, previousSchema));
     }
 
-    ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true, normalize);
+    Config config = getConfigInScope(subject);
+    ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, true, normalize);
     if (parsedSchema == null) {
       log.error("Empty schema");
       throw new InvalidSchemaException("Empty schema");
     }
-    Config config = getConfigInScope(subject);
     return isCompatibleWithPrevious(config, parsedSchema, prevParsedSchemas);
   }
 
   private List<String> isCompatibleWithPrevious(Config config,
                                                 ParsedSchema parsedSchema,
-                                                List<ParsedSchemaHolder> previousSchemas)
-      throws SchemaRegistryException {
-
+                                                List<ParsedSchemaHolder> previousSchemas) {
+    List<String> errorMessages = new ArrayList<>();
+    ParsedSchemaHolder previousSchemaHolder = !previousSchemas.isEmpty()
+                                                  ? previousSchemas.get(previousSchemas.size() - 1)
+                                                  : null;
+    if (isSchemaFieldValidationEnabled(config)) {
+      errorMessages.addAll(validateReservedFields(parsedSchema, previousSchemaHolder));
+    }
     CompatibilityLevel compatibility = CompatibilityLevel.forName(config.getCompatibilityLevel());
     String compatibilityGroup = config.getCompatibilityGroup();
     if (compatibilityGroup != null) {
@@ -2053,15 +2072,39 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
               getCompatibilityGroupValue(s.schema(), compatibilityGroup)))
           .collect(Collectors.toList());
     }
-    List<String> errorMessages = parsedSchema.isCompatible(compatibility, previousSchemas);
-    if (errorMessages.size() > 0) {
+    errorMessages.addAll(parsedSchema.isCompatible(compatibility, previousSchemas));
+    if (!errorMessages.isEmpty()) {
       try {
-        errorMessages.add(String.format("{compatibility: '%s'}", compatibility));
+        errorMessages.add(String.format("{validateFields: '%b', compatibility: '%s'}",
+            isSchemaFieldValidationEnabled(config),
+            compatibility));
       } catch (UnsupportedOperationException e) {
         // Ignore and return errorMessages
-        log.warn("Failed to append 'compabitibility' to error messages");
+        log.warn("Failed to append 'compatibility' to error messages");
       }
     }
+    return errorMessages;
+  }
+
+  private List<String> validateReservedFields(ParsedSchema currentSchema,
+                                              ParsedSchemaHolder previousSchema) {
+    List<String> errorMessages = new ArrayList<>();
+    Set<String> updatedReservedFields = currentSchema.getReservedFields();
+    if (previousSchema != null) {
+      // check to ensure that original reserved fields are not removed in the updated version
+      Sets.SetView<String> removedFields =
+          Sets.difference(previousSchema.schema().getReservedFields(), updatedReservedFields);
+      if (!removedFields.isEmpty()) {
+        removedFields.forEach(field -> errorMessages.add(String.format(RESERVED_FIELD_REMOVED,
+            field)));
+      }
+    }
+    updatedReservedFields.forEach(reservedField -> {
+      // check if updated fields conflict with reserved fields
+      if (currentSchema.hasTopLevelField(reservedField)) {
+        errorMessages.add(String.format(FIELD_CONFLICTS_WITH_RESERVED_FIELD, reservedField));
+      }
+    });
     return errorMessages;
   }
 
@@ -2303,6 +2346,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                     + " "
                     + sslEndpointIdentificationAlgo
                     + " not supported");
+  }
+
+  private boolean isSchemaFieldValidationEnabled(Config config) {
+    return config.isValidateFields() != null ? config.isValidateFields() : defaultValidateFields;
   }
 
   private static class RawSchema {
