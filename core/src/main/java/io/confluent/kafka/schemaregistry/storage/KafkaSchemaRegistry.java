@@ -634,7 +634,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       int schemaId = schema.getId();
       ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
 
-      if (parsedSchema != null) {
+      if (mode != Mode.IMPORT && parsedSchema != null) {
         // see if the schema to be registered already exists
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
         if (schemaIdAndSubjects != null
@@ -854,7 +854,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                   Map<String, String> headerProperties)
       throws SchemaRegistryException {
     Config config = getConfigInScope(subject);
-    if (!config.hasDefaultsOrOverrides()) {
+    Mode mode = getModeInScope(subject);
+    if (mode != Mode.IMPORT && !config.hasDefaultsOrOverrides()) {
       Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
       if (existingSchema != null) {
         if (schema.getId() == null
@@ -1214,16 +1215,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public void checkIfSchemaWithIdExist(int id, Schema schema)
       throws SchemaRegistryException, StoreException {
+    Schema schemaCopy = schema.copy();
     String qctx = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
     SchemaKey existingKey = this.lookupCache.schemaKeyById(id, qctx);
     if (existingKey != null) {
       SchemaRegistryValue existingValue = this.lookupCache.get(existingKey);
-      if (existingValue != null
-          && existingValue instanceof SchemaValue
-          && !((SchemaValue) existingValue).getSchema().equals(schema.getSchema())) {
-        throw new OperationNotPermittedException(
-            String.format("Overwrite new schema with id %s is not permitted.", id)
-        );
+      if (existingValue instanceof SchemaValue) {
+        SchemaValue existingSchemaValue = (SchemaValue) existingValue;
+        Schema existingSchema = existingSchemaValue.toSchemaEntity();
+        schemaCopy.setId(id);
+        schemaCopy.setSubject(existingSchema.getSubject());
+        schemaCopy.setVersion(existingSchema.getVersion());
+        if (!existingSchema.equals(schemaCopy)) {
+          throw new OperationNotPermittedException(
+              String.format("Overwrite new schema with id %s is not permitted.", id)
+          );
+        }
       }
     }
   }
