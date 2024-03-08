@@ -700,9 +700,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         SchemaValue schemaValue = new SchemaValue(schema, ruleSetHandler);
         metadataEncoder.encodeMetadata(schemaValue);
         if (schemaId >= 0) {
+          checkIfSchemaWithIdExist(schemaId, schema);
           schema.setId(schemaId);
           schemaValue.setId(schemaId);
-          checkIfSchemaWithIdExist(schemaValue);
           kafkaStore.put(schemaKey, schemaValue);
         } else {
           String qctx = QualifiedSubject.qualifiedContextFor(tenant(), subject);
@@ -1213,16 +1213,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return null;
   }
 
-  public void checkIfSchemaWithIdExist(SchemaValue schema)
+  public void checkIfSchemaWithIdExist(int id, Schema schema)
       throws SchemaRegistryException, StoreException {
+    Schema schemaCopy = schema.copy();
     String qctx = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
-    SchemaKey existingKey = this.lookupCache.schemaKeyById(schema.getId(), qctx);
+    SchemaKey existingKey = this.lookupCache.schemaKeyById(id, qctx);
     if (existingKey != null) {
       SchemaRegistryValue existingValue = this.lookupCache.get(existingKey);
-      if (!schema.equals(existingValue)) {
-        throw new OperationNotPermittedException(
-            String.format("Overwrite new schema with id %s is not permitted.", schema.getId())
-        );
+      if (existingValue instanceof SchemaValue) {
+        SchemaValue existingSchemaValue = (SchemaValue) existingValue;
+        Schema existingSchema = existingSchemaValue.toSchemaEntity();
+        schemaCopy.setId(id);
+        schemaCopy.setSubject(existingSchema.getSubject());
+        schemaCopy.setVersion(existingSchema.getVersion());
+        if (!existingSchema.equals(schemaCopy)) {
+          throw new OperationNotPermittedException(
+              String.format("Overwrite new schema with id %s is not permitted.", id)
+          );
+        }
       }
     }
   }
