@@ -1223,7 +1223,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (existingValue instanceof SchemaValue) {
         SchemaValue existingSchemaValue = (SchemaValue) existingValue;
         Schema existingSchema = existingSchemaValue.toSchemaEntity();
-        schemaCopy.setId(id);
+        schemaCopy.setId(existingSchema.getId());
         schemaCopy.setSubject(existingSchema.getSubject());
         schemaCopy.setVersion(existingSchema.getVersion());
         if (!existingSchema.equals(schemaCopy)) {
