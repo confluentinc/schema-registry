@@ -32,13 +32,18 @@ import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import org.apache.kafka.common.config.ConfigException;
 
 public class JsonataExecutor implements RuleExecutor {
 
   public static final String TYPE = "JSONATA";
 
+  public static final String JSONATA_TIMEOUT_MS = "jsonata.timeout.ms";
+  public static final String JSONATA_MAX_DEPTH = "jsonata.max.depth";
+  @Deprecated
   public static final String TIMEOUT_MS = "timeout.ms";
+  @Deprecated
   public static final String MAX_DEPTH = "max.depth";
 
   private long timeoutMs = 60000;
@@ -71,22 +76,37 @@ public class JsonataExecutor implements RuleExecutor {
 
   @Override
   public void configure(Map<String, ?> configs) {
-    Object timeoutMsConfig = configs.get(TIMEOUT_MS);
+    Long timeoutMsConfig = parseConfig(configs, JSONATA_TIMEOUT_MS, Long::parseLong);
     if (timeoutMsConfig != null) {
-      try {
-        this.timeoutMs = Long.parseLong(timeoutMsConfig.toString());
-      } catch (NumberFormatException e) {
-        throw new ConfigException("Cannot parse " + TIMEOUT_MS);
+      this.timeoutMs = timeoutMsConfig;
+    } else {
+      timeoutMsConfig = parseConfig(configs, TIMEOUT_MS, Long::parseLong);
+      if (timeoutMsConfig != null) {
+        this.timeoutMs = timeoutMsConfig;
       }
     }
-    Object maxDepthConfig = configs.get(MAX_DEPTH);
+    Integer maxDepthConfig = parseConfig(configs, JSONATA_MAX_DEPTH, Integer::parseInt);
     if (maxDepthConfig != null) {
-      try {
-        this.maxDepth = Integer.parseInt(maxDepthConfig.toString());
-      } catch (NumberFormatException e) {
-        throw new ConfigException("Cannot parse " + MAX_DEPTH);
+      this.maxDepth = maxDepthConfig;
+    } else {
+      maxDepthConfig = parseConfig(configs, MAX_DEPTH, Integer::parseInt);
+      if (maxDepthConfig != null) {
+        this.maxDepth = maxDepthConfig;
       }
     }
+  }
+
+  private static <T> T parseConfig(
+      Map<String, ?> configs, String name, Function<String, T> function) throws ConfigException {
+    Object config = configs.get(name);
+    if (config != null) {
+      try {
+        return function.apply(config.toString());
+      } catch (Exception e) {
+        throw new ConfigException("Cannot parse " + name);
+      }
+    }
+    return null;
   }
 
   @Override
