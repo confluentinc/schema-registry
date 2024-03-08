@@ -634,7 +634,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       int schemaId = schema.getId();
       ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
 
-      if (parsedSchema != null) {
+      if (mode != Mode.IMPORT && parsedSchema != null) {
         // see if the schema to be registered already exists
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
         if (schemaIdAndSubjects != null
@@ -700,9 +700,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         SchemaValue schemaValue = new SchemaValue(schema, ruleSetHandler);
         metadataEncoder.encodeMetadata(schemaValue);
         if (schemaId >= 0) {
-          checkIfSchemaWithIdExist(schemaId, schema);
           schema.setId(schemaId);
           schemaValue.setId(schemaId);
+          checkIfSchemaWithIdExist(schemaValue);
           kafkaStore.put(schemaKey, schemaValue);
         } else {
           String qctx = QualifiedSubject.qualifiedContextFor(tenant(), subject);
@@ -854,7 +854,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                   Map<String, String> headerProperties)
       throws SchemaRegistryException {
     Config config = getConfigInScope(subject);
-    if (!config.hasDefaultsOrOverrides()) {
+    Mode mode = getModeInScope(subject);
+    if (mode != Mode.IMPORT && !config.hasDefaultsOrOverrides()) {
       Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
       if (existingSchema != null) {
         if (schema.getId() == null
@@ -1212,17 +1213,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return null;
   }
 
-  public void checkIfSchemaWithIdExist(int id, Schema schema)
+  public void checkIfSchemaWithIdExist(SchemaValue schema)
       throws SchemaRegistryException, StoreException {
     String qctx = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
-    SchemaKey existingKey = this.lookupCache.schemaKeyById(id, qctx);
+    SchemaKey existingKey = this.lookupCache.schemaKeyById(schema.getId(), qctx);
     if (existingKey != null) {
       SchemaRegistryValue existingValue = this.lookupCache.get(existingKey);
-      if (existingValue != null
-          && existingValue instanceof SchemaValue
-          && !((SchemaValue) existingValue).getSchema().equals(schema.getSchema())) {
+      if (!schema.equals(existingValue)) {
         throw new OperationNotPermittedException(
-            String.format("Overwrite new schema with id %s is not permitted.", id)
+            String.format("Overwrite new schema with id %s is not permitted.", schema.getId())
         );
       }
     }
