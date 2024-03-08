@@ -1215,7 +1215,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public void checkIfSchemaWithIdExist(int id, Schema schema)
       throws SchemaRegistryException, StoreException {
-    Schema schemaCopy = schema.copy();
     String qctx = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
     SchemaKey existingKey = this.lookupCache.schemaKeyById(id, qctx);
     if (existingKey != null) {
@@ -1223,6 +1222,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (existingValue instanceof SchemaValue) {
         SchemaValue existingSchemaValue = (SchemaValue) existingValue;
         Schema existingSchema = existingSchemaValue.toSchemaEntity();
+        Schema schemaCopy = schema.copy();
         schemaCopy.setId(existingSchema.getId());
         schemaCopy.setSubject(existingSchema.getSubject());
         schemaCopy.setVersion(existingSchema.getVersion());
