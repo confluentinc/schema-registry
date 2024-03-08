@@ -600,7 +600,8 @@ public class DekRegistry implements Closeable {
       return key;
     } catch (GeneralSecurityException e) {
       log.error("Could not generate encrypted dek for " + key.getSubject(), e);
-      throw new DekGenerationException("Could not generate encrypted dek for " + key.getSubject());
+      throw new DekGenerationException(
+          "Could not generate encrypted dek for " + key.getSubject() + ": " + e.getMessage());
     }
   }
 
@@ -622,7 +623,8 @@ public class DekRegistry implements Closeable {
       return newKey;
     } catch (GeneralSecurityException e) {
       log.error("Could not generate raw dek for " + key.getSubject(), e);
-      throw new DekGenerationException("Could not generate raw dek for " + key.getSubject());
+      throw new DekGenerationException(
+          "Could not generate raw dek for " + key.getSubject() + ": " + e.getMessage());
     }
   }
 
