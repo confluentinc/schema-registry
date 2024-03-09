@@ -313,7 +313,7 @@ public class RestApiModeTest extends ClusterTestHarness {
             mode,
             restApp.restClient.setMode(mode).getMode());
 
-    // register same schema with same id different metadata
+    // register same schema with same id but with metadata
     expectedIdSchema1 = 1;
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(SCHEMA_STRING);
@@ -331,7 +331,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     // delete subject again
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
 
-    // register same schema with same id different metadata
+    // register same schema with same id but with metadata
     expectedIdSchema1 = 1;
     request = new RegisterSchemaRequest();
     request.setSchema(SCHEMA_STRING);
