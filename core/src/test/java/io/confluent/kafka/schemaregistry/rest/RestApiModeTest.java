@@ -289,7 +289,7 @@ public class RestApiModeTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testRegisterSchemaWithSameIdDifferentMetadataAfterImport() throws Exception {
+  public void testRegisterSchemaWithSameIdButWithMetadataAfterImport() throws Exception {
     String subject = "testSubject";
     String mode = "READWRITE";
 
