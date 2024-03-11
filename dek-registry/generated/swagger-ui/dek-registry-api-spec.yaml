@@ -43,6 +43,8 @@ paths:
                   example: User
         "404":
           description: Error code 40470 -- Key not found
+        "422":
+          description: Error code 42271 -- Invalid key
     post:
       summary: Create a dek.
       operationId: createDek
@@ -82,6 +84,13 @@ paths:
             application/json; qs=0.5:
               schema:
                 $ref: '#/components/schemas/Dek'
+        "409":
+          description: Conflict. Error code 40971 -- Key already exists. Error code
+            40972 -- Too many keys.
+        "422":
+          description: Error code 42271 -- Invalid key
+        "500":
+          description: Error code 50070 -- Dek generation error
   /dek-registry/v1/keks:
     get:
       summary: Get a list of kek names.
@@ -146,6 +155,11 @@ paths:
             application/json; qs=0.5:
               schema:
                 $ref: '#/components/schemas/Kek'
+        "409":
+          description: Conflict. Error code 40971 -- Key already exists. Error code
+            40972 -- Too many keys.
+        "422":
+          description: Error code 42271 -- Invalid key
   /dek-registry/v1/keks/{name}:
     get:
       summary: Get a kek by name.
@@ -177,6 +191,8 @@ paths:
                 $ref: '#/components/schemas/Kek'
         "404":
           description: Error code 40470 -- Key not found
+        "422":
+          description: Error code 42271 -- Invalid key
     put:
       summary: Alters a kek.
       operationId: putKek
@@ -218,6 +234,10 @@ paths:
                 $ref: '#/components/schemas/Kek'
         "404":
           description: Error code 40470 -- Key not found
+        "409":
+          description: Error code 40971 -- Key already exists
+        "422":
+          description: Error code 42271 -- Invalid key
     delete:
       summary: Delete a kek.
       operationId: deleteKek
@@ -237,7 +257,11 @@ paths:
         "204":
           description: No Content
         "404":
-          description: Error code 40470 -- Key not found
+          description: Not found. Error code 40470 -- Key not found. Error code 40471
+            -- Key not soft-deleted.
+        "422":
+          description: Unprocessable entity. Error code 42271 -- Invalid key. Error
+            code 42272 -- References to key exist.
   /dek-registry/v1/keks/{name}/deks/{subject}:
     get:
       summary: Get a dek by subject.
@@ -284,6 +308,10 @@ paths:
                 $ref: '#/components/schemas/Dek'
         "404":
           description: Error code 40470 -- Key not found
+        "422":
+          description: Error code 42271 -- Invalid key
+        "500":
+          description: Error code 50070 -- Dek generation error
     delete:
       summary: Delete all versions of a dek.
       operationId: deleteDekVersions
@@ -318,7 +346,10 @@ paths:
         "204":
           description: No Content
         "404":
-          description: Error code 40470 -- Key not found
+          description: Not found. Error code 40470 -- Key not found. Error code 40471
+            -- Key not soft-deleted.
+        "422":
+          description: Error code 42271 -- Invalid key
   /dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}:
     get:
       summary: Get a dek by subject and version.
@@ -372,7 +403,10 @@ paths:
         "404":
           description: Error code 40470 -- Key not found
         "422":
-          description: Error code 42202 -- Invalid version
+          description: Unprocessable entity. Error code 42202 -- Invalid version.
+            Error code 42271 -- Invalid key.
+        "500":
+          description: Error code 50070 -- Dek generation error
     delete:
       summary: Delete a dek version.
       operationId: deleteDekVersion
@@ -413,9 +447,11 @@ paths:
         "204":
           description: No Content
         "404":
-          description: Error code 40470 -- Key not found
+          description: Not found. Error code 40470 -- Key not found. Error code 40471
+            -- Key not soft-deleted.
         "422":
-          description: Error code 42202 -- Invalid version
+          description: Unprocessable entity. Error code 42202 -- Invalid version.
+            Error code 42271 -- Invalid key.
   /dek-registry/v1/keks/{name}/deks/{subject}/versions:
     get:
       summary: List versions of dek.
@@ -474,6 +510,8 @@ paths:
                   example: 1
         "404":
           description: Error code 40470 -- Key not found
+        "422":
+          description: Error code 42271 -- Invalid key
   /dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}/undelete:
     post:
       summary: Undelete a dek version.
@@ -510,9 +548,11 @@ paths:
         "204":
           description: No Content
         "404":
-          description: Error code 40470 -- Key not found
+          description: Not found. Error code 40470 -- Key not found. Error code 40472
+            -- Key must be undeleted.
         "422":
-          description: Error code 42202 -- Invalid version
+          description: Unprocessable entity. Error code 42202 -- Invalid version.
+            Error code 42271 -- Invalid key.
   /dek-registry/v1/keks/{name}/deks/{subject}/undelete:
     post:
       summary: Undelete all versions of a dek.
@@ -543,7 +583,10 @@ paths:
         "204":
           description: No Content
         "404":
-          description: Error code 40470 -- Key not found
+          description: Not found. Error code 40470 -- Key not found. Error code 40472
+            -- Key must be undeleted.
+        "422":
+          description: Error code 42271 -- Invalid key
   /dek-registry/v1/keks/{name}/undelete:
     post:
       summary: Undelete a kek.
@@ -560,6 +603,9 @@ paths:
           description: No Content
         "404":
           description: Error code 40470 -- Key not found
+        "422":
+          description: Unprocessable entity. Error code 42271 -- Invalid key. Error
+            code 42272 -- References to key exist.
 components:
   schemas:
     Dek:
@@ -567,85 +613,119 @@ components:
       properties:
         kekName:
           type: string
+          description: Kek name of the dek
         subject:
           type: string
+          description: Subject of the dek
         version:
           type: integer
+          description: Version of the dek
           format: int32
         algorithm:
           type: string
+          description: Algorithm of the dek
           enum:
           - AES128_GCM
           - AES256_GCM
           - AES256_SIV
         encryptedKeyMaterial:
           type: string
+          description: Encrypted key material of the dek
         keyMaterial:
           type: string
+          description: Raw key material of the dek
         ts:
           type: integer
+          description: Timestamp of the dek
           format: int64
         deleted:
           type: boolean
+          description: Whether the dek is deleted
+      description: Dek
     CreateDekRequest:
       type: object
       properties:
         subject:
           type: string
+          description: Subject of the dek
         version:
           type: integer
+          description: Version of the dek
           format: int32
         algorithm:
           type: string
+          description: Algorithm of the dek
           enum:
           - AES128_GCM
           - AES256_GCM
           - AES256_SIV
         encryptedKeyMaterial:
           type: string
+          description: Encrypted key material of the dek
         deleted:
           type: boolean
+          description: Whether the dek is deleted
+      description: Create dek request
     Kek:
       type: object
       properties:
         name:
           type: string
+          description: Name of the kek
         kmsType:
           type: string
+          description: KMS type of the kek
         kmsKeyId:
           type: string
+          description: KMS key ID of the kek
         kmsProps:
           type: object
           additionalProperties:
             type: string
+            description: Properties of the kek
+          description: Properties of the kek
         doc:
           type: string
+          description: Description of the kek
         shared:
           type: boolean
+          description: Whether the kek is shared
         ts:
           type: integer
+          description: Timestamp of the kek
           format: int64
         deleted:
           type: boolean
+          description: Whether the kek is deleted
+      description: Kek
     CreateKekRequest:
       type: object
       properties:
         name:
           type: string
+          description: Name of the kek
         kmsType:
           type: string
+          description: KMS type of the kek
         kmsKeyId:
           type: string
+          description: KMS key ID of the kek
         kmsProps:
           type: object
           additionalProperties:
             type: string
+            description: Properties of the kek
+          description: Properties of the kek
         doc:
           type: string
+          description: Description of the kek
         shared:
           type: boolean
+          description: Whether the kek is shared
         deleted:
           type: boolean
+          description: Whether the kek is deleted
+      description: Create kek request
     UpdateKekRequest:
       type: object
       properties:
@@ -653,7 +733,12 @@ components:
           type: object
           additionalProperties:
             type: string
+            description: Properties of the kek
+          description: Properties of the kek
         doc:
           type: string
+          description: Description of the kek
         shared:
           type: boolean
+          description: Whether the kek is shared
+      description: Update kek request

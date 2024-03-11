@@ -115,7 +115,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @Operation(summary = "Get a kek by name.", responses = {
       @ApiResponse(responseCode = "200", description = "The kek info",
           content = @Content(schema = @Schema(implementation = Kek.class))),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
   })
   @PerformanceMetric("keks.get")
   @DocumentedName("getKek")
@@ -141,7 +142,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
           description = "List of dek subjects", content = @Content(
           array = @ArraySchema(schema = @io.swagger.v3.oas.annotations.media.Schema(
               example = "User")))),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
   })
   @PerformanceMetric("deks.list")
   @DocumentedName("getDekSubjects")
@@ -165,7 +167,9 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @Operation(summary = "Get a dek by subject.", responses = {
       @ApiResponse(responseCode = "200", description = "The dek info",
           content = @Content(schema = @Schema(implementation = Dek.class))),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key"),
+      @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
   })
   @PerformanceMetric("deks.get")
   @DocumentedName("getDek")
@@ -208,7 +212,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
           content = @Content(array = @ArraySchema(
               schema = @io.swagger.v3.oas.annotations.media.Schema(type = "integer",
                   format = "int32", example = "1")))),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
   })
   @PerformanceMetric("deks.versions.list")
   @DocumentedName("getAllDekVersions")
@@ -238,7 +243,10 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @ApiResponse(responseCode = "200", description = "The dek info",
           content = @Content(schema = @Schema(implementation = Dek.class))),
       @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
-      @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version")
+      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
+          + "Error code 42202 -- Invalid version. "
+          + "Error code 42271 -- Invalid key."),
+      @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
   })
   @PerformanceMetric("deks.versions.get")
   @DocumentedName("getDekByVersion")
@@ -285,6 +293,10 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @Operation(summary = "Create a kek.", responses = {
       @ApiResponse(responseCode = "200", description = "The create response",
           content = @Content(schema = @Schema(implementation = Kek.class))),
+      @ApiResponse(responseCode = "409", description = "Conflict. "
+          + "Error code 40971 -- Key already exists. "
+          + "Error code 40972 -- Too many keys."),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
   })
   @PerformanceMetric("keks.create")
   @DocumentedName("registerKek")
@@ -324,6 +336,11 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @Operation(summary = "Create a dek.", responses = {
       @ApiResponse(responseCode = "200", description = "The create response",
           content = @Content(schema = @Schema(implementation = Dek.class))),
+      @ApiResponse(responseCode = "409", description = "Conflict. "
+          + "Error code 40971 -- Key already exists. "
+          + "Error code 40972 -- Too many keys."),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key"),
+      @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
   })
   @PerformanceMetric("deks.create")
   @DocumentedName("registerDek")
@@ -369,7 +386,9 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @Operation(summary = "Alters a kek.", responses = {
       @ApiResponse(responseCode = "200", description = "The update response",
           content = @Content(schema = @Schema(implementation = Kek.class))),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
+      @ApiResponse(responseCode = "409", description = "Error code 40971 -- Key already exists"),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
   })
   @PerformanceMetric("keks.put")
   @DocumentedName("updateKek")
@@ -405,7 +424,12 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @Path("/{name}")
   @Operation(summary = "Delete a kek.", responses = {
       @ApiResponse(responseCode = "204", description = "No Content"),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+      @ApiResponse(responseCode = "404", description = "Not found. "
+          + "Error code 40470 -- Key not found. "
+          + "Error code 40471 -- Key not soft-deleted."),
+      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
+          + "Error code 42271 -- Invalid key. "
+          + "Error code 42272 -- References to key exist."),
   })
   @PerformanceMetric("keks.delete")
   @DocumentedName("deregisterKek")
@@ -445,7 +469,10 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @Path("/{name}/deks/{subject}")
   @Operation(summary = "Delete all versions of a dek.", responses = {
       @ApiResponse(responseCode = "204", description = "No Content"),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+      @ApiResponse(responseCode = "404", description = "Not found. "
+          + "Error code 40470 -- Key not found. "
+          + "Error code 40471 -- Key not soft-deleted."),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
   })
   @PerformanceMetric("deks.delete")
   @DocumentedName("deregisterDekVersions")
@@ -493,8 +520,12 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @Path("/{name}/deks/{subject}/versions/{version}")
   @Operation(summary = "Delete a dek version.", responses = {
       @ApiResponse(responseCode = "204", description = "No Content"),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
-      @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version")
+      @ApiResponse(responseCode = "404", description = "Not found. "
+          + "Error code 40470 -- Key not found. "
+          + "Error code 40471 -- Key not soft-deleted."),
+      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
+          + "Error code 42202 -- Invalid version. "
+          + "Error code 42271 -- Invalid key."),
   })
   @PerformanceMetric("deks.versions.delete")
   @DocumentedName("deregisterDekVersion")
@@ -551,7 +582,10 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @Path("/{name}/undelete")
   @Operation(summary = "Undelete a kek.", responses = {
       @ApiResponse(responseCode = "204", description = "No Content"),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
+      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
+          + "Error code 42271 -- Invalid key. "
+          + "Error code 42272 -- References to key exist."),
   })
   @PerformanceMetric("keks.undelete")
   @DocumentedName("undeleteKek")
@@ -587,7 +621,10 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @Path("/{name}/deks/{subject}/undelete")
   @Operation(summary = "Undelete all versions of a dek.", responses = {
       @ApiResponse(responseCode = "204", description = "No Content"),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found")
+      @ApiResponse(responseCode = "404", description = "Not found. "
+          + "Error code 40470 -- Key not found. "
+          + "Error code 40472 -- Key must be undeleted."),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
   })
   @PerformanceMetric("deks.undelete")
   @DocumentedName("undeleteDekVersions")
@@ -632,8 +669,12 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @Path("/{name}/deks/{subject}/versions/{version}/undelete")
   @Operation(summary = "Undelete a dek version.", responses = {
       @ApiResponse(responseCode = "204", description = "No Content"),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
-      @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version")
+      @ApiResponse(responseCode = "404", description = "Not found. "
+          + "Error code 40470 -- Key not found. "
+          + "Error code 40472 -- Key must be undeleted."),
+      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
+          + "Error code 42202 -- Invalid version. "
+          + "Error code 42271 -- Invalid key."),
   })
   @PerformanceMetric("deks.versions.undelete")
   @DocumentedName("undeleteDekVersion")
