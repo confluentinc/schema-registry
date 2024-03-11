@@ -27,6 +27,7 @@ import java.util.Objects;
 
 @JsonInclude(Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@io.swagger.v3.oas.annotations.media.Schema(description = "Create kek request")
 public class CreateKekRequest {
 
   private String name;
@@ -41,6 +42,7 @@ public class CreateKekRequest {
     return JacksonMapper.INSTANCE.readValue(json, CreateKekRequest.class);
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Name of the kek")
   @JsonProperty("name")
   public String getName() {
     return this.name;
@@ -51,6 +53,7 @@ public class CreateKekRequest {
     this.name = name;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "KMS type of the kek")
   @JsonProperty("kmsType")
   public String getKmsType() {
     return this.kmsType;
@@ -61,6 +64,7 @@ public class CreateKekRequest {
     this.kmsType = kmsType;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "KMS key ID of the kek")
   @JsonProperty("kmsKeyId")
   public String getKmsKeyId() {
     return this.kmsKeyId;
@@ -71,6 +75,7 @@ public class CreateKekRequest {
     this.kmsKeyId = kmsKeyId;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Properties of the kek")
   @JsonProperty("kmsProps")
   public Map<String, String> getKmsProps() {
     return this.kmsProps;
@@ -81,6 +86,7 @@ public class CreateKekRequest {
     this.kmsProps = kmsProps;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Description of the kek")
   @JsonProperty("doc")
   public String getDoc() {
     return this.doc;
@@ -91,6 +97,7 @@ public class CreateKekRequest {
     this.doc = doc;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Whether the kek is shared")
   @JsonProperty("shared")
   public boolean isShared() {
     return this.shared;
@@ -101,6 +108,7 @@ public class CreateKekRequest {
     this.shared = shared;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Whether the kek is deleted")
   @JsonProperty("deleted")
   public boolean isDeleted() {
     return this.deleted;

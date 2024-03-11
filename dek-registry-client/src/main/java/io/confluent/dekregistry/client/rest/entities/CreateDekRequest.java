@@ -27,6 +27,7 @@ import java.util.Objects;
 
 @JsonInclude(Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@io.swagger.v3.oas.annotations.media.Schema(description = "Create dek request")
 public class CreateDekRequest {
 
   private String subject;
@@ -39,6 +40,7 @@ public class CreateDekRequest {
     return JacksonMapper.INSTANCE.readValue(json, CreateDekRequest.class);
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Subject of the dek")
   @JsonProperty("subject")
   public String getSubject() {
     return this.subject;
@@ -49,6 +51,7 @@ public class CreateDekRequest {
     this.subject = subject;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Version of the dek")
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
@@ -59,6 +62,7 @@ public class CreateDekRequest {
     this.version = version;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Algorithm of the dek")
   @JsonProperty("algorithm")
   public DekFormat getAlgorithm() {
     return this.algorithm;
@@ -69,6 +73,7 @@ public class CreateDekRequest {
     this.algorithm = algorithm;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Encrypted key material of the dek")
   @JsonProperty("encryptedKeyMaterial")
   public String getEncryptedKeyMaterial() {
     return this.encryptedKeyMaterial;
@@ -79,6 +84,7 @@ public class CreateDekRequest {
     this.encryptedKeyMaterial = encryptedKeyMaterial;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Whether the dek is deleted")
   @JsonProperty("deleted")
   public boolean isDeleted() {
     return this.deleted;
