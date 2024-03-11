@@ -1216,6 +1216,7 @@ public class JsonSchemaData {
         // This is a number or integer with a format
         return toConnectSchema(ctx, numberSchema, version, forceOptional);
       }
+      return toConnectSchema(ctx, stringSchema, version, forceOptional);
     }
     throw new IllegalArgumentException("Unsupported criterion "
         + combinedSchema.getCriterion() + " for " + combinedSchema);
