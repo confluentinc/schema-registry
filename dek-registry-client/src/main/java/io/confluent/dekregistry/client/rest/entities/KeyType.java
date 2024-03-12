@@ -16,6 +16,7 @@
 
 package io.confluent.dekregistry.client.rest.entities;
 
+@io.swagger.v3.oas.annotations.media.Schema(description = "Key type")
 public enum KeyType {
   DEK,
   KEK

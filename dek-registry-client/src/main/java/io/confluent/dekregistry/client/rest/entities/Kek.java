@@ -42,6 +42,7 @@ import java.util.TreeMap;
 
 @JsonInclude(Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@io.swagger.v3.oas.annotations.media.Schema(description = "Kek")
 public class Kek {
 
   private final String name;
@@ -78,41 +79,49 @@ public class Kek {
     this.deleted = deleted;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Name of the kek")
   @JsonProperty("name")
   public String getName() {
     return this.name;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "KMS type of the kek")
   @JsonProperty("kmsType")
   public String getKmsType() {
     return this.kmsType;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "KMS key ID of the kek")
   @JsonProperty("kmsKeyId")
   public String getKmsKeyId() {
     return this.kmsKeyId;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Properties of the kek")
   @JsonProperty("kmsProps")
   public SortedMap<String, String> getKmsProps() {
     return this.kmsProps;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Description of the kek")
   @JsonProperty("doc")
   public String getDoc() {
     return this.doc;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Whether the kek is shared")
   @JsonProperty("shared")
   public boolean isShared() {
     return this.shared;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Timestamp of the kek")
   @JsonProperty("ts")
   public Long getTimestamp() {
     return this.timestamp;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Whether the kek is deleted")
   @JsonProperty("deleted")
   public Boolean getDeleted() {
     return this.deleted;
