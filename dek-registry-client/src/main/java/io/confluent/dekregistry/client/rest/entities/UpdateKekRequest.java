@@ -26,6 +26,7 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@io.swagger.v3.oas.annotations.media.Schema(description = "Update kek request")
 public class UpdateKekRequest {
 
   private Map<String, String> kmsProps;
@@ -36,6 +37,7 @@ public class UpdateKekRequest {
     return JacksonMapper.INSTANCE.readValue(json, UpdateKekRequest.class);
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Properties of the kek")
   @JsonProperty("kmsProps")
   public Map<String, String> getKmsProps() {
     return this.kmsProps;
@@ -46,6 +48,7 @@ public class UpdateKekRequest {
     this.kmsProps = kmsProps;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Description of the kek")
   @JsonProperty("doc")
   public String getDoc() {
     return doc;
@@ -56,6 +59,7 @@ public class UpdateKekRequest {
     this.doc = doc;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Whether the kek is shared")
   @JsonProperty("shared")
   public Boolean isShared() {
     return shared;
