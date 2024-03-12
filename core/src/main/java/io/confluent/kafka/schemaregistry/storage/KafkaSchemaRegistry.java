@@ -634,7 +634,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       int schemaId = schema.getId();
       ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
 
-      if (mode != Mode.IMPORT && parsedSchema != null) {
+      if (parsedSchema != null) {
         // see if the schema to be registered already exists
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
         if (schemaIdAndSubjects != null
@@ -854,8 +854,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                   Map<String, String> headerProperties)
       throws SchemaRegistryException {
     Config config = getConfigInScope(subject);
-    Mode mode = getModeInScope(subject);
-    if (mode != Mode.IMPORT && !config.hasDefaultsOrOverrides()) {
+    if (!config.hasDefaultsOrOverrides()) {
       Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
       if (existingSchema != null) {
         if (schema.getId() == null
