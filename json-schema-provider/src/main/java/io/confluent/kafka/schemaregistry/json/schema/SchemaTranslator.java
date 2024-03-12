@@ -32,7 +32,6 @@ import com.github.erosb.jsonsKema.ConstSchema;
 import com.github.erosb.jsonsKema.ContainsSchema;
 import com.github.erosb.jsonsKema.DependentRequiredSchema;
 import com.github.erosb.jsonsKema.DependentSchemasSchema;
-import com.github.erosb.jsonsKema.DynamicRefSchema;
 import com.github.erosb.jsonsKema.EnumSchema;
 import com.github.erosb.jsonsKema.ExclusiveMaximumSchema;
 import com.github.erosb.jsonsKema.ExclusiveMinimumSchema;
@@ -283,12 +282,6 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
       builder.schemaDependency(entry.getKey(), ctx.schema());
     }
     return new SchemaContext(schema, builder);
-  }
-
-  @Override
-  public SchemaContext visitDynamicRefSchema(DynamicRefSchema schema) {
-    // ignore dynamic refs
-    return super.visitDynamicRefSchema(schema);
   }
 
   @Override
