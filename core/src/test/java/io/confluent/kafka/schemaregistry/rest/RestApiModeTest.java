@@ -215,6 +215,36 @@ public class RestApiModeTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testRegisterSchemaWithNoIdAfterImport() throws Exception {
+    // Represents a production use case where auto-registering clients
+    // do not fail when SR is in import mode and the schema already exists
+    String subject = "testSubject";
+    String mode = "READWRITE";
+
+    // set mode to read write
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    mode = "IMPORT";
+
+    // set mode to import
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+
+    // register same schema with no id
+    assertEquals("Registering without id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+  }
+
+  @Test
   public void testRegisterSchemaWithDifferentIdAfterImport() throws Exception {
     String subject = "testSubject";
     String mode = "READWRITE";
