@@ -13,7 +13,7 @@ paths:
         \ is the configured compatibility level for the subject (http:get:: /config/(string:\
         \ subject)). If this subject's compatibility level was never changed, then\
         \ the global compatibility level applies (http:get:: /config)."
-      operationId: testCompatibilityBySubjectName
+      operationId: testCompatibilityBySubjectName_1
       parameters:
       - name: subject
         in: path
@@ -113,7 +113,7 @@ paths:
     get:
       summary: Schema Registry Root Resource
       description: The Root resource is a no-op.
-      operationId: get
+      operationId: get_1
       responses:
         default:
           content:
@@ -127,7 +127,7 @@ paths:
               schema:
                 type: string
     post:
-      operationId: post
+      operationId: post_1
       requestBody:
         content:
           application/vnd.schemaregistry.v1+json:
@@ -181,7 +181,7 @@ paths:
         \ level for the subject (http:get:: /config/(string: subject)). If this subject's\
         \ compatibility level was never changed, then the global compatibility level\
         \ applies (http:get:: /config)."
-      operationId: testCompatibilityForSubject
+      operationId: testCompatibilityForSubject_1
       parameters:
       - name: subject
         in: path
@@ -261,7 +261,7 @@ paths:
       - Config (v1)
       summary: Get global compatibility level
       description: Retrieves the global compatibility level.
-      operationId: getTopLevelConfig
+      operationId: getTopLevelConfig_1
       responses:
         "200":
           description: The global compatibility level.
@@ -294,7 +294,7 @@ paths:
       summary: Update global compatibility level
       description: "Updates the global compatibility level. On success, echoes the\
         \ original request back to the client."
-      operationId: updateTopLevelConfig
+      operationId: updateTopLevelConfig_1
       requestBody:
         description: Config Update Request
         content:
@@ -357,7 +357,7 @@ paths:
       summary: Delete global compatibility level
       description: Deletes the global compatibility level config and reverts to the
         default.
-      operationId: deleteTopLevelConfig
+      operationId: deleteTopLevelConfig_1
       responses:
         "200":
           description: Operation succeeded. Returns old global compatibility level.
@@ -417,7 +417,7 @@ paths:
       - Config (v1)
       summary: Get subject compatibility level
       description: Retrieves compatibility level for a subject.
-      operationId: getSubjectLevelConfig
+      operationId: getSubjectLevelConfig_1
       parameters:
       - name: subject
         in: path
@@ -475,7 +475,7 @@ paths:
       summary: Update subject compatibility level
       description: "Update compatibility level for the specified subject. On success,\
         \ echoes the original request back to the client."
-      operationId: updateSubjectLevelConfig
+      operationId: updateSubjectLevelConfig_1
       parameters:
       - name: subject
         in: path
@@ -557,7 +557,7 @@ paths:
       summary: Delete subject compatibility level
       description: Deletes the specified subject-level compatibility level config
         and reverts to the global default.
-      operationId: deleteSubjectConfig
+      operationId: deleteSubjectConfig_1
       parameters:
       - name: subject
         in: path
@@ -636,7 +636,7 @@ paths:
       - Contexts (v1)
       summary: List contexts
       description: Retrieves a list of contexts.
-      operationId: listContexts
+      operationId: listContexts_1
       responses:
         "200":
           description: The contexts.
@@ -678,7 +678,7 @@ paths:
       - Modes (v1)
       summary: Get global mode
       description: Retrieves global mode.
-      operationId: getTopLevelMode
+      operationId: getTopLevelMode_1
       responses:
         "200":
           description: The global mode
@@ -700,7 +700,7 @@ paths:
       summary: Update global mode
       description: "Update global mode. On success, echoes the original request back\
         \ to the client."
-      operationId: updateTopLevelMode
+      operationId: updateTopLevelMode_1
       parameters:
       - name: force
         in: query
@@ -770,7 +770,7 @@ paths:
       - Modes (v1)
       summary: Get subject mode
       description: Retrieves the subject mode.
-      operationId: getMode
+      operationId: getMode_1
       parameters:
       - name: subject
         in: path
@@ -827,7 +827,7 @@ paths:
       summary: Update subject mode
       description: "Update mode for the specified subject. On success, echoes the\
         \ original request back to the client."
-      operationId: updateMode
+      operationId: updateMode_1
       parameters:
       - name: subject
         in: path
@@ -903,7 +903,7 @@ paths:
       summary: Delete subject mode
       description: Deletes the specified subject-level mode and reverts to the global
         default.
-      operationId: deleteSubjectMode
+      operationId: deleteSubjectMode_1
       parameters:
       - name: subject
         in: path
@@ -955,7 +955,7 @@ paths:
       - Schemas (v1)
       summary: List schemas
       description: Get the schemas matching the specified parameters.
-      operationId: getSchemas
+      operationId: getSchemas_1
       parameters:
       - name: subjectPrefix
         in: query
@@ -976,6 +976,12 @@ paths:
         schema:
           type: boolean
           default: false
+      - name: ruleType
+        in: query
+        description: Filters results by the given rule type
+        schema:
+          type: string
+          default: ""
       - name: offset
         in: query
         description: Pagination offset for results
@@ -1028,7 +1034,7 @@ paths:
       - Schemas (v1)
       summary: Get schema string by ID
       description: Retrieves the schema string identified by the input ID.
-      operationId: getSchema
+      operationId: getSchema_1
       parameters:
       - name: id
         in: path
@@ -1099,7 +1105,7 @@ paths:
       summary: List subjects associated to schema ID
       description: Retrieves all the subjects associated with a particular schema
         ID.
-      operationId: getSubjects
+      operationId: getSubjects_1
       parameters:
       - name: id
         in: path
@@ -1171,7 +1177,7 @@ paths:
       - Schemas (v1)
       summary: List subject-versions associated to schema ID
       description: Get all the subject-version pairs associated with the input ID.
-      operationId: getVersions
+      operationId: getVersions_1
       parameters:
       - name: id
         in: path
@@ -1240,7 +1246,7 @@ paths:
       - Schemas (v1)
       summary: List supported schema types
       description: Retrieve the schema types supported by this registry.
-      operationId: getSchemaTypes
+      operationId: getSchemaTypes_1
       responses:
         "200":
           description: List of supported schema types.
@@ -1282,7 +1288,7 @@ paths:
       - Subjects (v1)
       summary: List subjects
       description: Retrieves a list of registered subjects matching specified parameters.
-      operationId: list
+      operationId: list_1
       parameters:
       - name: subjectPrefix
         in: query
@@ -1343,7 +1349,7 @@ paths:
       description: "Check if a schema has already been registered under the specified\
         \ subject. If so, this returns the schema string along with its globally unique\
         \ identifier, its version under this subject and the subject name."
-      operationId: lookUpSchemaUnderSubject
+      operationId: lookUpSchemaUnderSubject_1
       parameters:
       - name: subject
         in: path
@@ -1422,7 +1428,7 @@ paths:
       description: Deletes the specified subject and its associated compatibility
         level if registered. It is recommended to use this API only when a topic needs
         to be recycled or in development environment.
-      operationId: deleteSubject
+      operationId: deleteSubject_1
       parameters:
       - name: subject
         in: path
@@ -1491,7 +1497,7 @@ paths:
       - Subjects (v1)
       summary: List versions under subject
       description: Retrieves a list of versions registered under the specified subject.
-      operationId: listVersions
+      operationId: listVersions_1
       parameters:
       - name: subject
         in: path
@@ -1567,7 +1573,7 @@ paths:
         Register a new schema under the specified subject. If successfully registered, this returns the unique identifier of this schema in the registry. The returned identifier should be used to retrieve this schema from the schemas resource and is different from the schema's version which is associated with the subject. If the same schema is registered under a different subject, the same identifier will be returned. However, the version of the schema may be different under different subjects.
         A schema should be compatible with the previously registered schema or schemas (if there are any) as per the configured compatibility level. The configured compatibility level can be obtained by issuing a GET http:get:: /config/(string: subject). If that returns null, then GET http:get:: /config
         When there are multiple instances of Schema Registry running in the same cluster, the schema registration request will be forwarded to one of the instances designated as the primary. If the primary is not available, the client will get an error code indicating that the forwarding has failed.
-      operationId: register
+      operationId: register_1
       parameters:
       - name: subject
         in: path
@@ -1655,7 +1661,7 @@ paths:
       summary: Get schema by version
       description: Retrieves a specific version of the schema registered under this
         subject.
-      operationId: getSchemaByVersion
+      operationId: getSchemaByVersion_1
       parameters:
       - name: subject
         in: path
@@ -1740,7 +1746,7 @@ paths:
         \ recommended to be used only in development environments or under extreme\
         \ circumstances where-in, its required to delete a previously registered schema\
         \ for compatibility purposes or re-register previously registered schema."
-      operationId: deleteSchemaVersion
+      operationId: deleteSchemaVersion_1
       parameters:
       - name: subject
         in: path
@@ -1827,7 +1833,7 @@ paths:
       - Subjects (v1)
       summary: List schemas referencing a schema
       description: Retrieves the IDs of schemas that reference the specified schema.
-      operationId: getReferencedBy
+      operationId: getReferencedBy_1
       parameters:
       - name: subject
         in: path
@@ -1916,7 +1922,7 @@ paths:
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly_2
+      operationId: getSchemaOnly
       parameters:
       - name: subject
         in: path
@@ -1999,7 +2005,7 @@ paths:
       tags:
       - Server Metadata (v1)
       summary: Get the server metadata
-      operationId: getClusterId
+      operationId: getClusterId_1
       responses:
         "500":
           description: |
@@ -2010,7 +2016,7 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly
+      operationId: getSchemaOnly_1
       parameters:
       - name: id
         in: path
@@ -2076,7 +2082,7 @@ paths:
       tags:
       - Server Metadata (v1)
       summary: Get Schema Registry server version
-      operationId: getSchemaRegistryVersion
+      operationId: getSchemaRegistryVersion_1
       responses:
         "500":
           description: |
@@ -2085,7 +2091,7 @@ paths:
     get:
       summary: Retrieve the latest version with the given metadata.
       description: Retrieve the latest version with the given metadata.
-      operationId: getLatestWithMetadata
+      operationId: getLatestWithMetadata_1
       parameters:
       - name: subject
         in: path
@@ -2131,6 +2137,100 @@ paths:
             Error code 40403 -- Schema not found
         "500":
           description: Internal server error
+  /subjects/{subject}/versions/{version}/tags:
+    post:
+      tags:
+      - Subjects (v1)
+      summary: Create or remove schema embedded tags for a subject version
+      description: "Create new schema subject version with the provided field or record\
+        \ level schema tags embedded (or remove) in the schema string, as well as\
+        \ the given metadata and ruleset."
+      operationId: modifyTags
+      parameters:
+      - name: subject
+        in: path
+        description: Name of the subject
+        required: true
+        schema:
+          type: string
+      - name: version
+        in: path
+        description: "Version of the schema to be returned. Valid values for versionId\
+          \ are between [1,2^31-1] or the string \"latest\". \"latest\" returns the\
+          \ last registered schema under the specified subject. Note that there may\
+          \ be a new latest schema that gets registered right after this request is\
+          \ served."
+        required: true
+        schema:
+          type: string
+      requestBody:
+        description: Tag schema request
+        content:
+          application/vnd.schemaregistry.v1+json:
+            schema:
+              $ref: '#/components/schemas/TagSchemaRequest'
+          application/vnd.schemaregistry+json:
+            schema:
+              $ref: '#/components/schemas/TagSchemaRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagSchemaRequest'
+          application/octet-stream:
+            schema:
+              $ref: '#/components/schemas/TagSchemaRequest'
+        required: true
+      responses:
+        "200":
+          description: Schema successfully registered.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/RegisterSchemaResponse'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/RegisterSchemaResponse'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/RegisterSchemaResponse'
+        "409":
+          description: Conflict. Incompatible schema.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        "422":
+          description: 'Unprocessable entity. Error code 42201 indicates an invalid
+            schema or schema type. '
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        "500":
+          description: Internal Server Error. Error code 50001 indicates a failure
+            in the backend data store.Error code 50002 indicates operation timed out.
+            Error code 50003 indicates a failure forwarding the request to the primary.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
 components:
   schemas:
     CompatibilityCheckResponse:
@@ -2330,14 +2430,14 @@ components:
           description: References to other schemas
           items:
             $ref: '#/components/schemas/SchemaReference'
-        metadata:
-          $ref: '#/components/schemas/Metadata'
-        ruleset:
-          $ref: '#/components/schemas/RuleSet'
         schema:
           type: string
           description: Schema definition string
           example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        ruleset:
+          $ref: '#/components/schemas/RuleSet'
         ruleSet:
           $ref: '#/components/schemas/RuleSet'
       description: Schema
@@ -2495,3 +2595,49 @@ components:
           items:
             $ref: '#/components/schemas/Rule'
       description: Schema rule set
+    SchemaEntity:
+      type: object
+      properties:
+        entityPath:
+          type: string
+        entityType:
+          type: string
+          enum:
+          - sr_record
+          - sr_field
+    SchemaTags:
+      type: object
+      properties:
+        schemaEntity:
+          $ref: '#/components/schemas/SchemaEntity'
+        tags:
+          type: array
+          items:
+            type: string
+    TagSchemaRequest:
+      type: object
+      properties:
+        newVersion:
+          type: integer
+          description: "The new version should be the latest version in the subject\
+            \ + 1. If set, the new version will be encoded to the schema metadata."
+          format: int32
+        tagsToAdd:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchemaTags'
+        tagsToRemove:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchemaTags'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        ruleSet:
+          $ref: '#/components/schemas/RuleSet'
+        rulesToMerge:
+          $ref: '#/components/schemas/RuleSet'
+        rulesToRemove:
+          type: array
+          items:
+            type: string
+      description: Schema tags register request
