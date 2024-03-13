@@ -234,12 +234,12 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.setMode(mode).getMode());
 
     int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    assertEquals("Registering with id should succeed",
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
 
     // register same schema with no id
-    assertEquals("Registering with id should succeed",
+    assertEquals("Registering without id should succeed",
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject));
   }
