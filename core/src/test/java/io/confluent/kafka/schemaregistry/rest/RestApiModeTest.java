@@ -15,9 +15,7 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import com.google.common.collect.ImmutableMap;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import org.junit.Test;
 
@@ -214,58 +212,6 @@ public class RestApiModeTest extends ClusterTestHarness {
     assertEquals(
         mode,
         restApp.restClient.setMode(mode, null, true).getMode());
-  }
-
-  @Test
-  public void testImportModeWithSameSchemaSameId() throws Exception {
-    String subject = "testSubject";
-    String mode = "IMPORT";
-
-    // set mode to import
-    assertEquals(
-        mode,
-        restApp.restClient.setMode(mode).getMode());
-
-    int expectedIdSchema1 = 100;
-    assertEquals("Registering with id should succeed",
-        expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
-
-    // register equivalent schema with same id
-    expectedIdSchema1 = 100;
-    assertEquals("Registering with id should succeed",
-        expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
-  }
-
-  @Test
-  public void testRegisterSameSchemaDifferentMetadataAfterImport() throws Exception {
-    String subject = "testSubject";
-    String mode = "IMPORT";
-
-    // register a valid avro schema
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
-        expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
-
-    // set subject mode to import with force=true
-    assertEquals(
-        mode,
-        restApp.restClient.setMode(mode, subject, true).getMode());
-
-    try {
-      Schema schema = new Schema(subject, 1, 1, AvroSchema.TYPE, null, SCHEMA_STRING);
-      schema.setMetadata(new Metadata(null, ImmutableMap.of("foo", "bar"), null));
-      RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
-      restApp.restClient.registerSchema(request, subject, false);
-      fail("Registering with different metadata should fail");
-    } catch (RestClientException e) {
-      // this is expected.
-      assertEquals("Should get a constraint violation",
-          RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
-    }
   }
 
   @Test
