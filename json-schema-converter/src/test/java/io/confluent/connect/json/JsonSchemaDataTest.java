@@ -1338,6 +1338,19 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectReferenceInAllOf() {
+    NumberSchema numberSchema = NumberSchema.builder()
+            .requiresInteger(true)
+            .unprocessedProperties(Collections.singletonMap("connect.type", "int64"))
+            .build();
+    ReferenceSchema referenceSchema = ReferenceSchema.builder().refValue("numberSchema").build();
+    referenceSchema.setReferredSchema(numberSchema);
+    CombinedSchema combinedSchema = CombinedSchema.allOf(ImmutableList.of(referenceSchema)).build();
+    Schema expectedSchema = new SchemaBuilder(Type.INT64).build();
+    checkNonObjectConversion(expectedSchema, 27L, combinedSchema, LongNode.valueOf(27));
+  }
+
+  @Test
   public void testToConnectUnion() {
     NumberSchema firstSchema = NumberSchema.builder()
         .requiresInteger(true)
