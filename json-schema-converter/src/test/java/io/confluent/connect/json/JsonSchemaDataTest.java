@@ -52,6 +52,7 @@ import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
+import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.StringSchema;
 import org.junit.Test;
 
@@ -1224,6 +1225,19 @@ public class JsonSchemaDataTest {
     CombinedSchema schema = (CombinedSchema) jsonSchema.rawSchema();
     Schema expectedSchema = new SchemaBuilder(Type.FLOAT64).build();
     checkNonObjectConversion(expectedSchema, 123.45, schema, DoubleNode.valueOf(123.45));
+  }
+
+  @Test
+  public void testToConnectReferenceInAllOf() {
+    NumberSchema numberSchema = NumberSchema.builder()
+            .requiresInteger(true)
+            .unprocessedProperties(Collections.singletonMap("connect.type", "int64"))
+            .build();
+    ReferenceSchema referenceSchema = ReferenceSchema.builder().refValue("numberSchema").build();
+    referenceSchema.setReferredSchema(numberSchema);
+    CombinedSchema combinedSchema = CombinedSchema.allOf(ImmutableList.of(referenceSchema)).build();
+    Schema expectedSchema = new SchemaBuilder(Type.INT64).build();
+    checkNonObjectConversion(expectedSchema, 27L, combinedSchema, LongNode.valueOf(27));
   }
 
   @Test
