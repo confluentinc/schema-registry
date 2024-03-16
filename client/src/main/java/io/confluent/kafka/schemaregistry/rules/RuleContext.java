@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.utils.WildcardMatcher;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
@@ -140,16 +141,17 @@ public class RuleContext {
   }
 
   public Set<String> getTags(String fullName) {
-    Set<String> tags = new HashSet<>();
     Metadata metadata = target.metadata();
     if (metadata != null && metadata.getTags() != null) {
+      Set<String> tags = new HashSet<>();
       for (Map.Entry<String, SortedSet<String>> entry : metadata.getTags().entrySet()) {
         if (WildcardMatcher.match(fullName, entry.getKey())) {
           tags.addAll(entry.getValue());
         }
       }
+      return tags;
     }
-    return tags;
+    return Collections.emptySet();
   }
 
   public String getParameter(String name) {
@@ -177,9 +179,30 @@ public class RuleContext {
 
   public FieldContext enterField(Object containingMessage,
       String fullName, String name, RuleContext.Type type, Set<String> tags) {
-    Set<String> allTags = new HashSet<>(tags);
-    allTags.addAll(getTags(fullName));
-    return new FieldContext(containingMessage, fullName, name, type, allTags);
+    Set<String> metadataTags = getTags(fullName);
+    if (!metadataTags.isEmpty()) {
+      tags = new HashSet<>(tags);
+      tags.addAll(metadataTags);
+    }
+    Set<String> ruleTags = rule().getTags();
+    if (!type.isPrimitive() || ruleTags.isEmpty() || !disjoint(tags, ruleTags)) {
+      return new FieldContext(containingMessage, fullName, name, type, tags);
+    } else {
+      return null;
+    }
+  }
+
+  // Slightly more efficient than Collections.disjoint for our use case
+  public static boolean disjoint(Set<String> set1, Set<String> set2) {
+    if (set1.isEmpty() || set2.isEmpty()) {
+      return true;
+    }
+    for (Object e : set1) {
+      if (set2.contains(e)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   public class FieldContext implements AutoCloseable {
