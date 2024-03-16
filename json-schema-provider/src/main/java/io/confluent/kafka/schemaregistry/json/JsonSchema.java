@@ -74,6 +74,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -760,18 +761,20 @@ public class JsonSchema implements ParsedSchema {
         String propertyName = entry.getKey();
         Schema propertySchema = entry.getValue();
         String fullName = path + "." + propertyName;
-        try (FieldContext ignored = ctx.enterField(message, fullName, propertyName,
+        try (FieldContext fc = ctx.enterField(message, fullName, propertyName,
             getType(propertySchema), getInlineTags(propertySchema))) {
-          PropertyAccessor propertyAccessor =
-              getPropertyAccessor(ctx, message, propertyName);
-          Object value = propertyAccessor.getPropertyValue();
-          Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
-          if (ctx.rule().getKind() == RuleKind.CONDITION) {
-            if (Boolean.FALSE.equals(newValue)) {
-              throw new RuntimeException(new RuleConditionException(ctx.rule()));
+          if (fc != null) {
+            PropertyAccessor propertyAccessor =
+                getPropertyAccessor(ctx, message, propertyName);
+            Object value = propertyAccessor.getPropertyValue();
+            Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
+            if (ctx.rule().getKind() == RuleKind.CONDITION) {
+              if (Boolean.FALSE.equals(newValue)) {
+                throw new RuntimeException(new RuleConditionException(ctx.rule()));
+              }
+            } else {
+              propertyAccessor.setPropertyValue(newValue);
             }
-          } else {
-            propertyAccessor.setPropertyValue(newValue);
           }
         }
       }
@@ -794,7 +797,7 @@ public class JsonSchema implements ParsedSchema {
           if (ruleTags.isEmpty()) {
             return transform.transform(ctx, fieldCtx, message);
           } else {
-            if (!Collections.disjoint(fieldCtx.getTags(), ruleTags)) {
+            if (!RuleContext.disjoint(fieldCtx.getTags(), ruleTags)) {
               return transform.transform(ctx, fieldCtx, message);
             }
           }
@@ -864,7 +867,12 @@ public class JsonSchema implements ParsedSchema {
   private Set<String> getInlineTags(Schema propertySchema) {
     Object prop = propertySchema.getUnprocessedProperties().get(TAGS);
     if (prop instanceof List) {
-      return ((List<?>)prop).stream().map(Object::toString).collect(Collectors.toSet());
+      List<?> tags = (List<?>) prop;
+      Set<String> result = new HashSet<>(tags.size());
+      for (Object tag : tags) {
+        result.add(tag.toString());
+      }
+      return result;
     }
     return Collections.emptySet();
   }
