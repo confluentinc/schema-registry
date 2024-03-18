@@ -197,7 +197,7 @@ public class RuleContext {
     if (set1.isEmpty() || set2.isEmpty()) {
       return true;
     }
-    for (Object e : set1) {
+    for (String e : set1) {
       if (set2.contains(e)) {
         return false;
       }
