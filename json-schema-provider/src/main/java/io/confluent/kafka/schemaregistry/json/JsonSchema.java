@@ -609,7 +609,7 @@ public class JsonSchema implements ParsedSchema {
         String propertyName = entry.getKey();
         Schema propertySchema = entry.getValue();
         String fullName = path + "." + propertyName;
-        try (FieldContext ignored = ctx.enterField(message, fullName, propertyName,
+        try (FieldContext fc = ctx.enterField(message, fullName, propertyName,
             getType(propertySchema), getInlineTags(propertySchema))) {
           if (fc != null) {
             PropertyAccessor propertyAccessor =
