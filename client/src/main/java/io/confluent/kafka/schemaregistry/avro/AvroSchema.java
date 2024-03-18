@@ -576,7 +576,7 @@ public class AvroSchema implements ParsedSchema {
         data = getData(message);
         for (Schema.Field f : schema.getFields()) {
           String fullName = schema.getFullName() + "." + f.name();
-          try (FieldContext ignored = ctx.enterField(
+          try (FieldContext fc = ctx.enterField(
               message, fullName, f.name(), getType(f.schema()), getInlineTags(f))) {
             if (fc != null) {
               Object value = data.getField(message, f.name(), f.pos());
