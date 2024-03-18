@@ -40,6 +40,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map.Entry;
@@ -574,17 +575,19 @@ public class AvroSchema implements ParsedSchema {
           String fullName = schema.getFullName() + "." + f.name();
           try (FieldContext fc = ctx.enterField(
               message, fullName, f.name(), getType(f.schema()), getInlineTags(f))) {
-            Object value = data.getField(message, f.name(), f.pos());
-            if (value instanceof Utf8) {
-              value = value.toString();
-            }
-            Object newValue = toTransformedMessage(ctx, f.schema(), value, transform);
-            if (ctx.rule().getKind() == RuleKind.CONDITION) {
-              if (Boolean.FALSE.equals(newValue)) {
-                throw new RuntimeException(new RuleConditionException(ctx.rule()));
+            if (fc != null) {
+              Object value = data.getField(message, f.name(), f.pos());
+              if (value instanceof Utf8) {
+                value = value.toString();
               }
-            } else {
-              data.setField(message, f.name(), f.pos(), newValue);
+              Object newValue = toTransformedMessage(ctx, f.schema(), value, transform);
+              if (ctx.rule().getKind() == RuleKind.CONDITION) {
+                if (Boolean.FALSE.equals(newValue)) {
+                  throw new RuntimeException(new RuleConditionException(ctx.rule()));
+                }
+              } else {
+                data.setField(message, f.name(), f.pos(), newValue);
+              }
             }
           }
         }
@@ -596,7 +599,7 @@ public class AvroSchema implements ParsedSchema {
             if (ruleTags.isEmpty()) {
               return fieldTransform(ctx, message, transform, fieldCtx);
             } else {
-              if (!Collections.disjoint(fieldCtx.getTags(), ruleTags)) {
+              if (!RuleContext.disjoint(fieldCtx.getTags(), ruleTags)) {
                 return fieldTransform(ctx, message, transform, fieldCtx);
               }
             }
@@ -681,7 +684,12 @@ public class AvroSchema implements ParsedSchema {
   private Set<String> getInlineTags(Schema.Field field) {
     Object prop = field.getObjectProp(TAGS);
     if (prop instanceof List) {
-      return ((List<?>)prop).stream().map(Object::toString).collect(Collectors.toSet());
+      List<?> tags = (List<?>) prop;
+      Set<String> result = new HashSet<>(tags.size());
+      for (Object tag : tags) {
+        result.add(tag.toString());
+      }
+      return result;
     }
     return Collections.emptySet();
   }
