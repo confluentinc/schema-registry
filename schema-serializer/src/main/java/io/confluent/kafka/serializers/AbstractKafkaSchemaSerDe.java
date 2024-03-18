@@ -103,6 +103,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   protected AbstractKafkaSchemaSerDeConfig config;
+  protected Map<String, Object> configOriginals;
   protected SchemaRegistryClient schemaRegistry;
   protected Ticker ticker = Ticker.systemTicker();
   protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
@@ -146,6 +147,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       AbstractKafkaSchemaSerDeConfig config,
       SchemaProvider provider) {
     this.config = config;
+    this.configOriginals = config.originals();
     if (schemaRegistry == null) {
       List<String> urls = config.getSchemaRegistryUrls();
       int maxSchemaObject = config.getMaxSchemasPerSubject();
@@ -226,7 +228,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   private Stream<RuleBase> initRuleObject(
       String name, AbstractKafkaSchemaSerDeConfig config, String configName) {
     String propertyName = configName + "." + name + ".class";
-    Object propertyValue = config.originals().get(propertyName);
+    Object propertyValue = configOriginals.get(propertyName);
     if (propertyValue == null) {
       return Stream.empty();
     }
@@ -261,7 +263,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     String prefix = configName + "." + name + ".param.";
     Map<String, Object> params = new HashMap<>();
     if (ruleObject.addOriginalConfigs()) {
-      params.putAll(config.originals());
+      params.putAll(configOriginals);
       // Don't propagate serializers
       params.remove(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
       params.remove(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
@@ -675,7 +677,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       } else if (ruleMode != rule.getMode()) {
         continue;
       }
-      RuleContext ctx = new RuleContext(config.originals(), source, target,
+      RuleContext ctx = new RuleContext(configOriginals, source, target,
           subject, topic, headers,
           isKey ? original : key(),
           isKey ? null : original,
