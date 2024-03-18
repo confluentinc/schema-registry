@@ -2332,19 +2332,21 @@ public class ProtobufSchema implements ParsedSchema {
             message, fd.getFullName(), fd.getName(), getType(fd),
             getInlineTags(schemaFd)) // use schema-based fd which has the tags
         ) {
-          Object value = copy.getField(fd); // we can't use the schema-based fd
-          Descriptor d = desc;
-          if (schemaFd.getType() == Type.MESSAGE) {
-            // Pass the schema-based descriptor which has the tags
-            d = schemaFd.getMessageType();
-          }
-          Object newValue = toTransformedMessage(ctx, d, value, transform);
-          if (ctx.rule().getKind() == RuleKind.CONDITION) {
-            if (Boolean.FALSE.equals(newValue)) {
-              throw new RuntimeException(new RuleConditionException(ctx.rule()));
+          if (fc != null) {
+            Object value = copy.getField(fd); // we can't use the schema-based fd
+            Descriptor d = desc;
+            if (schemaFd.getType() == Type.MESSAGE) {
+              // Pass the schema-based descriptor which has the tags
+              d = schemaFd.getMessageType();
             }
-          } else {
-            copy.setField(fd, newValue);
+            Object newValue = toTransformedMessage(ctx, d, value, transform);
+            if (ctx.rule().getKind() == RuleKind.CONDITION) {
+              if (Boolean.FALSE.equals(newValue)) {
+                throw new RuntimeException(new RuleConditionException(ctx.rule()));
+              }
+            } else {
+              copy.setField(fd, newValue);
+            }
           }
         }
       }
@@ -2356,7 +2358,7 @@ public class ProtobufSchema implements ParsedSchema {
           if (ruleTags.isEmpty()) {
             return fieldTransform(ctx, message, transform, fieldCtx);
           } else {
-            if (!Collections.disjoint(fieldCtx.getTags(), ruleTags)) {
+            if (!RuleContext.disjoint(fieldCtx.getTags(), ruleTags)) {
               return fieldTransform(ctx, message, transform, fieldCtx);
             }
           }
