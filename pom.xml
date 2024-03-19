@@ -95,7 +95,7 @@
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.4.5</jsonata-version>
         <json-schema.version>1.14.3</json-schema.version>
-        <json-skema.version>0.13.0</json-skema.version>
+        <json-skema.version>0.14.0</json-skema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
