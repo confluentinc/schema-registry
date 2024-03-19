@@ -81,6 +81,14 @@ public class SchemaEntity {
     return result;
   }
 
+  @Override
+  public String toString() {
+    return "SchemaEntity{" +
+        "entityType=" + entityType +
+        ", normalizedPath='" + normalizedPath + '\'' +
+        '}';
+  }
+
   public enum EntityType {
     @JsonProperty("sr_record")
     SR_RECORD("sr_record"),

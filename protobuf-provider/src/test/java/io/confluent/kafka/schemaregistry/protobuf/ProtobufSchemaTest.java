@@ -2648,6 +2648,20 @@ public class ProtobufSchemaTest {
     ParsedSchema schema = new ProtobufSchema(schemaString).copy(tagsToAdd, Collections.emptyMap());
     assertEquals(expectedString, schema.canonicalString());
     assertEquals(ImmutableSet.of("FILE", "OTHER", "PII", "PRIVATE", "ENUM", "CONST"), schema.inlineTags());
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tagsToAdd);
+    expectedTags.put(new SchemaEntity(
+        "SampleRecord",
+        SchemaEntity.EntityType.SR_RECORD),
+        ImmutableSet.of("OTHER", "PII"));
+    expectedTags.put(new SchemaEntity(
+        "SampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("OTHER", "PRIVATE", "PII"));
+    expectedTags.put(new SchemaEntity(
+        "SampleRecord.my_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PRIVATE", "PII"));
+    assertEquals(expectedTags, schema.inlineTaggedEntities());
 
     Map<SchemaEntity, Set<String>> tagsToRemove = new HashMap<>();
     tagsToRemove.put(new SchemaEntity(".SampleRecord.my_field1",
