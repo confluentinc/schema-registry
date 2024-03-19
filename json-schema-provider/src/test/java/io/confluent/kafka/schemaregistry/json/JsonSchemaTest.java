@@ -1141,6 +1141,31 @@ public class JsonSchemaTest {
         + "    },\n"
         + "    \"additionalProperties\": false\n"
         + "}\n";
+    String messageDef = "{\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": {\n"
+        + "        \"messageId\": {\n"
+        + "            \"$ref\": \"grandchild.schema.json#/$defs/MessageId\"\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"additionalProperties\": false\n"
+        + "}\n";
+    String protocolDef = "{\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": {\n"
+        + "        \"version\": {\n"
+        + "            \"type\": \"string\"\n"
+        + "        },\n"
+        + "        \"name\": {\n"
+        + "            \"type\": \"string\"\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"required\": [\n"
+        + "        \"name\",\n"
+        + "        \"version\"\n"
+        + "    ],\n"
+        + "    \"additionalProperties\": false\n"
+        + "}\n";
     String grandchild = "{\n"
         + "    \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
         + "    \"type\": \"object\",\n"
@@ -1154,21 +1179,50 @@ public class JsonSchemaTest {
         + "                \"id\": {\n"
         + "                    \"type\": \"string\"\n"
         + "                }\n"
-        + "            }\n"
+        + "            },\n"
         + "            \"additionalProperties\": false\n"
         + "        }\n"
         + "    },\n"
         + "    \"additionalProperties\": false\n"
         + "}\n";
+    String applicationDef = "{\n"
+        + "    \"type\" : \"object\",\n"
+        + "    \"properties\" : {\n"
+        + "      \"protocolVersion\" : {\n"
+        + "        \"type\" : \"array\",\n"
+        + "        \"minItems\" : 0,\n"
+        + "        \"items\" : {\n"
+        + "          \"$ref\" : \"child.schema.json#/$defs/ProtocolVersionName\"\n"
+        + "        }\n"
+        + "      }\n"
+        + "    },\n"
+        + "    \"additionalProperties\" : false\n"
+        + "}\n";
     SchemaReference ref0 = new SchemaReference("grandchild.schema.json", "reference", 1);
     JsonSchema jsonSchema0 = new JsonSchema(child, Collections.singletonList(ref0),
         Collections.singletonMap("grandchild.schema.json", grandchild), null);
     jsonSchema0.validate(true);
+
+    JsonSchema protocolDefSchema = new JsonSchema(protocolDef);
+    JsonSchema messageDefSchema = new JsonSchema(messageDef, Collections.singletonList(ref0),
+        Collections.singletonMap("grandchild.schema.json", grandchild), null);
+    Map<String, Object> defs = (Map<String, Object>)
+        jsonSchema0.rawSchema().getUnprocessedProperties().get("$defs");
+    assertEquals(protocolDefSchema.rawSchema(), defs.get("ProtocolVersionName"));
+    assertEquals(messageDefSchema.rawSchema(), defs.get("Message"));
+
     SchemaReference ref = new SchemaReference("child.schema.json", "reference", 1);
     JsonSchema jsonSchema = new JsonSchema(parent, ImmutableList.of(ref, ref0),
         ImmutableMap.of("child.schema.json", child,
             "grandchild.schema.json", grandchild), null);
     jsonSchema.validate(true);
+
+    JsonSchema applicationDefSchema = new JsonSchema(applicationDef, ImmutableList.of(ref, ref0),
+        ImmutableMap.of("child.schema.json", child,
+            "grandchild.schema.json", grandchild), null);
+    defs = (Map<String, Object>)
+        jsonSchema.rawSchema().getUnprocessedProperties().get("$defs");
+    assertEquals(applicationDefSchema.rawSchema(), defs.get("ApplicationSchema"));
   }
 
   private static Map<String, String> getJsonSchemaWithReferences(String draft) {
