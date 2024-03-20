@@ -348,6 +348,9 @@ public class JsonSchemaUtils {
         if ("definitions".equals(word)) {
           identifiersList.poll();
           result = findNodeFromNameBuilder(node.get("definitions"), identifiersList);
+        } else if ("$defs".equals(word)) {
+          identifiersList.poll();
+          result = findNodeFromNameBuilder(node.get("$defs"), identifiersList);
         } else {
           result = findNodeFromNameBuilder(node.get("properties"), identifiersList);
         }
