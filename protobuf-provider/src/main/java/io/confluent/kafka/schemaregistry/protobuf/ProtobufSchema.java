@@ -108,7 +108,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Difference;

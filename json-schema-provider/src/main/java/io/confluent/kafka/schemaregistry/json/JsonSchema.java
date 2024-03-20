@@ -927,8 +927,8 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  private void getInlineTaggedEntitiesRecursively(
-      Map<SchemaEntity, Set<String>> tags, Map<String, Object> unprocessedProperties, String scope) {
+  private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
+      Map<String, Object> unprocessedProperties, String scope) {
     Map<String, Object> defns = (Map<String, Object>) unprocessedProperties.get("definitions");
     if (defns != null) {
       for (Map.Entry<String, Object> entry : defns.entrySet()) {
@@ -952,19 +952,6 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  private Set<String> getInlineTags(Schema schema) {
-    Object prop = schema.getUnprocessedProperties().get(TAGS);
-    if (prop instanceof List) {
-      List<?> tags = (List<?>) prop;
-      Set<String> result = new LinkedHashSet<>(tags.size());
-      for (Object tag : tags) {
-        result.add(tag.toString());
-      }
-      return result;
-    }
-    return Collections.emptySet();
-  }
-
   private Map<String, Object> replaceRefs(Map<String, Object> defs) {
     Map<String, Object> result = new HashMap<>(defs);
     if (result.containsKey("$ref")) {
@@ -977,6 +964,19 @@ public class JsonSchema implements ParsedSchema {
       }
     }
     return result;
+  }
+
+  private Set<String> getInlineTags(Schema schema) {
+    Object prop = schema.getUnprocessedProperties().get(TAGS);
+    if (prop instanceof List) {
+      List<?> tags = (List<?>) prop;
+      Set<String> result = new LinkedHashSet<>(tags.size());
+      for (Object tag : tags) {
+        result.add(tag.toString());
+      }
+      return result;
+    }
+    return Collections.emptySet();
   }
 
   private Set<String> getInlineTags(JsonNode tagNode) {

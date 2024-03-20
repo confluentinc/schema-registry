@@ -85,6 +85,7 @@ public class SchemaEntity {
   public String toString() {
     return "SchemaEntity{"
         + "entityType=" + entityType
+        + ", entityPath='" + entityPath + '\''
         + ", normalizedPath='" + normalizedPath + '\''
         + '}';
   }
