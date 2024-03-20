@@ -122,8 +122,13 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     try {
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
-      String subject = isKey == null || strategyUsesSchema(isKey)
-          ? getContextName(topic) : subjectName(topic, isKey, null);
+      String subject = null;
+      if (isKey == null || strategyUsesSchema(isKey)) {
+        subject = getContextName(topic);
+      }
+      if (subject == null) {
+        subject = subjectName(topic, isKey, null);
+      }
       ProtobufSchema schema = ((ProtobufSchema)
               schemaRegistry.getSchemaBySubjectAndId(subject, id));
       MessageIndexes indexes = MessageIndexes.readFrom(buffer);

@@ -345,8 +345,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
     AvroSchema schemaFromRegistry() {
       try {
-        String subjectName = isKey == null || strategyUsesSchema(isKey)
-            ? getContext() : getSubject();
+        String subjectName = null;
+        if (isKey == null || strategyUsesSchema(isKey)) {
+          subjectName = getContext();
+        }
+        if (subjectName == null) {
+          subjectName = getSubject();
+        }
         return (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subjectName, schemaId);
       } catch (InterruptedIOException e) {
         String errorMessage = "Error retrieving Avro "
