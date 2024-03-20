@@ -91,9 +91,9 @@ public class SchemaTags {
 
   @Override
   public String toString() {
-    return "SchemaTags{" +
-        "schemaEntity=" + schemaEntity +
-        ", tags=" + tags +
-        '}';
+    return "SchemaTags{"
+        + "schemaEntity=" + schemaEntity
+        + ", tags=" + tags
+        + '}';
   }
 }
