@@ -19,9 +19,9 @@ code_artifact:
     - maven-snapshots/maven/io.confluent/kafka-serde-tools-package
     - maven-snapshots/maven/io.confluent/kafka-streams-*
     - maven-snapshots/maven/io.confluent/kafka-connect-*
-    - maven-snapshots/maven/io.confluent/dek-registry
-    - maven-snapshots/maven/io.confluent/dek-registry-client
+    - maven-snapshots/maven/io.confluent/dek-registry*
     - maven-snapshots/maven/io.confluent/kafka-protobuf-*
     - maven-snapshots/maven/io.confluent/kafka-json-*
     - maven-snapshots/maven/io.confluent/kafka-schema-*
     - maven-snapshots/maven/io.confluent/kafka-avro-serializer
+    - pypi-internal/pypi//confluent-ci-tools
