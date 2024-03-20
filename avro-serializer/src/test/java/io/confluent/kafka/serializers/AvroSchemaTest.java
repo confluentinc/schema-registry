@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -749,8 +750,8 @@ public class AvroSchemaTest {
       "    },\n" +
       "    {\n" +
       "      \"name\": \"my_field2\",\n" +
-      "      \"namespace\": \"com.example.mynamespace.nested\",\n" +
       "      \"type\": {\n" +
+      "        \"namespace\": \"com.example.mynamespace.nested\",\n" +
       "        \"name\": \"nestedRecordWithNamespace\",\n" +
       "        \"type\": \"record\",\n" +
       "        \"fields\": [\n" +
@@ -800,6 +801,7 @@ public class AvroSchemaTest {
       "    \"name\" : \"my_field2\",\n" +
       "    \"type\" : {\n" +
       "      \"type\" : \"record\",\n" +
+      "      \"namespace\" : \"com.example.mynamespace.nested\",\n" +
       "      \"name\" : \"nestedRecordWithNamespace\",\n" +
       "      \"fields\" : [ {\n" +
       "        \"name\" : \"nested_field1\",\n" +
@@ -811,8 +813,7 @@ public class AvroSchemaTest {
       "        \"confluent:tags\" : [ \"PRIVATE\",\"PII\" ]\n" +
       "      } ],\n" +
       "      \"confluent:tags\": [ \"PII\" ]\n" +
-      "    },\n" +
-      "    \"namespace\" : \"com.example.mynamespace.nested\"\n" +
+      "    }\n" +
       "  }, {\n" +
       "    \"name\" : \"my_field3\",\n" +
       "    \"type\" : \"double\",\n" +
@@ -848,6 +849,16 @@ public class AvroSchemaTest {
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
     assertEquals(ImmutableSet.of("PII", "PRIVATE"), resultSchema.inlineTags());
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tags);
+    expectedTags.put(new SchemaEntity(
+        "com.example.mynamespace.nestedRecordWithoutNamespace.nested_field2",
+            SchemaEntity.EntityType.SR_FIELD),
+        Collections.singleton("PRIVATE"));
+    expectedTags.put(new SchemaEntity(
+            "com.example.mynamespace.nested.nestedRecordWithNamespace.nested_field2",
+            SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PII", "PRIVATE"));
+    assertEquals(expectedTags, resultSchema.inlineTaggedEntities());
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
@@ -1067,6 +1078,20 @@ public class AvroSchemaTest {
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
     assertEquals(ImmutableSet.of("PII", "PRIVATE"), resultSchema.inlineTags());
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tags);
+    expectedTags.put(new SchemaEntity(
+        "nestedRecord3.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PII", "PRIVATE"));
+    expectedTags.put(new SchemaEntity(
+        "com.example.mynamespace.nestedRecord.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PRIVATE"));
+    expectedTags.put(new SchemaEntity(
+        "com.example.mynamespace.nested.nestedRecord2.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PII", "PRIVATE"));
+    assertEquals(expectedTags, resultSchema.inlineTaggedEntities());
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());

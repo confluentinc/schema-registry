@@ -131,6 +131,15 @@ public interface ParsedSchema {
   }
 
   /**
+   * Returns the inline tagged entities of the schema.
+   *
+   * @return a map of entity name to tags
+   */
+  default Map<SchemaEntity, Set<String>> inlineTaggedEntities() {
+    return Collections.emptyMap();
+  }
+
+  /**
    * Returns a copy of this schema.
    *
    * @return a copy of this schema

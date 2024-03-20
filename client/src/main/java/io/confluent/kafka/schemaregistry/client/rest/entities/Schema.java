@@ -57,6 +57,8 @@ public class Schema implements Comparable<Schema> {
   public static final String SCHEMA_DESC = "Schema definition string";
   public static final String SCHEMA_EXAMPLE = "{\"schema\": \"{\"type\": \"string\"}\"}";
 
+  public static final String SCHEMA_TAGS_DESC = "Schema tags";
+
   private String subject;
   private Integer version;
   private Integer id;
@@ -65,6 +67,7 @@ public class Schema implements Comparable<Schema> {
   private Metadata metadata;
   private RuleSet ruleSet;
   private String schema;
+  private List<SchemaTags> schemaTags;
 
   @JsonCreator
   public Schema(@JsonProperty("subject") String subject,
@@ -74,7 +77,27 @@ public class Schema implements Comparable<Schema> {
                 @JsonProperty("references") List<SchemaReference> references,
                 @JsonProperty("metadata") Metadata metadata,
                 @JsonProperty("ruleset") RuleSet ruleSet,
-                @JsonProperty("schema") String schema) {
+                @JsonProperty("schema") String schema,
+                @JsonProperty("schemaTags") List<SchemaTags> schemaTags) {
+    this.subject = subject;
+    this.version = version;
+    this.id = id;
+    this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
+    this.references = references != null ? references : Collections.emptyList();
+    this.metadata = metadata;
+    this.ruleSet = ruleSet;
+    this.schema = schema;
+    this.schemaTags = schemaTags;
+  }
+
+  public Schema(@JsonProperty("subject") String subject,
+      @JsonProperty("version") Integer version,
+      @JsonProperty("id") Integer id,
+      @JsonProperty("schemaType") String schemaType,
+      @JsonProperty("references") List<SchemaReference> references,
+      @JsonProperty("metadata") Metadata metadata,
+      @JsonProperty("ruleset") RuleSet ruleSet,
+      @JsonProperty("schema") String schema) {
     this.subject = subject;
     this.version = version;
     this.id = id;
@@ -178,11 +201,13 @@ public class Schema implements Comparable<Schema> {
   }
 
   public Schema copy() {
-    return new Schema(subject, version, id, schemaType, references, metadata, ruleSet, schema);
+    return new Schema(
+        subject, version, id, schemaType, references, metadata, ruleSet, schema, schemaTags);
   }
 
   public Schema copy(Integer version, Integer id) {
-    return new Schema(subject, version, id, schemaType, references, metadata, ruleSet, schema);
+    return new Schema(
+        subject, version, id, schemaType, references, metadata, ruleSet, schema, schemaTags);
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC, example = SUBJECT_EXAMPLE)
@@ -274,6 +299,17 @@ public class Schema implements Comparable<Schema> {
     this.schema = schema;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = SCHEMA_TAGS_DESC)
+  @JsonProperty("schemaTags")
+  public List<SchemaTags> getSchemaTags() {
+    return this.schemaTags;
+  }
+
+  @JsonProperty("schemaTags")
+  public void setSchemaTags(List<SchemaTags> schemaTags) {
+    this.schemaTags = schemaTags;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -309,7 +345,8 @@ public class Schema implements Comparable<Schema> {
     sb.append("references=" + this.references + ",");
     sb.append("metadata=" + this.metadata + ",");
     sb.append("ruleSet=" + this.ruleSet + ",");
-    sb.append("schema=" + this.schema + "}");
+    sb.append("schema=" + this.schema + ",");
+    sb.append("schemaTags=" + this.schemaTags + "}");
     return sb.toString();
   }
 
