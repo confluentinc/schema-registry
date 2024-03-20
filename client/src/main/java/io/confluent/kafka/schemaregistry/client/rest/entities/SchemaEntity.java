@@ -83,10 +83,10 @@ public class SchemaEntity {
 
   @Override
   public String toString() {
-    return "SchemaEntity{" +
-        "entityType=" + entityType +
-        ", normalizedPath='" + normalizedPath + '\'' +
-        '}';
+    return "SchemaEntity{"
+        + "entityType=" + entityType
+        + ", normalizedPath='" + normalizedPath + '\''
+        + '}';
   }
 
   public enum EntityType {
