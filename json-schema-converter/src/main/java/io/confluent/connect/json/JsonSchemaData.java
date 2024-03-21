@@ -112,6 +112,8 @@ public class JsonSchemaData {
   public static final String GENERALIZED_TYPE_UNION_FIELD_PREFIX =
       GENERALIZED_TYPE_UNION_PREFIX + "field_";
 
+  public static final String NULL_MARKER = "<NULL>";
+
   private static final JsonNodeFactory JSON_NODE_FACTORY =
       JsonNodeFactory.withExactBigDecimals(true);
 
@@ -699,6 +701,9 @@ public class JsonSchemaData {
           for (Map.Entry<String, String> entry : schema.parameters().entrySet()) {
             if (entry.getKey().startsWith(paramName + ".")) {
               String enumSymbol = entry.getKey().substring(paramName.length() + 1);
+              if (enumSymbol.equals(NULL_MARKER)) {
+                enumSymbol = null;
+              }
               enumBuilder.possibleValue(enumSymbol);
             }
           }
@@ -1006,7 +1011,7 @@ public class JsonSchemaData {
       builder.parameter(paramName, "");  // JSON enums have no name, use empty string as placeholder
       int symbolIndex = 0;
       for (Object enumObj : enumSchema.getPossibleValuesAsList()) {
-        String enumSymbol = enumObj.toString();
+        String enumSymbol = enumObj != null ? enumObj.toString() : NULL_MARKER;
         if (generalizedSumTypeSupport) {
           builder.parameter(paramName + "." + enumSymbol, String.valueOf(symbolIndex));
         } else {
