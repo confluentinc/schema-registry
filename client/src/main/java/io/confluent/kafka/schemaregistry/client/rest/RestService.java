@@ -897,7 +897,7 @@ public class RestService implements Closeable, Configurable {
 
   public SchemaString getId(Map<String, String> requestProperties,
       int id, String subject, boolean fetchMaxId) throws IOException, RestClientException {
-    return getId(requestProperties, id, subject, null, false);
+    return getId(requestProperties, id, subject, null, fetchMaxId);
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
@@ -967,7 +967,7 @@ public class RestService implements Closeable, Configurable {
   public Schema getVersion(Map<String, String> requestProperties,
                            String subject, int version, boolean lookupDeletedSchema)
       throws IOException, RestClientException {
-    return getVersion(requestProperties, subject, version, false, null);
+    return getVersion(requestProperties, subject, version, lookupDeletedSchema, null);
   }
 
   public Schema getVersion(Map<String, String> requestProperties,
