@@ -212,6 +212,24 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testFromConnectEnumWithNull() {
+    EnumSchema schema = EnumSchema.builder()
+        .possibleValue("one")
+        .possibleValue("two")
+        .possibleValue("three")
+        .possibleValue(null)
+        .build();
+    Schema connectSchema = new SchemaBuilder(Schema.Type.STRING).parameter(JSON_TYPE_ENUM, "")
+        .parameter(JSON_TYPE_ENUM + ".one", "one")
+        .parameter(JSON_TYPE_ENUM + ".two", "two")
+        .parameter(JSON_TYPE_ENUM + ".three", "three")
+        .parameter(JSON_TYPE_ENUM + ".<NULL>", "<NULL>")
+        .build();
+
+    checkNonObjectConversion(schema, TextNode.valueOf("one"), connectSchema, "one");
+  }
+
+  @Test
   public void testFromConnectEnumWithGeneralizedSumTypeSupport() {
     jsonSchemaData =
         new JsonSchemaData(new JsonSchemaDataConfig(
@@ -231,6 +249,34 @@ public class JsonSchemaDataTest {
         .parameter(GENERALIZED_TYPE_ENUM + ".one", "0")
         .parameter(GENERALIZED_TYPE_ENUM + ".two", "1")
         .parameter(GENERALIZED_TYPE_ENUM + ".three", "2")
+        .build();
+
+    checkNonObjectConversion(schema, TextNode.valueOf("one"), connectSchema, "one");
+  }
+
+  @Test
+  public void testFromConnectEnumWithNullGeneralizedSumTypeSupport() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, "true")));
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put("org.apache.kafka.connect.data.Enum", "");
+    params.put("org.apache.kafka.connect.data.Enum.one", "0");
+    params.put("org.apache.kafka.connect.data.Enum.two", "1");
+    params.put("org.apache.kafka.connect.data.Enum.three", "2");
+    params.put("org.apache.kafka.connect.data.Enum.<NULL>", "3");
+    EnumSchema schema = EnumSchema.builder()
+        .possibleValue("one")
+        .possibleValue("two")
+        .possibleValue("three")
+        .possibleValue(null)
+        .unprocessedProperties(Collections.singletonMap("connect.parameters", params))
+        .build();
+    Schema connectSchema = new SchemaBuilder(Schema.Type.STRING).parameter(GENERALIZED_TYPE_ENUM, "")
+        .parameter(GENERALIZED_TYPE_ENUM + ".one", "0")
+        .parameter(GENERALIZED_TYPE_ENUM + ".two", "1")
+        .parameter(GENERALIZED_TYPE_ENUM + ".three", "2")
+        .parameter(GENERALIZED_TYPE_ENUM + ".<NULL>", "3")
         .build();
 
     checkNonObjectConversion(schema, TextNode.valueOf("one"), connectSchema, "one");
@@ -1228,6 +1274,24 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectEnumWithNull() {
+    EnumSchema schema = EnumSchema.builder()
+        .possibleValue("one")
+        .possibleValue("two")
+        .possibleValue("three")
+        .possibleValue(null)
+        .build();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).parameter(JSON_TYPE_ENUM, "")
+        .parameter(JSON_TYPE_ENUM + ".one", "one")
+        .parameter(JSON_TYPE_ENUM + ".two", "two")
+        .parameter(JSON_TYPE_ENUM + ".three", "three")
+        .parameter(JSON_TYPE_ENUM + ".<NULL>", "<NULL>")
+        .build();
+
+    checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
+  }
+
+  @Test
   public void testToConnectEnumWithGeneralizedSumTypeSupport() {
     jsonSchemaData =
         new JsonSchemaData(new JsonSchemaDataConfig(
@@ -1241,6 +1305,27 @@ public class JsonSchemaDataTest {
         .parameter(GENERALIZED_TYPE_ENUM + ".one", "0")
         .parameter(GENERALIZED_TYPE_ENUM + ".two", "1")
         .parameter(GENERALIZED_TYPE_ENUM + ".three", "2")
+        .build();
+
+    checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
+  }
+
+  @Test
+  public void testToConnectEnumWithNullGeneralizedSumTypeSupport() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, "true")));
+    EnumSchema schema = EnumSchema.builder()
+        .possibleValue("one")
+        .possibleValue("two")
+        .possibleValue("three")
+        .possibleValue(null)
+        .build();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).parameter(GENERALIZED_TYPE_ENUM, "")
+        .parameter(GENERALIZED_TYPE_ENUM + ".one", "0")
+        .parameter(GENERALIZED_TYPE_ENUM + ".two", "1")
+        .parameter(GENERALIZED_TYPE_ENUM + ".three", "2")
+        .parameter(GENERALIZED_TYPE_ENUM + ".<NULL>", "3")
         .build();
 
     checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
