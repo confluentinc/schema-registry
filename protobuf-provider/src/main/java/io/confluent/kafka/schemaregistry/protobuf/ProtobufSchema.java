@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.protobuf;
 
 import static com.google.common.base.CaseFormat.LOWER_UNDERSCORE;
 import static com.google.common.base.CaseFormat.UPPER_CAMEL;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_FIELD;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_RECORD;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingElement;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingNode;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.jsonToFile;
@@ -2476,10 +2478,66 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
+  @Override
+  public Map<SchemaEntity, Set<String>> inlineTaggedEntities() {
+    Map<SchemaEntity, Set<String>> tags = new LinkedHashMap<>();
+    ProtoFileElement schema = rawSchema();
+    if (schema == null) {
+      return tags;
+    }
+    getInlineTaggedEntitiesRecursively(tags, schema.getTypes(), "");
+    return tags;
+  }
+
+  private void getInlineTaggedEntitiesRecursively(
+      Map<SchemaEntity, Set<String>> tags, List<TypeElement> types, String scope) {
+    for (TypeElement type : types) {
+      if (type instanceof MessageElement) {
+        getInlineTaggedEntitiesRecursively(tags, (MessageElement) type, scope);
+      }
+    }
+  }
+
+  private void getInlineTaggedEntitiesRecursively(
+      Map<SchemaEntity, Set<String>> tags, MessageElement message, String scope) {
+    String scopedName = scope + message.getName();
+    Set<String> recordTags = getInlineTags(CONFLUENT_MESSAGE_META, message.getOptions());
+    if (!recordTags.isEmpty()) {
+      tags.put(new SchemaEntity(scopedName, SR_RECORD), recordTags);
+    }
+    for (OneOfElement oneOf : message.getOneOfs()) {
+      for (FieldElement field : oneOf.getFields()) {
+        Set<String> fieldTags = getInlineTags(CONFLUENT_FIELD_META, field.getOptions());
+        if (!fieldTags.isEmpty()) {
+          tags.put(new SchemaEntity(
+              scopedName + "." + field.getName(), SR_FIELD), fieldTags);
+        }
+      }
+    }
+    for (FieldElement field : message.getFields()) {
+      Set<String> fieldTags = getInlineTags(CONFLUENT_FIELD_META, field.getOptions());
+      if (!fieldTags.isEmpty()) {
+        tags.put(new SchemaEntity(scopedName + "." + field.getName(), SR_FIELD), fieldTags);
+      }
+    }
+    getInlineTaggedEntitiesRecursively(tags, message.getNestedTypes(), scopedName + ".");
+  }
+
+
   private Set<String> getInlineTags(FieldDescriptor fd) {
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
       Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
       return new LinkedHashSet<>(meta.getTagsList());
+    }
+    return Collections.emptySet();
+  }
+
+  private Set<String> getInlineTags(String optionName, List<OptionElement> options) {
+    ProtobufMeta meta = ProtobufSchema.findMeta(optionName, options);
+    if (meta != null) {
+      if (meta.getTags() != null) {
+        return new LinkedHashSet<>(meta.getTags());
+      }
     }
     return Collections.emptySet();
   }
@@ -2499,7 +2557,7 @@ public class ProtobufSchema implements ParsedSchema {
       JsonNode entityNode;
       Object matchingElement;
 
-      if (SchemaEntity.EntityType.SR_RECORD == entity.getEntityType()) {
+      if (SR_RECORD == entity.getEntityType()) {
         metaName = CONFLUENT_MESSAGE_META;
         matchingElement = findMatchingElement(original, identifiers, false);
         MessageElement messageElement = (MessageElement) matchingElement;
