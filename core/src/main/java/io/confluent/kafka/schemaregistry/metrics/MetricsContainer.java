@@ -36,7 +36,13 @@ import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.SystemTime;
 
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.util.Collections;
+import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -64,6 +70,7 @@ public class MetricsContainer {
   public static final String METRIC_NAME_PB_SCHEMAS_CREATED = "protobuf-schemas-created";
   public static final String METRIC_NAME_PB_SCHEMAS_DELETED = "protobuf-schemas-deleted";
   public static final String METRIC_LEADER_INITIALIZATION_LATENCY = "leader-initialization-latency";
+  public static final String METRIC_CERTIFICATE_EXPIRATION = "certificate-expiration";
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
@@ -89,8 +96,7 @@ public class MetricsContainer {
   private final MetricsContext metricsContext;
 
   public MetricsContainer(SchemaRegistryConfig config, String kafkaClusterId) {
-    this.configuredTags =
-            Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
+    this.configuredTags = Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
 
     List<MetricsReporter> reporters = config.getConfiguredInstances(
         config.getList(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG),
@@ -173,6 +179,13 @@ public class MetricsContainer {
     return createMetric(name, name, name, metricDescription, stat);
   }
 
+  private SchemaRegistryMetric createMetric(String name, String metricDescription,
+                                            MeasurableStat stat, Map<String, String> tags) {
+    tags.putAll(configuredTags);
+    MetricName mn = new MetricName(name, name, metricDescription, configuredTags);
+    return new SchemaRegistryMetric(metrics, name, mn, stat);
+  }
+
   private SchemaRegistryMetric createMetric(String sensorName, String metricName,
                                             String metricGroup, String metricDescription,
                                             MeasurableStat stat) {
@@ -233,8 +246,35 @@ public class MetricsContainer {
     return leaderInitializationLatency;
   }
 
-  private static MetricsContext buildMetricsContext(
-          SchemaRegistryConfig config, String kafkaClusterId) {
+  public SchemaRegistryMetric getCertificateExpirationMetric(Map<String, String> tags) {
+    return createMetric(METRIC_CERTIFICATE_EXPIRATION,
+            "Epoch timestamp when the certificate expires", new Value(), tags);
+  }
+
+  public void emitCertificateExpirationMetric(KeyStore keystore, String type) {
+    try {
+      Enumeration<String> aliases = keystore.aliases();
+      while (aliases.hasMoreElements()) {
+        String alias = aliases.nextElement();
+
+        if (keystore.isCertificateEntry(alias)) {
+          Certificate certificate = keystore.getCertificate(alias);
+
+          if (certificate instanceof X509Certificate) {
+            X509Certificate crt = (X509Certificate) certificate;
+            Map<String, String> tags = new HashMap<>();
+            tags.put(SchemaRegistryConfig.RESOURCE_CERT_LABEL_TYPE, type);
+            tags.put(SchemaRegistryConfig.RESOURCE_CERT_LABEL_NAME, alias);
+            getCertificateExpirationMetric(tags).record(crt.getNotAfter().getTime());
+          }
+        }
+      }
+    } catch (KeyStoreException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static MetricsContext buildMetricsContext(SchemaRegistryConfig config, String kafkaClusterId) {
 
     String srGroupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
 
@@ -242,11 +282,11 @@ public class MetricsContainer {
             config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX);
 
     metadata.put(RESOURCE_LABEL_KAFKA_CLUSTER_ID, kafkaClusterId);
-    metadata.put(config.RESOURCE_LABEL_CLUSTER_ID, srGroupId);
-    metadata.put(config.RESOURCE_LABEL_GROUP_ID, srGroupId);
-    metadata.put(config.RESOURCE_LABEL_TYPE,  "schema_registry");
-    metadata.put(config.RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
-    metadata.put(config.RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+    metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_CLUSTER_ID, srGroupId);
+    metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_GROUP_ID, srGroupId);
+    metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_TYPE,  "schema_registry");
+    metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
+    metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
 
     return new KafkaMetricsContext(JMX_PREFIX, metadata);
   }
