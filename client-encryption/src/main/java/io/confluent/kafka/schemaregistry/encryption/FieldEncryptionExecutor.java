@@ -286,7 +286,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       String kmsType = ctx.getParameter(ENCRYPT_KMS_TYPE);
       String kmsKeyId = ctx.getParameter(ENCRYPT_KMS_KEY_ID);
 
-      Kek kek = retrieveKekFromRegistry(ctx, kekId);
+      Kek kek = retrieveKekFromRegistry(kekId);
       if (kek == null) {
         if (isRead) {
           throw new RuleException("No kek found for " + kekName + " during consume");
@@ -297,10 +297,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         if (kmsKeyId == null || kmsKeyId.isEmpty()) {
           throw new RuleException("No kms key id found for " + kekName + " during produce");
         }
-        kek = storeKekToRegistry(ctx, kekId, kmsType, kmsKeyId, false);
+        kek = storeKekToRegistry(kekId, kmsType, kmsKeyId, false);
         if (kek == null) {
           // Handle conflicts (409)
-          kek = retrieveKekFromRegistry(ctx, kekId);
+          kek = retrieveKekFromRegistry(kekId);
         }
         if (kek == null) {
           throw new RuleException("No kek found for " + kekName + " during produce");
@@ -334,13 +334,9 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       return dekExpiryDays;
     }
 
-    private Kek retrieveKekFromRegistry(RuleContext ctx, KekId key) throws RuleException {
+    private Kek retrieveKekFromRegistry(KekId key) throws RuleException {
       try {
-        Kek kek = client.getKek(key.getName(), key.isLookupDeleted());
-        if (kek == null) {
-          return null;
-        }
-        return kek;
+        return client.getKek(key.getName(), key.isLookupDeleted());
       } catch (RestClientException e) {
         if (e.getStatus() == 404) {
           return null;
@@ -351,8 +347,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       }
     }
 
-    private Kek storeKekToRegistry(
-        RuleContext ctx, KekId key, String kmsType, String kmsKeyId, boolean shared)
+    private Kek storeKekToRegistry(KekId key, String kmsType, String kmsKeyId, boolean shared)
         throws RuleException {
       try {
         Kek kek = client.createKek(
@@ -532,7 +527,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       }
     }
 
-    private byte[] prefixVersion(int version, byte[] ciphertext) throws RuleException {
+    private byte[] prefixVersion(int version, byte[] ciphertext) {
       byte[] combined = new byte[ciphertext.length + 1 + VERSION_SIZE];
       ByteBuffer buffer = ByteBuffer.wrap(combined);
       buffer.put(MAGIC_BYTE);
