@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -33,6 +34,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -79,11 +81,12 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
 
+    List<SchemaTags> schemaTags = Collections.singletonList(
+        new SchemaTags(new SchemaEntity("myrecord", SchemaEntity.EntityType.SR_RECORD),
+            Arrays.asList("TAG1", "TAG2")));
     TagSchemaRequest tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setNewVersion(2);
-    tagSchemaRequest.setTagsToAdd(Collections.singletonList(
-        new SchemaTags(new SchemaEntity("myrecord", SchemaEntity.EntityType.SR_RECORD),
-            Arrays.asList("TAG1", "TAG2"))));
+    tagSchemaRequest.setTagsToAdd(schemaTags);
 
     String expectedSchema = "{" +
         "\"type\":\"record\"," +
@@ -94,16 +97,18 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
     assertEquals(2, responses.getId());
 
-    Schema result = restApp.restClient.getLatestVersion(subject);
+    Schema result = restApp.restClient.getLatestVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject, Collections.singleton("*"));
     assertEquals(expectedSchema, result.getSchema());
     assertEquals((Integer) 2, result.getVersion());
     assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+    assertEquals(schemaTags, result.getSchemaTags());
 
     tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setNewVersion(3);
     tagSchemaRequest.setTagsToRemove(Collections.singletonList(
         new SchemaTags(new SchemaEntity("myrecord", SchemaEntity.EntityType.SR_RECORD),
-            Arrays.asList("TAG2"))));
+            Collections.singletonList("TAG2"))));
 
     expectedSchema = "{" +
         "\"type\":\"record\"," +
@@ -114,10 +119,19 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
     assertEquals(3, responses.getId());
 
-    result = restApp.restClient.getLatestVersion(subject);
+    result = restApp.restClient.getLatestVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject, Collections.singleton("*"));
     assertEquals(expectedSchema, result.getSchema());
     assertEquals((Integer) 3, result.getVersion());
     assertEquals("3", result.getMetadata().getProperties().get("confluent:version"));
+    List<SchemaTags> expectedSchemaTags = Collections.singletonList(
+        new SchemaTags(new SchemaEntity("myrecord", SchemaEntity.EntityType.SR_RECORD),
+            Collections.singletonList("TAG1")));
+    assertEquals(expectedSchemaTags, result.getSchemaTags());
+
+    SchemaString schemaString = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES,
+        3, subject, Collections.singleton("TAG1"), false);
+    assertEquals(expectedSchemaTags, schemaString.getSchemaTags());
   }
 
   @Test
