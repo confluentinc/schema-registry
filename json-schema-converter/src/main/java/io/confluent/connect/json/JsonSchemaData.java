@@ -280,7 +280,7 @@ public class JsonSchemaData {
     intersectSet.retainAll(objectFields);
 
     int childrenMatchFactor = 0;
-    for (String intersectedElement: intersectSet){
+    for (String intersectedElement: intersectSet) {
       Schema childSchema = fieldSchema.field(intersectedElement).schema();
       JsonNode childValue = value.get(intersectedElement);
       childrenMatchFactor += matchStructSchema(childSchema, childValue);
