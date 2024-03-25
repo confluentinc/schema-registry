@@ -169,10 +169,6 @@ public class MetricsContainer {
     return metrics;
   }
 
-  public Map<String, String> getMetricsTags() {
-    return configuredTags;
-  }
-
   public MetricsContext getMetricsContext() {
     return metricsContext;
   }
@@ -186,13 +182,6 @@ public class MetricsContainer {
   private SchemaRegistryMetric createMetric(String name, String metricDescription,
                                             MeasurableStat stat) {
     return createMetric(name, name, name, metricDescription, stat);
-  }
-
-  private SchemaRegistryMetric createMetric(String name, String metricDescription,
-                                            MeasurableStat stat, Map<String, String> tags) {
-    tags.putAll(configuredTags);
-    MetricName mn = new MetricName(name, name, metricDescription, tags);
-    return new SchemaRegistryMetric(metrics, name, mn, stat);
   }
 
   private SchemaRegistryMetric createMetric(String sensorName, String metricName,
