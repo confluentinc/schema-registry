@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_FIELD;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_RECORD;
 import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingEntity;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -74,8 +76,8 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -864,11 +866,111 @@ public class JsonSchema implements ParsedSchema {
     node.forEach(n -> getInlineTagsRecursively(tags, n));
   }
 
-  private Set<String> getInlineTags(Schema propertySchema) {
-    Object prop = propertySchema.getUnprocessedProperties().get(TAGS);
+  @Override
+  public Map<SchemaEntity, Set<String>> inlineTaggedEntities() {
+    Map<SchemaEntity, Set<String>> tags = new LinkedHashMap<>();
+    Schema schema = rawSchema();
+    if (schema == null) {
+      return tags;
+    }
+    getInlineTaggedEntitiesRecursively(tags, schema, "", false);
+    return tags;
+  }
+
+  private void getInlineTaggedEntitiesRecursively(
+      Map<SchemaEntity, Set<String>> tags, Schema schema, String scope, boolean inField) {
+    if (schema instanceof CombinedSchema) {
+      CombinedSchema combinedSchema = (CombinedSchema) schema;
+      String scopedName = scope + JsonSchemaComparator.getCriterion(combinedSchema);
+      List<Schema> subschemas = new ArrayList<>(combinedSchema.getSubschemas());
+      subschemas.sort(new JsonSchemaComparator());
+      for (int i = 0; i < subschemas.size(); i++) {
+        Schema subschema = subschemas.get(i);
+        getInlineTaggedEntitiesRecursively(tags, subschema, scopedName + "." + i + ".", false);
+      }
+    } else if (schema instanceof ArraySchema) {
+      Schema subschema = ((ArraySchema) schema).getAllItemSchema();
+      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "array.", false);
+    } else if (schema instanceof ObjectSchema) {
+      ObjectSchema objectSchema = (ObjectSchema) schema;
+      String scopedName = scope + "object";
+      if (!inField) {
+        Set<String> recordTags = getInlineTags(schema);
+        if (!recordTags.isEmpty()) {
+          tags.put(new SchemaEntity(scopedName, SR_RECORD), recordTags);
+        }
+      }
+      for (Map.Entry<String, Schema> entry : objectSchema.getPropertySchemas().entrySet()) {
+        String propertyName = entry.getKey();
+        Schema propertySchema = entry.getValue();
+        String scopedPropertyName = scopedName + "." + propertyName;
+        Set<String> fieldTags = getInlineTags(propertySchema);
+        if (!fieldTags.isEmpty()) {
+          tags.put(new SchemaEntity(scopedPropertyName, SR_FIELD), fieldTags);
+        }
+        getInlineTaggedEntitiesRecursively(
+            tags, propertySchema, scopedPropertyName + ".", true);
+      }
+      getInlineTaggedEntitiesRecursively(tags, schema.getUnprocessedProperties(), scopedName + ".");
+    } else if (schema instanceof ConditionalSchema) {
+      ConditionalSchema condSchema = (ConditionalSchema) schema;
+      String scopedName = scope + "conditional";
+      condSchema.getIfSchema().ifPresent(
+          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".if.", false));
+      condSchema.getThenSchema().ifPresent(
+          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".then.", false));
+      condSchema.getElseSchema().ifPresent(
+          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".else", false));
+    } else if (schema instanceof NotSchema) {
+      Schema subschema = ((NotSchema) schema).getMustNotMatch();
+      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "not.", false);
+    }
+  }
+
+  private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
+      Map<String, Object> unprocessedProperties, String scope) {
+    Map<String, Object> defns = (Map<String, Object>) unprocessedProperties.get("definitions");
+    if (defns != null) {
+      for (Map.Entry<String, Object> entry : defns.entrySet()) {
+        if (entry.getValue() instanceof Map) {
+          Map<String, Object> rawSchema = replaceRefs((Map<String, Object>) entry.getValue());
+          JsonNode jsonNode = objectMapper.valueToTree(rawSchema);
+          JsonSchema jsonSchema = new JsonSchema(jsonNode);
+          getInlineTaggedEntitiesRecursively(
+              tags, jsonSchema.rawSchema(), scope + "definitions.", false);
+        }
+      }
+    }
+    Map<String, Object> defs = (Map<String, Object>) unprocessedProperties.get("$defs");
+    if (defs != null) {
+      for (Map.Entry<String, Object> entry : defs.entrySet()) {
+        if (entry.getValue() instanceof Schema) {
+          getInlineTaggedEntitiesRecursively(
+              tags, (Schema) entry.getValue(), scope + "$defs.", false);
+        }
+      }
+    }
+  }
+
+  private Map<String, Object> replaceRefs(Map<String, Object> defs) {
+    Map<String, Object> result = new HashMap<>(defs);
+    if (result.containsKey("$ref")) {
+      // Use bare fragment as we don't care about the ref value during indexing
+      result.put("$ref", "#");
+    }
+    for (Map.Entry<String, Object> entry : result.entrySet()) {
+      if (entry.getValue() instanceof Map) {
+        entry.setValue(replaceRefs((Map<String, Object>) entry.getValue()));
+      }
+    }
+    return result;
+  }
+
+  private Set<String> getInlineTags(Schema schema) {
+    Object prop = schema.getUnprocessedProperties().get(TAGS);
     if (prop instanceof List) {
       List<?> tags = (List<?>) prop;
-      Set<String> result = new HashSet<>(tags.size());
+      Set<String> result = new LinkedHashSet<>(tags.size());
       for (Object tag : tags) {
         result.add(tag.toString());
       }
