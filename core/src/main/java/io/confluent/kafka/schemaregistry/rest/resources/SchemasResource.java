@@ -151,6 +151,8 @@ public class SchemasResource {
       @QueryParam("subject") String subject,
       @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Find tagged entities for the given tags or * for all tags")
+      @QueryParam("findTags") List<String> tags,
       @Parameter(description = "Whether to fetch the maximum schema identifier that exists")
       @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
     SchemaString schema;
@@ -158,14 +160,19 @@ public class SchemasResource {
                           + "registry";
     try {
       schema = schemaRegistry.get(id, subject, format, fetchMaxId);
+      if (schema == null) {
+        throw Errors.schemaNotFoundException(id);
+      }
+      if (tags != null && !tags.isEmpty()) {
+        Schema s = new Schema(null, null, null, schema);
+        schemaRegistry.extractSchemaTags(s, tags);
+        schema.setSchemaTags(s.getSchemaTags());
+      }
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
-    }
-    if (schema == null) {
-      throw Errors.schemaNotFoundException(id);
     }
     return schema;
   }
