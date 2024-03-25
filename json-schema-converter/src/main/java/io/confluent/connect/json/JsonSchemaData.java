@@ -194,7 +194,7 @@ public class JsonSchemaData {
         String fieldNamePrefix = generalizedSumTypeSupport
             ? GENERALIZED_TYPE_UNION_FIELD_PREFIX
             : JSON_TYPE_ONE_OF + ".field.";
-        int numMatchingProperties = -1;
+        int numMatchingProperties = 0;
         Field matchingField = null;
         for (Field field : schema.fields()) {
           Schema fieldSchema = field.schema();
@@ -266,7 +266,7 @@ public class JsonSchemaData {
 
   private static int matchStructSchema(Schema fieldSchema, JsonNode value) {
     if (fieldSchema.type() != Schema.Type.STRUCT || !value.isObject()) {
-      return -1;
+      return 0;
     }
     Set<String> schemaFields = fieldSchema.fields()
         .stream()
@@ -278,7 +278,15 @@ public class JsonSchemaData {
     }
     Set<String> intersectSet = new HashSet<>(schemaFields);
     intersectSet.retainAll(objectFields);
-    return intersectSet.size();
+
+    int childrenMatchFactor = 0;
+    for (String intersectedElement: intersectSet){
+      Schema childSchema = fieldSchema.field(intersectedElement).schema();
+      JsonNode childValue = value.get(intersectedElement);
+      childrenMatchFactor += matchStructSchema(childSchema, childValue);
+    }
+
+    return intersectSet.size() + childrenMatchFactor;
   }
 
   // Convert values in Kafka Connect form into their logical types. These logical converters are
