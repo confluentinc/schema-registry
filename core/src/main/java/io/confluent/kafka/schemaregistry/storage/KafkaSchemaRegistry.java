@@ -196,8 +196,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.myIdentity = getMyIdentity(internalListener, isEligibleForLeaderElector, config);
     log.info("Setting my identity to {}",  myIdentity);
 
-    Map<String, Object> sslConfig = config.getOverriddenSslConfigs(internalListener);
-    this.sslFactory = new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(sslConfig), this);
     this.leaderConnectTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_CONNECT_TIMEOUT_MS);
     this.leaderReadTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_READ_TIMEOUT_MS);
     this.kafkaStoreTimeoutMs =
@@ -213,6 +211,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.kafkaClusterId = kafkaClusterId(config);
     this.groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
     this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
+
+    Map<String, Object> sslConfig = config.getOverriddenSslConfigs(internalListener);
+    this.sslFactory = new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(sslConfig), this);
     this.providers = initProviders(config);
     this.schemaCache = Caffeine.newBuilder()
         .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
@@ -2357,12 +2358,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   @Override
   public void onKeystoreCreated(KeyStore keystore) {
-    metricsContainer.emitCertificateExpirationMetric(keystore, "keystore");
+    metricsContainer.emitCertificateExpirationMetric(keystore, metricsContainer.getCertificateExpirationKeystore());
   }
 
   @Override
   public void onTruststoreCreated(KeyStore truststore) {
-    metricsContainer.emitCertificateExpirationMetric(truststore, "truststore");
+    metricsContainer.emitCertificateExpirationMetric(truststore, metricsContainer.getCertificateExpirationTruststore());
   }
 
   private static class RawSchema {
