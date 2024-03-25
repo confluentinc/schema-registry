@@ -93,6 +93,9 @@ public class MetricsContainer {
   private final SchemaRegistryMetric protobufSchemasDeleted;
   private final SchemaRegistryMetric leaderInitializationLatency;
 
+  private final SchemaRegistryMetric certificateExpirationKeystore;
+  private final SchemaRegistryMetric certificateExpirationTruststore;
+
   private final MetricsContext metricsContext;
 
   public MetricsContainer(SchemaRegistryConfig config, String kafkaClusterId) {
@@ -154,6 +157,12 @@ public class MetricsContainer {
 
     this.leaderInitializationLatency = createMetric(METRIC_LEADER_INITIALIZATION_LATENCY,
             "Time spent initializing the leader's kafka store", new Value());
+
+    this.certificateExpirationKeystore = createMetric(METRIC_CERTIFICATE_EXPIRATION + "-keystore",
+            "Epoch timestamp when the keystore certificate expires, if its a certificate chain, then its the certificate with the shortest time to live", new Value());
+
+    this.certificateExpirationTruststore = createMetric(METRIC_CERTIFICATE_EXPIRATION + "-truststore",
+            "Epoch timestamp when the truststore certificate expires, if its a certificate chain, then its the certificate with the shortest time to live", new Value());
   }
 
   public Metrics getMetrics() {
@@ -182,7 +191,7 @@ public class MetricsContainer {
   private SchemaRegistryMetric createMetric(String name, String metricDescription,
                                             MeasurableStat stat, Map<String, String> tags) {
     tags.putAll(configuredTags);
-    MetricName mn = new MetricName(name, name, metricDescription, configuredTags);
+    MetricName mn = new MetricName(name, name, metricDescription, tags);
     return new SchemaRegistryMetric(metrics, name, mn, stat);
   }
 
@@ -246,13 +255,18 @@ public class MetricsContainer {
     return leaderInitializationLatency;
   }
 
-  public SchemaRegistryMetric getCertificateExpirationMetric(Map<String, String> tags) {
-    return createMetric(METRIC_CERTIFICATE_EXPIRATION,
-            "Epoch timestamp when the certificate expires", new Value(), tags);
+  public SchemaRegistryMetric getCertificateExpirationKeystore() {
+      return certificateExpirationKeystore;
   }
 
-  public void emitCertificateExpirationMetric(KeyStore keystore, String type) {
+  public SchemaRegistryMetric getCertificateExpirationTruststore() {
+      return certificateExpirationTruststore;
+  }
+
+  public void emitCertificateExpirationMetric(KeyStore keystore, SchemaRegistryMetric metric) {
     try {
+      long shortestExpiration = Long.MAX_VALUE;
+
       Enumeration<String> aliases = keystore.aliases();
       while (aliases.hasMoreElements()) {
         String alias = aliases.nextElement();
@@ -262,13 +276,13 @@ public class MetricsContainer {
 
           if (certificate instanceof X509Certificate) {
             X509Certificate crt = (X509Certificate) certificate;
-            Map<String, String> tags = new HashMap<>();
-            tags.put(SchemaRegistryConfig.RESOURCE_CERT_LABEL_TYPE, type);
-            tags.put(SchemaRegistryConfig.RESOURCE_CERT_LABEL_NAME, alias);
-            getCertificateExpirationMetric(tags).record(crt.getNotAfter().getTime());
+            if (crt.getNotAfter().getTime() < shortestExpiration) {
+              shortestExpiration = crt.getNotAfter().getTime();
+            }
           }
         }
       }
+      metric.record(shortestExpiration);
     } catch (KeyStoreException e) {
       throw new RuntimeException(e);
     }
