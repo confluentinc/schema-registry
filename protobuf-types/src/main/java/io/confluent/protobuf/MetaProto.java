@@ -250,7 +250,7 @@ public final class MetaProto {
     @java.lang.Override
     public boolean containsParams(
         java.lang.String key) {
-      if (key == null) { throw new java.lang.NullPointerException(); }
+      if (key == null) { throw new NullPointerException("map key"); }
       return internalGetParams().getMap().containsKey(key);
     }
     /**
@@ -277,7 +277,7 @@ public final class MetaProto {
     public java.lang.String getParamsOrDefault(
         java.lang.String key,
         java.lang.String defaultValue) {
-      if (key == null) { throw new java.lang.NullPointerException(); }
+      if (key == null) { throw new NullPointerException("map key"); }
       java.util.Map<java.lang.String, java.lang.String> map =
           internalGetParams().getMap();
       return map.containsKey(key) ? map.get(key) : defaultValue;
@@ -289,7 +289,7 @@ public final class MetaProto {
 
     public java.lang.String getParamsOrThrow(
         java.lang.String key) {
-      if (key == null) { throw new java.lang.NullPointerException(); }
+      if (key == null) { throw new NullPointerException("map key"); }
       java.util.Map<java.lang.String, java.lang.String> map =
           internalGetParams().getMap();
       if (!map.containsKey(key)) {
@@ -312,7 +312,7 @@ public final class MetaProto {
     @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      if (!getDocBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(doc_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, doc_);
       }
       com.google.protobuf.GeneratedMessageV3
@@ -330,7 +330,7 @@ public final class MetaProto {
       if (size != -1) return size;
 
       size = 0;
-      if (!getDocBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(doc_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, doc_);
       }
       for (java.util.Map.Entry<java.lang.String, java.lang.String> entry
@@ -760,7 +760,7 @@ public final class MetaProto {
       @java.lang.Override
       public boolean containsParams(
           java.lang.String key) {
-        if (key == null) { throw new java.lang.NullPointerException(); }
+        if (key == null) { throw new NullPointerException("map key"); }
         return internalGetParams().getMap().containsKey(key);
       }
       /**
@@ -787,7 +787,7 @@ public final class MetaProto {
       public java.lang.String getParamsOrDefault(
           java.lang.String key,
           java.lang.String defaultValue) {
-        if (key == null) { throw new java.lang.NullPointerException(); }
+        if (key == null) { throw new NullPointerException("map key"); }
         java.util.Map<java.lang.String, java.lang.String> map =
             internalGetParams().getMap();
         return map.containsKey(key) ? map.get(key) : defaultValue;
@@ -799,7 +799,7 @@ public final class MetaProto {
 
       public java.lang.String getParamsOrThrow(
           java.lang.String key) {
-        if (key == null) { throw new java.lang.NullPointerException(); }
+        if (key == null) { throw new NullPointerException("map key"); }
         java.util.Map<java.lang.String, java.lang.String> map =
             internalGetParams().getMap();
         if (!map.containsKey(key)) {
@@ -819,7 +819,7 @@ public final class MetaProto {
 
       public Builder removeParams(
           java.lang.String key) {
-        if (key == null) { throw new java.lang.NullPointerException(); }
+        if (key == null) { throw new NullPointerException("map key"); }
         internalGetMutableParams().getMutableMap()
             .remove(key);
         return this;
@@ -838,8 +838,11 @@ public final class MetaProto {
       public Builder putParams(
           java.lang.String key,
           java.lang.String value) {
-        if (key == null) { throw new java.lang.NullPointerException(); }
-        if (value == null) { throw new java.lang.NullPointerException(); }
+        if (key == null) { throw new NullPointerException("map key"); }
+        if (value == null) {
+  throw new NullPointerException("map value");
+}
+
         internalGetMutableParams().getMutableMap()
             .put(key, value);
         return this;

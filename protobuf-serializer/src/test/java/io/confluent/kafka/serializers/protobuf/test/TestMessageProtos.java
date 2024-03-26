@@ -475,7 +475,7 @@ public final class TestMessageProtos {
     @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      if (!getTestStringBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(testString_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, testString_);
       }
       if (testBool_ != false) {
@@ -484,10 +484,10 @@ public final class TestMessageProtos {
       if (!testBytes_.isEmpty()) {
         output.writeBytes(3, testBytes_);
       }
-      if (testDouble_ != 0D) {
+      if (java.lang.Double.doubleToRawLongBits(testDouble_) != 0) {
         output.writeDouble(4, testDouble_);
       }
-      if (testFloat_ != 0F) {
+      if (java.lang.Float.floatToRawIntBits(testFloat_) != 0) {
         output.writeFloat(5, testFloat_);
       }
       if (testFixed32_ != 0) {
@@ -529,7 +529,7 @@ public final class TestMessageProtos {
       if (size != -1) return size;
 
       size = 0;
-      if (!getTestStringBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(testString_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, testString_);
       }
       if (testBool_ != false) {
@@ -540,11 +540,11 @@ public final class TestMessageProtos {
         size += com.google.protobuf.CodedOutputStream
           .computeBytesSize(3, testBytes_);
       }
-      if (testDouble_ != 0D) {
+      if (java.lang.Double.doubleToRawLongBits(testDouble_) != 0) {
         size += com.google.protobuf.CodedOutputStream
           .computeDoubleSize(4, testDouble_);
       }
-      if (testFloat_ != 0F) {
+      if (java.lang.Float.floatToRawIntBits(testFloat_) != 0) {
         size += com.google.protobuf.CodedOutputStream
           .computeFloatSize(5, testFloat_);
       }
@@ -2091,7 +2091,7 @@ public final class TestMessageProtos {
     @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      if (!getTestStringBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(testString_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, testString_);
       }
       if (testBool_ != false) {
@@ -2100,10 +2100,10 @@ public final class TestMessageProtos {
       if (!testBytes_.isEmpty()) {
         output.writeBytes(3, testBytes_);
       }
-      if (testDouble_ != 0D) {
+      if (java.lang.Double.doubleToRawLongBits(testDouble_) != 0) {
         output.writeDouble(4, testDouble_);
       }
-      if (testFloat_ != 0F) {
+      if (java.lang.Float.floatToRawIntBits(testFloat_) != 0) {
         output.writeFloat(5, testFloat_);
       }
       if (testFixed32_ != 0) {
@@ -2148,7 +2148,7 @@ public final class TestMessageProtos {
       if (size != -1) return size;
 
       size = 0;
-      if (!getTestStringBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(testString_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, testString_);
       }
       if (testBool_ != false) {
@@ -2159,11 +2159,11 @@ public final class TestMessageProtos {
         size += com.google.protobuf.CodedOutputStream
           .computeBytesSize(3, testBytes_);
       }
-      if (testDouble_ != 0D) {
+      if (java.lang.Double.doubleToRawLongBits(testDouble_) != 0) {
         size += com.google.protobuf.CodedOutputStream
           .computeDoubleSize(4, testDouble_);
       }
-      if (testFloat_ != 0F) {
+      if (java.lang.Float.floatToRawIntBits(testFloat_) != 0) {
         size += com.google.protobuf.CodedOutputStream
           .computeFloatSize(5, testFloat_);
       }

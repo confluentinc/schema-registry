@@ -81,6 +81,10 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return new KafkaJsonSchemaDeserializerConfig(props);
   }
 
+  public ObjectMapper objectMapper() {
+    return objectMapper;
+  }
+
   /**
    * Deserializes the payload without including schema information for primitive types, maps, and
    * arrays. Just the resulting deserialized object is returned.

@@ -188,7 +188,7 @@ public final class Ref {
     @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      if (!getRefIdBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(refId_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, refId_);
       }
       if (isActive_ != false) {
@@ -203,7 +203,7 @@ public final class Ref {
       if (size != -1) return size;
 
       size = 0;
-      if (!getRefIdBytes().isEmpty()) {
+      if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(refId_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, refId_);
       }
       if (isActive_ != false) {

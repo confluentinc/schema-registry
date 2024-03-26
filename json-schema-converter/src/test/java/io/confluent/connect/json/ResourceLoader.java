@@ -36,14 +36,16 @@ public class ResourceLoader {
     this.rootPath = requireNonNull(rootPath, "rootPath cannot be null");
   }
 
-  public JSONObject readJSONObject(String relPath) {
-    InputStream stream = getStream(relPath);
-    return new JSONObject(new JSONTokener(stream));
+  public JSONObject readJSONObject(String relPath) throws IOException {
+    try (InputStream stream = getStream(relPath)) {
+      return new JSONObject(new JSONTokener(stream));
+    }
   }
 
   public JsonNode readJsonNode(String relPath) throws IOException {
-    InputStream stream = getStream(relPath);
-    return new ObjectMapper().readTree(stream);
+    try (InputStream stream = getStream(relPath)) {
+      return new ObjectMapper().readTree(stream);
+    }
   }
 
   public InputStream getStream(String relPath) {

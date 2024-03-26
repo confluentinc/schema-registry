@@ -27,6 +27,8 @@ import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.connect.schema.ConnectEnum;
+import io.confluent.connect.schema.ConnectUnion;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.HashSet;
@@ -102,8 +104,15 @@ public class JsonSchemaData {
   public static final String DEFAULT_ID_PREFIX = "#id";
   public static final String JSON_ID_PROP = NAMESPACE + ".Id";
   public static final String JSON_TYPE_ENUM = NAMESPACE + ".Enum";
-  public static final String JSON_TYPE_ENUM_PREFIX = JSON_TYPE_ENUM + ".";
   public static final String JSON_TYPE_ONE_OF = NAMESPACE + ".OneOf";
+
+  public static final String GENERALIZED_TYPE_UNION = ConnectUnion.LOGICAL_PARAMETER;
+  public static final String GENERALIZED_TYPE_ENUM = ConnectEnum.LOGICAL_PARAMETER;
+  public static final String GENERALIZED_TYPE_UNION_PREFIX = "connect_union_";
+  public static final String GENERALIZED_TYPE_UNION_FIELD_PREFIX =
+      GENERALIZED_TYPE_UNION_PREFIX + "field_";
+
+  public static final String NULL_MARKER = "<NULL>";
 
   private static final JsonNodeFactory JSON_NODE_FACTORY =
       JsonNodeFactory.withExactBigDecimals(true);
@@ -182,14 +191,18 @@ public class JsonSchemaData {
       return result;
     });
     TO_CONNECT_CONVERTERS.put(Schema.Type.STRUCT, (schema, value) -> {
-      if (schema.name() != null && schema.name().equals(JSON_TYPE_ONE_OF)) {
+      if (isUnionSchema(schema)) {
+        boolean generalizedSumTypeSupport = ConnectUnion.isUnion(schema);
+        String fieldNamePrefix = generalizedSumTypeSupport
+            ? GENERALIZED_TYPE_UNION_FIELD_PREFIX
+            : JSON_TYPE_ONE_OF + ".field.";
         int numMatchingProperties = 0;
         Field matchingField = null;
         for (Field field : schema.fields()) {
           Schema fieldSchema = field.schema();
 
           if (isInstanceOfSchemaTypeForSimpleSchema(fieldSchema, value)) {
-            return new Struct(schema.schema()).put(JSON_TYPE_ONE_OF + ".field." + field.index(),
+            return new Struct(schema.schema()).put(fieldNamePrefix + field.index(),
                 toConnectData(fieldSchema, value)
             );
           } else {
@@ -202,7 +215,7 @@ public class JsonSchemaData {
         }
         if (matchingField != null) {
           return new Struct(schema.schema()).put(
-              JSON_TYPE_ONE_OF + ".field." + matchingField.index(),
+              fieldNamePrefix + matchingField.index(),
               toConnectData(matchingField.schema(), value)
           );
         }
@@ -378,6 +391,7 @@ public class JsonSchemaData {
   private final JsonSchemaDataConfig config;
   private final Map<Schema, JsonSchema> fromConnectSchemaCache;
   private final Map<JsonSchema, Schema> toConnectSchemaCache;
+  private final boolean generalizedSumTypeSupport;
 
   public JsonSchemaData() {
     this(new JsonSchemaDataConfig.Builder().with(
@@ -390,6 +404,7 @@ public class JsonSchemaData {
     this.config = jsonSchemaDataConfig;
     fromConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
     toConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
+    generalizedSumTypeSupport = jsonSchemaDataConfig.isGeneralizedSumTypeSupport();
   }
 
   /**
@@ -520,7 +535,7 @@ public class JsonSchemaData {
           }
           //This handles the inverting of a union which is held as a struct, where each field is
           // one of the union types.
-          if (JSON_TYPE_ONE_OF.equals(schema.name())) {
+          if (isUnionSchema(schema)) {
             for (Field field : schema.fields()) {
               Object object = struct.get(field);
               if (object != null) {
@@ -683,11 +698,18 @@ public class JsonSchemaData {
         builder = BooleanSchema.builder();
         break;
       case STRING:
-        if (schema.parameters() != null && schema.parameters().containsKey(JSON_TYPE_ENUM)) {
+        if (schema.parameters() != null
+            && (schema.parameters().containsKey(GENERALIZED_TYPE_ENUM)
+                || schema.parameters().containsKey(JSON_TYPE_ENUM))) {
           EnumSchema.Builder enumBuilder = EnumSchema.builder();
+          String paramName = generalizedSumTypeSupport ? GENERALIZED_TYPE_ENUM : JSON_TYPE_ENUM;
           for (Map.Entry<String, String> entry : schema.parameters().entrySet()) {
-            if (entry.getKey().startsWith(JSON_TYPE_ENUM_PREFIX)) {
-              enumBuilder.possibleValue(entry.getValue());
+            if (entry.getKey().startsWith(paramName + ".")) {
+              String enumSymbol = entry.getKey().substring(paramName.length() + 1);
+              if (enumSymbol.equals(NULL_MARKER)) {
+                enumSymbol = null;
+              }
+              enumBuilder.possibleValue(enumSymbol);
             }
           }
           builder = enumBuilder;
@@ -736,7 +758,7 @@ public class JsonSchemaData {
         }
         break;
       case STRUCT:
-        if (JSON_TYPE_ONE_OF.equals(schema.name())) {
+        if (isUnionSchema(schema)) {
           CombinedSchema.Builder combinedBuilder = CombinedSchema.builder();
           combinedBuilder.criterion(CombinedSchema.ONE_CRITERION);
           if (schema.isOptional()) {
@@ -987,19 +1009,28 @@ public class JsonSchemaData {
     } else if (jsonSchema instanceof EnumSchema) {
       EnumSchema enumSchema = (EnumSchema) jsonSchema;
       builder = SchemaBuilder.string();
-      builder.parameter(JSON_TYPE_ENUM,
-          ""
-      );  // JSON enums have no name, use empty string as placeholder
+      String paramName = generalizedSumTypeSupport ? GENERALIZED_TYPE_ENUM : JSON_TYPE_ENUM;
+      builder.parameter(paramName, "");  // JSON enums have no name, use empty string as placeholder
+      int symbolIndex = 0;
       for (Object enumObj : enumSchema.getPossibleValuesAsList()) {
-        String enumSymbol = enumObj.toString();
-        builder.parameter(JSON_TYPE_ENUM_PREFIX + enumSymbol, enumSymbol);
+        String enumSymbol = enumObj != null ? enumObj.toString() : NULL_MARKER;
+        if (generalizedSumTypeSupport) {
+          builder.parameter(paramName + "." + enumSymbol, String.valueOf(symbolIndex));
+        } else {
+          builder.parameter(paramName + "." + enumSymbol, enumSymbol);
+        }
+        symbolIndex++;
       }
     } else if (jsonSchema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) jsonSchema;
       CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
       String name;
       if (criterion == CombinedSchema.ONE_CRITERION || criterion == CombinedSchema.ANY_CRITERION) {
-        name = JSON_TYPE_ONE_OF;
+        if (generalizedSumTypeSupport) {
+          name = GENERALIZED_TYPE_UNION_PREFIX + ctx.getAndIncrementUnionIndex();
+        } else {
+          name = JSON_TYPE_ONE_OF;
+        }
       } else if (criterion == CombinedSchema.ALL_CRITERION) {
         return allOfToConnectSchema(ctx, combinedSchema, version, forceOptional);
       } else {
@@ -1021,12 +1052,18 @@ public class JsonSchemaData {
       }
       int index = 0;
       builder = SchemaBuilder.struct().name(name);
+      if (generalizedSumTypeSupport) {
+        builder.parameter(GENERALIZED_TYPE_UNION, name);
+      }
       for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
         if (subSchema instanceof NullSchema) {
           builder.optional();
         } else {
-          String subFieldName = name + ".field." + index++;
+          String subFieldName = generalizedSumTypeSupport
+              ? GENERALIZED_TYPE_UNION_FIELD_PREFIX + index
+              : name + ".field." + index;
           builder.field(subFieldName, toConnectSchema(ctx, subSchema, null, true));
+          index++;
         }
       }
     } else if (jsonSchema instanceof ArraySchema) {
@@ -1235,6 +1272,10 @@ public class JsonSchemaData {
     }
   }
 
+  private static boolean isUnionSchema(Schema schema) {
+    return JSON_TYPE_ONE_OF.equals(schema.name()) || ConnectUnion.isUnion(schema);
+  }
+
   private interface JsonToConnectTypeConverter {
     Object convert(Schema schema, JsonNode value);
   }
@@ -1399,6 +1440,7 @@ public class JsonSchemaData {
   private static class ToConnectContext {
     private final Map<org.everit.json.schema.Schema, SchemaBuilder> schemaToStructMap;
     private int idIndex = 0;
+    private int unionIndex = 0;
 
     public ToConnectContext() {
       this.schemaToStructMap = new IdentityHashMap<>();
@@ -1414,6 +1456,10 @@ public class JsonSchemaData {
 
     public int incrementAndGetIdIndex() {
       return ++idIndex;
+    }
+
+    public int getAndIncrementUnionIndex() {
+      return unionIndex++;
     }
   }
 
