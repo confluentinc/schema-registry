@@ -1635,9 +1635,7 @@ public class ProtobufData {
       result[0] = null;
       result[1] = fullName;
     }
-    if (result[0] != null) {
-      result[0] = scrubName(result[0]);
-    }
+    result[0] = scrubName(result[0]);
     result[1] = scrubName(result[1]);
     return result;
   }

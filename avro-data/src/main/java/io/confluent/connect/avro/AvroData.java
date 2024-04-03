@@ -2324,9 +2324,7 @@ public class AvroData {
       result[0] = null;
       result[1] = fullName;
     }
-    if (result[0] != null) {
-      result[0] = scrubName(result[0], scrubInvalidNames);
-    }
+    result[0] = scrubName(result[0], scrubInvalidNames);
     result[1] = scrubName(result[1], scrubInvalidNames);
     return result;
   }
