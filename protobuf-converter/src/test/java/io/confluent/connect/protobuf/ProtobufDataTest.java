@@ -1703,7 +1703,7 @@ public class ProtobufDataTest {
         .build();
     ProtobufData protobufData = new ProtobufData(protobufDataConfig);
     Schema schema = SchemaBuilder.struct()
-        .name("org.acme.invalid record-name")
+        .name("org.acme-corp.invalid record-name")
         .field("invalid field-name", Schema.STRING_SCHEMA)
         .build();
     Struct struct = new Struct(schema);
@@ -1714,6 +1714,7 @@ public class ProtobufDataTest {
     Descriptor descriptor = protobufSchema.toDescriptor();
     Message message = (Message) protobufSchemaAndValue.getValue();
     Descriptor messageDescriptor = message.getDescriptorForType();
+    assertEquals("org.acme_corp.invalid_record_name", descriptor.getFullName());
     assertEquals("invalid_record_name", descriptor.getName());
     assertEquals("invalid_field_name", descriptor.getFields().get(0).getName());
     assertEquals("invalid_record_name", messageDescriptor.getName());
