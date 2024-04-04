@@ -139,6 +139,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       MessageIndexes indexes = MessageIndexes.readFrom(buffer);
       String name = schema.toMessageName(indexes);
       schema = schemaWithName(schema, name);
+      if (isKey == null || strategyUsesSchema(isKey)) {
+        subject = subjectName(topic, isKey, schema);
+      }
 
       ParsedSchema readerSchema = null;
       if (metadata != null) {
