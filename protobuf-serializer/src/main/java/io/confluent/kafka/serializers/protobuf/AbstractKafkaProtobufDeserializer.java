@@ -150,7 +150,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         readerSchema = lookupLatestVersion(subject, schema, false);
       }
       if (includeSchemaAndVersion || readerSchema != null) {
-        subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(id, schema, subject, isKey);
         Integer version = schemaVersion(topic, isKey, id, subject, schema, null);
         schema = schema.copy(version);
