@@ -141,6 +141,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       schema = schemaWithName(schema, name);
       if (isKey != null && strategyUsesSchema(isKey)) {
         subject = subjectName(topic, isKey, schema);
+        schema = schemaForDeserialize(id, schema, subject, isKey);
       }
 
       ParsedSchema readerSchema = null;
@@ -150,8 +151,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         readerSchema = lookupLatestVersion(subject, schema, false);
       }
       if (includeSchemaAndVersion || readerSchema != null) {
-        // subject may have changed
-        schema = schemaForDeserialize(id, schema, subject, isKey);
         Integer version = schemaVersion(topic, isKey, id, subject, schema, null);
         schema = schema.copy(version);
         schema = schemaWithName(schema, name);

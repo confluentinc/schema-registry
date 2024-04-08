@@ -133,6 +133,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       JsonSchema schema = ((JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id));
       if (isKey != null && strategyUsesSchema(isKey)) {
         subject = subjectName(topic, isKey, schema);
+        schema = schemaForDeserialize(id, schema, subject, isKey);
       }
 
       ParsedSchema readerSchema = null;
@@ -142,8 +143,6 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         readerSchema = lookupLatestVersion(subject, schema, false);
       }
       if (includeSchemaAndVersion || readerSchema != null) {
-        // subject may have changed
-        schema = schemaForDeserialize(id, schema, subject, isKey);
         Integer version = schemaVersion(topic, isKey, id, subject, schema, null);
         schema = schema.copy(version);
       }
