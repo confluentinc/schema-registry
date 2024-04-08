@@ -131,7 +131,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       String subject = isKey == null || strategyUsesSchema(isKey)
           ? getContextName(topic) : subjectName(topic, isKey, null);
       JsonSchema schema = ((JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id));
-      if (isKey == null || strategyUsesSchema(isKey)) {
+      if (isKey != null && strategyUsesSchema(isKey)) {
         subject = subjectName(topic, isKey, schema);
       }
 
