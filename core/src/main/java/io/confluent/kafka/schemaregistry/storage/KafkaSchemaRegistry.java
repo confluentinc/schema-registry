@@ -1695,7 +1695,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (subjectVersionKey == null) {
         return null;
       }
-      schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
+      schema = getSchemaValue(subjectVersionKey);
       if (schema == null) {
         return null;
       }
