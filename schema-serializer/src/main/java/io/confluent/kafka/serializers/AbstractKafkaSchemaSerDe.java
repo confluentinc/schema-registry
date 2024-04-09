@@ -421,14 +421,12 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     int version1 = first.version();
     int version2 = last.version();
     List<ParsedSchema> schemas = new ArrayList<>();
+    schemas.add(first);
     for (int i = version1 + 1; i < version2; i++) {
       schemas.add(getSchemaMetadata(subject, i));
     }
-    List<ParsedSchema> result = new ArrayList<>();
-    result.add(first);
-    result.addAll(schemas);
-    result.add(last);
-    return result;
+    schemas.add(last);
+    return schemas;
   }
 
   /**
