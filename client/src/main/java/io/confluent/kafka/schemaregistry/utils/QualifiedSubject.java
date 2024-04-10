@@ -40,6 +40,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   // Subject name under which global permissions are stored.
   public static final String GLOBAL_SUBJECT_NAME = "__GLOBAL";
 
+  // Subject name that represents empty string
+  public static final String EMPTY_SUBJECT_NAME = "__EMPTY";
+
   private final String tenant;
   private final String context;  // assumed to start with CONTEXT_SEPARATOR
   private final String subject;
@@ -218,7 +221,8 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     }
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     // For backward compatibility, we allow an empty subject
-    if (qs == null || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)) {
+    if (qs == null || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)
+        || qs.getSubject().equals(EMPTY_SUBJECT_NAME)) {
       return false;
     }
     return true;

@@ -197,5 +197,6 @@ public class QualifiedSubjectTest {
     assertFalse(QualifiedSubject.isValidSubject("default", String.valueOf((char) 31)));
     assertTrue(QualifiedSubject.isValidSubject("default", "  "));
     assertFalse(QualifiedSubject.isValidSubject("default", "__GLOBAL"));
+    assertFalse(QualifiedSubject.isValidSubject("default", "__EMPTY"));
   }
 }
