@@ -888,11 +888,35 @@
     "compatible": false
   },
   {
+    "description": "Detect changes to validation criteria in composed schema type for singleton",
+    "original_schema": {
+      "oneOf": [
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "update_schema": {
+      "allOf": [
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "changes": [
+      "COMBINED_TYPE_EXTENDED #/"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect changes to validation criteria in composed schema type",
     "original_schema": {
       "oneOf": [
         {
           "type": "string"
+        },
+        {
+          "type": "integer"
         }
       ]
     },

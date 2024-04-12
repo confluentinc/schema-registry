@@ -325,6 +325,7 @@ public class Context {
       fullPath.addLast(path);
     }
 
+    @Override
     public void close() {
       fullPath.removeLast();
     }
@@ -336,6 +337,7 @@ public class Context {
       fullName.addLast(name);
     }
 
+    @Override
     public void close() {
       fullName.removeLast();
       super.close();
@@ -350,6 +352,7 @@ public class Context {
       schemas.add(schema);
     }
 
+    @Override
     public void close() {
       schemas.remove(schema);
     }

@@ -1,0 +1,147 @@
+/*
+ * Copyright 2022 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.confluent.kafka.schemaregistry.rules.jsonata;
+
+import com.api.jsonata4java.expressions.EvaluateException;
+import com.api.jsonata4java.expressions.EvaluateRuntimeException;
+import com.api.jsonata4java.expressions.Expressions;
+import com.api.jsonata4java.expressions.ParseException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
+import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
+import org.apache.kafka.common.config.ConfigException;
+
+public class JsonataExecutor implements RuleExecutor {
+
+  public static final String TYPE = "JSONATA";
+
+  public static final String JSONATA_TIMEOUT_MS = "jsonata.timeout.ms";
+  public static final String JSONATA_MAX_DEPTH = "jsonata.max.depth";
+  @Deprecated
+  public static final String TIMEOUT_MS = "timeout.ms";
+  @Deprecated
+  public static final String MAX_DEPTH = "max.depth";
+
+  private long timeoutMs = 60000;
+  private int maxDepth = 1000;
+
+  private static final int DEFAULT_CACHE_SIZE = 100;
+
+  private final LoadingCache<String, Expressions> cache;
+
+  public JsonataExecutor() {
+    cache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_SIZE)
+        .build(new CacheLoader<String, Expressions>() {
+          @Override
+          public Expressions load(String expr) throws Exception {
+            try {
+              return Expressions.parse(expr);
+            } catch (ParseException e) {
+              throw new RuleException("Could not parse expression", e);
+            } catch (EvaluateRuntimeException ere) {
+              throw new RuleException("Could not evaluate expression", ere);
+            } catch (JsonProcessingException e) {
+              throw new RuleException("Could not parse message", e);
+            } catch (IOException e) {
+              throw new RuleException(e);
+            }
+          }
+        });
+  }
+
+  @Override
+  public void configure(Map<String, ?> configs) {
+    Long timeoutMsConfig = parseConfig(configs, JSONATA_TIMEOUT_MS, Long::parseLong);
+    if (timeoutMsConfig != null) {
+      this.timeoutMs = timeoutMsConfig;
+    } else {
+      timeoutMsConfig = parseConfig(configs, TIMEOUT_MS, Long::parseLong);
+      if (timeoutMsConfig != null) {
+        this.timeoutMs = timeoutMsConfig;
+      }
+    }
+    Integer maxDepthConfig = parseConfig(configs, JSONATA_MAX_DEPTH, Integer::parseInt);
+    if (maxDepthConfig != null) {
+      this.maxDepth = maxDepthConfig;
+    } else {
+      maxDepthConfig = parseConfig(configs, MAX_DEPTH, Integer::parseInt);
+      if (maxDepthConfig != null) {
+        this.maxDepth = maxDepthConfig;
+      }
+    }
+  }
+
+  private static <T> T parseConfig(
+      Map<String, ?> configs, String name, Function<String, T> function) throws ConfigException {
+    Object config = configs.get(name);
+    if (config != null) {
+      try {
+        return function.apply(config.toString());
+      } catch (Exception e) {
+        throw new ConfigException("Cannot parse " + name);
+      }
+    }
+    return null;
+  }
+
+  @Override
+  public String type() {
+    return TYPE;
+  }
+
+  @Override
+  public Object transform(RuleContext ctx, Object message)
+      throws RuleException {
+    JsonNode jsonObj;
+    if (message instanceof JsonNode) {
+      jsonObj = (JsonNode) message;
+    } else {
+      try {
+        jsonObj = ctx.target().toJson(message);
+      } catch (IOException e) {
+        throw new RuleException(e);
+      }
+    }
+    Expressions expr;
+    try {
+      expr = cache.get(ctx.rule().getExpr());
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof RuleException) {
+        throw (RuleException) e.getCause();
+      } else {
+        throw new RuleException("Could not get expression", e.getCause());
+      }
+    }
+    try {
+      JsonNode result = expr.evaluate(jsonObj, timeoutMs, maxDepth);
+      return ctx.rule().getKind() == RuleKind.CONDITION ? result.asBoolean(true) : result;
+    } catch (EvaluateException e) {
+      throw new RuleException("Could not evaluate expression", e);
+    }
+  }
+}
