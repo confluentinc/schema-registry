@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema.Format;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
+import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -66,6 +67,7 @@ import static org.junit.Assert.fail;
 
 public class KafkaAvroSerializerTest {
 
+  private final Properties defaultConfig;
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer;
   private final KafkaAvroDeserializer avroDeserializer;
@@ -78,7 +80,7 @@ public class KafkaAvroSerializerTest {
   private final KafkaAvroDecoder reflectionAvroDecoder;
 
   public KafkaAvroSerializerTest() {
-    Properties defaultConfig = new Properties();
+    defaultConfig = new Properties();
     defaultConfig.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     schemaRegistry = new MockSchemaRegistryClient();
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(defaultConfig));
@@ -510,6 +512,31 @@ public class KafkaAvroSerializerTest {
     byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
     assertEquals(annotatedUserRecord, specificAvroDeserializer.deserialize(topic, bytes));
     assertEquals(annotatedUserRecord, specificAvroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroDeserializerWithPreRegisteredUseLatestRecordNameStrategy()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        RecordNameStrategy.class.getName()
+    );
+    avroSerializer.configure(configs, false);
+    avroDeserializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register("example.avro.User", new AvroSchema(avroRecord.getSchema()));
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+
+    // restore configs
+    avroDeserializer.configure(new HashMap(defaultConfig), false);
   }
 
   @Test

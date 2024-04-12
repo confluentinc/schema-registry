@@ -29,10 +29,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
-import io.confluent.kafka.schemaregistry.annotations.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
+import io.confluent.kafka.serializers.subject.RecordNameStrategy;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
@@ -278,6 +280,32 @@ public class KafkaJsonSchemaSerializerTest {
     Object deserialized = getDeserializer(null).deserialize(topic, bytes);
     assertEquals(expectedRecord, deserialized);
   }
+  
+  @Test
+  public void testKafkaJsonSchemaDeserializerWithPreRegisteredUseLatestRecordNameStrategy()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaJsonSchemaSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaJsonSchemaSerializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaJsonSchemaSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        RecordNameStrategy.class.getName()
+    );
+    serializer.configure(configs, false);
+    deserializer.configure(configs, false);
+    User user = new User("john", "doe", (short) 50, "jack", null);
+    JsonSchema schema = JsonSchemaUtils.getSchema(user);
+    schemaRegistry.register("com.acme.User", schema);
+    byte[] bytes = serializer.serialize(topic, user);
+    assertEquals(user, deserializer.deserialize(topic, bytes));
+
+    // restore configs
+    serializer.configure(new HashMap(config), false);
+    serializer.configure(new HashMap(config), false);
+  }
 
   // Generate javaType property
   @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
@@ -316,7 +344,8 @@ public class KafkaJsonSchemaSerializerTest {
 
   // Generate javaType property
   @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
-      value="io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerTest$User")})
+      value="io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerTest$User"),
+      @JsonSchemaString(path="title", value="com.acme.User")})
   public static class User {
     @JsonProperty
     public String firstName;
