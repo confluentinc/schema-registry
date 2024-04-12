@@ -17,8 +17,8 @@
 package io.confluent.kafka.formatter;
 
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
-import kafka.common.MessageFormatter;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.record.TimestampType;
@@ -75,6 +75,12 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
   );
 
   @Override
+  public void configure(Map<String, ?> configs) {
+    Properties properties = new Properties();
+    properties.putAll(configs);
+    this.init(properties);
+  }
+
   public void init(Properties props) {
     if (props == null) {
       throw new ConfigException("Missing schema registry url!");
@@ -153,13 +159,13 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       try {
         if (deserializer.getKeyDeserializer() != null) {
           Object deserializedKey = consumerRecord.key() == null
-                                   ? null
-                                   : deserializer.deserializeKey(null, consumerRecord.key());
+              ? null
+              : deserializer.deserializeKey(consumerRecord.topic(), consumerRecord.key());
           output.write(
               deserializedKey != null ? deserializedKey.toString().getBytes(StandardCharsets.UTF_8)
                                       : NULL_BYTES);
         } else {
-          writeTo(consumerRecord.key(), output);
+          writeTo(consumerRecord.topic(), consumerRecord.key(), output);
         }
         if (printKeyId) {
           output.write(idSeparator);
@@ -176,11 +182,15 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       }
     }
     try {
-      writeTo(consumerRecord.value(), output);
+      writeTo(consumerRecord.topic(), consumerRecord.value(), output);
       if (printValueId) {
         output.write(idSeparator);
-        int schemaId = schemaIdFor(consumerRecord.value());
-        output.print(schemaId);
+        if (consumerRecord.value() != null) {
+          int schemaId = schemaIdFor(consumerRecord.value());
+          output.print(schemaId);
+        } else {
+          output.write(NULL_BYTES);
+        }
       }
       output.write(lineSeparator);
     } catch (IOException ioe) {
@@ -188,7 +198,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     }
   }
 
-  protected abstract void writeTo(byte[] data, PrintStream output) throws IOException;
+  protected abstract void writeTo(String topic, byte[] data, PrintStream output) throws IOException;
 
   @Override
   public void close() {

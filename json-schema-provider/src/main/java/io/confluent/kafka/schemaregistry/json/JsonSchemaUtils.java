@@ -93,6 +93,21 @@ public class JsonSchemaUtils {
     return false;
   }
 
+  public static ObjectNode copyEnvelopeWithoutPayload(ObjectNode jsonValue) {
+    ObjectNode result = JsonNodeFactory.instance.objectNode();
+    JsonNode schemaNode = jsonValue.get(ENVELOPE_SCHEMA_FIELD_NAME);
+    result.set(ENVELOPE_SCHEMA_FIELD_NAME, schemaNode);
+    JsonNode referencesNode = jsonValue.get(ENVELOPE_REFERENCES_FIELD_NAME);
+    if (referencesNode != null && !referencesNode.isEmpty()) {
+      result.set(ENVELOPE_REFERENCES_FIELD_NAME, referencesNode);
+    }
+    JsonNode resolvedReferencesNode = jsonValue.get(ENVELOPE_RESOLVED_REFS_FIELD_NAME);
+    if (resolvedReferencesNode != null && !resolvedReferencesNode.isEmpty()) {
+      result.set(ENVELOPE_RESOLVED_REFS_FIELD_NAME, resolvedReferencesNode);
+    }
+    return result;
+  }
+
   public static JsonSchema copyOf(JsonSchema schema) {
     return schema.copy();
   }

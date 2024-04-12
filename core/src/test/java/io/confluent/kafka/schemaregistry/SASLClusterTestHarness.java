@@ -19,7 +19,7 @@ import kafka.security.minikdc.MiniKdc;
 import kafka.server.KafkaConfig;
 import kafka.utils.JaasTestUtils;
 import kafka.utils.TestUtils;
-import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.LoginManager;
 import org.junit.After;
@@ -116,7 +116,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     injectProperties(props);
     props.setProperty("zookeeper.connection.timeout.ms", "30000");
     props.setProperty("sasl.mechanism.inter.broker.protocol", "GSSAPI");
-    props.setProperty(SaslConfigs.SASL_ENABLED_MECHANISMS, "GSSAPI");
+    props.setProperty(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "GSSAPI");
 
     return KafkaConfig.fromProps(props);
   }

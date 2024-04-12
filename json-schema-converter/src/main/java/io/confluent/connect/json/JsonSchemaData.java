@@ -28,14 +28,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 import java.util.Set;
-import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -185,7 +183,7 @@ public class JsonSchemaData {
     });
     TO_CONNECT_CONVERTERS.put(Schema.Type.STRUCT, (schema, value) -> {
       if (schema.name() != null && schema.name().equals(JSON_TYPE_ONE_OF)) {
-        int numMatchingProperties = -1;
+        int numMatchingProperties = 0;
         Field matchingField = null;
         for (Field field : schema.fields()) {
           Schema fieldSchema = field.schema();
@@ -257,7 +255,7 @@ public class JsonSchemaData {
 
   private static int matchStructSchema(Schema fieldSchema, JsonNode value) {
     if (fieldSchema.type() != Schema.Type.STRUCT || !value.isObject()) {
-      return -1;
+      return 0;
     }
     Set<String> schemaFields = fieldSchema.fields()
         .stream()
@@ -269,7 +267,15 @@ public class JsonSchemaData {
     }
     Set<String> intersectSet = new HashSet<>(schemaFields);
     intersectSet.retainAll(objectFields);
-    return intersectSet.size();
+
+    int childrenMatchFactor = 0;
+    for (String intersectedElement: intersectSet) {
+      Schema childSchema = fieldSchema.field(intersectedElement).schema();
+      JsonNode childValue = value.get(intersectedElement);
+      childrenMatchFactor += matchStructSchema(childSchema, childValue);
+    }
+
+    return intersectSet.size() + childrenMatchFactor;
   }
 
   // Convert values in Kafka Connect form into their logical types. These logical converters are
@@ -370,8 +376,8 @@ public class JsonSchemaData {
   }
 
   private final JsonSchemaDataConfig config;
-  private final Cache<Schema, JsonSchema> fromConnectSchemaCache;
-  private final Cache<JsonSchema, Schema> toConnectSchemaCache;
+  private final Map<Schema, JsonSchema> fromConnectSchemaCache;
+  private final Map<JsonSchema, Schema> toConnectSchemaCache;
 
   public JsonSchemaData() {
     this(new JsonSchemaDataConfig.Builder().with(
@@ -382,10 +388,8 @@ public class JsonSchemaData {
 
   public JsonSchemaData(JsonSchemaDataConfig jsonSchemaDataConfig) {
     this.config = jsonSchemaDataConfig;
-    fromConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(jsonSchemaDataConfig.schemaCacheSize()));
-    toConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(jsonSchemaDataConfig.schemaCacheSize()));
+    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
+    toConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
   }
 
   /**
@@ -1128,6 +1132,7 @@ public class JsonSchemaData {
     NumberSchema numberSchema = null;
     StringSchema stringSchema = null;
     CombinedSchema combinedSubschema = null;
+    ReferenceSchema referenceSchema = null;
     Map<String, org.everit.json.schema.Schema> properties = new LinkedHashMap<>();
     Map<String, Boolean> required = new HashMap<>();
     for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
@@ -1141,6 +1146,8 @@ public class JsonSchemaData {
         stringSchema = (StringSchema) subSchema;
       } else if (subSchema instanceof CombinedSchema) {
         combinedSubschema = (CombinedSchema) subSchema;
+      } else if (subSchema instanceof ReferenceSchema) {
+        referenceSchema = (ReferenceSchema) subSchema;
       }
       collectPropertySchemas(subSchema, properties, required, new HashSet<>());
     }
@@ -1181,6 +1188,15 @@ public class JsonSchemaData {
       if (numberSchema != null) {
         // This is a number or integer with a format
         return toConnectSchema(ctx, numberSchema, version, forceOptional);
+      }
+      return toConnectSchema(ctx, stringSchema, version, forceOptional);
+    } else if (referenceSchema != null) {
+      SchemaBuilder refBuilder = ctx.get(referenceSchema.getReferredSchema());
+      if (refBuilder != null) {
+        refBuilder.parameter(JSON_ID_PROP, DEFAULT_ID_PREFIX + ctx.incrementAndGetIdIndex());
+        return new SchemaWrapper(refBuilder, forceOptional);
+      } else {
+        return toConnectSchema(ctx, referenceSchema.getReferredSchema(), version, forceOptional);
       }
     }
     throw new IllegalArgumentException("Unsupported criterion "

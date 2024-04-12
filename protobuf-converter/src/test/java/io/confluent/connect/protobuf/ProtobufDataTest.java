@@ -36,6 +36,8 @@ import com.google.protobuf.util.Timestamps;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
+import io.confluent.connect.protobuf.test.KeyValueOptional;
+import io.confluent.connect.protobuf.test.KeyValueProto2;
 import io.confluent.connect.protobuf.test.KeyValueWrapper;
 import io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry;
 import io.confluent.connect.protobuf.test.MapReferences.MapReferencesMessage;
@@ -49,6 +51,7 @@ import io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.EnumUnion;
 import io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status;
 import io.confluent.kafka.serializers.protobuf.test.Int16ValueOuterClass.Int16Value;
 import io.confluent.kafka.serializers.protobuf.test.Int8ValueOuterClass.Int8Value;
+import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos;
 import io.confluent.kafka.serializers.protobuf.test.TimeOfDayValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.TimeOfDayValueOuterClass.TimeOfDayValue;
 import io.confluent.protobuf.type.Decimal;
@@ -89,6 +92,7 @@ import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.Tim
 import io.confluent.kafka.serializers.protobuf.test.UInt32ValueOuterClass;
 
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_ENUM;
+import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_PROP;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION_PREFIX;
 import static io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue.newBuilder;
@@ -96,6 +100,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class ProtobufDataTest {
 
@@ -721,7 +726,12 @@ public class ProtobufDataTest {
     builder.setValue(expectedValue);
     SInt32ValueOuterClass.SInt32Value message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
-    assertEquals(getExpectedSchemaAndValue(OPTIONAL_INT32_SCHEMA, message, expectedValue), result);
+    Schema sint32Schema = SchemaBuilder.int32()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .parameter(PROTOBUF_TYPE_PROP, "sint32")
+        .build();
+    assertEquals(getExpectedSchemaAndValue(sint32Schema, message, expectedValue), result);
   }
 
   @Test
@@ -733,8 +743,13 @@ public class ProtobufDataTest {
     builder.setValue(expectedValue);
     UInt32ValueOuterClass.UInt32Value message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
+    Schema schema = SchemaBuilder.int64()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .parameter(PROTOBUF_TYPE_PROP, "uint32")
+        .build();
     assertEquals(
-        getExpectedSchemaAndValue(OPTIONAL_INT64_SCHEMA, message, UNSIGNED_RESULT),
+        getExpectedSchemaAndValue(schema, message, UNSIGNED_RESULT),
         result
     );
   }
@@ -767,7 +782,12 @@ public class ProtobufDataTest {
     builder.setValue(expectedValue);
     SInt64ValueOuterClass.SInt64Value message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
-    assertEquals(getExpectedSchemaAndValue(OPTIONAL_INT64_SCHEMA, message, expectedValue), result);
+    Schema sint64Schema = SchemaBuilder.int64()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .parameter(PROTOBUF_TYPE_PROP, "sint64")
+        .build();
+    assertEquals(getExpectedSchemaAndValue(sint64Schema, message, expectedValue), result);
   }
 
   @Test
@@ -976,6 +996,101 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testRoundTripConnectPreserveSignedAndFixed() throws Exception {
+    TestMessageProtos.TestMessage originalMessage = TestMessageProtos.TestMessage.newBuilder()
+        .setTestSint32(12)
+        .setTestSint64(12L)
+        .setTestFixed32(12)
+        .setTestFixed64(12L)
+        .setTestSfixed32(12)
+        .setTestSfixed64(12L)
+        .setTestUint32(12)
+        .setTestUint64(12L)
+        .build();
+
+    SchemaAndValue toConnectResult = getSchemaAndValue(originalMessage);
+    ProtobufData protobufData = new ProtobufData();
+    ProtobufSchemaAndValue fromConnectResult = protobufData.fromConnectData(toConnectResult.schema(), toConnectResult.value());
+    Message message = (Message) fromConnectResult.getValue();
+
+    MessageElement messageElem = (MessageElement) fromConnectResult.getSchema().rawSchema().getTypes().get(0);
+    FieldElement fieldElem = messageElem.getFields().get(5);
+    assertEquals("test_fixed32", fieldElem.getName());
+    assertEquals("fixed32", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(6);
+    assertEquals("test_fixed64", fieldElem.getName());
+    assertEquals("fixed64", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(9);
+    assertEquals("test_sfixed32", fieldElem.getName());
+    assertEquals("sfixed32", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(10);
+    assertEquals("test_sfixed64", fieldElem.getName());
+    assertEquals("sfixed64", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(11);
+    assertEquals("test_sint32", fieldElem.getName());
+    assertEquals("sint32", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(12);
+    assertEquals("test_sint64", fieldElem.getName());
+    assertEquals("sint64", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(13);
+    assertEquals("test_uint32", fieldElem.getName());
+    assertEquals("uint32", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(14);
+    assertEquals("test_uint64", fieldElem.getName());
+    assertEquals("uint64", fieldElem.getType());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_fixed32");
+    assertEquals(12, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_fixed64");
+    assertEquals(12L, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_sfixed32");
+    assertEquals(12, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_sfixed64");
+    assertEquals(12L, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_sint32");
+    assertEquals(12, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_sint64");
+    assertEquals(12L, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_uint32");
+    assertEquals(12, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_uint64");
+    assertEquals(12L, message.getField(fieldDescriptor));
+
+    TestMessageProtos.TestMessage convertedMessage = TestMessageProtos.TestMessage.parseFrom(message.toByteArray());
+    assertEquals(originalMessage, convertedMessage);
+  }
+
+  @Test
+  public void testRoundTripConnectUInt32Fixed32() throws Exception {
+    final Long UNSIGNED_RESULT = 4294967295L;
+    Integer expectedValue = -1;
+
+    TestMessageProtos.TestMessage message = TestMessageProtos.TestMessage
+        .newBuilder()
+        .setTestFixed32(expectedValue)
+        .setTestUint32(expectedValue)
+        .build();
+    SchemaAndValue result = getSchemaAndValue(message);
+
+    ProtobufData protobufData = new ProtobufData();
+    ProtobufSchemaAndValue converted = protobufData.fromConnectData(result.schema(), result.value());
+    Message convertedValue = (Message) converted.getValue();
+
+    TestMessageProtos.TestMessage parsedMessage = TestMessageProtos.TestMessage.parseFrom(convertedValue.toByteArray());
+
+    assertEquals(message, parsedMessage);
+    assertTrue(parsedMessage.toString().contains("test_fixed32: " + UNSIGNED_RESULT));
+    assertTrue(parsedMessage.toString().contains("test_uint32: " + UNSIGNED_RESULT));
+  }
+
   public void testFromConnectEnumUnionWithString() throws Exception {
     EnumUnion message = createEnumUnionWithString();
     SchemaAndValue schemaAndValue = getSchemaAndValue(message);
@@ -1588,7 +1703,7 @@ public class ProtobufDataTest {
         .build();
     ProtobufData protobufData = new ProtobufData(protobufDataConfig);
     Schema schema = SchemaBuilder.struct()
-        .name("org.acme.invalid record-name")
+        .name("org.acme-corp.invalid record-name")
         .field("invalid field-name", Schema.STRING_SCHEMA)
         .build();
     Struct struct = new Struct(schema);
@@ -1599,6 +1714,7 @@ public class ProtobufDataTest {
     Descriptor descriptor = protobufSchema.toDescriptor();
     Message message = (Message) protobufSchemaAndValue.getValue();
     Descriptor messageDescriptor = message.getDescriptorForType();
+    assertEquals("org.acme_corp.invalid_record_name", descriptor.getFullName());
     assertEquals("invalid_record_name", descriptor.getName());
     assertEquals("invalid_field_name", descriptor.getFields().get(0).getName());
     assertEquals("invalid_record_name", messageDescriptor.getName());
@@ -1608,13 +1724,19 @@ public class ProtobufDataTest {
 
   @Test
   public void testNameScrubbing() {
+    assertEquals(null, ProtobufData.doScrubName(null));
+    assertEquals("", ProtobufData.doScrubName(""));
+    assertEquals("abc_DEF_123", ProtobufData.doScrubName("abc_DEF_123")); // nothing to scrub
+
     assertEquals("abc_2B____", ProtobufData.doScrubName("abc+-.*_"));
     assertEquals("abc_def", ProtobufData.doScrubName("abc-def"));
     assertEquals("abc_2Bdef", ProtobufData.doScrubName("abc+def"));
     assertEquals("abc__def", ProtobufData.doScrubName("abc  def"));
     assertEquals("abc_def", ProtobufData.doScrubName("abc.def"));
-    assertEquals("x0abc_def", ProtobufData.doScrubName("0abc.def"));
-    assertEquals("x_abc_def", ProtobufData.doScrubName("_abc.def"));
+    assertEquals("x0abc_def", ProtobufData.doScrubName("0abc.def")); // invalid start char
+    assertEquals("x_abc_def", ProtobufData.doScrubName("_abc.def")); // invalid start char
+    assertEquals("x0abc", ProtobufData.doScrubName("0abc")); // (only) invalid start char
+    assertEquals("x_abc", ProtobufData.doScrubName("_abc")); // (only) invalid start char
   }
 
   @Test
@@ -1650,6 +1772,7 @@ public class ProtobufDataTest {
             SchemaBuilder.struct().name("UInt32Value").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3))
                     .field("value", SchemaBuilder.int64().optional()
                         .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+                        .parameter(PROTOBUF_TYPE_PROP, "uint32")
                         .build())
                     .build()
     );
@@ -1712,6 +1835,84 @@ public class ProtobufDataTest {
     result.put("key", 123);
     result.put("wrappedValue", "hi");
     result.put("wrappedValue2", 456L);
+    return result;
+  }
+
+  @Test
+  public void testRoundTripConnectNoOptionalForNullables() throws Exception {
+    KeyValueOptional.KeyValueOptionalMessage message =
+        KeyValueOptional.KeyValueOptionalMessage.newBuilder()
+            .setKey(123)
+            .setValue("hi")
+            .build();
+    SchemaAndValue schemaAndValue = getSchemaAndValue(message);
+    Schema expectedSchema = getExpectedNoOptionalForNullablesSchema();
+    assertSchemasEqual(expectedSchema, schemaAndValue.schema());
+    Struct expected = getExpectedNoOptionalForNullablesData();
+    assertEquals(expected, schemaAndValue.value());
+
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  private Schema getExpectedNoOptionalForNullablesSchema() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("KeyValueOptionalMessage");
+    schemaBuilder.field("key",
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    schemaBuilder.field("value",
+        SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    return schemaBuilder.build();
+  }
+
+  private Struct getExpectedNoOptionalForNullablesData() {
+    Schema schema = getExpectedNoOptionalForNullablesSchema();
+    Struct result = new Struct(schema.schema());
+    result.put("key", 123);
+    result.put("value", "hi");
+    return result;
+  }
+
+  @Test
+  public void testRoundTripConnectOptionalForNullables() throws Exception {
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.OPTIONAL_FOR_NULLABLES_CONFIG, true)
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    KeyValueOptional.KeyValueOptionalMessage message =
+        KeyValueOptional.KeyValueOptionalMessage.newBuilder()
+            .setKey(123)
+            .setValue("hi")
+            .build();
+    SchemaAndValue schemaAndValue = getSchemaAndValue(protobufData, message);
+    Schema expectedSchema = getExpectedOptionalForNullablesSchema();
+    assertSchemasEqual(expectedSchema, schemaAndValue.schema());
+    Struct expected = getExpectedOptionalForNullablesData();
+    assertEquals(expected, schemaAndValue.value());
+
+    byte[] messageBytes = getMessageBytes(protobufData, schemaAndValue);
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  private Schema getExpectedOptionalForNullablesSchema() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("KeyValueOptionalMessage");
+    schemaBuilder.field("key",
+        SchemaBuilder.int32().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    schemaBuilder.field("value",
+        SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    return schemaBuilder.build();
+  }
+
+  private Struct getExpectedOptionalForNullablesData() {
+    Schema schema = getExpectedOptionalForNullablesSchema();
+    Struct result = new Struct(schema.schema());
+    result.put("key", 123);
+    result.put("value", "hi");
     return result;
   }
 
@@ -1869,6 +2070,37 @@ public class ProtobufDataTest {
         actual.field("tags").schema().name());
     assertEquals("Meta.tags", actual.field("meta").schema().field("tags").schema().name());
   }
+
+
+  @Test
+  public void testToConnectOptionalProto2() {
+    KeyValueProto2.KeyValueMessage message = KeyValueProto2.KeyValueMessage.newBuilder()
+        .setKey(123)
+        .build();
+
+    ProtobufSchema protobufSchema = new ProtobufSchema(message.getDescriptorForType());
+    ProtobufData protobufData = new ProtobufData();
+    SchemaAndValue result = protobufData.toConnectData(protobufSchema, message);
+    Struct value = (Struct) result.value();
+    assertNull(value.get("value"));
+  }
+
+
+  @Test
+  public void testToConnectOptionalProto2Disabled() {
+    KeyValueProto2.KeyValueMessage message = KeyValueProto2.KeyValueMessage.newBuilder()
+        .setKey(123)
+        .build();
+
+    ProtobufSchema protobufSchema = new ProtobufSchema(message.getDescriptorForType());
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(ProtobufDataConfig.OPTIONAL_FOR_PROTO2_CONFIG, false);  // for backward compat
+    ProtobufData protobufData = new ProtobufData(new ProtobufDataConfig(configs));
+    SchemaAndValue result = protobufData.toConnectData(protobufSchema, message);
+    Struct value = (Struct) result.value();
+    assertNotNull(value.get("value"));
+  }
+
 
   @Test
   public void testToConnectMultipleMapReferences() throws Exception {

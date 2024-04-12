@@ -6,7 +6,7 @@ package io.confluent.protobuf.type;
 /**
  * Protobuf type {@code confluent.type.Decimal}
  */
-public  final class Decimal extends
+public final class Decimal extends
     com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:confluent.type.Decimal)
     DecimalOrBuilder {
@@ -106,6 +106,7 @@ private static final long serialVersionUID = 0L;
    * <code>bytes value = 1;</code>
    * @return The value.
    */
+  @java.lang.Override
   public com.google.protobuf.ByteString getValue() {
     return value_;
   }
@@ -120,6 +121,7 @@ private static final long serialVersionUID = 0L;
    * <code>uint32 precision = 2;</code>
    * @return The precision.
    */
+  @java.lang.Override
   public int getPrecision() {
     return precision_;
   }
@@ -134,6 +136,7 @@ private static final long serialVersionUID = 0L;
    * <code>int32 scale = 3;</code>
    * @return The scale.
    */
+  @java.lang.Override
   public int getScale() {
     return scale_;
   }
@@ -483,6 +486,7 @@ private static final long serialVersionUID = 0L;
      * <code>bytes value = 1;</code>
      * @return The value.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString getValue() {
       return value_;
     }
@@ -528,6 +532,7 @@ private static final long serialVersionUID = 0L;
      * <code>uint32 precision = 2;</code>
      * @return The precision.
      */
+    @java.lang.Override
     public int getPrecision() {
       return precision_;
     }
@@ -570,6 +575,7 @@ private static final long serialVersionUID = 0L;
      * <code>int32 scale = 3;</code>
      * @return The scale.
      */
+    @java.lang.Override
     public int getScale() {
       return scale_;
     }

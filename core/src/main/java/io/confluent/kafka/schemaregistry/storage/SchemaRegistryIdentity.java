@@ -28,8 +28,7 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 /**
- * The identity of a schema registry instance. The leader will store the json representation of its
- * identity in Zookeeper.
+ * The identity of a schema registry instance.
  */
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)

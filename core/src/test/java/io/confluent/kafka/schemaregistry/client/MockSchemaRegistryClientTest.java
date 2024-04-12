@@ -16,6 +16,9 @@
 package io.confluent.kafka.schemaregistry.client;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import java.util.Collections;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -35,6 +38,7 @@ import java.util.Arrays;
 import java.util.Properties;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 public class MockSchemaRegistryClientTest extends ClusterTestHarness {
 
@@ -158,6 +162,43 @@ public class MockSchemaRegistryClientTest extends ClusterTestHarness {
     Consumer<String, Object> consumer = createConsumer(consumerProps);
     ArrayList<Object> recordList = consume(consumer, topic, objects.length);
     assertArrayEquals(objects, recordList.toArray());
+  }
+
+  @Test
+  public void testRegisterAndGetId() throws Exception {
+    MockSchemaRegistryClient client =
+        new MockSchemaRegistryClient(Collections.singletonList(new AvroSchemaProvider()));
+    AvroSchema schema = new AvroSchema("{\"namespace\": \"example.avro\", \"type\": \"record\", " +
+        "\"name\": \"User\"," +
+        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}");
+
+    AvroSchema schema2 = new AvroSchema("{\"namespace\": \"example.avro\", \"type\": \"record\", " +
+        "\"name\": \"User2\"," +
+        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}");
+
+    int id = client.register("test", schema);
+    assertEquals(1, id);
+
+    id = client.register("test", schema2);
+    assertEquals(2, id);
+
+    id = client.register("test2", schema);
+    assertEquals(1, id);
+
+    id = client.register("test2", schema2);
+    assertEquals(2, id);
+
+    id = client.getId("test", schema);
+    assertEquals(1, id);
+
+    id = client.getId("test", schema2);
+    assertEquals(2, id);
+
+    id = client.getId("test2", schema);
+    assertEquals(1, id);
+
+    id = client.getId("test2", schema2);
+    assertEquals(2, id);
   }
 }
 
