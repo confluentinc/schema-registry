@@ -15,6 +15,12 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
+import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.EmptySchema;
@@ -26,14 +32,6 @@ import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
-
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-
-import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
 
 public class SchemaDiff {
   public static final Set<Difference.Type> COMPATIBLE_CHANGES;
@@ -176,12 +174,10 @@ public class SchemaDiff {
 
     if (!original.getClass().equals(update.getClass())) {
       // TrueSchema extends EmptySchema
-      if (original instanceof FalseSchema || update instanceof EmptySchema) {
-        return;
-      } else {
+      if (!(original instanceof FalseSchema) && !(update instanceof EmptySchema)) {
         ctx.addDifference(Type.TYPE_CHANGED);
-        return;
       }
+      return;
     }
 
     try (Context.SchemaScope schemaScope = ctx.enterSchema(original)) {

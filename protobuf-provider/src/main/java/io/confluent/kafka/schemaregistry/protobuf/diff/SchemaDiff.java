@@ -16,22 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
-import com.google.common.base.Objects;
-import com.squareup.wire.schema.internal.parser.EnumElement;
-import com.squareup.wire.schema.internal.parser.MessageElement;
-import com.squareup.wire.schema.internal.parser.ProtoFileElement;
-import com.squareup.wire.schema.internal.parser.TypeElement;
-
-import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
-
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_CHANGED;
@@ -49,11 +33,26 @@ import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ON
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_REMOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.PACKAGE_CHANGED;
 
+import com.google.common.base.Objects;
+import com.squareup.wire.schema.internal.parser.EnumElement;
+import com.squareup.wire.schema.internal.parser.MessageElement;
+import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 public class SchemaDiff {
-  public static final Set<Difference.Type> COMPATIBLE_CHANGES;
+  public static final Set<Type> COMPATIBLE_CHANGES;
 
   static {
-    Set<Difference.Type> changes = new HashSet<>();
+    Set<Type> changes = new HashSet<>();
 
     changes.add(MESSAGE_ADDED);
     changes.add(MESSAGE_MOVED);
@@ -74,9 +73,8 @@ public class SchemaDiff {
   }
 
   public static List<Difference> compare(
-      final ProtobufSchema original,
-      final ProtobufSchema update
-  ) {
+          final ProtobufSchema original,
+          final ProtobufSchema update) {
     final Context ctx = new Context(COMPATIBLE_CHANGES);
     ctx.collectTypeInfo(original, true);
     ctx.collectTypeInfo(update, false);
@@ -109,7 +107,7 @@ public class SchemaDiff {
     allEnumNames.addAll(updateEnums.keySet());
 
     for (String name : allMessageNames) {
-      try (Context.NamedScope nameScope = ctx.enterName(name)) {
+      try (Context.NamedScope ignored = ctx.enterName(name)) {
         MessageElement originalMessage = originalMessages.get(name);
         MessageElement updateMessage = updateMessages.get(name);
         if (updateMessage == null) {
@@ -136,7 +134,7 @@ public class SchemaDiff {
     }
 
     for (String name : allEnumNames) {
-      try (Context.NamedScope nameScope = ctx.enterName(name)) {
+      try (Context.NamedScope ignored = ctx.enterName(name)) {
         EnumElement originalEnum = originalEnums.get(name);
         EnumElement updateEnum = updateEnums.get(name);
         if (updateEnum == null) {
