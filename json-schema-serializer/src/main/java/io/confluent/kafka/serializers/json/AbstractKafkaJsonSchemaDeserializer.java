@@ -177,7 +177,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
           if (jsonNode == null) {
             jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
           }
-          schema.validate(jsonNode);
+          jsonNode = schema.validate(jsonNode);
         } catch (JsonProcessingException | ValidationException e) {
           throw new SerializationException("JSON "
               + jsonNode

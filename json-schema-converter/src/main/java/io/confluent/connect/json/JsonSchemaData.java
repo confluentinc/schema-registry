@@ -938,6 +938,9 @@ public class JsonSchemaData {
     if (schema == null) {
       return null;
     }
+    if (config.ignoreModernDialects()) {
+      schema = schema.copyIgnoringModernDialects();
+    }
     Schema cachedSchema = toConnectSchemaCache.get(schema);
     if (cachedSchema != null) {
       return cachedSchema;

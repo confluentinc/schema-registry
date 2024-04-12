@@ -82,6 +82,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private static final int HTTP_NOT_FOUND = 404;
   private static final int VERSION_NOT_FOUND_ERROR_CODE = 40402;
   private static final int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
+  private static final int SUBJECT_NOT_FOUND_ERROR_CODE = 40401;
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
@@ -331,7 +332,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     try {
       restSchema = restService.getId(id, subject);
     } catch (RestClientException rce) {
-      if (isSchemaNotFoundException(rce)) {
+      if (isSchemaOrSubjectNotFoundException(rce)) {
         missingIdCache.put(new SubjectAndInt(subject, id), System.currentTimeMillis());
       }
       throw rce;
@@ -351,7 +352,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
       response = restService.lookUpSubjectVersion(request, subject, normalize, true);
     } catch (RestClientException rce) {
-      if (isSchemaNotFoundException(rce)) {
+      if (isSchemaOrSubjectNotFoundException(rce)) {
         missingSchemaCache.put(
             new SubjectAndSchema(subject, schema, normalize), System.currentTimeMillis());
       }
@@ -370,7 +371,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
       response = restService.lookUpSubjectVersion(request, subject, normalize, false);
     } catch (RestClientException rce) {
-      if (isSchemaNotFoundException(rce)) {
+      if (isSchemaOrSubjectNotFoundException(rce)) {
         missingSchemaCache.put(
             new SubjectAndSchema(subject, schema, normalize), System.currentTimeMillis());
       }
@@ -830,8 +831,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return rce.getStatus() == HTTP_NOT_FOUND && rce.getErrorCode() == VERSION_NOT_FOUND_ERROR_CODE;
   }
 
-  private boolean isSchemaNotFoundException(RestClientException rce) {
-    return rce.getStatus() == HTTP_NOT_FOUND && rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE;
+  private boolean isSchemaOrSubjectNotFoundException(RestClientException rce) {
+    return rce.getStatus() == HTTP_NOT_FOUND
+        && (rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE
+        || rce.getErrorCode() == SUBJECT_NOT_FOUND_ERROR_CODE);
   }
 
   private static String toQualifiedContext(String subject) {

@@ -39,6 +39,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
@@ -891,6 +892,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     } finally {
       kafkaStore.lockFor(subject).unlock();
     }
+  }
+
+  public void extractSchemaTags(Schema schema, List<String> tags)
+      throws SchemaRegistryException {
+    ParsedSchema parsedSchema = parseSchema(schema);
+    boolean isWildcard = tags.contains("*");
+    List<SchemaTags> schemaTags = parsedSchema.inlineTaggedEntities().entrySet()
+        .stream()
+        .filter(e -> isWildcard || !Collections.disjoint(tags, e.getValue()))
+        .map(e -> new SchemaTags(e.getKey(), new ArrayList<>(e.getValue())))
+        .collect(Collectors.toList());
+    schema.setSchemaTags(schemaTags);
   }
 
   public Schema modifySchemaTags(String subject, Schema schema, TagSchemaRequest request)

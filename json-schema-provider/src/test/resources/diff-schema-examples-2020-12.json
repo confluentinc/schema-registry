@@ -2,10 +2,12 @@
   {
     "description": "Anything can change to empty schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
     },
     "changes": [
     ],
@@ -14,22 +16,25 @@
   {
     "description": "Detect changes to id",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$id": "something"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$id": "something_else"
     },
     "changes": [
-      "ID_CHANGED #/"
     ],
     "compatible": true
   },
   {
     "description": "Detect changes to title",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "title": "something"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "title": "something_else"
     },
     "changes": [
@@ -40,9 +45,11 @@
   {
     "description": "Detect changes to description",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "description": "something"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "description": "something_else"
     },
     "changes": [
@@ -53,9 +60,11 @@
   {
     "description": "Detect changes to simple schema type",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array"
     },
     "changes": [
@@ -66,10 +75,12 @@
   {
     "description": "Detect increased minLength string schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "minLength": 10
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "minLength": 11
     },
@@ -81,10 +92,12 @@
   {
     "description": "Detect decreased minLength string schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "minLength": 11
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "minLength": 10
     },
@@ -96,10 +109,12 @@
   {
     "description": "Detect increased maxLength string schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "maxLength": 10
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "maxLength": 12
     },
@@ -111,10 +126,12 @@
   {
     "description": "Detect decreased maxLength string schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "maxLength": 12
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "maxLength": 10
     },
@@ -126,10 +143,12 @@
   {
     "description": "Detect removed pattern from string schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "pattern": "uuid"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string"
     },
     "changes": [
@@ -140,10 +159,12 @@
   {
     "description": "Detect changes to pattern string schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "pattern": "date-time"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "pattern": "uuid"
     },
@@ -155,10 +176,12 @@
   {
     "description": "Detect changes to pattern",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "pattern": "date-time"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "pattern": "date-time"
     },
@@ -168,10 +191,12 @@
   {
     "description": "Detect removed maximum number schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "maximum": 10
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number"
     },
     "changes": [
@@ -182,10 +207,12 @@
   {
     "description": "Detect increased maximum number schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "maximum": 10
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "maximum": 11
     },
@@ -197,10 +224,12 @@
   {
     "description": "Detect decreased maximum number schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "maximum": 11
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "maximum": 10
     },
@@ -212,10 +241,12 @@
   {
     "description": "Detect removed minimum number schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "minimum": 10
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number"
     },
     "changes": [
@@ -226,10 +257,12 @@
   {
     "description": "Detect increased minimum number schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "minimum": 10
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "minimum": 11
     },
@@ -241,10 +274,12 @@
   {
     "description": "Detect decreased minimum number schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "minimum": 11
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "minimum": 10
     },
@@ -256,10 +291,12 @@
   {
     "description": "Detect removed multipleOf number schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "multipleOf": 10
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number"
     },
     "changes": [
@@ -270,10 +307,12 @@
   {
     "description": "Detect reduced multipleOf number schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "multipleOf": 10
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "multipleOf": 2
     },
@@ -285,10 +324,12 @@
   {
     "description": "Detect changes to multipleOf number schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "multipleOf": 10
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number",
       "multipleOf": 11
     },
@@ -300,9 +341,11 @@
   {
     "description": "Detect narrowed change to number schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "integer"
     },
     "changes": [
@@ -313,9 +356,11 @@
   {
     "description": "Detect extended change to number schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "integer"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "number"
     },
     "changes": [
@@ -326,9 +371,11 @@
   {
     "description": "Detect compatible change to not schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "not":  { "type": "number" }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "not":  { "type": "integer" }
     },
     "changes": [
@@ -339,9 +386,11 @@
   {
     "description": "Detect incompatible change to not schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "not":  { "type": "integer" }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "not":  { "type": "number" }
     },
     "changes": [
@@ -350,24 +399,9 @@
     "compatible": false
   },
   {
-    "description": "Detect removed enum ",
-    "original_schema": {
-      "type": "string",
-      "enum": [
-        "red"
-      ]
-    },
-    "update_schema": {
-      "type": "string"
-    },
-    "changes": [
-      "PRODUCT_TYPE_NARROWED #/"
-    ],
-    "compatible": true
-  },
-  {
     "description": "Detect incompatible changes to enum schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "allOf": [
         {
           "type": "string"
@@ -380,6 +414,7 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "allOf": [
         {
           "type": "string"
@@ -399,6 +434,7 @@
   {
     "description": "Detect compatible changes to enum schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "allOf": [
         {
           "type": "string"
@@ -411,6 +447,7 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "allOf": [
         {
           "enum": [
@@ -431,11 +468,13 @@
   {
     "description": "Detect changes to type array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": [
         "object"
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": [
         "object",
         "array"
@@ -449,6 +488,7 @@
   {
     "description": "Detect changes to sub schemas",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "type": "string"
@@ -456,6 +496,7 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "type": "number"
@@ -470,6 +511,7 @@
   {
     "description": "Detect changes to number of sub schemas",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "type": "string"
@@ -477,6 +519,7 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "type": "number"
@@ -494,6 +537,7 @@
   {
     "description": "Detect changes to remove properties",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -501,6 +545,7 @@
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "bar": {
           "type": "string"
@@ -516,6 +561,7 @@
   {
     "description": "Detect change type of properties",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -523,6 +569,7 @@
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "number"
@@ -537,6 +584,7 @@
   {
     "description": "Detect optional property added to closed content model",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -545,6 +593,7 @@
       "additionalProperties": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -563,6 +612,7 @@
   {
     "description": "Detect property added to partially open content model 1",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -579,6 +629,7 @@
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -607,6 +658,7 @@
   {
     "description": "Detect property added to partially open content model 2",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -615,6 +667,7 @@
       "additionalProperties": { "type": "string" }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -634,6 +687,7 @@
   {
     "description": "Detect property added to partially open content model 3",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -642,6 +696,7 @@
       "additionalProperties": { "type": "string" }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -662,6 +717,7 @@
   {
     "description": "Detect property added to partially open content model 4",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -670,6 +726,7 @@
       "additionalProperties": { "type": "string" }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -692,6 +749,7 @@
   {
     "description": "Detect property removed from partially open content model 1",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -703,6 +761,7 @@
       "additionalProperties": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -727,6 +786,7 @@
   {
     "description": "Detect property removed from partially open content model 2",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -738,6 +798,7 @@
       "additionalProperties": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -754,6 +815,7 @@
   {
     "description": "Detect property removed from partially open content model 3",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -765,6 +827,7 @@
       "additionalProperties": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -782,6 +845,7 @@
   {
     "description": "Detect property removed from partially open content model 4",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -793,6 +857,7 @@
       "additionalProperties": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -809,6 +874,7 @@
   {
     "description": "Detect property removed from partially open content model 5",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -820,6 +886,7 @@
       "additionalProperties": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -837,6 +904,7 @@
   {
     "description": "Detect property added to open content model",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -844,6 +912,7 @@
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -861,6 +930,7 @@
   {
     "description": "Detect changes to composed schema type",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "properties": {
@@ -872,6 +942,7 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "properties": {
@@ -890,6 +961,7 @@
   {
     "description": "Detect changes to validation criteria in composed schema type for singleton",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "type": "string"
@@ -897,6 +969,7 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "allOf": [
         {
           "type": "string"
@@ -911,6 +984,7 @@
   {
     "description": "Detect changes to validation criteria in composed schema type",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "type": "string"
@@ -921,6 +995,7 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "allOf": [
         {
           "type": "string"
@@ -935,6 +1010,7 @@
   {
     "description": "Detect changes to dependencies as array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "number"
@@ -943,13 +1019,14 @@
           "type": "string"
         }
       },
-      "dependencies": {
+      "dependentRequired": {
         "foo": [
           "bar"
         ]
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "number"
@@ -958,7 +1035,7 @@
           "type": "string"
         }
       },
-      "dependencies": {
+      "dependentRequired": {
         "bar": [
           "foo"
         ]
@@ -973,7 +1050,8 @@
   {
     "description": "Detect compatible changes to dependencies schemas",
     "original_schema": {
-      "dependencies": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "dependentSchemas": {
         "foo": {
           "type": "string"
         },
@@ -983,7 +1061,8 @@
       }
     },
     "update_schema": {
-      "dependencies": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "dependentSchemas": {
         "foo": {
           "type": "string"
         }
@@ -997,14 +1076,16 @@
   {
     "description": "Detect compatible changes to dependencies schemas",
     "original_schema": {
-      "dependencies": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "dependentSchemas": {
         "foo": {
           "type": "string"
         }
       }
     },
     "update_schema": {
-      "dependencies": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "dependentSchemas": {
       }
     },
     "changes": [
@@ -1015,14 +1096,16 @@
   {
     "description": "Detect incompatible changes to dependencies schemas",
     "original_schema": {
-      "dependencies": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "dependentSchemas": {
         "foo": {
           "type": "string"
         }
       }
     },
     "update_schema": {
-      "dependencies": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "dependentSchemas": {
         "foo": {
           "type": "number"
         }
@@ -1036,14 +1119,16 @@
   {
     "description": "Detect changes to dependencies properties",
     "original_schema": {
-      "dependencies": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "dependentSchemas": {
         "foo": {
           "type": "string"
         }
       }
     },
     "update_schema": {
-      "dependencies": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "dependentSchemas": {
         "bar": {
           "type": "string"
         }
@@ -1058,6 +1143,7 @@
   {
     "description": "Detect required array to be removed",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -1068,6 +1154,7 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -1082,6 +1169,7 @@
   {
     "description": "Detect required array to be added",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -1089,6 +1177,7 @@
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -1106,6 +1195,7 @@
   {
     "description": "Detect required array to be changed",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -1116,6 +1206,7 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "foo": {
           "type": "string"
@@ -1133,25 +1224,28 @@
   {
     "description": "Detect removed maxProperties",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
       },
       "maxProperties": 1
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
       }
     },
     "changes": [
-      "MAX_PROPERTIES_REMOVED #/maxProperties"
     ],
     "compatible": true
   },
   {
     "description": "Detect increased maxProperties",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "maxProperties": 1
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "maxProperties": 2
     },
     "changes": [
@@ -1162,9 +1256,11 @@
   {
     "description": "Detect decreased maxProperties",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "maxProperties": 2
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "maxProperties": 1
     },
     "changes": [
@@ -1175,25 +1271,28 @@
   {
     "description": "Detect removed minProperties",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
       },
       "minProperties": 2
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
       }
     },
     "changes": [
-      "MIN_PROPERTIES_REMOVED #/minProperties"
     ],
     "compatible": true
   },
   {
     "description": "Detect increased minProperties",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "minProperties": 1
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "minProperties": 2
     },
     "changes": [
@@ -1204,9 +1303,11 @@
   {
     "description": "Detect decreased minProperties",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "minProperties": 2
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "minProperties": 1
     },
     "changes": [
@@ -1217,9 +1318,11 @@
   {
     "description": "Detect changes to all items schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "items": {
         "type": "string"
@@ -1233,12 +1336,14 @@
   {
     "description": "Detect changes to all items schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "items": {
         "type": "string"
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array"
     },
     "changes": [
@@ -1249,8 +1354,9 @@
   {
     "description": "Detect changes to items schema list",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1260,6 +1366,7 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array"
     },
     "changes": [
@@ -1271,8 +1378,9 @@
   {
     "description": "Detect item added to partially open content model 1",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1280,11 +1388,12 @@
           "type": "number"
         }
       ],
-      "additionalItems": { "type": "string" }
+      "items": { "type": "string" }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1295,7 +1404,7 @@
           "type": "string"
         }
       ],
-      "additionalItems": { "type": "string" }
+      "items": { "type": "string" }
     },
     "changes": [
       "ITEM_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/2"
@@ -1305,8 +1414,9 @@
   {
     "description": "Detect item added to partially open content model 2",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1314,11 +1424,12 @@
           "type": "number"
         }
       ],
-      "additionalItems": { "type": "string" }
+      "items": { "type": "string" }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1329,7 +1440,7 @@
           "type": "number"
         }
       ],
-      "additionalItems": { "type": "string" }
+      "items": { "type": "string" }
     },
     "changes": [
       "TYPE_CHANGED #/items/2",
@@ -1340,8 +1451,9 @@
   {
     "description": "Detect item removed from partially open content model 1",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1352,11 +1464,12 @@
           "type": "string"
         }
       ],
-      "additionalItems": { "type": "string" }
+      "items": { "type": "string" }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1364,7 +1477,7 @@
           "type": "number"
         }
       ],
-      "additionalItems": { "type": "string" }
+      "items": { "type": "string" }
     },
     "changes": [
       "ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/2"
@@ -1374,8 +1487,9 @@
   {
     "description": "Detect item removed from partially open content model 2",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1386,11 +1500,12 @@
           "oneOf": [{"type":"null"},{"type":"string"}]
         }
       ],
-      "additionalItems": { "oneOf": [{"type":"null"},{"type":"string"}] }
+      "items": { "oneOf": [{"type":"null"},{"type":"string"}] }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1398,7 +1513,7 @@
           "type": "number"
         }
       ],
-      "additionalItems": { "oneOf": [{"type":"null"},{"type":"string"}] }
+      "items": { "oneOf": [{"type":"null"},{"type":"string"}] }
     },
     "changes": [
       "ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/2"
@@ -1408,8 +1523,9 @@
   {
     "description": "Detect item removed from partially open content model 3",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1420,11 +1536,12 @@
           "type": "number"
         }
       ],
-      "additionalItems": { "type": "string" }
+      "items": { "type": "string" }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1432,7 +1549,7 @@
           "type": "number"
         }
       ],
-      "additionalItems": { "type": "string" }
+      "items": { "type": "string" }
     },
     "changes": [
       "TYPE_CHANGED #/items/2",
@@ -1443,16 +1560,18 @@
   {
     "description": "Detect changes to items in the schema list",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         }
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "number"
         }
@@ -1466,10 +1585,12 @@
   {
     "description": "Detect decreased maxItems",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "maxItems": 2
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "maxItems": 1
     },
@@ -1481,10 +1602,12 @@
   {
     "description": "Detect removed minItems",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "minItems": 1
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array"
     },
     "changes": [
@@ -1495,10 +1618,12 @@
   {
     "description": "Detect increased minItems",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "minItems": 1
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "minItems": 2
     },
@@ -1510,10 +1635,12 @@
   {
     "description": "Detect decreased minItems",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "minItems": 2
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "minItems": 1
     },
@@ -1525,10 +1652,12 @@
   {
     "description": "Detect unique items removed",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "uniqueItems": true
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array"
     },
     "changes": [
@@ -1539,6 +1668,7 @@
   {
     "description": "Detect incompatible changes to reference schemas",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "items": {
         "$ref": "#/definitions/someRef"
@@ -1550,6 +1680,7 @@
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
       "items": {
         "$ref": "#/definitions/someRef"
@@ -1568,9 +1699,11 @@
   {
     "description": "Detect compatible change of moving to reference schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$ref": "#/definitions/someRef",
       "definitions": {
         "someRef": {
@@ -1585,6 +1718,7 @@
   {
     "description": "Detect compatible change of moving from reference schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$ref": "#/definitions/someRef",
       "definitions": {
         "someRef": {
@@ -1593,6 +1727,7 @@
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string"
     },
     "changes": [
@@ -1602,25 +1737,28 @@
   {
     "description": "Detect added boolean additional properties",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
       },
       "additionalProperties": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
       }
     },
     "changes": [
-      "ADDITIONAL_PROPERTIES_ADDED #/additionalProperties"
     ],
     "compatible": true
   },
   {
     "description": "Detect removed boolean additional properties",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": true
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false
     },
     "changes": [
@@ -1631,9 +1769,11 @@
   {
     "description": "Detect narrowing changes to additional properties schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": true
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": {
         "type": "number"
       }
@@ -1646,9 +1786,11 @@
   {
     "description": "Detect adding empty schema to open content model",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": true
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": true,
       "properties": {
         "foo": true
@@ -1662,12 +1804,14 @@
   {
     "description": "Detect removing empty schema from open content model",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": true,
       "properties": {
         "foo": true
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": true
     },
     "changes": [
@@ -1678,9 +1822,11 @@
   {
     "description": "Detect adding false to closed content model",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
         "foo": false
@@ -1694,12 +1840,14 @@
   {
     "description": "Detect removing false from closed content model",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
         "foo": false
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false
     },
     "changes": [
@@ -1710,11 +1858,13 @@
   {
     "description": "Detect changes to additional properties schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": {
         "type": "string"
       }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": {
         "type": "number"
       }
@@ -1727,10 +1877,12 @@
   {
     "description": "Detect removed boolean additional items",
     "original_schema": {
-      "additionalItems": true
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": true
     },
     "update_schema": {
-      "additionalItems": false
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": false
     },
     "changes": [
       "ADDITIONAL_ITEMS_REMOVED #/additionalItems"
@@ -1740,35 +1892,39 @@
   {
     "description": "Detect changes to additional items schema",
     "original_schema": {
-      "additionalItems": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
         "type": "string"
       }
     },
     "update_schema": {
-      "additionalItems": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
         "type": "number"
       }
     },
     "changes": [
-      "TYPE_CHANGED #/additionalItems"
+      "TYPE_CHANGED #/items"
     ],
     "compatible": false
   },
   {
     "description": "Detect adding empty schema to open content model for array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "additionalItems": true,
-      "items": [
+      "items": true,
+      "prefixItems": [
         {
           "type": "number"
         }
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "additionalItems": true,
-      "items": [
+      "items": true,
+      "prefixItems": [
         {
           "type": "number"
         },
@@ -1783,9 +1939,10 @@
   {
     "description": "Detect removing empty schema from open content model for array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "additionalItems": true,
-      "items": [
+      "items": true,
+      "prefixItems": [
         {
           "type": "number"
         },
@@ -1793,9 +1950,10 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "additionalItems": true,
-      "items": [
+      "items": true,
+      "prefixItems": [
         {
           "type": "number"
         }
@@ -1809,18 +1967,20 @@
   {
     "description": "Detect adding false to closed content model for array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "additionalItems": false,
-      "items": [
+      "items": false,
+      "prefixItems": [
         {
           "type": "number"
         }
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "additionalItems": false,
-      "items": [
+      "items": false,
+      "prefixItems": [
         {
           "type": "number"
         },
@@ -1835,9 +1995,10 @@
   {
     "description": "Detect removing false from closed content model for array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "additionalItems": false,
-      "items": [
+      "items": false,
+      "prefixItems": [
         {
           "type": "number"
         },
@@ -1845,9 +2006,10 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "additionalItems": false,
-      "items": [
+      "items": false,
+      "prefixItems": [
         {
           "type": "number"
         }
@@ -1861,8 +2023,9 @@
   {
     "description": "Detect adding to closed content model for array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1870,11 +2033,12 @@
           "type": "number"
         }
       ],
-      "additionalItems": false
+      "items": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1885,7 +2049,7 @@
           "type": "boolean"
         }
       ],
-      "additionalItems": true
+      "items": true
     },
     "changes": [
       "ITEM_ADDED_TO_CLOSED_CONTENT_MODEL #/items/2",
@@ -1896,8 +2060,9 @@
   {
     "description": "Detect removing from closed content model for array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1908,11 +2073,12 @@
           "type": "boolean"
         }
       ],
-      "additionalItems": false
+      "items": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1920,7 +2086,7 @@
           "type": "number"
         }
       ],
-      "additionalItems": true
+      "items": true
     },
     "changes": [
       "ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL #/items/2",
@@ -1931,8 +2097,9 @@
   {
     "description": "Detect removing from open content model for array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1940,16 +2107,17 @@
           "type": "number"
         }
       ],
-      "additionalItems": true
+      "items": true
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         }
       ],
-      "additionalItems": true
+      "items": true
     },
     "changes": [
       "ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL #/items/1"
@@ -1959,17 +2127,19 @@
   {
     "description": "Detect adding to closed content model for array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         }
       ],
-      "additionalItems": false
+      "items": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1977,7 +2147,7 @@
           "type": "number"
         }
       ],
-      "additionalItems": false
+      "items": false
     },
     "changes": [
       "ITEM_ADDED_TO_CLOSED_CONTENT_MODEL #/items/1"
@@ -1987,8 +2157,9 @@
   {
     "description": "Detect removing number from closed content model for array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -1996,16 +2167,17 @@
           "type": "number"
         }
       ],
-      "additionalItems": false
+      "items": false
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         }
       ],
-      "additionalItems": { "type": "number" }
+      "items": { "type": "number" }
     },
     "changes": [
       "ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/1",
@@ -2016,17 +2188,19 @@
   {
     "description": "Detect adding number to partially open content model for array",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         }
       ],
-      "additionalItems": { "type": "number" }
+      "items": { "type": "number" }
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "array",
-      "items": [
+      "prefixItems": [
         {
           "type": "string"
         },
@@ -2034,7 +2208,7 @@
           "type": "number"
         }
       ],
-      "additionalItems": true
+      "items": true
     },
     "changes": [
       "ITEM_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/1",
@@ -2045,9 +2219,11 @@
   {
     "description": "Detect change to oneOf schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "type": "number"
@@ -2065,9 +2241,11 @@
   {
     "description": "Detect change to optional oneOf schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "null"
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "type": "number"
@@ -2085,6 +2263,7 @@
   {
     "description": "Detect change to oneOf schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "type": "number"
@@ -2092,6 +2271,7 @@
       ]
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "type": "string"
@@ -2109,10 +2289,12 @@
   {
     "description": "Detect change to oneOf schema",
     "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "string",
       "maxLength": 3
     },
     "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
           "type": "number"
@@ -2125,42 +2307,6 @@
     "changes": [
       "MAX_LENGTH_REMOVED #/maxLength",
       "SUM_TYPE_EXTENDED #/"
-    ],
-    "compatible": true
-  },
-  {
-    "description": "Allow addition of un-reserved property",
-    "original_metadata": {
-      "properties": {
-        "confluent:reserved": "cost,status"
-      }
-    },
-    "original_schema": {
-      "properties": {
-        "foo": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "update_metadata": {
-      "properties": {
-        "confluent:reserved": "cost,status"
-      }
-    },
-    "update_schema": {
-      "properties": {
-        "foo": {
-          "type": "string"
-        },
-        "bar": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "changes": [
-      "OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL #/properties/bar"
     ],
     "compatible": true
   }
