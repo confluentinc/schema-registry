@@ -599,9 +599,14 @@ public class DekRegistry implements Closeable {
           key.getVersion(), encryptedDekStr, key.isDeleted());
       return key;
     } catch (GeneralSecurityException e) {
-      log.error("Could not generate encrypted dek for " + key.getSubject(), e);
-      throw new DekGenerationException(
-          "Could not generate encrypted dek for " + key.getSubject() + ": " + e.getMessage());
+      String msg = "Could not generate encrypted dek for " + key.getSubject();
+      log.error(msg, e);
+      msg += ": " + e.getMessage();
+      Throwable cause = e.getCause();
+      if (cause != null) {
+        msg += ": " + cause.getMessage();
+      }
+      throw new DekGenerationException(msg);
     }
   }
 
@@ -622,9 +627,14 @@ public class DekRegistry implements Closeable {
       newKey.setTimestamp(key.getTimestamp());
       return newKey;
     } catch (GeneralSecurityException e) {
-      log.error("Could not generate raw dek for " + key.getSubject(), e);
-      throw new DekGenerationException(
-          "Could not generate raw dek for " + key.getSubject() + ": " + e.getMessage());
+      String msg = "Could not generate raw dek for " + key.getSubject();
+      log.error(msg, e);
+      msg += ": " + e.getMessage();
+      Throwable cause = e.getCause();
+      if (cause != null) {
+        msg += ": " + cause.getMessage();
+      }
+      throw new DekGenerationException(msg);
     }
   }
 
