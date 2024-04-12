@@ -43,6 +43,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -1677,15 +1678,22 @@ public class ProtobufData {
    */
   private String[] splitName(String fullName) {
     String[] result = new String[2];
-    int indexLastDot = fullName.lastIndexOf('.');
-    if (indexLastDot >= 0) {
-      result[0] = fullName.substring(0, indexLastDot);
-      result[1] = fullName.substring(indexLastDot + 1);
-    } else {
+    if (fullName == null || fullName.isEmpty()) {
       result[0] = null;
       result[1] = fullName;
+      return result;
     }
-    result[1] = scrubName(result[1]);
+    String[] parts = fullName.split("\\.");
+    for (int i = 0; i < parts.length; i++) {
+      parts[i] = scrubName(parts[i]);
+    }
+    if (parts.length <= 1) {
+      result[0] = null;
+      result[1] = parts[0];
+    } else {
+      result[0] = String.join(".", Arrays.copyOfRange(parts, 0, parts.length - 1));
+      result[1] = parts[parts.length - 1];
+    }
     return result;
   }
 

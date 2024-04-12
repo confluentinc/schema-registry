@@ -2353,15 +2353,22 @@ public class AvroData {
 
   private static String[] splitName(String fullName, boolean scrubInvalidNames) {
     String[] result = new String[2];
-    int indexLastDot = fullName.lastIndexOf('.');
-    if (indexLastDot >= 0) {
-      result[0] = fullName.substring(0, indexLastDot);
-      result[1] = fullName.substring(indexLastDot + 1);
-    } else {
+    if (fullName == null || fullName.isEmpty()) {
       result[0] = null;
       result[1] = fullName;
+      return result;
     }
-    result[1] = scrubName(result[1], scrubInvalidNames);
+    String[] parts = fullName.split("\\.");
+    for (int i = 0; i < parts.length; i++) {
+      parts[i] = scrubName(parts[i], scrubInvalidNames);
+    }
+    if (parts.length <= 1) {
+      result[0] = null;
+      result[1] = parts[0];
+    } else {
+      result[0] = String.join(".", Arrays.copyOfRange(parts, 0, parts.length - 1));
+      result[1] = parts[parts.length - 1];
+    }
     return result;
   }
 
