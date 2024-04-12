@@ -38,6 +38,7 @@ public class SchemaString {
   private List<SchemaReference> references = Collections.emptyList();
   private Metadata metadata = null;
   private RuleSet ruleSet = null;
+  private List<SchemaTags> schemaTags;
   private Integer maxId;
 
   public SchemaString() {
@@ -54,6 +55,7 @@ public class SchemaString {
     this.references = schema.getReferences();
     this.metadata = schema.getMetadata();
     this.ruleSet = schema.getRuleSet();
+    this.schemaTags = schema.getSchemaTags();
   }
 
   public static SchemaString fromJson(String json) throws IOException {
@@ -118,6 +120,16 @@ public class SchemaString {
     this.ruleSet = ruleSet;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.SCHEMA_TAGS_DESC)
+  @JsonProperty("schemaTags")
+  public List<SchemaTags> getSchemaTags() {
+    return this.schemaTags;
+  }
+
+  @JsonProperty("schemaTags")
+  public void setSchemaTags(List<SchemaTags> schemaTags) {
+    this.schemaTags = schemaTags;
+  }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = "Maximum ID", example = "1")
   @JsonProperty("maxId")

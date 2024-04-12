@@ -265,8 +265,12 @@ public class SchemaRegistryConfig extends RestConfig {
   @Deprecated
   public static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG =
       "schema.registry.resource.extension.class";
+  public static final String INIT_RESOURCE_EXTENSION_CONFIG =
+      "init.resource.extension.class";
   public static final String RESOURCE_EXTENSION_CONFIG =
       "resource.extension.class";
+  public static final String ENABLE_FIPS_CONFIG =
+      "enable.fips";
   public static final String RESOURCE_STATIC_LOCATIONS_CONFIG =
       "resource.static.locations";
   @Deprecated
@@ -437,12 +441,20 @@ public class SchemaRegistryConfig extends RestConfig {
       "Login thread will sleep until the specified window factor of time from last refresh to "
       + "ticket's expiry has "
       + "been reached, at which time it will try to renew the ticket.";
+  protected static final String ENABLE_FIPS_DOC =
+      "Enable FIPS mode on the server. If FIPS mode is enabled, broker listener security protocols,"
+      + " TLS versions and cipher suites will be validated based on FIPS compliance requirement.";
   protected static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC =
       "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
       + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
       + " like filters to Schema Registry. Typically used to add custom capability like logging, "
       + " security, etc. The schema.registry.resource.extension.class name is deprecated; "
       + "prefer using resource.extension.class instead.";
+  protected static final String INIT_RESOURCE_EXTENSION_DOC =
+      "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
+      + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
+      + " to Schema Registry. These resources will be injected before Schema Registry is "
+      + "initialized.";
   protected static final String RESOURCE_STATIC_LOCATIONS_DOC =
       "  A list of classpath resources containing static resources to serve using the default "
           + "servlet.";
@@ -691,8 +703,14 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
     )
+    .define(ENABLE_FIPS_CONFIG, ConfigDef.Type.BOOLEAN, false,
+        ConfigDef.Importance.LOW, ENABLE_FIPS_DOC
+    )
     .define(RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
+    )
+    .define(INIT_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
+            ConfigDef.Importance.LOW, INIT_RESOURCE_EXTENSION_DOC
     )
     .define(RESOURCE_STATIC_LOCATIONS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, RESOURCE_STATIC_LOCATIONS_DOC
