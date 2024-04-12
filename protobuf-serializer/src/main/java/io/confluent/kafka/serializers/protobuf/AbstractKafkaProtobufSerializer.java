@@ -53,6 +53,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   protected boolean idCompatStrict;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
+  protected String schemaFormat;
   protected boolean skipKnownTypes;
   protected ReferenceSubjectNameStrategy referenceSubjectNameStrategy;
 
@@ -65,6 +66,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     this.idCompatStrict = config.getIdCompatibilityStrict();
     this.useLatestVersion = config.useLatestVersion();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
+    this.schemaFormat = config.getSchemaFormat();
     this.skipKnownTypes = config.skipKnownTypes();
     this.referenceSubjectNameStrategy = config.referenceSubjectNameStrategyInstance();
   }
@@ -103,9 +105,17 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Protobuf schema: ";
+        if (schemaFormat != null) {
+          String formatted = schema.formattedString(schemaFormat);
+          schema = schema.copyWithSchema(formatted);
+        }
         id = schemaRegistry.register(subject, schema, normalizeSchema);
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
+        if (schemaFormat != null) {
+          String formatted = schema.formattedString(schemaFormat);
+          schema = schema.copyWithSchema(formatted);
+        }
         schema = (ProtobufSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
         id = schemaRegistry.getId(subject, schema);
@@ -351,9 +361,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         subject,
         version,
         id,
-        schema.schemaType(),
-        schema.references(),
-        schema.canonicalString()
+        schema
     );
   }
 }

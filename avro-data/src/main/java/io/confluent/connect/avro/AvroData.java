@@ -330,6 +330,7 @@ public class AvroData {
   private Map<AvroSchema, Schema> toConnectSchemaCache;
   private boolean connectMetaData;
   private boolean generalizedSumTypeSupport;
+  private boolean ignoreDefaultForNullables;
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
   private boolean discardTypeDocDefault;
@@ -342,10 +343,11 @@ public class AvroData {
   }
 
   public AvroData(AvroDataConfig avroDataConfig) {
-    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(avroDataConfig.getSchemasCacheSize());
-    toConnectSchemaCache = new BoundedConcurrentHashMap<>(avroDataConfig.getSchemasCacheSize());
+    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(avroDataConfig.schemaCacheSize());
+    toConnectSchemaCache = new BoundedConcurrentHashMap<>(avroDataConfig.schemaCacheSize());
     this.connectMetaData = avroDataConfig.isConnectMetaData();
     this.generalizedSumTypeSupport = avroDataConfig.isGeneralizedSumTypeSupport();
+    this.ignoreDefaultForNullables = avroDataConfig.ignoreDefaultForNullables();
     this.enhancedSchemaSupport = avroDataConfig.isEnhancedAvroSchemaSupport();
     this.scrubInvalidNames = avroDataConfig.isScrubInvalidNames();
     this.discardTypeDocDefault = avroDataConfig.isDiscardTypeDocDefault();
@@ -599,7 +601,8 @@ public class AvroData {
           // one of the union types.
           if (isUnionSchema(schema)) {
             for (Field field : schema.fields()) {
-              Object object = struct.get(field);
+              Object object = ignoreDefaultForNullables
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
               if (object != null) {
                 return fromConnectData(
                     field.schema(),
@@ -619,9 +622,11 @@ public class AvroData {
               String fieldName = scrubName(field.name(), scrubInvalidNames);
               org.apache.avro.Schema.Field theField = underlyingAvroSchema.getField(fieldName);
               org.apache.avro.Schema fieldAvroSchema = theField.schema();
+              Object fieldValue = ignoreDefaultForNullables
+                  ? struct.getWithoutDefault(field.name()) : struct.get(field);
               convertedBuilder.set(
                   fieldName,
-                  fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false, true)
+                  fromConnectData(field.schema(), fieldAvroSchema, fieldValue, false, true)
               );
             }
             return convertedBuilder.build();

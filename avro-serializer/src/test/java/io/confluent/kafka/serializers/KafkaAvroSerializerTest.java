@@ -20,6 +20,7 @@ import io.confluent.kafka.example.ExtendedWidget;
 import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema.Format;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import java.math.BigDecimal;
@@ -722,7 +723,6 @@ public class KafkaAvroSerializerTest {
             new SchemaReference("io.confluent.kafka.example.User", "user", -1)
         )));
   }
-
   @Test
   public void testKafkaAvroSerializerWithArraySpecific() throws IOException, RestClientException {
     Map serializerConfigs = ImmutableMap.of(
@@ -1159,4 +1159,31 @@ public class KafkaAvroSerializerTest {
     assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
   }
 
+  @Test
+  public void testResolvedFormat() throws IOException, RestClientException {
+    schemaRegistry.register("user", new AvroSchema(createUserSchema()));
+    schemaRegistry.register("account", new AvroSchema(createAccountSchema()));
+    int id = schemaRegistry.register(topic + "-value",
+        new AvroSchema("[ \"example.avro.User\", \"example.avro.Account\" ]",
+            ImmutableList.of(
+                new SchemaReference("example.avro.User", "user", 1),
+                new SchemaReference("example.avro.Account", "account", 1)
+            ),
+            ImmutableMap.of(
+                "example.avro.User",
+                createUserSchema().toString(),
+                "example.avro.Account",
+                createAccountSchema().toString()
+            ),
+            null
+        ));
+    AvroSchema schema = (AvroSchema) schemaRegistry.getSchemaById(id);
+    String expectedCanonical = "[\"example.avro.User\",\"example.avro.Account\"]";
+    assertEquals(expectedCanonical, schema.canonicalString());
+    String expectedResolved = "[{\"type\":\"record\",\"name\":\"User\",\"namespace\":\"example.avro\","
+        + "\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]}"
+        + ",{\"type\":\"record\",\"name\":\"Account\",\"namespace\":\"example.avro\","
+        + "\"fields\":[{\"name\":\"accountNumber\",\"type\":\"string\"}]}]";
+    assertEquals(expectedResolved, schema.formattedString(Format.RESOLVED.symbol()));
+  }
 }

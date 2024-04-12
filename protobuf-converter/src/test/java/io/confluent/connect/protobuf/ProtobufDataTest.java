@@ -36,11 +36,13 @@ import com.google.protobuf.util.Timestamps;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
+import io.confluent.connect.protobuf.test.KeyValue;
 import io.confluent.connect.protobuf.test.KeyValueOptional;
 import io.confluent.connect.protobuf.test.KeyValueProto2;
 import io.confluent.connect.protobuf.test.KeyValueWrapper;
 import io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry;
 import io.confluent.connect.protobuf.test.MapReferences.MapReferencesMessage;
+import io.confluent.connect.protobuf.test.NestedKeyValue;
 import io.confluent.connect.protobuf.test.RecursiveKeyValue;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.protobuf.test.DateValueOuterClass;
@@ -95,7 +97,6 @@ import static io.confluent.connect.protobuf.ProtobufData.GENERALIZED_TYPE_UNION;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_ENUM;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_PROP;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
-import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION_PREFIX;
 import static io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue.newBuilder;
 import static org.junit.Assert.assertArrayEquals;
@@ -261,6 +262,45 @@ public class ProtobufDataTest {
     return enumUnionBuilder;
   }
 
+  private SchemaBuilder getEnumUnionSchemaBuilderWithoutIndex() {
+    final SchemaBuilder enumUnionBuilder = SchemaBuilder.struct();
+    enumUnionBuilder.name("EnumUnion");
+    final SchemaBuilder someValBuilder = SchemaBuilder.struct();
+    someValBuilder.name("io.confluent.connect.protobuf.Union.some_val");
+    someValBuilder.field(
+        "one_id",
+        SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    someValBuilder.field(
+        "other_id",
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    someValBuilder.field(
+        "some_status",
+        SchemaBuilder.string()
+            .name("Status")
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(3))
+            .parameter(PROTOBUF_TYPE_ENUM, "Status")
+            .parameter(PROTOBUF_TYPE_ENUM + ".ACTIVE", "0")
+            .parameter(PROTOBUF_TYPE_ENUM + ".INACTIVE", "1")
+            .build()
+    );
+    enumUnionBuilder.field("some_val", someValBuilder.optional().build());
+    enumUnionBuilder.field(
+        "status",
+        SchemaBuilder.string()
+            .name("Status")
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(4))
+            .parameter(PROTOBUF_TYPE_ENUM, "Status")
+            .parameter(PROTOBUF_TYPE_ENUM + ".ACTIVE", "0")
+            .parameter(PROTOBUF_TYPE_ENUM + ".INACTIVE", "1")
+            .build()
+    );
+    return enumUnionBuilder;
+  }
+
   private SchemaBuilder getEnumUnionSchemaBuilderWithGeneralizedSumTypeSupport() {
     final SchemaBuilder enumUnionBuilder = SchemaBuilder.struct();
     enumUnionBuilder.name("EnumUnion");
@@ -307,6 +347,16 @@ public class ProtobufDataTest {
     Struct union = new Struct(schema.field("some_val_0").schema());
     union.put("one_id", "ID");
     result.put("some_val_0", union);
+    result.put("status", "INACTIVE");
+    return result;
+  }
+
+  private Struct getEnumUnionWithStringWithoutIndex() throws ParseException {
+    Schema schema = getEnumUnionSchemaBuilderWithoutIndex().build();
+    Struct result = new Struct(schema.schema());
+    Struct union = new Struct(schema.field("some_val").schema());
+    union.put("one_id", "ID");
+    result.put("some_val", union);
     result.put("status", "INACTIVE");
     return result;
   }
@@ -702,11 +752,25 @@ public class ProtobufDataTest {
   public void testToConnectEnumUnionWithString() throws Exception {
     EnumUnion message = createEnumUnionWithString();
     SchemaAndValue result = getSchemaAndValue(message);
-      Schema expectedSchema = getEnumUnionSchemaBuilder().build();
-      assertSchemasEqual(expectedSchema, result.schema());
-      Struct expected = getEnumUnionWithString();
-      assertEquals(expected, result.value());
-    }
+    Schema expectedSchema = getEnumUnionSchemaBuilder().build();
+    assertSchemasEqual(expectedSchema, result.schema());
+    Struct expected = getEnumUnionWithString();
+    assertEquals(expected, result.value());
+  }
+
+  @Test
+  public void testToConnectEnumUnionWithStringWithoutIndex() throws Exception {
+    EnumUnion message = createEnumUnionWithString();
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.GENERATE_INDEX_FOR_UNIONS_CONFIG, "false")
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue result = getSchemaAndValue(protobufData, message);
+    Schema expectedSchema = getEnumUnionSchemaBuilderWithoutIndex().build();
+    assertSchemasEqual(expectedSchema, result.schema());
+    Struct expected = getEnumUnionWithStringWithoutIndex();
+    assertEquals(expected, result.value());
+  }
 
   @Test
   public void testToConnectEnumUnionWithStringWithGeneralizedSumTypeSupport() throws Exception {
@@ -747,6 +811,42 @@ public class ProtobufDataTest {
   }
 
   // Data Conversion tests
+
+  @Test
+  public void testToConnectNestedNull() throws Exception {
+    NestedKeyValue.NestedKeyValueMessage.Builder builder = NestedKeyValue.NestedKeyValueMessage.newBuilder();
+    NestedKeyValue.NestedKeyValueMessage message = builder.build();
+
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+            .with(ProtobufDataConfig.WRAPPER_FOR_RAW_PRIMITIVES_CONFIG, true)
+            .with(ProtobufDataConfig.GENERATE_STRUCT_FOR_NULLS_CONFIG, true)
+            .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue result = getSchemaAndValue(protobufData, message);
+
+    Schema schema = result.schema();
+    Struct value = (Struct) result.value();
+
+    assertNotNull(value.get(schema.field("wrapper_field").schema().field("nested_field")));
+  }
+
+  @Test
+  public void testToConnectNestedNullNegative() throws Exception {
+    NestedKeyValue.NestedKeyValueMessage.Builder builder = NestedKeyValue.NestedKeyValueMessage.newBuilder();
+    NestedKeyValue.NestedKeyValueMessage message = builder.build();
+
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+            .with(ProtobufDataConfig.WRAPPER_FOR_RAW_PRIMITIVES_CONFIG, true)
+            .with(ProtobufDataConfig.GENERATE_STRUCT_FOR_NULLS_CONFIG, false)
+            .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue result = getSchemaAndValue(protobufData, message);
+
+    Schema schema = result.schema();
+    Struct value = (Struct) result.value();
+
+    assertNull(value.get(schema.field("wrapper_field").schema().field("nested_field")));
+  }
 
   @Test
   public void testToConnectNull() {
@@ -1898,6 +1998,44 @@ public class ProtobufDataTest {
     assertEquals("invalid_record_name", messageDescriptor.getName());
     assertEquals("invalid_field_name", messageDescriptor.getFields().get(0).getName());
     assertEquals("foo", message.getField(messageDescriptor.getFields().get(0)));
+  }
+
+  @Test
+  public void testFromConnectIgnoreDefaultForNullables() throws Exception {
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.IGNORE_DEFAULT_FOR_NULLABLES_CONFIG, true)
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    KeyValue.KeyValueMessage message =
+        KeyValue.KeyValueMessage.newBuilder()
+            .setKey(123)
+            .build();
+    Schema connectSchema = getIgnoreDefaultForNullablesSchema();
+    Struct data = getIgnoreDefaultForNullablesData();
+
+    byte[] messageBytes = getMessageBytes(protobufData, new SchemaAndValue(connectSchema, data));
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  private Schema getIgnoreDefaultForNullablesSchema() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("KeyValueMessage");
+    schemaBuilder.field("key",
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    schemaBuilder.field("value",
+        SchemaBuilder.string().optional().defaultValue("string-value")
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    return schemaBuilder.build();
+  }
+
+  private Struct getIgnoreDefaultForNullablesData() {
+    Schema schema = getIgnoreDefaultForNullablesSchema();
+    Struct result = new Struct(schema.schema());
+    result.put("key", 123);
+    result.put("value", null);
+    return result;
   }
 
   @Test

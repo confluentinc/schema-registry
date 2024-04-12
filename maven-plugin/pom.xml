@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.2.11-0</version>
+        <version>7.3.9-0</version>
     </parent>
 
     <licenses>
@@ -53,7 +53,18 @@
             <artifactId>junit</artifactId>
             <scope>test</scope>
         </dependency>
-
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-protobuf-serializer</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

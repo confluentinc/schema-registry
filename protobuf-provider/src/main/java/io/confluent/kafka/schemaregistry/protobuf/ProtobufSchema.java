@@ -16,11 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
+import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.AnyProto;
 import com.google.protobuf.ApiProto;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
+import com.google.protobuf.DescriptorProtos.DescriptorProto.ExtensionRange;
 import com.google.protobuf.DescriptorProtos.DescriptorProto.ReservedRange;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto.EnumReservedRange;
@@ -37,12 +39,16 @@ import com.google.protobuf.DescriptorProtos.ServiceDescriptorProto;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.Descriptors.GenericDescriptor;
 import com.google.protobuf.DurationProto;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.EmptyProto;
 import com.google.protobuf.FieldMaskProto;
+import com.google.protobuf.GeneratedMessageV3.ExtendableMessage;
+import com.google.protobuf.Message;
 import com.google.protobuf.SourceContextProto;
 import com.google.protobuf.StructProto;
 import com.google.protobuf.TimestampProto;
@@ -69,6 +75,8 @@ import com.squareup.wire.schema.Location;
 import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.EnumConstantElement;
 import com.squareup.wire.schema.internal.parser.EnumElement;
+import com.squareup.wire.schema.internal.parser.ExtendElement;
+import com.squareup.wire.schema.internal.parser.ExtensionsElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import com.squareup.wire.schema.internal.parser.OneOfElement;
@@ -80,11 +88,18 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.LinkedHashMap;
+import java.util.stream.Stream;
+import kotlin.Pair;
 import kotlin.ranges.IntRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,8 +133,6 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final String TYPE = "PROTOBUF";
 
-  public static final String SERIALIZED_FORMAT = "serialized";
-
   public static final String PROTO2 = "proto2";
   public static final String PROTO3 = "proto3";
 
@@ -133,6 +146,7 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String KEY_FIELD = "key";
   public static final String VALUE_FIELD = "value";
 
+  protected static final String CONFLUENT_PREFIX = "confluent.";
   private static final String CONFLUENT_FILE_META = "confluent.file_meta";
   private static final String CONFLUENT_MESSAGE_META = "confluent.message_meta";
   private static final String CONFLUENT_FIELD_META = "confluent.field_meta";
@@ -142,6 +156,7 @@ public class ProtobufSchema implements ParsedSchema {
   private static final String JAVA_PACKAGE = "java_package";
   private static final String JAVA_OUTER_CLASSNAME = "java_outer_classname";
   private static final String JAVA_MULTIPLE_FILES = "java_multiple_files";
+  private static final String JAVA_GENERATE_EQUALS_AND_HASH = "java_generate_equals_and_hash";
   private static final String JAVA_STRING_CHECK_UTF8 = "java_string_check_utf8";
   private static final String OPTIMIZE_FOR = "optimize_for";
   private static final String GO_PACKAGE = "go_package";
@@ -324,6 +339,8 @@ public class ProtobufSchema implements ParsedSchema {
 
   private static final Base64.Decoder base64Decoder = Base64.getDecoder();
 
+  private static volatile Method extensionFields;
+
   public ProtobufSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null, null);
   }
@@ -388,6 +405,20 @@ public class ProtobufSchema implements ParsedSchema {
     this.schemaObj = toProtoFile(enumDescriptor.getFile(), dependencies);
     this.version = null;
     this.name = enumDescriptor.getFullName();
+    this.references = Collections.unmodifiableList(references);
+    this.dependencies = Collections.unmodifiableMap(dependencies);
+    this.descriptor = null;
+  }
+
+  public ProtobufSchema(FileDescriptor fileDescriptor) {
+    this(fileDescriptor, Collections.emptyList());
+  }
+
+  public ProtobufSchema(FileDescriptor fileDescriptor, List<SchemaReference> references) {
+    Map<String, ProtoFileElement> dependencies = new HashMap<>();
+    this.schemaObj = toProtoFile(fileDescriptor, dependencies);
+    this.version = null;
+    this.name = null;
     this.references = Collections.unmodifiableList(references);
     this.dependencies = Collections.unmodifiableMap(dependencies);
     this.descriptor = null;
@@ -471,6 +502,19 @@ public class ProtobufSchema implements ParsedSchema {
     );
   }
 
+  public ProtobufSchema copyWithSchema(String schema) {
+    return new ProtobufSchema(
+        toProtoFile(schema),
+        this.version,
+        this.name,
+        references,
+        this.dependencies,
+        schema,
+        null,
+        null
+    );
+  }
+
   private ProtoFileElement toProtoFile(String schema) {
     try {
       return ProtoParser.Companion.parse(DEFAULT_LOCATION, schema);
@@ -551,6 +595,11 @@ public class ProtobufSchema implements ParsedSchema {
       options.add(new OptionElement(
           JAVA_MULTIPLE_FILES, Kind.BOOLEAN, file.getOptions().getJavaMultipleFiles(), false));
     }
+    if (file.getOptions().hasJavaGenerateEqualsAndHash()) {
+      options.add(new OptionElement(
+          JAVA_GENERATE_EQUALS_AND_HASH, Kind.BOOLEAN,
+          file.getOptions().getJavaGenerateEqualsAndHash(), false));
+    }
     if (file.getOptions().hasJavaStringCheckUtf8()) {
       options.add(new OptionElement(
           JAVA_STRING_CHECK_UTF8, Kind.BOOLEAN, file.getOptions().getJavaStringCheckUtf8(), false));
@@ -622,7 +671,9 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    // NOTE: skip extensions
+    options.addAll(toCustomOptions(file.getOptions()));
+    ImmutableList.Builder<ExtendElement> extendElements =
+        toExtendElements(file, file.getExtensionList());
     return new ProtoFileElement(DEFAULT_LOCATION,
         packageName,
         syntax,
@@ -630,9 +681,119 @@ public class ProtobufSchema implements ParsedSchema {
         publicImports.build(),
         types.build(),
         services.build(),
-        Collections.emptyList(),
+        extendElements.build(),
         options.build()
     );
+  }
+
+  private static ImmutableList.Builder<ExtendElement> toExtendElements(
+      FileDescriptorProto file, List<FieldDescriptorProto> fields) {
+    Map<String, ImmutableList.Builder<FieldElement>> extendFieldElements = new LinkedHashMap<>();
+    for (FieldDescriptorProto fd : fields) {
+      // Note that the extendee is a fully qualified name
+      ImmutableList.Builder<FieldElement> extendFields = extendFieldElements.computeIfAbsent(
+          fd.getExtendee(), k -> ImmutableList.builder());
+      extendFields.add(toField(file, fd, false));
+    }
+    ImmutableList.Builder<ExtendElement> extendElements = ImmutableList.builder();
+    for (Map.Entry<String, ImmutableList.Builder<FieldElement>> extendFieldElement :
+        extendFieldElements.entrySet()) {
+      extendElements.add(new ExtendElement(DEFAULT_LOCATION,
+          extendFieldElement.getKey(), "", extendFieldElement.getValue().build()));
+    }
+    return extendElements;
+  }
+
+  private static List<OptionElement> toCustomOptions(ExtendableMessage<?> options) {
+    // Uncomment this in case the getExtensionFields method is deprecated
+    //return options.getAllFields().entrySet().stream()
+    return getExtensionFields(options).entrySet().stream()
+        .filter(e -> e.getKey().isExtension()
+            && !e.getKey().getFullName().startsWith(CONFLUENT_PREFIX))
+        .flatMap(e -> toOptionElements(e.getKey().getFullName(), e.getValue()))
+        .collect(Collectors.toList());
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<Descriptors.FieldDescriptor, Object> getExtensionFields(
+      ExtendableMessage<?> options) {
+    // We use reflection to access getExtensionFields as an optimization over calling getAllFields
+    try {
+      if (extensionFields == null) {
+        synchronized (ProtobufSchema.class) {
+          if (extensionFields == null) {
+            extensionFields = ExtendableMessage.class.getDeclaredMethod("getExtensionFields");
+          }
+        }
+        extensionFields.setAccessible(true);
+      }
+      return (Map<Descriptors.FieldDescriptor, Object>) extensionFields.invoke(options);
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static Stream<OptionElement> toOptionElements(String name, Object value) {
+    if (value instanceof List) {
+      return ((List<?>) value).stream().map(v -> toOptionElement(name, v));
+    } else {
+      return Stream.of(toOptionElement(name, value));
+    }
+  }
+
+  private static OptionElement toOptionElement(String name, Object value) {
+    return new OptionElement(name, toKind(value), toOptionValue(value, false), true);
+  }
+
+  private static Kind toKind(Object value) {
+    if (value instanceof String) {
+      return Kind.STRING;
+    } else if (value instanceof Boolean) {
+      return Kind.BOOLEAN;
+    } else if (value instanceof Number) {
+      return Kind.NUMBER;
+    } else if (value instanceof Enum || value instanceof EnumValueDescriptor) {
+      return Kind.ENUM;
+    } else if (value instanceof List) {
+      return Kind.LIST;
+    } else if (value instanceof Message) {
+      return Kind.MAP;
+    } else {
+      throw new IllegalArgumentException("Unsupported option type " + value.getClass().getName());
+    }
+  }
+
+  private static Object toOptionValue(Object value, boolean isMapValue) {
+    if (value instanceof List) {
+      return ((List<?>) value).stream()
+          .map(o -> toOptionValue(o, false))
+          .collect(Collectors.toList());
+    } else if (value instanceof Message) {
+      return toOptionMap((Message) value);
+    } else {
+      if (isMapValue) {
+        if (value instanceof Boolean) {
+          return new OptionElement.OptionPrimitive(Kind.BOOLEAN, value);
+        } else if (value instanceof Enum) {
+          return new OptionElement.OptionPrimitive(Kind.ENUM, value);
+        } else if (value instanceof Number) {
+          return new OptionElement.OptionPrimitive(Kind.NUMBER, value);
+        }
+      }
+      return value;
+    }
+  }
+
+  private static Map<String, Object> toOptionMap(Message message) {
+    return message.getAllFields().entrySet().stream()
+        .map(e -> new Pair<>(toOptionMapKey(e.getKey()), toOptionValue(e.getValue(), true)))
+        .filter(p -> p.getSecond() != null)
+        .collect(Collectors.toMap(Pair::getFirst, Pair::getSecond,
+            (e1, e2) -> e1, LinkedHashMap::new));
+  }
+
+  private static String toOptionMapKey(FieldDescriptor field) {
+    return field.isExtension() ? "[" + field.getFullName() + "]" : field.getName();
   }
 
   private static MessageElement toMessage(FileDescriptorProto file, DescriptorProto descriptor) {
@@ -641,6 +802,7 @@ public class ProtobufSchema implements ParsedSchema {
     ImmutableList.Builder<FieldElement> fields = ImmutableList.builder();
     ImmutableList.Builder<TypeElement> nested = ImmutableList.builder();
     ImmutableList.Builder<ReservedElement> reserved = ImmutableList.builder();
+    ImmutableList.Builder<ExtensionsElement> extensions = ImmutableList.builder();
     LinkedHashMap<String, ImmutableList.Builder<FieldElement>> oneofsMap = new LinkedHashMap<>();
     for (OneofDescriptorProto od : descriptor.getOneofDeclList()) {
       oneofsMap.put(od.getName(), ImmutableList.builder());
@@ -676,6 +838,10 @@ public class ProtobufSchema implements ParsedSchema {
       );
       reserved.add(reservedElem);
     }
+    for (ExtensionRange extensionRange : descriptor.getExtensionRangeList()) {
+      ExtensionsElement extension = toExtension(extensionRange);
+      extensions.add(extension);
+    }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (descriptor.getOptions().hasNoStandardDescriptorAccessor()) {
       OptionElement option = new OptionElement(
@@ -705,7 +871,10 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    // NOTE: skip extensions, groups
+    options.addAll(toCustomOptions(descriptor.getOptions()));
+    ImmutableList.Builder<ExtendElement> extendElements =
+        toExtendElements(file, descriptor.getExtensionList());
+    // NOTE: skip groups
     return new MessageElement(DEFAULT_LOCATION,
         name,
         "",
@@ -717,9 +886,9 @@ public class ProtobufSchema implements ParsedSchema {
             .map(e -> toOneof(e.getKey(), e.getValue()))
             .filter(e -> !e.getFields().isEmpty())
             .collect(Collectors.toList()),
+        extensions.build(),
         Collections.emptyList(),
-        Collections.emptyList(),
-        Collections.emptyList()
+        extendElements.build()
     );
   }
 
@@ -777,6 +946,7 @@ public class ProtobufSchema implements ParsedSchema {
           options.add(option);
         }
       }
+      options.addAll(toCustomOptions(ev.getOptions()));
       constants.add(new EnumConstantElement(
           DEFAULT_LOCATION,
           ev.getName(),
@@ -820,6 +990,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
+    options.addAll(toCustomOptions(ed.getOptions()));
     return new EnumElement(DEFAULT_LOCATION, name, "",
         options.build(), constants.build(), reserved.build());
   }
@@ -842,6 +1013,15 @@ public class ProtobufSchema implements ParsedSchema {
     return new ReservedElement(DEFAULT_LOCATION, "", values);
   }
 
+  private static ExtensionsElement toExtension(ExtensionRange range) {
+    List<Object> values = new ArrayList<>();
+    int start = range.getStart();
+    int end = range.getEnd();
+    // inclusive, exclusive
+    values.add(start == end - 1 ? start : new IntRange(start, end - 1));
+    return new ExtensionsElement(DEFAULT_LOCATION, "", values);
+  }
+
   private static ServiceElement toService(ServiceDescriptorProto sd) {
     String name = sd.getName();
     log.trace("*** service name: {}", name);
@@ -862,6 +1042,7 @@ public class ProtobufSchema implements ParsedSchema {
         );
         options.add(option);
       }
+      options.addAll(toCustomOptions(method.getOptions()));
       methods.add(new RpcElement(
           DEFAULT_LOCATION,
           method.getName(),
@@ -881,6 +1062,7 @@ public class ProtobufSchema implements ParsedSchema {
       );
       options.add(option);
     }
+    options.addAll(toCustomOptions(sd.getOptions()));
     return new ServiceElement(DEFAULT_LOCATION, name, "", methods.build(), options.build());
   }
 
@@ -915,6 +1097,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
+    options.addAll(toCustomOptions(fd.getOptions()));
     String jsonName = fd.hasJsonName() ? fd.getJsonName() : null;
     String defaultValue = !PROTO3.equals(file.getSyntax()) && fd.hasDefaultValue()
                           ? fd.getDefaultValue()
@@ -1054,6 +1237,42 @@ public class ProtobufSchema implements ParsedSchema {
         ServiceDefinition service = toDynamicService(serviceElement);
         schema.addServiceDefinition(service);
       }
+      for (ExtendElement extendElement : rootElem.getExtendDeclarations()) {
+        for (FieldElement field : extendElement.getFields()) {
+          Field.Label fieldLabel = field.getLabel();
+          String label = fieldLabel != null ? fieldLabel.toString().toLowerCase() : null;
+          String fieldType = field.getType();
+          String defaultVal = field.getDefaultValue();
+          String jsonName = field.getJsonName();
+          Map<String, OptionElement> options = mergeOptions(field.getOptions());
+          CType ctype = findOption(CTYPE, options)
+              .map(o -> CType.valueOf(o.getValue().toString())).orElse(null);
+          Boolean isPacked = findOption(PACKED, options)
+              .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+          JSType jstype = findOption(JSTYPE, options)
+              .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
+          Boolean isDeprecated = findOption(DEPRECATED, options)
+              .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+          Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
+          String doc = findDoc(meta);
+          Map<String, String> params = findParams(meta);
+          schema.addExtendDefinition(
+              extendElement.getName(),
+              label,
+              fieldType,
+              field.getName(),
+              field.getTag(),
+              defaultVal,
+              jsonName,
+              doc,
+              params,
+              ctype,
+              isPacked,
+              jstype,
+              isDeprecated
+          );
+        }
+      }
       for (String ref : rootElem.getImports()) {
         ProtoFileElement dep = dependencies.get(ref);
         if (dep != null) {
@@ -1080,6 +1299,11 @@ public class ProtobufSchema implements ParsedSchema {
       OptionElement javaMultipleFiles = options.get(JAVA_MULTIPLE_FILES);
       if (javaMultipleFiles != null) {
         schema.setJavaMultipleFiles(Boolean.parseBoolean(javaMultipleFiles.getValue().toString()));
+      }
+      OptionElement javaGenerateEqualsAndHash = options.get(JAVA_GENERATE_EQUALS_AND_HASH);
+      if (javaGenerateEqualsAndHash != null) {
+        schema.setJavaGenerateEqualsAndHash(
+            Boolean.parseBoolean(javaGenerateEqualsAndHash.getValue().toString()));
       }
       OptionElement javaStringCheckUtf8 = options.get(JAVA_STRING_CHECK_UTF8);
       if (javaStringCheckUtf8 != null) {
@@ -1167,13 +1391,12 @@ public class ProtobufSchema implements ParsedSchema {
     return options.stream()
         .collect(Collectors.toMap(
             o -> o.getName().startsWith(".") ? o.getName().substring(1) : o.getName(),
-            o -> o,
+            o -> transform(o),
             ProtobufSchema::merge));
   }
 
   @SuppressWarnings("unchecked")
-  private static OptionElement merge(OptionElement existing, OptionElement replacement) {
-    existing = transform(existing);
+  protected static OptionElement merge(OptionElement existing, OptionElement replacement) {
     replacement = transform(replacement);
     if (existing.getKind() == Kind.MAP && replacement.getKind() == Kind.MAP) {
       Map<String, ?> existingMap = (Map<String, ?>) existing.getValue();
@@ -1205,14 +1428,30 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
-  private static OptionElement transform(OptionElement option) {
+  protected static OptionElement transform(OptionElement option) {
     if (option.getKind() == Kind.OPTION) {
-      OptionElement value = (OptionElement) option.getValue();
-      Map<String, ?> map = Collections.singletonMap(value.getName(), value.getValue());
+      Map<String, ?> map = transformOptionMap(option);
       return new OptionElement(option.getName(), Kind.MAP, map, option.isParenthesized());
     } else {
       return option;
     }
+  }
+
+  private static Map<String, ?> transformOptionMap(OptionElement option) {
+    if (option.getKind() != Kind.OPTION) {
+      throw new IllegalArgumentException("Expected option of kind OPTION");
+    }
+    OptionElement value = (OptionElement) option.getValue();
+    Object mapValue = value.getValue();
+    Kind kind = value.getKind();
+    if (kind == Kind.BOOLEAN || kind == Kind.ENUM || kind == Kind.NUMBER) {
+      // Wire only creates OptionPrimitive for the above kinds
+      mapValue = new OptionElement.OptionPrimitive(kind, mapValue);
+    } else if (kind == Kind.OPTION) {
+      // Recursively convert options of kind OPTION to maps
+      mapValue = transformOptionMap(value);
+    }
+    return Collections.singletonMap(value.getName(), mapValue);
   }
 
   private static MessageDefinition toDynamicMessage(
@@ -1343,6 +1582,56 @@ public class ProtobufSchema implements ParsedSchema {
           throw new IllegalStateException("Unsupported reserved type: " + elem.getClass()
               .getName());
         }
+      }
+    }
+    for (ExtensionsElement extension : messageElem.getExtensions()) {
+      for (Object elem : extension.getValues()) {
+        if (elem instanceof Integer) {
+          int tag = (Integer) elem;
+          message.addExtensionRange(tag, tag + 1);
+        } else if (elem instanceof IntRange) {
+          IntRange range = (IntRange) elem;
+          message.addExtensionRange(range.getStart(), range.getEndInclusive() + 1);
+        } else {
+          throw new IllegalStateException("Unsupported extensions type: " + elem.getClass()
+              .getName());
+        }
+      }
+    }
+    for (ExtendElement extendElement : messageElem.getExtendDeclarations()) {
+      for (FieldElement field : extendElement.getFields()) {
+        Field.Label fieldLabel = field.getLabel();
+        String label = fieldLabel != null ? fieldLabel.toString().toLowerCase() : null;
+        String fieldType = field.getType();
+        String defaultVal = field.getDefaultValue();
+        String jsonName = field.getJsonName();
+        Map<String, OptionElement> options = mergeOptions(field.getOptions());
+        CType ctype = findOption(CTYPE, options)
+            .map(o -> CType.valueOf(o.getValue().toString())).orElse(null);
+        Boolean isPacked = findOption(PACKED, options)
+            .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+        JSType jstype = findOption(JSTYPE, options)
+            .map(o -> JSType.valueOf(o.getValue().toString())).orElse(null);
+        Boolean isDeprecated = findOption(DEPRECATED, options)
+            .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+        Optional<OptionElement> meta = findOption(CONFLUENT_FIELD_META, options);
+        String doc = findDoc(meta);
+        Map<String, String> params = findParams(meta);
+        message.addExtendDefinition(
+            extendElement.getName(),
+            label,
+            fieldType,
+            field.getName(),
+            field.getTag(),
+            defaultVal,
+            jsonName,
+            doc,
+            params,
+            ctype,
+            isPacked,
+            jstype,
+            isDeprecated
+        );
       }
     }
     Map<String, OptionElement> options = mergeOptions(messageElem.getOptions());
@@ -1530,11 +1819,24 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public String formattedString(String format) {
-    if (SERIALIZED_FORMAT.equals(format)) {
-      FileDescriptorProto file = toDynamicSchema().getFileDescriptorProto();
-      return base64Encoder.encodeToString(file.toByteArray());
+    if (format == null || format.trim().isEmpty()) {
+      return canonicalString();
     }
-    throw new IllegalArgumentException("Unsupported format " + format);
+    Format formatEnum = Format.get(format);
+    switch (formatEnum) {
+      case DEFAULT:
+        return canonicalString();
+      case IGNORE_EXTENSIONS:
+        FormatContext ctx = new FormatContext(true, false);
+        return ProtobufSchemaUtils.toFormattedString(ctx, this);
+      case SERIALIZED:
+        FileDescriptorProto file = toDynamicSchema().getFileDescriptorProto();
+        return base64Encoder.encodeToString(file.toByteArray());
+      default:
+        // Don't throw an exception for forward compatibility of formats
+        log.warn("Unsupported format {}", format);
+        return canonicalString();
+    }
   }
 
   public Integer version() {
@@ -1649,32 +1951,108 @@ public class ProtobufSchema implements ParsedSchema {
     return canonicalString();
   }
 
+  public GenericDescriptor toSpecificDescriptor(String originalPath) {
+    String clsName = fullName(originalPath);
+    if (clsName == null) {
+      return null;
+    }
+    try {
+      Class<?> cls = Class.forName(clsName);
+      Method parseMethod = cls.getDeclaredMethod("getDescriptor");
+      return (GenericDescriptor) parseMethod.invoke(null);
+    } catch (ClassNotFoundException e) {
+      throw new IllegalArgumentException("Class " + clsName + " could not be found.");
+    } catch (NoSuchMethodException e) {
+      throw new IllegalArgumentException("Class " + clsName
+          + " is not a valid protobuf message class", e);
+    } catch (IllegalAccessException | InvocationTargetException e) {
+      throw new IllegalArgumentException("Not a valid protobuf builder");
+    }
+  }
+
   public String fullName() {
-    Descriptor descriptor = toDescriptor();
-    FileDescriptor fd = descriptor.getFile();
-    DescriptorProtos.FileOptions o = fd.getOptions();
-    String p = o.hasJavaPackage() ? o.getJavaPackage() : fd.getPackage();
+    return fullName(null);
+  }
+
+  public String fullName(String originalPath) {
+    Map<String, OptionElement> options = mergeOptions(schemaObj.getOptions());
+    OptionElement javaPackageName = options.get(JAVA_PACKAGE);
+    OptionElement javaOuterClassname = options.get(JAVA_OUTER_CLASSNAME);
+    OptionElement javaMultipleFiles = options.get(JAVA_MULTIPLE_FILES);
+
     String outer = "";
-    if (!o.getJavaMultipleFiles()) {
-      if (o.hasJavaOuterClassname()) {
-        outer = o.getJavaOuterClassname();
+    if (javaMultipleFiles == null
+        || !Boolean.parseBoolean(javaMultipleFiles.getValue().toString())) {
+      if (javaOuterClassname != null) {
+        outer = javaOuterClassname.getValue().toString();
+      } else if (originalPath != null) {
+        Path path = Paths.get(originalPath).getFileName();
+        if (path != null) {
+          String fileName = path.toString();
+          if (fileName.endsWith(".proto")) {
+            fileName = fileName.substring(0, fileName.length() - ".proto".length());
+          }
+          outer = underscoresToCamelCase(fileName, true);
+          if (hasConflictingClassName(outer)) {
+            outer += "OuterClass";
+          }
+        }
       } else {
-        // Can't determine full name without either java_outer_classname or java_multiple_files
+        // Can't determine full name w/o either java_outer_classname or java_multiple_files=true
         return null;
       }
     }
+    String p = javaPackageName != null
+        ? javaPackageName.getValue().toString()
+        : schemaObj.getPackageName();
     StringBuilder inner = new StringBuilder();
-    while (descriptor != null) {
-      if (inner.length() == 0) {
-        inner.insert(0, descriptor.getName());
-      } else {
-        inner.insert(0, descriptor.getName() + "$");
+    String typeName = name;
+    if (typeName == null && !schemaObj.getTypes().isEmpty()) {
+      typeName = name();
+    }
+    List<TypeElement> typeElems = toTypeElements(typeName);
+    for (TypeElement typeElem : typeElems) {
+      if (inner.length() > 0) {
+        inner.append("$");
       }
-      descriptor = descriptor.getContainingType();
+      inner.append(typeElem.getName());
     }
     String d1 = (!outer.isEmpty() || inner.length() != 0 ? "." : "");
     String d2 = (!outer.isEmpty() && inner.length() != 0 ? "$" : "");
     return p + d1 + outer + d2 + inner;
+  }
+
+  private boolean hasConflictingClassName(String className) {
+    for (TypeElement type : schemaObj.getTypes()) {
+      if (type.getName().equals(className)) {
+        return true;
+      }
+      if (type instanceof MessageElement) {
+        if (messageHasConflictingClassName(className, ((MessageElement) type))) {
+          return true;
+        }
+      }
+    }
+    for (ServiceElement service : schemaObj.getServices()) {
+      if (service.getName().equals(className)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean messageHasConflictingClassName(String className, MessageElement message) {
+    for (TypeElement type : message.getNestedTypes()) {
+      if (type.getName().equals(className)) {
+        return true;
+      }
+      if (type instanceof MessageElement) {
+        if (messageHasConflictingClassName(className, ((MessageElement) type))) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   public MessageIndexes toMessageIndexes(String name) {
@@ -1746,6 +2124,25 @@ public class ProtobufSchema implements ParsedSchema {
     return null;
   }
 
+  private List<TypeElement> toTypeElements(String name) {
+    List<TypeElement> typeElems = new ArrayList<>();
+    if (name == null) {
+      return Collections.emptyList();
+    }
+    String[] parts = name.split("\\.");
+    List<TypeElement> types = schemaObj.getTypes();
+    for (String part : parts) {
+      for (TypeElement type : types) {
+        if (type.getName().equals(part)) {
+          typeElems.add(type);
+          types = type.getNestedTypes();
+          break;
+        }
+      }
+    }
+    return typeElems;
+  }
+
   public static String toMapEntry(String s) {
     if (s.contains("_")) {
       s = LOWER_UNDERSCORE.to(UPPER_CAMEL, s);
@@ -1762,5 +2159,75 @@ public class ProtobufSchema implements ParsedSchema {
       parts[parts.length - 1] = lastPart;
     }
     return String.join(".", parts);
+  }
+
+  // Adapted from java_helpers.cc in protobuf
+  public static String underscoresToCamelCase(String input, boolean capitalizeNextLetter) {
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < input.length(); i++) {
+      char c = input.charAt(i);
+      if ('a' <= c && c <= 'z') {
+        if (capitalizeNextLetter) {
+          result.append(Character.toUpperCase(c));
+        } else {
+          result.append(c);
+        }
+        capitalizeNextLetter = false;
+      } else if ('A' <= c && c <= 'Z') {
+        if (i == 0 && !capitalizeNextLetter) {
+          // Force first letter to lower-case unless explicitly told to
+          // capitalize it.
+          result.append(Character.toLowerCase(c));
+        } else {
+          // Capital letters after the first are left as-is.
+          result.append(c);
+        }
+        capitalizeNextLetter = false;
+      } else if ('0' <= c && c <= '9') {
+        result.append(c);
+        capitalizeNextLetter = true;
+      } else {
+        capitalizeNextLetter = true;
+      }
+    }
+    return result.toString();
+  }
+
+  public enum Format {
+    DEFAULT("default"),
+    IGNORE_EXTENSIONS("ignore_extensions"),
+    SERIALIZED("serialized");
+
+    private static final EnumHashBiMap<Format, String> lookup =
+        EnumHashBiMap.create(Format.class);
+
+    static {
+      for (Format type : Format.values()) {
+        lookup.put(type, type.symbol());
+      }
+    }
+
+    private final String symbol;
+
+    Format(String symbol) {
+      this.symbol = symbol;
+    }
+
+    public String symbol() {
+      return symbol;
+    }
+
+    public static Format get(String symbol) {
+      return lookup.inverse().get(symbol);
+    }
+
+    public static Set<String> symbols() {
+      return lookup.inverse().keySet();
+    }
+
+    @Override
+    public String toString() {
+      return symbol();
+    }
   }
 }

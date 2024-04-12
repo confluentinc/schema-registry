@@ -20,11 +20,17 @@ import com.acme.glup.ExampleProtoAcme;
 import com.acme.glup.MetadataProto;
 import com.acme.glup.MetadataProto.DataSet;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
+import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.Descriptors.GenericDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
 import io.confluent.connect.protobuf.test.DescriptorRef;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -33,8 +39,10 @@ import io.confluent.kafka.serializers.subject.DefaultReferenceSubjectNameStrateg
 import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -160,6 +168,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
   public void testDependency() throws Exception {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.NORMALIZE_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     serializerConfig.put(KafkaProtobufSerializerConfig.SKIP_KNOWN_TYPES_CONFIG, false);
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
@@ -204,12 +213,15 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     assertEquals(ProtobufSchemaUtils.getSchema(DEPENDENCY_MESSAGE).canonicalString(),
         schema.canonicalString()
     );
+
+    checkNormalization(schemaRegistry, "DependencyTestProto.proto");
   }
 
   @Test
   public void testDependencyPreregister() throws Exception {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.NORMALIZE_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.REFERENCE_LOOKUP_ONLY_CONFIG, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     serializerConfig.put(KafkaProtobufSerializerConfig.SKIP_KNOWN_TYPES_CONFIG, true);
@@ -252,6 +264,8 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     // specific -> specific
     bytes = protobufSerializer.serialize(topic, CONSENT_MESSAGE);
     assertEquals(CONSENT_MESSAGE, consentMessageDeserializer.deserialize(topic, bytes));
+
+    checkNormalization(schemaRegistry, "common_proto.proto");
   }
 
   public static class TestReferenceNameStrategy implements SubjectNameStrategy {
@@ -271,6 +285,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
   public void testDependency2() throws Exception {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.NORMALIZE_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     serializerConfig.put(KafkaProtobufSerializerConfig.SKIP_KNOWN_TYPES_CONFIG, false);
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
@@ -310,16 +325,19 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     );
 
     ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 4);
-    assertEquals(ProtobufSchemaUtils.getSchema(CLICK_CAS_MESSAGE).canonicalString(),
-        schema.canonicalString()
+    assertEquals(ProtobufSchemaUtils.getSchema(CLICK_CAS_MESSAGE).normalize().canonicalString(),
+        schema.normalize().canonicalString()
     );
+
+    checkNormalization(schemaRegistry, "exampleProtoAcme.proto");
   }
 
   @Test
   public void testWellKnownType() throws Exception {
     String schemaString = getSchemaWithWellKnownType();
     String subject = "wellknown";
-    registerAndVerifySchema(restApp.restClient, schemaString, Collections.emptyList(), 1, subject);
+    registerAndVerifySchema(
+        restApp.restClient, schemaString, Collections.emptyList(), 1, subject, true);
 
     DescriptorRef.DescriptorMessage descMessage =
         DescriptorRef.DescriptorMessage.newBuilder()
@@ -329,6 +347,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
 
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.NORMALIZE_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
         10,
@@ -365,8 +384,8 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     assertEquals(descMessage.getKey(), getField(message, "key"));
 
     ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId(subject, 1);
-    assertEquals(ProtobufSchemaUtils.getSchema(descMessage).canonicalString(),
-        schema.canonicalString()
+    assertEquals(ProtobufSchemaUtils.getSchema(descMessage).normalize().canonicalString(),
+        schema.normalize().canonicalString()
     );
 
     // additional resolve dependencies check
@@ -374,7 +393,9 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     ProtobufSchema resolvedSchema = ProtobufSchemaUtils.getSchema(descMessage);
     resolvedSchema = KafkaProtobufSerializer.resolveDependencies(
         schemaRegistry, false, false, true, null, true, strategy, subject, false, resolvedSchema);
-    assertEquals(schema, resolvedSchema);
+    assertEquals(schema.normalize(), resolvedSchema.normalize());
+
+    checkNormalization(schemaRegistry, "DescriptorRef.proto");
   }
 
   @Test(expected = RestClientException.class)
@@ -405,10 +426,22 @@ public class RestApiSerializerTest extends ClusterTestHarness {
       int expectedId,
       String subject
   ) throws IOException, RestClientException {
+    registerAndVerifySchema(restService, schemaString, references, expectedId, subject, false);
+  }
+
+  public static void registerAndVerifySchema(
+      RestService restService,
+      String schemaString,
+      List<SchemaReference> references,
+      int expectedId,
+      String subject,
+      boolean normalize
+  ) throws IOException, RestClientException {
     int registeredId = restService.registerSchema(schemaString,
         ProtobufSchema.TYPE,
         references,
-        subject
+        subject,
+        normalize
     );
     assertEquals(
         "Registering a new schema should succeed",
@@ -427,8 +460,8 @@ public class RestApiSerializerTest extends ClusterTestHarness {
         + "\n"
         + "import \"google/protobuf/descriptor.proto\";\n"
         + "\n"
-        + "option java_package = \"io.confluent.connect.protobuf.test\";\n"
         + "option java_outer_classname = \"DescriptorRef\";\n"
+        + "option java_package = \"io.confluent.connect.protobuf.test\";\n"
         + "\n"
         + "message DescriptorMessage {\n"
         + "  int32 key = 1;\n"
@@ -441,6 +474,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
   public void testEnumRoot() throws Exception {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.NORMALIZE_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
         10,
@@ -479,8 +513,8 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 1);
     assertEquals(new ProtobufSchema("syntax = \"proto3\";\n"
             + "\n"
-            + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
             + "option java_outer_classname = \"EnumRootOuter\";\n"
+            + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
             + "\n"
             + "enum EnumRoot {\n"
             + "  HELLO = 0;\n"
@@ -491,9 +525,35 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     assertEquals("EnumRoot", schema.name());
 
     schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 2);
-    assertEquals(ProtobufSchemaUtils.getSchema(ENUM_REF).canonicalString(),
-        schema.canonicalString()
+    assertEquals(ProtobufSchemaUtils.getSchema(ENUM_REF).normalize().canonicalString(),
+        schema.normalize().canonicalString()
     );
+
+    checkNormalization(schemaRegistry, "EnumReference.proto");
+  }
+
+  private static void checkNormalization(SchemaRegistryClient schemaRegistry, String fileName)
+      throws Exception {
+    Collection<String> subjects = schemaRegistry.getAllSubjects();
+    for (String subject : subjects) {
+      SchemaMetadata metadata = schemaRegistry.getLatestSchemaMetadata(subject);
+      Optional<ParsedSchema> schema = schemaRegistry.parseSchema(new Schema(subject, metadata));
+      ProtobufSchema proto = (ProtobufSchema) schema.get();
+      GenericDescriptor d = proto.toSpecificDescriptor(
+          subject.endsWith(".proto") ? subject : fileName);
+      ProtobufSchema proto2;
+      if (d instanceof EnumDescriptor) {
+        proto2 = new ProtobufSchema((EnumDescriptor) d);
+      } else if (d instanceof Descriptor){
+        proto2 = new ProtobufSchema((Descriptor) d);
+      } else if (d instanceof FileDescriptor) {
+        proto2 = new ProtobufSchema((FileDescriptor) d);
+      } else {
+        throw new IllegalArgumentException();
+      }
+      proto2 = proto2.normalize();
+      assertEquals(metadata.getSchema(), proto2.canonicalString());
+    }
   }
 }
 

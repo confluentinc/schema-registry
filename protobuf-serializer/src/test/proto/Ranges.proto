@@ -1,0 +1,30 @@
+syntax = "proto2";
+package io.confluent.kafka.serializers.protobuf.test;
+
+import "google/protobuf/descriptor.proto";
+
+option java_package = "io.confluent.kafka.serializers.protobuf.test";
+
+message FooBar {
+  extensions 100 to 200;
+  extensions 1000 to 1001;
+  extensions 2000 to 2000;
+
+  reserved 5000 to 6000;
+  reserved 10000 to 10001;
+  reserved 20000 to 20000;
+
+  optional int32 foo = 1;
+  optional string bar = 2;
+
+  enum FooBarBazEnum {
+    reserved 100 to 200;
+    reserved 1000 to 1001;
+    reserved 2000 to 2000;
+
+    NONE = 0;
+    FOO = 1;
+    BAR = 2;
+    BAZ = 3;
+  }
+}

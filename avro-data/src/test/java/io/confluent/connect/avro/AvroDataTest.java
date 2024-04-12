@@ -1029,6 +1029,30 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testFromConnectStructIgnoreDefaultForNullables() {
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.IGNORE_DEFAULT_FOR_NULLABLES_CONFIG, true)
+        .build();
+    AvroData avroData = new AvroData(avroDataConfig);
+
+    Schema connectStringSchema = SchemaBuilder.string().optional().defaultValue("default-string").build();
+    // The string field is not set
+    Schema schema = SchemaBuilder.struct()
+        .name("Record")
+        .field("int32", Schema.INT32_SCHEMA)
+        .field("string", connectStringSchema)
+        .build();
+
+    Struct struct = new Struct(schema).put("int32", 12);
+
+    Object convertedRecord = avroData.fromConnectData(schema, struct);
+
+    assertThat(convertedRecord, instanceOf(GenericRecord.class));
+    assertThat(((GenericRecord)convertedRecord).get("int32"), equalTo(12));
+    assertNull(((GenericRecord)convertedRecord).get("string"));
+  }
+
+  @Test
   public void testFromConnectOptionalComplex() {
     Schema optionalStructSchema = SchemaBuilder.struct().optional()
         .name("optionalStruct")
