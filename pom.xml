@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[7.1.13-0, 7.1.14-0)</version>
+        <version>[7.2.11-0, 7.2.12-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>7.1.13-0</version>
+    <version>7.2.11-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -50,6 +50,7 @@
         <module>schema-serializer</module>
         <module>avro-serializer</module>
         <module>json-serializer</module>
+        <module>schema-converter</module>
         <module>avro-data</module>
         <module>avro-converter</module>
         <module>package-schema-registry</module>
@@ -84,7 +85,7 @@
         <okio.version>3.4.0</okio.version>
         <wire.version>4.9.7</wire.version>
         <swagger.version>2.1.10</swagger.version>
-        <io.confluent.schema-registry.version>7.1.13-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>7.2.11-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <bouncycastle.jdk18.version>1.77</bouncycastle.jdk18.version>
     </properties>
@@ -191,8 +192,8 @@
                 <version>${jackson.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.github.everit-org.json-schema</groupId>
-                <artifactId>org.everit.json.schema</artifactId>
+                <groupId>com.github.erosb</groupId>
+                <artifactId>everit-json-schema</artifactId>
                 <version>${json-schema.version}</version>
             </dependency>
             <dependency>

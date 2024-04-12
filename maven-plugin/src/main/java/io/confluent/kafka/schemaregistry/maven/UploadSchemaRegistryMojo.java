@@ -26,9 +26,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -108,7 +106,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
         }
         return;
       }
-      String schemaString = readFile(file, StandardCharsets.UTF_8);
+      String schemaString = MojoUtils.readFile(file, StandardCharsets.UTF_8);
       Optional<ParsedSchema> schema = client().parseSchema(
           schemaType, schemaString, schemaReferences);
       if (schema.isPresent()) {
@@ -186,9 +184,5 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     return result;
   }
 
-  private static String readFile(File file, Charset encoding) throws IOException {
-    byte[] encoded = Files.readAllBytes(file.toPath());
-    return new String(encoded, encoding);
-  }
 
 }

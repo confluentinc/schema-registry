@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import java.util.LinkedHashMap;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
@@ -212,6 +213,37 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testFromConnectEnumWithGeneralizedSumTypeSupport() {
+    avroData = new AvroData(new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 2)
+        .with(AvroDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, true)
+        .build());
+    // Enums are just converted to strings, original enum is preserved in parameters
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
+        .enumeration("TestEnum")
+        .doc("some documentation")
+        .symbols("foo", "bar", "baz");
+    Map<String, String> params = new LinkedHashMap<>();
+    params.put("io.confluent.connect.avro.enum.doc.TestEnum", "some documentation");
+    params.put("org.apache.kafka.connect.data.Enum", "TestEnum");
+    params.put("org.apache.kafka.connect.data.Enum.foo", "0");
+    params.put("org.apache.kafka.connect.data.Enum.bar", "1");
+    params.put("org.apache.kafka.connect.data.Enum.baz", "2");
+    avroSchema.addProp("connect.parameters", params);
+    avroSchema.addProp("connect.name", "TestEnum");
+    SchemaBuilder builder = SchemaBuilder.string().name("TestEnum");
+    builder.parameter(AVRO_ENUM_DOC_PREFIX_PROP + "TestEnum", "some documentation");
+    builder.parameter(GENERALIZED_TYPE_ENUM, "TestEnum");
+    int i = 0;
+    for(String enumSymbol : new String[]{"foo", "bar", "baz"}) {
+      builder.parameter(GENERALIZED_TYPE_ENUM+"."+enumSymbol, String.valueOf(i++));
+    }
+
+    checkNonRecordConversion(avroSchema, new GenericData.EnumSymbol(avroSchema, "bar"),
+        builder.build(), "bar", avroData);
+  }
+
+  @Test
   public void testFromConnectMapWithStringKey() {
     final Schema schema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA);
     final org.apache.avro.Schema expected = org.apache.avro.SchemaBuilder.map()
@@ -314,7 +346,54 @@ public class AvroDataTest {
     assertEquals(2,
         genericData.resolveUnion(unionSchema, avroData.fromConnectData(union, unionSameOther)));
   }
-  
+
+  @Test
+  public void testFromConnectUnionWithGeneralizedSumTypeSupport() {
+    avroData = new AvroData(new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 2)
+        .with(AvroDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, true)
+        .build());
+    // Make sure we handle primitive types and named types properly by using a variety of types
+    org.apache.avro.Schema avroRecordSchema1 = org.apache.avro.SchemaBuilder.builder()
+        .record("Test1").fields().requiredInt("test").endRecord();
+    // Add connect name
+    avroRecordSchema1.addProp("connect.name", "Test1");
+    org.apache.avro.Schema avroRecordSchema2 = org.apache.avro.SchemaBuilder.builder()
+        .record("Test2").namespace("io.confluent").fields().requiredInt("test").endRecord();
+    // Add connect name
+    avroRecordSchema2.addProp("connect.name", "io.confluent.Test2");
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .intType().and()
+        .stringType().and()
+        .type(avroRecordSchema1).and()
+        .type(avroRecordSchema2)
+        .endUnion();
+
+    Schema recordSchema1 = SchemaBuilder.struct().name("Test1")
+        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema recordSchema2 = SchemaBuilder.struct().name("io.confluent.Test2")
+        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema schema = SchemaBuilder.struct()
+        .name("connect_union_0")
+        .parameter("org.apache.kafka.connect.data.Union", "connect_union_0")
+        .field("connect_union_field_0", Schema.OPTIONAL_INT32_SCHEMA)
+        .field("connect_union_field_1", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("connect_union_field_2", recordSchema1)
+        .field("connect_union_field_3", recordSchema2)
+        .build();
+    assertEquals(12,
+        avroData.fromConnectData(schema, new Struct(schema).put("connect_union_field_0", 12)));
+    assertEquals("teststring",
+        avroData.fromConnectData(schema, new Struct(schema).put("connect_union_field_1", "teststring")));
+
+    Struct schema1Test = new Struct(schema).put("connect_union_field_2", new Struct(recordSchema1).put("test", 12));
+    GenericRecord record1Test = new GenericRecordBuilder(avroRecordSchema1).set("test", 12).build();
+    Struct schema2Test = new Struct(schema).put("connect_union_field_3", new Struct(recordSchema2).put("test", 12));
+    GenericRecord record2Test = new GenericRecordBuilder(avroRecordSchema2).set("test", 12).build();
+    assertEquals(record1Test, avroData.fromConnectData(schema, schema1Test));
+    assertEquals(record2Test, avroData.fromConnectData(schema, schema2Test));
+  }
+
   @Test
   public void testFromConnectWithInvalidName() {
     AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
@@ -2124,6 +2203,51 @@ public class AvroDataTest {
                  avroData.toConnectData(avroSchema, record2Test));
   }
 
+  @Test
+  public void testToConnectUnionWithGeneralizedSumTypeSupport() {
+    avroData = new AvroData(new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 2)
+        .with(AvroDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, true)
+        .build());
+    // Make sure we handle primitive types and named types properly by using a variety of types
+    org.apache.avro.Schema avroRecordSchema1 = org.apache.avro.SchemaBuilder.builder()
+        .record("Test1").fields().requiredInt("test").endRecord();
+    org.apache.avro.Schema avroRecordSchema2 = org.apache.avro.SchemaBuilder.builder()
+        .record("Test2").namespace("io.confluent").fields().requiredInt("test").endRecord();
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .intType().and()
+        .stringType().and()
+        .type(avroRecordSchema1).and()
+        .type(avroRecordSchema2)
+        .endUnion();
+
+    Schema recordSchema1 = SchemaBuilder.struct().name("Test1")
+        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema recordSchema2 = SchemaBuilder.struct().name("io.confluent.Test2")
+        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema schema = SchemaBuilder.struct()
+        .name("connect_union_0")
+        .parameter("org.apache.kafka.connect.data.Union", "connect_union_0")
+        .field("connect_union_field_0", Schema.OPTIONAL_INT32_SCHEMA)
+        .field("connect_union_field_1", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("connect_union_field_2", recordSchema1)
+        .field("connect_union_field_3", recordSchema2)
+        .build();
+    assertEquals(new SchemaAndValue(schema, new Struct(schema).put("connect_union_field_0", 12)),
+        avroData.toConnectData(avroSchema, 12));
+    assertEquals(new SchemaAndValue(schema, new Struct(schema).put("connect_union_field_1", "teststring")),
+        avroData.toConnectData(avroSchema, "teststring"));
+
+    Struct schema1Test = new Struct(schema).put("connect_union_field_2", new Struct(recordSchema1).put("test", 12));
+    GenericRecord record1Test = new GenericRecordBuilder(avroRecordSchema1).set("test", 12).build();
+    Struct schema2Test = new Struct(schema).put("connect_union_field_3", new Struct(recordSchema2).put("test", 12));
+    GenericRecord record2Test = new GenericRecordBuilder(avroRecordSchema2).set("test", 12).build();
+    assertEquals(new SchemaAndValue(schema, schema1Test),
+        avroData.toConnectData(avroSchema, record1Test));
+    assertEquals(new SchemaAndValue(schema, schema2Test),
+        avroData.toConnectData(avroSchema, record2Test));
+  }
+
   @Test(expected = DataException.class)
   public void testToConnectUnionRecordConflict() {
     // If the records have the same name but are in different namespaces, we don't support this
@@ -2220,6 +2344,31 @@ public class AvroDataTest {
             avroData.toConnectData(avroSchema, "bar"));
     assertEquals(new SchemaAndValue(builder.build(), "bar"),
             avroData.toConnectData(avroSchema, new GenericData.EnumSymbol(avroSchema, "bar")));
+  }
+
+  @Test
+  public void testToConnectEnumWithGeneralizedSumTypeSupport() {
+    avroData = new AvroData(new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 2)
+        .with(AvroDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, true)
+        .build());
+    // Enums are just converted to strings, original enum is preserved in parameters
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
+        .enumeration("TestEnum")
+        .doc("some documentation")
+        .symbols("foo", "bar", "baz");
+    SchemaBuilder builder = SchemaBuilder.string().name("TestEnum");
+    builder.parameter(AVRO_ENUM_DOC_PREFIX_PROP + "TestEnum", "some documentation");
+    builder.parameter(GENERALIZED_TYPE_ENUM, "TestEnum");
+    int i = 0;
+    for(String enumSymbol : new String[]{"foo", "bar", "baz"}) {
+      builder.parameter(GENERALIZED_TYPE_ENUM+"."+enumSymbol, String.valueOf(i++));
+    }
+
+    assertEquals(new SchemaAndValue(builder.build(), "bar"),
+        avroData.toConnectData(avroSchema, "bar"));
+    assertEquals(new SchemaAndValue(builder.build(), "bar"),
+        avroData.toConnectData(avroSchema, new GenericData.EnumSymbol(avroSchema, "bar")));
   }
 
   @Test

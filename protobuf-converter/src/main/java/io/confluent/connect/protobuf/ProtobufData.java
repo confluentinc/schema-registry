@@ -33,6 +33,8 @@ import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.util.Timestamps;
+import io.confluent.connect.schema.ConnectEnum;
+import io.confluent.connect.schema.ConnectUnion;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -122,6 +124,9 @@ public class ProtobufData {
   public static final String CONNECT_TYPE_PROP = "connect.type";
   public static final String CONNECT_TYPE_INT8 = "int8";
   public static final String CONNECT_TYPE_INT16 = "int16";
+
+  public static final String GENERALIZED_TYPE_UNION = ConnectUnion.LOGICAL_PARAMETER;
+  public static final String GENERALIZED_TYPE_ENUM = ConnectEnum.LOGICAL_PARAMETER;
 
   private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
   private static final int MILLIS_PER_NANO = 1_000_000;
@@ -287,8 +292,10 @@ public class ProtobufData {
 
   private final Map<Schema, ProtobufSchema> fromConnectSchemaCache;
   private final Map<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
+  private boolean generalizedSumTypeSupport;
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
+  private boolean useIntForEnums;
   private boolean useOptionalForNullables;
   private boolean supportOptionalForProto2;
   private boolean useWrapperForNullables;
@@ -308,8 +315,10 @@ public class ProtobufData {
   public ProtobufData(ProtobufDataConfig protobufDataConfig) {
     fromConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
     toConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
+    this.generalizedSumTypeSupport = protobufDataConfig.isGeneralizedSumTypeSupportDefault();
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
     this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
+    this.useIntForEnums = protobufDataConfig.useIntForEnums();
     this.useOptionalForNullables = protobufDataConfig.useOptionalForNullables();
     this.supportOptionalForProto2 = protobufDataConfig.supportOptionalForProto2();
     this.useWrapperForNullables = protobufDataConfig.useWrapperForNullables();
@@ -371,6 +380,10 @@ public class ProtobufData {
         case INT16:
         case INT32: {
           final int intValue = ((Number) value).intValue(); // Check for correct type
+          if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
+            String enumType = schema.parameters().get(PROTOBUF_TYPE_ENUM);
+            return protobufSchema.getEnumValue(scope + enumType, intValue);
+          }
           return isWrapper ? Int32Value.newBuilder().setValue(intValue).build() : intValue;
         }
 
@@ -403,9 +416,13 @@ public class ProtobufData {
 
         case STRING: {
           final String stringValue = (String) value; // Check for correct type
-          if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
-            String enumType = schema.parameters().get(PROTOBUF_TYPE_ENUM);
-            String tag = schema.parameters().get(PROTOBUF_TYPE_ENUM_PREFIX + stringValue);
+          if (schema.parameters() != null
+              && (schema.parameters().containsKey(GENERALIZED_TYPE_ENUM)
+                  || schema.parameters().containsKey(PROTOBUF_TYPE_ENUM))) {
+            String paramName = generalizedSumTypeSupport
+                ? GENERALIZED_TYPE_ENUM : PROTOBUF_TYPE_ENUM;
+            String enumType = schema.parameters().get(paramName);
+            String tag = schema.parameters().get(paramName + "." + stringValue);
             if (tag != null) {
               return protobufSchema.getEnumValue(scope + enumType, Integer.parseInt(tag));
             }
@@ -470,10 +487,9 @@ public class ProtobufData {
           if (!struct.schema().equals(schema)) {
             throw new DataException("Mismatching struct schema");
           }
-          String structName = schema.name();
           //This handles the inverting of a union which is held as a struct, where each field is
           // one of the union types.
-          if (structName != null && structName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
+          if (isUnionSchema(schema)) {
             for (Field field : schema.fields()) {
               Object object = struct.get(field);
               if (object != null) {
@@ -710,6 +726,7 @@ public class ProtobufData {
       if (fieldDef != null) {
         boolean isProto3Optional = "optional".equals(fieldDef.getLabel());
         if (isProto3Optional) {
+          // Add a synthentic oneof
           MessageDefinition.OneofBuilder oneofBuilder = message.addOneof("_" + fieldDef.getName());
           oneofBuilder.addField(
               true,
@@ -792,9 +809,11 @@ public class ProtobufData {
     Object defaultVal = null;
     if (fieldSchema.type() == Schema.Type.STRUCT) {
       String fieldSchemaName = fieldSchema.name();
-      if (fieldSchemaName != null && fieldSchemaName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
-        String unionName =
-            getUnqualifiedName(ctx, fieldSchemaName.substring(PROTOBUF_TYPE_UNION_PREFIX.length()));
+      if (isUnionSchema(fieldSchema)) {
+        String unionName = generalizedSumTypeSupport
+            ? fieldSchema.parameters().get(GENERALIZED_TYPE_UNION)
+            : getUnqualifiedName(
+                ctx, fieldSchemaName.substring(PROTOBUF_TYPE_UNION_PREFIX.length()));
         oneofDefinitionFromConnectSchema(ctx, schema, message, fieldSchema, unionName);
         return null;
       } else {
@@ -811,8 +830,9 @@ public class ProtobufData {
     } else if (fieldSchema.type() == Schema.Type.MAP) {
       message.addMessageDefinition(
           mapDefinitionFromConnectSchema(ctx, schema, type, fieldSchema));
-    } else if (fieldSchema.parameters() != null && fieldSchema.parameters()
-        .containsKey(PROTOBUF_TYPE_ENUM)) {
+    } else if (fieldSchema.parameters() != null
+        && (fieldSchema.parameters().containsKey(GENERALIZED_TYPE_ENUM)
+            || fieldSchema.parameters().containsKey(PROTOBUF_TYPE_ENUM))) {
       String enumName = getUnqualifiedName(ctx, fieldSchema.name());
       if (!message.containsEnum(enumName)) {
         message.addEnumDefinition(enumDefinitionFromConnectSchema(ctx, schema, fieldSchema));
@@ -999,15 +1019,16 @@ public class ProtobufData {
       Schema enumElem
   ) {
     String enumName = getUnqualifiedName(ctx, enumElem.name());
-    EnumDefinition.Builder enumer = EnumDefinition.newBuilder(enumName);
+    EnumDefinition.Builder enumBuilder = EnumDefinition.newBuilder(enumName);
+    String paramName = generalizedSumTypeSupport ? GENERALIZED_TYPE_ENUM : PROTOBUF_TYPE_ENUM;
     for (Map.Entry<String, String> entry : enumElem.parameters().entrySet()) {
-      if (entry.getKey().startsWith(PROTOBUF_TYPE_ENUM_PREFIX)) {
-        String name = entry.getKey().substring(PROTOBUF_TYPE_ENUM_PREFIX.length());
+      if (entry.getKey().startsWith(paramName + ".")) {
+        String name = entry.getKey().substring(paramName.length() + 1);
         int tag = Integer.parseInt(entry.getValue());
-        enumer.addValue(name, tag);
+        enumBuilder.addValue(name, tag);
       }
     }
-    return enumer.build();
+    return enumBuilder.build();
   }
 
   private String dataTypeFromConnectSchema(
@@ -1042,6 +1063,9 @@ public class ProtobufData {
         return useWrapperForNullables && schema.isOptional()
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT32:
+        if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
+          return schema.parameters().get(PROTOBUF_TYPE_ENUM);
+        }
         defaultType = FieldDescriptor.Type.INT32.toString().toLowerCase();
         if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_PROP)) {
           defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
@@ -1078,8 +1102,12 @@ public class ProtobufData {
         return useWrapperForNullables && schema.isOptional()
             ? PROTOBUF_BOOL_WRAPPER_TYPE : FieldDescriptor.Type.BOOL.toString().toLowerCase();
       case STRING:
-        if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
-          return schema.parameters().get(PROTOBUF_TYPE_ENUM);
+        if (schema.parameters() != null) {
+          if (schema.parameters().containsKey(GENERALIZED_TYPE_ENUM)) {
+            return schema.parameters().get(GENERALIZED_TYPE_ENUM);
+          } else if (schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
+            return schema.parameters().get(PROTOBUF_TYPE_ENUM);
+          }
         }
         return useWrapperForNullables && schema.isOptional()
             ? PROTOBUF_STRING_WRAPPER_TYPE : FieldDescriptor.Type.STRING.toString().toLowerCase();
@@ -1117,6 +1145,11 @@ public class ProtobufData {
 
   private boolean isTimestampSchema(Schema schema) {
     return Timestamp.LOGICAL_NAME.equals(schema.name());
+  }
+
+  private static boolean isUnionSchema(Schema schema) {
+    return (schema.name() != null && schema.name().startsWith(PROTOBUF_TYPE_UNION))
+        || ConnectUnion.isUnion(schema);
   }
 
   public SchemaAndValue toConnectData(ProtobufSchema protobufSchema, Message message) {
@@ -1161,7 +1194,13 @@ public class ProtobufData {
           if (value instanceof Message) {
             value = getWrappedValue((Message) value);
           }
-          converted = ((Number) value).intValue();
+          if (value instanceof Number) {
+            converted = ((Number) value).intValue();
+          } else if (value instanceof Enum) {
+            converted = ((Enum) value).ordinal();
+          } else if (value instanceof EnumValueDescriptor) {
+            converted = ((EnumValueDescriptor) value).getNumber();
+          }
           break;
         case INT64:
           if (value instanceof Message) {
@@ -1296,8 +1335,8 @@ public class ProtobufData {
       OneofDescriptor oneOfDescriptor,
       FieldDescriptor fieldDescriptor
   ) {
-    String unionName = oneOfDescriptor.getName() + "_" + oneOfDescriptor.getIndex();
-    Field unionField = schema.field(unionName);
+    String unionFieldName = unionFieldName(oneOfDescriptor);
+    Field unionField = schema.field(unionFieldName);
     Schema unionSchema = unionField.schema();
     Struct union = new Struct(unionSchema);
 
@@ -1307,6 +1346,10 @@ public class ProtobufData {
     union.put(fieldName, toConnectData(field.schema(), obj));
 
     result.put(unionField, union);
+  }
+
+  private String unionFieldName(OneofDescriptor oneofDescriptor) {
+    return oneofDescriptor.getName() + "_" + oneofDescriptor.getIndex();
   }
 
   private void setStructField(
@@ -1367,8 +1410,8 @@ public class ProtobufData {
       builder.name(name);
       List<OneofDescriptor> oneOfDescriptors = descriptor.getRealOneofs();
       for (OneofDescriptor oneOfDescriptor : oneOfDescriptors) {
-        String unionName = oneOfDescriptor.getName() + "_" + oneOfDescriptor.getIndex();
-        builder.field(unionName, toConnectSchema(ctx, oneOfDescriptor));
+        String unionFieldName = unionFieldName(oneOfDescriptor);
+        builder.field(unionFieldName, toConnectSchema(ctx, oneOfDescriptor));
       }
       List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
       for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
@@ -1390,8 +1433,14 @@ public class ProtobufData {
 
   private Schema toConnectSchema(ToConnectContext ctx, OneofDescriptor descriptor) {
     SchemaBuilder builder = SchemaBuilder.struct();
-    String name = enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName();
-    builder.name(PROTOBUF_TYPE_UNION_PREFIX + name);
+    if (generalizedSumTypeSupport) {
+      String name = descriptor.getName();
+      builder.name(name);
+      builder.parameter(GENERALIZED_TYPE_UNION, name);
+    } else {
+      String name = enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName();
+      builder.name(PROTOBUF_TYPE_UNION_PREFIX + name);
+    }
     List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
     for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
       builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
@@ -1466,16 +1515,17 @@ public class ProtobufData {
         break;
 
       case ENUM:
-        builder = SchemaBuilder.string();
+        builder = useIntForEnums ? SchemaBuilder.int32() : SchemaBuilder.string();
         EnumDescriptor enumDescriptor = descriptor.getEnumType();
         String name = enhancedSchemaSupport
             ? enumDescriptor.getFullName() : enumDescriptor.getName();
         builder.name(name);
-        builder.parameter(PROTOBUF_TYPE_ENUM, enumDescriptor.getName());
+        String paramName = generalizedSumTypeSupport ? GENERALIZED_TYPE_ENUM : PROTOBUF_TYPE_ENUM;
+        builder.parameter(paramName, enumDescriptor.getName());
         for (EnumValueDescriptor enumValueDesc : enumDescriptor.getValues()) {
           String enumSymbol = enumValueDesc.getName();
           String enumTag = String.valueOf(enumValueDesc.getNumber());
-          builder.parameter(PROTOBUF_TYPE_ENUM_PREFIX + enumSymbol, enumTag);
+          builder.parameter(paramName + "." + enumSymbol, enumTag);
         }
         builder.optional();
         break;

@@ -35,7 +35,9 @@ import io.confluent.connect.json.JsonSchemaData.SchemaWrapper;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
@@ -65,6 +67,10 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
 import static io.confluent.connect.json.JsonSchemaData.CONNECT_TYPE_MAP;
 import static io.confluent.connect.json.JsonSchemaData.CONNECT_TYPE_PROP;
+import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_ENUM;
+import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_UNION;
+import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_UNION_FIELD_PREFIX;
+import static io.confluent.connect.json.JsonSchemaData.GENERALIZED_TYPE_UNION_PREFIX;
 import static io.confluent.connect.json.JsonSchemaData.JSON_TYPE_ENUM;
 import static io.confluent.connect.json.JsonSchemaData.JSON_TYPE_ONE_OF;
 import static io.confluent.connect.json.JsonSchemaData.KEY_FIELD;
@@ -207,6 +213,77 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testFromConnectEnumWithNull() {
+    EnumSchema schema = EnumSchema.builder()
+        .possibleValue("one")
+        .possibleValue("two")
+        .possibleValue("three")
+        .possibleValue(null)
+        .build();
+    Schema connectSchema = new SchemaBuilder(Schema.Type.STRING).parameter(JSON_TYPE_ENUM, "")
+        .parameter(JSON_TYPE_ENUM + ".one", "one")
+        .parameter(JSON_TYPE_ENUM + ".two", "two")
+        .parameter(JSON_TYPE_ENUM + ".three", "three")
+        .parameter(JSON_TYPE_ENUM + ".<NULL>", "<NULL>")
+        .build();
+
+    checkNonObjectConversion(schema, TextNode.valueOf("one"), connectSchema, "one");
+  }
+
+  @Test
+  public void testFromConnectEnumWithGeneralizedSumTypeSupport() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, "true")));
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put("org.apache.kafka.connect.data.Enum", "");
+    params.put("org.apache.kafka.connect.data.Enum.one", "0");
+    params.put("org.apache.kafka.connect.data.Enum.two", "1");
+    params.put("org.apache.kafka.connect.data.Enum.three", "2");
+    EnumSchema schema = EnumSchema.builder()
+        .possibleValue("one")
+        .possibleValue("two")
+        .possibleValue("three")
+        .unprocessedProperties(Collections.singletonMap("connect.parameters", params))
+        .build();
+    Schema connectSchema = new SchemaBuilder(Schema.Type.STRING).parameter(GENERALIZED_TYPE_ENUM, "")
+        .parameter(GENERALIZED_TYPE_ENUM + ".one", "0")
+        .parameter(GENERALIZED_TYPE_ENUM + ".two", "1")
+        .parameter(GENERALIZED_TYPE_ENUM + ".three", "2")
+        .build();
+
+    checkNonObjectConversion(schema, TextNode.valueOf("one"), connectSchema, "one");
+  }
+
+  @Test
+  public void testFromConnectEnumWithNullGeneralizedSumTypeSupport() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, "true")));
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put("org.apache.kafka.connect.data.Enum", "");
+    params.put("org.apache.kafka.connect.data.Enum.one", "0");
+    params.put("org.apache.kafka.connect.data.Enum.two", "1");
+    params.put("org.apache.kafka.connect.data.Enum.three", "2");
+    params.put("org.apache.kafka.connect.data.Enum.<NULL>", "3");
+    EnumSchema schema = EnumSchema.builder()
+        .possibleValue("one")
+        .possibleValue("two")
+        .possibleValue("three")
+        .possibleValue(null)
+        .unprocessedProperties(Collections.singletonMap("connect.parameters", params))
+        .build();
+    Schema connectSchema = new SchemaBuilder(Schema.Type.STRING).parameter(GENERALIZED_TYPE_ENUM, "")
+        .parameter(GENERALIZED_TYPE_ENUM + ".one", "0")
+        .parameter(GENERALIZED_TYPE_ENUM + ".two", "1")
+        .parameter(GENERALIZED_TYPE_ENUM + ".three", "2")
+        .parameter(GENERALIZED_TYPE_ENUM + ".<NULL>", "3")
+        .build();
+
+    checkNonObjectConversion(schema, TextNode.valueOf("one"), connectSchema, "one");
+  }
+
+  @Test
   public void testFromConnectUnion() {
     NumberSchema firstSchema = NumberSchema.builder()
         .requiresInteger(true)
@@ -224,6 +301,31 @@ public class JsonSchemaDataTest {
     Schema connectSchema = builder.build();
 
     Struct actual = new Struct(connectSchema).put(JSON_TYPE_ONE_OF + ".field.0", (byte) 12);
+    checkNonObjectConversion(schema, ShortNode.valueOf((short) 12), connectSchema, actual);
+  }
+
+  @Test
+  public void testFromConnectUnionWithGeneralizedSumTypeSupport() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, "true")));
+    NumberSchema firstSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(ImmutableMap.of("connect.type", "int8", "connect.index", 0))
+        .build();
+    NumberSchema secondSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(ImmutableMap.of("connect.type", "int16", "connect.index", 1))
+        .build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
+        .build();
+    SchemaBuilder builder = SchemaBuilder.struct().name("connect_union_0");
+    builder.field(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "0", Schema.INT8_SCHEMA);
+    builder.field(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "1", Schema.INT16_SCHEMA);
+    builder.parameter(GENERALIZED_TYPE_UNION, "connect_union_0");
+    Schema connectSchema = builder.build();
+
+    Struct actual = new Struct(connectSchema).put(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "0", (byte) 12);
     checkNonObjectConversion(schema, ShortNode.valueOf((short) 12), connectSchema, actual);
   }
 
@@ -1136,6 +1238,64 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectEnumWithNull() {
+    EnumSchema schema = EnumSchema.builder()
+        .possibleValue("one")
+        .possibleValue("two")
+        .possibleValue("three")
+        .possibleValue(null)
+        .build();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).parameter(JSON_TYPE_ENUM, "")
+        .parameter(JSON_TYPE_ENUM + ".one", "one")
+        .parameter(JSON_TYPE_ENUM + ".two", "two")
+        .parameter(JSON_TYPE_ENUM + ".three", "three")
+        .parameter(JSON_TYPE_ENUM + ".<NULL>", "<NULL>")
+        .build();
+
+    checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
+  }
+
+  @Test
+  public void testToConnectEnumWithGeneralizedSumTypeSupport() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, "true")));
+    EnumSchema schema = EnumSchema.builder()
+        .possibleValue("one")
+        .possibleValue("two")
+        .possibleValue("three")
+        .build();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).parameter(GENERALIZED_TYPE_ENUM, "")
+        .parameter(GENERALIZED_TYPE_ENUM + ".one", "0")
+        .parameter(GENERALIZED_TYPE_ENUM + ".two", "1")
+        .parameter(GENERALIZED_TYPE_ENUM + ".three", "2")
+        .build();
+
+    checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
+  }
+
+  @Test
+  public void testToConnectEnumWithNullGeneralizedSumTypeSupport() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, "true")));
+    EnumSchema schema = EnumSchema.builder()
+        .possibleValue("one")
+        .possibleValue("two")
+        .possibleValue("three")
+        .possibleValue(null)
+        .build();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).parameter(GENERALIZED_TYPE_ENUM, "")
+        .parameter(GENERALIZED_TYPE_ENUM + ".one", "0")
+        .parameter(GENERALIZED_TYPE_ENUM + ".two", "1")
+        .parameter(GENERALIZED_TYPE_ENUM + ".three", "2")
+        .parameter(GENERALIZED_TYPE_ENUM + ".<NULL>", "3")
+        .build();
+
+    checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
+  }
+
+  @Test
   public void testToConnectEnumInAllOf() {
     StringSchema stringSchema = StringSchema.builder().build();
     EnumSchema enumSchema = EnumSchema.builder()
@@ -1258,6 +1418,31 @@ public class JsonSchemaDataTest {
     Schema expectedSchema = builder.build();
 
     Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.0", (byte) 12);
+    checkNonObjectConversion(expectedSchema, expected, schema, ShortNode.valueOf((short) 12));
+  }
+
+  @Test
+  public void testToConnectUnionWithGeneralizedSumTypeSupport() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, "true")));
+    NumberSchema firstSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
+        .build();
+    NumberSchema secondSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int16"))
+        .build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
+        .build();
+    SchemaBuilder builder = SchemaBuilder.struct().name("connect_union_0");
+    builder.field(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "0", Schema.OPTIONAL_INT8_SCHEMA);
+    builder.field(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "1", Schema.OPTIONAL_INT16_SCHEMA);
+    builder.parameter(GENERALIZED_TYPE_UNION, "connect_union_0");
+    Schema expectedSchema = builder.build();
+
+    Struct expected = new Struct(expectedSchema).put(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "0", (byte) 12);
     checkNonObjectConversion(expectedSchema, expected, schema, ShortNode.valueOf((short) 12));
   }
 
@@ -1812,6 +1997,47 @@ public class JsonSchemaDataTest {
     assertTrue(connectSchema.field("complexNode").schema().isOptional());
   }
 
+  @Test
+  public void testOptionalObjectOrArray() {
+    // From https://stackoverflow.com/questions/36413015/json-schema-which-allows-either-an-object-or-an-array-of-those-objects
+    String schema = "{\n"
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"assetMetadata\": {\n"
+        + "      \"anyOf\": [\n"
+        + "        { \"$ref\": \"#/definitions/assetMetadata\" },\n"
+        + "        {\n"
+        + "          \"type\": \"array\",\n"
+        + "          \"items\": { \"$ref\": \"#/definitions/assetMetadata\" }\n"
+        + "        },\n"
+        + "        {\n"
+        + "          \"type\": \"null\"\n"
+        + "        }\n"
+        + "      ]\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"definitions\": {\n"
+        + "    \"assetMetadata\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"additionalProperties\": false,\n"
+        + "      \"properties\": {\n"
+        + "        \"id\": {\n"
+        + "          \"type\": \"string\"\n"
+        + "        },\n"
+        + "        \"type\": {\n"
+        + "          \"type\": \"string\"\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertTrue(connectSchema.field("assetMetadata").schema().isOptional());
+  }
+  
   @Test
   public void testToConnectRecursiveSchema() {
     JsonSchema jsonSchema = getRecursiveJsonSchema();

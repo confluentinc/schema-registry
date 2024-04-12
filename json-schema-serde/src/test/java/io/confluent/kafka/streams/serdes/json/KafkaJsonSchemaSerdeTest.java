@@ -16,12 +16,15 @@
 
 package io.confluent.kafka.streams.serdes.json;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -49,6 +52,26 @@ public class KafkaJsonSchemaSerdeTest {
 
   private static final JsonSchema recordSchema = new JsonSchema(recordSchemaString);
 
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  private static class SomeTestRecord {
+    String string;
+    Integer number;
+    private SomeTestRecord() {}
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      SomeTestRecord that = (SomeTestRecord) o;
+      return Objects.equals(string, that.string) &&
+              Objects.equals(number, that.number);
+    }
+  }
+
   private Object createJsonRecord() throws IOException {
     String json = "{\n"
         + "    \"null\": null,\n"
@@ -60,6 +83,17 @@ public class KafkaJsonSchemaSerdeTest {
     return objectMapper.readValue(json, Object.class);
   }
 
+  private SomeTestRecord createJsonRecordWithClass() throws IOException {
+    String json = "{\n"
+            + "    \"null\": null,\n"
+            + "    \"boolean\": true,\n"
+            + "    \"number\": 12,\n"
+            + "    \"string\": \"string\"\n"
+            + "}";
+
+    return objectMapper.readValue(json, SomeTestRecord.class);
+  }
+
   private static KafkaJsonSchemaSerde<Object> createConfiguredSerdeForRecordValues() {
     SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
     KafkaJsonSchemaSerde<Object> serde = new KafkaJsonSchemaSerde<>(schemaRegistryClient);
@@ -68,6 +102,16 @@ public class KafkaJsonSchemaSerdeTest {
     serde.configure(serdeConfig, false);
     return serde;
   }
+
+  private static KafkaJsonSchemaSerde<SomeTestRecord> createConfiguredSerdeForRecordValuesWithClass() {
+    SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
+    KafkaJsonSchemaSerde<SomeTestRecord> serde = new KafkaJsonSchemaSerde<>(schemaRegistryClient, SomeTestRecord.class);
+    Map<String, Object> serdeConfig = new HashMap<>();
+    serdeConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
+    serde.configure(serdeConfig, false);
+    return serde;
+  }
+
 
   @Test
   public void shouldRoundTripRecords() throws Exception {
@@ -105,4 +149,22 @@ public class KafkaJsonSchemaSerdeTest {
   public void shouldFailWhenInstantiatedWithNullSchemaRegistryClient() {
     new KafkaJsonSchemaSerde<>((SchemaRegistryClient) null);
   }
+
+  @Test
+  public void shouldLetTheAbilityToDeserializeToASpecificClass() throws IOException {
+    // Given
+    KafkaJsonSchemaSerde<SomeTestRecord> serde = createConfiguredSerdeForRecordValuesWithClass();
+    SomeTestRecord record = createJsonRecordWithClass();
+
+    // When
+    Object roundtrippedRecord = serde.deserializer().deserialize(
+            ANY_TOPIC, serde.serializer().serialize(ANY_TOPIC, record));
+
+    // Then
+    assertThat(roundtrippedRecord, equalTo(record));
+
+    // Cleanup
+    serde.close();
+  }
+
 }

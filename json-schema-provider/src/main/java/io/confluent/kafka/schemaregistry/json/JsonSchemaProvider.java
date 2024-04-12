@@ -19,7 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
-import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -35,19 +34,19 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
   }
 
   @Override
-  public Optional<ParsedSchema> parseSchema(String schemaString,
-                                            List<SchemaReference> references,
-                                            boolean isNew) {
+  public ParsedSchema parseSchemaOrElseThrow(String schemaString,
+                                             List<SchemaReference> references,
+                                             boolean isNew) {
     try {
-      return Optional.of(new JsonSchema(
-          schemaString,
-          references,
-          resolveReferences(references),
-          null
-      ));
+      return new JsonSchema(
+              schemaString,
+              references,
+              resolveReferences(references),
+              null
+      );
     } catch (Exception e) {
       log.error("Could not parse JSON schema", e);
-      return Optional.empty();
+      throw e;
     }
   }
 }
