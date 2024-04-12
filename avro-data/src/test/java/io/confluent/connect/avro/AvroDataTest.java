@@ -323,17 +323,18 @@ public class AvroDataTest {
         .build();
     AvroData avroData = new AvroData(avroDataConfig);
     Schema schema = SchemaBuilder.struct()
-        .name("org.acme.invalid record-name")
+        .name("org.acme-corp.invalid record-name")
         .field("invalid field-name", Schema.STRING_SCHEMA)
         .build();
     Struct struct = new Struct(schema);
     struct.put("invalid field-name", "foo");
-    org.apache.avro.Schema expectedSchema = org.apache.avro.SchemaBuilder
-        .record("invalid_record_name").namespace("org.acme") // default values
+    org.apache.avro.Schema expectedAvroSchema = org.apache.avro.SchemaBuilder
+        .record("invalid_record_name").namespace("org.acme_corp") // default values
         .fields()
         .requiredString("invalid_field_name")
         .endRecord();
     org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+    assertEquals(expectedAvroSchema, avroSchema);
     GenericRecord convertedRecord = (GenericRecord) avroData.fromConnectData(schema, struct);
     assertEquals("invalid_record_name", avroSchema.getName());
     assertEquals("invalid_field_name", avroSchema.getFields().get(0).name());
