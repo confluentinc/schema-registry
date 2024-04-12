@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.5.4-0</version>
+        <version>7.5.4-145</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
