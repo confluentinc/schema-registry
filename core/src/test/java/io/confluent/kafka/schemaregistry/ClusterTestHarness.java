@@ -182,7 +182,7 @@ public abstract class ClusterTestHarness {
         brokerId,
         zkConnect,
         false,
-        false,
+        true,
         TestUtils.RandomPort(),
         noInterBrokerSecurityProtocol,
         noFile,
