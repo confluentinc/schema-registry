@@ -122,6 +122,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   private static final ErrorAction ERROR_ACTION = new ErrorAction();
   private static final NoneAction NONE_ACTION = new NoneAction();
 
+  private static final String ON_SUCCESS = "onSuccess";
+  private static final String ON_FAILURE = "onFailure";
+
   // Track the key for use when deserializing/serializing the value, such as for a DLQ.
   // We take advantage of the fact the value serde is called after the key serde.
   private static final ThreadLocal<Object> key = new ThreadLocal<>();
@@ -709,11 +712,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   private String getOnSuccess(Rule rule) {
-    Object propertyValue = getRuleConfig(rule.getName(), "onSuccess");
+    Object propertyValue = getRuleConfig(rule.getName(), ON_SUCCESS);
     if (propertyValue != null) {
       return propertyValue.toString();
     }
-    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, "onSuccess");
+    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, ON_SUCCESS);
     if (propertyValue != null) {
       return propertyValue.toString();
     }
@@ -721,11 +724,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   private String getOnFailure(Rule rule) {
-    Object propertyValue = getRuleConfig(rule.getName(), "onFailure");
+    Object propertyValue = getRuleConfig(rule.getName(), ON_FAILURE);
     if (propertyValue != null) {
       return propertyValue.toString();
     }
-    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, "onFailure");
+    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, ON_FAILURE);
     if (propertyValue != null) {
       return propertyValue.toString();
     }
