@@ -691,19 +691,48 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
               throw new IllegalStateException("Unsupported rule kind " + rule.getKind());
           }
           runAction(ctx, ruleMode, rule,
-              message != null ? rule.getOnSuccess() : rule.getOnFailure(),
+              message != null ? getOnSuccess(rule) : getOnFailure(rule),
               message, null, message != null ? null : ErrorAction.TYPE
           );
         } catch (RuleException e) {
-          runAction(ctx, ruleMode, rule, rule.getOnFailure(), message, e, ErrorAction.TYPE);
+          runAction(ctx, ruleMode, rule, getOnFailure(rule), message, e, ErrorAction.TYPE);
         }
       } else {
-        runAction(ctx, ruleMode, rule, rule.getOnFailure(), message,
+        runAction(ctx, ruleMode, rule, getOnFailure(rule), message,
             new RuleException("Could not find rule executor of type " + rule.getType()),
             ErrorAction.TYPE);
       }
     }
     return message;
+  }
+
+  private String getOnSuccess(Rule rule) {
+    Object propertyValue = getRuleConfig(rule.getName(), "onSuccess");
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
+    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, "onSuccess");
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
+    return rule.getOnSuccess();
+  }
+
+  private String getOnFailure(Rule rule) {
+    Object propertyValue = getRuleConfig(rule.getName(), "onFailure");
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
+    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, "onFailure");
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
+    return rule.getOnFailure();
+  }
+
+  private Object getRuleConfig(String name, String suffix) {
+    String propertyName = RULE_EXECUTORS + "." + name + "." + suffix;
+    return configOriginals.get(propertyName);
   }
 
   private boolean skipRule(Rule rule, Headers headers) {
