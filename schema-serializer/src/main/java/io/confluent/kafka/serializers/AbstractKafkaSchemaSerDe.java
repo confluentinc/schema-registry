@@ -714,6 +714,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     if (propertyValue != null) {
       return propertyValue.toString();
     }
+    propertyValue = getRuleConfig("_" + rule.getType() + "_", ON_SUCCESS);
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
     propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, ON_SUCCESS);
     if (propertyValue != null) {
       return propertyValue.toString();
@@ -723,6 +727,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   private String getOnFailure(Rule rule) {
     Object propertyValue = getRuleConfig(rule.getName(), ON_FAILURE);
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
+    propertyValue = getRuleConfig("_" + rule.getType() + "_", ON_FAILURE);
     if (propertyValue != null) {
       return propertyValue.toString();
     }
