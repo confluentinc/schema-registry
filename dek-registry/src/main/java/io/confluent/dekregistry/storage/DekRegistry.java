@@ -502,7 +502,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public void testKek(String kekName) throws SchemaRegistryException {
+  public void validateKek(String kekName) throws SchemaRegistryException {
     DataEncryptionKey key = new DataEncryptionKey(kekName, TEST_SUBJECT,
         DekFormat.AES256_GCM, MIN_VERSION, null, false);
     KeyEncryptionKey kek = getKek(key.getKekName(), true);
