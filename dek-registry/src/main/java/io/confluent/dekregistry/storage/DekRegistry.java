@@ -107,6 +107,8 @@ public class DekRegistry implements Closeable {
   public static final String AZURE_KMS = "azure-kms";
   public static final String GCP_KMS = "gcp-kms";
 
+  private static final String TEST_SUBJECT = "__TEST";
+
   private static final TypeReference<Kek> KEK_TYPE =
       new TypeReference<Kek>() {
       };
@@ -497,6 +499,17 @@ public class DekRegistry implements Closeable {
       return GCP_KMS;
     } else {
       return kmsType;
+    }
+  }
+
+  public void validateKek(String kekName) throws SchemaRegistryException {
+    DataEncryptionKey key = new DataEncryptionKey(kekName, TEST_SUBJECT,
+        DekFormat.AES256_GCM, MIN_VERSION, null, false);
+    KeyEncryptionKey kek = getKek(key.getKekName(), true);
+    if (kek.isShared()) {
+      generateEncryptedDek(kek, key);
+    } else {
+      throw new InvalidKeyException("shared");
     }
   }
 
