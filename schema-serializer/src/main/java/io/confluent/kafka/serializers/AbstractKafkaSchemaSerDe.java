@@ -119,11 +119,16 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected Map<String, Map<String, RuleBase>> ruleActions;
   protected boolean isKey;
 
+  private Map<Rule, String> onSuccessActions;
+  private Map<Rule, String> onFailureActions;
+  private Map<Rule, Boolean> disabledFlags;
+
   private static final ErrorAction ERROR_ACTION = new ErrorAction();
   private static final NoneAction NONE_ACTION = new NoneAction();
 
   private static final String ON_SUCCESS = "onSuccess";
   private static final String ON_FAILURE = "onFailure";
+  private static final String DISABLED = "disabled";
 
   // Track the key for use when deserializing/serializing the value, such as for a DLQ.
   // We take advantage of the fact the value serde is called after the key serde.
@@ -196,6 +201,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         config, RULE_EXECUTORS, RuleExecutor.class, enableRuleServiceLoader);
     ruleActions = initRuleObjects(
         config, RULE_ACTIONS, RuleAction.class, enableRuleServiceLoader);
+    onSuccessActions = new HashMap<>();
+    onFailureActions = new HashMap<>();
+    disabledFlags = new HashMap<>();
   }
 
   protected void postOp(Object payload) {
@@ -543,11 +551,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       throws IOException, RestClientException {
     ParsedSchema lookupSchema = getSchemaBySubjectAndId(subject, id);
     if (idCompatStrict && !lookupSchema.isBackwardCompatible(schema).isEmpty()) {
-      throw new IOException("Incompatible schema " + lookupSchema.canonicalString()
-          + " with refs " + lookupSchema.references()
-          + " of type " + lookupSchema.schemaType()
-          + " for schema " + schema.canonicalString()
-          + ". Set id.compatibility.strict=false to disable this check");
+      throw new IOException("Incompatible schema '" + lookupSchema.canonicalString()
+          + "' with refs '" + lookupSchema.references()
+          + "' of type '" + lookupSchema.schemaType()
+          + "' for schema '" + schema.canonicalString()
+          + "'. Set id.compatibility.strict=false to disable this check");
     }
     return lookupSchema;
   }
@@ -585,11 +593,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       // Sanity check by testing latest is backward compatibility with schema
       // Don't test for forward compatibility so unions can be handled properly
       if (latestCompatStrict && !latestVersion.isBackwardCompatible(schema).isEmpty()) {
-        throw new IOException("Incompatible schema " + schemaMetadata.getSchema()
-            + " with refs " + schemaMetadata.getReferences()
-            + " of type " + schemaMetadata.getSchemaType()
-            + " for schema " + schema.canonicalString()
-            + ". Set latest.compatibility.strict=false to disable this check");
+        throw new IOException("Incompatible schema '" + schemaMetadata.getSchema()
+            + "' with refs '" + schemaMetadata.getReferences()
+            + "' of type '" + schemaMetadata.getSchemaType()
+            + "' for schema '" + schema.canonicalString()
+            + "'. Set latest.compatibility.strict=false to disable this check");
       }
       if (cache != null) {
         cache.put(ss, latestVersion);
@@ -710,27 +718,57 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   private String getOnSuccess(Rule rule) {
-    Object propertyValue = getRuleConfig(rule.getName(), ON_SUCCESS);
-    if (propertyValue != null) {
-      return propertyValue.toString();
-    }
-    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, ON_SUCCESS);
-    if (propertyValue != null) {
-      return propertyValue.toString();
-    }
-    return rule.getOnSuccess();
+    return onSuccessActions.computeIfAbsent(rule, r -> {
+      Object propertyValue = getRuleConfig(rule.getName(), ON_SUCCESS);
+      if (propertyValue != null) {
+        return propertyValue.toString();
+      }
+      propertyValue = getRuleConfig("_" + rule.getType() + "_", ON_SUCCESS);
+      if (propertyValue != null) {
+        return propertyValue.toString();
+      }
+      propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, ON_SUCCESS);
+      if (propertyValue != null) {
+        return propertyValue.toString();
+      }
+      return rule.getOnSuccess();
+    });
   }
 
   private String getOnFailure(Rule rule) {
-    Object propertyValue = getRuleConfig(rule.getName(), ON_FAILURE);
-    if (propertyValue != null) {
-      return propertyValue.toString();
-    }
-    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, ON_FAILURE);
-    if (propertyValue != null) {
-      return propertyValue.toString();
-    }
-    return rule.getOnFailure();
+    return onFailureActions.computeIfAbsent(rule, r -> {
+      Object propertyValue = getRuleConfig(rule.getName(), ON_FAILURE);
+      if (propertyValue != null) {
+        return propertyValue.toString();
+      }
+      propertyValue = getRuleConfig("_" + rule.getType() + "_", ON_FAILURE);
+      if (propertyValue != null) {
+        return propertyValue.toString();
+      }
+      propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, ON_FAILURE);
+      if (propertyValue != null) {
+        return propertyValue.toString();
+      }
+      return rule.getOnFailure();
+    });
+  }
+
+  private boolean isDisabled(Rule rule) {
+    return disabledFlags.computeIfAbsent(rule, r -> {
+      Object propertyValue = getRuleConfig(rule.getName(), DISABLED);
+      if (propertyValue != null) {
+        return Boolean.parseBoolean(propertyValue.toString());
+      }
+      propertyValue = getRuleConfig("_" + rule.getType() + "_", DISABLED);
+      if (propertyValue != null) {
+        return Boolean.parseBoolean(propertyValue.toString());
+      }
+      propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, DISABLED);
+      if (propertyValue != null) {
+        return Boolean.parseBoolean(propertyValue.toString());
+      }
+      return rule.isDisabled();
+    });
   }
 
   private Object getRuleConfig(String name, String suffix) {
@@ -739,7 +777,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   private boolean skipRule(Rule rule, Headers headers) {
-    if (rule.isDisabled()) {
+    if (isDisabled(rule)) {
       return true;
     }
     if (headers != null) {
