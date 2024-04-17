@@ -332,6 +332,43 @@ public class DekRegistryResource extends SchemaRegistryResource {
   }
 
   @POST
+  @Path("/{name}/test")
+  @Operation(summary = "Test a kek.", responses = {
+      @ApiResponse(responseCode = "200", description = "The test response",
+          content = @Content(schema = @Schema(implementation = Kek.class))),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key"),
+      @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
+  })
+  @PerformanceMetric("keks.test")
+  @DocumentedName("testKek")
+  public void testKek(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      @Parameter(description = "Name of the kek", required = true)
+      @PathParam("name") String kekName) {
+
+    log.debug("Testing kek {}", kekName);
+
+    checkName(kekName);
+
+    KeyEncryptionKey kek = dekRegistry.getKek(kekName, false);
+    if (kek == null) {
+      throw DekRegistryErrors.keyNotFoundException(kekName);
+    }
+
+    try {
+      dekRegistry.testKek(kekName);
+      asyncResponse.resume(kek);
+    } catch (DekGenerationException e) {
+      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+    } catch (InvalidKeyException e) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while testing key", e);
+    }
+  }
+
+  @POST
   @Path("/{name}/deks")
   @Operation(summary = "Create a dek.", responses = {
       @ApiResponse(responseCode = "200", description = "The create response",
