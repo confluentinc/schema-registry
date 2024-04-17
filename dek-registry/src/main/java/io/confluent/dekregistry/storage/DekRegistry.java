@@ -500,6 +500,18 @@ public class DekRegistry implements Closeable {
     }
   }
 
+  public void testKek(String kekName) throws SchemaRegistryException {
+    String subject = "__test__";
+    DataEncryptionKey key = new DataEncryptionKey(kekName, subject,
+        DekFormat.AES256_GCM, MIN_VERSION, null, false);
+    KeyEncryptionKey kek = getKek(key.getKekName(), true);
+    if (kek.isShared()) {
+      generateEncryptedDek(kek, key);
+    } else {
+      throw new InvalidKeyException("shared");
+    }
+  }
+
   public Dek createDekOrForward(String kekName, CreateDekRequest request,
       Map<String, String> headerProperties) throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
