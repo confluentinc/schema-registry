@@ -121,12 +121,14 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   private Map<Rule, String> onSuccessActions;
   private Map<Rule, String> onFailureActions;
+  private Map<Rule, Boolean> disabledFlags;
 
   private static final ErrorAction ERROR_ACTION = new ErrorAction();
   private static final NoneAction NONE_ACTION = new NoneAction();
 
   private static final String ON_SUCCESS = "onSuccess";
   private static final String ON_FAILURE = "onFailure";
+  private static final String DISABLED = "disabled";
 
   // Track the key for use when deserializing/serializing the value, such as for a DLQ.
   // We take advantage of the fact the value serde is called after the key serde.
@@ -201,6 +203,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         config, RULE_ACTIONS, RuleAction.class, enableRuleServiceLoader);
     onSuccessActions = new HashMap<>();
     onFailureActions = new HashMap<>();
+    disabledFlags = new HashMap<>();
   }
 
   protected void postOp(Object payload) {
@@ -750,13 +753,31 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     });
   }
 
+  private boolean isDisabled(Rule rule) {
+    return disabledFlags.computeIfAbsent(rule, r -> {
+      Object propertyValue = getRuleConfig(rule.getName(), DISABLED);
+      if (propertyValue != null) {
+        return Boolean.parseBoolean(propertyValue.toString());
+      }
+      propertyValue = getRuleConfig("_" + rule.getType() + "_", DISABLED);
+      if (propertyValue != null) {
+        return Boolean.parseBoolean(propertyValue.toString());
+      }
+      propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, DISABLED);
+      if (propertyValue != null) {
+        return Boolean.parseBoolean(propertyValue.toString());
+      }
+      return rule.isDisabled();
+    });
+  }
+
   private Object getRuleConfig(String name, String suffix) {
     String propertyName = RULE_EXECUTORS + "." + name + "." + suffix;
     return configOriginals.get(propertyName);
   }
 
   private boolean skipRule(Rule rule, Headers headers) {
-    if (rule.isDisabled()) {
+    if (isDisabled(rule)) {
       return true;
     }
     if (headers != null) {

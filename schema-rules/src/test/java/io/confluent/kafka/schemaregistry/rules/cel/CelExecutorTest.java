@@ -687,6 +687,27 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerConstraintDlqDisabled() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelExecutor.TYPE, null, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        null, "DLQ", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    Map<String, Object> config = new HashMap<>(defaultConfig);
+    config.put("rule.executors._default_.disabled", "true");
+    KafkaAvroSerializer customSerializer = new KafkaAvroSerializer(schemaRegistry, config);
+    byte[] bytes = customSerializer.serialize(topic, avroRecord);
+    avroDeserializer.deserialize(topic, bytes);
+
+    verifyNoInteractions(producer);
+    verifyNoInteractions(producer2);
+  }
+
+  @Test
   public void testKafkaAvroSerializerReflection() throws Exception {
     byte[] bytes;
     Object obj;
