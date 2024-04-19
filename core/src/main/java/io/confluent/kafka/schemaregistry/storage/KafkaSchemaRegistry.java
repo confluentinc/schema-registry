@@ -792,7 +792,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         ? ((LazyParsedSchemaHolder) undeletedVersions.get(0)).schemaValue()
         : null;
     Schema previousSchema = previousSchemaValue != null
-        ? previousSchemaValue.toSchemaEntity()
+        ? toSchemaEntity(previousSchemaValue)
         : null;
     if (schema == null
         || schema.getSchema() == null
@@ -1230,7 +1230,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       SchemaRegistryValue existingValue = this.lookupCache.get(existingKey);
       if (existingValue instanceof SchemaValue) {
         SchemaValue existingSchemaValue = (SchemaValue) existingValue;
-        Schema existingSchema = existingSchemaValue.toSchemaEntity();
+        Schema existingSchema = toSchemaEntity(existingSchemaValue);
         Schema schemaCopy = schema.copy();
         schemaCopy.setId(existingSchema.getId());
         schemaCopy.setSubject(existingSchema.getSubject());
@@ -1542,7 +1542,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       SchemaValue schemaValue = getSchemaValue(new SchemaKey(subject, version));
       Schema schema = null;
       if (schemaValue != null && (!schemaValue.isDeleted() || returnDeletedSchema)) {
-        schema = schemaValue.toSchemaEntity();
+        schema = toSchemaEntity(schemaValue);
       }
       return schema;
     }
@@ -1565,7 +1565,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (subjectVersionKey == null) {
         return null;
       }
-      schema = getSchemaValue(subjectVersionKey);
+      schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error while retrieving schema with id "
@@ -1573,7 +1573,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           + " from the backend Kafka"
           + " store", e);
     }
-    Schema schemaEntity = schema.toSchemaEntity();
+    Schema schemaEntity = toSchemaEntity(schema);
     SchemaString schemaString = new SchemaString(schemaEntity);
     if (format != null && !format.trim().isEmpty()) {
       ParsedSchema parsedSchema = parseSchema(schemaEntity, false, false);
@@ -1587,12 +1587,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return schemaString;
   }
 
+  public Schema toSchemaEntity(SchemaValue schemaValue) {
+    metadataEncoder.decodeMetadata(schemaValue);
+    return schemaValue.toSchemaEntity();
+  }
+
   protected SchemaValue getSchemaValue(SchemaKey key)
       throws SchemaRegistryException {
     try {
-      SchemaValue schemaValue = (SchemaValue) kafkaStore.get(key);
-      metadataEncoder.decodeMetadata(schemaValue);
-      return schemaValue;
+      return (SchemaValue) kafkaStore.get(key);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error while retrieving schema from the backend Kafka"
@@ -1709,12 +1712,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (subjectVersionKey == null) {
         return null;
       }
-      schema = getSchemaValue(subjectVersionKey);
+      schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
       if (schema == null) {
         return null;
       }
 
-      return lookupCache.schemaIdAndSubjects(schema.toSchemaEntity())
+      return lookupCache.schemaIdAndSubjects(toSchemaEntity(schema))
           .allSubjectVersions()
           .entrySet()
           .stream()
@@ -1824,7 +1827,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
     }
 
-    return latestSchemaValue != null ? latestSchemaValue.toSchemaEntity() : null;
+    return latestSchemaValue != null ? toSchemaEntity(latestSchemaValue) : null;
   }
 
   private CloseableIterator<SchemaRegistryValue> allVersions(
@@ -2249,7 +2252,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (!shouldInclude) {
         continue;
       }
-      Schema schema = schemaValue.toSchemaEntity();
+      Schema schema = toSchemaEntity(schemaValue);
       if (returnLatestOnly) {
         if (previousSchema != null && !schema.getSubject().equals(previousSchema.getSubject())) {
           schemaList.add(previousSchema);
