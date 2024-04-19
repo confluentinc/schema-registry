@@ -132,7 +132,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     if (key == null) {
       throw DekRegistryErrors.keyNotFoundException(name);
     }
-    return key.toKekEntity();
+    return dekRegistry.toKekEntity(key);
   }
 
   @GET

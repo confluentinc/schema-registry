@@ -318,6 +318,10 @@ public class DekRegistry implements Closeable {
     }
   }
 
+  public Kek toKekEntity(KeyEncryptionKey kek) {
+    return kek.toKekEntity();
+  }
+
   public List<String> getDekSubjects(String kekName, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
     return getDeks(tenant, kekName, lookupDeleted).stream()
@@ -419,7 +423,7 @@ public class DekRegistry implements Closeable {
     lock(tenant, headerProperties);
     try {
       if (isLeader(headerProperties)) {
-        return createKek(request).toKekEntity();
+        return toKekEntity(createKek(request));
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
@@ -589,7 +593,7 @@ public class DekRegistry implements Closeable {
   protected DataEncryptionKey generateEncryptedDek(KeyEncryptionKey kek, DataEncryptionKey key)
       throws DekGenerationException {
     try {
-      Aead aead = kek.toKekEntity().toAead(config.originals());
+      Aead aead = toKekEntity(kek).toAead(config.originals());
       // Generate new dek
       byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
       byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
@@ -614,7 +618,7 @@ public class DekRegistry implements Closeable {
       throws DekGenerationException {
     try {
       // Decrypt dek
-      Aead aead = kek.toKekEntity().toAead(config.originals());
+      Aead aead = toKekEntity(kek).toAead(config.originals());
       byte[] encryptedDek = Base64.getDecoder().decode(
           key.getEncryptedKeyMaterial().getBytes(StandardCharsets.UTF_8));
       byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
@@ -645,7 +649,7 @@ public class DekRegistry implements Closeable {
     try {
       if (isLeader(headerProperties)) {
         KeyEncryptionKey kek = putKek(name, request);
-        return kek != null ? kek.toKekEntity() : null;
+        return kek != null ? toKekEntity(kek) : null;
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
