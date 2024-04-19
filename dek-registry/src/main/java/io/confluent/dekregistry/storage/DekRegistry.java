@@ -318,6 +318,10 @@ public class DekRegistry implements Closeable {
     }
   }
 
+  public Kek toKekEntity(KeyEncryptionKey kek) {
+    return kek.toKekEntity();
+  }
+
   public List<String> getDekSubjects(String kekName, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
     return getDeks(tenant, kekName, lookupDeleted).stream()
@@ -419,7 +423,7 @@ public class DekRegistry implements Closeable {
     lock(tenant, headerProperties);
     try {
       if (isLeader(headerProperties)) {
-        return createKek(request).toKekEntity();
+        return toKekEntity(createKek(request));
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
@@ -639,7 +643,7 @@ public class DekRegistry implements Closeable {
   }
 
   protected Aead getAead(KeyEncryptionKey kek) throws GeneralSecurityException {
-    return kek.toKekEntity().toAead(config.originals());
+    return toKekEntity(kek).toAead(config.originals());
   }
 
   public Kek putKekOrForward(String name, UpdateKekRequest request,
@@ -649,7 +653,7 @@ public class DekRegistry implements Closeable {
     try {
       if (isLeader(headerProperties)) {
         KeyEncryptionKey kek = putKek(name, request);
-        return kek != null ? kek.toKekEntity() : null;
+        return kek != null ? toKekEntity(kek) : null;
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
