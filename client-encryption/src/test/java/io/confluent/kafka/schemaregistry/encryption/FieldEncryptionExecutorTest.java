@@ -235,7 +235,13 @@ public abstract class FieldEncryptionExecutorTest {
       executor = (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).get(name);
     }
     if (executor == null) {
-      FieldEncryptionExecutor encryptor = (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).get(DEFAULT_NAME);
+      FieldEncryptionExecutor encryptor = (FieldEncryptionExecutor)
+          executors.get(FieldEncryptionExecutor.TYPE).get("_ENCRYPT_");
+      executor = encryptor;
+    }
+    if (executor == null) {
+      FieldEncryptionExecutor encryptor = (FieldEncryptionExecutor)
+          executors.get(FieldEncryptionExecutor.TYPE).get(DEFAULT_NAME);
       executor = encryptor;
     }
     if (executor != null) {
