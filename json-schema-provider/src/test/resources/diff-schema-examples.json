@@ -366,6 +366,29 @@
     "compatible": true
   },
   {
+    "description": "Detect incompatible changes to const schema",
+    "original_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "const": "red"
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "const": "blue"
+        }
+      }
+    },
+    "changes": [
+      "ENUM_ARRAY_CHANGED #/properties/foo/const"
+    ],
+    "compatible": false
+  },
+  {
     "description": "Detect incompatible changes to enum schema",
     "original_schema": {
       "allOf": [
