@@ -20,9 +20,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
@@ -122,15 +124,21 @@ public class ModeResource {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.setModeOrForward(subject, mode, force, headerProperties);
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to update mode", e);
+    } catch (SchemaRegistryTimeoutException e) {
+      throw Errors.operationTimeoutException("Update mode operation timed out", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Failed to update mode", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding update mode request"
                                                     + " to the leader", e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while updating the mode", e);
     }
 
     return request;

@@ -473,10 +473,16 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     }
     try {
       schemaRegistry.setMode(subject, m, force);
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to update mode", e);
+    } catch (SchemaRegistryTimeoutException e) {
+      throw Errors.operationTimeoutException("Update mode operation timed out", e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while updating the mode", e);
     }
     return m.name();
   }

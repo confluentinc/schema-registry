@@ -2163,13 +2163,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public void setMode(String subject, Mode mode)
-      throws SchemaRegistryStoreException, OperationNotPermittedException {
+  public void setMode(String subject, Mode mode) throws SchemaRegistryException {
     setMode(subject, mode, false);
   }
 
   public void setMode(String subject, Mode mode, boolean force)
-      throws SchemaRegistryStoreException, OperationNotPermittedException {
+      throws SchemaRegistryException {
     if (!allowModeChanges) {
       throw new OperationNotPermittedException("Mode changes are not allowed");
     }
@@ -2181,21 +2180,39 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         if (hasSubjects(subject, false)) {
           throw new OperationNotPermittedException("Cannot import since found existing subjects");
         }
+
+        // Hard delete any remaining versions
+        List<SchemaKey> deletedVersions = new ArrayList<>();
+        Set<String> allSubjects = subjects(subject, true);
+        for (String s : allSubjects) {
+          Iterator<SchemaKey> schemasToBeDeleted = getAllVersions(s, LookupFilter.INCLUDE_DELETED);
+          while (schemasToBeDeleted.hasNext()) {
+            SchemaKey key = schemasToBeDeleted.next();
+            if (!lookupCache.referencesSchema(key).isEmpty()) {
+              throw new ReferenceExistsException(key.toString());
+            }
+            deletedVersions.add(key);
+          }
+        }
+        for (SchemaKey key : deletedVersions) {
+          kafkaStore.put(key, null);
+        }
+
         // At this point no schemas should exist with matching subjects.
         // Write an event to clear deleted schemas from the caches.
         kafkaStore.put(new ClearSubjectKey(subject), new ClearSubjectValue(subject));
       }
       kafkaStore.put(modeKey, new ModeValue(subject, mode));
       log.debug("Wrote new mode: {} to the Kafka data store with key {}", mode.name(), modeKey);
+    } catch (StoreTimeoutException te) {
+      throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new mode to the store", e);
     }
   }
 
   public void setModeOrForward(String subject, Mode mode, boolean force,
-      Map<String, String> headerProperties)
-      throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
-      OperationNotPermittedException, UnknownLeaderException {
+      Map<String, String> headerProperties) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
