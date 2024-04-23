@@ -2178,6 +2178,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           throw new OperationNotPermittedException("Cannot import since found existing subjects");
         }
 
+        // Hard delete any remaining versions
         List<SchemaKey> deletedVersions = new ArrayList<>();
         Set<String> allSubjects = subjects(subject, true);
         for (String s : allSubjects) {
