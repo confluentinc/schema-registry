@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
@@ -1012,21 +1013,14 @@ public class JsonSchemaData {
     } else if (jsonSchema instanceof StringSchema) {
       String type = (String) jsonSchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
       builder = CONNECT_TYPE_BYTES.equals(type) ? SchemaBuilder.bytes() : SchemaBuilder.string();
+    } else if (jsonSchema instanceof ConstSchema) {
+      ConstSchema constSchema = (ConstSchema) jsonSchema;
+      List<Object> possibleValues = ImmutableList.of(constSchema.getPermittedValue());
+      builder = toConnectEnums(possibleValues);
     } else if (jsonSchema instanceof EnumSchema) {
       EnumSchema enumSchema = (EnumSchema) jsonSchema;
-      builder = SchemaBuilder.string();
-      String paramName = generalizedSumTypeSupport ? GENERALIZED_TYPE_ENUM : JSON_TYPE_ENUM;
-      builder.parameter(paramName, "");  // JSON enums have no name, use empty string as placeholder
-      int symbolIndex = 0;
-      for (Object enumObj : enumSchema.getPossibleValuesAsList()) {
-        String enumSymbol = enumObj != null ? enumObj.toString() : NULL_MARKER;
-        if (generalizedSumTypeSupport) {
-          builder.parameter(paramName + "." + enumSymbol, String.valueOf(symbolIndex));
-        } else {
-          builder.parameter(paramName + "." + enumSymbol, enumSymbol);
-        }
-        symbolIndex++;
-      }
+      List<Object> possibleValues = enumSchema.getPossibleValuesAsList();
+      builder = toConnectEnums(possibleValues);
     } else if (jsonSchema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) jsonSchema;
       CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
@@ -1165,6 +1159,23 @@ public class JsonSchemaData {
 
     Schema result = builder.build();
     return result;
+  }
+
+  private SchemaBuilder toConnectEnums(List<Object> possibleValues) {
+    SchemaBuilder builder = SchemaBuilder.string();
+    String paramName = generalizedSumTypeSupport ? GENERALIZED_TYPE_ENUM : JSON_TYPE_ENUM;
+    builder.parameter(paramName, "");  // JSON enums have no name, use empty string as placeholder
+    int symbolIndex = 0;
+    for (Object enumObj : possibleValues) {
+      String enumSymbol = enumObj != null ? enumObj.toString() : NULL_MARKER;
+      if (generalizedSumTypeSupport) {
+        builder.parameter(paramName + "." + enumSymbol, String.valueOf(symbolIndex));
+      } else {
+        builder.parameter(paramName + "." + enumSymbol, enumSymbol);
+      }
+      symbolIndex++;
+    }
+    return builder;
   }
 
   private Schema allOfToConnectSchema(

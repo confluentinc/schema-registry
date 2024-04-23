@@ -130,6 +130,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   private static final String ON_FAILURE = "onFailure";
   private static final String DISABLED = "disabled";
 
+  private static final String PARAM = ".param.";
+
   // Track the key for use when deserializing/serializing the value, such as for a DLQ.
   // We take advantage of the fact the value serde is called after the key serde.
   private static final ThreadLocal<Object> key = new ThreadLocal<>();
@@ -271,7 +273,6 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   private void configureRuleObject(
       RuleBase ruleObject, String name, AbstractKafkaSchemaSerDeConfig config, String configName) {
-    String prefix = configName + "." + name + ".param.";
     Map<String, Object> params = new HashMap<>();
     if (ruleObject.addOriginalConfigs()) {
       params.putAll(configOriginals);
@@ -282,6 +283,14 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       // copy props prefixed with "schema.registry."
       params.putAll(config.originalsWithPrefix(SchemaRegistryClientConfig.CLIENT_NAMESPACE, false));
     }
+    // Add default params
+    String prefix = configName + "." + RuleBase.DEFAULT_NAME + PARAM;
+    params.putAll(config.originalsWithPrefix(prefix));
+    // Add rule type specific params
+    prefix = configName + "._" + ruleObject.type() + "_" + PARAM;
+    params.putAll(config.originalsWithPrefix(prefix));
+    // Add named params
+    prefix = configName + "." + name + PARAM;
     params.putAll(config.originalsWithPrefix(prefix));
     ruleObject.configure(params);
   }
