@@ -2178,19 +2178,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           throw new OperationNotPermittedException("Cannot import since found existing subjects");
         }
 
-        List<Integer> deletedVersions = new ArrayList<>();
-        Iterator<SchemaKey> schemasToBeDeleted = getAllVersions(subject,
-            LookupFilter.INCLUDE_DELETED);
-        while (schemasToBeDeleted.hasNext()) {
-          int version = schemasToBeDeleted.next().getVersion();
-          SchemaKey key = new SchemaKey(subject, version);
-          if (!lookupCache.referencesSchema(key).isEmpty()) {
-            throw new ReferenceExistsException(key.toString());
+        List<SchemaKey> deletedVersions = new ArrayList<>();
+        Set<String> allSubjects = subjects(subject, true);
+        for (String s : allSubjects) {
+          Iterator<SchemaKey> schemasToBeDeleted = getAllVersions(s, LookupFilter.INCLUDE_DELETED);
+          while (schemasToBeDeleted.hasNext()) {
+            SchemaKey key = schemasToBeDeleted.next();
+            if (!lookupCache.referencesSchema(key).isEmpty()) {
+              throw new ReferenceExistsException(key.toString());
+            }
+            deletedVersions.add(key);
           }
-          deletedVersions.add(version);
         }
-        for (Integer version : deletedVersions) {
-          kafkaStore.put(new SchemaKey(subject, version), null);
+        for (SchemaKey key : deletedVersions) {
+          kafkaStore.put(key, null);
         }
 
         // At this point no schemas should exist with matching subjects.
