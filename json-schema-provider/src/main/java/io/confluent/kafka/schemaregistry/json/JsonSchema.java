@@ -74,6 +74,7 @@ import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.ConditionalSchema;
+import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.FalseSchema;
@@ -674,7 +675,7 @@ public class JsonSchema implements ParsedSchema {
   private RuleContext.Type getType(Schema schema) {
     if (schema instanceof ObjectSchema) {
       return isMap((ObjectSchema) schema) ? Type.MAP : Type.RECORD;
-    } else if (schema instanceof EnumSchema) {
+    } else if (schema instanceof ConstSchema || schema instanceof EnumSchema) {
       return Type.ENUM;
     } else if (schema instanceof ArraySchema) {
       return Type.ARRAY;
