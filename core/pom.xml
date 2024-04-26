@@ -79,7 +79,7 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-codec</artifactId>
-            <version>${netty.version}</version>
+            <version>4.1.108.Final</version>
         </dependency>
         <dependency>
             <groupId>com.101tec</groupId>
