@@ -1,0 +1,93 @@
+# This file is managed by ServiceBot plugin - Semaphore. The content in this file is created using a common
+# template and configurations in service.yml.
+# Any modifications made to ths file will be overwritten by the generated content in nightly runs.
+# For more information, please refer to the page:
+# https://confluentinc.atlassian.net/wiki/spaces/Foundations/pages/2871296194/Add+SemaphoreCI
+version: v1.0
+name: build-test-release
+agent:
+  machine:
+    type: s1-prod-ubuntu20-04-amd64-1
+
+fail_fast:
+  cancel:
+    when: "true"
+
+execution_time_limit:
+  hours: 2
+
+queue:
+  - when: "branch != 'master' and branch !~ '[0-9]+\\.[0-9]+\\.x'"
+    processing: parallel
+
+global_job_config:
+  prologue:
+    commands:
+      - checkout
+      - sem-version java 11
+      - . cache-maven restore
+
+blocks:
+  - name: Test
+    dependencies: []
+    run:
+      # don't run the tests on non-functional changes...
+      when: "change_in('/', {exclude: ['/.deployed-versions/', '.github/']})"
+    task:
+      jobs:
+        - name: Test
+          commands:
+            - ci-tools ci-update-version
+            - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode --no-transfer-progress clean verify install dependency:analyze validate
+            - . cache-maven store
+      epilogue:
+        always:
+          commands:
+            - . publish-test-results
+            - artifact push workflow target/test-results
+            - artifact push workflow target
+
+  - name: Release
+    dependencies: ["Test"]
+    run:
+      when: "branch = 'master' or branch =~ '[0-9]+\\.[0-9]+\\.x'"
+    task:
+      jobs:
+        - name: Release
+          commands:
+            - ci-tools ci-update-version
+            - ci-tools ci-push-tag
+            - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode -DaltDeploymentRepository=confluent-codeartifact-internal::default::https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven-snapshots/
+              -DrepositoryId=confluent-codeartifact-internal deploy -DskipTests
+
+
+after_pipeline:
+  task:
+    agent:
+      machine:
+        type: s1-prod-ubuntu20-04-arm64-0
+    jobs:
+      - name: Metrics
+        commands:
+          - emit-ci-metrics -p -a test-results
+      - name: Publish Test Results
+        commands:
+          - test-results gen-pipeline-report
+      - name: SonarQube
+        commands:
+          - checkout
+          - sem-version java 11
+          - artifact pull workflow target
+          - emit-sonarqube-data --run_only_sonar_scan
+      - name: Trigger downstream projects
+        commands:
+          - >-
+            if [[ -z "$SEMAPHORE_GIT_PR_BRANCH" ]] && [[ "$SEMAPHORE_PIPELINE_RESULT" == "passed" ]]; then
+              sem-trigger -p kafka-rest -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
+              sem-trigger -p ksql -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
+              sem-trigger -p confluent-security-plugins -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
+              sem-trigger -p kafka-connect-replicator -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
+              sem-trigger -p ce-kafka-rest -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
+              sem-trigger -p confluent-cloud-plugins -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
+              sem-trigger -p schema-registry-plugins -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
+            fi
