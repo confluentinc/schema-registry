@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -25,6 +26,8 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 
+import java.util.Base64;
+import java.util.Objects;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.Min;
 import java.util.Collections;
@@ -35,14 +38,19 @@ import java.util.stream.Collectors;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SchemaValue extends SubjectValue implements Comparable<SchemaValue> {
 
+  public static final String ENCODED_PROPERTY = "__enc__";
+
   @Min(1)
   private Integer version;
   @Min(0)
   private Integer id;
+  private String md5;
   @NotEmpty
   private String schema;
   private String schemaType = AvroSchema.TYPE;
   private List<SchemaReference> references = Collections.emptyList();
+  private Metadata metadata = null;
+  private RuleSet ruleSet = null;
   @NotEmpty
   private boolean deleted;
 
@@ -59,7 +67,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     this.deleted = deleted;
   }
 
-  @JsonCreator
+  @VisibleForTesting
   public SchemaValue(@JsonProperty("subject") String subject,
                      @JsonProperty("version") Integer version,
                      @JsonProperty("id") Integer id,
@@ -76,6 +84,29 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     this.deleted = deleted;
   }
 
+  @JsonCreator
+  public SchemaValue(@JsonProperty("subject") String subject,
+                     @JsonProperty("version") Integer version,
+                     @JsonProperty("id") Integer id,
+                     @JsonProperty("md5") String md5,
+                     @JsonProperty("schemaType") String schemaType,
+                     @JsonProperty("references") List<SchemaReference> references,
+                     @JsonProperty("metadata") Metadata metadata,
+                     @JsonProperty("ruleSet") RuleSet ruleSet,
+                     @JsonProperty("schema") String schema,
+                     @JsonProperty("deleted") boolean deleted) {
+    super(subject);
+    this.version = version;
+    this.id = id;
+    this.md5 = md5;
+    this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
+    this.references = references != null ? references : Collections.emptyList();
+    this.metadata = metadata;
+    this.ruleSet = ruleSet;
+    this.schema = schema;
+    this.deleted = deleted;
+  }
+
   public SchemaValue(Schema schemaEntity) {
     super(schemaEntity.getSubject());
     this.version = schemaEntity.getVersion();
@@ -84,8 +115,32 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
         = schemaEntity.getReferences();
     this.references = refs == null ? null : refs.stream()
-        .map(ref -> new SchemaReference(ref.getName(), ref.getSubject(), ref.getVersion()))
+        .map(SchemaReference::new)
         .collect(Collectors.toList());
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata =
+        schemaEntity.getMetadata();
+    this.metadata = metadata != null ? new Metadata(metadata) : null;
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet =
+        schemaEntity.getRuleSet();
+    this.ruleSet = ruleSet != null ? new RuleSet(ruleSet) : null;
+    this.schema = schemaEntity.getSchema();
+    this.deleted = false;
+  }
+
+  public SchemaValue(Schema schemaEntity, RuleSetHandler ruleSetHandler) {
+    super(schemaEntity.getSubject());
+    this.version = schemaEntity.getVersion();
+    this.id = schemaEntity.getId();
+    this.schemaType = schemaEntity.getSchemaType();
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
+        = schemaEntity.getReferences();
+    this.references = refs == null ? null : refs.stream()
+        .map(SchemaReference::new)
+        .collect(Collectors.toList());
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata =
+        schemaEntity.getMetadata();
+    this.metadata = metadata != null ? new Metadata(metadata) : null;
+    this.ruleSet = ruleSetHandler.transform(schemaEntity.getRuleSet());
     this.schema = schemaEntity.getSchema();
     this.deleted = false;
   }
@@ -110,6 +165,26 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     this.id = id;
   }
 
+  @JsonProperty("md5")
+  public String getMd5() {
+    return this.md5;
+  }
+
+  @JsonProperty("md5")
+  public void setMd5(String md5) {
+    this.md5 = md5;
+  }
+
+  @JsonIgnore
+  public byte[] getMd5Bytes() {
+    return md5 != null ? Base64.getDecoder().decode(md5) : null;
+  }
+
+  @JsonIgnore
+  public void setMd5Bytes(byte[] bytes) {
+    md5 = bytes != null ? Base64.getEncoder().encodeToString(bytes) : null;
+  }
+
   @JsonProperty("schemaType")
   @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
@@ -129,6 +204,26 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   @JsonProperty("references")
   public void setReferences(List<SchemaReference> references) {
     this.references = references;
+  }
+
+  @JsonProperty("metadata")
+  public Metadata getMetadata() {
+    return this.metadata;
+  }
+
+  @JsonProperty("metadata")
+  public void setMetadata(Metadata metadata) {
+    this.metadata = metadata;
+  }
+
+  @JsonProperty("ruleSet")
+  public RuleSet getRuleSet() {
+    return this.ruleSet;
+  }
+
+  @JsonProperty("ruleSet")
+  public void setRuleSet(RuleSet ruleSet) {
+    this.ruleSet = ruleSet;
   }
 
   @JsonProperty("schema")
@@ -162,51 +257,35 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     if (!super.equals(o)) {
       return false;
     }
-
     SchemaValue that = (SchemaValue) o;
-
-    if (!this.version.equals(that.version)) {
-      return false;
-    }
-    if (!this.id.equals(that.getId())) {
-      return false;
-    }
-    if (schemaType != null ? !schemaType.equals(that.schemaType) : that.schemaType != null) {
-      return false;
-    }
-    if (!this.references.equals(that.getReferences())) {
-      return false;
-    }
-    if (!this.schema.equals(that.schema)) {
-      return false;
-    }
-    if (deleted != that.deleted) {
-      return false;
-    }
-
-    return true;
+    return deleted == that.deleted
+        && Objects.equals(version, that.version)
+        && Objects.equals(id, that.id)
+        && Objects.equals(md5, that.md5)
+        && Objects.equals(schema, that.schema)
+        && Objects.equals(schemaType, that.schemaType)
+        && Objects.equals(references, that.references)
+        && Objects.equals(metadata, that.metadata)
+        && Objects.equals(ruleSet, that.ruleSet);
   }
 
   @Override
   public int hashCode() {
-    int result = super.hashCode();
-    result = 31 * result + version;
-    result = 31 * result + id.intValue();
-    result = 31 * result + (schemaType != null ? schemaType.hashCode() : 0);
-    result = 31 * result + schema.hashCode();
-    result = 31 * result + references.hashCode();
-    result = 31 * result + (deleted ? 1 : 0);
-    return result;
+    return Objects.hash(super.hashCode(), version, id, md5, schema, schemaType, references,
+        metadata, ruleSet, deleted);
   }
-
+  
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("{subject=" + this.getSubject() + ",");
     sb.append("version=" + this.version + ",");
     sb.append("id=" + this.id + ",");
+    sb.append("md5=" + this.md5 + ",");
     sb.append("schemaType=" + this.schemaType + ",");
     sb.append("references=" + this.references + ",");
+    sb.append("metadata=" + this.metadata + ",");
+    sb.append("ruleSet=" + this.ruleSet + ",");
     sb.append("schema=" + this.schema + ",");
     sb.append("deleted=" + this.deleted + "}");
     return sb.toString();
@@ -234,9 +313,10 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
         getId(),
         getSchemaType(),
         getReferences() == null ? null : getReferences().stream()
-            .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
-                ref.getName(), ref.getSubject(), ref.getVersion()))
+            .map(SchemaReference::toRefEntity)
             .collect(Collectors.toList()),
+        getMetadata() == null ? null : getMetadata().toMetadataEntity(),
+        getRuleSet() == null ? null : getRuleSet().toRuleSetEntity(),
         getSchema()
     );
   }

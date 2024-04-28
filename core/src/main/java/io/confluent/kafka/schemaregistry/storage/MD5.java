@@ -16,12 +16,9 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-import java.util.List;
 
 /**
  * Simple wrapper for 16 byte MD5 hash.
@@ -50,39 +47,16 @@ public class MD5 {
   public static MD5 ofSchema(Schema schema) {
     try {
       MessageDigest md = MessageDigest.getInstance("MD5");
-      md.update(schema.getSchema().getBytes(StandardCharsets.UTF_8));
-      if (schema.getReferences() != null) {
-        for (io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference reference :
-            schema.getReferences()) {
-          md.update(reference.getName().getBytes(StandardCharsets.UTF_8));
-          md.update(reference.getSubject().getBytes(StandardCharsets.UTF_8));
-          md.update(ByteBuffer.allocate(4).putInt(reference.getVersion()).array());
-        }
-      }
+      schema.updateHash(md);
       return new MD5(md.digest());
     } catch (NoSuchAlgorithmException e) {
       throw new RuntimeException(e);
     }
   }
 
-  /**
-   * Factory method converts String into MD5 object.
-   */
-  public static MD5 ofString(String str, List<SchemaReference> references) {
-    try {
-      MessageDigest md = MessageDigest.getInstance("MD5");
-      md.update(str.getBytes(StandardCharsets.UTF_8));
-      if (references != null) {
-        for (SchemaReference reference : references) {
-          md.update(reference.getName().getBytes(StandardCharsets.UTF_8));
-          md.update(reference.getSubject().getBytes(StandardCharsets.UTF_8));
-          md.update(ByteBuffer.allocate(4).putInt(reference.getVersion()).array());
-        }
-      }
-      return new MD5(md.digest());
-    } catch (NoSuchAlgorithmException e) {
-      throw new RuntimeException(e);
-    }
+  public static MD5 ofSchema(SchemaValue schema) {
+    byte[] bytes = schema.getMd5Bytes();
+    return bytes != null ? new MD5(bytes) : ofSchema(schema.toSchemaEntity());
   }
 
   @Override

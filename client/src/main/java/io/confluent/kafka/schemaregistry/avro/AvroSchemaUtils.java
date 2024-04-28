@@ -24,29 +24,41 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.avro.AvroRuntimeException;
+import org.apache.avro.Conversions;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.data.TimeConversions;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.reflect.ReflectData;
+import org.apache.avro.reflect.ReflectData.AllowNull;
+import org.apache.avro.reflect.ReflectDatumWriter;
+import org.apache.avro.specific.SpecificDatumWriter;
+import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayInputStream;
@@ -60,7 +72,48 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
+import static io.confluent.kafka.schemaregistry.avro.AvroSchema.FIELDS_FIELD;
+import static io.confluent.kafka.schemaregistry.avro.AvroSchema.NAME_FIELD;
+
 public class AvroSchemaUtils {
+
+  private static final GenericData GENERIC_DATA_INSTANCE = new GenericData();
+  private static final ReflectData REFLECT_DATA_INSTANCE = new ReflectData();
+  private static final ReflectData REFLECT_DATA_ALLOW_NULL_INSTANCE = new AllowNull();
+
+  static {
+    addLogicalTypeConversion(GENERIC_DATA_INSTANCE);
+    addLogicalTypeConversion(REFLECT_DATA_INSTANCE);
+    addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE);
+  }
+
+  public static GenericData getGenericData() {
+    return GENERIC_DATA_INSTANCE;
+  }
+
+  public static ReflectData getReflectData() {
+    return REFLECT_DATA_INSTANCE;
+  }
+
+  public static ReflectData getReflectDataAllowNull() {
+    return REFLECT_DATA_ALLOW_NULL_INSTANCE;
+  }
+
+  public static void addLogicalTypeConversion(GenericData avroData) {
+    avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+    avroData.addLogicalTypeConversion(new Conversions.UUIDConversion());
+
+    avroData.addLogicalTypeConversion(new TimeConversions.DateConversion());
+
+    avroData.addLogicalTypeConversion(new TimeConversions.TimeMillisConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.TimeMicrosConversion());
+
+    avroData.addLogicalTypeConversion(new TimeConversions.TimestampMillisConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.TimestampMicrosConversion());
+
+    avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMillisConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMicrosConversion());
+  }
 
   private static final EncoderFactory encoderFactory = EncoderFactory.get();
   private static final DecoderFactory decoderFactory = DecoderFactory.get();
@@ -112,11 +165,24 @@ public class AvroSchemaUtils {
   }
 
   public static Schema getSchema(Object object) {
-    return getSchema(object, false, false, false);
+    return getSchema(object, false, false, false, true);
   }
 
   public static Schema getSchema(Object object, boolean useReflection,
                                  boolean reflectionAllowNull, boolean removeJavaProperties) {
+    return getSchema(object, useReflection, reflectionAllowNull, removeJavaProperties, true);
+  }
+
+  public static Schema getSchema(Object object, boolean useReflection,
+                                 boolean reflectionAllowNull, boolean removeJavaProperties,
+                                 boolean throwError) {
+    return getSchema(object, useReflection, reflectionAllowNull, false,
+        removeJavaProperties, throwError);
+  }
+
+  public static Schema getSchema(Object object, boolean useReflection,
+                                 boolean reflectionAllowNull, boolean useLogicalTypeConverters,
+                                 boolean removeJavaProperties, boolean throwError) {
     if (object == null) {
       return primitiveSchemas.get("Null");
     } else if (object instanceof Boolean) {
@@ -134,8 +200,10 @@ public class AvroSchemaUtils {
     } else if (object instanceof byte[] || object instanceof ByteBuffer) {
       return primitiveSchemas.get("Bytes");
     } else if (useReflection) {
-      Schema schema = reflectionAllowNull ? ReflectData.AllowNull.get().getSchema(object.getClass())
-          : ReflectData.get().getSchema(object.getClass());
+      ReflectData reflectData = reflectionAllowNull
+          ? (useLogicalTypeConverters ? getReflectDataAllowNull() : ReflectData.AllowNull.get())
+          : (useLogicalTypeConverters ? getReflectData() : ReflectData.get());
+      Schema schema = reflectData.getSchema(object.getClass());
       if (schema == null) {
         throw new SerializationException("Schema is null for object of class " + object.getClass()
             .getCanonicalName());
@@ -159,12 +227,26 @@ public class AvroSchemaUtils {
         // no data will be added to the map.
         return Schema.createMap(primitiveSchemas.get("Null"));
       }
-      Schema valueSchema = getSchema(mapValue.values().iterator().next());
+      Schema valueSchema = getSchema(mapValue.values().iterator().next(),
+          useReflection, reflectionAllowNull, removeJavaProperties, throwError);
       return Schema.createMap(valueSchema);
-    } else {
+    } else if (throwError) {
       throw new IllegalArgumentException(
           "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, "
               + "Float, Double, String, byte[] and IndexedRecord");
+
+    } else {
+      // Try reflection as last resort
+      ReflectData reflectData = reflectionAllowNull
+          ? (useLogicalTypeConverters ? getReflectDataAllowNull() : ReflectData.AllowNull.get())
+          : (useLogicalTypeConverters ? getReflectData() : ReflectData.get());
+      Schema schema = reflectData.getSchema(object.getClass());
+      if (schema == null) {
+        throw new SerializationException("Schema is null for object of class " + object.getClass()
+            .getCanonicalName());
+      } else {
+        return schema;
+      }
     }
   }
 
@@ -197,10 +279,15 @@ public class AvroSchemaUtils {
   }
 
   public static Object toObject(JsonNode value, AvroSchema schema) throws IOException {
+    return toObject(value, schema, new GenericDatumReader<>(
+        schema.rawSchema(), schema.rawSchema(), getGenericData()));
+  }
+
+  public static Object toObject(
+      JsonNode value, AvroSchema schema, DatumReader<Object> reader) throws IOException {
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       Schema rawSchema = schema.rawSchema();
       jsonMapper.writeValue(out, value);
-      DatumReader<Object> reader = new GenericDatumReader<Object>(rawSchema);
       Object object = reader.read(null,
           decoderFactory.jsonDecoder(rawSchema, new ByteArrayInputStream(out.toByteArray()))
       );
@@ -209,8 +296,13 @@ public class AvroSchemaUtils {
   }
 
   public static Object toObject(String value, AvroSchema schema) throws IOException {
+    return toObject(value, schema, new GenericDatumReader<>(
+        schema.rawSchema(), schema.rawSchema(), getGenericData()));
+  }
+
+  public static Object toObject(
+      String value, AvroSchema schema, DatumReader<Object> reader) throws IOException {
     Schema rawSchema = schema.rawSchema();
-    DatumReader<Object> reader = new GenericDatumReader<Object>(rawSchema);
     Object object = reader.read(null,
         decoderFactory.jsonDecoder(rawSchema, value));
     return object;
@@ -226,10 +318,11 @@ public class AvroSchemaUtils {
     }
   }
 
+  @SuppressWarnings("unchecked")
   public static void toJson(Object value, OutputStream out) throws IOException {
-    Schema schema = getSchema(value);
+    Schema schema = getSchema(value, false, false, false, false);
     JsonEncoder encoder = encoderFactory.jsonEncoder(schema, out);
-    DatumWriter<Object> writer = new GenericDatumWriter<>(schema);
+    DatumWriter<Object> writer = (DatumWriter<Object>) getDatumWriter(value, schema, true);
     // Some types require wrapping/conversion
     Object wrappedValue = value;
     if (value instanceof byte[]) {
@@ -237,6 +330,85 @@ public class AvroSchemaUtils {
     }
     writer.write(wrappedValue, encoder);
     encoder.flush();
+  }
+
+  public static DatumWriter<?> getDatumWriter(
+      Object value, Schema schema, boolean avroUseLogicalTypeConverters) {
+    if (value instanceof SpecificRecord) {
+      return new SpecificDatumWriter<>(schema);
+    } else if (value instanceof GenericRecord) {
+      return new GenericDatumWriter<>(schema,
+          avroUseLogicalTypeConverters ? getGenericData() : GenericData.get());
+    } else {
+      return new ReflectDatumWriter<>(schema,
+          avroUseLogicalTypeConverters ? getReflectData() : ReflectData.get());
+    }
+  }
+
+  public static JsonNode findMatchingEntity(JsonNode node, SchemaEntity entity) {
+    String[] identifiers = entity.getEntityPath().split("\\.");
+    SchemaEntity.EntityType type = entity.getEntityType();
+    String nameSpace;
+    String recordName;
+    String fieldName = null;
+
+    if (SchemaEntity.EntityType.SR_RECORD == type) {
+      nameSpace = String.join(".", Arrays.copyOfRange(identifiers, 0, identifiers.length - 1));
+      recordName = identifiers[identifiers.length - 1];
+    } else {
+      nameSpace = String.join(".", Arrays.copyOfRange(identifiers, 0, identifiers.length - 2));
+      recordName = identifiers[identifiers.length - 2];
+      fieldName = identifiers[identifiers.length - 1];
+    }
+
+    LinkedList<JsonNodeWithNS> toVisit = new LinkedList<>();
+    JsonNode currNameSpace = node.get("namespace");
+    toVisit.add(new JsonNodeWithNS(node, currNameSpace == null ? null : currNameSpace.asText()));
+
+    // BFS to search
+    while (toVisit.size() > 0) {
+      JsonNodeWithNS curr = toVisit.removeFirst();
+      JsonNode currNode = curr.jsonNode();
+      if (!currNode.has("type")) {
+        // union
+        currNode.elements().forEachRemaining(
+            e -> toVisit.add(new JsonNodeWithNS(e, curr.namespace())));
+      } else {
+        String schemaType = currNode.get("type").asText();
+        switch (schemaType) {
+          case "record":
+            if ((nameSpace.isEmpty() || nameSpace.equals(curr.namespace()))
+                && recordName.equals(currNode.get(NAME_FIELD).asText())) {
+              if (SchemaEntity.EntityType.SR_RECORD == type) {
+                return currNode;
+              } else {
+                Iterator<JsonNode> fieldsIter = currNode.get(FIELDS_FIELD).elements();
+                while (fieldsIter.hasNext()) {
+                  JsonNode currField = fieldsIter.next();
+                  if (fieldName.equals(currField.get(NAME_FIELD).asText())) {
+                    return currField;
+                  }
+                }
+              }
+            } else {
+              currNode.get(FIELDS_FIELD).elements()
+                .forEachRemaining(e -> toVisit.add(new JsonNodeWithNS(e, curr.namespace())));
+            }
+            break;
+          case "array":
+            toVisit.add(new JsonNodeWithNS(currNode.get("items"), curr.namespace()));
+            break;
+          case "map":
+            toVisit.add(new JsonNodeWithNS(currNode.get("values"), curr.namespace()));
+            break;
+          default:
+            // nested type
+            toVisit.add(new JsonNodeWithNS(currNode.get("type"), curr.namespace()));
+        }
+      }
+    }
+    throw new IllegalArgumentException(String.format(
+      "No matching path '%s' found in the schema", entity.getEntityPath()));
   }
 
   protected static String toNormalizedString(AvroSchema schema) {
@@ -461,6 +633,45 @@ public class AvroSchemaUtils {
       generator.writeNumber((BigDecimal) datum);
     } else {
       throw new AvroRuntimeException("Unknown datum class: " + datum.getClass());
+    }
+  }
+
+  static class JsonNodeWithNS {
+    private final JsonNode node;
+    private final String namespace;
+
+    public JsonNodeWithNS(JsonNode node, String parentNamespace) {
+      this.node = node;
+
+      JsonNode namespaceNode = node.get("namespace");
+      this.namespace = namespaceNode == null ? parentNamespace : namespaceNode.asText();
+    }
+
+    public JsonNode jsonNode() {
+      return node;
+    }
+
+    public String namespace() {
+      return namespace;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      JsonNodeWithNS other = (JsonNodeWithNS) o;
+      return Objects.equals(namespace, other.namespace()) && Objects.equals(node, other.jsonNode());
+    }
+
+    @Override
+    public int hashCode() {
+      int result = Objects.hashCode(node);
+      result = 31 * result + Objects.hashCode(namespace);
+      return result;
     }
   }
 }

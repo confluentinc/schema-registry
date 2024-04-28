@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema.Format;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
+import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -30,6 +31,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Arrays;
 
+import java.util.Objects;
+import java.util.UUID;
 import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -59,12 +62,12 @@ import kafka.utils.VerifiableProperties;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class KafkaAvroSerializerTest {
 
+  private final Properties defaultConfig;
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer;
   private final KafkaAvroDeserializer avroDeserializer;
@@ -77,7 +80,7 @@ public class KafkaAvroSerializerTest {
   private final KafkaAvroDecoder reflectionAvroDecoder;
 
   public KafkaAvroSerializerTest() {
-    Properties defaultConfig = new Properties();
+    defaultConfig = new Properties();
     defaultConfig.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     schemaRegistry = new MockSchemaRegistryClient();
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(defaultConfig));
@@ -113,6 +116,10 @@ public class KafkaAvroSerializerTest {
             KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     reflectionDecoderProps.setProperty(
             KafkaAvroDeserializerConfig.SCHEMA_REFLECTION_CONFIG, "true");
+    reflectionDecoderProps.setProperty(
+            KafkaAvroDeserializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG, "true");
+    reflectionDecoderProps.setProperty(
+            KafkaAvroDeserializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, "true");
     reflectionAvroDecoder = new KafkaAvroDecoder(
             schemaRegistry, new VerifiableProperties(reflectionDecoderProps));
   }
@@ -229,6 +236,7 @@ public class KafkaAvroSerializerTest {
     return ExtendedUser.newBuilder()
         .setName("testUser")
         .setAge(99)
+        .setUpdatedAt(Instant.ofEpochMilli(1613646696368L))
         .build();
   }
 
@@ -504,6 +512,31 @@ public class KafkaAvroSerializerTest {
     byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
     assertEquals(annotatedUserRecord, specificAvroDeserializer.deserialize(topic, bytes));
     assertEquals(annotatedUserRecord, specificAvroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroDeserializerWithPreRegisteredUseLatestRecordNameStrategy()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        RecordNameStrategy.class.getName()
+    );
+    avroSerializer.configure(configs, false);
+    avroDeserializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register("example.avro.User", new AvroSchema(avroRecord.getSchema()));
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+
+    // restore configs
+    avroDeserializer.configure(new HashMap(defaultConfig), false);
   }
 
   @Test
@@ -931,6 +964,32 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerSpecificRecordWithValueTypeConfig() {
+    HashMap<String, String> specificDeserializerProps = new HashMap<String, String>();
+    // Intentionally invalid schema registry URL to satisfy the config class's requirement that
+    // it be set.
+    specificDeserializerProps.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    specificDeserializerProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    specificDeserializerProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG,
+        User.class.getName()
+    );
+
+    final KafkaAvroDeserializer specificAvroDeserializerWithReaderSchema = new KafkaAvroDeserializer(
+      schemaRegistry, specificDeserializerProps
+    );
+
+    IndexedRecord avroRecord = createExtendedSpecificAvroRecord();
+    final byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+
+    final Object obj = specificAvroDeserializerWithReaderSchema.deserialize(topic, bytes);
+    assertTrue(
+        "Full object should be a io.confluent.kafka.example.User",
+        User.class.isInstance(obj)
+    );
+    assertEquals("testUser", ((User) obj).getName().toString());
+  }
+
+  @Test
   public void testKafkaAvroSerializerReflectionRecord() {
     byte[] bytes;
     Object obj;
@@ -996,6 +1055,73 @@ public class KafkaAvroSerializerTest {
     assertEquals(widget, obj);
   }
 
+  @Test
+  public void testKafkaAvroSerializerReflectionRecordWithLogicalType() {
+    byte[] bytes;
+    Object obj;
+
+    RecordWithUUID record = new RecordWithUUID();
+    record.uuid = UUID.randomUUID();
+
+    Schema schema = AvroSchemaUtils.getReflectData().getSchema(record.getClass());
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus",
+        AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, true,
+        KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, true
+    );
+    reflectionAvroDeserializer.configure(configs, false);
+    reflectionAvroSerializer.configure(configs, false);
+
+    bytes = reflectionAvroSerializer.serialize(topic, record);
+    obj = reflectionAvroDecoder.fromBytes(bytes, schema);
+    assertTrue(
+        "Returned object should be a RecordWithUUID",
+        RecordWithUUID.class.isInstance(obj)
+    );
+    assertEquals(record, obj);
+
+    obj = reflectionAvroDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a RecordWithUUID",
+        RecordWithUUID.class.isInstance(obj)
+    );
+    assertEquals(record, obj);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerReflectionRecordWithLogicalTypeNullField() {
+    byte[] bytes;
+    Object obj;
+
+    RecordWithUUID record = new RecordWithUUID();
+
+    Schema schema = AvroSchemaUtils.getReflectDataAllowNull().getSchema(record.getClass());
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus",
+        AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, true,
+        KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG, true,
+        KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, true
+    );
+    reflectionAvroDeserializer.configure(configs, false);
+    reflectionAvroSerializer.configure(configs, false);
+
+    bytes = reflectionAvroSerializer.serialize(topic, record);
+    obj = reflectionAvroDecoder.fromBytes(bytes, schema);
+    assertTrue(
+        "Returned object should be a RecordWithUUID",
+        RecordWithUUID.class.isInstance(obj)
+    );
+    assertEquals(record, obj);
+
+    obj = reflectionAvroDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a RecordWithUUID",
+        RecordWithUUID.class.isInstance(obj)
+    );
+    assertEquals(record, obj);
+  }
 
   @Test
   public void testKafkaAvroSerializerReflectionRecordWithProjection() {
@@ -1185,5 +1311,26 @@ public class KafkaAvroSerializerTest {
         + ",{\"type\":\"record\",\"name\":\"Account\",\"namespace\":\"example.avro\","
         + "\"fields\":[{\"name\":\"accountNumber\",\"type\":\"string\"}]}]";
     assertEquals(expectedResolved, schema.formattedString(Format.RESOLVED.symbol()));
+  }
+
+  static class RecordWithUUID {
+    UUID uuid;
+
+    @Override
+    public int hashCode() {
+      return uuid.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (obj == null) {
+        return false;
+      }
+      if (!(obj instanceof RecordWithUUID)) {
+        return false;
+      }
+      RecordWithUUID that = (RecordWithUUID) obj;
+      return Objects.equals(this.uuid, that.uuid);
+    }
   }
 }
