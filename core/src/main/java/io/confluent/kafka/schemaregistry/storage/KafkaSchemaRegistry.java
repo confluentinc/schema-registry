@@ -669,7 +669,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
         if (schemaIdAndSubjects != null
             && (schemaId < 0 || schemaId == schemaIdAndSubjects.getSchemaId())) {
-          if (schema.getVersion() != 0
+          if (schema.getVersion() == 0
               && schemaIdAndSubjects.hasSubject(subject)
               && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
             // return only if the schema was previously registered under the input subject
@@ -685,7 +685,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
 
       // iterate from the latest to first
-      if (schema.getVersion() != 0) {
+      if (schema.getVersion() == 0) {
         for (ParsedSchemaHolder schemaHolder : undeletedVersions) {
           SchemaValue schemaValue = ((LazyParsedSchemaHolder) schemaHolder).schemaValue();
           ParsedSchema undeletedSchema = schemaHolder.schema();
@@ -894,7 +894,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     Schema schema = new Schema(subject, request);
     Config config = getConfigInScope(subject);
     if (!request.hasSchemaTagsToAddOrRemove()
-        && schema.getVersion() != 0
+        && schema.getVersion() == 0
         && !config.hasDefaultsOrOverrides()) {
       Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
       if (existingSchema != null) {
