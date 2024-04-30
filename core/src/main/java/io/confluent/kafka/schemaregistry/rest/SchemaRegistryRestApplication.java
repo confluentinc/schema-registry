@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.JettyEofExceptionMapper;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.rest.filters.AliasFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.ContextFilter;
@@ -119,6 +120,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new RestCallMetricFilter(
             schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
             schemaRegistry.getMetricsContainer().getApiCallsFailure()));
+    config.register(new JettyEofExceptionMapper());
 
     List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions =
         schemaRegistry.getResourceExtensions();
