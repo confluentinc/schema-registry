@@ -86,7 +86,7 @@ public class AvroSchemaProviderTest {
             new SchemaReference("test2", "test2", -1)
     );
     List<SchemaReference> referencesForTest2 = Arrays.asList(
-            new SchemaReference("test1", "test2", -1)
+            new SchemaReference("test1", "test1", -1)
     );
     List<SchemaReference> referencesForTest3 = Arrays.asList(
             new SchemaReference("test1", "test1", -1),
@@ -109,7 +109,7 @@ public class AvroSchemaProviderTest {
             new SchemaReference("test2", "test2", 1)
     );
     List<SchemaReference> referencesForTest2Resolved = Arrays.asList(
-            new SchemaReference("test1", "test2", 1)
+            new SchemaReference("test1", "test1", 1)
     );
     List<SchemaReference> referencesForTest3Resolved = Arrays.asList(
             new SchemaReference("test1", "test1", 1),
