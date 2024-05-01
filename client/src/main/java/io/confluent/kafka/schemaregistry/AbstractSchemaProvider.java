@@ -80,8 +80,8 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       } else {
         visited.add(reference.getName());
       }
-      resolveReferences(s, schemas, visited);
       if (!schemas.containsKey(reference.getName())) {
+        resolveReferences(s, schemas, visited);
         schemas.put(reference.getName(), s.getSchema());
       }
     }
