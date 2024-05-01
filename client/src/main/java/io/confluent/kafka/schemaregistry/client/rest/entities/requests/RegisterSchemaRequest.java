@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -23,6 +24,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
@@ -45,6 +47,8 @@ public class RegisterSchemaRequest {
   private Metadata metadata = null;
   private RuleSet ruleSet = null;
   private String schema;
+  private List<SchemaTags> schemaTagsToAdd;
+  private List<SchemaTags> schemaTagsToRemove;
 
   public RegisterSchemaRequest() {
   }
@@ -149,6 +153,32 @@ public class RegisterSchemaRequest {
     this.schema = schema;
   }
 
+  @JsonProperty("schemaTagsToAdd")
+  public List<SchemaTags> getSchemaTagsToAdd() {
+    return schemaTagsToAdd;
+  }
+
+  @JsonProperty("schemaTagsToAdd")
+  public void setSchemaTagsToAdd(List<SchemaTags> schemaTagsToAdd) {
+    this.schemaTagsToAdd = schemaTagsToAdd;
+  }
+
+  @JsonProperty("schemaTagsToRemove")
+  public List<SchemaTags> getSchemaTagsToRemove() {
+    return schemaTagsToRemove;
+  }
+
+  @JsonProperty("schemaTagsToRemove")
+  public void setSchemaTagsToRemove(List<SchemaTags> schemaTagsToRemove) {
+    this.schemaTagsToRemove = schemaTagsToRemove;
+  }
+
+  @JsonIgnore
+  public boolean hasSchemaTagsToAddOrRemove() {
+    return (schemaTagsToAdd != null && !schemaTagsToAdd.isEmpty())
+        || (schemaTagsToRemove != null && !schemaTagsToRemove.isEmpty());
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -164,12 +194,15 @@ public class RegisterSchemaRequest {
         && Objects.equals(references, that.references)
         && Objects.equals(metadata, that.metadata)
         && Objects.equals(ruleSet, that.ruleSet)
-        && Objects.equals(schema, that.schema);
+        && Objects.equals(schema, that.schema)
+        && Objects.equals(schemaTagsToAdd, that.schemaTagsToAdd)
+        && Objects.equals(schemaTagsToRemove, that.schemaTagsToRemove);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaType, references, metadata, ruleSet, version, id, schema);
+    return Objects.hash(schemaType, references, metadata, ruleSet, version, id, schema,
+        schemaTagsToAdd, schemaTagsToRemove);
   }
 
   @Override
@@ -186,7 +219,9 @@ public class RegisterSchemaRequest {
     buf.append("references=").append(this.references).append(", ");
     buf.append("metadata=").append(this.metadata).append(", ");
     buf.append("ruleSet=").append(this.ruleSet).append(", ");
-    buf.append("schema=").append(schema).append("}");
+    buf.append("schema=").append(schema).append(", ");
+    buf.append("schemaTagsToAdd=").append(schemaTagsToAdd).append(", ");
+    buf.append("schemaTagsToRemove=").append(schemaTagsToRemove).append("}");
     return buf.toString();
   }
 
