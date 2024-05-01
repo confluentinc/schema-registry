@@ -48,13 +48,13 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       return Collections.emptyMap();
     }
     Map<String, String> result = new LinkedHashMap<>();
-    Set<String> visited = new HashSet<>();
-    resolveReferences(schema, result, visited);
+    resolveReferences(schema, result);
     return result;
   }
 
-  private void resolveReferences(Schema schema, Map<String, String> schemas, Set<String> visited) {
+  private void resolveReferences(Schema schema, Map<String, String> schemas) {
     List<SchemaReference> references = schema.getReferences();
+    Set<String> visited = new HashSet<>();
     for (SchemaReference reference : references) {
       if (reference.getName() == null
           || reference.getSubject() == null
@@ -66,22 +66,22 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       } else {
         visited.add(reference.getName());
       }
+      QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+              schemaVersionFetcher().tenant(), schema.getSubject(), reference.getSubject());
+      Schema s = schemaVersionFetcher().getByVersion(refSubject.toQualifiedSubject(),
+              reference.getVersion(), true);
+      if (s == null) {
+        throw new IllegalStateException("No schema reference found for subject \""
+                + refSubject
+                + "\" and version "
+                + reference.getVersion());
+      }
+      if (reference.getVersion() == -1) {
+        // Update the version with the latest
+        reference.setVersion(s.getVersion());
+      }
+      resolveReferences(s, schemas);
       if (!schemas.containsKey(reference.getName())) {
-        QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
-            schemaVersionFetcher().tenant(), schema.getSubject(), reference.getSubject());
-        Schema s = schemaVersionFetcher().getByVersion(refSubject.toQualifiedSubject(),
-            reference.getVersion(), true);
-        if (s == null) {
-          throw new IllegalStateException("No schema reference found for subject \""
-              + refSubject
-              + "\" and version "
-              + reference.getVersion());
-        }
-        if (reference.getVersion() == -1) {
-          // Update the version with the latest
-          reference.setVersion(s.getVersion());
-        }
-        resolveReferences(s, schemas, visited);
         schemas.put(reference.getName(), s.getSchema());
       }
     }
