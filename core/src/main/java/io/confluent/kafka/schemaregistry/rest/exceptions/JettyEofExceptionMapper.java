@@ -23,6 +23,12 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
 
+/**
+ * This class is intended to catch Early EOF errors that occur when the client disconnects
+ * while the server is reading from the input stream. We catch the org.ecplise.jetty.io.EofException
+ * rather than the more generic java.io.EOFException to ensure that we're
+ * only catching jetty server based errors where the client disconnects.
+ */
 @Provider
 public class JettyEofExceptionMapper implements ExceptionMapper<EofException> {
   private static final String ERROR_MESSAGE =
