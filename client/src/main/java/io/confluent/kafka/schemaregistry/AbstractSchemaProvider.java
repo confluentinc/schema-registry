@@ -48,23 +48,18 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       return Collections.emptyMap();
     }
     Map<String, String> result = new LinkedHashMap<>();
-    resolveReferences(schema, result);
+    Set<String> visited = new HashSet<>();
+    resolveReferences(schema, result, visited);
     return result;
   }
 
-  private void resolveReferences(Schema schema, Map<String, String> schemas) {
+  private void resolveReferences(Schema schema, Map<String, String> schemas, Set<String> visited) {
     List<SchemaReference> references = schema.getReferences();
-    Set<String> visited = new HashSet<>();
     for (SchemaReference reference : references) {
       if (reference.getName() == null
           || reference.getSubject() == null
           || reference.getVersion() == null) {
         throw new IllegalStateException("Invalid reference: " + reference);
-      }
-      if (visited.contains(reference.getName())) {
-        continue;
-      } else {
-        visited.add(reference.getName());
       }
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
               schemaVersionFetcher().tenant(), schema.getSubject(), reference.getSubject());
@@ -80,7 +75,12 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
         // Update the version with the latest
         reference.setVersion(s.getVersion());
       }
-      resolveReferences(s, schemas);
+      if (visited.contains(reference.getName())) {
+        continue;
+      } else {
+        visited.add(reference.getName());
+      }
+      resolveReferences(s, schemas, visited);
       if (!schemas.containsKey(reference.getName())) {
         schemas.put(reference.getName(), s.getSchema());
       }
