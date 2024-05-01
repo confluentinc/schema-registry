@@ -601,12 +601,18 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       latestVersion = latestVersion.copy(schemaMetadata.getVersion());
       // Sanity check by testing latest is backward compatibility with schema
       // Don't test for forward compatibility so unions can be handled properly
-      if (latestCompatStrict && !latestVersion.isBackwardCompatible(schema).isEmpty()) {
-        throw new IOException("Incompatible schema '" + schemaMetadata.getSchema()
-            + "' with refs '" + schemaMetadata.getReferences()
-            + "' of type '" + schemaMetadata.getSchemaType()
-            + "' for schema '" + schema.canonicalString()
-            + "'. Set latest.compatibility.strict=false to disable this check");
+      if (latestCompatStrict) {
+        List<String> errorMessages = latestVersion.isBackwardCompatible(schema);
+        if (!errorMessages.isEmpty()) {
+          String baseMsg = "Incompatible schema '" + schemaMetadata.getSchema()
+                  + "' with refs '" + schemaMetadata.getReferences()
+                  + "' of type '" + schemaMetadata.getSchemaType()
+                  + "' for schema '" + schema.canonicalString()
+                  + "'. Set latest.compatibility.strict=false to disable this check.";
+          log.error(baseMsg + " Error messages: " + String.join(",", errorMessages)
+                  + "; latestVersion=" + latestVersion + "; schema=" + schema);
+          throw new IOException(baseMsg + " See log file for more details.");
+        }
       }
       if (cache != null) {
         cache.put(ss, latestVersion);

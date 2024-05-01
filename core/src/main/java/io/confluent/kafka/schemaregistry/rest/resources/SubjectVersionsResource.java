@@ -407,14 +407,13 @@ public class SubjectVersionsResource {
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
 
-    Schema schema = new Schema(subjectName, request);
     RegisterSchemaResponse registerSchemaResponse;
     try {
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
       }
       Schema result =
-          schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
+          schemaRegistry.registerOrForward(subjectName, request, normalize, headerProperties);
       registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
