@@ -16,10 +16,13 @@
 package io.confluent.kafka.formatter.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
+import java.util.Collections;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.record.TimestampType;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -45,21 +48,25 @@ public class KafkaJsonSchemaFormatterTest {
   private JsonSchemaMessageFormatter formatter;
   private JsonSchema recordSchema = null;
   private JsonSchema keySchema = null;
-  private SchemaRegistryClient schemaRegistry = null;
+  private String url = "mock://test";
   private static ObjectMapper objectMapper = new ObjectMapper();
 
   @Before
   public void setUp() {
     props = new Properties();
-    props.put(KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, url);
 
     String userSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}, "
         + "\"additionalProperties\": false }";
     recordSchema = new JsonSchema(userSchema);
     String keySchema = "{\"type\":\"integer\"}";
     this.keySchema = new JsonSchema(keySchema);
-    schemaRegistry = new MockSchemaRegistryClient();
-    formatter = new JsonSchemaMessageFormatter(schemaRegistry, null);
+    formatter = new JsonSchemaMessageFormatter(url, null);
+  }
+
+  @After
+  public void tearDown() {
+    MockSchemaRegistry.dropScope("test");
   }
 
   @Test
@@ -70,7 +77,7 @@ public class KafkaJsonSchemaFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     JsonSchemaMessageReader jsonSchemaReader =
-        new JsonSchemaMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+        new JsonSchemaMessageReader(url, null, recordSchema, "topic1", false, reader,
             false, true, false);
     ProducerRecord<byte[], byte[]> message = jsonSchemaReader.readMessage();
 
@@ -97,7 +104,7 @@ public class KafkaJsonSchemaFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     JsonSchemaMessageReader jsonSchemaReader =
-        new JsonSchemaMessageReader(schemaRegistry, keySchema, recordSchema, "topic1", true, reader,
+        new JsonSchemaMessageReader(url, keySchema, recordSchema, "topic1", true, reader,
             false, true, false);
     ProducerRecord<byte[], byte[]> message = jsonSchemaReader.readMessage();
 
@@ -122,7 +129,7 @@ public class KafkaJsonSchemaFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     JsonSchemaMessageReader jsonSchemaReader =
-        new JsonSchemaMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+        new JsonSchemaMessageReader(url, null, recordSchema, "topic1", false, reader,
             false, true, false);
     try {
       jsonSchemaReader.readMessage();

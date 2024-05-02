@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import java.util.Map;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 /**
@@ -58,7 +59,12 @@ public class ReflectionAvroSerializer<T> implements Serializer<T> {
 
   @Override
   public byte[] serialize(final String topic, final T record) {
-    return inner.serialize(topic, record);
+    return serialize(topic, null, record);
+  }
+
+  @Override
+  public byte[] serialize(final String topic, final Headers headers, final T record) {
+    return inner.serialize(topic, headers, record);
   }
 
   @Override

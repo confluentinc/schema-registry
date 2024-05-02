@@ -17,10 +17,12 @@ package io.confluent.kafka.formatter.protobuf;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.InvalidProtocolBufferException;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.record.TimestampType;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -48,13 +50,14 @@ public class KafkaProtobufFormatterTest {
   private ProtobufSchema enumSchema = null;
   private ProtobufSchema keySchema = null;
   private ProtobufSchema snakeCaseSchema = null;
+  private String url = "mock://test";
   private SchemaRegistryClient schemaRegistry = null;
   private static ObjectMapper objectMapper = new ObjectMapper();
 
   @Before
   public void setUp() {
     props = new Properties();
-    props.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, url);
     props.put("preserve.json.field.name", "true");
 
     String userSchema = "syntax = \"proto3\"; message User { string name = 1; } "
@@ -68,8 +71,13 @@ public class KafkaProtobufFormatterTest {
     String snakeCaseSchema = "syntax = \"proto3\"; message Foo { string first_field = 1;"
             + "string second_field = 2; }";
     this.snakeCaseSchema = new ProtobufSchema(snakeCaseSchema);
-    schemaRegistry = new MockSchemaRegistryClient();
-    formatter = new ProtobufMessageFormatter(schemaRegistry, null);
+    schemaRegistry = MockSchemaRegistry.getClientForScope("test");
+    formatter = new ProtobufMessageFormatter(url, null);
+  }
+
+  @After
+  public void tearDown() {
+    MockSchemaRegistry.dropScope("test");
   }
 
   @Test
@@ -80,7 +88,7 @@ public class KafkaProtobufFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
-        new ProtobufMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+        new ProtobufMessageReader(url, null, recordSchema, "topic1", false, reader,
             false, true, false);
     ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
 
@@ -106,7 +114,7 @@ public class KafkaProtobufFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
-        new ProtobufMessageReader(schemaRegistry, null, enumSchema, "topic1", false, reader,
+        new ProtobufMessageReader(url, null, enumSchema, "topic1", false, reader,
             false, true, false);
     ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
 
@@ -132,7 +140,7 @@ public class KafkaProtobufFormatterTest {
     BufferedReader reader =
             new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
-            new ProtobufMessageReader(schemaRegistry, null, snakeCaseSchema, "topic1", false, reader,
+            new ProtobufMessageReader(url, null, snakeCaseSchema, "topic1", false, reader,
                     false, true, false);
     ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
 
@@ -159,7 +167,7 @@ public class KafkaProtobufFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
-        new ProtobufMessageReader(schemaRegistry, keySchema, recordSchema, "topic1", true, reader,
+        new ProtobufMessageReader(url, keySchema, recordSchema, "topic1", true, reader,
             false, true, false);
     ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
 
@@ -202,7 +210,7 @@ public class KafkaProtobufFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
-        new ProtobufMessageReader(schemaRegistry, null, recordSchema.copy("User2"), "topic1", false, reader,
+        new ProtobufMessageReader(url, null, recordSchema.copy("User2"), "topic1", false, reader,
             false, true, false);
     ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
 
@@ -226,7 +234,7 @@ public class KafkaProtobufFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
-        new ProtobufMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+        new ProtobufMessageReader(url, null, recordSchema, "topic1", false, reader,
             false, true, false);
     try {
       protobufReader.readMessage();

@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
@@ -124,14 +125,14 @@ public class JsonSchemaData {
       Schema.Type.class);
 
   static {
-    TO_CONNECT_CONVERTERS.put(Schema.Type.BOOLEAN, (schema, value) -> value.booleanValue());
-    TO_CONNECT_CONVERTERS.put(Schema.Type.INT8, (schema, value) -> (byte) value.shortValue());
-    TO_CONNECT_CONVERTERS.put(Schema.Type.INT16, (schema, value) -> value.shortValue());
-    TO_CONNECT_CONVERTERS.put(Schema.Type.INT32, (schema, value) -> value.intValue());
-    TO_CONNECT_CONVERTERS.put(Schema.Type.INT64, (schema, value) -> value.longValue());
-    TO_CONNECT_CONVERTERS.put(Schema.Type.FLOAT32, (schema, value) -> value.floatValue());
-    TO_CONNECT_CONVERTERS.put(Schema.Type.FLOAT64, (schema, value) -> value.doubleValue());
-    TO_CONNECT_CONVERTERS.put(Schema.Type.BYTES, (schema, value) -> {
+    TO_CONNECT_CONVERTERS.put(Schema.Type.BOOLEAN, (data, schema, value) -> value.booleanValue());
+    TO_CONNECT_CONVERTERS.put(Schema.Type.INT8, (data, schema, value) -> (byte) value.shortValue());
+    TO_CONNECT_CONVERTERS.put(Schema.Type.INT16, (data, schema, value) -> value.shortValue());
+    TO_CONNECT_CONVERTERS.put(Schema.Type.INT32, (data, schema, value) -> value.intValue());
+    TO_CONNECT_CONVERTERS.put(Schema.Type.INT64, (data, schema, value) -> value.longValue());
+    TO_CONNECT_CONVERTERS.put(Schema.Type.FLOAT32, (data, schema, value) -> value.floatValue());
+    TO_CONNECT_CONVERTERS.put(Schema.Type.FLOAT64, (data, schema, value) -> value.doubleValue());
+    TO_CONNECT_CONVERTERS.put(Schema.Type.BYTES, (data, schema, value) -> {
       try {
         Object o = value.binaryValue();
         if (o == null) {
@@ -142,16 +143,16 @@ public class JsonSchemaData {
         throw new DataException("Invalid bytes field", e);
       }
     });
-    TO_CONNECT_CONVERTERS.put(Schema.Type.STRING, (schema, value) -> value.textValue());
-    TO_CONNECT_CONVERTERS.put(Schema.Type.ARRAY, (schema, value) -> {
+    TO_CONNECT_CONVERTERS.put(Schema.Type.STRING, (data, schema, value) -> value.textValue());
+    TO_CONNECT_CONVERTERS.put(Schema.Type.ARRAY, (data, schema, value) -> {
       Schema elemSchema = schema == null ? null : schema.valueSchema();
       ArrayList<Object> result = new ArrayList<>();
       for (JsonNode elem : value) {
-        result.add(toConnectData(elemSchema, elem));
+        result.add(data.toConnectData(elemSchema, elem));
       }
       return result;
     });
-    TO_CONNECT_CONVERTERS.put(Schema.Type.MAP, (schema, value) -> {
+    TO_CONNECT_CONVERTERS.put(Schema.Type.MAP, (data, schema, value) -> {
       Schema keySchema = schema == null ? null : schema.keySchema();
       Schema valueSchema = schema == null ? null : schema.valueSchema();
 
@@ -165,7 +166,7 @@ public class JsonSchemaData {
         Iterator<Map.Entry<String, JsonNode>> fieldIt = value.fields();
         while (fieldIt.hasNext()) {
           Map.Entry<String, JsonNode> entry = fieldIt.next();
-          result.put(entry.getKey(), toConnectData(valueSchema, entry.getValue()));
+          result.put(entry.getKey(), data.toConnectData(valueSchema, entry.getValue()));
         }
       } else {
         if (!value.isArray()) {
@@ -183,14 +184,14 @@ public class JsonSchemaData {
             throw new DataException("Found invalid map entry, expected length 2 but found :" + entry
                 .size());
           }
-          result.put(toConnectData(keySchema, entry.get(KEY_FIELD)),
-              toConnectData(valueSchema, entry.get(VALUE_FIELD))
+          result.put(data.toConnectData(keySchema, entry.get(KEY_FIELD)),
+              data.toConnectData(valueSchema, entry.get(VALUE_FIELD))
           );
         }
       }
       return result;
     });
-    TO_CONNECT_CONVERTERS.put(Schema.Type.STRUCT, (schema, value) -> {
+    TO_CONNECT_CONVERTERS.put(Schema.Type.STRUCT, (data, schema, value) -> {
       if (isUnionSchema(schema)) {
         boolean generalizedSumTypeSupport = ConnectUnion.isUnion(schema);
         String fieldNamePrefix = generalizedSumTypeSupport
@@ -203,7 +204,7 @@ public class JsonSchemaData {
 
           if (isInstanceOfSchemaTypeForSimpleSchema(fieldSchema, value)) {
             return new Struct(schema.schema()).put(fieldNamePrefix + field.index(),
-                toConnectData(fieldSchema, value)
+                data.toConnectData(fieldSchema, value)
             );
           } else {
             int matching = matchStructSchema(fieldSchema, value);
@@ -216,7 +217,7 @@ public class JsonSchemaData {
         if (matchingField != null) {
           return new Struct(schema.schema()).put(
               fieldNamePrefix + matchingField.index(),
-              toConnectData(matchingField.schema(), value)
+              data.toConnectData(matchingField.schema(), value)
           );
         }
         throw new DataException("Did not find matching oneof field for data");
@@ -228,7 +229,7 @@ public class JsonSchemaData {
 
         Struct result = new Struct(schema.schema());
         for (Field field : schema.fields()) {
-          Object fieldValue = toConnectData(field.schema(), value.get(field.name()));
+          Object fieldValue = data.toConnectData(field.schema(), value.get(field.name()));
           if (fieldValue != null) {
             result.put(field, fieldValue);
           }
@@ -568,7 +569,7 @@ public class JsonSchemaData {
     }
   }
 
-  public static Object toConnectData(Schema schema, JsonNode jsonValue) {
+  public Object toConnectData(Schema schema, JsonNode jsonValue) {
     final Schema.Type schemaType;
     if (schema != null) {
       schemaType = schema.type();
@@ -630,7 +631,7 @@ public class JsonSchemaData {
         return logicalConverter.convert(schema, jsonValue);
       }
     }
-    return typeConverter.convert(schema, jsonValue);
+    return typeConverter.convert(this, schema, jsonValue);
   }
 
   public JsonSchema fromConnectSchema(Schema schema) {
@@ -1009,21 +1010,14 @@ public class JsonSchemaData {
     } else if (jsonSchema instanceof StringSchema) {
       String type = (String) jsonSchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
       builder = CONNECT_TYPE_BYTES.equals(type) ? SchemaBuilder.bytes() : SchemaBuilder.string();
+    } else if (jsonSchema instanceof ConstSchema) {
+      ConstSchema constSchema = (ConstSchema) jsonSchema;
+      List<Object> possibleValues = ImmutableList.of(constSchema.getPermittedValue());
+      builder = toConnectEnums(possibleValues);
     } else if (jsonSchema instanceof EnumSchema) {
       EnumSchema enumSchema = (EnumSchema) jsonSchema;
-      builder = SchemaBuilder.string();
-      String paramName = generalizedSumTypeSupport ? GENERALIZED_TYPE_ENUM : JSON_TYPE_ENUM;
-      builder.parameter(paramName, "");  // JSON enums have no name, use empty string as placeholder
-      int symbolIndex = 0;
-      for (Object enumObj : enumSchema.getPossibleValuesAsList()) {
-        String enumSymbol = enumObj != null ? enumObj.toString() : NULL_MARKER;
-        if (generalizedSumTypeSupport) {
-          builder.parameter(paramName + "." + enumSymbol, String.valueOf(symbolIndex));
-        } else {
-          builder.parameter(paramName + "." + enumSymbol, enumSymbol);
-        }
-        symbolIndex++;
-      }
+      List<Object> possibleValues = enumSchema.getPossibleValuesAsList();
+      builder = toConnectEnums(possibleValues);
     } else if (jsonSchema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) jsonSchema;
       CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
@@ -1164,6 +1158,23 @@ public class JsonSchemaData {
     return result;
   }
 
+  private SchemaBuilder toConnectEnums(List<Object> possibleValues) {
+    SchemaBuilder builder = SchemaBuilder.string();
+    String paramName = generalizedSumTypeSupport ? GENERALIZED_TYPE_ENUM : JSON_TYPE_ENUM;
+    builder.parameter(paramName, "");  // JSON enums have no name, use empty string as placeholder
+    int symbolIndex = 0;
+    for (Object enumObj : possibleValues) {
+      String enumSymbol = enumObj != null ? enumObj.toString() : NULL_MARKER;
+      if (generalizedSumTypeSupport) {
+        builder.parameter(paramName + "." + enumSymbol, String.valueOf(symbolIndex));
+      } else {
+        builder.parameter(paramName + "." + enumSymbol, enumSymbol);
+      }
+      symbolIndex++;
+    }
+    return builder;
+  }
+
   private Schema allOfToConnectSchema(
       ToConnectContext ctx, CombinedSchema combinedSchema,
       Integer version, boolean forceOptional) {
@@ -1280,7 +1291,7 @@ public class JsonSchemaData {
   }
 
   private interface JsonToConnectTypeConverter {
-    Object convert(Schema schema, JsonNode value);
+    Object convert(JsonSchemaData data, Schema schema, JsonNode value);
   }
 
   private interface ConnectToJsonLogicalTypeConverter {

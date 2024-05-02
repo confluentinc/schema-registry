@@ -20,12 +20,17 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import java.io.InterruptedIOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Headers;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
@@ -45,7 +50,6 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
 public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKafkaSchemaSerDe {
   protected static final ObjectMapper objectMapper = Jackson.newObjectMapper();
-  protected boolean isKey;
   protected Class<T> type;
   protected String typeProperty;
   protected boolean validate;
@@ -54,7 +58,6 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
    * Sets properties for this deserializer without overriding the schema registry client itself.
    * Useful for testing, where a mock client is injected.
    */
-  @SuppressWarnings("unchecked")
   protected void configure(KafkaJsonSchemaDeserializerConfig config, Class<T> type) {
     configureClientProperties(config, new JsonSchemaProvider());
     this.type = type;
@@ -99,10 +102,16 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return (T) deserialize(false, null, isKey, payload);
   }
 
+  protected Object deserialize(
+      boolean includeSchemaAndVersion, String topic, Boolean isKey, byte[] payload
+  ) throws SerializationException, InvalidConfigurationException {
+    return deserialize(includeSchemaAndVersion, topic, isKey, null, payload);
+  }
+
   // The Object return type is a bit messy, but this is the simplest way to have
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
-      boolean includeSchemaAndVersion, String topic, Boolean isKey, byte[] payload
+      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
@@ -122,18 +131,52 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       String subject = isKey == null || strategyUsesSchema(isKey)
           ? getContextName(topic) : subjectName(topic, isKey, null);
       JsonSchema schema = ((JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id));
-      if (includeSchemaAndVersion) {
+      if (isKey != null && strategyUsesSchema(isKey)) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(id, schema, subject, isKey);
+      }
+
+      ParsedSchema readerSchema = null;
+      if (metadata != null) {
+        readerSchema = getLatestWithMetadata(subject);
+      } else if (useLatestVersion) {
+        readerSchema = lookupLatestVersion(subject, schema, false);
+      }
+      if (includeSchemaAndVersion || readerSchema != null) {
+        Integer version = schemaVersion(topic, isKey, id, subject, schema, null);
+        schema = schema.copy(version);
+      }
+      List<Migration> migrations = Collections.emptyList();
+      if (readerSchema != null) {
+        migrations = getMigrations(subject, schema, readerSchema);
       }
 
       int length = buffer.limit() - 1 - idSize;
       int start = buffer.position() + buffer.arrayOffset();
 
       JsonNode jsonNode = null;
+      if (!migrations.isEmpty()) {
+        jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+        jsonNode = (JsonNode) executeMigrations(migrations, subject, topic, headers, jsonNode);
+      }
+
+      if (readerSchema != null) {
+        schema = (JsonSchema) readerSchema;
+      }
+      if (schema.ruleSet() != null && schema.ruleSet().hasRules(RuleMode.READ)) {
+        if (jsonNode == null) {
+          jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+        }
+        jsonNode = (JsonNode) executeRules(
+            subject, topic, headers, payload, RuleMode.READ, null, schema, jsonNode
+        );
+      }
+
       if (validate) {
         try {
-          jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+          if (jsonNode == null) {
+            jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+          }
           schema.validate(jsonNode);
         } catch (JsonProcessingException | ValidationException e) {
           throw new SerializationException("JSON "
@@ -185,8 +228,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         // schema registry's ordering (which is implicit by auto-registration time rather than
         // explicit from the Connector).
 
-        Integer version = schemaVersion(topic, isKey, id, subject, schema, value);
-        return new JsonSchemaAndValue(schema.copy(version), value);
+        return new JsonSchemaAndValue(schema, value);
       }
 
       return value;
@@ -196,6 +238,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       throw new SerializationException("Error deserializing JSON message for id " + id, e);
     } catch (RestClientException e) {
       throw toKafkaException(e, "Error retrieving JSON schema for id " + id);
+    } finally {
+      postOp(payload);
     }
   }
 
@@ -266,8 +310,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   protected JsonSchemaAndValue deserializeWithSchemaAndVersion(
-      String topic, boolean isKey, byte[] payload
+      String topic, boolean isKey, Headers headers, byte[] payload
   ) throws SerializationException {
-    return (JsonSchemaAndValue) deserialize(true, topic, isKey, payload);
+    return (JsonSchemaAndValue) deserialize(true, topic, isKey, headers, payload);
   }
 }
