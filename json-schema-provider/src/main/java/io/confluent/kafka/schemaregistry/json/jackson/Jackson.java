@@ -24,7 +24,6 @@ import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationConfig;
 import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.cfg.CacheProvider;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.jsonFormatVisitors.JsonFormatVisitorWrapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -127,11 +126,6 @@ public class Jackson {
       _unknownTypeSerializer = DEFAULT_UNKNOWN_SERIALIZER;
     }
 
-    public DefaultSerializerProviderImpl(DefaultSerializerProviderImpl src, CacheProvider cp) {
-      super(src, cp);
-      _unknownTypeSerializer = DEFAULT_UNKNOWN_SERIALIZER;
-    }
-
     protected DefaultSerializerProviderImpl(
         SerializerProvider src, SerializationConfig config, SerializerFactory f) {
       super(src, config, f);
@@ -147,10 +141,6 @@ public class Jackson {
     public DefaultSerializerProviderImpl createInstance(
         SerializationConfig config, SerializerFactory jsf) {
       return new DefaultSerializerProviderImpl(this, config, jsf);
-    }
-
-    public DefaultSerializerProviderImpl withCaches(CacheProvider cp) {
-      return new DefaultSerializerProviderImpl(this, cp);
     }
   }
 
