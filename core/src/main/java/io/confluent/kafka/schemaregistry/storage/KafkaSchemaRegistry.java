@@ -731,14 +731,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           throw new InvalidSchemaException("Version is not one more than previous version");
         }
 
-        SchemaKey schemaKey = new SchemaKey(subject, schema.getVersion());
-        SchemaValue schemaValue = new SchemaValue(schema, ruleSetHandler);
+        final SchemaKey schemaKey = new SchemaKey(subject, schema.getVersion());
+        final SchemaValue schemaValue = new SchemaValue(schema, ruleSetHandler);
         metadataEncoder.encodeMetadata(schemaValue);
         if (schemaId >= 0) {
           checkIfSchemaWithIdExist(schemaId, schema);
           schema.setId(schemaId);
           schemaValue.setId(schemaId);
-          kafkaStore.put(schemaKey, schemaValue);
         } else {
           String qctx = QualifiedSubject.qualifiedContextFor(tenant(), subject);
           int retries = 0;
@@ -751,7 +750,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
               if (retries > 1) {
                 log.warn(String.format("Retrying to register the schema with ID %s", newId));
               }
-              kafkaStore.put(schemaKey, schemaValue);
               break;
             }
           }
@@ -768,6 +766,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             kafkaStore.put(key, null);
           }
         }
+        kafkaStore.put(schemaKey, schemaValue);
 
         return modifiedSchema
             ? schema
