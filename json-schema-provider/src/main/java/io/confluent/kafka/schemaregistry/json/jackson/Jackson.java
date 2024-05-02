@@ -118,6 +118,7 @@ public class Jackson {
         SerializationConfig config, SerializerFactory jsf) {
       return new DefaultSerializerProviderImpl(this, config, jsf);
     }
+  }
 
   static class UnknownSerializerImpl extends UnknownSerializer {
     public UnknownSerializerImpl() {
