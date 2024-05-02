@@ -105,9 +105,9 @@ public class Dek {
 
   @JsonProperty("keyMaterial")
   public void setKeyMaterial(byte[] keyMaterialBytes) {
-    if (keyMaterialBytes != null) {
-      this.keyMaterial =
-          new String(Base64.getEncoder().encode(keyMaterialBytes), StandardCharsets.UTF_8);
+    this.keyMaterial = keyMaterialBytes != null
+        ? new String(Base64.getEncoder().encode(keyMaterialBytes), StandardCharsets.UTF_8)
+        : null;
     }
   }
 
