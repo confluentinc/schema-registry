@@ -108,7 +108,6 @@ public class Dek {
     this.keyMaterial = keyMaterialBytes != null
         ? new String(Base64.getEncoder().encode(keyMaterialBytes), StandardCharsets.UTF_8)
         : null;
-    }
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = "Timestamp of the dek")
