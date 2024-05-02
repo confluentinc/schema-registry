@@ -87,7 +87,6 @@
         <io.confluent.schema-registry.version>7.0.15-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <bouncycastle.jdk18.version>1.77</bouncycastle.jdk18.version>
-        <jackson.version>2.16.2</jackson.version>
     </properties>
 
     <repositories>
