@@ -431,10 +431,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
           dek = client.getDek(
               key.getKekName(), key.getSubject(), key.getDekFormat(), key.isLookupDeleted());
         }
-        if (dek == null) {
-          return null;
-        }
-        return dek.getEncryptedKeyMaterial() != null ? dek : null;
+        return dek != null && dek.getEncryptedKeyMaterial() != null ? dek : null;
       } catch (RestClientException e) {
         if (e.getStatus() == 404) {
           return null;
