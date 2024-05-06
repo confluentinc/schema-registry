@@ -35,27 +35,24 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.reflect.ReflectData;
@@ -236,6 +233,12 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
+  public boolean hasTopLevelField(String field) {
+    return schemaObj != null && schemaObj.getType() == Schema.Type.RECORD
+            && schemaObj.getField(field) != null;
+  }
+
+  @Override
   public String schemaType() {
     return TYPE;
   }
@@ -333,9 +336,9 @@ public class AvroSchema implements ParsedSchema {
               this.schemaObj,
               ((AvroSchema) previousSchema).schemaObj);
       return result.getResult().getIncompatibilities().stream()
-          .map(Difference::new)
-          .map(Difference::toString)
-          .collect(Collectors.toCollection(ArrayList::new));
+              .map(Difference::new)
+              .map(Difference::toString)
+              .collect(Collectors.toCollection(ArrayList::new));
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
       return Lists.newArrayList(
@@ -513,7 +516,7 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
-  public Object copyMessage(Object message) throws IOException {
+  public Object copyMessage(Object message) {
     GenericData data = getData(message);
     return data.deepCopy(rawSchema(), message);
   }
@@ -568,7 +571,7 @@ public class AvroSchema implements ParsedSchema {
                 (e1, e2) -> e1));
       case RECORD:
         if (message == null) {
-          return message;
+          return null;
         }
         data = getData(message);
         for (Schema.Field f : schema.getFields()) {

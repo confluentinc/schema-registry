@@ -15,46 +15,43 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.BooleanNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.NumericNode;
-import com.fasterxml.jackson.databind.node.TextNode;
-import com.google.common.collect.ImmutableSet;
-import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
-import io.confluent.kafka.schemaregistry.SchemaProvider;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import io.confluent.kafka.schemaregistry.json.diff.Difference;
-import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import org.everit.json.schema.ValidationException;
-import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.google.common.collect.ImmutableSet;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.json.diff.Difference;
+import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import org.everit.json.schema.ValidationException;
+import org.junit.Test;
+
 public class JsonSchemaTest {
 
-  private static ObjectMapper objectMapper = new ObjectMapper();
+  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   private static final String recordSchemaString = "{\"properties\": {\n"
       + "     \"null\": {\"type\": \"null\"},\n"
@@ -92,6 +89,44 @@ public class JsonSchemaTest {
       + "  \"additionalProperties\": false\n"
       + "}";
 
+  private static final String schema = "{\n"
+      + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+      + "  \"$id\": \"task.schema.json\",\n"
+      + "  \"title\": \"Task\",\n"
+      + "  \"description\": \"A task\",\n"
+      + "  \"type\": [\"null\", \"object\"],\n"
+      + "  \"properties\": {\n"
+      + "    \"parent\": {\n"
+      + "        \"$ref\": \"task.schema.json\"\n"
+      + "    },    \n"
+      + "    \"title\": {\n"
+      + "        \"description\": \"Task title\",\n"
+      + "        \"type\": \"string\"\n"
+      + "    }\n"
+      + "  }\n"
+      + "}";
+
+  @Test
+  public void testHasTopLevelField() {
+    ParsedSchema parsedSchema = new JsonSchema(schema);
+    assertTrue(parsedSchema.hasTopLevelField("parent"));
+    assertFalse(parsedSchema.hasTopLevelField("doesNotExist"));
+  }
+
+  @Test
+  public void testGetReservedFields() {
+    Metadata reservedFieldMetadata = new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "name, city"),
+        Collections.emptySet());
+    ParsedSchema parsedSchema = new JsonSchema(schema,
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        reservedFieldMetadata,
+        null,
+        null);
+    assertEquals(ImmutableSet.of("name", "city"), parsedSchema.getReservedFields());
+  }
+
   @Test
   public void testPrimitiveTypesToJsonSchema() throws Exception {
     Object envelope = JsonSchemaUtils.toObject((String) null, createPrimitiveSchema("null"));
@@ -100,23 +135,23 @@ public class JsonSchemaTest {
 
     envelope = JsonSchemaUtils.toObject("true", createPrimitiveSchema("boolean"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
-    assertEquals(true, ((BooleanNode) result).asBoolean());
+    assertTrue(result.asBoolean());
 
     envelope = JsonSchemaUtils.toObject("false", createPrimitiveSchema("boolean"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
-    assertEquals(false, ((BooleanNode) result).asBoolean());
+    assertFalse(result.asBoolean());
 
     envelope = JsonSchemaUtils.toObject("12", createPrimitiveSchema("number"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
-    assertEquals(12, ((NumericNode) result).asInt());
+    assertEquals(12, result.asInt());
 
     envelope = JsonSchemaUtils.toObject("23.2", createPrimitiveSchema("number"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
-    assertEquals(23.2, ((NumericNode) result).asDouble(), 0.1);
+    assertEquals(23.2, result.asDouble(), 0.1);
 
     envelope = JsonSchemaUtils.toObject("\"a string\"", createPrimitiveSchema("string"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
-    assertEquals("a string", ((TextNode) result).asText());
+    assertEquals("a string", result.asText());
   }
 
   @Test
@@ -130,8 +165,8 @@ public class JsonSchemaTest {
 
     JsonNode envelope = (JsonNode) JsonSchemaUtils.toObject(json, recordSchema);
     JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
-    assertEquals(true, result.get("null").isNull());
-    assertEquals(true, result.get("boolean").booleanValue());
+    assertTrue(result.get("null").isNull());
+    assertTrue(result.get("boolean").booleanValue());
     assertEquals(12, result.get("number").intValue());
     assertEquals("string", result.get("string").textValue());
   }
@@ -148,8 +183,8 @@ public class JsonSchemaTest {
 
     JsonNode envelope = (JsonNode) JsonSchemaUtils.toObject(json, recordSchema);
     JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
-    assertEquals(true, result.get("null").isNull());
-    assertEquals(true, result.get("boolean").booleanValue());
+    assertTrue(result.get("null").isNull());
+    assertTrue(result.get("boolean").booleanValue());
     assertEquals(12, result.get("number").intValue());
     assertEquals("string", result.get("string").textValue());
   }
@@ -162,7 +197,7 @@ public class JsonSchemaTest {
     JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     ArrayNode arrayNode = (ArrayNode) result;
     Iterator<JsonNode> elements = arrayNode.elements();
-    List<String> strings = new ArrayList<String>();
+    List<String> strings = new ArrayList<>();
     while (elements.hasNext()) {
       strings.add(elements.next().textValue());
     }
@@ -173,11 +208,11 @@ public class JsonSchemaTest {
   public void testUnionToJsonSchema() throws Exception {
     Object envelope = JsonSchemaUtils.toObject("\"test\"", unionSchema);
     JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
-    assertEquals("test", ((TextNode) result).asText());
+    assertEquals("test", result.asText());
 
     envelope = JsonSchemaUtils.toObject("12", unionSchema);
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
-    assertEquals(12, ((NumericNode) result).asInt());
+    assertEquals(12, result.asInt());
 
     try {
       JsonSchemaUtils.toObject("-1", unionSchema);
@@ -191,7 +226,7 @@ public class JsonSchemaTest {
   public void testEnumToJsonSchema() throws Exception {
     Object envelope = JsonSchemaUtils.toObject("\"red\"", enumSchema);
     JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
-    assertEquals("red", ((TextNode) result).asText());
+    assertEquals("red", result.asText());
 
     try {
       JsonSchemaUtils.toObject("\"yellow\"", enumSchema);
@@ -203,7 +238,7 @@ public class JsonSchemaTest {
 
   @Test
   public void testPrimitiveTypesToJson() throws Exception {
-    JsonNode result = objectMapper.readTree(JsonSchemaUtils.toJson((int) 0));
+    JsonNode result = objectMapper.readTree(JsonSchemaUtils.toJson(0));
     assertTrue(result.isNumber());
 
     result = objectMapper.readTree(JsonSchemaUtils.toJson((long) 0));
@@ -241,7 +276,7 @@ public class JsonSchemaTest {
     assertTrue(result.isObject());
     assertTrue(result.get("null").isNull());
     assertTrue(result.get("boolean").isBoolean());
-    assertEquals(true, result.get("boolean").booleanValue());
+    assertTrue(result.get("boolean").booleanValue());
     assertTrue(result.get("number").isIntegralNumber());
     assertEquals(12, result.get("number").intValue());
     assertTrue(result.get("string").isTextual());
@@ -835,6 +870,53 @@ public class JsonSchemaTest {
     assertEquals(ImmutableSet.of("PII", "TEST2", "TEST3"), resultSchema.inlineTags());
   }
 
+  @Test
+  public void testRestrictedFields() {
+    String schema = "{\n"
+            + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+            + "  \"$id\": \"task.schema.json\",\n"
+            + "  \"title\": \"Task\",\n"
+            + "  \"description\": \"A task\",\n"
+            + "  \"type\": \"object\",\n"
+            + "  \"properties\": {\n"
+            + "    \"$id\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"$$title\": {\n"
+            + "        \"description\": \"Task title\",\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"status\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    jsonSchema.validate(false);
+    assertThrows(ValidationException.class, () -> jsonSchema.validate(true));
+    String stringSchema = "{\n"
+            + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+            + "  \"$id\": \"task.schema.json\",\n"
+            + "  \"title\": \"Task\",\n"
+            + "  \"description\": \"A task\",\n"
+            + "  \"type\": \"object\",\n"
+            + "  \"properties\": {\n"
+            + "    \"$id\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"title\": {\n"
+            + "        \"description\": \"Task title\",\n"
+            + "        \"type\": \"string\"\n"
+            + "    },    \n"
+            + "    \"status\": {\n"
+            + "        \"type\": \"string\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+    JsonSchema validSchema = new JsonSchema(stringSchema);
+    validSchema.validate(true);
+  }
+
   private static Map<String, String> getJsonSchemaWithReferences() {
     Map<String, String> schemas = new HashMap<>();
     String reference = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
@@ -860,6 +942,10 @@ public class JsonSchemaTest {
 
     public String getProp() {
       return prop;
+    }
+
+    public void setProp(String prop) {
+      this.prop = prop;
     }
   }
 }
