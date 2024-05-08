@@ -34,15 +34,18 @@ public interface UpdateRequestHandler {
 
   void handle(Schema schema, TagSchemaRequest request);
 
-  default void handle(String subject, ConfigUpdateRequest request, Map<String, String> headerProperties) {
+  default void handle(String subject, ConfigUpdateRequest request,
+                      Map<String, String> headerProperties) {
     handle(subject, request);
   }
 
-  default void handle(String subject, boolean normalize, RegisterSchemaRequest request, Map<String, String> headerProperties) {
+  default void handle(String subject, boolean normalize, RegisterSchemaRequest request,
+                      Map<String, String> headerProperties) {
     handle(subject, normalize, request);
   }
 
-  default void handle(Schema schema, TagSchemaRequest request, Map<String, String> headerProperties) {
+  default void handle(Schema schema, TagSchemaRequest request,
+                      Map<String, String> headerProperties) {
     handle(schema, request);
   }
 }

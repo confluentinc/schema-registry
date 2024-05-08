@@ -59,20 +59,24 @@ public class CompositeUpdateRequestHandler implements UpdateRequestHandler {
   }
 
   @Override
-  public void handle(String subject, ConfigUpdateRequest request, Map<String, String> headerProperties) {
+  public void handle(String subject, ConfigUpdateRequest request,
+                     Map<String, String> headerProperties) {
     for (UpdateRequestHandler handler : handlers) {
       handler.handle(subject, request, headerProperties);
     }
   }
 
   @Override
-  public void handle(String subject, boolean normalize, RegisterSchemaRequest request, Map<String, String> headerProperties) {
+  public void handle(String subject, boolean normalize, RegisterSchemaRequest request,
+                     Map<String, String> headerProperties) {
     for (UpdateRequestHandler handler : handlers) {
       handler.handle(subject, normalize, request, headerProperties);
     }
   }
+
   @Override
-  public void handle(Schema schema, TagSchemaRequest request, Map<String, String> headerProperties) {
+  public void handle(Schema schema, TagSchemaRequest request,
+                     Map<String, String> headerProperties) {
     for (UpdateRequestHandler handler : handlers) {
       handler.handle(schema, request, headerProperties);
     }
