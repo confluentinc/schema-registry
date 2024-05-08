@@ -388,7 +388,11 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(subjectName, normalize, request);
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+
+    schemaRegistry.getCompositeUpdateRequestHandler().handle(
+        subjectName, normalize, request, headerProperties);
 
     if (request.getRuleSet() != null) {
       try {
@@ -403,9 +407,6 @@ public class SubjectVersionsResource {
     }
 
     subjectName = QualifiedSubject.normalize(schemaRegistry.tenant(), subjectName);
-
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers, schemaRegistry.config().whitelistHeaders());
 
     RegisterSchemaResponse registerSchemaResponse;
     try {
@@ -626,10 +627,10 @@ public class SubjectVersionsResource {
           String.format("Error while getting schema of subject %s version %s",
               subjectName, version), e);
     }
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(schema, request);
-
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
+    schemaRegistry.getCompositeUpdateRequestHandler().handle(schema, request, headerProperties);
+
     RegisterSchemaResponse registerSchemaResponse;
     try {
       if (request.getRulesToMerge() != null || request.getRulesToRemove() != null) {

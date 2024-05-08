@@ -104,7 +104,9 @@ public class ConfigResource {
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
 
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(subject, request);
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+    schemaRegistry.getCompositeUpdateRequestHandler().handle(subject, request, headerProperties);
 
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
@@ -132,8 +134,6 @@ public class ConfigResource {
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-          headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.updateConfigOrForward(subject, new Config(request), headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());

@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpd
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import java.util.List;
+import java.util.Map;
 
 public class CompositeUpdateRequestHandler implements UpdateRequestHandler {
 
@@ -54,6 +55,26 @@ public class CompositeUpdateRequestHandler implements UpdateRequestHandler {
   public void handle(Schema schema, TagSchemaRequest request) {
     for (UpdateRequestHandler handler : handlers) {
       handler.handle(schema, request);
+    }
+  }
+
+  @Override
+  public void handle(String subject, ConfigUpdateRequest request, Map<String, String> headerProperties) {
+    for (UpdateRequestHandler handler : handlers) {
+      handler.handle(subject, request, headerProperties);
+    }
+  }
+
+  @Override
+  public void handle(String subject, boolean normalize, RegisterSchemaRequest request, Map<String, String> headerProperties) {
+    for (UpdateRequestHandler handler : handlers) {
+      handler.handle(subject, normalize, request, headerProperties);
+    }
+  }
+  @Override
+  public void handle(Schema schema, TagSchemaRequest request, Map<String, String> headerProperties) {
+    for (UpdateRequestHandler handler : handlers) {
+      handler.handle(schema, request, headerProperties);
     }
   }
 }
