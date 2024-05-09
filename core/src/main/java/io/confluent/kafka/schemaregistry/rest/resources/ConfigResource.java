@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
@@ -106,7 +107,11 @@ public class ConfigResource {
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(subject, request, headerProperties);
+    try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(subject, request, headerProperties);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while updating subject level config", e);
+    }
 
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
@@ -213,8 +218,13 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
-
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(request);
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+    try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(request, headerProperties);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while updating global level config", e);
+    }
 
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
@@ -236,8 +246,6 @@ public class ConfigResource {
       }
     }
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-          headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.updateConfigOrForward(null, new Config(request), headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());

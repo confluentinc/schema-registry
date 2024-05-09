@@ -35,6 +35,11 @@ public interface UpdateRequestHandler {
 
   void handle(Schema schema, TagSchemaRequest request);
 
+  default void handle(ConfigUpdateRequest request,
+                      Map<String, String> headerProperties) throws SchemaRegistryException {
+    handle(null, request);
+  }
+
   default void handle(String subject, ConfigUpdateRequest request,
                       Map<String, String> headerProperties) throws SchemaRegistryException {
     handle(subject, request);

@@ -391,8 +391,12 @@ public class SubjectVersionsResource {
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
 
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(
-        subjectName, normalize, request, headerProperties);
+    try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(
+          subjectName, normalize, request, headerProperties);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while registering schema", e);
+    }
 
     if (request.getRuleSet() != null) {
       try {
@@ -629,10 +633,11 @@ public class SubjectVersionsResource {
     }
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(schema, request, headerProperties);
+
 
     RegisterSchemaResponse registerSchemaResponse;
     try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(schema, request, headerProperties);
       if (request.getRulesToMerge() != null || request.getRulesToRemove() != null) {
         if (request.getRuleSet() != null) {
           throw new RestInvalidRuleSetException(
