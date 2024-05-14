@@ -453,19 +453,22 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     checkName(name);
 
+    KeyEncryptionKey kek = dekRegistry.getKek(name, false);
+    if (kek == null) {
+      throw DekRegistryErrors.keyNotFoundException(name);
+    }
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
-      KeyEncryptionKey key = dekRegistry.getKek(name, false);
-      boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
+      boolean shared = request.isShared() != null ? request.isShared() : kek.isShared();
       if (shared && testSharing) {
         SortedMap<String, String> kmsProps = request.getKmsProps() != null
             ? new TreeMap<>(request.getKmsProps())
-            : key.getKmsProps();
-        KeyEncryptionKey kek = new KeyEncryptionKey(name, key.getKmsType(),
-            key.getKmsKeyId(), kmsProps, null, true, false);
-        dekRegistry.testKek(kek);
+            : kek.getKmsProps();
+        KeyEncryptionKey newKek = new KeyEncryptionKey(name, kek.getKmsType(),
+            kek.getKmsKeyId(), kmsProps, null, true, false);
+        dekRegistry.testKek(newKek);
       }
 
       Kek kek = dekRegistry.putKekOrForward(name, request, headerProperties);
