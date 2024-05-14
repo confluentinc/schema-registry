@@ -50,7 +50,6 @@ import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
