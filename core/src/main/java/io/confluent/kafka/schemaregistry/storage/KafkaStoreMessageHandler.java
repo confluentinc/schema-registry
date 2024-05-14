@@ -123,8 +123,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
         SchemaValue schemaValue = (SchemaValue) this.lookupCache.get(schemaKey);
         if (schemaValue != null) {
           schemaValue.setDeleted(true);
-          lookupCache.put(schemaKey, schemaValue);
-          lookupCache.schemaDeleted(schemaKey, schemaValue);
+          SchemaValue oldSchemaValue = (SchemaValue) lookupCache.put(schemaKey, schemaValue);
+          lookupCache.schemaDeleted(schemaKey, oldSchemaValue);
         }
       } catch (StoreException e) {
         log.error("Failed to delete subject {} in the local cache", subject, e);
