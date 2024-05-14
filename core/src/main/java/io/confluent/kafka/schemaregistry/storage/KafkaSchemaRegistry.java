@@ -449,6 +449,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         && getResourceExtensions().stream().allMatch(SchemaRegistryResourceExtension::healthy);
   }
 
+  public SslFactory getSslFactory() {
+    return sslFactory;
+  }
+
   /**
    * Add a leader change listener.
    *
