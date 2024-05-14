@@ -506,10 +506,9 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public void testKek(String kekName) throws SchemaRegistryException {
-    DataEncryptionKey key = new DataEncryptionKey(kekName, TEST_SUBJECT,
+  public void testKek(KeyEncryptionKey kek) throws SchemaRegistryException {
+    DataEncryptionKey key = new DataEncryptionKey(kek.getName(), TEST_SUBJECT,
         DekFormat.AES256_GCM, MIN_VERSION, null, false);
-    KeyEncryptionKey kek = getKek(key.getKekName(), true);
     if (kek.isShared()) {
       generateEncryptedDek(kek, key);
     } else {
@@ -716,7 +715,7 @@ public class DekRegistry implements Closeable {
     }
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
         ? new TreeMap<>(request.getKmsProps())
-        : Collections.emptySortedMap();
+        : key.getKmsProps();
     String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
     boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
