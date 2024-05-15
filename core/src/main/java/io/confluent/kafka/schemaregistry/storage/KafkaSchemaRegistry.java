@@ -747,6 +747,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while registering the schema in the"
                                              + " backend Kafka store", e);
+    } catch (IllegalStateException e) {
+      if (e.getCause() instanceof SchemaRegistryException) {
+        throw (SchemaRegistryException) e.getCause();
+      }
+      throw e;
     }
   }
 
@@ -2025,18 +2030,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throw new InvalidSchemaException("Previous schema not provided");
     }
 
-    List<ParsedSchemaHolder> prevParsedSchemas = new ArrayList<>(previousSchemas.size());
-    for (SchemaKey previousSchema : previousSchemas) {
-      prevParsedSchemas.add(new LazyParsedSchemaHolder(this, previousSchema));
-    }
+    try {
+      List<ParsedSchemaHolder> prevParsedSchemas = new ArrayList<>(previousSchemas.size());
+      for (SchemaKey previousSchema : previousSchemas) {
+        prevParsedSchemas.add(new LazyParsedSchemaHolder(this, previousSchema));
+      }
 
-    ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true, normalize);
-    if (parsedSchema == null) {
-      log.error("Empty schema");
-      throw new InvalidSchemaException("Empty schema");
+      ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true, normalize);
+      if (parsedSchema == null) {
+        log.error("Empty schema");
+        throw new InvalidSchemaException("Empty schema");
+      }
+      Config config = getConfigInScope(subject);
+      return isCompatibleWithPrevious(config, parsedSchema, prevParsedSchemas);
+    } catch (IllegalStateException e) {
+      if (e.getCause() instanceof SchemaRegistryException) {
+        throw (SchemaRegistryException) e.getCause();
+      }
+      throw e;
     }
-    Config config = getConfigInScope(subject);
-    return isCompatibleWithPrevious(config, parsedSchema, prevParsedSchemas);
   }
 
   private List<String> isCompatibleWithPrevious(Config config,
