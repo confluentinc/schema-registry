@@ -2150,5 +2150,41 @@
       "SUM_TYPE_EXTENDED #/"
     ],
     "compatible": true
+  },
+  {
+    "description": "Allow addition of un-reserved property",
+    "original_metadata": {
+      "properties": {
+        "confluent:reserved": "cost,status"
+      }
+    },
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "update_metadata": {
+      "properties": {
+        "confluent:reserved": "cost,status"
+      }
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "changes": [
+      "OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL #/properties/bar"
+    ],
+    "compatible": true
   }
 ]

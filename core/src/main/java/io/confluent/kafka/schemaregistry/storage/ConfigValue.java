@@ -30,6 +30,8 @@ public class ConfigValue extends SubjectValue {
 
   private String alias;
   private Boolean normalize;
+  private Boolean validateFields;
+  private Boolean validateRules;
   private CompatibilityLevel compatibilityLevel;
   private String compatibilityGroup;
   private Metadata defaultMetadata;
@@ -40,6 +42,8 @@ public class ConfigValue extends SubjectValue {
   public ConfigValue(@JsonProperty("subject") String subject,
                      @JsonProperty("alias") String alias,
                      @JsonProperty("normalize") Boolean normalize,
+                     @JsonProperty("validateFields") Boolean validateFields,
+                     @JsonProperty("validateRules") Boolean validateRules,
                      @JsonProperty("compatibilityLevel") CompatibilityLevel compatibilityLevel,
                      @JsonProperty("compatibilityGroup") String compatibilityGroup,
                      @JsonProperty("defaultMetadata") Metadata defaultMetadata,
@@ -49,6 +53,8 @@ public class ConfigValue extends SubjectValue {
     super(subject);
     this.alias = alias;
     this.normalize = normalize;
+    this.validateFields = validateFields;
+    this.validateRules = validateRules;
     this.compatibilityLevel = compatibilityLevel;
     this.compatibilityGroup = compatibilityGroup;
     this.defaultMetadata = defaultMetadata;
@@ -61,6 +67,7 @@ public class ConfigValue extends SubjectValue {
     super(subject);
     this.alias = configEntity.getAlias();
     this.normalize = configEntity.isNormalize();
+    this.validateRules = configEntity.isValidateRules();
     this.compatibilityLevel = CompatibilityLevel.forName(configEntity.getCompatibilityLevel());
     this.compatibilityGroup = configEntity.getCompatibilityGroup();
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata defaultMetadata =
@@ -81,6 +88,8 @@ public class ConfigValue extends SubjectValue {
     super(subject);
     this.alias = configEntity.getAlias();
     this.normalize = configEntity.isNormalize();
+    this.validateFields = configEntity.isValidateFields();
+    this.validateRules = configEntity.isValidateRules();
     this.compatibilityLevel = CompatibilityLevel.forName(configEntity.getCompatibilityLevel());
     this.compatibilityGroup = configEntity.getCompatibilityGroup();
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata defaultMetadata =
@@ -116,6 +125,26 @@ public class ConfigValue extends SubjectValue {
   @JsonProperty("normalize")
   public void setNormalize(Boolean normalize) {
     this.normalize = normalize;
+  }
+
+  @JsonProperty("validateFields")
+  public Boolean isValidateFields() {
+    return validateFields;
+  }
+
+  @JsonProperty("validateFields")
+  public void setValidateFields(Boolean validateFields) {
+    this.validateFields = validateFields;
+  }
+
+  @JsonProperty("validateRules")
+  public Boolean isValidateRules() {
+    return validateRules;
+  }
+
+  @JsonProperty("validateRules")
+  public void setValidateRules(Boolean validateRules) {
+    this.validateRules = validateRules;
   }
 
   @JsonProperty("compatibilityLevel")
@@ -192,6 +221,8 @@ public class ConfigValue extends SubjectValue {
     ConfigValue that = (ConfigValue) o;
     return Objects.equals(alias, that.alias)
         && Objects.equals(normalize, that.normalize)
+        && Objects.equals(validateFields, that.validateFields)
+        && Objects.equals(validateRules, that.validateRules)
         && compatibilityLevel == that.compatibilityLevel
         && Objects.equals(compatibilityGroup, that.compatibilityGroup)
         && Objects.equals(defaultMetadata, that.defaultMetadata)
@@ -202,8 +233,10 @@ public class ConfigValue extends SubjectValue {
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), alias, normalize, compatibilityLevel, compatibilityGroup,
-        defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
+    return Objects.hash(super.hashCode(), alias, normalize, validateFields, validateRules,
+            compatibilityLevel, compatibilityGroup,
+            defaultMetadata, overrideMetadata, defaultRuleSet,
+            overrideRuleSet);
   }
 
   @Override
@@ -211,6 +244,8 @@ public class ConfigValue extends SubjectValue {
     return "ConfigValue{"
         + "alias='" + alias + '\''
         + ", normalize=" + normalize
+        + ", validateFields=" + validateFields
+        + ", validateRules=" + validateRules
         + ", compatibilityLevel=" + compatibilityLevel
         + ", compatibilityGroup='" + compatibilityGroup + '\''
         + ", defaultMetadata=" + defaultMetadata
@@ -229,6 +264,8 @@ public class ConfigValue extends SubjectValue {
     return new Config(
         alias,
         normalize,
+        validateFields,
+        validateRules,
         compatibilityLevel != null ? compatibilityLevel.name : null,
         compatibilityGroup,
         defaultMetadata != null ? defaultMetadata.toMetadataEntity() : null,
@@ -251,6 +288,10 @@ public class ConfigValue extends SubjectValue {
               ? newConfig.getAlias() : oldConfig.getAlias(),
           newConfig.isNormalize() != null
               ? newConfig.isNormalize() : oldConfig.isNormalize(),
+          newConfig.isValidateFields() != null
+              ? newConfig.isValidateFields() : oldConfig.isValidateFields(),
+          newConfig.isValidateRules() != null
+              ? newConfig.isValidateRules() : oldConfig.isValidateRules(),
           newConfig.getCompatibilityLevel() != null
               ? newConfig.getCompatibilityLevel() : oldConfig.getCompatibilityLevel(),
           newConfig.getCompatibilityGroup() != null

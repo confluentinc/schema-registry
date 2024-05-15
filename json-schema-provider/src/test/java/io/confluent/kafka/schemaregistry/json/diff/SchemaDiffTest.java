@@ -15,6 +15,17 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
+import static java.util.stream.Collectors.toList;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONArray;
@@ -22,32 +33,20 @@ import org.json.JSONObject;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import static java.util.stream.Collectors.toList;
-import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
-
 public class SchemaDiffTest {
 
   @Test
   public void checkJsonSchemaCompatibility() {
-    final JSONArray testCases = new JSONArray(readFile("diff-schema-examples.json"));
+    final JSONArray testCases = new JSONArray(Objects.requireNonNull(readFile("diff-schema-examples.json")));
     checkJsonSchemaCompatibility(testCases);
   }
 
   @Test
   public void checkJsonSchemaCompatibilityForCombinedSchemas() {
-    final JSONArray testCases = new JSONArray(readFile("diff-combined-schema-examples.json"));
+    final JSONArray testCases = new JSONArray(Objects.requireNonNull(readFile("diff-combined-schema-examples.json")));
     checkJsonSchemaCompatibility(testCases);
   }
 
-  @SuppressWarnings("unchecked")
   private void checkJsonSchemaCompatibility(JSONArray testCases) {
     for (final Object testCaseObject : testCases) {
       final JSONObject testCase = (JSONObject) testCaseObject;
@@ -55,7 +54,7 @@ public class SchemaDiffTest {
       final Schema update = SchemaLoader.load(testCase.getJSONObject("update_schema"));
       final JSONArray changes = (JSONArray) testCase.get("changes");
       boolean isCompatible = testCase.getBoolean("compatible");
-      final List<String> errorMessages = (List<String>) changes.toList()
+      final List<String> errorMessages = changes.toList()
           .stream()
           .map(Object::toString)
           .collect(toList());
@@ -77,8 +76,8 @@ public class SchemaDiffTest {
 
   @Test
   public void testRecursiveCheck() {
-    final Schema original = SchemaLoader.load(new JSONObject(readFile("recursive-schema.json")));
-    final Schema newOne = SchemaLoader.load(new JSONObject(readFile("recursive-schema.json")));
+    final Schema original = SchemaLoader.load(new JSONObject(Objects.requireNonNull(readFile("recursive-schema.json"))));
+    final Schema newOne = SchemaLoader.load(new JSONObject(Objects.requireNonNull(readFile("recursive-schema.json"))));
     Assert.assertTrue(SchemaDiff.compare(original, newOne).isEmpty());
   }
 

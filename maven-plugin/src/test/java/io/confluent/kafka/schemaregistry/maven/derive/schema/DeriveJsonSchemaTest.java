@@ -43,14 +43,14 @@ public class DeriveJsonSchemaTest extends DeriveSchemaTest {
     }
     JsonNode schemaString = derive.getSchemaForArray(messagesJson, "ArrayObject");
     JsonSchema schema = new JsonSchema(schemaString.toString());
-    schema.validate();
+    schema.validate(false);
     assertEquals(schema.toString(), expectedSchema);
   }
 
   public void matchAndValidate(String message, JsonNode schemaString, String expectedSchema)
       throws IOException {
     JsonSchema schema = new JsonSchema(schemaString.toString());
-    schema.validate();
+    schema.validate(false);
     schema.validate(mapper.readValue(message, ObjectNode.class));
     assertEquals(schema.toString(), expectedSchema);
   }
