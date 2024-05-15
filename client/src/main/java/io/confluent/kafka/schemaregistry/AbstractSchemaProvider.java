@@ -61,26 +61,26 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
           || reference.getVersion() == null) {
         throw new IllegalStateException("Invalid reference: " + reference);
       }
+      QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+              schemaVersionFetcher().tenant(), schema.getSubject(), reference.getSubject());
+      Schema s = schemaVersionFetcher().getByVersion(refSubject.toQualifiedSubject(),
+              reference.getVersion(), true);
+      if (s == null) {
+        throw new IllegalStateException("No schema reference found for subject \""
+                + refSubject
+                + "\" and version "
+                + reference.getVersion());
+      }
+      if (reference.getVersion() == -1) {
+        // Update the version with the latest
+        reference.setVersion(s.getVersion());
+      }
       if (visited.contains(reference.getName())) {
         continue;
       } else {
         visited.add(reference.getName());
       }
       if (!schemas.containsKey(reference.getName())) {
-        QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
-            schemaVersionFetcher().tenant(), schema.getSubject(), reference.getSubject());
-        Schema s = schemaVersionFetcher().getByVersion(refSubject.toQualifiedSubject(),
-            reference.getVersion(), true);
-        if (s == null) {
-          throw new IllegalStateException("No schema reference found for subject \""
-              + refSubject
-              + "\" and version "
-              + reference.getVersion());
-        }
-        if (reference.getVersion() == -1) {
-          // Update the version with the latest
-          reference.setVersion(s.getVersion());
-        }
         resolveReferences(s, schemas, visited);
         schemas.put(reference.getName(), s.getSchema());
       }

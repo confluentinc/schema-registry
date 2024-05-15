@@ -171,6 +171,7 @@ public class RegisterDeks implements Callable<Integer> {
   }
 
   private Map<String, Object> configsWithoutPrefix(Rule rule, Map<String, Object> configs) {
+    // Add default params
     Map<String, Object> ruleConfigs = new HashMap<>(configs);
     for (Map.Entry<String, Object> entry: configs.entrySet()) {
       String name = entry.getKey();
@@ -178,8 +179,16 @@ public class RegisterDeks implements Callable<Integer> {
         ruleConfigs.put(name.substring(DEFAULT_RULE_PARAM_PREFIX.length()), entry.getValue());
       }
     }
-    // Specific params override default params
-    String prefix = "rule.executors." + rule.getName() + ".param.";
+    // Rule type specific params override default params
+    String prefix = "rule.executors._ " + rule.getType() + "_.param.";
+    for (Map.Entry<String, Object> entry: configs.entrySet()) {
+      String name = entry.getKey();
+      if (name.startsWith(prefix)) {
+        ruleConfigs.put(name.substring(prefix.length()), entry.getValue());
+      }
+    }
+    // Named params override rule type specific params and default params
+    prefix = "rule.executors." + rule.getName() + ".param.";
     for (Map.Entry<String, Object> entry: configs.entrySet()) {
       String name = entry.getKey();
       if (name.startsWith(prefix)) {

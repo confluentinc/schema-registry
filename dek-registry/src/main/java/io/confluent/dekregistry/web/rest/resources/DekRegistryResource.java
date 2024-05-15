@@ -52,6 +52,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.validation.constraints.NotNull;
@@ -132,7 +134,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     if (key == null) {
       throw DekRegistryErrors.keyNotFoundException(name);
     }
-    return key.toKekEntity();
+    return dekRegistry.toKekEntity(key);
   }
 
   @GET
@@ -303,6 +305,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
   public void createKek(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
+      @Parameter(description = "Whether to test kek sharing")
+      @QueryParam("testSharing") boolean testSharing,
       @Parameter(description = "The create request", required = true)
       @NotNull CreateKekRequest request) {
 
@@ -320,6 +324,12 @@ public class DekRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
+      if (request.isShared() && testSharing) {
+        KeyEncryptionKey kek = new KeyEncryptionKey(request.getName(), request.getKmsType(),
+            request.getKmsKeyId(), new TreeMap<>(request.getKmsProps()), null, true, false);
+        dekRegistry.testKek(kek);
+      }
+
       Kek kek = dekRegistry.createKekOrForward(request, headerProperties);
       asyncResponse.resume(kek);
     } catch (AlreadyExistsException e) {
@@ -328,6 +338,42 @@ public class DekRegistryResource extends SchemaRegistryResource {
       throw DekRegistryErrors.tooManyKeysException(dekRegistry.config().maxKeys());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while creating key", e);
+    }
+  }
+
+  @POST
+  @Path("/{name}/test")
+  @Operation(summary = "Test a kek.", responses = {
+      @ApiResponse(responseCode = "200", description = "The test response",
+          content = @Content(schema = @Schema(implementation = Kek.class))),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key"),
+      @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
+  })
+  @PerformanceMetric("keks.test")
+  @DocumentedName("testKek")
+  public void testKek(
+      final @Suspended AsyncResponse asyncResponse,
+      @Parameter(description = "Name of the kek", required = true)
+      @PathParam("name") String kekName) {
+
+    log.debug("Testing kek {}", kekName);
+
+    checkName(kekName);
+
+    KeyEncryptionKey kek = dekRegistry.getKek(kekName, false);
+    if (kek == null) {
+      throw DekRegistryErrors.keyNotFoundException(kekName);
+    }
+
+    try {
+      dekRegistry.testKek(kek);
+      asyncResponse.resume(kek);
+    } catch (DekGenerationException e) {
+      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+    } catch (InvalidKeyException e) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while testing key", e);
     }
   }
 
@@ -397,6 +443,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
       final @Context HttpHeaders headers,
       @Parameter(description = "Name of the kek", required = true)
       @PathParam("name") String name,
+      @Parameter(description = "Whether to test kek sharing")
+      @QueryParam("testSharing") boolean testSharing,
       @Parameter(description = "The update request", required = true)
       @NotNull UpdateKekRequest request) {
 
@@ -404,10 +452,24 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     checkName(name);
 
+    KeyEncryptionKey oldKek = dekRegistry.getKek(name, false);
+    if (oldKek == null) {
+      throw DekRegistryErrors.keyNotFoundException(name);
+    }
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
+      boolean shared = request.isShared() != null ? request.isShared() : oldKek.isShared();
+      if (shared && testSharing) {
+        SortedMap<String, String> kmsProps = request.getKmsProps() != null
+            ? new TreeMap<>(request.getKmsProps())
+            : oldKek.getKmsProps();
+        KeyEncryptionKey newKek = new KeyEncryptionKey(name, oldKek.getKmsType(),
+            oldKek.getKmsKeyId(), kmsProps, null, true, false);
+        dekRegistry.testKek(newKek);
+      }
+
       Kek kek = dekRegistry.putKekOrForward(name, request, headerProperties);
       if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(name);

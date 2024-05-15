@@ -95,6 +95,7 @@ import org.mockito.ArgumentCaptor;
 
 public class CelExecutorTest {
 
+  private final Map<String, Object> defaultConfig;
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer;
   private final KafkaAvroDeserializer avroDeserializer;
@@ -127,7 +128,7 @@ public class CelExecutorTest {
     when(producer2.send(any(ProducerRecord.class), any(Callback.class))).thenReturn(
         CompletableFuture.completedFuture(null));
 
-    Map<String, Object> defaultConfig = new HashMap<>();
+    defaultConfig = new HashMap<>();
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
@@ -607,6 +608,102 @@ public class CelExecutorTest {
     // Verify producer record has both key and value
     assertNotNull(argument.getValue().key());
     assertNotNull(argument.getValue().value());
+    verifyNoInteractions(producer2);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerConstraintDlqFromRuleNameConfig() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelExecutor.TYPE, null, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    Map<String, Object> config = new HashMap<>(defaultConfig);
+    config.put("rule.executors.myRule.onFailure", "DLQ");
+    KafkaAvroSerializer customSerializer = new KafkaAvroSerializer(schemaRegistry, config);
+    try {
+      byte[] bytes = customSerializer.serialize(topic, avroRecord);
+      fail("Should send to DLQ and throw exception");
+    } catch (SerializationException e) {
+      // expected
+    }
+
+    verify(producer).send(any(ProducerRecord.class), any(Callback.class));
+    verifyNoInteractions(producer2);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerConstraintDlqFromRuleTypeConfig() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelExecutor.TYPE, null, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    Map<String, Object> config = new HashMap<>(defaultConfig);
+    config.put("rule.executors._CEL_.onFailure", "DLQ");
+    KafkaAvroSerializer customSerializer = new KafkaAvroSerializer(schemaRegistry, config);
+    try {
+      byte[] bytes = customSerializer.serialize(topic, avroRecord);
+      fail("Should send to DLQ and throw exception");
+    } catch (SerializationException e) {
+      // expected
+    }
+
+    verify(producer).send(any(ProducerRecord.class), any(Callback.class));
+    verifyNoInteractions(producer2);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerConstraintDlqFromDefaultConfig() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelExecutor.TYPE, null, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    Map<String, Object> config = new HashMap<>(defaultConfig);
+    config.put("rule.executors._default_.onFailure", "DLQ");
+    KafkaAvroSerializer customSerializer = new KafkaAvroSerializer(schemaRegistry, config);
+    try {
+      byte[] bytes = customSerializer.serialize(topic, avroRecord);
+      fail("Should send to DLQ and throw exception");
+    } catch (SerializationException e) {
+      // expected
+    }
+
+    verify(producer).send(any(ProducerRecord.class), any(Callback.class));
+    verifyNoInteractions(producer2);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerConstraintDlqDisabled() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelExecutor.TYPE, null, null, "message.name != \"testUser\" || message.kind != \"ONE\"",
+        null, "DLQ", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    Map<String, Object> config = new HashMap<>(defaultConfig);
+    config.put("rule.executors._default_.disabled", "true");
+    KafkaAvroSerializer customSerializer = new KafkaAvroSerializer(schemaRegistry, config);
+    byte[] bytes = customSerializer.serialize(topic, avroRecord);
+    avroDeserializer.deserialize(topic, bytes);
+
+    verifyNoInteractions(producer);
     verifyNoInteractions(producer2);
   }
 

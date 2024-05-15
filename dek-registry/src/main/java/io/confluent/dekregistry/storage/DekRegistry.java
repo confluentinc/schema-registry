@@ -107,6 +107,8 @@ public class DekRegistry implements Closeable {
   public static final String AZURE_KMS = "azure-kms";
   public static final String GCP_KMS = "gcp-kms";
 
+  private static final String TEST_SUBJECT = "__TEST";
+
   private static final TypeReference<Kek> KEK_TYPE =
       new TypeReference<Kek>() {
       };
@@ -318,6 +320,10 @@ public class DekRegistry implements Closeable {
     }
   }
 
+  public Kek toKekEntity(KeyEncryptionKey kek) {
+    return kek.toKekEntity();
+  }
+
   public List<String> getDekSubjects(String kekName, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
     return getDeks(tenant, kekName, lookupDeleted).stream()
@@ -419,7 +425,7 @@ public class DekRegistry implements Closeable {
     lock(tenant, headerProperties);
     try {
       if (isLeader(headerProperties)) {
-        return createKek(request).toKekEntity();
+        return toKekEntity(createKek(request));
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
@@ -497,6 +503,16 @@ public class DekRegistry implements Closeable {
       return GCP_KMS;
     } else {
       return kmsType;
+    }
+  }
+
+  public void testKek(KeyEncryptionKey kek) throws SchemaRegistryException {
+    DataEncryptionKey key = new DataEncryptionKey(kek.getName(), TEST_SUBJECT,
+        DekFormat.AES256_GCM, MIN_VERSION, null, false);
+    if (kek.isShared()) {
+      generateEncryptedDek(kek, key);
+    } else {
+      throw new InvalidKeyException("shared");
     }
   }
 
@@ -599,9 +615,14 @@ public class DekRegistry implements Closeable {
           key.getVersion(), encryptedDekStr, key.isDeleted());
       return key;
     } catch (GeneralSecurityException e) {
-      log.error("Could not generate encrypted dek for " + key.getSubject(), e);
-      throw new DekGenerationException(
-          "Could not generate encrypted dek for " + key.getSubject() + ": " + e.getMessage());
+      String msg = "Could not generate encrypted dek for " + key.getSubject();
+      log.error(msg, e);
+      msg += ": " + e.getMessage();
+      Throwable cause = e.getCause();
+      if (cause != null) {
+        msg += ": " + cause.getMessage();
+      }
+      throw new DekGenerationException(msg);
     }
   }
 
@@ -622,14 +643,19 @@ public class DekRegistry implements Closeable {
       newKey.setTimestamp(key.getTimestamp());
       return newKey;
     } catch (GeneralSecurityException e) {
-      log.error("Could not generate raw dek for " + key.getSubject(), e);
-      throw new DekGenerationException(
-          "Could not generate raw dek for " + key.getSubject() + ": " + e.getMessage());
+      String msg = "Could not generate raw dek for " + key.getSubject();
+      log.error(msg, e);
+      msg += ": " + e.getMessage();
+      Throwable cause = e.getCause();
+      if (cause != null) {
+        msg += ": " + cause.getMessage();
+      }
+      throw new DekGenerationException(msg);
     }
   }
 
   protected Aead getAead(KeyEncryptionKey kek) throws GeneralSecurityException {
-    return kek.toKekEntity().toAead(config.originals());
+    return toKekEntity(kek).toAead(config.originals());
   }
 
   public Kek putKekOrForward(String name, UpdateKekRequest request,
@@ -639,7 +665,7 @@ public class DekRegistry implements Closeable {
     try {
       if (isLeader(headerProperties)) {
         KeyEncryptionKey kek = putKek(name, request);
-        return kek != null ? kek.toKekEntity() : null;
+        return kek != null ? toKekEntity(kek) : null;
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
@@ -689,7 +715,7 @@ public class DekRegistry implements Closeable {
     }
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
         ? new TreeMap<>(request.getKmsProps())
-        : Collections.emptySortedMap();
+        : key.getKmsProps();
     String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
     boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),

@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.Set;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.FalseSchema;
@@ -199,6 +200,8 @@ public class SchemaDiff {
           StringSchemaDiff.compare(ctx, (StringSchema) original, (StringSchema) update);
         } else if (original instanceof NumberSchema) {
           NumberSchemaDiff.compare(ctx, (NumberSchema) original, (NumberSchema) update);
+        } else if (original instanceof ConstSchema) {
+          ConstSchemaDiff.compare(ctx, (ConstSchema) original, (ConstSchema) update);
         } else if (original instanceof EnumSchema) {
           EnumSchemaDiff.compare(ctx, (EnumSchema) original, (EnumSchema) update);
         } else if (original instanceof CombinedSchema) {

@@ -50,6 +50,7 @@ import org.apache.kafka.connect.json.DecimalFormat;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
@@ -193,6 +194,22 @@ public class JsonSchemaDataTest {
   public void testFromConnectString() {
     StringSchema schema = StringSchema.builder().build();
     checkNonObjectConversion(schema, TextNode.valueOf("string"), Schema.STRING_SCHEMA, "string");
+  }
+
+  @Test
+  public void testFromConnectConst() {
+    ConstSchema schema = ConstSchema.builder()
+        .permittedValue("one")
+        .build();
+    Schema connectSchema = new SchemaBuilder(Schema.Type.STRING).parameter(JSON_TYPE_ENUM, "")
+        .parameter(JSON_TYPE_ENUM + ".one", "one")
+        .build();
+
+    // const is syntactic sugar for enum with one element
+    EnumSchema expected = EnumSchema.builder()
+        .possibleValue("one")
+        .build();
+    checkNonObjectConversion(expected, TextNode.valueOf("one"), connectSchema, "one");
   }
 
   @Test
@@ -1258,6 +1275,18 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectConst() {
+    ConstSchema schema = ConstSchema.builder()
+        .permittedValue("one")
+        .build();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).parameter(JSON_TYPE_ENUM, "")
+        .parameter(JSON_TYPE_ENUM + ".one", "one")
+        .build();
+
+    checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
+  }
+
+  @Test
   public void testToConnectEnum() {
     EnumSchema schema = EnumSchema.builder()
         .possibleValue("one")
@@ -1617,6 +1646,63 @@ public class JsonSchemaDataTest {
     checkNonObjectConversion(connectSchema, expected, schema, obj);
   }
 
+  @Test
+  public void testToConnectUnionSecondNestedSchemas() {
+    StringSchema stringSchema = StringSchema.builder()
+            .unprocessedProperties(ImmutableMap.of("connect.index", 0))
+            .build();
+    ObjectSchema firstSchemaNested = ObjectSchema.builder()
+            .addPropertySchema("differentFieldNameA", stringSchema)
+            .build();
+    ObjectSchema firstSchema = ObjectSchema.builder()
+            .addPropertySchema("commonFieldName", firstSchemaNested)
+            .unprocessedProperties(ImmutableMap.of("connect.index", 0))
+            .build();
+    ObjectSchema secondSchemaNested = ObjectSchema.builder()
+            .addPropertySchema("differentFieldNameB", stringSchema)
+            .build();
+    ObjectSchema secondSchema = ObjectSchema.builder()
+            .addPropertySchema("commonFieldName", secondSchemaNested)
+            .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+            .build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
+            .build();
+
+    Schema field0Nested = SchemaBuilder.struct().field("differentFieldNameA", Schema.STRING_SCHEMA).build();
+    Schema field0 = SchemaBuilder.struct()
+            .field("commonFieldName", field0Nested)
+            .optional()
+            .build();
+    Schema field1Nested = SchemaBuilder.struct().field("differentFieldNameB", Schema.STRING_SCHEMA).build();
+    Schema field1 = SchemaBuilder.struct()
+            .field("commonFieldName", field1Nested)
+            .optional()
+            .build();
+    Schema connectSchema = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF)
+            .field(JSON_TYPE_ONE_OF + ".field.0", field0)
+            .field(JSON_TYPE_ONE_OF + ".field.1", field1)
+            .build();
+
+    ObjectNode firstObj = JsonNodeFactory.instance.objectNode()
+            .set("differentFieldNameA", TextNode.valueOf("sample string A"));
+    ObjectNode secondObj = JsonNodeFactory.instance.objectNode()
+            .set("differentFieldNameB", TextNode.valueOf("sample string B"));
+    Struct firstStruct = new Struct(field0Nested).put("differentFieldNameA", "sample string A");
+    Struct secondStruct = new Struct(field1Nested).put("differentFieldNameB", "sample string B");
+
+    ObjectNode obj = JsonNodeFactory.instance.objectNode().
+            set("commonFieldName", firstObj);
+    Struct struct = new Struct(field0).put("commonFieldName", firstStruct);
+    Struct expected = new Struct(connectSchema).put(JSON_TYPE_ONE_OF + ".field.0", struct);
+    checkNonObjectConversion(connectSchema, expected, schema, obj);
+
+    obj = JsonNodeFactory.instance.objectNode().
+            set("commonFieldName", secondObj);
+    struct = new Struct(field1).put("commonFieldName", secondStruct);
+    expected = new Struct(connectSchema).put(JSON_TYPE_ONE_OF + ".field.1", struct);
+    checkNonObjectConversion(connectSchema, expected, schema, obj);
+  }
+  
   @Test
   public void testToConnectMapOptionalValue() {
     testToConnectMapOptional("some value");
