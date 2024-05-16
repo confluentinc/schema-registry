@@ -351,7 +351,8 @@ public class CelExecutor implements RuleExecutor {
       this.jsonClass = jsonClass;
     }
 
-    public RuleWithArgs(String rule, ScriptType type, Map<String, Decl> decls, Descriptor protobufDesc) {
+    public RuleWithArgs(
+        String rule, ScriptType type, Map<String, Decl> decls, Descriptor protobufDesc) {
       this.rule = rule;
       this.type = type;
       this.decls = decls;
