@@ -43,6 +43,7 @@ import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -100,7 +101,7 @@ public class CelExecutor implements RuleExecutor {
 
             ScriptBuilder scriptBuilder = scriptHost
                 .buildScript(ruleWithArgs.getRule())
-                .withDeclarations(ruleWithArgs.getDecls());
+                .withDeclarations(new ArrayList<>(ruleWithArgs.getDecls().values()));
             switch (ruleWithArgs.getType()) {
               case AVRO:
                 // Register our Avro type
@@ -196,7 +197,7 @@ public class CelExecutor implements RuleExecutor {
         return obj;
       }
 
-      List<Decl> decls = toDecls(args);
+      Map<String, Decl> decls = toDecls(args);
       RuleWithArgs ruleWithArgs = null;
       switch (type) {
         case AVRO:
@@ -226,10 +227,10 @@ public class CelExecutor implements RuleExecutor {
     }
   }
 
-  private static List<Decl> toDecls(Map<String, Object> args) {
+  private static Map<String, Decl> toDecls(Map<String, Object> args) {
     return args.entrySet().stream()
         .map(e -> Decls.newVar(e.getKey(), findType(e.getValue())))
-        .collect(Collectors.toList());
+        .collect(Collectors.toMap(Decl::getName, e -> e));
   }
 
   private static Type findType(Object arg) {
@@ -331,26 +332,27 @@ public class CelExecutor implements RuleExecutor {
   static class RuleWithArgs {
     private final String rule;
     private final ScriptType type;
-    private final List<Decl> decls;
+    private final Map<String, Decl> decls;
     private Schema avroSchema;
     private Class<?> jsonClass;
     private Descriptor protobufDesc;
 
-    public RuleWithArgs(String rule, ScriptType type, List<Decl> decls, Schema avroSchema) {
+    public RuleWithArgs(String rule, ScriptType type, Map<String, Decl> decls, Schema avroSchema) {
       this.rule = rule;
       this.type = type;
       this.decls = decls;
       this.avroSchema = avroSchema;
     }
 
-    public RuleWithArgs(String rule, ScriptType type, List<Decl> decls, Class<?> jsonClass) {
+    public RuleWithArgs(String rule, ScriptType type, Map<String, Decl> decls, Class<?> jsonClass) {
       this.rule = rule;
       this.type = type;
       this.decls = decls;
       this.jsonClass = jsonClass;
     }
 
-    public RuleWithArgs(String rule, ScriptType type, List<Decl> decls, Descriptor protobufDesc) {
+    public RuleWithArgs(
+        String rule, ScriptType type, Map<String, Decl> decls, Descriptor protobufDesc) {
       this.rule = rule;
       this.type = type;
       this.decls = decls;
@@ -365,7 +367,7 @@ public class CelExecutor implements RuleExecutor {
       return type;
     }
 
-    public List<Decl> getDecls() {
+    public Map<String, Decl> getDecls() {
       return decls;
     }
 
