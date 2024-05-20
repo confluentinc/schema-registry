@@ -61,6 +61,15 @@ import org.slf4j.LoggerFactory;
 
 public class SslFactory {
 
+  /**
+   * Interface to react when keystore or truststore is created, to emit metrics or log events.
+   */
+  public interface SslFactoryCreated {
+    void onKeystoreCreated(KeyStore keystore);
+
+    void onTruststoreCreated(KeyStore truststore);
+  }
+
   private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
   private final String provider;
   private final String kmfAlgorithm;
@@ -73,8 +82,11 @@ public class SslFactory {
   private String keystoreType;
   private String truststoreType;
 
-
   public SslFactory(Map<String, ?> configs) {
+    this(configs, null);
+  }
+
+  public SslFactory(Map<String, ?> configs, SslFactoryCreated callback) {
     this.protocol = (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
     if (this.protocol == null) {
       this.protocol = SslConfigs.DEFAULT_SSL_PROTOCOL;
@@ -113,6 +125,17 @@ public class SslFactory {
           passwordOf(configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)));
 
       this.sslContext = createSslContext(keystore, truststore);
+
+      // Make sure that the sslContext is created
+      if (callback != null) {
+        if (this.keystore != null) {
+          callback.onKeystoreCreated(this.keystore.get());
+        }
+
+        if (this.truststore != null) {
+          callback.onTruststoreCreated(this.truststore.get());
+        }
+      }
     } catch (Exception e) {
       throw new RuntimeException("Error initializing the ssl context for RestService", e);
     }
