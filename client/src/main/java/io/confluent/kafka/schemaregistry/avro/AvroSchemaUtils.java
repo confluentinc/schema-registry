@@ -163,7 +163,8 @@ public class AvroSchemaUtils {
       return Schema.createMap(valueSchema);
     } else {
       throw new IllegalArgumentException(
-          "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, "
+          "Unsupported Avro type '" + object.getClass().getSimpleName()
+              + "'. Supported types are null, Boolean, Integer, Long, "
               + "Float, Double, String, byte[] and IndexedRecord");
     }
   }
