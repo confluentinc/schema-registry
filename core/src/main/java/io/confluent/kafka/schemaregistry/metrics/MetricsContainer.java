@@ -42,7 +42,6 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -99,7 +98,8 @@ public class MetricsContainer {
   private final MetricsContext metricsContext;
 
   public MetricsContainer(SchemaRegistryConfig config, String kafkaClusterId) {
-    this.configuredTags = Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
+    this.configuredTags =
+        Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
 
     List<MetricsReporter> reporters = config.getConfiguredInstances(
         config.getList(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG),
@@ -159,10 +159,13 @@ public class MetricsContainer {
             "Time spent initializing the leader's kafka store", new Value());
 
     this.certificateExpirationKeystore = createMetric(METRIC_CERTIFICATE_EXPIRATION + "-keystore",
-            "Epoch timestamp when the keystore certificate expires, if its a certificate chain, then its the certificate with the shortest time to live", new Value());
+            "Epoch timestamp when the keystore certificate expires, if its a certificate chain, "
+                + "then its the certificate with the shortest time to live", new Value());
 
-    this.certificateExpirationTruststore = createMetric(METRIC_CERTIFICATE_EXPIRATION + "-truststore",
-            "Epoch timestamp when the truststore certificate expires, if its a certificate chain, then its the certificate with the shortest time to live", new Value());
+    this.certificateExpirationTruststore =
+        createMetric(METRIC_CERTIFICATE_EXPIRATION + "-truststore",
+            "Epoch timestamp when the truststore certificate expires, if its a certificate chain, "
+                + "then its the certificate with the shortest time to live", new Value());
   }
 
   public Metrics getMetrics() {
@@ -245,11 +248,11 @@ public class MetricsContainer {
   }
 
   public SchemaRegistryMetric getCertificateExpirationKeystore() {
-      return certificateExpirationKeystore;
+    return certificateExpirationKeystore;
   }
 
   public SchemaRegistryMetric getCertificateExpirationTruststore() {
-      return certificateExpirationTruststore;
+    return certificateExpirationTruststore;
   }
 
   public void emitCertificateExpirationMetric(KeyStore keystore, SchemaRegistryMetric metric) {
@@ -277,7 +280,8 @@ public class MetricsContainer {
     }
   }
 
-  private static MetricsContext buildMetricsContext(SchemaRegistryConfig config, String kafkaClusterId) {
+  private static MetricsContext buildMetricsContext(
+      SchemaRegistryConfig config, String kafkaClusterId) {
 
     String srGroupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
 

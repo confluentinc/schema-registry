@@ -86,13 +86,9 @@ import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import java.io.IOException;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -120,7 +116,8 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaRegistry, SslFactory.SslFactoryCreated {
+public class KafkaSchemaRegistry implements SchemaRegistry,
+    LeaderAwareSchemaRegistry, SslFactory.SslFactoryCreated {
 
   /**
    * Schema versions under a particular subject are indexed from MIN_VERSION.
@@ -214,7 +211,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
 
     Map<String, Object> sslConfig = config.getOverriddenSslConfigs(internalListener);
-    this.sslFactory = new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(sslConfig), this);
+    this.sslFactory =
+        new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(sslConfig), this);
     this.providers = initProviders(config);
     this.schemaCache = Caffeine.newBuilder()
         .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
@@ -2437,12 +2435,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   @Override
   public void onKeystoreCreated(KeyStore keystore) {
-    metricsContainer.emitCertificateExpirationMetric(keystore, metricsContainer.getCertificateExpirationKeystore());
+    metricsContainer.emitCertificateExpirationMetric(
+        keystore, metricsContainer.getCertificateExpirationKeystore());
   }
 
   @Override
   public void onTruststoreCreated(KeyStore truststore) {
-    metricsContainer.emitCertificateExpirationMetric(truststore, metricsContainer.getCertificateExpirationTruststore());
+    metricsContainer.emitCertificateExpirationMetric(
+        truststore, metricsContainer.getCertificateExpirationTruststore());
   }
 
   private static class RawSchema {
