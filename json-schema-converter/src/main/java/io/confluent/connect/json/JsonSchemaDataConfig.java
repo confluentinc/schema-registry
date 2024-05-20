@@ -141,12 +141,12 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
       String s = (String) o;
       if (s == null || !validStrings.contains(s.toUpperCase(Locale.ROOT))) {
         throw new ConfigException(name, o, "String must be one of (case insensitive): "
-            + Utils.join(validStrings, ", "));
+            + String.join(", ", validStrings));
       }
     }
 
     public String toString() {
-      return "(case insensitive) [" + Utils.join(validStrings, ", ") + "]";
+      return "(case insensitive) [" + String.join(", ", validStrings) + "]";
     }
   }
 }
