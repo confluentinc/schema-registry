@@ -144,7 +144,7 @@ public abstract class ClusterTestHarness {
                           servers.get(i).boundPort(listenerType)
                       );
     }
-    bootstrapServers = Utils.join(serverUrls, ",");
+    bootstrapServers = String.join(",", serverUrls);
 
     if (setupRestApp) {
       if (schemaRegistryPort == null)
