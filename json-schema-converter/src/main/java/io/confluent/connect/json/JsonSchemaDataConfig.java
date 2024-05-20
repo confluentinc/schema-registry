@@ -16,7 +16,6 @@
 package io.confluent.connect.json;
 
 import io.confluent.connect.schema.AbstractDataConfig;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.json.DecimalFormat;
 
 import java.util.Arrays;
