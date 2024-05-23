@@ -284,11 +284,14 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setAlgorithm(algorithm);
     request.setEncryptedKeyMaterial(encryptedKeyMaterial);
     request.setDeleted(deleted);
-    Dek dek = restService.createDek(requestProperties, kekName, request);
-    dekCache.put(new DekId(kekName, subject, version, algorithm, deleted), dek);
-    dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, false));
-    dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, true));
-    return dek;
+    try {
+      Dek dek = restService.createDek(requestProperties, kekName, request);
+      dekCache.put(new DekId(kekName, subject, version, algorithm, deleted), dek);
+      return dek;
+    } finally {
+      dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, false));
+      dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, true));
+    }
   }
 
   @Override
