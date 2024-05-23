@@ -289,6 +289,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       dekCache.put(new DekId(kekName, subject, version, algorithm, deleted), dek);
       return dek;
     } finally {
+      // Ensure latest dek is invalidated, such as in case of conflict (409)
       dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, false));
       dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, true));
     }
