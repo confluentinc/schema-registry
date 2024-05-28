@@ -16,12 +16,15 @@
 package io.confluent.kafka.schemaregistry.client;
 
 import com.google.common.testing.FakeTicker;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -327,6 +330,46 @@ public class CachedSchemaRegistryClientTest {
         AVRO_SCHEMA_0.rawSchema(),
         ((AvroSchema) client.getSchemaBySubjectAndId(subjectTwo, ID_25)).rawSchema()
     );
+
+    verify(restService);
+  }
+
+  @Test
+  public void testLookUpEmptyRuleSetMetadataSchema() throws Exception {
+    Metadata emptyMetadata = new Metadata(new HashMap<>(), new HashMap<>(), Collections.emptySet());
+    RuleSet emptyRuleset = new RuleSet(Collections.emptyList(), Collections.emptyList());
+
+    AvroSchema schemaWithEmptyFields = new AvroSchema(
+        AVRO_SCHEMA_0.canonicalString(),
+        new ArrayList<>(),
+        new HashMap<>(),
+        emptyMetadata,
+        emptyRuleset,
+        1,
+        true
+    );
+
+    String subjectOne = "subjectOne";
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema emptySchemaDetails
+        = new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
+        SUBJECT_0, 1, ID_25, AvroSchema.TYPE, Collections.emptyList(), schemaWithEmptyFields.canonicalString());
+
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(subjectOne), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(ID_25));
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class), eq(subjectOne), anyBoolean(), anyBoolean()))
+        .andReturn(emptySchemaDetails);
+    expect(restService.getId(ID_25, subjectOne))
+        .andReturn(new SchemaString(schemaWithEmptyFields.canonicalString()));
+
+    replay(restService);
+
+    assertEquals(ID_25, client.register(subjectOne, schemaWithEmptyFields));
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaBySubjectAndId(subjectOne, ID_25)).rawSchema()
+    );
+    assertEquals(ID_25, client.getId(subjectOne, schemaWithEmptyFields, false));
 
     verify(restService);
   }
