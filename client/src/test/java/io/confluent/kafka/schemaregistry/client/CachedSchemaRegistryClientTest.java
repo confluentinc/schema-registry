@@ -359,21 +359,19 @@ public class CachedSchemaRegistryClientTest {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(subjectOne), anyBoolean()))
         .andReturn(new RegisterSchemaResponse(ID_25));
-
     expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class), eq(subjectOne), anyBoolean(), anyBoolean()))
         .andReturn(emptySchemaDetails);
-
     expect(restService.getId(ID_25, subjectOne))
         .andReturn(new SchemaString(schemaWithEmptyFields.canonicalString()));
 
     replay(restService);
 
     assertEquals(ID_25, client.register(subjectOne, schemaWithEmptyFields));
-    assertEquals(ID_25, client.getId(subjectOne, schemaWithEmptyFields, false));
     assertEquals(
         AVRO_SCHEMA_0.rawSchema(),
         ((AvroSchema) client.getSchemaBySubjectAndId(subjectOne, ID_25)).rawSchema()
     );
+    assertEquals(ID_25, client.getId(subjectOne, schemaWithEmptyFields, false));
 
     verify(restService);
   }
