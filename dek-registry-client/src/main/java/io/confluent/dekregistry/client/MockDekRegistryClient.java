@@ -69,6 +69,18 @@ public class MockDekRegistryClient implements DekRegistryClient {
   }
 
   @Override
+  public List<String> listKeks(String subject, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    return deks.entrySet().stream()
+        .filter(kv -> kv.getKey().getSubject().equals(subject)
+            && (!kv.getValue().isDeleted() || lookupDeleted))
+        .map(kv -> kv.getKey().getKekName())
+        .sorted()
+        .distinct()
+        .collect(Collectors.toList());
+  }
+
+  @Override
   public List<Integer> listDekVersions(String kekName, String subject,
       DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
