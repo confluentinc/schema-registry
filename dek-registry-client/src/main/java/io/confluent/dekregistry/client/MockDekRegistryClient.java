@@ -62,22 +62,26 @@ public class MockDekRegistryClient implements DekRegistryClient {
   @Override
   public List<String> listKeks(boolean lookupDeleted)
       throws IOException, RestClientException {
-    return keks.entrySet().stream()
-        .filter(kv -> !kv.getValue().isDeleted() || lookupDeleted)
-        .map(kv -> kv.getKey().getName())
-        .collect(Collectors.toList());
+    return listKeks(null, lookupDeleted);
   }
 
   @Override
   public List<String> listKeks(String subject, boolean lookupDeleted)
       throws IOException, RestClientException {
-    return deks.entrySet().stream()
-        .filter(kv -> kv.getKey().getSubject().equals(subject)
-            && (!kv.getValue().isDeleted() || lookupDeleted))
-        .map(kv -> kv.getKey().getKekName())
-        .sorted()
-        .distinct()
-        .collect(Collectors.toList());
+    if (subject == null || subject.isEmpty()) {
+      return keks.entrySet().stream()
+          .filter(kv -> !kv.getValue().isDeleted() || lookupDeleted)
+          .map(kv -> kv.getKey().getName())
+          .collect(Collectors.toList());
+    } else {
+      return deks.entrySet().stream()
+          .filter(kv -> kv.getKey().getSubject().equals(subject)
+              && (!kv.getValue().isDeleted() || lookupDeleted))
+          .map(kv -> kv.getKey().getKekName())
+          .sorted()
+          .distinct()
+          .collect(Collectors.toList());
+    }
   }
 
   @Override
