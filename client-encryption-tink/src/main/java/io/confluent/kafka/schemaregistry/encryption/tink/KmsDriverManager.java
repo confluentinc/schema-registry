@@ -22,6 +22,7 @@ import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 
 public class KmsDriverManager {
@@ -51,8 +52,17 @@ public class KmsDriverManager {
   }
 
   private static List<KmsDriver> loadDrivers() {
+    try {
+      loadDrivers(Thread.currentThread().getContextClassLoader());
+    } catch (ServiceConfigurationError e) {
+      // Try using the class loader of the KmsDriver class
+      loadDrivers(KmsDriver.class.getClassLoader());
+    }
+  }
+
+  private static List<KmsDriver> loadDrivers(ClassLoader classLoader) {
     List<KmsDriver> drivers = new ArrayList<>();
-    ServiceLoader<KmsDriver> clientLoader = ServiceLoader.load(KmsDriver.class);
+    ServiceLoader<KmsDriver> clientLoader = ServiceLoader.load(KmsDriver.class, classLoader);
     for (KmsDriver element : clientLoader) {
       drivers.add(element);
     }
