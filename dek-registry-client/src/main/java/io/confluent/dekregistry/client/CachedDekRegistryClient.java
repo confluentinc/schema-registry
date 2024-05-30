@@ -103,6 +103,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   }
 
   @Override
+  public List<String> listKeks(String subject, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    return restService.listKeks(subject, lookupDeleted);
+  }
+
+  @Override
   public Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException {
     try {

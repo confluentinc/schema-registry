@@ -294,6 +294,12 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1, 2), versions);
 
+    List<String> kekNames = client.listKeks(subject, false);
+    assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeks(subject2, false);
+    assertEquals(ImmutableList.of(kekName), kekNames);
+
     try {
       client.deleteKek(headers, kekName, false);
       fail();
@@ -336,6 +342,12 @@ public class RestApiTest extends ClusterTestHarness {
 
     versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1, 2), versions);
+
+    kekNames = client.listKeks(subject2, false);
+    assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeks(subject, true);
+    assertEquals(ImmutableList.of(kekName), kekNames);
 
     client.deleteDek(headers, kekName, subject2, algorithm, false);
     client.deleteKek(headers, kekName, false);
