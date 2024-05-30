@@ -53,10 +53,10 @@ public class KmsDriverManager {
 
   private static List<KmsDriver> loadDrivers() {
     try {
-      loadDrivers(Thread.currentThread().getContextClassLoader());
+      return loadDrivers(Thread.currentThread().getContextClassLoader());
     } catch (ServiceConfigurationError e) {
       // Try using the class loader of the KmsDriver class
-      loadDrivers(KmsDriver.class.getClassLoader());
+      return loadDrivers(KmsDriver.class.getClassLoader());
     }
   }
 
