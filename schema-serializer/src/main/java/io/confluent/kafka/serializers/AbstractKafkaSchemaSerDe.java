@@ -62,6 +62,7 @@ import java.util.Optional;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.serializers.context.NullContextNameStrategy;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -233,7 +234,13 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
               return e.getValue();
             }, (e1, e2) -> e1, LinkedHashMap::new)));
     if (enableRuleServiceLoader) {
-      addRuleObjectsFromServiceLoader(ruleObjects, config, configName, cls);
+      try {
+        addRuleObjectsFromServiceLoader(ruleObjects, config, configName, cls,
+            Thread.currentThread().getContextClassLoader());
+      } catch (ServiceConfigurationError e) {
+        // Try using the class loader of the given class
+        addRuleObjectsFromServiceLoader(ruleObjects, config, configName, cls, cls.getClassLoader());
+      }
     }
     return ruleObjects;
   }
@@ -259,8 +266,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   private void addRuleObjectsFromServiceLoader(
       Map<String, Map<String, RuleBase>> ruleObjects,
-      AbstractKafkaSchemaSerDeConfig config, String configName, Class<? extends RuleBase> cls) {
-    ServiceLoader<? extends RuleBase> serviceLoader = ServiceLoader.load(cls, cls.getClassLoader());
+      AbstractKafkaSchemaSerDeConfig config, String configName, Class<? extends RuleBase> cls,
+      ClassLoader classLoader) {
+    ServiceLoader<? extends RuleBase> serviceLoader = ServiceLoader.load(cls, classLoader);
 
     String name = RuleBase.DEFAULT_NAME;
     for (RuleBase ruleObject : serviceLoader) {
