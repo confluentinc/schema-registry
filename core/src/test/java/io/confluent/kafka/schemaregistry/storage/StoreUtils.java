@@ -98,7 +98,7 @@ public class StoreUtils {
     }
 
     KafkaStore<String, String> kafkaStore =
-            new KafkaStore<String, String>(config, new StringMessageHandler(),
+            new KafkaStore<String, String>(config, 0, new StringMessageHandler(),
                     StringSerializer.INSTANCE,
                     inMemoryStore, new NoopKey().toString());
     try {
