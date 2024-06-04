@@ -37,6 +37,9 @@ public interface DekRegistryClient extends Closeable {
   List<String> listKeks(boolean lookupDeleted)
       throws IOException, RestClientException;
 
+  List<String> listKeks(String subject, boolean lookupDeleted)
+      throws IOException, RestClientException;
+
   Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException;
 
