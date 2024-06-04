@@ -445,6 +445,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   public boolean healthy() {
+    // Get dummy context key
+    try {
+      // Should return null if key does not exist
+      kafkaStore.get(new ContextKey(tenant(), "dummy"));
+    } catch (Throwable t) {
+      return false;
+    }
     return initialized()
         && getResourceExtensions().stream().allMatch(SchemaRegistryResourceExtension::healthy);
   }

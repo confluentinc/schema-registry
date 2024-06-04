@@ -285,11 +285,19 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public List<String> getKekNames(boolean lookupDeleted) {
+  public List<String> getKekNames(String subject, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
-    return getKeks(tenant, lookupDeleted).stream()
-        .map(kv -> ((KeyEncryptionKeyId) kv.key).getName())
-        .collect(Collectors.toList());
+    if (subject == null || subject.isEmpty()) {
+      return getKeks(tenant, lookupDeleted).stream()
+          .map(kv -> ((KeyEncryptionKeyId) kv.key).getName())
+          .collect(Collectors.toList());
+    } else {
+      return getDeks(tenant, null, subject, null, lookupDeleted).stream()
+          .map(kv -> ((DataEncryptionKeyId) kv.key).getKekName())
+          .sorted()
+          .distinct()
+          .collect(Collectors.toList());
+    }
   }
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getKeks(
@@ -343,12 +351,14 @@ public class DekRegistry implements Closeable {
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
       String tenant, String kekName, boolean lookupDeleted) {
+    String minKekName = kekName != null ? kekName : String.valueOf(Character.MIN_VALUE);
+    String maxKekName = kekName != null ? kekName : String.valueOf(Character.MAX_VALUE);
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     DataEncryptionKeyId key1 = new DataEncryptionKeyId(
-        tenant, kekName, String.valueOf(Character.MIN_VALUE),
+        tenant, minKekName, String.valueOf(Character.MIN_VALUE),
         DekFormat.AES128_GCM, MIN_VERSION);
     DataEncryptionKeyId key2 = new DataEncryptionKeyId(
-        tenant, kekName, String.valueOf(Character.MAX_VALUE),
+        tenant, maxKekName, String.valueOf(Character.MAX_VALUE),
         DekFormat.AES256_SIV, Integer.MAX_VALUE);
     try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
         keys().range(key1, true, key2, false)) {
@@ -364,15 +374,17 @@ public class DekRegistry implements Closeable {
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
       String tenant, String kekName, String subject, DekFormat algorithm, boolean lookupDeleted) {
+    String minKekName = kekName != null ? kekName : String.valueOf(Character.MIN_VALUE);
+    String maxKekName = kekName != null ? kekName : String.valueOf(Character.MAX_VALUE);
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     DataEncryptionKeyId key1 = new DataEncryptionKeyId(
-        tenant, kekName, subject,
+        tenant, minKekName, subject,
         algorithm, MIN_VERSION);
     DataEncryptionKeyId key2 = new DataEncryptionKeyId(
-        tenant, kekName, subject,
+        tenant, maxKekName, subject,
         algorithm, Integer.MAX_VALUE);
     try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
         keys().range(key1, true, key2, false)) {
