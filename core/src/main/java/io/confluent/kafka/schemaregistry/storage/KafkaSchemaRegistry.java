@@ -152,6 +152,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   private final int searchMaxLimit;
   private final boolean delayLeaderElection;
   private final boolean allowModeChanges;
+  private final boolean enableStoreHealthCheck;
   private SchemaRegistryIdentity leaderIdentity;
   private RestService leaderRestService;
   private final SslFactory sslFactory;
@@ -184,6 +185,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
     this.delayLeaderElection = config.getBoolean(SchemaRegistryConfig.LEADER_ELECTION_DELAY);
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
+    this.enableStoreHealthCheck = config.getBoolean(SchemaRegistryConfig.ENABLE_STORE_HEALTH_CHECK);
 
     String interInstanceListenerNameConfig = config.interInstanceListenerName();
     NamedURI internalListener = getInterInstanceListener(config.getListeners(),
@@ -448,12 +450,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   }
 
   public boolean healthy() {
-    // Get dummy context key
-    try {
-      // Should return null if key does not exist
-      kafkaStore.get(new ContextKey(tenant(), "dummy"));
-    } catch (Throwable t) {
-      return false;
+    if (enableStoreHealthCheck) {
+      // Get dummy context key
+      try {
+        // Should return null if key does not exist
+        kafkaStore.get(new ContextKey(tenant(), "dummy"));
+      } catch (Throwable t) {
+        return false;
+      }
     }
     return initialized()
         && getResourceExtensions().stream().allMatch(SchemaRegistryResourceExtension::healthy);

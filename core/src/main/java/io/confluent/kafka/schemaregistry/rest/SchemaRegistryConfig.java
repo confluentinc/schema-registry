@@ -222,6 +222,9 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String METADATA_ENCODER_TOPIC_CONFIG = "metadata.encoder.topic";
   public static final String METADATA_ENCODER_TOPIC_DEFAULT = "_schema_encoders";
 
+  public static final String ENABLE_STORE_HEALTH_CHECK = "enable.store.health.check";
+  public static final boolean DEFAULT_ENABLE_STORE_HEALTH_CHECK = false;
+
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
   public static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG =
@@ -392,6 +395,8 @@ public class SchemaRegistryConfig extends RestConfig {
       + "cluster wide setting i.e all nodes should have either true or false.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
+  protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
+      "If true, health check will call the local storage.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
       + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";
@@ -614,6 +619,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
+    )
+    .define(ENABLE_STORE_HEALTH_CHECK, ConfigDef.Type.BOOLEAN, DEFAULT_ENABLE_STORE_HEALTH_CHECK,
+        ConfigDef.Importance.LOW, ENABLE_STORE_HEALTH_CHECK_DOC
     )
     .define(KAFKASTORE_SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING,
         SecurityProtocol.PLAINTEXT.toString(), ConfigDef.Importance.MEDIUM,
