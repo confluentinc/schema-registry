@@ -25,7 +25,7 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-@io.swagger.v3.oas.annotations.media.Schema(description = "SchemaWithAliases")
+@io.swagger.v3.oas.annotations.media.Schema(description = "ExtendedSchema")
 public class ExtendedSchema extends Schema {
 
   public static final String ALIASES_DESC = "Aliases for the given subject";

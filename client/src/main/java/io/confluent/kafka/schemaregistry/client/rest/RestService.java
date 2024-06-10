@@ -95,8 +95,8 @@ public class RestService implements Closeable, Configurable {
   private static final TypeReference<List<Schema>> GET_SCHEMAS_RESPONSE_TYPE =
       new TypeReference<List<Schema>>() {
       };
-  private static final TypeReference<List<ExtendedSchema>>
-      GET_SCHEMAS_WITH_ALIASES_RESPONSE_TYPE = new TypeReference<List<ExtendedSchema>>() {
+  private static final TypeReference<List<ExtendedSchema>> GET_EXTENDED_SCHEMAS_RESPONSE_TYPE =
+      new TypeReference<List<ExtendedSchema>>() {
       };
   private static final TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
       new TypeReference<SchemaString>() {
@@ -899,7 +899,7 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build().toString();
 
     List<ExtendedSchema> response = httpRequest(path, "GET", null, requestProperties,
-        GET_SCHEMAS_WITH_ALIASES_RESPONSE_TYPE);
+        GET_EXTENDED_SCHEMAS_RESPONSE_TYPE);
     return response;
   }
 

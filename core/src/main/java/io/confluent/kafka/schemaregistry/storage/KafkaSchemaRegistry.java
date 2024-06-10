@@ -1897,7 +1897,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private Map<String, List<String>> getAliases(String subjectPrefix) throws SchemaRegistryException {
+  private Map<String, List<String>> getAliases(String subjectPrefix)
+      throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> iter = allConfigs(subjectPrefix, true)) {
       Map<String, List<String>> subjectToAliases = new HashMap<>();
       while (iter.hasNext()) {
@@ -1948,14 +1949,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return latestSchemaValue != null ? toSchemaEntity(latestSchemaValue) : null;
   }
 
-  private CloseableIterator<SchemaRegistryValue> allVersions(
-      String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
-    return allVersions(SchemaKey::new, subjectOrPrefix, isPrefix);
-  }
-
   private CloseableIterator<SchemaRegistryValue> allConfigs(
       String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
     return allVersions((s, v) -> new ConfigKey(s), subjectOrPrefix, isPrefix);
+  }
+
+  private CloseableIterator<SchemaRegistryValue> allVersions(
+      String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
+    return allVersions(SchemaKey::new, subjectOrPrefix, isPrefix);
   }
 
   private CloseableIterator<SchemaRegistryValue> allVersions(
