@@ -19,7 +19,6 @@ package io.confluent.kafka.schemaregistry.client;
 import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaWithAliases;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
