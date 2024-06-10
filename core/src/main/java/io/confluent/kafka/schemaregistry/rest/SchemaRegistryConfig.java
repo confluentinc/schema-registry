@@ -221,7 +221,7 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String METADATA_ENCODER_TOPIC_DEFAULT = "_schema_encoders";
 
   public static final String HEALTH_CALL_LOCAL_STORE = "health.call.local.store";
-  public static final boolean DEFAULT_HEALTH_CALL_LOCAL_STORE = true;
+  public static final boolean DEFAULT_HEALTH_CALL_LOCAL_STORE = false;
 
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
