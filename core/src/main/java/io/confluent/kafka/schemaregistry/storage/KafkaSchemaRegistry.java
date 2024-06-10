@@ -104,6 +104,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -1898,41 +1899,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private Map<String, List<String>> getAliases(String subjectPrefix) throws SchemaRegistryException {
-    QualifiedSubject qualifiedSubject = QualifiedSubject.create(tenant(), subjectPrefix);
-    String tenantPrefix = qualifiedSubject.getTenant();
-    if (DEFAULT_TENANT.equals(tenantPrefix)) {
-      tenantPrefix = "";
-    }
-    boolean isWildcard = WILDCARD.equals(qualifiedSubject.getContext());
-    String unqualifiedSubjectPrefix = qualifiedSubject.getSubject();
-    try {
-      ConfigKey key1 = new ConfigKey(tenantPrefix + Character.MIN_VALUE);
-      ConfigKey key2 = new ConfigKey(tenantPrefix + Character.MAX_VALUE);
-      try (CloseableIterator<SchemaRegistryValue> iter = kafkaStore.getAll(key1, key2)) {
-        Map<String, List<String>> subjectToAliases = new HashMap<>();
-        while (iter.hasNext()) {
-          ConfigValue configValue = (ConfigValue) iter.next();
-          String alias = configValue.getAlias();
-          if (alias == null) {
-            continue;
-          }
-          boolean doAdd = false;
-          QualifiedSubject qualifiedAlias = QualifiedSubject.create(tenant(), alias);
-          if (isWildcard && qualifiedAlias.getSubject().startsWith(unqualifiedSubjectPrefix)) {
-            doAdd = true;
-          } else if (qualifiedAlias.toQualifiedSubject().startsWith(subjectPrefix)) {
-            doAdd = true;
-          }
-          if (doAdd) {
-            List<String> aliases = subjectToAliases.computeIfAbsent(alias, k -> new ArrayList<>());
-            aliases.add(configValue.getSubject());
-          }
+    try (CloseableIterator<SchemaRegistryValue> iter = allConfigs(subjectPrefix, true)) {
+      Map<String, List<String>> subjectToAliases = new HashMap<>();
+      while (iter.hasNext()) {
+        ConfigValue configValue = (ConfigValue) iter.next();
+        String alias = configValue.getAlias();
+        if (alias == null) {
+          continue;
         }
-        return subjectToAliases;
+        List<String> aliases = subjectToAliases.computeIfAbsent(alias, k -> new ArrayList<>());
+        aliases.add(configValue.getSubject());
       }
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException(
-          "Error from the backend Kafka store", e);
+      return subjectToAliases;
     }
   }
 
@@ -1973,6 +1951,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private CloseableIterator<SchemaRegistryValue> allVersions(
       String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
+    return allVersions(SchemaKey::new, subjectOrPrefix, isPrefix);
+  }
+
+  private CloseableIterator<SchemaRegistryValue> allConfigs(
+      String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
+    return allVersions((s, v) -> new ConfigKey(s), subjectOrPrefix, isPrefix);
+  }
+
+  private CloseableIterator<SchemaRegistryValue> allVersions(
+      BiFunction<String, Integer, SchemaRegistryKey> keyCreator,
+      String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
     try {
       String start;
       String end;
@@ -1983,7 +1972,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         String unqualifiedSubjectOrPrefix =
             subjectOrPrefix.substring(idx + CONTEXT_WILDCARD.length());
         if (!unqualifiedSubjectOrPrefix.isEmpty()) {
-          return allVersionsFromAllContexts(tenantPrefix, unqualifiedSubjectOrPrefix, isPrefix);
+          return allVersionsFromAllContexts(
+              keyCreator, tenantPrefix, unqualifiedSubjectOrPrefix, isPrefix);
         }
         start = tenantPrefix + CONTEXT_PREFIX + CONTEXT_DELIMITER;
         end = tenantPrefix + CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER;
@@ -1991,8 +1981,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         start = subjectOrPrefix;
         end = isPrefix ? subjectOrPrefix + Character.MAX_VALUE : subjectOrPrefix;
       }
-      SchemaKey key1 = new SchemaKey(start, MIN_VERSION);
-      SchemaKey key2 = new SchemaKey(end, MAX_VERSION);
+      SchemaRegistryKey key1 = keyCreator.apply(start, MIN_VERSION);
+      SchemaRegistryKey key2 = keyCreator.apply(end, MAX_VERSION);
       return TransformedIterator.transform(kafkaStore.getAll(key1, key2), v -> {
         if (v instanceof SchemaValue) {
           metadataEncoder.decodeMetadata(((SchemaValue) v));
@@ -2006,12 +1996,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private CloseableIterator<SchemaRegistryValue> allVersionsFromAllContexts(
+      BiFunction<String, Integer, SchemaRegistryKey> keyCreator,
       String tenantPrefix, String unqualifiedSubjectOrPrefix, boolean isPrefix)
       throws SchemaRegistryException {
     List<SchemaRegistryValue> versions = new ArrayList<>();
     // Add versions from default context
     try (CloseableIterator<SchemaRegistryValue> iter =
-        allVersions(tenantPrefix + unqualifiedSubjectOrPrefix, isPrefix)) {
+        allVersions(keyCreator, tenantPrefix + unqualifiedSubjectOrPrefix, isPrefix)) {
       while (iter.hasNext()) {
         versions.add(iter.next());
       }
@@ -2026,7 +2017,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       QualifiedSubject qualSub =
           new QualifiedSubject(v.getTenant(), v.getContext(), unqualifiedSubjectOrPrefix);
       try (CloseableIterator<SchemaRegistryValue> subiter =
-          allVersions(qualSub.toQualifiedSubject(), isPrefix)) {
+          allVersions(keyCreator, qualSub.toQualifiedSubject(), isPrefix)) {
         while (subiter.hasNext()) {
           versions.add(subiter.next());
         }
