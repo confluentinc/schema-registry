@@ -29,7 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaWithAliases;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -95,8 +95,8 @@ public class RestService implements Closeable, Configurable {
   private static final TypeReference<List<Schema>> GET_SCHEMAS_RESPONSE_TYPE =
       new TypeReference<List<Schema>>() {
       };
-  private static final TypeReference<List<SchemaWithAliases>>
-      GET_SCHEMAS_WITH_ALIASES_RESPONSE_TYPE = new TypeReference<List<SchemaWithAliases>>() {
+  private static final TypeReference<List<ExtendedSchema>>
+      GET_SCHEMAS_WITH_ALIASES_RESPONSE_TYPE = new TypeReference<List<ExtendedSchema>>() {
       };
   private static final TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
       new TypeReference<SchemaString>() {
@@ -871,7 +871,7 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
-  public List<SchemaWithAliases> getSchemas(Map<String, String> requestProperties,
+  public List<ExtendedSchema> getSchemas(Map<String, String> requestProperties,
       String subjectPrefix,
       boolean includeAliases,
       boolean lookupDeletedSchema,
@@ -898,7 +898,7 @@ public class RestService implements Closeable, Configurable {
     }
     String path = builder.build().toString();
 
-    List<SchemaWithAliases> response = httpRequest(path, "GET", null, requestProperties,
+    List<ExtendedSchema> response = httpRequest(path, "GET", null, requestProperties,
         GET_SCHEMAS_WITH_ALIASES_RESPONSE_TYPE);
     return response;
   }

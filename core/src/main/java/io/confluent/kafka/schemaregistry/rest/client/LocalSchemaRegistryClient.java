@@ -29,7 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaWithAliases;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -257,7 +257,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subjectPrefix = schemaRegistry.tenant() + TENANT_DELIMITER + subjectPrefix;
     }
-    Iterator<SchemaWithAliases> schemas = null;
+    Iterator<ExtendedSchema> schemas = null;
     List<ParsedSchema> result = new ArrayList<>();
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
     try {

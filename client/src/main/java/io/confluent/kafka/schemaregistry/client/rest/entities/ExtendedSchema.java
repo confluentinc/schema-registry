@@ -26,14 +26,14 @@ import java.util.Objects;
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @io.swagger.v3.oas.annotations.media.Schema(description = "SchemaWithAliases")
-public class SchemaWithAliases extends Schema {
+public class ExtendedSchema extends Schema {
 
   public static final String ALIASES_DESC = "Aliases for the given subject";
 
   private List<String> aliases;
 
   @JsonCreator
-  public SchemaWithAliases(@JsonProperty("subject") String subject,
+  public ExtendedSchema(@JsonProperty("subject") String subject,
                 @JsonProperty("version") Integer version,
                 @JsonProperty("id") Integer id,
                 @JsonProperty("schemaType") String schemaType,
@@ -46,7 +46,7 @@ public class SchemaWithAliases extends Schema {
     this.aliases = aliases;
   }
 
-  public SchemaWithAliases(Schema schema, List<String> aliases) {
+  public ExtendedSchema(Schema schema, List<String> aliases) {
     super(schema.getSubject(), schema.getVersion(), schema.getId(), schema.getSchemaType(),
         schema.getReferences(), schema.getMetadata(), schema.getRuleSet(), schema.getSchema());
     this.aliases = aliases;
@@ -74,7 +74,7 @@ public class SchemaWithAliases extends Schema {
     if (!super.equals(o)) {
       return false;
     }
-    SchemaWithAliases that = (SchemaWithAliases) o;
+    ExtendedSchema that = (ExtendedSchema) o;
     return Objects.equals(aliases, that.aliases);
   }
 

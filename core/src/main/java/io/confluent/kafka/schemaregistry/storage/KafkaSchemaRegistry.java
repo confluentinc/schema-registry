@@ -21,7 +21,6 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_D
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.WILDCARD;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -41,7 +40,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaWithAliases;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
@@ -1850,16 +1849,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   @Override
-  public Iterator<SchemaWithAliases> getVersionsWithSubjectPrefix(String prefix,
+  public Iterator<ExtendedSchema> getVersionsWithSubjectPrefix(String prefix,
       LookupFilter filter,
       boolean returnLatestOnly,
       Predicate<Schema> postFilter)
       throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
-      Map<String, List<SchemaWithAliases>> schemas = schemasByVersion(
+      Map<String, List<ExtendedSchema>> schemas = schemasByVersion(
           Collections.emptyMap(), allVersions, filter, returnLatestOnly, postFilter);
-      List<SchemaWithAliases> result = new ArrayList<>();
-      for (List<SchemaWithAliases> schemaList : schemas.values()) {
+      List<ExtendedSchema> result = new ArrayList<>();
+      for (List<ExtendedSchema> schemaList : schemas.values()) {
         result.addAll(schemaList);
       }
       Collections.sort(result);
@@ -1867,17 +1866,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public Iterator<SchemaWithAliases> getVersionsIncludingAliasesWithSubjectPrefix(String prefix,
+  public Iterator<ExtendedSchema> getVersionsIncludingAliasesWithSubjectPrefix(String prefix,
       LookupFilter filter,
       boolean returnLatestOnly,
       Predicate<Schema> postFilter)
       throws SchemaRegistryException {
     Map<String, List<String>> aliases = getAliases(prefix);
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
-      Map<String, List<SchemaWithAliases>> schemas = schemasByVersion(
+      Map<String, List<ExtendedSchema>> schemas = schemasByVersion(
           aliases, allVersions, filter, returnLatestOnly, postFilter);
-      List<SchemaWithAliases> result = new ArrayList<>();
-      for (List<SchemaWithAliases> schemaList : schemas.values()) {
+      List<ExtendedSchema> result = new ArrayList<>();
+      for (List<ExtendedSchema> schemaList : schemas.values()) {
         result.addAll(schemaList);
       }
       for (Map.Entry<String, List<String>> entry : aliases.entrySet()) {
@@ -1885,9 +1884,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         if (!schemas.containsKey(subject)) {
           // Collect schemas for the aliased subject
           try (CloseableIterator<SchemaRegistryValue> subVersions = allVersions(subject, false)) {
-            Map<String, List<SchemaWithAliases>> subSchemas = schemasByVersion(
+            Map<String, List<ExtendedSchema>> subSchemas = schemasByVersion(
                 aliases, subVersions, filter, returnLatestOnly, postFilter);
-            for (List<SchemaWithAliases> schemaList : subSchemas.values()) {
+            for (List<ExtendedSchema> schemaList : subSchemas.values()) {
               result.addAll(schemaList);
             }
           }
@@ -2396,14 +2395,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return this.kafkaStore;
   }
 
-  private Map<String, List<SchemaWithAliases>> schemasByVersion(
+  private Map<String, List<ExtendedSchema>> schemasByVersion(
       Map<String, List<String>> subjectByAliases,
       CloseableIterator<SchemaRegistryValue> schemas,
       LookupFilter filter,
       boolean returnLatestOnly,
       Predicate<Schema> postFilter) {
-    Map<String, List<SchemaWithAliases>> schemaMap = new HashMap<>();
-    SchemaWithAliases previousSchema = null;
+    Map<String, List<ExtendedSchema>> schemaMap = new HashMap<>();
+    ExtendedSchema previousSchema = null;
     while (schemas.hasNext()) {
       SchemaValue schemaValue = (SchemaValue) schemas.next();
       boolean shouldInclude = shouldInclude(schemaValue.isDeleted(), filter);
@@ -2411,8 +2410,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         continue;
       }
       List<String> aliases = subjectByAliases.get(schemaValue.getSubject());
-      SchemaWithAliases schema = new SchemaWithAliases(toSchemaEntity(schemaValue), aliases);
-      List<SchemaWithAliases> schemaList = schemaMap.computeIfAbsent(
+      ExtendedSchema schema = new ExtendedSchema(toSchemaEntity(schemaValue), aliases);
+      List<ExtendedSchema> schemaList = schemaMap.computeIfAbsent(
           schemaValue.getSubject(), k -> new ArrayList<>());
       if (returnLatestOnly) {
         if (previousSchema != null && !schema.getSubject().equals(previousSchema.getSubject())) {
@@ -2425,13 +2424,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
     if (returnLatestOnly && previousSchema != null) {
       // handle last subject
-      List<SchemaWithAliases> schemaList = schemaMap.computeIfAbsent(
+      List<ExtendedSchema> schemaList = schemaMap.computeIfAbsent(
           previousSchema.getSubject(), k -> new ArrayList<>());
       schemaList.add(previousSchema);
     }
     if (postFilter != null) {
-      for (Map.Entry<String, List<SchemaWithAliases>> entry : schemaMap.entrySet()) {
-        List<SchemaWithAliases> schemaList = entry.getValue();
+      for (Map.Entry<String, List<ExtendedSchema>> entry : schemaMap.entrySet()) {
+        List<ExtendedSchema> schemaList = entry.getValue();
         schemaList = schemaList.stream()
             .filter(postFilter)
             .collect(Collectors.toList());

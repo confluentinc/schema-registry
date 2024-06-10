@@ -19,7 +19,7 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaWithAliases;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
@@ -83,7 +83,7 @@ public class SchemasResource {
                   ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("schemas.get-schemas")
-  public List<SchemaWithAliases> getSchemas(
+  public List<ExtendedSchema> getSchemas(
       @Parameter(description = "Filters results by the respective subject prefix")
       @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
       @Parameter(description = "Whether to include aliases in the search")
@@ -99,8 +99,8 @@ public class SchemasResource {
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
-    Iterator<SchemaWithAliases> schemas;
-    List<SchemaWithAliases> filteredSchemas = new ArrayList<>();
+    Iterator<ExtendedSchema> schemas;
+    List<ExtendedSchema> filteredSchemas = new ArrayList<>();
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
     LookupFilter filter = lookupDeletedSchema ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT;
     try {
@@ -123,7 +123,7 @@ public class SchemasResource {
     int toIndex = offset + limit;
     int index = 0;
     while (schemas.hasNext() && index < toIndex) {
-      SchemaWithAliases schema = schemas.next();
+      ExtendedSchema schema = schemas.next();
       if (index >= offset) {
         filteredSchemas.add(schema);
       }

@@ -27,7 +27,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaWithAliases;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -1014,7 +1014,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     List<Schema> schemas = restApp.restClient.getSchemas("testAlias", true, false);
     assertEquals(0, schemas.size());
 
-    List<SchemaWithAliases> schemasWithAliases = restApp.restClient.getSchemas(
+    List<ExtendedSchema> schemasWithAliases = restApp.restClient.getSchemas(
         RestService.DEFAULT_REQUEST_PROPERTIES, "testAlias", true, false, false, null, null, null);
     assertEquals(2, schemasWithAliases.size());
 
