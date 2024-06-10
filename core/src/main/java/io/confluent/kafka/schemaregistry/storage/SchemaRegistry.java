@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaWithAliases;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
@@ -71,7 +72,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Iterator<SchemaKey> getAllVersions(String subject, LookupFilter filter)
       throws SchemaRegistryException;
 
-  Iterator<Schema> getVersionsWithSubjectPrefix(
+  Iterator<SchemaWithAliases> getVersionsWithSubjectPrefix(
       String prefix, LookupFilter filter, boolean latestOnly, Predicate<Schema> postFilter)
       throws SchemaRegistryException;
 
