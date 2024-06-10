@@ -723,6 +723,83 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerWithMultiTypeUnionSpecificLogical() throws IOException, RestClientException {
+    Map serializerConfigs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+            false,
+            KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+            true,
+            KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG,
+            true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+            true,
+            KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG,
+            true
+    );
+
+    String differentTopic = "another_topic";
+    IndexedRecord record = createExtendedSpecificAvroRecord();
+    AvroSchema schema = new AvroSchema(record.getSchema());
+
+    Grant grantRecord = Grant.newBuilder()
+            .setGrant("p234")
+            .build();
+    AvroSchema grantSchema = new AvroSchema(grantRecord.getSchema());
+
+    schemaRegistry.register("user", schema);
+    schemaRegistry.register("account", new AvroSchema(createAccountSchema()));
+    // Given TOPIC A subject is union type [A, B]
+    schemaRegistry.register(topic + "-value",
+            new AvroSchema("[ \"io.confluent.kafka.example.ExtendedUser\", \"example.avro.Account\" ]",
+                    ImmutableList.of(
+                            new SchemaReference("io.confluent.kafka.example.ExtendedUser", "user", 1),
+                            new SchemaReference("example.avro.Account", "account", 1)
+                    ),
+                    ImmutableMap.of(
+                            "io.confluent.kafka.example.ExtendedUser",
+                            schema.toString(),
+                            "example.avro.Account",
+                            createAccountSchema().toString()
+                    ),
+                    null
+            ));
+    schemaRegistry.register("grant", grantSchema);
+    // Given TOPIC B subject is union type [C]
+    schemaRegistry.register(differentTopic + "-value",
+            new AvroSchema("[ \"io.confluent.kafka.example.Grant\" ]",
+                    ImmutableList.of(
+                            new SchemaReference("io.confluent.kafka.example.Grant", "grant", 1)
+                    ),
+                    ImmutableMap.of(
+                            "io.confluent.kafka.example.ExtendedUser",
+                            schema.toString(),
+                            "example.avro.Account",
+                            createAccountSchema().toString(),
+                            "io.confluent.kafka.example.Grant",
+                            grantSchema.toString()
+                    ),
+                    null
+            ));
+
+    avroSerializer.configure(serializerConfigs, false);
+    avroDeserializer.configure(deserializerConfigs, false);
+
+    byte[] bytes1 = avroSerializer.serialize(topic, record);
+    byte[] bytesGrant = avroSerializer.serialize(differentTopic, grantRecord);
+
+    // Assert that deserialize is capable to deserializing from topic A using A-subject
+    assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+    // Assert that deserialize is capable to deserializing from topic B using B-subject
+    assertEquals(grantRecord, avroDeserializer.deserialize(differentTopic, bytesGrant));
+  }
+
+  @Test
   public void testKafkaAvroSerializerWithCyclicReference() throws IOException, RestClientException {
     IndexedRecord record = createSpecificAvroRecord();
     AvroSchema schema = new AvroSchema(record.getSchema());

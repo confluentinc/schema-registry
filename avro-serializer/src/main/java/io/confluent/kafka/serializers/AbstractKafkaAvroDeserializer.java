@@ -88,7 +88,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                       ? getReflectData()
                       : ReflectData.get());
             } else if (useSpecificAvroReader) {
-              return new SpecificDatumReader<>(writerSchema, finalReaderSchema);
+              return new SpecificDatumReader<>(writerSchema, finalReaderSchema,
+                  avroUseLogicalTypeConverters
+                      ? AvroSchemaUtils.getSpecificDataForSchema(finalReaderSchema)
+                      : SpecificData.getForSchema(finalReaderSchema));
             } else {
               return new GenericDatumReader<>(writerSchema, finalReaderSchema,
                   avroUseLogicalTypeConverters
