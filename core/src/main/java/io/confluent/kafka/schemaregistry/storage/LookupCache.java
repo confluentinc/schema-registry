@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.DEFAULT_TENANT;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import java.util.Map;
 import java.util.Set;
 
@@ -107,9 +108,25 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param defaultForTopLevel default value for the top level scope
    * @return the compatibility level if found, otherwise null
    */
-  CompatibilityLevel compatibilityLevel(String subject,
-                                        boolean returnTopLevelIfNotFound,
-                                        CompatibilityLevel defaultForTopLevel)
+  default CompatibilityLevel compatibilityLevel(String subject,
+                                                boolean returnTopLevelIfNotFound,
+                                                CompatibilityLevel defaultForTopLevel)
+      throws StoreException {
+    Config config = config(subject, returnTopLevelIfNotFound, new Config(defaultForTopLevel.name));
+    return CompatibilityLevel.forName(config.getCompatibilityLevel());
+  }
+
+  /**
+   * Retrieves the config for a subject.
+   *
+   * @param subject the subject
+   * @param returnTopLevelIfNotFound whether to return the top level scope if not found
+   * @param defaultForTopLevel default value for the top level scope
+   * @return the compatibility level if found, otherwise null
+   */
+  Config config(String subject,
+                boolean returnTopLevelIfNotFound,
+                Config defaultForTopLevel)
       throws StoreException;
 
   /**

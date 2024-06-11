@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage.serialization;
 
+import java.io.Closeable;
 import java.io.Serializable;
 import org.apache.kafka.common.Configurable;
 
@@ -24,7 +25,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationExcepti
  * @param <K> Key type to be serialized from. <p/> A class that implements this interface is
  *            expected to have a constructor with no parameter.
  */
-public interface Serializer<K, V> extends Configurable, Serializable {
+public interface Serializer<K, V> extends Configurable, Serializable, Closeable {
 
   /**
    * @param key Typed key
