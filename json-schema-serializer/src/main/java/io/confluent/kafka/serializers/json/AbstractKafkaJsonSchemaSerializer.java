@@ -50,7 +50,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
   protected boolean latestCompatStrict;
-  protected static final ObjectMapper objectMapper = Jackson.newObjectMapper();
+  protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected SpecificationVersion specVersion;
   protected boolean oneofForNullables;
   protected boolean failUnknownProperties;
