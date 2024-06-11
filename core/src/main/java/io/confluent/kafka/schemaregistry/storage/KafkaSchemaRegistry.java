@@ -40,6 +40,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
@@ -102,6 +103,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -1844,26 +1846,98 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Iterator<SchemaKey> getAllVersions(String subject, LookupFilter filter)
       throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
-      return sortSchemaKeysByVersion(allVersions, filter).iterator();
+      List<SchemaKey> schemaKeys = schemaKeysByVersion(allVersions, filter);
+      Collections.sort(schemaKeys);
+      return schemaKeys.iterator();
     }
   }
 
   @Override
-  public Iterator<Schema> getVersionsWithSubjectPrefix(String prefix,
-                                                       LookupFilter filter,
-                                                       boolean returnLatestOnly,
-                                                       Predicate<Schema> postFilter)
+  public Iterator<ExtendedSchema> getVersionsWithSubjectPrefix(String prefix,
+      boolean includeAliases,
+      LookupFilter filter,
+      boolean returnLatestOnly,
+      Predicate<Schema> postFilter)
+      throws SchemaRegistryException {
+    if (includeAliases) {
+      return allVersionsIncludingAliasesWithSubjectPrefix(
+          prefix, filter, returnLatestOnly, postFilter);
+    } else {
+      return allVersionsWithSubjectPrefix(prefix, filter, returnLatestOnly, postFilter);
+    }
+  }
+
+  private Iterator<ExtendedSchema> allVersionsWithSubjectPrefix(String prefix,
+      LookupFilter filter,
+      boolean returnLatestOnly,
+      Predicate<Schema> postFilter)
       throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
-      return sortSchemasByVersion(allVersions, filter, returnLatestOnly, postFilter)
-          .iterator();
+      Map<String, List<ExtendedSchema>> schemas = schemasByVersion(
+          Collections.emptyMap(), allVersions, filter, returnLatestOnly, postFilter);
+      List<ExtendedSchema> result = new ArrayList<>();
+      for (List<ExtendedSchema> schemaList : schemas.values()) {
+        result.addAll(schemaList);
+      }
+      Collections.sort(result);
+      return result.iterator();
+    }
+  }
+
+  public Iterator<ExtendedSchema> allVersionsIncludingAliasesWithSubjectPrefix(String prefix,
+      LookupFilter filter,
+      boolean returnLatestOnly,
+      Predicate<Schema> postFilter)
+      throws SchemaRegistryException {
+    Map<String, List<String>> aliases = getAliases(prefix);
+    try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
+      Map<String, List<ExtendedSchema>> schemas = schemasByVersion(
+          aliases, allVersions, filter, returnLatestOnly, postFilter);
+      List<ExtendedSchema> result = new ArrayList<>();
+      for (List<ExtendedSchema> schemaList : schemas.values()) {
+        result.addAll(schemaList);
+      }
+      for (Map.Entry<String, List<String>> entry : aliases.entrySet()) {
+        String subject = entry.getKey();
+        if (!schemas.containsKey(subject)) {
+          // Collect schemas for the aliased subject
+          try (CloseableIterator<SchemaRegistryValue> subVersions = allVersions(subject, false)) {
+            Map<String, List<ExtendedSchema>> subSchemas = schemasByVersion(
+                aliases, subVersions, filter, returnLatestOnly, postFilter);
+            for (List<ExtendedSchema> schemaList : subSchemas.values()) {
+              result.addAll(schemaList);
+            }
+          }
+        }
+      }
+      Collections.sort(result);
+      return result.iterator();
+    }
+  }
+
+  private Map<String, List<String>> getAliases(String subjectPrefix)
+      throws SchemaRegistryException {
+    try (CloseableIterator<SchemaRegistryValue> iter = allConfigs(subjectPrefix, true)) {
+      Map<String, List<String>> subjectToAliases = new HashMap<>();
+      while (iter.hasNext()) {
+        ConfigValue configValue = (ConfigValue) iter.next();
+        String alias = configValue.getAlias();
+        if (alias == null) {
+          continue;
+        }
+        List<String> aliases = subjectToAliases.computeIfAbsent(alias, k -> new ArrayList<>());
+        aliases.add(configValue.getSubject());
+      }
+      return subjectToAliases;
     }
   }
 
   private List<SchemaKey> getAllSchemaKeys(String subject)
       throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
-      return sortSchemaKeysByVersion(allVersions, LookupFilter.INCLUDE_DELETED);
+      List<SchemaKey> schemaKeys = schemaKeysByVersion(allVersions, LookupFilter.INCLUDE_DELETED);
+      Collections.sort(schemaKeys);
+      return schemaKeys;
     }
   }
 
@@ -1893,7 +1967,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return latestSchemaValue != null ? toSchemaEntity(latestSchemaValue) : null;
   }
 
+  private CloseableIterator<SchemaRegistryValue> allConfigs(
+      String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
+    return allVersions((s, v) -> new ConfigKey(s), subjectOrPrefix, isPrefix);
+  }
+
   private CloseableIterator<SchemaRegistryValue> allVersions(
+      String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
+    return allVersions(SchemaKey::new, subjectOrPrefix, isPrefix);
+  }
+
+  private CloseableIterator<SchemaRegistryValue> allVersions(
+      BiFunction<String, Integer, SchemaRegistryKey> keyCreator,
       String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
     try {
       String start;
@@ -1901,20 +1986,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       int idx = subjectOrPrefix.indexOf(CONTEXT_WILDCARD);
       if (idx >= 0) {
         // Context wildcard match (prefix may contain tenant)
-        String prefix = subjectOrPrefix.substring(0, idx);
+        String tenantPrefix = subjectOrPrefix.substring(0, idx);
         String unqualifiedSubjectOrPrefix =
             subjectOrPrefix.substring(idx + CONTEXT_WILDCARD.length());
         if (!unqualifiedSubjectOrPrefix.isEmpty()) {
-          return allVersionsFromAllContexts(prefix, unqualifiedSubjectOrPrefix, isPrefix);
+          return allVersionsFromAllContexts(
+              keyCreator, tenantPrefix, unqualifiedSubjectOrPrefix, isPrefix);
         }
-        start = prefix + CONTEXT_PREFIX + CONTEXT_DELIMITER;
-        end = prefix + CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER;
+        start = tenantPrefix + CONTEXT_PREFIX + CONTEXT_DELIMITER;
+        end = tenantPrefix + CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER;
       } else {
         start = subjectOrPrefix;
         end = isPrefix ? subjectOrPrefix + Character.MAX_VALUE : subjectOrPrefix;
       }
-      SchemaKey key1 = new SchemaKey(start, MIN_VERSION);
-      SchemaKey key2 = new SchemaKey(end, MAX_VERSION);
+      SchemaRegistryKey key1 = keyCreator.apply(start, MIN_VERSION);
+      SchemaRegistryKey key2 = keyCreator.apply(end, MAX_VERSION);
       return TransformedIterator.transform(kafkaStore.getAll(key1, key2), v -> {
         if (v instanceof SchemaValue) {
           metadataEncoder.decodeMetadata(((SchemaValue) v));
@@ -1928,12 +2014,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private CloseableIterator<SchemaRegistryValue> allVersionsFromAllContexts(
+      BiFunction<String, Integer, SchemaRegistryKey> keyCreator,
       String tenantPrefix, String unqualifiedSubjectOrPrefix, boolean isPrefix)
       throws SchemaRegistryException {
     List<SchemaRegistryValue> versions = new ArrayList<>();
     // Add versions from default context
     try (CloseableIterator<SchemaRegistryValue> iter =
-        allVersions(tenantPrefix + unqualifiedSubjectOrPrefix, isPrefix)) {
+        allVersions(keyCreator, tenantPrefix + unqualifiedSubjectOrPrefix, isPrefix)) {
       while (iter.hasNext()) {
         versions.add(iter.next());
       }
@@ -1948,7 +2035,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       QualifiedSubject qualSub =
           new QualifiedSubject(v.getTenant(), v.getContext(), unqualifiedSubjectOrPrefix);
       try (CloseableIterator<SchemaRegistryValue> subiter =
-          allVersions(qualSub.toQualifiedSubject(), isPrefix)) {
+          allVersions(keyCreator, qualSub.toQualifiedSubject(), isPrefix)) {
         while (subiter.hasNext()) {
           versions.add(subiter.next());
         }
@@ -2327,19 +2414,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return this.kafkaStore;
   }
 
-  private List<Schema> sortSchemasByVersion(CloseableIterator<SchemaRegistryValue> schemas,
-                                            LookupFilter filter,
-                                            boolean returnLatestOnly,
-                                            Predicate<Schema> postFilter) {
-    List<Schema> schemaList = new ArrayList<>();
-    Schema previousSchema = null;
+  private Map<String, List<ExtendedSchema>> schemasByVersion(
+      Map<String, List<String>> subjectByAliases,
+      CloseableIterator<SchemaRegistryValue> schemas,
+      LookupFilter filter,
+      boolean returnLatestOnly,
+      Predicate<Schema> postFilter) {
+    Map<String, List<ExtendedSchema>> schemaMap = new HashMap<>();
+    ExtendedSchema previousSchema = null;
     while (schemas.hasNext()) {
       SchemaValue schemaValue = (SchemaValue) schemas.next();
       boolean shouldInclude = shouldInclude(schemaValue.isDeleted(), filter);
       if (!shouldInclude) {
         continue;
       }
-      Schema schema = toSchemaEntity(schemaValue);
+      List<String> aliases = subjectByAliases.get(schemaValue.getSubject());
+      ExtendedSchema schema = new ExtendedSchema(toSchemaEntity(schemaValue), aliases);
+      List<ExtendedSchema> schemaList = schemaMap.computeIfAbsent(
+          schemaValue.getSubject(), k -> new ArrayList<>());
       if (returnLatestOnly) {
         if (previousSchema != null && !schema.getSubject().equals(previousSchema.getSubject())) {
           schemaList.add(previousSchema);
@@ -2351,21 +2443,23 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
     if (returnLatestOnly && previousSchema != null) {
       // handle last subject
-      Schema lastSchema = schemaList.isEmpty() ? null : schemaList.get(schemaList.size() - 1);
-      if (lastSchema == null || !lastSchema.getSubject().equals(previousSchema.getSubject())) {
-        schemaList.add(previousSchema);
-      }
+      List<ExtendedSchema> schemaList = schemaMap.computeIfAbsent(
+          previousSchema.getSubject(), k -> new ArrayList<>());
+      schemaList.add(previousSchema);
     }
     if (postFilter != null) {
-      schemaList = schemaList.stream()
-          .filter(postFilter)
-          .collect(Collectors.toList());
+      for (Map.Entry<String, List<ExtendedSchema>> entry : schemaMap.entrySet()) {
+        List<ExtendedSchema> schemaList = entry.getValue();
+        schemaList = schemaList.stream()
+            .filter(postFilter)
+            .collect(Collectors.toList());
+        entry.setValue(schemaList);
+      }
     }
-    Collections.sort(schemaList);
-    return schemaList;
+    return schemaMap;
   }
 
-  private List<SchemaKey> sortSchemaKeysByVersion(CloseableIterator<SchemaRegistryValue> schemas,
+  private List<SchemaKey> schemaKeysByVersion(CloseableIterator<SchemaRegistryValue> schemas,
       LookupFilter filter) {
     List<SchemaKey> schemaList = new ArrayList<>();
     while (schemas.hasNext()) {
@@ -2377,7 +2471,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       SchemaKey schemaKey = schemaValue.toKey();
       schemaList.add(schemaKey);
     }
-    Collections.sort(schemaList);
     return schemaList;
   }
 
