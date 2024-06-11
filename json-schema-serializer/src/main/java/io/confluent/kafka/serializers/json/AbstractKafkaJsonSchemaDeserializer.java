@@ -49,7 +49,7 @@ import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
 public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKafkaSchemaSerDe {
-  protected static final ObjectMapper objectMapper = Jackson.newObjectMapper();
+  protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected Class<T> type;
   protected String typeProperty;
   protected boolean validate;
