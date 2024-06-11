@@ -16,12 +16,16 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import java.util.Collections;
+import java.util.List;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +35,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
-  private IdGenerator idGenerator;
+  private final IdGenerator idGenerator;
+  private final List<String> canonicalizeSchemaTypes;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
                                   LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
@@ -39,6 +44,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
+    this.canonicalizeSchemaTypes = schemaRegistry.config().getList(
+        SchemaRegistryConfig.SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG);
   }
 
   /**
@@ -50,40 +57,59 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   @Override
   public ValidationStatus validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
                                          TopicPartition tp, long offset, long timestamp) {
+    if (value == null) {
+      return ValidationStatus.SUCCESS;
+    }
+
+    // Store the offset and timestamp in the cached value
+    value.setOffset(offset);
+    value.setTimestamp(timestamp);
+
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
-      if (schemaObj != null) {
-        normalize(schemaObj);
-        try {
-          SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
-          if (oldKey != null) {
-            SchemaValue oldSchema;
-            oldSchema = (SchemaValue) lookupCache.get(oldKey);
-            if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
-              log.error("Found a schema with duplicate ID {}.  This schema will not be "
-                      + "registered since a schema already exists with this ID.",
-                  schemaObj.getId());
-              return schemaRegistry.isLeader()
-                  ? ValidationStatus.ROLLBACK_FAILURE : ValidationStatus.IGNORE_FAILURE;
-            }
-          }
-        } catch (StoreException e) {
-          log.error("Error while retrieving schema", e);
-          return schemaRegistry.isLeader()
-              ? ValidationStatus.ROLLBACK_FAILURE : ValidationStatus.IGNORE_FAILURE;
+      String schemaType = schemaObj.getSchemaType();
+      if (canonicalizeSchemaTypes.contains(schemaType)) {
+        SchemaProvider schemaProvider = schemaRegistry.schemaProvider(schemaType);
+        if (schemaProvider != null) {
+          canonicalize(schemaProvider, schemaObj);
         }
+      }
+      try {
+        String qctx = QualifiedSubject.qualifiedContextFor(
+            schemaRegistry.tenant(), schemaObj.getSubject());
+        SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId(), qctx);
+        if (oldKey != null) {
+          SchemaValue oldSchema;
+          oldSchema = (SchemaValue) lookupCache.get(oldKey);
+          if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
+            log.error("Found a schema with duplicate ID {}.  This schema will not be "
+                    + "registered since a schema already exists with this ID.",
+                schemaObj.getId());
+            return schemaRegistry.isLeader()
+                ? ValidationStatus.ROLLBACK_FAILURE : ValidationStatus.IGNORE_FAILURE;
+          }
+        }
+      } catch (StoreException e) {
+        log.error("Error while retrieving schema", e);
+        return schemaRegistry.isLeader()
+            ? ValidationStatus.ROLLBACK_FAILURE : ValidationStatus.IGNORE_FAILURE;
+      }
+    } else if (key.getKeyType() == SchemaRegistryKeyType.CONFIG
+        || key.getKeyType() == SchemaRegistryKeyType.MODE) {
+      SubjectValue subjectValue = (SubjectValue) value;
+      if (subjectValue.getSubject() == null) {
+        // handle legacy values that don't have subject in the value
+        subjectValue.setSubject(((SubjectKey) key).getSubject());
       }
     }
     return ValidationStatus.SUCCESS;
   }
 
   @VisibleForTesting
-  protected static void normalize(SchemaValue schemaValue) {
-    if (ProtobufSchema.TYPE.equals(schemaValue.getSchemaType())) {
-      // Normalize the schema if it is Protobuf (due to changes in Protobuf canonicalization)
-      String normalized = new ProtobufSchema(schemaValue.getSchema()).canonicalString();
-      schemaValue.setSchema(normalized);
-    }
+  protected static void canonicalize(SchemaProvider schemaProvider, SchemaValue schemaValue) {
+    // Canonicalize the schema (due to changes in canonicalization)
+    schemaProvider.parseSchema(schemaValue.getSchema(), Collections.emptyList())
+        .ifPresent(parsedSchema -> schemaValue.setSchema(parsedSchema.canonicalString()));
   }
 
   /**
@@ -123,8 +149,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
         SchemaValue schemaValue = (SchemaValue) this.lookupCache.get(schemaKey);
         if (schemaValue != null) {
           schemaValue.setDeleted(true);
-          lookupCache.put(schemaKey, schemaValue);
-          lookupCache.schemaDeleted(schemaKey, schemaValue);
+          SchemaValue oldSchemaValue = (SchemaValue) lookupCache.put(schemaKey, schemaValue);
+          lookupCache.schemaDeleted(schemaKey, schemaValue, oldSchemaValue);
         }
       } catch (StoreException e) {
         log.error("Failed to delete subject {} in the local cache", subject, e);
@@ -150,11 +176,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       idGenerator.schemaRegistered(schemaKey, schemaValue);
 
       if (schemaValue.isDeleted()) {
-        lookupCache.schemaDeleted(schemaKey, schemaValue);
+        lookupCache.schemaDeleted(schemaKey, schemaValue, oldSchemaValue);
         updateMetrics(metricsContainer.getSchemasDeleted(),
                       metricsContainer.getSchemasDeleted(getSchemaType(schemaValue)));
       } else {
-        lookupCache.schemaRegistered(schemaKey, schemaValue);
+        lookupCache.schemaRegistered(schemaKey, schemaValue, oldSchemaValue);
         updateMetrics(metricsContainer.getSchemasCreated(),
                       metricsContainer.getSchemasCreated(getSchemaType(schemaValue)));
       }

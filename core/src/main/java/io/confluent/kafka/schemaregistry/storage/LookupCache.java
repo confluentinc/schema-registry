@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.DEFAULT_TENANT;
 
+import java.util.Map;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
@@ -63,9 +64,10 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * Provides the {@link SchemaKey} for the provided schema id.
    *
    * @param id the schema id; never {@code null}
+   * @param subject the qualified context or subject
    * @return the {@link SchemaKey} if found, otherwise null.
    */
-  SchemaKey schemaKeyById(Integer id) throws StoreException;
+  SchemaKey schemaKeyById(Integer id, String subject) throws StoreException;
 
   /**
    * Callback that is invoked when a schema is registered.
@@ -74,8 +76,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    *
    * @param schemaKey   the registered SchemaKey; never {@code null}
    * @param schemaValue the registered SchemaValue; never {@code null}
+   * @param oldSchemaValue the previous SchemaValue
    */
-  void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue);
+  void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue);
 
   /**
    * Callback that is invoked when a schema is deleted.
@@ -84,8 +87,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    *
    * @param schemaKey   the deleted SchemaKey; never {@code null}
    * @param schemaValue the deleted SchemaValue; never {@code null}
+   * @param oldSchemaValue the previous SchemaValue
    */
-  void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue);
+  void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue);
 
   /**
    * Callback that is invoked when a schema is tombstoned.
@@ -139,8 +143,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * Clears the cache of deleted schemas that match the given subject.
    *
    * @param subject the subject, or null for all subjects
+   * @return the number of schemas cleared by schema type
    */
-  void clearSubjects(String subject) throws StoreException;
+  Map<String, Integer> clearSubjects(String subject) throws StoreException;
 
   default String tenant() {
     return DEFAULT_TENANT;
