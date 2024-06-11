@@ -107,13 +107,8 @@ public class SchemasResource {
       Predicate<Schema> postFilter = ruleType != null && !ruleType.isEmpty()
           ? schema -> schema.getRuleSet() != null && schema.getRuleSet().hasRulesWithType(ruleType)
           : null;
-      if (aliases) {
-        schemas = schemaRegistry.getVersionsIncludingAliasesWithSubjectPrefix(
-            subjectPrefix, filter, latestOnly, postFilter);
-      } else {
-        schemas = schemaRegistry.getVersionsWithSubjectPrefix(
-            subjectPrefix, filter, latestOnly, postFilter);
-      }
+      schemas = schemaRegistry.getVersionsWithSubjectPrefix(
+          subjectPrefix, aliases, filter, latestOnly, postFilter);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {

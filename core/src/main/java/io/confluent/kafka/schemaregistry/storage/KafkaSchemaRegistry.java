@@ -1850,6 +1850,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   @Override
   public Iterator<ExtendedSchema> getVersionsWithSubjectPrefix(String prefix,
+      boolean includeAliases,
+      LookupFilter filter,
+      boolean returnLatestOnly,
+      Predicate<Schema> postFilter)
+      throws SchemaRegistryException {
+    if (includeAliases) {
+      return allVersionsIncludingAliasesWithSubjectPrefix(
+          prefix, filter, returnLatestOnly, postFilter);
+    } else {
+      return allVersionsWithSubjectPrefix(prefix, filter, returnLatestOnly, postFilter);
+    }
+  }
+
+  private Iterator<ExtendedSchema> allVersionsWithSubjectPrefix(String prefix,
       LookupFilter filter,
       boolean returnLatestOnly,
       Predicate<Schema> postFilter)
@@ -1866,7 +1880,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public Iterator<ExtendedSchema> getVersionsIncludingAliasesWithSubjectPrefix(String prefix,
+  public Iterator<ExtendedSchema> allVersionsIncludingAliasesWithSubjectPrefix(String prefix,
       LookupFilter filter,
       boolean returnLatestOnly,
       Predicate<Schema> postFilter)
