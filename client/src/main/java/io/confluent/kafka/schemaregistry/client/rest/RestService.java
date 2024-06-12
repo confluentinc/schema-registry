@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -93,6 +94,9 @@ public class RestService implements Closeable, Configurable {
       };
   private static final TypeReference<List<Schema>> GET_SCHEMAS_RESPONSE_TYPE =
       new TypeReference<List<Schema>>() {
+      };
+  private static final TypeReference<List<ExtendedSchema>> GET_EXTENDED_SCHEMAS_RESPONSE_TYPE =
+      new TypeReference<List<ExtendedSchema>>() {
       };
   private static final TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
       new TypeReference<SchemaString>() {
@@ -864,6 +868,38 @@ public class RestService implements Closeable, Configurable {
 
     List<Schema> response = httpRequest(path, "GET", null, requestProperties,
         GET_SCHEMAS_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<ExtendedSchema> getSchemas(Map<String, String> requestProperties,
+      String subjectPrefix,
+      boolean includeAliases,
+      boolean lookupDeletedSchema,
+      boolean latestOnly,
+      String ruleType,
+      Integer offset,
+      Integer limit)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas");
+    if (subjectPrefix != null) {
+      builder.queryParam("subjectPrefix", subjectPrefix);
+    }
+    builder.queryParam("aliases", includeAliases);
+    builder.queryParam("deleted", lookupDeletedSchema);
+    builder.queryParam("latestOnly", latestOnly);
+    if (ruleType != null) {
+      builder.queryParam("ruleType", ruleType);
+    }
+    if (offset != null) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit != null) {
+      builder.queryParam("limit", limit);
+    }
+    String path = builder.build().toString();
+
+    List<ExtendedSchema> response = httpRequest(path, "GET", null, requestProperties,
+        GET_EXTENDED_SCHEMAS_RESPONSE_TYPE);
     return response;
   }
 
