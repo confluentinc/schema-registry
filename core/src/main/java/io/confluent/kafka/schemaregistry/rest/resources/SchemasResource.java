@@ -87,7 +87,7 @@ public class SchemasResource {
       @Parameter(description = "Filters results by the respective subject prefix")
       @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
       @Parameter(description = "Whether to include aliases in the search")
-      @DefaultValue("") @QueryParam("aliases") boolean aliases,
+      @DefaultValue("false") @QueryParam("aliases") boolean aliases,
       @Parameter(description = "Whether to return soft deleted schemas")
       @DefaultValue("false") @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description =
