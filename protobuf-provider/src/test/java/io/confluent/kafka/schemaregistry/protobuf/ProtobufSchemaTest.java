@@ -27,6 +27,8 @@ import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
+import io.confluent.protobuf.MetaProto;
+import io.confluent.protobuf.MetaProto.Meta;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
