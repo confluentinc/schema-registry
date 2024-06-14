@@ -1779,7 +1779,12 @@ public class ProtobufSchema implements ParsedSchema {
     if (result == null) {
       return null;
     } else if (result instanceof Map) {
-      return (Map<String, String>) result;
+      Map<String, String> params = new LinkedHashMap<>();
+      Map<String, String> keyValue = (Map<String, String>) result;
+      String key = keyValue.get(KEY_FIELD);
+      String value = keyValue.get(VALUE_FIELD);
+      params.put(key, value);
+      return params;
     } else if (result instanceof List) {
       List<Map<String, String>> keyValues = (List<Map<String, String>>) result;
       Map<String, String> params = new LinkedHashMap<>();
