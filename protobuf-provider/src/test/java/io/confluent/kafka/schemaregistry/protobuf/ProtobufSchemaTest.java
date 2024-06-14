@@ -27,6 +27,8 @@ import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
+import io.confluent.protobuf.MetaProto;
+import io.confluent.protobuf.MetaProto.Meta;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -965,6 +967,10 @@ public class ProtobufSchemaTest {
         + " }];\n"
         + "}";
     ProtobufSchema schema = new ProtobufSchema(schemaString);
+    FieldDescriptor fd = schema.toDescriptor().findFieldByName("MIT_ACTUAL_PRICE");
+    Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
+    assertEquals("2", meta.getParamsOrThrow("scale"));
+
     // Ensure we can process params when creating a dynamic schema
     assertNotNull(schema.toDynamicSchema());
   }
