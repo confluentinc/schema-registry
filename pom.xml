@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[7.3.9-0, 7.3.10-0)</version>
+        <version>[7.4.6-0, 7.4.7-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>7.3.9-0</version>
+    <version>7.4.6-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -48,6 +48,7 @@
         <module>core</module>
         <module>client</module>
         <module>schema-serializer</module>
+        <module>schema-rules</module>
         <module>avro-serializer</module>
         <module>json-serializer</module>
         <module>schema-converter</module>
@@ -68,6 +69,14 @@
         <module>json-schema-provider</module>
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
+        <module>client-encryption-tink</module>
+        <module>dek-registry-client</module>
+        <module>dek-registry</module>
+        <module>client-encryption-aws</module>
+        <module>client-encryption-azure</module>
+        <module>client-encryption-gcp</module>
+        <module>client-encryption-hcvault</module>
+        <module>client-encryption</module>
         <module>benchmark</module>
     </modules>
 
@@ -75,20 +84,31 @@
         <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
         <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
         <exec-maven-plugin.version>1.2.1</exec-maven-plugin.version>
-        <podam.version>6.0.2.RELEASE</podam.version>
+        <podam.version>7.2.11.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.9.10</kotlin.version>
+        <antlr.version>4.13.1</antlr.version>
+        <caffeine.version>2.9.3</caffeine.version>
+        <cel-version>0.3.12</cel-version>
+        <google.api-client.version>1.35.2</google.api-client.version>
+        <guice.version>5.1.0</guice.version>
+        <jsonata-version>2.4.5</jsonata-version>
         <json-schema.version>1.14.3</json-schema.version>
+        <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <okio.version>3.4.0</okio.version>
+        <tink.version>1.12.0</tink.version>
+        <tink.aws.kms.version>1.9.1</tink.aws.kms.version>
+        <tink.gcp.kms.version>1.9.0</tink.gcp.kms.version>
         <wire.version>4.9.7</wire.version>
         <swagger.version>2.1.10</swagger.version>
-        <io.confluent.schema-registry.version>7.3.9-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>7.4.6-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.12.0</commons.lang3.version>
         <bouncycastle.jdk18.version>1.77</bouncycastle.jdk18.version>
+        <commons.validator.version>1.7</commons.validator.version>
     </properties>
 
     <repositories>
@@ -106,6 +126,11 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
+                <groupId>io.kcache</groupId>
+                <artifactId>kcache</artifactId>
+                <version>${kcache.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro</artifactId>
                 <version>${avro.version}</version>
@@ -114,6 +139,11 @@
                 <groupId>com.google.code.gson</groupId>
                 <artifactId>gson</artifactId>
                 <version>${gson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-validator</groupId>
+                <artifactId>commons-validator</artifactId>
+                <version>${commons.validator.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>
@@ -126,9 +156,24 @@
                 <version>${commons.lang3.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.github.ben-manes.caffeine</groupId>
+                <artifactId>caffeine</artifactId>
+                <version>${caffeine.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
                 <version>${guava.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.inject</groupId>
+                <artifactId>guice</artifactId>
+                <version>${guice.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.netflix.governator</groupId>
+                <artifactId>governator-core</artifactId>
+                <version>1.17.10</version>
             </dependency>
             <dependency>
                 <groupId>com.google.protobuf</groupId>
@@ -173,6 +218,11 @@
                 <version>${okio.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.fasterxml.jackson.dataformat</groupId>
+                <artifactId>jackson-dataformat-csv</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.fasterxml.jackson.datatype</groupId>
                 <artifactId>jackson-datatype-guava</artifactId>
                 <version>${jackson.version}</version>
@@ -198,6 +248,11 @@
                 <version>${jackson.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.hubspot.jackson</groupId>
+                <artifactId>jackson-datatype-protobuf</artifactId>
+                <version>0.9.13</version>
+            </dependency>
+            <dependency>
                 <groupId>com.github.erosb</groupId>
                 <artifactId>everit-json-schema</artifactId>
                 <version>${json-schema.version}</version>
@@ -212,6 +267,63 @@
                         <artifactId>kotlin-stdlib</artifactId>
                     </exclusion>
                 </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.antlr</groupId>
+                <artifactId>antlr4-runtime</artifactId>
+                <version>${antlr.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-identity</artifactId>
+                <version>1.12.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-security-keyvault-keys</artifactId>
+                <version>4.6.1</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.jopenlibs</groupId>
+                <artifactId>vault-java-driver</artifactId>
+                <version>5.4.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.crypto.tink</groupId>
+                <artifactId>tink</artifactId>
+                <version>${tink.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.crypto.tink</groupId>
+                <artifactId>tink-awskms</artifactId>
+                <version>${tink.aws.kms.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.crypto.tink</groupId>
+                <artifactId>tink-gcpkms</artifactId>
+                <version>${tink.gcp.kms.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.api-client</groupId>
+                <artifactId>google-api-client</artifactId>
+                <version>${google.api-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.projectnessie.cel</groupId>
+                <artifactId>cel-bom</artifactId>
+                <version>${cel-version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.ibm.jsonata4java</groupId>
+                <artifactId>JSONata4Java</artifactId>
+                <version>${jsonata-version}</version>
+            </dependency>
+            <dependency>
+                <groupId>info.picocli</groupId>
+                <artifactId>picocli</artifactId>
+                <version>4.7.5</version>
             </dependency>
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>

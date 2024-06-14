@@ -48,6 +48,10 @@ public class UrlList {
     this(Arrays.asList(url));
   }
 
+  public List<String> urls() {
+    return urls;
+  }
+
   /**
    * Get the current url
    *
@@ -82,7 +86,7 @@ public class UrlList {
 
   @Override
   public String toString() {
-    return urls.toString();
+    return String.join(",", urls);
   }
 
 }

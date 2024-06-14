@@ -106,6 +106,12 @@ public final class MockSchemaRegistry {
     }
   }
 
+  public static void clear() {
+    synchronized (SCOPED_CLIENTS) {
+      SCOPED_CLIENTS.clear();
+    }
+  }
+
   public static String validateAndMaybeGetMockScope(final List<String> urls) {
     final List<String> mockScopes = new LinkedList<>();
     for (final String url : urls) {
