@@ -34,7 +34,7 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Value;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -115,7 +115,7 @@ public class MetricsContainer {
             new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                             TimeUnit.MILLISECONDS);
-    this.metrics = new Metrics(metricConfig, reporters, new SystemTime(), metricsContext);
+    this.metrics = new Metrics(metricConfig, reporters, Time.SYSTEM, metricsContext);
 
     this.isLeaderNode = createMetric(METRIC_NAME_MASTER_SLAVE_ROLE,
             "1.0 indicates the node is the active leader in the cluster and is the"
