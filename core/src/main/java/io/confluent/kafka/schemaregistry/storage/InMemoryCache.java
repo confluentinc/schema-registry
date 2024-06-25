@@ -174,7 +174,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
-          tenant(), schemaKey.getSubject(), ref.getSubject());
+          tenant(), schemaKey.getSubject(), ref.getSubject(), true);
       SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
       Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
           referencedBy.getOrDefault(tenant(), Collections.emptyMap());
@@ -226,7 +226,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
-          tenant(), schemaKey.getSubject(), ref.getSubject());
+          tenant(), schemaKey.getSubject(), ref.getSubject(), true);
       SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
       Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
           referencedBy.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
