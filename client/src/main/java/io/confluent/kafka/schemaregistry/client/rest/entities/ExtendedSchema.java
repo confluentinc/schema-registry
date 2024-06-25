@@ -52,6 +52,10 @@ public class ExtendedSchema extends Schema {
     this.aliases = aliases;
   }
 
+  public ExtendedSchema copy() {
+    return new ExtendedSchema(this, aliases);
+  }
+
   @io.swagger.v3.oas.annotations.media.Schema(description = ALIASES_DESC)
   @JsonProperty("aliases")
   public List<String> getAliases() {

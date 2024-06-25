@@ -1928,7 +1928,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         if (alias == null) {
           continue;
         }
-        List<String> aliases = subjectToAliases.computeIfAbsent(alias, k -> new ArrayList<>());
+        QualifiedSubject qualAlias =
+            QualifiedSubject.qualifySubjectWithParent(tenant(), subjectPrefix, alias, true);
+        List<String> aliases = subjectToAliases.computeIfAbsent(
+            qualAlias.toQualifiedSubject(), k -> new ArrayList<>());
         aliases.add(configValue.getSubject());
       }
       return subjectToAliases;
