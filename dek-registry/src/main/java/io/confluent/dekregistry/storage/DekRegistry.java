@@ -98,6 +98,8 @@ public class DekRegistry implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(DekRegistry.class);
 
+  public static final String KEY = "dekRegistry";
+
   public static final int LATEST_VERSION = DekRegistryClient.LATEST_VERSION;
   public static final int MIN_VERSION = 1;
   public static final byte[] EMPTY_AAD = new byte[0];
@@ -137,6 +139,7 @@ public class DekRegistry implements Closeable {
   ) {
     try {
       this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      this.schemaRegistry.properties().put(KEY, this);
       this.schemaRegistry.addUpdateRequestHandler(new EncryptionUpdateRequestHandler());
       this.metricsManager = metricsManager;
       this.config = new DekRegistryConfig(schemaRegistry.config().originalProperties());
