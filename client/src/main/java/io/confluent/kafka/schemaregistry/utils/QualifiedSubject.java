@@ -152,6 +152,20 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     }
   }
 
+  public static QualifiedSubject createFromUnqualified(String tenant, String unqualifiedSubject) {
+    try {
+      if (unqualifiedSubject == null) {
+        return null;
+      }
+      String qualifiedSubject = DEFAULT_TENANT.equals(tenant)
+          ? unqualifiedSubject
+          : tenant + TENANT_DELIMITER + unqualifiedSubject;
+      return new QualifiedSubject(tenant, qualifiedSubject);
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+  }
+
   public static String contextFor(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     return qs != null ? qs.getContext() : DEFAULT_CONTEXT;
