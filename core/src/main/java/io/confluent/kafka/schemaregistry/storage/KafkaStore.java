@@ -141,9 +141,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
         new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
                                      this.storeUpdateHandler, serializer, this.localStore,
                                      this.producer, this.noopKey, this.initialized, this.config);
-    // checkpoint could be updated once the reader thread starts. This could result in a race condition
-    // where schemas after the checkpoint during startup would be double counted.
-    Map<TopicPartition, Long> checkpoints = kafkaTopicReader.checkpoints();
+    // checkpoint could be updated once the reader thread starts. This could result in a
+    // race condition where schemas after the checkpoint during startup would be double counted.
+    final Map<TopicPartition, Long> checkpoints = new HashMap<>(kafkaTopicReader.checkpoints());
     this.kafkaTopicReader.start();
 
     try {
@@ -157,7 +157,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
     }
-    this.storeUpdateHandler.cacheInitialized(new HashMap<>(checkpoints));
+    this.storeUpdateHandler.cacheInitialized(checkpoints);
     initLatch.countDown();
   }
 
