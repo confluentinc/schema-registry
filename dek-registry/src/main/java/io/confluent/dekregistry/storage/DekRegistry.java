@@ -15,6 +15,9 @@
 
 package io.confluent.dekregistry.storage;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Multimaps;
@@ -98,6 +101,8 @@ public class DekRegistry implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(DekRegistry.class);
 
+  public static final String KEY = "dekRegistry";
+
   public static final int LATEST_VERSION = DekRegistryClient.LATEST_VERSION;
   public static final int MIN_VERSION = 1;
   public static final byte[] EMPTY_AAD = new byte[0];
@@ -137,6 +142,7 @@ public class DekRegistry implements Closeable {
   ) {
     try {
       this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      this.schemaRegistry.properties().put(KEY, this);
       this.schemaRegistry.addUpdateRequestHandler(new EncryptionUpdateRequestHandler());
       this.metricsManager = metricsManager;
       this.config = new DekRegistryConfig(schemaRegistry.config().originalProperties());
@@ -355,10 +361,10 @@ public class DekRegistry implements Closeable {
     String maxKekName = kekName != null ? kekName : String.valueOf(Character.MAX_VALUE);
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     DataEncryptionKeyId key1 = new DataEncryptionKeyId(
-        tenant, minKekName, String.valueOf(Character.MIN_VALUE),
+        tenant, minKekName, CONTEXT_PREFIX + CONTEXT_DELIMITER,
         DekFormat.AES128_GCM, MIN_VERSION);
     DataEncryptionKeyId key2 = new DataEncryptionKeyId(
-        tenant, maxKekName, String.valueOf(Character.MAX_VALUE),
+        tenant, maxKekName, CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER,
         DekFormat.AES256_SIV, Integer.MAX_VALUE);
     try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
         keys().range(key1, true, key2, false)) {
