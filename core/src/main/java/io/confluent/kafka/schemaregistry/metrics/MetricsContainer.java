@@ -172,6 +172,10 @@ public class MetricsContainer {
     return metrics;
   }
 
+  public Map<String, String> getMetricsTags() {
+    return configuredTags;
+  }
+
   public MetricsContext getMetricsContext() {
     return metricsContext;
   }
