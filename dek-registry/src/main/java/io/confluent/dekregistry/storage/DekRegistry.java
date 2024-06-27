@@ -15,6 +15,9 @@
 
 package io.confluent.dekregistry.storage;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Multimaps;
@@ -346,10 +349,10 @@ public class DekRegistry implements Closeable {
       String tenant, String kekName, boolean lookupDeleted) {
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     DataEncryptionKeyId key1 = new DataEncryptionKeyId(
-        tenant, kekName, String.valueOf(Character.MIN_VALUE),
+        tenant, kekName, CONTEXT_PREFIX + CONTEXT_DELIMITER,
         DekFormat.AES128_GCM, MIN_VERSION);
     DataEncryptionKeyId key2 = new DataEncryptionKeyId(
-        tenant, kekName, String.valueOf(Character.MAX_VALUE),
+        tenant, kekName, CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER,
         DekFormat.AES256_SIV, Integer.MAX_VALUE);
     try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
         keys().range(key1, true, key2, false)) {
