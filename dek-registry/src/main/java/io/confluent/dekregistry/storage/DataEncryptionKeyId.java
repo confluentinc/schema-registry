@@ -120,8 +120,10 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
     } else if (that.getSubject() == null) {
       return 1;
     } else {
-      QualifiedSubject qs1 = QualifiedSubject.create(this.getTenant(), this.getSubject());
-      QualifiedSubject qs2 = QualifiedSubject.create(that.getTenant(), that.getSubject());
+      QualifiedSubject qs1 = QualifiedSubject.createFromUnqualified(
+          this.getTenant(), this.getSubject());
+      QualifiedSubject qs2 = QualifiedSubject.createFromUnqualified(
+          that.getTenant(), that.getSubject());
       int subjectComparison = qs1.compareTo(qs2);
       if (subjectComparison != 0) {
         return subjectComparison < 0 ? -1 : 1;
