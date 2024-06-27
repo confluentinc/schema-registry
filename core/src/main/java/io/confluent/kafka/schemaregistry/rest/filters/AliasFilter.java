@@ -15,12 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.rest.filters;
 
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.TENANT_DELIMITER;
-
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -107,7 +105,7 @@ public class AliasFilter implements ContainerRequestFilter {
       path = path.substring(1);
     }
 
-    if (path.startsWith("schemas/ids")) {
+    if (path.startsWith("schemas/ids") || path.startsWith("keks")) {
       String subject = queryParams.getFirst("subject");
       if (subject == null) {
         subject = "";
@@ -131,10 +129,9 @@ public class AliasFilter implements ContainerRequestFilter {
     }
     String alias = config.getAlias();
     if (alias != null && !alias.isEmpty()) {
-      if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
-        alias = schemaRegistry.tenant() + TENANT_DELIMITER + alias;
-      }
-      return alias;
+      QualifiedSubject qualAlias =
+          QualifiedSubject.qualifySubjectWithParent(schemaRegistry.tenant(), subject, alias, true);
+      return qualAlias.toQualifiedSubject();
     } else {
       return subject;
     }

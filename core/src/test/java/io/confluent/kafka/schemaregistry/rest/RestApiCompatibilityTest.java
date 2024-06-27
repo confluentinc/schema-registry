@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -976,5 +977,157 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     Schema schema = restApp.restClient.getVersion("testSubject", 1);
     assertEquals(schemaString1, schema.getSchema());
+  }
+
+  @Test
+  public void testGetSchemasWithAliases() throws Exception {
+    String subject = "testSubject";
+
+    // register a valid avro
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+            + "\"name\":\"myrecord\","
+            + "\"fields\":"
+            + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering should succeed",
+            expectedIdSchema1,
+            restApp.restClient.registerSchema(schemaString1, subject));
+
+    // register a backward compatible avro
+    String schemaString2 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}").canonicalString();
+    int expectedIdSchema2 = 2;
+    assertEquals("Registering a compatible schema should succeed",
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(schemaString2, subject));
+
+    subject = "noTestSubject";
+
+    // register unrelated schemas
+    String unrelated1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"x1\"}]}").canonicalString();
+    int expectedIdUnrelated1 = 3;
+    assertEquals("Registering should succeed",
+        expectedIdUnrelated1,
+        restApp.restClient.registerSchema(unrelated1, subject));
+
+    // register a backward compatible avro
+    String unrelated2 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"x1\"},"
+        + " {\"type\":\"string\",\"name\":\"x2\", \"default\": \"foo\"}]}").canonicalString();
+    int expectedIdUnrelated2 = 4;
+    assertEquals("Registering a compatible schema should succeed",
+        expectedIdUnrelated2,
+        restApp.restClient.registerSchema(unrelated2, subject));
+
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setAlias("testSubject");
+    // set alias config
+    assertEquals("Setting alias config should succeed",
+            config,
+            restApp.restClient.updateConfig(config, "testAlias"));
+
+    List<Schema> schemas = restApp.restClient.getSchemas("testAlias", true, false);
+    assertEquals(0, schemas.size());
+
+    List<ExtendedSchema> schemasWithAliases = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "testAlias", true, false, false, null, null, null);
+    assertEquals(2, schemasWithAliases.size());
+    for (ExtendedSchema schema : schemasWithAliases) {
+      if (schema.getSubject().equals("testSubject")) {
+        assertEquals(1, schema.getAliases().size());
+        assertEquals("testAlias", schema.getAliases().get(0));
+      } else {
+        fail("Unexpected subject: " + schema.getSubject());
+      }
+    }
+
+    subject = "testAlligator";
+    String schemaString3 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"a1\"},"
+        + " {\"type\":\"string\",\"name\":\"a2\", \"default\": \"foo\"}]}").canonicalString();
+    int expectedIdSchema3 = 5;
+    assertEquals("Registering a schema should succeed",
+        expectedIdSchema3,
+        restApp.restClient.registerSchema(schemaString3, subject));
+
+    // see if the query picks up the new schema
+    schemasWithAliases = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "testAl", true, false, false, null, null, null);
+    assertEquals(3, schemasWithAliases.size());
+    for (ExtendedSchema schema : schemasWithAliases) {
+      if (schema.getSubject().endsWith("testAlligator")) {
+        assertNull(schema.getAliases());
+      } else if (schema.getSubject().equals("testSubject")) {
+        assertEquals(1, schema.getAliases().size());
+        assertEquals("testAlias", schema.getAliases().get(0));
+      } else {
+        fail("Unexpected subject: " + schema.getSubject());
+      }
+    }
+
+    // make sure we don't get repeats with a common subjectPrefix
+    schemasWithAliases = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "test", true, false, false, null, null, null);
+    assertEquals(3, schemasWithAliases.size());
+    for (ExtendedSchema schema : schemasWithAliases) {
+      if (schema.getSubject().endsWith("testAlligator")) {
+        assertNull(schema.getAliases());
+      } else if (schema.getSubject().equals("testSubject")) {
+        assertEquals(1, schema.getAliases().size());
+        assertEquals("testAlias", schema.getAliases().get(0));
+      } else {
+        fail("Unexpected subject: " + schema.getSubject());
+      }
+    }
+
+    // another alias to same subject
+    config = new ConfigUpdateRequest();
+    config.setAlias("testSubject");
+    // set alias config
+    assertEquals("Setting alias config should succeed",
+        config,
+        restApp.restClient.updateConfig(config, "testAlias2"));
+
+    // see if the query picks up the new schema
+    schemasWithAliases = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "testAl", true, false, false, null, null, null);
+    assertEquals(3, schemasWithAliases.size());
+    for (ExtendedSchema schema : schemasWithAliases) {
+      if (schema.getSubject().endsWith("testAlligator")) {
+        assertNull(schema.getAliases());
+      } else if (schema.getSubject().equals("testSubject")) {
+        assertEquals(2, schema.getAliases().size());
+        assertEquals("testAlias", schema.getAliases().get(0));
+        assertEquals("testAlias2", schema.getAliases().get(1));
+      } else {
+        fail("Unexpected subject: " + schema.getSubject());
+      }
+    }
+
+    // make sure we don't get repeats with a common subjectPrefix
+    schemasWithAliases = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "test", true, false, false, null, null, null);
+    assertEquals(3, schemasWithAliases.size());
+    for (ExtendedSchema schema : schemasWithAliases) {
+      if (schema.getSubject().endsWith("testAlligator")) {
+        assertNull(schema.getAliases());
+      } else if (schema.getSubject().equals("testSubject")) {
+        assertEquals(2, schema.getAliases().size());
+        assertEquals("testAlias", schema.getAliases().get(0));
+        assertEquals("testAlias2", schema.getAliases().get(1));
+      } else {
+        fail("Unexpected subject: " + schema.getSubject());
+      }
+    }
   }
 }

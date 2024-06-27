@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_FIELD;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_RECORD;
 import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingEntity;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -37,6 +39,17 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.fasterxml.jackson.databind.ser.PropertyWriter;
+import com.github.erosb.jsonsKema.JsonArray;
+import com.github.erosb.jsonsKema.JsonBoolean;
+import com.github.erosb.jsonsKema.JsonNull;
+import com.github.erosb.jsonsKema.JsonNumber;
+import com.github.erosb.jsonsKema.JsonObject;
+import com.github.erosb.jsonsKema.JsonString;
+import com.github.erosb.jsonsKema.JsonValue;
+import com.github.erosb.jsonsKema.SchemaLoaderConfig;
+import com.github.erosb.jsonsKema.UnknownSource;
+import com.github.erosb.jsonsKema.ValidationFailure;
+import com.github.erosb.jsonsKema.Validator;
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -47,6 +60,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import io.confluent.kafka.schemaregistry.json.schema.SchemaTranslator;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -58,11 +72,12 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -84,9 +99,9 @@ import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
+import org.everit.json.schema.TrueSchema;
 import org.everit.json.schema.ValidationException;
 import org.everit.json.schema.loader.SchemaLoader;
-import org.everit.json.schema.loader.SpecificationVersion;
 import org.everit.json.schema.loader.internal.ReferenceResolver;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -96,6 +111,8 @@ import org.slf4j.LoggerFactory;
 public class JsonSchema implements ParsedSchema {
 
   private static final Logger log = LoggerFactory.getLogger(JsonSchema.class);
+
+  public static final String DEFAULT_BASE_URI = "mem://input";
 
   public static final String TYPE = "JSON";
 
@@ -111,6 +128,8 @@ public class JsonSchema implements ParsedSchema {
 
   private transient Schema schemaObj;
 
+  private transient com.github.erosb.jsonsKema.Schema skemaObj;
+
   private final Integer version;
 
   private final List<SchemaReference> references;
@@ -120,6 +139,8 @@ public class JsonSchema implements ParsedSchema {
   private final Metadata metadata;
 
   private final RuleSet ruleSet;
+
+  private final boolean ignoreModernDialects;
 
   private transient String canonicalString;
 
@@ -156,6 +177,7 @@ public class JsonSchema implements ParsedSchema {
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
     this.metadata = null;
     this.ruleSet = null;
+    this.ignoreModernDialects = false;
   }
 
   public JsonSchema(
@@ -182,6 +204,7 @@ public class JsonSchema implements ParsedSchema {
       this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
       this.metadata = metadata;
       this.ruleSet = ruleSet;
+      this.ignoreModernDialects = false;
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON " + schemaString, e);
     }
@@ -200,6 +223,7 @@ public class JsonSchema implements ParsedSchema {
       this.resolvedReferences = Collections.emptyMap();
       this.metadata = null;
       this.ruleSet = null;
+      this.ignoreModernDialects = false;
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON " + schemaObj, e);
     }
@@ -207,21 +231,25 @@ public class JsonSchema implements ParsedSchema {
 
   private JsonSchema(
       JsonNode jsonNode,
+      com.github.erosb.jsonsKema.Schema skemaObj,
       Schema schemaObj,
       Integer version,
       List<SchemaReference> references,
       Map<String, String> resolvedReferences,
       Metadata metadata,
       RuleSet ruleSet,
+      boolean ignoreModernDialects,
       String canonicalString
   ) {
     this.jsonNode = jsonNode;
+    this.skemaObj = skemaObj;
     this.schemaObj = schemaObj;
     this.version = version;
     this.references = references;
     this.resolvedReferences = resolvedReferences;
     this.metadata = metadata;
     this.ruleSet = ruleSet;
+    this.ignoreModernDialects = ignoreModernDialects;
     this.canonicalString = canonicalString;
   }
 
@@ -229,12 +257,14 @@ public class JsonSchema implements ParsedSchema {
   public JsonSchema copy() {
     return new JsonSchema(
         this.jsonNode,
+        this.skemaObj,
         this.schemaObj,
         this.version,
         this.references,
         this.resolvedReferences,
         this.metadata,
         this.ruleSet,
+        this.ignoreModernDialects,
         this.canonicalString
     );
   }
@@ -243,12 +273,14 @@ public class JsonSchema implements ParsedSchema {
   public JsonSchema copy(Integer version) {
     return new JsonSchema(
         this.jsonNode,
+        this.skemaObj,
         this.schemaObj,
         version,
         this.references,
         this.resolvedReferences,
         this.metadata,
         this.ruleSet,
+        this.ignoreModernDialects,
         this.canonicalString
     );
   }
@@ -257,12 +289,14 @@ public class JsonSchema implements ParsedSchema {
   public JsonSchema copy(Metadata metadata, RuleSet ruleSet) {
     return new JsonSchema(
         this.jsonNode,
+        this.skemaObj,
         this.schemaObj,
         this.version,
         this.references,
         this.resolvedReferences,
         metadata,
         ruleSet,
+        this.ignoreModernDialects,
         this.canonicalString
     );
   }
@@ -281,6 +315,21 @@ public class JsonSchema implements ParsedSchema {
       schemaCopy.version());
   }
 
+  public JsonSchema copyIgnoringModernDialects() {
+    return new JsonSchema(
+        this.jsonNode,
+        null,
+        null,
+        this.version,
+        this.references,
+        this.resolvedReferences,
+        this.metadata,
+        this.ruleSet,
+        true,
+        this.canonicalString
+    );
+  }
+
   public JsonNode toJsonNode() {
     return jsonNode;
   }
@@ -292,38 +341,96 @@ public class JsonSchema implements ParsedSchema {
     }
     if (schemaObj == null) {
       try {
-        // Extract the $schema to use for determining the id keyword
-        SpecificationVersion spec = SpecificationVersion.DRAFT_7;
-        if (jsonNode.has(SCHEMA_KEYWORD)) {
-          String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
-          if (schema != null) {
-            spec = SpecificationVersion.lookupByMetaSchemaUrl(schema)
-                    .orElse(SpecificationVersion.DRAFT_7);
+        if (jsonNode.isBoolean()) {
+          schemaObj = jsonNode.booleanValue()
+              ? TrueSchema.builder().build()
+              : FalseSchema.builder().build();
+        } else {
+          // Extract the $schema to use for determining the id keyword
+          SpecificationVersion spec = SpecificationVersion.DRAFT_7;
+          if (jsonNode.has(SCHEMA_KEYWORD)) {
+            String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
+            SpecificationVersion s = SpecificationVersion.getFromUrl(schema);
+            if (s != null) {
+              spec = s;
+            }
+          }
+          switch (spec) {
+            case DRAFT_2020_12:
+            case DRAFT_2019_09:
+              if (ignoreModernDialects) {
+                loadPreviousDraft(spec);
+              } else {
+                loadLatestDraft();
+              }
+              break;
+            default:
+              loadPreviousDraft(spec);
+              break;
           }
         }
-        // Extract the $id to use for resolving relative $ref URIs
-        URI idUri = null;
-        if (jsonNode.has(spec.idKeyword())) {
-          String id = jsonNode.get(spec.idKeyword()).asText();
-          if (id != null) {
-            idUri = ReferenceResolver.resolve((URI) null, id);
-          }
-        }
-        SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
-            .useDefaults(true).draftV7Support();
-        for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
-          URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-          builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
-        }
-        JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
-        builder.schemaJson(jsonObject);
-        SchemaLoader loader = builder.build();
-        schemaObj = loader.load().build();
-      } catch (IOException e) {
-        throw new IllegalArgumentException("Invalid JSON", e);
+      } catch (Throwable e) {
+        throw new IllegalArgumentException("Invalid JSON Schema", e);
       }
     }
     return schemaObj;
+  }
+
+  private void loadLatestDraft() throws URISyntaxException {
+    Map<URI, String> references = new HashMap<>();
+    for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+      URI uri = new URI(dep.getKey());
+      references.put(uri, dep.getValue());
+      if (!uri.isAbsolute() && !dep.getKey().startsWith(".")) {
+        // For backward compatibility
+        references.put(new URI("./" + dep.getKey()), dep.getValue());
+      }
+    }
+    SchemaLoaderConfig config = SchemaLoaderConfig.createDefaultConfig(references);
+    JsonValue schemaJson = objectMapper.convertValue(jsonNode, JsonObject.class);
+    skemaObj = new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
+    SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator());
+    assert ctx != null;
+    ctx.close();
+    schemaObj = ctx.schema();
+  }
+
+  private void loadPreviousDraft(SpecificationVersion spec)
+      throws JsonProcessingException {
+    org.everit.json.schema.loader.SpecificationVersion loaderSpec =
+        org.everit.json.schema.loader.SpecificationVersion.DRAFT_7;
+    switch (spec) {
+      case DRAFT_7:
+        loaderSpec = org.everit.json.schema.loader.SpecificationVersion.DRAFT_7;
+        break;
+      case DRAFT_6:
+        loaderSpec = org.everit.json.schema.loader.SpecificationVersion.DRAFT_6;
+        break;
+      case DRAFT_4:
+        loaderSpec = org.everit.json.schema.loader.SpecificationVersion.DRAFT_4;
+        break;
+      default:
+        break;
+    }
+
+    // Extract the $id to use for resolving relative $ref URIs
+    URI idUri = null;
+    if (jsonNode.has(loaderSpec.idKeyword())) {
+      String id = jsonNode.get(loaderSpec.idKeyword()).asText();
+      if (id != null) {
+        idUri = ReferenceResolver.resolve((URI) null, id);
+      }
+    }
+    SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
+        .useDefaults(true).draftV7Support();
+    for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+      URI child = ReferenceResolver.resolve(idUri, dep.getKey());
+      builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
+    }
+    JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
+    builder.schemaJson(jsonObject);
+    SchemaLoader loader = builder.build();
+    schemaObj = loader.load().build();
   }
 
   @Override
@@ -392,6 +499,10 @@ public class JsonSchema implements ParsedSchema {
     return ruleSet;
   }
 
+  public boolean isIgnoreModernDialects() {
+    return ignoreModernDialects;
+  }
+
   @Override
   public JsonSchema normalize() {
     String canonical = canonicalString();
@@ -433,11 +544,48 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  public void validate(Object value) throws JsonProcessingException, ValidationException {
-    validate(rawSchema(), value);
+  public JsonNode validate(JsonNode value) throws JsonProcessingException, ValidationException {
+    if (skemaObj != null) {
+      return validate(skemaObj, value);
+    } else {
+      return validate(rawSchema(), value);
+    }
   }
 
-  public static void validate(Schema schema, Object value)
+  public static JsonNode validate(com.github.erosb.jsonsKema.Schema schema, JsonNode value)
+      throws JsonProcessingException, ValidationException {
+    Validator validator = Validator.forSchema(schema);
+    JsonValue primitiveValue = null;
+    if (value instanceof BinaryNode) {
+      primitiveValue = new JsonString(value.asText(), UnknownSource.INSTANCE);
+    } else if (value instanceof BooleanNode) {
+      primitiveValue = new JsonBoolean(value.asBoolean(), UnknownSource.INSTANCE);
+    } else if (value instanceof NullNode) {
+      primitiveValue = new JsonNull(UnknownSource.INSTANCE);
+    } else if (value instanceof NumericNode) {
+      primitiveValue = new JsonNumber(value.numberValue(), UnknownSource.INSTANCE);
+    } else if (value instanceof TextNode) {
+      primitiveValue = new JsonString(value.asText(), UnknownSource.INSTANCE);
+    }
+    ValidationFailure failure;
+    if (primitiveValue != null) {
+      failure = validator.validate(primitiveValue);
+    } else {
+      JsonValue jsonObject;
+      if (value instanceof ArrayNode) {
+        jsonObject = objectMapper.convertValue(value, JsonArray.class);
+      } else {
+        jsonObject = objectMapper.convertValue(value, JsonObject.class);
+      }
+      failure = validator.validate(jsonObject);
+    }
+    if (failure != null) {
+      throw new ValidationException(failure.toString());
+    }
+    return value;
+  }
+
+  public static JsonNode validate(Schema schema, Object value)
       throws JsonProcessingException, ValidationException {
     Object primitiveValue = NONE_MARKER;
     if (isPrimitive(value)) {
@@ -455,6 +603,9 @@ public class JsonSchema implements ParsedSchema {
     }
     if (primitiveValue != NONE_MARKER) {
       schema.validate(primitiveValue);
+      return value instanceof JsonNode
+          ? (JsonNode) value
+          : objectMapper.convertValue(primitiveValue, JsonNode.class);
     } else {
       Object jsonObject;
       if (value instanceof ArrayNode) {
@@ -467,6 +618,7 @@ public class JsonSchema implements ParsedSchema {
         jsonObject = objectMapper.convertValue(value, JSONObject.class);
       }
       schema.validate(jsonObject);
+      return objectMapper.convertValue(jsonObject, JsonNode.class);
     }
   }
 
@@ -512,13 +664,15 @@ public class JsonSchema implements ParsedSchema {
         && Objects.equals(references, that.references)
         && Objects.equals(canonicalString(), that.canonicalString())
         && Objects.equals(metadata, that.metadata)
-        && Objects.equals(ruleSet, that.ruleSet);
+        && Objects.equals(ruleSet, that.ruleSet)
+        && ignoreModernDialects == that.ignoreModernDialects;
   }
 
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      hashCode = Objects.hash(jsonNode, references, version, metadata, ruleSet);
+      hashCode = Objects.hash(
+          jsonNode, references, version, metadata, ruleSet, ignoreModernDialects);
     }
     return hashCode;
   }
@@ -713,11 +867,111 @@ public class JsonSchema implements ParsedSchema {
     node.forEach(n -> getInlineTagsRecursively(tags, n));
   }
 
-  private Set<String> getInlineTags(Schema propertySchema) {
-    Object prop = propertySchema.getUnprocessedProperties().get(TAGS);
+  @Override
+  public Map<SchemaEntity, Set<String>> inlineTaggedEntities() {
+    Map<SchemaEntity, Set<String>> tags = new LinkedHashMap<>();
+    Schema schema = rawSchema();
+    if (schema == null) {
+      return tags;
+    }
+    getInlineTaggedEntitiesRecursively(tags, schema, "", false);
+    return tags;
+  }
+
+  private void getInlineTaggedEntitiesRecursively(
+      Map<SchemaEntity, Set<String>> tags, Schema schema, String scope, boolean inField) {
+    if (schema instanceof CombinedSchema) {
+      CombinedSchema combinedSchema = (CombinedSchema) schema;
+      String scopedName = scope + JsonSchemaComparator.getCriterion(combinedSchema);
+      List<Schema> subschemas = new ArrayList<>(combinedSchema.getSubschemas());
+      subschemas.sort(new JsonSchemaComparator());
+      for (int i = 0; i < subschemas.size(); i++) {
+        Schema subschema = subschemas.get(i);
+        getInlineTaggedEntitiesRecursively(tags, subschema, scopedName + "." + i + ".", false);
+      }
+    } else if (schema instanceof ArraySchema) {
+      Schema subschema = ((ArraySchema) schema).getAllItemSchema();
+      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "array.", false);
+    } else if (schema instanceof ObjectSchema) {
+      ObjectSchema objectSchema = (ObjectSchema) schema;
+      String scopedName = scope + "object";
+      if (!inField) {
+        Set<String> recordTags = getInlineTags(schema);
+        if (!recordTags.isEmpty()) {
+          tags.put(new SchemaEntity(scopedName, SR_RECORD), recordTags);
+        }
+      }
+      for (Map.Entry<String, Schema> entry : objectSchema.getPropertySchemas().entrySet()) {
+        String propertyName = entry.getKey();
+        Schema propertySchema = entry.getValue();
+        String scopedPropertyName = scopedName + "." + propertyName;
+        Set<String> fieldTags = getInlineTags(propertySchema);
+        if (!fieldTags.isEmpty()) {
+          tags.put(new SchemaEntity(scopedPropertyName, SR_FIELD), fieldTags);
+        }
+        getInlineTaggedEntitiesRecursively(
+            tags, propertySchema, scopedPropertyName + ".", true);
+      }
+      getInlineTaggedEntitiesRecursively(tags, schema.getUnprocessedProperties(), scopedName + ".");
+    } else if (schema instanceof ConditionalSchema) {
+      ConditionalSchema condSchema = (ConditionalSchema) schema;
+      String scopedName = scope + "conditional";
+      condSchema.getIfSchema().ifPresent(
+          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".if.", false));
+      condSchema.getThenSchema().ifPresent(
+          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".then.", false));
+      condSchema.getElseSchema().ifPresent(
+          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".else", false));
+    } else if (schema instanceof NotSchema) {
+      Schema subschema = ((NotSchema) schema).getMustNotMatch();
+      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "not.", false);
+    }
+  }
+
+  private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
+      Map<String, Object> unprocessedProperties, String scope) {
+    Map<String, Object> defns = (Map<String, Object>) unprocessedProperties.get("definitions");
+    if (defns != null) {
+      for (Map.Entry<String, Object> entry : defns.entrySet()) {
+        if (entry.getValue() instanceof Map) {
+          Map<String, Object> rawSchema = replaceRefs((Map<String, Object>) entry.getValue());
+          JsonNode jsonNode = objectMapper.valueToTree(rawSchema);
+          JsonSchema jsonSchema = new JsonSchema(jsonNode);
+          getInlineTaggedEntitiesRecursively(
+              tags, jsonSchema.rawSchema(), scope + "definitions.", false);
+        }
+      }
+    }
+    Map<String, Object> defs = (Map<String, Object>) unprocessedProperties.get("$defs");
+    if (defs != null) {
+      for (Map.Entry<String, Object> entry : defs.entrySet()) {
+        if (entry.getValue() instanceof Schema) {
+          getInlineTaggedEntitiesRecursively(
+              tags, (Schema) entry.getValue(), scope + "$defs.", false);
+        }
+      }
+    }
+  }
+
+  private Map<String, Object> replaceRefs(Map<String, Object> defs) {
+    Map<String, Object> result = new HashMap<>(defs);
+    if (result.containsKey("$ref")) {
+      // Use bare fragment as we don't care about the ref value during indexing
+      result.put("$ref", "#");
+    }
+    for (Map.Entry<String, Object> entry : result.entrySet()) {
+      if (entry.getValue() instanceof Map) {
+        entry.setValue(replaceRefs((Map<String, Object>) entry.getValue()));
+      }
+    }
+    return result;
+  }
+
+  private Set<String> getInlineTags(Schema schema) {
+    Object prop = schema.getUnprocessedProperties().get(TAGS);
     if (prop instanceof List) {
       List<?> tags = (List<?>) prop;
-      Set<String> result = new HashSet<>(tags.size());
+      Set<String> result = new LinkedHashSet<>(tags.size());
       for (Object tag : tags) {
         result.add(tag.toString());
       }

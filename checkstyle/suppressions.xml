@@ -13,7 +13,7 @@
               files="(AbstractKafkaProtobufSerializer|DynamicSchema|MessageDefinition|ProtobufSchema|Rule|RuleContext|SchemaRegistryCoordinator|Config.*).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(AzureKmsClient|AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|AbstractKafkaSchemaSerDe|CachedSchemaRegistryClient|MockSchemaRegistryClient|RestService|Errors|SchemaRegistryRestApplication|Context|KafkaSchemaRegistry|KafkaStore|AvroConverter|AvroData|AvroSchemaUtils|KafkaGroupLeaderElector|ProtobufSchema|ProtobufData|JsonSchemaData|InMemoryCache|SchemaMessageReader|Jackson|JsonSchemaConverter|MetricsContainer|ProtobufSchema|ProtobufSchemaUtils|MetadataEncoderService|ProtoFileElementDeserializer|DekRegistry).java"/>
+              files="(AzureKmsClient|AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|AbstractKafkaSchemaSerDe|CachedSchemaRegistryClient|MockSchemaRegistryClient|RestService|Errors|SchemaRegistryRestApplication|Context|KafkaSchemaRegistry|KafkaStore|AvroConverter|AvroData|AvroSchemaUtils|KafkaGroupLeaderElector|JsonSchema|ProtobufSchema|ProtobufData|JsonSchemaData|InMemoryCache|SchemaMessageReader|Jackson|JsonSchemaConverter|MetricsContainer|ProtobufSchema|ProtobufSchemaUtils|MetadataEncoderService|ProtoFileElementDeserializer|DekRegistry).java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(RestService|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|AvroData|KafkaGroupLeaderElector).java"/>
@@ -25,10 +25,10 @@
               files="(.*).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AvroData|ConfigResource|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|MessageDefinition|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|AbstractKafkaSchemaSerDe|AbstractKafkaAvroSerializer|AbstractKafkaAvroDeserializer|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaProtobufDeserializer|ProtobufData|ProtobufSchemaUtils|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader|ContextFilter|QualifiedSubject|SubjectVersionsResource|Rule|WildcardMatcher|JsonSchemaComparator|LocalSchemaRegistryClient|DataEncryptionKeyId|FieldEncryptionExecutor|FieldRuleExecutor|SchemaRegistryCoordinator|DekRegistry).java"/>
+              files="(AvroData|ConfigResource|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|MessageDefinition|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|AbstractKafkaSchemaSerDe|AbstractKafkaAvroSerializer|AbstractKafkaAvroDeserializer|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaProtobufDeserializer|ProtobufData|ProtobufSchemaUtils|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader|ContextFilter|QualifiedSubject|SubjectVersionsResource|Rule|WildcardMatcher|JsonSchemaComparator|LocalSchemaRegistryClient|DataEncryptionKeyId|FieldEncryptionExecutor|FieldRuleExecutor|SchemaRegistryCoordinator|SchemaTranslator|SchemaUtils|DekRegistry).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AbstractKafkaAvroSerializer|AbstractKafkaJsonSchemaSerializer|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaProtobufSerializer|AbstractKafkaProtobufDeserializer|AbstractKafkaSchemaSerDe|AvroData|AvroSchema|AvroSchemaUtils|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchema|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema|ProtobufSchemaUtils|JsonSchemaComparator|SchemaMessageFormatter|SchemaMessageReader|SubjectVersionsResource).java"/>
+              files="(AbstractKafkaAvroSerializer|AbstractKafkaJsonSchemaSerializer|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaProtobufSerializer|AbstractKafkaProtobufDeserializer|AbstractKafkaSchemaSerDe|AvroData|AvroSchema|AvroSchemaUtils|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchema|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema|ProtobufSchemaUtils|JsonSchemaComparator|SchemaMessageFormatter|SchemaMessageReader|SchemaTranslator|SubjectVersionsResource).java"/>
 
     <suppress checks="MethodLength"
               files="(AvroData|ProtobufSchema|ProtobufSchemaUtils).java"/>
