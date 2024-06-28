@@ -33,6 +33,7 @@ import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_DELETED_COUNT;
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_MASTER_SLAVE_ROLE;
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_REGISTERED_COUNT;
+import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_TOMBSTONED_COUNT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -63,6 +64,8 @@ public class MetricsTest extends ClusterTestHarness {
             new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_AVRO_SCHEMAS_CREATED);
     ObjectName schemasDeleted =
             new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_DELETED_COUNT);
+    ObjectName schemasTombstoned =
+            new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_TOMBSTONED_COUNT);
     ObjectName avroDeleted =
             new ObjectName("kafka.schema.registry:type=" + METRIC_NAME_AVRO_SCHEMAS_DELETED);
 
@@ -90,9 +93,16 @@ public class MetricsTest extends ClusterTestHarness {
                                                   subject, i.toString()));
     }
 
+    // Tombstoning schemas should not modify create count.
+    for (Integer i = 1; i < schemaIdCounter; i++) {
+      assertEquals(i, service.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+              subject, i.toString(), true));
+    }
+
     assertEquals((double) schemaCount, mBeanServer.getAttribute(schemasCreated, METRIC_NAME_REGISTERED_COUNT));
     assertEquals((double) schemaCount, mBeanServer.getAttribute(avroCreated, METRIC_NAME_AVRO_SCHEMAS_CREATED));
     assertEquals((double) schemaCount, mBeanServer.getAttribute(schemasDeleted, METRIC_NAME_DELETED_COUNT));
+    assertEquals((double) schemaCount, mBeanServer.getAttribute(schemasTombstoned, METRIC_NAME_TOMBSTONED_COUNT));
     assertEquals((double) schemaCount, mBeanServer.getAttribute(avroDeleted, METRIC_NAME_AVRO_SCHEMAS_DELETED));
   }
 
