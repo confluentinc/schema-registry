@@ -93,6 +93,12 @@ public class MetricsTest extends ClusterTestHarness {
                                                   subject, i.toString()));
     }
 
+    // Tombstoning schemas should not modify create count.
+    for (Integer i = 1; i < schemaIdCounter; i++) {
+      assertEquals(i, service.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+              subject, i.toString(), true));
+    }
+
     assertEquals((double) schemaCount, mBeanServer.getAttribute(schemasCreated, METRIC_NAME_REGISTERED_COUNT));
     assertEquals((double) schemaCount, mBeanServer.getAttribute(avroCreated, METRIC_NAME_AVRO_SCHEMAS_CREATED));
     assertEquals((double) schemaCount, mBeanServer.getAttribute(schemasDeleted, METRIC_NAME_DELETED_COUNT));
