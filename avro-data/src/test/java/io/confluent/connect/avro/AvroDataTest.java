@@ -3235,7 +3235,7 @@ public class AvroDataTest {
 
     AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
         .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
-        .with(AvroDataConfig.FLATTEN_SINGLETON_UNION_CONFIG, false)
+        .with(AvroDataConfig.FLATTEN_SINGLETON_UNIONS_CONFIG, false)
         .build();
     AvroData testAvroData = new AvroData(avroDataConfig);
 

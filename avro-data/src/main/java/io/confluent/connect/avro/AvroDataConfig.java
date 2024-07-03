@@ -47,9 +47,9 @@ public class AvroDataConfig extends AbstractDataConfig {
   public static final String ALLOW_OPTIONAL_MAP_KEYS_DOC =
       "Allow optional string map key when converting from Connect Schema to Avro Schema.";
 
-  public static final String FLATTEN_SINGLETON_UNION_CONFIG = "flatten.singleton.union";
-  public static final boolean FLATTEN_SINGLETON_UNION_DEFAULT = true;
-  public static final String FLATTEN_SINGLETON_UNION_DOC = "Whether to flatten singleton unions";
+  public static final String FLATTEN_SINGLETON_UNIONS_CONFIG = "flatten.singleton.unions";
+  public static final boolean FLATTEN_SINGLETON_UNIONS_DEFAULT = true;
+  public static final String FLATTEN_SINGLETON_UNIONS_DOC = "Whether to flatten singleton unions";
 
   @Deprecated
   public static final String DISCARD_TYPE_DOC_DEFAULT_CONFIG = "discard.type.doc.default";
@@ -79,11 +79,11 @@ public class AvroDataConfig extends AbstractDataConfig {
                 ALLOW_OPTIONAL_MAP_KEYS_DEFAULT,
                 ConfigDef.Importance.LOW,
                 ALLOW_OPTIONAL_MAP_KEYS_DOC)
-        .define(FLATTEN_SINGLETON_UNION_CONFIG,
+        .define(FLATTEN_SINGLETON_UNIONS_CONFIG,
                 ConfigDef.Type.BOOLEAN,
-                FLATTEN_SINGLETON_UNION_DEFAULT,
+            FLATTEN_SINGLETON_UNIONS_DEFAULT,
                 ConfigDef.Importance.LOW,
-                FLATTEN_SINGLETON_UNION_DOC);
+            FLATTEN_SINGLETON_UNIONS_DOC);
   }
 
   public AvroDataConfig(Map<?, ?> props) {
@@ -110,8 +110,8 @@ public class AvroDataConfig extends AbstractDataConfig {
     return this.getBoolean(ALLOW_OPTIONAL_MAP_KEYS_CONFIG);
   }
 
-  public boolean isFlattenSingletonUnion() {
-    return this.getBoolean(FLATTEN_SINGLETON_UNION_CONFIG);
+  public boolean isFlattenSingletonUnions() {
+    return this.getBoolean(FLATTEN_SINGLETON_UNIONS_CONFIG);
   }
 
   public static class Builder {

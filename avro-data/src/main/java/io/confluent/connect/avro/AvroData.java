@@ -335,7 +335,7 @@ public class AvroData {
   private boolean scrubInvalidNames;
   private boolean discardTypeDocDefault;
   private boolean allowOptionalMapKey;
-  private boolean flattenSingletonUnion;
+  private boolean flattenSingletonUnions;
 
   public AvroData(int cacheSize) {
     this(new AvroDataConfig.Builder()
@@ -353,7 +353,7 @@ public class AvroData {
     this.scrubInvalidNames = avroDataConfig.isScrubInvalidNames();
     this.discardTypeDocDefault = avroDataConfig.isDiscardTypeDocDefault();
     this.allowOptionalMapKey = avroDataConfig.isAllowOptionalMapKeys();
-    this.flattenSingletonUnion = avroDataConfig.isFlattenSingletonUnion();
+    this.flattenSingletonUnions = avroDataConfig.isFlattenSingletonUnions();
   }
 
   /**
@@ -1922,7 +1922,7 @@ public class AvroData {
         break;
 
       case UNION: {
-        if (schema.getTypes().size() == 1 && flattenSingletonUnion) {
+        if (schema.getTypes().size() == 1 && flattenSingletonUnions) {
           return toConnectSchemaWithCycles(schema.getTypes().get(0), getForceOptionalDefault(),
               null, docDefaultVal, toConnectContext);
         } else if (schema.getTypes().size() == 2) {
