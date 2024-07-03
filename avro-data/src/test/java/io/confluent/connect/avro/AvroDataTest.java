@@ -2333,6 +2333,16 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testToConnectSingletonUnion() {
+    org.apache.avro.Schema avroStringSchema = org.apache.avro.SchemaBuilder.builder().stringType();
+    org.apache.avro.Schema unionAvroSchema = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().type(avroStringSchema).endUnion();
+    SchemaBuilder builder = SchemaBuilder.string();
+    assertEquals(new SchemaAndValue(builder.build(), "bar"),
+        avroData.toConnectData(unionAvroSchema, "bar"));
+  }
+
+  @Test
   public void testToConnectEnum() {
     // Enums are just converted to strings, original enum is preserved in parameters
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
