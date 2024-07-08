@@ -1487,6 +1487,15 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectSingletonUnion() {
+    StringSchema firstSchema = StringSchema.builder().build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema)).build();
+    Schema expectedSchema = SchemaBuilder.string().build();
+
+    checkNonObjectConversion(expectedSchema, "bar", schema, TextNode.valueOf("bar"));
+  }
+
+  @Test
   public void testToConnectUnionWithGeneralizedSumTypeSupport() {
     jsonSchemaData =
         new JsonSchemaData(new JsonSchemaDataConfig(
