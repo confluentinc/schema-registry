@@ -93,9 +93,9 @@
         <cel-version>0.3.12</cel-version>
         <google.api-client.version>1.35.2</google.api-client.version>
         <guice.version>5.1.0</guice.version>
-        <jsonata-version>2.4.5</jsonata-version>
+        <jsonata-version>2.5.0</jsonata-version>
         <json-schema.version>1.14.3</json-schema.version>
-        <json-skema.version>0.14.0</json-skema.version>
+        <json-skema.version>0.15.0</json-skema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
@@ -107,7 +107,7 @@
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.7.0-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
-        <commons.lang3.version>3.12.0</commons.lang3.version>
+        <commons.lang3.version>3.14.0</commons.lang3.version>
         <bouncycastle.jdk18.version>1.77</bouncycastle.jdk18.version>
         <commons.validator.version>1.7</commons.validator.version>
         <snappy.version>1.1.10.5</snappy.version>
