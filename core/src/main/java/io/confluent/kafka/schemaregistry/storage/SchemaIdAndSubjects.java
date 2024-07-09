@@ -22,7 +22,8 @@ import java.util.function.Predicate;
 
 /**
  * Kafka schema registry maintains a few in memory indices to facilitate schema lookups. One such
- * index is the md5 index that maps MD5 -> SchemaIdAndSubjects. This index is used to do 2 things.
+ * index is the md5 index that maps MD5 -&gt; SchemaIdAndSubjects.
+ * This index is used to do 2 things.
  * Firstly, to prevent the same schema string from being registered multiple times. So, if the MD5
  * of the canonicalized schema is present in the registry, we simply return the id. However, the
  * same schema string can be registered under multiple subjects. And if so, it may be assigned
