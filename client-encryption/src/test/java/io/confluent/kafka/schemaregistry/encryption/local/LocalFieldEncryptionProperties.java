@@ -14,7 +14,6 @@
  */
 package io.confluent.kafka.schemaregistry.encryption.local;
 
-import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.OLD_SECRETS;
 import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.SECRET;
 
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
@@ -63,8 +62,6 @@ public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
           getRuleExecutor().getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
           + ".param." + SECRET, "mysecret");
-      props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
-          + ".param." + OLD_SECRETS, "old1, old2");
     }
     return props;
   }
