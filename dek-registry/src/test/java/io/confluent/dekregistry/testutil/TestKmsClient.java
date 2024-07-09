@@ -18,20 +18,13 @@ package io.confluent.dekregistry.testutil;
 
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KmsClient;
-import com.google.crypto.tink.PrimitiveSet;
 import com.google.crypto.tink.Registry;
 import com.google.crypto.tink.proto.AesGcmKey;
-import com.google.crypto.tink.proto.KeyStatusType;
-import com.google.crypto.tink.proto.Keyset.Key;
-import com.google.crypto.tink.proto.OutputPrefixType;
 import com.google.crypto.tink.subtle.Hkdf;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.protobuf.ByteString;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
 import javax.annotation.Nullable;
 
@@ -58,9 +51,7 @@ public final class TestKmsClient implements KmsClient {
     }
     this.keyUri = uri;
 
-    PrimitiveSet.Builder<Aead> builder = PrimitiveSet.newBuilder(Aead.class);
-    builder.addPrimaryPrimitive(getPrimitive(secret), getKey(secret));
-    this.aead = Registry.wrap(builder.build());
+    this.aead = getPrimitive(secret);
   }
 
   private Aead getPrimitive(String secret)
@@ -72,24 +63,6 @@ public final class TestKmsClient implements KmsClient {
         .setKeyValue(ByteString.copyFrom(keyBytes))
         .build();
     return Registry.getPrimitive(AES_GCM_KEY, key.toByteString(), Aead.class);
-  }
-
-  private Key getKey(String secret) throws GeneralSecurityException {
-    return Key.newBuilder()
-        .setKeyId(getId(secret))
-        .setStatus(KeyStatusType.ENABLED)
-        .setOutputPrefixType(OutputPrefixType.TINK)
-        .build();
-  }
-
-  private int getId(String secret) throws GeneralSecurityException {
-    try {
-      MessageDigest md = MessageDigest.getInstance("MD5");
-      md.update(secret.getBytes(StandardCharsets.UTF_8));
-      return ByteBuffer.wrap(md.digest()).getInt();
-    } catch (NoSuchAlgorithmException e) {
-      throw new GeneralSecurityException(e);
-    }
   }
 
   /**
