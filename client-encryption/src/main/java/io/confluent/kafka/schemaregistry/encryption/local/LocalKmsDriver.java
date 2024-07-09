@@ -19,19 +19,14 @@ package io.confluent.kafka.schemaregistry.encryption.local;
 import com.google.crypto.tink.KmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
 import java.security.GeneralSecurityException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 public class LocalKmsDriver implements KmsDriver {
 
   public static final String SECRET = "secret";
-  public static final String OLD_SECRETS = "old.secrets";
 
   public static final String LOCAL_SECRET = "LOCAL_SECRET";
-  public static final String LOCAL_OLD_SECRETS = "LOCAL_OLD_SECRETS";
 
   public LocalKmsDriver() {
   }
@@ -52,23 +47,10 @@ public class LocalKmsDriver implements KmsDriver {
     return secret;
   }
 
-  private List<String> getOldSecrets(Map<String, ?> configs) {
-    String oldSecretsStr = (String) configs.get(OLD_SECRETS);
-    if (oldSecretsStr == null) {
-      oldSecretsStr = System.getenv(LOCAL_OLD_SECRETS);
-    }
-    if (oldSecretsStr != null) {
-      return Arrays.asList(oldSecretsStr.split(","));
-    } else {
-      return Collections.emptyList();
-    }
-  }
-
   @Override
   public KmsClient newKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
-    return new LocalKmsClient(
-        kekUrl.orElse(LocalKmsClient.PREFIX), getSecret(configs), getOldSecrets(configs));
+    return new LocalKmsClient(kekUrl.orElse(LocalKmsClient.PREFIX), getSecret(configs));
   }
 }
 
