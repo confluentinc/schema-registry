@@ -86,4 +86,22 @@ public class ExtendedSchema extends Schema {
   public int hashCode() {
     return Objects.hash(super.hashCode(), aliases);
   }
+
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{subject=" + getSubject() + ",");
+    sb.append("version=" + getVersion() + ",");
+    sb.append("id=" + getId() + ",");
+    sb.append("schemaType=" + getSchemaType() + ",");
+    sb.append("references=" + getReferences() + ",");
+    sb.append("metadata=" + getMetadata() + ",");
+    sb.append("ruleSet=" + getRuleSet() + ",");
+    sb.append("schema=" + getSchema() + ",");
+    sb.append("schemaTags=" + getSchemaTags() + ",");
+    sb.append("aliases=" + getAliases() + "}");
+    return sb.toString();
+  }
+
+
 }
