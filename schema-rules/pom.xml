@@ -52,6 +52,7 @@
         <dependency>
             <groupId>com.ibm.jsonata4java</groupId>
             <artifactId>JSONata4Java</artifactId>
+            <version>2.4.5</version>
         </dependency>
         <dependency>
             <groupId>com.hubspot.jackson</groupId>
