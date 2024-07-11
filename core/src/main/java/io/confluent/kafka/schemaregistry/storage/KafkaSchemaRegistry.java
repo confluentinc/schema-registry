@@ -1925,8 +1925,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         if (alias == null) {
           continue;
         }
-        QualifiedSubject qualAlias =
-            QualifiedSubject.qualifySubjectWithParent(tenant(), subjectPrefix, alias, true);
+        // Use the subject of the configValue as the qualifying parent (not the subjectPrefix)
+        QualifiedSubject qualAlias = QualifiedSubject.qualifySubjectWithParent(
+            tenant(), configValue.getSubject(), alias, true);
         List<String> aliases = subjectToAliases.computeIfAbsent(
             qualAlias.toQualifiedSubject(), k -> new ArrayList<>());
         aliases.add(configValue.getSubject());
