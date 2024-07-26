@@ -77,6 +77,8 @@ import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCred
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
+import static java.lang.String.format;
+
 /**
  * Rest access layer for sending requests to the schema registry.
  */
@@ -219,7 +221,7 @@ public class RestService implements Closeable, Configurable {
         (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
 
     if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
-      throw new ConfigException(String.format(
+      throw new ConfigException(format(
           "Only one of '%s' and '%s' may be specified",
           SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE,
           SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE
@@ -293,7 +295,7 @@ public class RestService implements Closeable, Configurable {
     String requestData = requestBodyData == null
                          ? "null"
                          : new String(requestBodyData, StandardCharsets.UTF_8);
-    log.debug(String.format("Sending %s with input %s to %s",
+    log.debug(format("Sending %s with input %s to %s",
                             method, requestData,
                             requestUrl));
 
@@ -330,7 +332,7 @@ public class RestService implements Closeable, Configurable {
             try {
               errorMessage = jsonDeserializer.readValue(errorString, ErrorMessage.class);
             } catch (JsonProcessingException e) {
-              errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, errorString);
+              errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, format("Unable to parse error message from schema registry: '(%s)'", errorString));
             }
           } else {
             errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
