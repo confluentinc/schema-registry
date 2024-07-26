@@ -997,7 +997,7 @@ public class RestService implements Closeable, Configurable {
       throws IOException, RestClientException {
     return getId(requestProperties, id, subject, null, findTags, fetchMaxId);
   }
-  
+
   public SchemaString getId(Map<String, String> requestProperties,
       int id, String subject, String format, Set<String> findTags, boolean fetchMaxId)
       throws IOException, RestClientException {
