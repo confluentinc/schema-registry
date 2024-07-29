@@ -918,15 +918,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     Schema schema = new Schema(subject, request);
     Config config = getConfigInScope(subject);
     if (!request.hasSchemaTagsToAddOrRemove()
-        && schema.getVersion() == 0
+        && schema.getVersion() != -1
         && !config.hasDefaultsOrOverrides()) {
       Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
       if (existingSchema != null) {
-        if (schema.getId() == null
-            || schema.getId() < 0
-            || schema.getId().equals(existingSchema.getId())
-        ) {
-          return new Schema(subject, existingSchema.getId());
+        if (schema.getVersion() == 0) {
+          if (schema.getId() == null
+              || schema.getId() < 0
+              || schema.getId().equals(existingSchema.getId())
+          ) {
+            return new Schema(subject, existingSchema.getId());
+          }
+        } else if (existingSchema.getId().equals(schema.getId())
+            && existingSchema.getVersion().equals(schema.getVersion())) {
+          return existingSchema;
         }
       }
     }
