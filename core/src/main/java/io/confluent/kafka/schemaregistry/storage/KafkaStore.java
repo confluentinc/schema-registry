@@ -26,6 +26,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -140,6 +141,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
         new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
                                      this.storeUpdateHandler, serializer, this.localStore,
                                      this.producer, this.noopKey, this.initialized, this.config);
+    // checkpoint could be updated once the reader thread starts. This could result in a
+    // race condition where schemas after the checkpoint during startup would be double counted.
+    final Map<TopicPartition, Long> checkpoints = new HashMap<>(kafkaTopicReader.checkpoints());
     this.kafkaTopicReader.start();
 
     try {
@@ -153,7 +157,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
     }
-    this.storeUpdateHandler.cacheInitialized(new HashMap<>(kafkaTopicReader.checkpoints()));
+    this.storeUpdateHandler.cacheInitialized(checkpoints);
     initLatch.countDown();
   }
 
