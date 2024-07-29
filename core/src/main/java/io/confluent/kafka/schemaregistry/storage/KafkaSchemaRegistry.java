@@ -921,8 +921,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (existingSchema != null) {
         if (schema.getVersion() == 0) {
           if (schema.getId() == null
-                  || schema.getId() < 0
-                  || schema.getId().equals(existingSchema.getId())
+              || schema.getId() < 0
+              || schema.getId().equals(existingSchema.getId())
           ) {
             return new Schema(subject, existingSchema.getId());
           }
