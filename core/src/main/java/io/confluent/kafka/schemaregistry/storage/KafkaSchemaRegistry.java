@@ -38,6 +38,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
@@ -616,7 +617,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         schema = new Schema(subject, version, schema.getId(), newSchema);
       }
 
-      return register(subject, schema, normalize);
+      return register(subject, schema, normalize, request.doPropagateSchemaTags());
     } catch (IllegalArgumentException e) {
       throw new InvalidSchemaException(e);
     }
@@ -637,7 +638,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public Schema register(String subject,
                          Schema schema,
-                         boolean normalize)
+                         boolean normalize,
+                         boolean propagateSchemaTags)
       throws SchemaRegistryException {
     try {
       checkRegisterMode(subject, schema);
@@ -675,7 +677,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       boolean modifiedSchema = false;
       if (mode != Mode.IMPORT) {
-        modifiedSchema = maybePopulateFromPrevious(config, schema, undeletedVersions, newVersion);
+        modifiedSchema = maybePopulateFromPrevious(
+            config, schema, undeletedVersions, newVersion, propagateSchemaTags);
       }
 
       int schemaId = schema.getId();
@@ -832,19 +835,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private boolean maybePopulateFromPrevious(
-      Config config, Schema schema, List<ParsedSchemaHolder> undeletedVersions, int newVersion)
+      Config config, Schema schema, List<ParsedSchemaHolder> undeletedVersions, int newVersion,
+      boolean propagateSchemaTags)
       throws SchemaRegistryException {
     boolean populatedSchema = false;
-    SchemaValue previousSchemaValue = !undeletedVersions.isEmpty()
-        ? ((LazyParsedSchemaHolder) undeletedVersions.get(0)).schemaValue()
+    LazyParsedSchemaHolder previousSchemaHolder = !undeletedVersions.isEmpty()
+        ? (LazyParsedSchemaHolder) undeletedVersions.get(0)
         : null;
-    Schema previousSchema = previousSchemaValue != null
-        ? toSchemaEntity(previousSchemaValue)
+    Schema previousSchema = previousSchemaHolder != null
+        ? toSchemaEntity(previousSchemaHolder.schemaValue())
         : null;
     if (schema == null
         || schema.getSchema() == null
         || schema.getSchema().trim().isEmpty()) {
-      if (previousSchemaValue != null) {
+      if (previousSchema != null) {
         schema.setSchema(previousSchema.getSchema());
         schema.setSchemaType(previousSchema.getSchemaType());
         schema.setReferences(previousSchema.getReferences());
@@ -853,9 +857,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         throw new InvalidSchemaException("Empty schema");
       }
     }
+    boolean populatedSchemaTags = maybePropagateSchemaTags(
+        schema, previousSchemaHolder, propagateSchemaTags);
     boolean populatedMetadataRuleSet = maybeSetMetadataRuleSet(
         config, schema, previousSchema, newVersion);
-    return populatedSchema || populatedMetadataRuleSet;
+    return populatedSchema || populatedSchemaTags || populatedMetadataRuleSet;
+  }
+
+  private boolean maybePropagateSchemaTags(
+      Schema schema, LazyParsedSchemaHolder previousSchema, boolean propagateSchemaTags)
+      throws InvalidSchemaException {
+    if (!propagateSchemaTags || previousSchema == null) {
+      return false;
+    }
+    Map<SchemaEntity, Set<String>> schemaTags = previousSchema.schema().inlineTaggedEntities();
+    if (schemaTags.isEmpty()) {
+      return false;
+    }
+    ParsedSchema parsedSchema = parseSchema(schema);
+    parsedSchema = parsedSchema.copy(schemaTags, Collections.emptyMap());
+    schema.setSchema(parsedSchema.canonicalString());
+    return true;
   }
 
   private boolean maybeSetMetadataRuleSet(
@@ -915,6 +937,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     Schema schema = new Schema(subject, request);
     Config config = getConfigInScope(subject);
     if (!request.hasSchemaTagsToAddOrRemove()
+        && !request.doPropagateSchemaTags()
         && schema.getVersion() != -1
         && !config.hasDefaultsOrOverrides()) {
       Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);

@@ -47,6 +47,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
 
   protected boolean normalizeSchema;
   protected boolean autoRegisterSchema;
+  protected boolean propagateSchemaTags;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
   protected boolean latestCompatStrict;
@@ -60,6 +61,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     configureClientProperties(config, new JsonSchemaProvider());
     this.normalizeSchema = config.normalizeSchema();
     this.autoRegisterSchema = config.autoRegisterSchema();
+    this.propagateSchemaTags = config.propagateSchemaTags();
     this.useSchemaId = config.useSchemaId();
     this.idCompatStrict = config.getIdCompatibilityStrict();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
@@ -128,7 +130,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering JSON schema: ";
         io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
-            registerWithResponse(subject, schema, normalizeSchema);
+            registerWithResponse(subject, schema, normalizeSchema, propagateSchemaTags);
         if (s.getSchema() != null) {
           Optional<ParsedSchema> optSchema = schemaRegistry.parseSchema(s);
           if (optSchema.isPresent()) {
