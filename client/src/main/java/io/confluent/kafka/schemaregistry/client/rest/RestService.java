@@ -945,7 +945,9 @@ public class RestService implements Closeable, Configurable {
       builder.queryParam("subject", subject);
     }
     if (findTags != null && !findTags.isEmpty()) {
-      builder.queryParam("findTags", String.join(",", findTags));
+      for (String findTag : findTags) {
+        builder.queryParam("findTags", findTag);
+      }
     }
     String path = builder.build(id).toString();
 
@@ -1012,7 +1014,9 @@ public class RestService implements Closeable, Configurable {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}")
         .queryParam("deleted", lookupDeletedSchema);
     if (findTags != null && !findTags.isEmpty()) {
-      builder.queryParam("findTags", String.join(",", findTags));
+      for (String findTag : findTags) {
+        builder.queryParam("findTags", findTag);
+      }
     }
     String path = builder.build(subject, version).toString();
 
