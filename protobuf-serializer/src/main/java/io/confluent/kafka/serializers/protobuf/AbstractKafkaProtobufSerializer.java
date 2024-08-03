@@ -52,6 +52,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
 
   protected boolean normalizeSchema;
   protected boolean autoRegisterSchema;
+  protected boolean propagateSchemaTags;
   protected boolean onlyLookupReferencesBySchema;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
@@ -64,6 +65,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     configureClientProperties(config, new ProtobufSchemaProvider());
     this.normalizeSchema = config.normalizeSchema();
     this.autoRegisterSchema = config.autoRegisterSchema();
+    this.propagateSchemaTags = config.propagateSchemaTags();
     this.onlyLookupReferencesBySchema = config.onlyLookupReferencesBySchema();
     this.useSchemaId = config.useSchemaId();
     this.idCompatStrict = config.getIdCompatibilityStrict();
@@ -119,7 +121,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           schema = schema.copyWithSchema(formatted);
         }
         io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
-            registerWithResponse(subject, schema, normalizeSchema);
+            registerWithResponse(subject, schema, normalizeSchema, propagateSchemaTags);
         if (s.getSchema() != null) {
           Optional<ParsedSchema> optSchema = schemaRegistry.parseSchema(s);
           if (optSchema.isPresent()) {
@@ -254,27 +256,58 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     );
   }
 
+  public static ProtobufSchema resolveDependencies(
+      SchemaRegistryClient schemaRegistry,
+      boolean normalizeSchema,
+      boolean autoRegisterSchema,
+      boolean useLatestVersion,
+      boolean latestCompatStrict,
+      Map<SubjectSchema, ParsedSchema> latestVersions,
+      boolean skipKnownTypes,
+      ReferenceSubjectNameStrategy strategy,
+      String topic,
+      boolean isKey,
+      ProtobufSchema schema
+  ) throws IOException, RestClientException {
+    return resolveDependencies(
+        schemaRegistry,
+        normalizeSchema,
+        autoRegisterSchema,
+        false,
+        useLatestVersion,
+        latestCompatStrict,
+        latestVersions,
+        skipKnownTypes,
+        strategy,
+        topic,
+        isKey,
+        schema
+    );
+  }
+
   /**
    * Resolve schema dependencies recursively.
    *
-   * @param schemaRegistry     schema registry client
-   * @param normalizeSchema    whether to normalized the schema
-   * @param autoRegisterSchema whether to automatically register schemas
-   * @param useLatestVersion   whether to use the latest subject version for serialization
-   * @param latestCompatStrict whether to check that the latest subject version is backward
-   *                           compatible with the schema of the object
-   * @param latestVersions     an optional cache of latest subject versions, may be null
-   * @param skipKnownTypes     whether to skip known types when resolving schema dependencies
-   * @param strategy           the strategy for determining the subject name for a reference
-   * @param topic              the topic
-   * @param isKey              whether the object is the record key
-   * @param schema             the schema
+   * @param schemaRegistry      schema registry client
+   * @param normalizeSchema     whether to normalized the schema
+   * @param autoRegisterSchema  whether to automatically register schemas
+   * @param propagateSchemaTags whether to propagate tags during registration
+   * @param useLatestVersion    whether to use the latest subject version for serialization
+   * @param latestCompatStrict  whether to check that the latest subject version is backward
+   *                            compatible with the schema of the object
+   * @param latestVersions      an optional cache of latest subject versions, may be null
+   * @param skipKnownTypes      whether to skip known types when resolving schema dependencies
+   * @param strategy            the strategy for determining the subject name for a reference
+   * @param topic               the topic
+   * @param isKey               whether the object is the record key
+   * @param schema              the schema
    * @return the schema with resolved dependencies
    */
   public static ProtobufSchema resolveDependencies(
       SchemaRegistryClient schemaRegistry,
       boolean normalizeSchema,
       boolean autoRegisterSchema,
+      boolean propagateSchemaTags,
       boolean useLatestVersion,
       boolean latestCompatStrict,
       Map<SubjectSchema, ParsedSchema> latestVersions,
@@ -292,6 +325,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     Schema s = resolveDependencies(schemaRegistry,
         normalizeSchema,
         autoRegisterSchema,
+        propagateSchemaTags,
         useLatestVersion,
         latestCompatStrict,
         latestVersions,
@@ -310,6 +344,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       SchemaRegistryClient schemaRegistry,
       boolean normalizeSchema,
       boolean autoRegisterSchema,
+      boolean propagateSchemaTags,
       boolean useLatestVersion,
       boolean latestCompatStrict,
       Map<SubjectSchema, ParsedSchema> latestVersions,
@@ -330,6 +365,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       Schema subschema = resolveDependencies(schemaRegistry,
           normalizeSchema,
           autoRegisterSchema,
+          propagateSchemaTags,
           useLatestVersion,
           latestCompatStrict,
           latestVersions,
@@ -351,6 +387,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       Schema subschema = resolveDependencies(schemaRegistry,
           normalizeSchema,
           autoRegisterSchema,
+          propagateSchemaTags,
           useLatestVersion,
           latestCompatStrict,
           latestVersions,
@@ -370,8 +407,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     String subject = name != null ? strategy.subjectName(name, topic, isKey, schema) : null;
     if (subject != null) {
       if (autoRegisterSchema) {
-        RegisterSchemaResponse response =
-            schemaRegistry.registerWithResponse(subject, schema, normalizeSchema);
+        RegisterSchemaResponse response = schemaRegistry.registerWithResponse(
+            subject, schema, normalizeSchema, propagateSchemaTags);
         if (response.getSchema() != null) {
           Optional<ParsedSchema> optSchema =
               schemaRegistry.parseSchema(new Schema(subject, response));
