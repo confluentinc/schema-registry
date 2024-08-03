@@ -108,6 +108,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   default RegisterSchemaResponse registerWithResponse(
       String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
+    return registerWithResponse(subject, schema, normalize, false);
+  }
+
+  default RegisterSchemaResponse registerWithResponse(
+      String subject, ParsedSchema schema, boolean normalize, boolean propagateSchemaTags)
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 

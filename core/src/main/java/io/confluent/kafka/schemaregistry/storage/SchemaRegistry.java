@@ -43,7 +43,12 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return register(subject, schema, false);
   }
 
-  Schema register(String subject, Schema schema, boolean normalize)
+  default Schema register(String subject, Schema schema, boolean normalize)
+      throws SchemaRegistryException {
+    return register(subject, schema, normalize, false);
+  }
+
+  Schema register(String subject, Schema schema, boolean normalize, boolean propagateSchemaTags)
       throws SchemaRegistryException;
 
   default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {

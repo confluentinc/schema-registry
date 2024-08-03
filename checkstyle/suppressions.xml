@@ -40,7 +40,7 @@
               files="(KafkaSchemaRegistry|SchemaRegistryConfig|ProtobufData|JsonSchemaData).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
-              files="(AvroData|JsonSchema|KafkaSchemaRegistry|ProtobufData|ProtobufSchema|CelExecutor|FieldRuleExecutor|MetadataEncoderService|MockDekRegistryClient|DataEncryptionKey|KeyEncryptionKey|Rule|CombinedSchemaDiff).java"/>
+              files="(AvroData|JsonSchema|KafkaSchemaRegistry|ProtobufData|ProtobufSchema|CelExecutor|FieldRuleExecutor|MetadataEncoderService|MockDekRegistryClient|DataEncryptionKey|KeyEncryptionKey|Rule|CombinedSchemaDiff|RegisterSchemaRequest).java"/>
 
     <suppress checks="MemberName"
               files="(DynamicSchema|EnumDefinition|MessageDefinition|ServiceDefinition).java"/>
