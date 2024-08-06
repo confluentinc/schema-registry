@@ -107,11 +107,11 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @PerformanceMetric("keks.list")
   @DocumentedName("getKekNames")
   public List<String> getKekNames(
-      @Parameter(description = "Name of the subject")
-      @QueryParam("subject") String subject,
+      @Parameter(description = "Subject name prefix")
+      @QueryParam("subjectPrefix") List<String> subjectPrefix,
       @Parameter(description = "Whether to include deleted keys")
       @QueryParam("deleted") boolean lookupDeleted) {
-    return dekRegistry.getKekNames(subject, lookupDeleted);
+    return dekRegistry.getKekNames(subjectPrefix, lookupDeleted);
   }
 
   @GET
