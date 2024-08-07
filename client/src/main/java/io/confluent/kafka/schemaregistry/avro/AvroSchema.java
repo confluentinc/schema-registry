@@ -57,10 +57,6 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.reflect.ReflectData;
-import org.apache.avro.specific.SpecificData;
-import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.util.Utf8;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -513,8 +509,8 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
-  public Object copyMessage(Object message) throws IOException {
-    GenericData data = getData(message);
+  public Object copyMessage(Object message) {
+    GenericData data = AvroSchemaUtils.getData(rawSchema(), message, false, false);
     return data.deepCopy(rawSchema(), message);
   }
 
@@ -545,7 +541,7 @@ public class AvroSchema implements ParsedSchema {
     Schema.Type st = schema.getType();
     switch (st) {
       case UNION:
-        data = getData(message);
+        data = AvroSchemaUtils.getData(schema, message, false, false);
         int unionIndex = data.resolveUnion(schema, message);
         return toTransformedMessage(ctx, schema.getTypes().get(unionIndex), message, transform);
       case ARRAY:
@@ -570,7 +566,7 @@ public class AvroSchema implements ParsedSchema {
         if (message == null) {
           return message;
         }
-        data = getData(message);
+        data = AvroSchemaUtils.getData(schema, message, false, false);
         for (Schema.Field f : schema.getFields()) {
           String fullName = schema.getFullName() + "." + f.name();
           try (FieldContext fc = ctx.enterField(
@@ -728,16 +724,6 @@ public class AvroSchema implements ParsedSchema {
       } else {
         ((ObjectNode) nodePtr).replace(TAGS, jsonMapper.valueToTree(allTags));
       }
-    }
-  }
-
-  private static GenericData getData(Object message) {
-    if (message instanceof SpecificRecord) {
-      return SpecificData.get();
-    } else if (message instanceof GenericRecord) {
-      return GenericData.get();
-    } else {
-      return ReflectData.get();
     }
   }
 

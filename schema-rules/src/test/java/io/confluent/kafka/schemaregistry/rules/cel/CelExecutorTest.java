@@ -68,11 +68,13 @@ import io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -155,6 +157,8 @@ public class CelExecutorTest {
         producer2);
     defaultConfig.put(AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS + ".cel_field.param." + DlqAction.DLQ_AUTO_FLUSH,
         true);
+    // Enable logical types
+    defaultConfig.put(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, true);
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, defaultConfig);
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, defaultConfig);
     avroKeySerializer = new KafkaAvroSerializer(schemaRegistry);
@@ -231,6 +235,47 @@ public class CelExecutorTest {
     avroRecord.put("mydouble", 4.0d);
     avroRecord.put("myboolean", true);
     avroRecord.put("kind", new GenericData.EnumSymbol(enumSchema, "ONE"));
+    return avroRecord;
+  }
+
+  private Schema createLogicalSchema() {
+    String schemaStr = "{\n"
+        + "    \"name\": \"Message\",\n"
+        + "    \"namespace\": \"examples\",\n"
+        + "    \"type\": \"record\",\n"
+        + "    \"fields\": [\n"
+        + "        {\n"
+        + "            \"name\": \"removal_dt\",\n"
+        + "            \"type\": [\n"
+        + "                \"null\",\n"
+        + "                {\n"
+        + "                    \"type\": \"long\",\n"
+        + "                    \"logicalType\": \"timestamp-millis\"\n"
+        + "                }\n"
+        + "            ]\n"
+        + "        },\n"
+        + "        {\n"
+        + "            \"name\": \"dewey_no\",\n"
+        + "            \"type\": [\n"
+        + "                \"null\",\n"
+        + "                {\n"
+        + "                    \"type\": \"string\",\n"
+        + "                    \"avro.java.string\": \"String\"\n"
+        + "                }\n"
+        + "            ]\n"
+        + "        }\n"
+        + "    ]\n"
+        + "}\n";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(schemaStr);
+    return schema;
+  }
+
+  private IndexedRecord createLogicalRecord(String name) {
+    Schema schema = createLogicalSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("dewey_no", name);
+    avroRecord.put("removal_dt", Instant.ofEpochSecond(1363704255000L));
     return avroRecord;
   }
 
@@ -403,6 +448,24 @@ public class CelExecutorTest {
     schemaRegistry.register(topic + "-value", avroSchema);
 
     avroSerializer.serialize(topic, avroRecord);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerFieldConstraintLogicalType() throws Exception {
+    IndexedRecord avroRecord = createLogicalRecord("921.00000000000000000");
+    AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == 'dewey_no' && typeName == 'STRING';value.matches(r'^[0-9]{1,3}(\\.[0-9]{17})?$')",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    IndexedRecord newAvroRecord = (IndexedRecord) avroDeserializer.deserialize(topic, bytes);
+    assertEquals(avroRecord.get(0), newAvroRecord.get(0));
+    assertEquals(avroRecord.get(1), newAvroRecord.get(1));
   }
 
   @Test
