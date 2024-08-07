@@ -339,7 +339,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (TooManyKeysException e) {
       throw DekRegistryErrors.tooManyKeysException(dekRegistry.config().maxKeys());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while creating key", e);
+      throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
     }
   }
 
@@ -425,7 +425,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (TooManyKeysException e) {
       throw DekRegistryErrors.tooManyKeysException(dekRegistry.config().maxKeys());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while creating key", e);
+      throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
     }
   }
 
@@ -480,7 +480,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while creating key", e);
+      throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
     }
   }
 
