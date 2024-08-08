@@ -392,7 +392,10 @@ public class RestService implements Closeable, Configurable {
                                requestBodyData,
                                requestProperties,
                                responseFormat);
-      } catch (IOException e) {
+      } catch (IOException | RestClientException e) {
+        if (e instanceof RestClientException && !isRetriable((RestClientException) e)) {
+          throw e;
+        }
         baseUrls.fail(baseUrl);
         if (i == n - 1) {
           throw e; // Raise the exception since we have no more urls to try
@@ -400,6 +403,11 @@ public class RestService implements Closeable, Configurable {
       }
     }
     throw new IOException("Internal HTTP retry error"); // Can't get here
+  }
+
+  private static boolean isRetriable(RestClientException e) {
+    int status = e.getStatus();
+    return status == 408 || status == 429 || status == 502 || status == 503 | status == 504;
   }
 
   // Visible for testing
