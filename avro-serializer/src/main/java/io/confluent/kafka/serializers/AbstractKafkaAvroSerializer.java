@@ -143,7 +143,14 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         restClientErrorMsg = "Error retrieving Avro schema";
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
-      object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
+      AvroSchemaUtils.setThreadLocalData(
+          schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+      try {
+        object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
+      } finally {
+        AvroSchemaUtils.clearThreadLocalData();
+      }
+
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());
@@ -189,7 +196,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     DatumWriter<Object> writer;
     writer = datumWriterCache.get(rawSchema,
         () -> (DatumWriter<Object>) AvroSchemaUtils.getDatumWriter(
-            value, rawSchema, avroUseLogicalTypeConverters)
+            value, rawSchema, avroUseLogicalTypeConverters, avroReflectionAllowNull)
     );
     writer.write(value, encoder);
     encoder.flush();
