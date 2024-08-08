@@ -71,8 +71,13 @@ import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -86,9 +91,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -885,8 +887,15 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   protected static KafkaException toKafkaException(RestClientException e, String errorMessage) {
-    if (e.getErrorCode() / 100 == 4 /* Client Error */) {
-      return new InvalidConfigurationException(e.getMessage());
+    int status = e.getStatus();
+    if (status == 429) {        // Too Many Requests
+      return new ThrottlingQuotaExceededException(e.getMessage());
+    } else if (status == 408    // Request Timeout
+        || status == 503        // Service Unavailable
+        || status == 504) {     // Gateway Timeout
+      return new TimeoutException(errorMessage, e);
+    } else if (status == 502) { // Bad Gateway
+      return new DisconnectException(errorMessage, e);
     } else {
       return new SerializationException(errorMessage, e);
     }
