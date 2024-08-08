@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 
 import java.io.Closeable;
@@ -29,6 +30,7 @@ import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -46,6 +48,8 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
+import org.apache.kafka.common.errors.TimeoutException;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -257,7 +261,16 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   protected static KafkaException toKafkaException(RestClientException e, String errorMessage) {
-    if (e.getErrorCode() / 100 == 4 /* Client Error */) {
+    int status = e.getStatus();
+    if (status == 429) {        // Too Many Requests
+      return new ThrottlingQuotaExceededException(e.getMessage());
+    } else if (status == 408    // Request Timeout
+        || status == 503        // Service Unavailable
+        || status == 504) {     // Gateway Timeout
+      return new TimeoutException(errorMessage, e);
+    } else if (status == 502) { // Bad Gateway
+      return new DisconnectException(errorMessage, e);
+    } else if (status >= 400 && status < 500) {
       return new InvalidConfigurationException(e.getMessage());
     } else {
       return new SerializationException(errorMessage, e);
