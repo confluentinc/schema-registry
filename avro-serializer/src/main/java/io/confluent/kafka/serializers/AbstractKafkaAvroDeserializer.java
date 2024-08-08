@@ -16,9 +16,6 @@
 
 package io.confluent.kafka.serializers;
 
-import static io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils.getReflectData;
-import static io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils.getReflectDataAllowNull;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -32,7 +29,6 @@ import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
@@ -79,24 +75,18 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                 AvroSchemaUtils.getPrimitiveSchemas().containsValue(writerSchema);
             if (writerSchemaIsPrimitive) {
               return new GenericDatumReader<>(writerSchema, finalReaderSchema,
-                  avroUseLogicalTypeConverters
-                      ? AvroSchemaUtils.getGenericData()
-                      : GenericData.get());
+                  AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
             } else if (useSchemaReflection) {
               return new ReflectDatumReader<>(writerSchema, finalReaderSchema,
-                  avroUseLogicalTypeConverters
-                      ? getReflectData()
-                      : ReflectData.get());
+                  AvroSchemaUtils.getReflectData(
+                      avroUseLogicalTypeConverters, avroReflectionAllowNull));
             } else if (useSpecificAvroReader) {
               return new SpecificDatumReader<>(writerSchema, finalReaderSchema,
-                  avroUseLogicalTypeConverters
-                      ? AvroSchemaUtils.getSpecificDataForSchema(finalReaderSchema)
-                      : SpecificData.getForSchema(finalReaderSchema));
+                  AvroSchemaUtils.getSpecificDataForSchema(
+                      finalReaderSchema, avroUseLogicalTypeConverters));
             } else {
               return new GenericDatumReader<>(writerSchema, finalReaderSchema,
-                  avroUseLogicalTypeConverters
-                      ? AvroSchemaUtils.getGenericData()
-                      : GenericData.get());
+                  AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
             }
           }
         };
@@ -363,9 +353,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   private Schema getReflectionReaderSchema(Schema writerSchema) {
-    ReflectData reflectData = avroReflectionAllowNull
-        ? (avroUseLogicalTypeConverters ? getReflectDataAllowNull() : ReflectData.AllowNull.get())
-        : (avroUseLogicalTypeConverters ? getReflectData() : ReflectData.get());
+    ReflectData reflectData =
+        AvroSchemaUtils.getReflectData(avroUseLogicalTypeConverters, avroReflectionAllowNull);
     Class<?> readerClass = reflectData.getClass(writerSchema);
     if (readerClass == null) {
       throw new SerializationException("Could not find class "
@@ -498,9 +487,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         if (!migrations.isEmpty()) {
           // if migration is required, then initially use GenericDatumReader
           reader = new GenericDatumReader<>(writerSchema, writerSchema,
-              avroUseLogicalTypeConverters
-                  ? AvroSchemaUtils.getGenericData()
-                  : GenericData.get());
+              AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
         } else {
           reader = getDatumReader(writerSchema, readerSchema);
         }
@@ -519,24 +506,31 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           }
         }
 
-        // First apply migration rules
-        if (!migrations.isEmpty()) {
-          result = executeMigrations(migrations, getSubject(), topic, headers, result);
-        }
-
         if (readerAvroSchema == null) {
           readerAvroSchema = writerAvroSchema;
         }
-        if (result instanceof JsonNode) {
-          reader = getDatumReader(readerAvroSchema.rawSchema(), readerAvroSchema.rawSchema());
-          result = AvroSchemaUtils.toObject(
-              (JsonNode) result, readerAvroSchema, (DatumReader<Object>) reader);
-        }
 
-        // Next apply domain rules
-        result = executeRules(
-          getSubject(), topic, headers, payload, RuleMode.READ, null, readerAvroSchema, result
-        );
+        AvroSchemaUtils.setThreadLocalData(
+            readerAvroSchema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+        try {
+          // First apply migration rules
+          if (!migrations.isEmpty()) {
+            result = executeMigrations(migrations, getSubject(), topic, headers, result);
+          }
+
+          if (result instanceof JsonNode) {
+            reader = getDatumReader(readerAvroSchema.rawSchema(), readerAvroSchema.rawSchema());
+            result = AvroSchemaUtils.toObject(
+                (JsonNode) result, readerAvroSchema, (DatumReader<Object>) reader);
+          }
+
+          // Next apply domain rules
+          result = executeRules(
+              getSubject(), topic, headers, payload, RuleMode.READ, null, readerAvroSchema, result
+          );
+        } finally {
+          AvroSchemaUtils.clearThreadLocalData();
+        }
 
         return result;
       } catch (ExecutionException ex) {
