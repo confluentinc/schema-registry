@@ -16,15 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel.avro;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.reflect.ReflectData;
-import org.apache.avro.specific.SpecificData;
-import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.util.Utf8;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.pb.Checked;
@@ -120,7 +117,7 @@ public final class AvroTypeDescription implements TypeDescription {
       throw new IllegalArgumentException(String.format("No property named '%s'", property));
     }
     Schema schema = getSchema(value);
-    GenericData data = getData(value);
+    GenericData data = AvroSchemaUtils.getData(schema, value, false, false);
     Schema.Field f = schema.getField(property);
     Object result = data.getField(value, f.name(), f.pos());
     if (result instanceof Utf8) {
@@ -161,15 +158,4 @@ public final class AvroTypeDescription implements TypeDescription {
     }
     return ((GenericContainer) message).getSchema();
   }
-
-  static GenericData getData(Object message) {
-    if (message instanceof SpecificRecord) {
-      return SpecificData.get();
-    } else if (message instanceof GenericRecord) {
-      return GenericData.get();
-    } else {
-      return  ReflectData.get();
-    }
-  }
-
 }
