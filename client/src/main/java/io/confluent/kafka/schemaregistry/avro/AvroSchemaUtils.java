@@ -91,8 +91,46 @@ public class AvroSchemaUtils {
     addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE);
   }
 
+  private static final ThreadLocal<GenericData> genericData = new ThreadLocal<>();
+  private static final ThreadLocal<ReflectData> reflectData = new ThreadLocal<>();
+  private static final ThreadLocal<SpecificData> specificData = new ThreadLocal<>();
+
+  public static void setThreadLocalData(Schema schema, boolean useLogicaltypes, boolean allowNull) {
+    genericData.set(getGenericData(useLogicaltypes));
+    reflectData.set(getReflectData(useLogicaltypes, allowNull));
+    specificData.set(getSpecificDataForSchema(schema, useLogicaltypes));
+  }
+
+  public static GenericData getThreadLocalGenericData() {
+    return genericData.get();
+  }
+
+  public static ReflectData getThreadLocalReflectData() {
+    return reflectData.get();
+  }
+
+  public static SpecificData getThreadLocalSpecificData() {
+    return specificData.get();
+  }
+
+  public static void clearThreadLocalData() {
+    genericData.remove();
+    reflectData.remove();
+    specificData.remove();
+  }
+
+  public static GenericData getGenericData(boolean useLogicalTypes) {
+    return useLogicalTypes ? getGenericData() : GenericData.get();
+  }
+
   public static GenericData getGenericData() {
     return GENERIC_DATA_INSTANCE;
+  }
+
+  public static ReflectData getReflectData(boolean useLogicalTypes, boolean allowNull) {
+    return allowNull
+        ? (useLogicalTypes ? getReflectDataAllowNull() : ReflectData.AllowNull.get())
+        : (useLogicalTypes ? getReflectData() : ReflectData.get());
   }
 
   public static ReflectData getReflectData() {
@@ -103,8 +141,8 @@ public class AvroSchemaUtils {
     return REFLECT_DATA_ALLOW_NULL_INSTANCE;
   }
 
-  public static SpecificData getSpecificData() {
-    return SPECIFIC_DATA_INSTANCE;
+  public static SpecificData getSpecificDataForSchema(Schema reader, boolean useLogicalTypes) {
+    return useLogicalTypes ? getSpecificDataForSchema(reader) : SpecificData.getForSchema(reader);
   }
 
   public static SpecificData getSpecificDataForSchema(Schema reader) {
@@ -121,6 +159,10 @@ public class AvroSchemaUtils {
   public static <T> SpecificData getSpecificDataForClass(Class<T> c) {
     return SpecificRecordBase.class.isAssignableFrom(c)
             ? SpecificData.getForClass(c) : getSpecificData();
+  }
+
+  public static SpecificData getSpecificData() {
+    return SPECIFIC_DATA_INSTANCE;
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
@@ -224,9 +266,7 @@ public class AvroSchemaUtils {
     } else if (object instanceof byte[] || object instanceof ByteBuffer) {
       return primitiveSchemas.get("Bytes");
     } else if (useReflection) {
-      ReflectData reflectData = reflectionAllowNull
-          ? (useLogicalTypeConverters ? getReflectDataAllowNull() : ReflectData.AllowNull.get())
-          : (useLogicalTypeConverters ? getReflectData() : ReflectData.get());
+      ReflectData reflectData = getReflectData(useLogicalTypeConverters, reflectionAllowNull);
       Schema schema = reflectData.getSchema(object.getClass());
       if (schema == null) {
         throw new SerializationException("Schema is null for object of class " + object.getClass()
@@ -262,9 +302,7 @@ public class AvroSchemaUtils {
 
     } else {
       // Try reflection as last resort
-      ReflectData reflectData = reflectionAllowNull
-          ? (useLogicalTypeConverters ? getReflectDataAllowNull() : ReflectData.AllowNull.get())
-          : (useLogicalTypeConverters ? getReflectData() : ReflectData.get());
+      ReflectData reflectData = getReflectData(useLogicalTypeConverters, reflectionAllowNull);
       Schema schema = reflectData.getSchema(object.getClass());
       if (schema == null) {
         throw new SerializationException("Schema is null for object of class " + object.getClass()
@@ -304,8 +342,9 @@ public class AvroSchemaUtils {
   }
 
   public static Object toObject(JsonNode value, AvroSchema schema) throws IOException {
+    GenericData data = getData(schema.rawSchema(), null, false, false);
     return toObject(value, schema, new GenericDatumReader<>(
-        schema.rawSchema(), schema.rawSchema(), getGenericData()));
+        schema.rawSchema(), schema.rawSchema(), data));
   }
 
   public static Object toObject(
@@ -321,8 +360,9 @@ public class AvroSchemaUtils {
   }
 
   public static Object toObject(String value, AvroSchema schema) throws IOException {
+    GenericData data = getData(schema.rawSchema(), null, false, false);
     return toObject(value, schema, new GenericDatumReader<>(
-        schema.rawSchema(), schema.rawSchema(), getGenericData()));
+        schema.rawSchema(), schema.rawSchema(), data));
   }
 
   public static Object toObject(
@@ -347,7 +387,7 @@ public class AvroSchemaUtils {
   public static void toJson(Object value, OutputStream out) throws IOException {
     Schema schema = getSchema(value, false, false, false, false);
     JsonEncoder encoder = encoderFactory.jsonEncoder(schema, out);
-    DatumWriter<Object> writer = (DatumWriter<Object>) getDatumWriter(value, schema, true);
+    DatumWriter<Object> writer = (DatumWriter<Object>) getDatumWriter(value, schema, false, false);
     // Some types require wrapping/conversion
     Object wrappedValue = value;
     if (value instanceof byte[]) {
@@ -357,19 +397,38 @@ public class AvroSchemaUtils {
     encoder.flush();
   }
 
+  public static GenericData getData(Schema schema, Object message,
+      boolean useLogicalTypes, boolean allowNull) {
+    if (message instanceof SpecificRecord) {
+      SpecificData data = AvroSchemaUtils.getThreadLocalSpecificData();
+      return data != null ? data : getSpecificDataForSchema(schema, useLogicalTypes);
+    } else if (message instanceof GenericRecord) {
+      GenericData data = AvroSchemaUtils.getThreadLocalGenericData();
+      return data != null ? data : getGenericData(useLogicalTypes);
+    } else if (message != null) {
+      ReflectData data = AvroSchemaUtils.getThreadLocalReflectData();
+      return data != null ? data : getReflectData(useLogicalTypes, allowNull);
+    } else {
+      // a null message indicates to use the generic data
+      GenericData data = AvroSchemaUtils.getThreadLocalGenericData();
+      return data != null ? data : getGenericData(useLogicalTypes);
+    }
+  }
+
   public static DatumWriter<?> getDatumWriter(
       Object value, Schema schema, boolean avroUseLogicalTypeConverters) {
+    return getDatumWriter(value, schema, avroUseLogicalTypeConverters, false);
+  }
+
+  public static DatumWriter<?> getDatumWriter(
+      Object value, Schema schema, boolean useLogicalTypes, boolean allowNull) {
+    GenericData data = getData(schema, value, useLogicalTypes, allowNull);
     if (value instanceof SpecificRecord) {
-      return new SpecificDatumWriter<>(schema,
-          avroUseLogicalTypeConverters
-                  ? getSpecificDataForSchema(schema)
-                  : SpecificData.getForSchema(schema));
+      return new SpecificDatumWriter<>(schema, (SpecificData) data);
     } else if (value instanceof GenericRecord) {
-      return new GenericDatumWriter<>(schema,
-          avroUseLogicalTypeConverters ? getGenericData() : GenericData.get());
+      return new GenericDatumWriter<>(schema, data);
     } else {
-      return new ReflectDatumWriter<>(schema,
-          avroUseLogicalTypeConverters ? getReflectData() : ReflectData.get());
+      return new ReflectDatumWriter<>(schema, (ReflectData) data);
     }
   }
 
