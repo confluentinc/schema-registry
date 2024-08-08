@@ -291,14 +291,16 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public List<String> getKekNames(String subject, boolean lookupDeleted) {
+  public List<String> getKekNames(List<String> subjectPrefix, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
-    if (subject == null || subject.isEmpty()) {
+    if (subjectPrefix == null || subjectPrefix.isEmpty()) {
       return getKeks(tenant, lookupDeleted).stream()
           .map(kv -> ((KeyEncryptionKeyId) kv.key).getName())
           .collect(Collectors.toList());
     } else {
-      return getDeks(tenant, null, subject, null, lookupDeleted).stream()
+      return getDeks(tenant, lookupDeleted).stream()
+          .filter(kv -> subjectPrefix.stream()
+              .anyMatch(prefix -> ((DataEncryptionKeyId) kv.key).getSubject().startsWith(prefix)))
           .map(kv -> ((DataEncryptionKeyId) kv.key).getKekName())
           .sorted()
           .distinct()
@@ -356,9 +358,18 @@ public class DekRegistry implements Closeable {
   }
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
+      String tenant, boolean lookupDeleted) {
+    return getDeks(tenant, String.valueOf(Character.MIN_VALUE),
+        String.valueOf(Character.MAX_VALUE), lookupDeleted);
+  }
+
+  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
       String tenant, String kekName, boolean lookupDeleted) {
-    String minKekName = kekName != null ? kekName : String.valueOf(Character.MIN_VALUE);
-    String maxKekName = kekName != null ? kekName : String.valueOf(Character.MAX_VALUE);
+    return getDeks(tenant, kekName, kekName, lookupDeleted);
+  }
+
+  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
+      String tenant, String minKekName, String maxKekName, boolean lookupDeleted) {
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     DataEncryptionKeyId key1 = new DataEncryptionKeyId(
         tenant, minKekName, CONTEXT_PREFIX + CONTEXT_DELIMITER,
@@ -380,17 +391,15 @@ public class DekRegistry implements Closeable {
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
       String tenant, String kekName, String subject, DekFormat algorithm, boolean lookupDeleted) {
-    String minKekName = kekName != null ? kekName : String.valueOf(Character.MIN_VALUE);
-    String maxKekName = kekName != null ? kekName : String.valueOf(Character.MAX_VALUE);
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
     }
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     DataEncryptionKeyId key1 = new DataEncryptionKeyId(
-        tenant, minKekName, subject,
+        tenant, kekName, subject,
         algorithm, MIN_VERSION);
     DataEncryptionKeyId key2 = new DataEncryptionKeyId(
-        tenant, maxKekName, subject,
+        tenant, kekName, subject,
         algorithm, Integer.MAX_VALUE);
     try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
         keys().range(key1, true, key2, false)) {

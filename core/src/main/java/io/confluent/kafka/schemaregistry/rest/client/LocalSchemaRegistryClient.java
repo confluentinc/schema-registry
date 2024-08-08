@@ -170,31 +170,33 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized int register(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    return registerWithResponse(subject, schema, 0, -1, normalize).getId();
+    return registerWithResponse(subject, schema, 0, -1, normalize, false).getId();
   }
 
   @Override
   public synchronized int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
-    return registerWithResponse(subject, schema, version, id, false).getId();
+    return registerWithResponse(subject, schema, version, id, false, false).getId();
   }
 
   @Override
   public synchronized RegisterSchemaResponse registerWithResponse(
-      String subject, ParsedSchema schema, boolean normalize)
+      String subject, ParsedSchema schema, boolean normalize, boolean propagateSchemaTags)
       throws IOException, RestClientException {
-    return registerWithResponse(subject, schema, 0, -1, normalize);
+    return registerWithResponse(subject, schema, 0, -1, normalize, propagateSchemaTags);
   }
 
   private synchronized RegisterSchemaResponse registerWithResponse(
-      String subject, ParsedSchema schema, int version, int id, boolean normalize)
+      String subject, ParsedSchema schema, int version, int id,
+      boolean normalize, boolean propagateSchemaTags)
       throws IOException, RestClientException {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
     Schema s = new Schema(subject, version, id, schema);
     try {
-      return new RegisterSchemaResponse(schemaRegistry.register(subject, s, normalize));
+      return new RegisterSchemaResponse(
+          schemaRegistry.register(subject, s, normalize, propagateSchemaTags));
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {

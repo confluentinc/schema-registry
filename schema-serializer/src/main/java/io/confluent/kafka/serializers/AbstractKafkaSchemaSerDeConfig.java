@@ -72,6 +72,11 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String AUTO_REGISTER_SCHEMAS_DOC =
       "Specify if the Serializer should attempt to register the Schema with Schema Registry";
 
+  public static final String PROPAGATE_SCHEMA_TAGS = "propagate.schema.tags";
+  public static final boolean PROPAGATE_SCHEMA_TAGS_DEFAULT = false;
+  public static final String PROPAGATE_SCHEMA_TAGS_DOC =
+      "Whether to propagate schema tags from a previous schema version during registration";
+
   public static final String USE_SCHEMA_ID = "use.schema.id";
   public static final int USE_SCHEMA_ID_DEFAULT = -1;
   public static final String USE_SCHEMA_ID_DOC = "Schema ID to use for serialization";
@@ -280,6 +285,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, NORMALIZE_SCHEMAS_DOC)
         .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
                 Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
+        .define(PROPAGATE_SCHEMA_TAGS, Type.BOOLEAN, PROPAGATE_SCHEMA_TAGS_DEFAULT,
+                Importance.LOW, PROPAGATE_SCHEMA_TAGS_DOC)
         .define(USE_SCHEMA_ID, Type.INT, USE_SCHEMA_ID_DEFAULT,
                 Importance.LOW, USE_SCHEMA_ID_DOC)
         .define(ID_COMPATIBILITY_STRICT, Type.BOOLEAN, ID_COMPATIBILITY_STRICT_DEFAULT,
@@ -379,6 +386,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean autoRegisterSchema() {
     return this.getBoolean(AUTO_REGISTER_SCHEMAS);
+  }
+
+  public boolean propagateSchemaTags() {
+    return this.getBoolean(PROPAGATE_SCHEMA_TAGS);
   }
 
   public int useSchemaId() {

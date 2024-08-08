@@ -10,6 +10,8 @@ import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.entities.ErrorMessage;
 import java.net.URI;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
@@ -151,7 +153,7 @@ public class ContextFilter implements ContainerRequestFilter {
       path = path.substring(1);
     }
 
-    if (path.startsWith("schemas/ids") || path.startsWith("keks")) {
+    if (path.startsWith("schemas/ids")) {
       String subject = queryParams.getFirst("subject");
       if (subject == null) {
         subject = "";
@@ -160,15 +162,21 @@ public class ContextFilter implements ContainerRequestFilter {
         subject = QualifiedSubject.normalizeContext(context) + subject;
         builder.replaceQueryParam("subject", subject);
       }
-    } else if (path.equals("schemas") || path.equals("subjects")) {
-      String subject = queryParams.getFirst("subjectPrefix");
-      if (subject == null) {
-        subject = "";
+    } else if (path.equals("schemas") || path.equals("subjects") || path.startsWith("keks")) {
+      List<String> subjectPrefixes = queryParams.get("subjectPrefix");
+      if (subjectPrefixes == null || subjectPrefixes.isEmpty()) {
+        // Ensure context is used as subjectPrefix
+        subjectPrefixes = Collections.singletonList("");
       }
-      if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
-        subject = QualifiedSubject.normalizeContext(context) + subject;
-        builder.replaceQueryParam("subjectPrefix", subject);
-      }
+      Object[] newSubjectPrefixes = subjectPrefixes.stream()
+          .map(prefix -> {
+            if (!prefix.startsWith(CONTEXT_PREFIX) && !prefix.startsWith(CONTEXT_WILDCARD)) {
+              return QualifiedSubject.normalizeContext(context) + prefix;
+            }
+            return prefix;
+          })
+          .toArray();
+      builder.replaceQueryParam("subjectPrefix", newSubjectPrefixes);
     }
   }
 
@@ -185,8 +193,8 @@ public class ContextFilter implements ContainerRequestFilter {
   }
 
   static class ContextAndPath {
-    private String context;
-    private String path;
+    private final String context;
+    private final String path;
 
     public ContextAndPath(String context, String path) {
       this.context = context;

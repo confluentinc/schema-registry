@@ -536,10 +536,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return schemaRegistry.register(subject, schema, normalize);
   }
 
-  protected Schema registerWithResponse(String subject, ParsedSchema schema, boolean normalize)
+  protected Schema registerWithResponse(String subject, ParsedSchema schema,
+      boolean normalize, boolean propagateSchemaTags)
       throws IOException, RestClientException {
     RegisterSchemaResponse response =
-        schemaRegistry.registerWithResponse(subject, schema, normalize);
+        schemaRegistry.registerWithResponse(subject, schema, normalize, propagateSchemaTags);
     return new Schema(subject, response);
   }
 

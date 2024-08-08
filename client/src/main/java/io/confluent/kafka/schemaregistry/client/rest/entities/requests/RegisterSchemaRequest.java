@@ -49,6 +49,7 @@ public class RegisterSchemaRequest {
   private String schema;
   private List<SchemaTags> schemaTagsToAdd;
   private List<SchemaTags> schemaTagsToRemove;
+  private Boolean propagateSchemaTags;
 
   public RegisterSchemaRequest() {
   }
@@ -173,10 +174,25 @@ public class RegisterSchemaRequest {
     this.schemaTagsToRemove = schemaTagsToRemove;
   }
 
+  @JsonProperty("propagateSchemaTags")
+  public Boolean isPropagateSchemaTags() {
+    return propagateSchemaTags;
+  }
+
+  @JsonProperty("propagateSchemaTags")
+  public void setPropagateSchemaTags(Boolean propagateSchemaTags) {
+    this.propagateSchemaTags = propagateSchemaTags;
+  }
+
   @JsonIgnore
   public boolean hasSchemaTagsToAddOrRemove() {
     return (schemaTagsToAdd != null && !schemaTagsToAdd.isEmpty())
         || (schemaTagsToRemove != null && !schemaTagsToRemove.isEmpty());
+  }
+
+  @JsonIgnore
+  public boolean doPropagateSchemaTags() {
+    return (Boolean.TRUE.equals(propagateSchemaTags));
   }
 
   @Override
@@ -196,13 +212,14 @@ public class RegisterSchemaRequest {
         && Objects.equals(ruleSet, that.ruleSet)
         && Objects.equals(schema, that.schema)
         && Objects.equals(schemaTagsToAdd, that.schemaTagsToAdd)
-        && Objects.equals(schemaTagsToRemove, that.schemaTagsToRemove);
+        && Objects.equals(schemaTagsToRemove, that.schemaTagsToRemove)
+        && Objects.equals(propagateSchemaTags, that.propagateSchemaTags);
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(schemaType, references, metadata, ruleSet, version, id, schema,
-        schemaTagsToAdd, schemaTagsToRemove);
+        schemaTagsToAdd, schemaTagsToRemove, propagateSchemaTags);
   }
 
   @Override
@@ -221,7 +238,8 @@ public class RegisterSchemaRequest {
     buf.append("ruleSet=").append(this.ruleSet).append(", ");
     buf.append("schema=").append(schema).append(", ");
     buf.append("schemaTagsToAdd=").append(schemaTagsToAdd).append(", ");
-    buf.append("schemaTagsToRemove=").append(schemaTagsToRemove).append("}");
+    buf.append("schemaTagsToRemove=").append(schemaTagsToRemove).append(", ");
+    buf.append("propagateSchemaTags=").append(propagateSchemaTags).append("}");
     return buf.toString();
   }
 

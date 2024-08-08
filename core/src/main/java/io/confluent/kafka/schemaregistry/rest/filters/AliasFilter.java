@@ -105,7 +105,7 @@ public class AliasFilter implements ContainerRequestFilter {
       path = path.substring(1);
     }
 
-    if (path.startsWith("schemas/ids") || path.startsWith("keks")) {
+    if (path.startsWith("schemas/ids")) {
       String subject = queryParams.getFirst("subject");
       if (subject == null) {
         subject = "";
