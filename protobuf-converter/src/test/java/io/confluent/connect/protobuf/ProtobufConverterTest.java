@@ -28,7 +28,8 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.protobuf.test.KeyTimestampValueOuterClass.KeyTimestampValue;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue;
-import java.util.List;
+
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -39,9 +40,12 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import io.confluent.connect.protobuf.test.Key;
@@ -276,6 +280,23 @@ public class ProtobufConverterTest {
     byte[] result = converter.fromConnectData("my-topic",
         getTestMessageSchema(),
         getTestMessageStruct(TEST_MSG_STRING, 123)
+    );
+
+    assertArrayEquals(expected, Arrays.copyOfRange(result, PROTOBUF_BYTES_START, result.length));
+  }
+
+  @Test
+  public void testFromConnectDataForValueUseJsonFieldNames() {
+    final byte[] expected = HELLO_WORLD_MESSAGE.toByteArray();
+
+    Map<String, Object> configs = new HashMap<>(SR_CONFIG);
+    configs.put(ProtobufDataConfig.JSON_FIELD_NAMES_CONFIG, true);
+    converter.configure(configs, false);
+
+    SchemaAndValue schemaAndValue = getExpectedTestMessageWithJsonFieldNames();
+
+    byte[] result = converter.fromConnectData("my-topic",
+            schemaAndValue.schema(), schemaAndValue.value()
     );
 
     assertArrayEquals(expected, Arrays.copyOfRange(result, PROTOBUF_BYTES_START, result.length));
@@ -529,6 +550,44 @@ public class ProtobufConverterTest {
     );
 
     assertEquals(expected, result);
+  }
+
+  @Test
+  public void testToConnectDataForValueUseJsonFieldNames() throws Exception {
+    Map<String, Object> configs = new HashMap<>(SR_CONFIG);
+    configs.put(ProtobufDataConfig.JSON_FIELD_NAMES_CONFIG, true);
+    converter.configure(configs, false);
+    // extra byte for message index
+    final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 0}, HELLO_WORLD_MESSAGE.toByteArray());
+    schemaRegistry.register("my-topic-value", getSchema(TestMessage.getDescriptor()));
+    SchemaAndValue result = converter.toConnectData("my-topic", input);
+
+    SchemaAndValue expected = getExpectedTestMessageWithJsonFieldNames();
+
+    assertEquals(expected.schema(), result.schema());
+    assertEquals(expected, result);
+  }
+
+  private SchemaAndValue getExpectedTestMessageWithJsonFieldNames() {
+    Struct testMessageStruct = getTestMessageStruct(TEST_MSG_STRING, 123);
+    Schema testMessageSchema = getTestMessageSchema();
+
+    final SchemaBuilder builder = SchemaBuilder.struct();
+    builder.name("TestMessage").version(1);
+    List values = new ArrayList<>();
+    for (Field field : testMessageSchema.fields()) {
+      String jsonFieldName = TestMessage.getDescriptor()
+              .findFieldByName(field.name()).getJsonName();
+      builder.field(jsonFieldName, field.schema());
+      values.add(testMessageStruct.get(field));
+    }
+    final Schema jsonSchema = builder.build();
+    final Struct jsonStruct = new Struct(jsonSchema);
+    final Iterator<Object> valuesIt = values.iterator();
+    for (Field field : jsonSchema.fields()) {
+      jsonStruct.put(field, valuesIt.next());
+    }
+    return new SchemaAndValue(jsonSchema, jsonStruct);
   }
 
   @Test
