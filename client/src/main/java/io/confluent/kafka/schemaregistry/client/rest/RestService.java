@@ -332,7 +332,10 @@ public class RestService implements Closeable, Configurable {
             try {
               errorMessage = jsonDeserializer.readValue(errorString, ErrorMessage.class);
             } catch (JsonProcessingException e) {
-              errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, format("Unable to parse error message from schema registry: '(%s)'", errorString));
+              errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, format(
+                  "Unable to parse error message from schema registry: '(%s)'",
+                  errorString
+              ));
             }
           } else {
             errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
