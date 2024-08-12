@@ -791,6 +791,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public Collection<String> getAllContexts() throws IOException, RestClientException {
+    return restService.getAllContexts();
+  }
+
+  @Override
   public Collection<String> getAllSubjects() throws IOException, RestClientException {
     return restService.getAllSubjects();
   }
