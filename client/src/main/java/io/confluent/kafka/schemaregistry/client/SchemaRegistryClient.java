@@ -274,6 +274,10 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
+  default Collection<String> getAllContexts() throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
 
   default Collection<String> getAllSubjects(boolean lookupDeletedSubject) throws IOException,
