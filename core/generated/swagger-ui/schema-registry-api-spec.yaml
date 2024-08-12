@@ -115,7 +115,8 @@ paths:
       description: The Root resource is a no-op.
       operationId: get
       responses:
-        default:
+        'default':
+          description: default response
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
@@ -151,7 +152,7 @@ paths:
               additionalProperties:
                 type: string
       responses:
-        default:
+        'default':
           description: default response
           content:
             application/vnd.schemaregistry.v1+json:
