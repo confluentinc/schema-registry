@@ -80,6 +80,7 @@ public class ModeResource {
           + "Error code 50003 -- Error while forwarding the request to the primary\n"
           + "Error code 50004 -- Unknown leader")
   })
+  @PerformanceMetric("mode.update-subject")
   public ModeUpdateRequest updateMode(
       @ApiParam(value = "Name of the Subject", required = true)
       @PathParam("subject") String subject,
@@ -124,6 +125,7 @@ public class ModeResource {
   @ApiResponses(value = {
       @ApiResponse(code = 404, message = "Subject not found"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
+  @PerformanceMetric("mode.get-subject")
   public Mode getMode(
       @ApiParam(value = "Name of the Subject", required = true)
       @PathParam("subject") String subject,
@@ -153,6 +155,7 @@ public class ModeResource {
           + "Error code 50003 -- Error while forwarding the request to the primary\n"
           + "Error code 50004 -- Unknown leader")
   })
+  @PerformanceMetric("mode.update-global")
   public ModeUpdateRequest updateTopLevelMode(
       @Context HttpHeaders headers,
       @ApiParam(value = "Update Request", required = true) @NotNull ModeUpdateRequest request,
@@ -164,6 +167,7 @@ public class ModeResource {
   @ApiOperation(value = "Get global mode.")
   @ApiResponses(value = {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
+  @PerformanceMetric("mode.get-global")
   public Mode getTopLevelMode() {
     return getMode(null, false);
   }
@@ -176,6 +180,7 @@ public class ModeResource {
       @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")
   })
+  @PerformanceMetric("mode.delete-subject")
   public void deleteSubjectMode(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
