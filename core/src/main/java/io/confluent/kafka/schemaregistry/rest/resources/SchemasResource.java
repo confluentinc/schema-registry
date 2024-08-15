@@ -132,6 +132,7 @@ public class SchemasResource {
   @ApiResponses(value = {
       @ApiResponse(code = 404, message = "Error code 40403 -- Schema not found\n"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  @PerformanceMetric("schemas.get-subjects")
   public Set<String> getSubjects(
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
@@ -163,6 +164,7 @@ public class SchemasResource {
   @ApiResponses(value = {
       @ApiResponse(code = 404, message = "Error code 40403 -- Schema not found\n"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  @PerformanceMetric("schemas.get-versions")
   public List<SubjectVersion> getVersions(
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
@@ -193,6 +195,7 @@ public class SchemasResource {
   @ApiOperation("Get the schema types supported by this registry.")
   @ApiResponses(value = {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  @PerformanceMetric("schemas.get-types")
   public Set<String> getSchemaTypes() {
     return schemaRegistry.schemaTypes();
   }

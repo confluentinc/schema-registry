@@ -51,6 +51,7 @@ import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.rest.annotations.PerformanceMetric;
 
 @Path("/config")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -79,6 +80,7 @@ public class ConfigResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
           + "Error code 50003 -- Error while forwarding the request to the primary")
   })
+  @PerformanceMetric("config.update-subject")
   public ConfigUpdateRequest updateSubjectLevelConfig(
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @Context HttpHeaders headers,
@@ -119,6 +121,7 @@ public class ConfigResource {
   @ApiResponses(value = {
       @ApiResponse(code = 404, message = "Subject not found"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
+  @PerformanceMetric("config.get-subject")
   public Config getSubjectLevelConfig(
       @PathParam("subject") String subject,
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
@@ -150,6 +153,7 @@ public class ConfigResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
           + "Error code 50003 -- Error while forwarding the request to the primary\n")
   })
+  @PerformanceMetric("config.update-global")
   public ConfigUpdateRequest updateTopLevelConfig(
       @Context HttpHeaders headers,
       @ApiParam(value = "Config Update Request", required = true)
@@ -182,6 +186,7 @@ public class ConfigResource {
   @ApiResponses(value = {@ApiResponse(code = 500,
       message = "Error code 50001 -- Error in the backend data store")}
   )
+  @PerformanceMetric("config.get-global")
   public Config getTopLevelConfig() {
     Config config = null;
     try {
@@ -201,6 +206,7 @@ public class ConfigResource {
       @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")
   })
+  @PerformanceMetric("config.delete-subject")
   public void deleteSubjectConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
