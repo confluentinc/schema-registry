@@ -101,7 +101,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
         "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
         null, serializedValue);
     formatter.writeTo(crecord, ps);
@@ -127,7 +127,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
         "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length,
         serializedValue.length, serializedKey, serializedValue);
     formatter.writeTo(crecord, ps);
@@ -157,7 +157,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
         "topic1", 0, 200, timestamp, timestampType, 0, 0, serializedValue.length,
         null, serializedValue);
     formatter.writeTo(crecord, ps);
@@ -202,7 +202,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
         "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length,
         serializedValue.length, serializedKey, serializedValue);
     formatter.writeTo(crecord, ps);
@@ -235,7 +235,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
             "topic1", 0, 200, timestamp, timestampType, 0, serializedKey.length,
             serializedValue.length, serializedKey, serializedValue);
     formatter.writeTo(crecord, ps);
@@ -261,7 +261,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
         "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
         null, serializedValue);
     formatter.writeTo(crecord, ps);
@@ -312,7 +312,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
             "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
             null, serializedValue);
 
@@ -358,7 +358,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
         topicName, 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length, serializedValue.length,
         serializedKey, serializedValue);
 
@@ -406,7 +406,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
         topicName, 0, 200, 1000, TimestampType.LOG_APPEND_TIME, serializedKey.length, serializedValue.length,
         serializedKey, serializedValue, message.headers(), Optional.empty());
 
@@ -456,7 +456,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
         topicName, 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0,
         serializedKey, serializedValue, message.headers(), Optional.empty());
 

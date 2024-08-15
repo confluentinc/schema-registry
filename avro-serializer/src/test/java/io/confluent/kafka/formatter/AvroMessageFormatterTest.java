@@ -195,7 +195,7 @@ public class AvroMessageFormatterTest {
     System.arraycopy(SCHEMA_ID_BYTES, 0, value, 1, SCHEMA_ID_BYTES.length);
     System.arraycopy(SOME_BYTES, 0, value, 1 + SCHEMA_ID_BYTES.length, SOME_BYTES.length);
 
-    return new ConsumerRecord<>(
+    return new ConsumerRecord<byte[], byte[]>(
         "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0,
         0, value.length,
         includeKey ? key : null, value);
