@@ -2400,11 +2400,13 @@ public class ProtobufSchema implements ParsedSchema {
       case BYTES:
         return RuleContext.Type.BYTES;
       case INT32:
+      case SINT32:
       case UINT32:
       case FIXED32:
       case SFIXED32:
         return RuleContext.Type.INT;
       case INT64:
+      case SINT64:
       case UINT64:
       case FIXED64:
       case SFIXED64:
