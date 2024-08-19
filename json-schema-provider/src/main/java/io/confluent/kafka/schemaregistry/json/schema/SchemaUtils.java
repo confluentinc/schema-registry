@@ -15,14 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.json.schema;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import static io.confluent.kafka.schemaregistry.json.diff.SchemaDiff.schemaTypesEqual;
+
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
-import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.CombinedSchema.ValidationCriterion;
 import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
@@ -41,8 +40,6 @@ import org.everit.json.schema.TrueSchema;
 
 public class SchemaUtils {
 
-  private static volatile Method isSyntheticMethod;
-
   public static Schema.Builder<?> schemaToBuilder(Schema s) {
     // TrueSchema extends EmptySchema
     if (s instanceof TrueSchema) {
@@ -54,8 +51,8 @@ public class SchemaUtils {
     if (s instanceof BooleanSchema) {
       return toBuilder((BooleanSchema) s);
     }
-    if (s instanceof CombinedSchema) {
-      return toBuilder((CombinedSchema) s);
+    if (s instanceof CombinedSchemaExt) {
+      return toBuilder((CombinedSchemaExt) s);
     }
     if (s instanceof ConditionalSchema) {
       return toBuilder((ConditionalSchema) s);
@@ -101,8 +98,8 @@ public class SchemaUtils {
     return merge(BooleanSchema.builder(), s);
   }
 
-  public static CombinedSchema.Builder toBuilder(CombinedSchema s) {
-    return merge(CombinedSchema.builder(), s);
+  public static CombinedSchemaExt.Builder toBuilder(CombinedSchemaExt s) {
+    return merge(CombinedSchemaExt.builder(), s);
   }
 
   public static ConditionalSchema.Builder toBuilder(ConditionalSchema s) {
@@ -192,9 +189,10 @@ public class SchemaUtils {
     return builder;
   }
 
-  public static CombinedSchema.Builder merge(CombinedSchema.Builder builder, CombinedSchema s) {
+  public static CombinedSchemaExt.Builder merge(
+      CombinedSchemaExt.Builder builder, CombinedSchemaExt s) {
     copyGenericAttrs(builder, s);
-    builder.isSynthetic(isSynthetic(s));
+    builder.isGenerated(s.isGenerated());
     builder.criterion(s.getCriterion());
     builder.subschemas(s.getSubschemas());
     return builder;
@@ -390,44 +388,27 @@ public class SchemaUtils {
     }
   }
 
-  protected static boolean containsType(CombinedSchema combinedSchema, Schema schema) {
+  protected static boolean containsType(CombinedSchemaExt combinedSchema, Schema schema) {
     for (Schema subschema : combinedSchema.getSubschemas()) {
-      if (subschema.getClass().equals(schema.getClass())) {
+      if (schemaTypesEqual(subschema, schema)) {
         return true;
       }
     }
     return false;
   }
 
-  protected static boolean isSyntheticAll(Schema schema) {
-    return schema instanceof CombinedSchema
-        && isSyntheticCombined((CombinedSchema) schema, CombinedSchema.ALL_CRITERION);
+  protected static boolean isGeneratedAll(Schema schema) {
+    return schema instanceof CombinedSchemaExt
+        && isGeneratedCombined((CombinedSchemaExt) schema, CombinedSchemaExt.ALL_CRITERION);
   }
 
-  protected static boolean isSyntheticAny(Schema schema) {
-    return schema instanceof CombinedSchema
-        && isSyntheticCombined((CombinedSchema) schema, CombinedSchema.ANY_CRITERION);
+  protected static boolean isGeneratedAny(Schema schema) {
+    return schema instanceof CombinedSchemaExt
+        && isGeneratedCombined((CombinedSchemaExt) schema, CombinedSchemaExt.ANY_CRITERION);
   }
 
-  protected static boolean isSyntheticCombined(
-      CombinedSchema schema, ValidationCriterion criterion) {
-    return schema.getCriterion() == criterion && isSynthetic(schema);
-  }
-
-  protected static boolean isSynthetic(CombinedSchema schema) {
-    // We use reflection to access isSynthetic
-    try {
-      if (isSyntheticMethod == null) {
-        synchronized (SchemaTranslator.class) {
-          if (isSyntheticMethod == null) {
-            isSyntheticMethod = CombinedSchema.class.getDeclaredMethod("isSynthetic");
-          }
-        }
-        isSyntheticMethod.setAccessible(true);
-      }
-      return (Boolean) isSyntheticMethod.invoke(schema);
-    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-      throw new RuntimeException(e);
-    }
+  protected static boolean isGeneratedCombined(
+      CombinedSchemaExt schema, ValidationCriterion criterion) {
+    return schema.getCriterion() == criterion && schema.isGenerated();
   }
 }

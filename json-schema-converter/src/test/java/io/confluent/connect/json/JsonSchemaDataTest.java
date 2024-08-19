@@ -2207,6 +2207,52 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testAnyOfWithArray() {
+    String schema = "{\n"
+        + "  \"$defs\": {\n"
+        + "    \"review\": {\n"
+        + "      \"properties\": {\n"
+        + "        \"created_on\": {\n"
+        + "          \"type\": [\n"
+        + "            \"string\",\n"
+        + "            \"null\"\n"
+        + "          ]\n"
+        + "        },\n"
+        + "        \"reason_code\": {\n"
+        + "          \"type\": [\n"
+        + "            \"string\",\n"
+        + "            \"null\"\n"
+        + "          ]\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"required\": [],\n"
+        + "      \"type\": \"object\"\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"properties\": {\n"
+        + "    \"change_operation\": {\n"
+        + "      \"type\": \"string\"\n"
+        + "    },\n"
+        + "    \"reviews\": {\n"
+        + "      \"items\": {\n"
+        + "        \"$ref\": \"#/$defs/review\"\n"
+        + "      },\n"
+        + "      \"required\": [],\n"
+        + "      \"type\": [\n"
+        + "        \"array\",\n"
+        + "        \"null\"\n"
+        + "      ]\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertTrue(connectSchema.field("reviews").schema().type() == Schema.Type.ARRAY);
+  }
+
+  @Test
   public void testToConnectRecursiveSchema() {
     JsonSchema jsonSchema = getRecursiveJsonSchema();
     JsonSchemaData jsonSchemaData = new JsonSchemaData();
