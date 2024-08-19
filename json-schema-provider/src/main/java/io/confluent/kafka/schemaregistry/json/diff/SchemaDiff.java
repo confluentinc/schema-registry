@@ -173,7 +173,7 @@ public class SchemaDiff {
       }
     }
 
-    if (!original.getClass().equals(update.getClass())) {
+    if (!schemaTypesEqual(original, update)) {
       // TrueSchema extends EmptySchema
       if (!(original instanceof FalseSchema) && !(update instanceof EmptySchema)) {
         ctx.addDifference(Type.TYPE_CHANGED);
@@ -223,5 +223,11 @@ public class SchemaDiff {
     } else {
       return schema;
     }
+  }
+
+  public static boolean schemaTypesEqual(final Schema schema1, final Schema schema2) {
+    return (schema1.getClass().equals(schema2.getClass()))
+        // to handle CombinedSchema and CombinedSchemaExt comparisons
+        || (schema1 instanceof CombinedSchema && schema2 instanceof CombinedSchema);
   }
 }
