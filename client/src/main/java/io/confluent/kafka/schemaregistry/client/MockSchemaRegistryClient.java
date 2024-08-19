@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
+
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
@@ -710,6 +712,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public Collection<String> getAllContexts() throws IOException, RestClientException {
+    List<String> results = new ArrayList<>(schemaToIdCache.keySet()).stream()
+        .map(s -> QualifiedSubject.create(DEFAULT_TENANT, s).getContext())
+        .sorted()
+        .collect(Collectors.toList());
+    return results;
+  }
+
+  @Override
   public Collection<String> getAllSubjects() throws IOException, RestClientException {
     List<String> results = new ArrayList<>(schemaToIdCache.keySet());
     Collections.sort(results);
@@ -737,7 +748,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private static String toQualifiedContext(String subject) {
     QualifiedSubject qualifiedSubject =
-        QualifiedSubject.create(QualifiedSubject.DEFAULT_TENANT, subject);
+        QualifiedSubject.create(DEFAULT_TENANT, subject);
     return qualifiedSubject != null ? qualifiedSubject.toQualifiedContext() : NO_SUBJECT;
   }
 }
