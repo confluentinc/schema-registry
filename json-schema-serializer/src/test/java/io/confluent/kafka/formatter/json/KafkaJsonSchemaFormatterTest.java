@@ -17,7 +17,6 @@ package io.confluent.kafka.formatter.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
-import java.util.Collections;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
@@ -31,10 +30,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.util.Optional;
 import java.util.Properties;
 
-import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializerConfig;
 
@@ -85,8 +83,8 @@ public class KafkaJsonSchemaFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+        null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -113,8 +111,8 @@ public class KafkaJsonSchemaFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length,
-        serializedValue.length, serializedKey, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, serializedKey.length,
+        serializedValue.length, serializedKey, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
