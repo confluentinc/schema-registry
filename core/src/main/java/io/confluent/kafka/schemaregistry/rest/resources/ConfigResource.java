@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -95,6 +96,7 @@ public class ConfigResource {
                     + "Error code 50003 indicates a failure forwarding the request to the primary.",
             content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("config.update-subject")
   public ConfigUpdateRequest updateSubjectLevelConfig(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -147,6 +149,7 @@ public class ConfigResource {
                     + "Error code 50001 indicates a failure in the backend data store.",
             content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("config.get-subject")
   public Config getSubjectLevelConfig(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -192,6 +195,7 @@ public class ConfigResource {
                   + "Error code 50003 indicates a failure forwarding the request to the primary.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("config.update-global")
   public ConfigUpdateRequest updateTopLevelConfig(
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
@@ -230,6 +234,7 @@ public class ConfigResource {
                   + "Error code 50001 indicates a failure in the backend data store.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("config.get-global")
   public Config getTopLevelConfig() {
     Config config;
     try {
@@ -298,6 +303,7 @@ public class ConfigResource {
                   + "Error code 50001 indicates a failure in the backend data store.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("config.delete-subject")
   public void deleteSubjectConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,

@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -94,6 +95,7 @@ public class ModeResource {
                   + "Error code 50004 indicates unknown leader.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("mode.update-subject")
   public ModeUpdateRequest updateMode(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -152,6 +154,7 @@ public class ModeResource {
                   + "Error code 50001 indicates a failure in the backend data store.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("mode.get-subject")
   public Mode getMode(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -193,6 +196,7 @@ public class ModeResource {
                   + "Error code 50004 indicates unknown leader.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("mode.update-global")
   public ModeUpdateRequest updateTopLevelMode(
       @Context HttpHeaders headers,
       @Parameter(description = "Update Request", required = true)
@@ -214,6 +218,7 @@ public class ModeResource {
             description = "Error code 50001 -- Error in the backend data store")
       })
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("mode.get-global")
   public Mode getTopLevelMode() {
     return getMode(null, false);
   }
@@ -235,6 +240,7 @@ public class ModeResource {
                   + "Error code 50001 indicates a failure in the backend data store.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("mode.delete-subject")
   public void deleteSubjectMode(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
