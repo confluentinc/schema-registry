@@ -716,8 +716,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   public Collection<String> getAllContexts() throws IOException, RestClientException {
     List<String> results = new ArrayList<>(schemaToIdCache.keySet()).stream()
         .map(s -> QualifiedSubject.create(DEFAULT_TENANT, s).getContext())
-        .filter(s -> !s.isEmpty() && !s.equals(DEFAULT_CONTEXT))
         .sorted()
+        .distinct()
         .collect(Collectors.toList());
     return results;
   }
