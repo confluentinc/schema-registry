@@ -227,11 +227,16 @@ public class MockSchemaRegistryClientTest extends ClusterTestHarness {
     id = client.register(":.context1:test-value", avroSchema);
     assertEquals(1, id);
 
+    id = client.register(":.context1:test-value2", avroSchema);
+    assertEquals(1, id);
+
+    id = client.register("test-value", avroSchema);
     id = client.register("test-value", avroSchema);
     assertEquals(1, id);
 
     Collection<String> contexts = client.getAllContexts();
     Iterator<String> iter = contexts.iterator();
+    assertEquals(".", iter.next());
     assertEquals(".context1", iter.next());
     assertEquals(".context2", iter.next());
   }
