@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriverManager;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleClientException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
@@ -341,9 +342,9 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         if (e.getStatus() == 404) {
           return null;
         }
-        throw new RuleException("Could not get kek " + key.getName(), e);
+        throw new RuleClientException("Could not get kek " + key.getName(), e);
       } catch (IOException e) {
-        throw new RuleException("Could not get kek " + key.getName(), e);
+        throw new RuleClientException("Could not get kek " + key.getName(), e);
       }
     }
 
@@ -359,9 +360,9 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         if (e.getStatus() == 409) {
           return null;
         }
-        throw new RuleException("Could not register kek " + key.getName(), e);
+        throw new RuleClientException("Could not register kek " + key.getName(), e);
       } catch (IOException e) {
-        throw new RuleException("Could not register kek " + key.getName(), e);
+        throw new RuleClientException("Could not register kek " + key.getName(), e);
       }
     }
 
@@ -436,10 +437,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         if (e.getStatus() == 404) {
           return null;
         }
-        throw new RuleException("Could not get dek for kek " + key.getKekName()
+        throw new RuleClientException("Could not get dek for kek " + key.getKekName()
             + ", subject " + key.getSubject(), e);
       } catch (IOException e) {
-        throw new RuleException("Could not get dek for kek " + key.getKekName()
+        throw new RuleClientException("Could not get dek for kek " + key.getKekName()
             + ", subject " + key.getSubject(), e);
       }
     }
@@ -465,10 +466,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         if (e.getStatus() == 409) {
           return null;
         }
-        throw new RuleException("Could not register dek for kek " + key.getKekName()
+        throw new RuleClientException("Could not register dek for kek " + key.getKekName()
             + ", subject " + key.getSubject(), e);
       } catch (IOException e) {
-        throw new RuleException("Could not register dek for kek " + key.getKekName()
+        throw new RuleClientException("Could not register dek for kek " + key.getKekName()
             + ", subject " + key.getSubject(), e);
       }
     }
