@@ -191,6 +191,7 @@ public class SchemasResource {
             content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
                     ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("schemas.get-subjects")
   public Set<String> getSubjects(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
@@ -239,6 +240,7 @@ public class SchemasResource {
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
                   ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("schemas.get-versions")
   public List<SubjectVersion> getVersions(
       @Parameter(description = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
@@ -327,6 +329,7 @@ public class SchemasResource {
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
                   ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("schemas.get-types")
   public Set<String> getSchemaTypes() {
     return schemaRegistry.schemaTypes();
   }
