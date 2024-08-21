@@ -137,8 +137,7 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
 
     return new HttpAccessTokenRetriever(clientId, clientSecret, scope, sslSocketFactory,
         url.toString(), retryBackoffMs, retryBackoffMaxMs, loginConnectTimeoutMs,
-            loginReadTimeoutMs, false
-    );
+            loginReadTimeoutMs);
   }
 
   private AccessTokenValidator getTokenValidator(ConfigurationUtils cu, Map<String, ?> configs) {
