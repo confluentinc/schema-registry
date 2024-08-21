@@ -97,13 +97,14 @@
         <json-schema.version>1.14.3</json-schema.version>
         <json-skema.version>0.15.0</json-skema.version>
         <kcache.version>4.0.11</kcache.version>
+        <protobuf.version>3.25.4</protobuf.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <okio.version>3.4.0</okio.version>
         <tink.version>1.12.0</tink.version>
         <tink.aws.kms.version>1.9.1</tink.aws.kms.version>
         <tink.gcp.kms.version>1.9.0</tink.gcp.kms.version>
-        <wire.version>4.9.7</wire.version>
+        <wire.version>5.0.0</wire.version>
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.7.1-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
