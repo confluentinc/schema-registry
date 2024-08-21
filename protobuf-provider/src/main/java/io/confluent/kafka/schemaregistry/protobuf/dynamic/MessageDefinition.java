@@ -22,17 +22,15 @@ import static io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema.t
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
-import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
-import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
-import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
+import com.google.protobuf.DescriptorProtos.ExtensionRangeOptions.Declaration;
+import com.google.protobuf.DescriptorProtos.ExtensionRangeOptions.VerificationState;
+import com.google.protobuf.DescriptorProtos.FeatureSet;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * MessageDefinition
@@ -75,37 +73,32 @@ public class MessageDefinition {
     }
 
     public Builder addField(
-        String label,
         String type,
         String name,
-        int num,
-        String defaultVal,
-        ProtobufMeta meta
+        int num
     ) {
-      return addField(label, type, name, num, defaultVal,
-          null, meta, null, null, null, null);
+      return addField(FieldDefinition.newBuilder(name, num, type).build());
     }
 
-    public Builder addField(
-        String label,
-        String type,
-        String name,
-        int num,
-        String defaultVal,
-        String jsonName,
-        ProtobufMeta meta,
-        CType ctype,
-        Boolean isPacked,
-        JSType jstype,
-        Boolean isDeprecated
-    ) {
-      doAddField(label, false, type, name, num,
-              defaultVal, jsonName, meta, ctype, isPacked, jstype, isDeprecated, null);
+    public Builder addField(FieldDefinition fd) {
+      mMsgTypeBuilder.addField(fd.getFieldType());
       return this;
     }
 
     public OneofBuilder addOneof(String oneofName) {
-      mMsgTypeBuilder.addOneofDecl(OneofDescriptorProto.newBuilder().setName(oneofName).build());
+      return addOneof(oneofName, null);
+    }
+
+    public OneofBuilder addOneof(String oneofName, FeatureSet features) {
+      DescriptorProtos.OneofOptions.Builder optionsBuilder =
+          DescriptorProtos.OneofOptions.newBuilder();
+      if (features != null) {
+        optionsBuilder.setFeatures(features);
+      }
+      mMsgTypeBuilder.addOneofDecl(OneofDescriptorProto.newBuilder()
+          .setName(oneofName)
+          .mergeOptions(optionsBuilder.build())
+          .build());
       return new OneofBuilder(this, mOneofIndex++);
     }
 
@@ -154,33 +147,34 @@ public class MessageDefinition {
       return this;
     }
 
-    public Builder addExtensionRange(int start, int end) {
+    public Builder addExtensionRange(
+        int start,
+        int end,
+        List<Declaration> decls,
+        FeatureSet features,
+        VerificationState verification
+    ) {
       DescriptorProto.ExtensionRange.Builder rangeBuilder =
           DescriptorProto.ExtensionRange.newBuilder();
       rangeBuilder.setStart(start).setEnd(end);
+      DescriptorProtos.ExtensionRangeOptions.Builder optionsBuilder =
+          DescriptorProtos.ExtensionRangeOptions.newBuilder();
+      for (Declaration decl : decls) {
+        optionsBuilder.addDeclaration(decl);
+      }
+      if (features != null) {
+        optionsBuilder.setFeatures(features);
+      }
+      if (verification != null) {
+        optionsBuilder.setVerification(verification);
+      }
+      rangeBuilder.mergeOptions(optionsBuilder.build());
       mMsgTypeBuilder.addExtensionRange(rangeBuilder.build());
       return this;
     }
 
-    public Builder addExtendDefinition(
-        String extendee,
-        String label,
-        String type,
-        String name,
-        int num,
-        String defaultVal,
-        String jsonName,
-        ProtobufMeta meta,
-        CType ctype,
-        Boolean isPacked,
-        JSType jstype,
-        Boolean isDeprecated
-    ) {
-      FieldDescriptorProto.Builder fieldBuilder = MessageDefinition.getFieldBuilder(label, false,
-          type, name, num, defaultVal, jsonName, meta, ctype, isPacked, jstype, isDeprecated,
-          null);
-      fieldBuilder.setExtendee(extendee);
-      mMsgTypeBuilder.addExtension(fieldBuilder.build());
+    public Builder addExtendDefinition(FieldDefinition fd) {
+      mMsgTypeBuilder.addExtension(fd.getFieldType());
       return this;
     }
 
@@ -211,6 +205,14 @@ public class MessageDefinition {
       return this;
     }
 
+    public Builder setFeatures(FeatureSet features) {
+      DescriptorProtos.MessageOptions.Builder optionsBuilder =
+          DescriptorProtos.MessageOptions.newBuilder();
+      optionsBuilder.setFeatures(features);
+      mMsgTypeBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
     // Note: added
     public Builder setMeta(ProtobufMeta meta) {
       Meta m = toMeta(meta);
@@ -234,27 +236,6 @@ public class MessageDefinition {
       mMsgTypeBuilder.setName(msgTypeName);
     }
 
-    private void doAddField(
-        String label,
-        boolean isProto3Optional,
-        String type,
-        String name,
-        int num,
-        String defaultVal,
-        String jsonName,
-        ProtobufMeta meta,
-        CType ctype,
-        Boolean isPacked,
-        JSType jstype,
-        Boolean isDeprecated,
-        OneofBuilder oneofBuilder
-    ) {
-      FieldDescriptorProto.Builder fieldBuilder = getFieldBuilder(label, isProto3Optional,
-          type, name, num, defaultVal, jsonName, meta, ctype, isPacked, jstype, isDeprecated,
-          oneofBuilder);
-      mMsgTypeBuilder.addField(fieldBuilder.build());
-    }
-
     private DescriptorProto.Builder mMsgTypeBuilder;
     private int mOneofIndex = 0;
   }
@@ -265,53 +246,8 @@ public class MessageDefinition {
   public static class OneofBuilder {
     // --- public ---
 
-    public OneofBuilder addField(
-        String type,
-        String name,
-        int num,
-        String defaultVal,
-        ProtobufMeta meta) {
-      return addField(false, type, name, num, defaultVal, null, meta, null, null, false);
-    }
-
-    public OneofBuilder addField(
-        boolean isProto3Optional,
-        String type,
-        String name,
-        int num,
-        String defaultVal,
-        ProtobufMeta meta) {
-      return addField(
-          isProto3Optional, type, name, num, defaultVal, null, meta, null, null, false);
-    }
-
-    public OneofBuilder addField(
-        boolean isProto3Optional,
-        String type,
-        String name,
-        int num,
-        String defaultVal,
-        String jsonName,
-        ProtobufMeta meta,
-        CType ctype,
-        JSType jstype,
-        Boolean deprecated
-    ) {
-      mMsgBuilder.doAddField(
-          "optional",
-          isProto3Optional,
-          type,
-          name,
-          num,
-          defaultVal,
-          jsonName,
-          meta,
-          ctype,
-          null,
-          jstype,
-          deprecated,
-          this
-      );
+    public OneofBuilder addField(FieldDefinition fd) {
+      mMsgBuilder.addField(fd);
       return this;
     }
 
@@ -332,116 +268,5 @@ public class MessageDefinition {
 
     private MessageDefinition.Builder mMsgBuilder;
     private int mIdx;
-  }
-
-  public static FieldDescriptorProto.Builder getFieldBuilder(
-      String label,
-      boolean isProto3Optional,
-      String type,
-      String name,
-      int num,
-      String defaultVal,
-      String jsonName,
-      ProtobufMeta meta,
-      CType ctype,
-      Boolean isPacked,
-      JSType jstype,
-      Boolean isDeprecated,
-      OneofBuilder oneofBuilder
-  ) {
-    FieldDescriptorProto.Label protoLabel = sLabelMap.get(label);
-    FieldDescriptorProto.Builder fieldBuilder = FieldDescriptorProto.newBuilder();
-    // Note: changed
-    if (label != null) {
-      fieldBuilder.setLabel(protoLabel);
-    }
-    if (isProto3Optional) {
-      fieldBuilder.setProto3Optional(isProto3Optional);
-    }
-    FieldDescriptorProto.Type primType = sTypeMap.get(type);
-    if (primType != null) {
-      fieldBuilder.setType(primType);
-    } else {
-      fieldBuilder.setTypeName(type);
-    }
-    fieldBuilder.setName(name).setNumber(num);
-    if (defaultVal != null) {
-      fieldBuilder.setDefaultValue(defaultVal);
-    }
-    if (oneofBuilder != null) {
-      fieldBuilder.setOneofIndex(oneofBuilder.getIdx());
-    }
-    if (jsonName != null) {
-      fieldBuilder.setJsonName(jsonName);
-    }
-    if (ctype != null) {
-      DescriptorProtos.FieldOptions.Builder optionsBuilder =
-          DescriptorProtos.FieldOptions.newBuilder();
-      optionsBuilder.setCtype(ctype);
-      fieldBuilder.mergeOptions(optionsBuilder.build());
-    }
-    if (isPacked != null) {
-      DescriptorProtos.FieldOptions.Builder optionsBuilder =
-          DescriptorProtos.FieldOptions.newBuilder();
-      optionsBuilder.setPacked(isPacked);
-      fieldBuilder.mergeOptions(optionsBuilder.build());
-    }
-    if (jstype != null) {
-      DescriptorProtos.FieldOptions.Builder optionsBuilder =
-          DescriptorProtos.FieldOptions.newBuilder();
-      optionsBuilder.setJstype(jstype);
-      fieldBuilder.mergeOptions(optionsBuilder.build());
-    }
-    if (isDeprecated != null) {
-      DescriptorProtos.FieldOptions.Builder optionsBuilder =
-          DescriptorProtos.FieldOptions.newBuilder();
-      optionsBuilder.setDeprecated(isDeprecated);
-      fieldBuilder.mergeOptions(optionsBuilder.build());
-    }
-    setFieldMeta(fieldBuilder, meta);
-    return fieldBuilder;
-  }
-
-  // --- private static ---
-
-  private static void setFieldMeta(
-      FieldDescriptorProto.Builder fieldBuilder, ProtobufMeta meta) {
-    Meta m = toMeta(meta);
-    if (m != null) {
-      DescriptorProtos.FieldOptions.Builder optionsBuilder =
-          DescriptorProtos.FieldOptions.newBuilder();
-      optionsBuilder.setExtension(MetaProto.fieldMeta, m);
-      fieldBuilder.mergeOptions(optionsBuilder.build());
-    }
-  }
-
-  private static Map<String, FieldDescriptorProto.Type> sTypeMap;
-  private static Map<String, FieldDescriptorProto.Label> sLabelMap;
-
-  static {
-    sTypeMap = new HashMap<String, FieldDescriptorProto.Type>();
-    sTypeMap.put("double", FieldDescriptorProto.Type.TYPE_DOUBLE);
-    sTypeMap.put("float", FieldDescriptorProto.Type.TYPE_FLOAT);
-    sTypeMap.put("int32", FieldDescriptorProto.Type.TYPE_INT32);
-    sTypeMap.put("int64", FieldDescriptorProto.Type.TYPE_INT64);
-    sTypeMap.put("uint32", FieldDescriptorProto.Type.TYPE_UINT32);
-    sTypeMap.put("uint64", FieldDescriptorProto.Type.TYPE_UINT64);
-    sTypeMap.put("sint32", FieldDescriptorProto.Type.TYPE_SINT32);
-    sTypeMap.put("sint64", FieldDescriptorProto.Type.TYPE_SINT64);
-    sTypeMap.put("fixed32", FieldDescriptorProto.Type.TYPE_FIXED32);
-    sTypeMap.put("fixed64", FieldDescriptorProto.Type.TYPE_FIXED64);
-    sTypeMap.put("sfixed32", FieldDescriptorProto.Type.TYPE_SFIXED32);
-    sTypeMap.put("sfixed64", FieldDescriptorProto.Type.TYPE_SFIXED64);
-    sTypeMap.put("bool", FieldDescriptorProto.Type.TYPE_BOOL);
-    sTypeMap.put("string", FieldDescriptorProto.Type.TYPE_STRING);
-    sTypeMap.put("bytes", FieldDescriptorProto.Type.TYPE_BYTES);
-    //sTypeMap.put("enum", FieldDescriptorProto.Type.TYPE_ENUM);
-    //sTypeMap.put("message", FieldDescriptorProto.Type.TYPE_MESSAGE);
-    //sTypeMap.put("group", FieldDescriptorProto.Type.TYPE_GROUP);
-
-    sLabelMap = new HashMap<String, FieldDescriptorProto.Label>();
-    sLabelMap.put("optional", FieldDescriptorProto.Label.LABEL_OPTIONAL);
-    sLabelMap.put("required", FieldDescriptorProto.Label.LABEL_REQUIRED);
-    sLabelMap.put("repeated", FieldDescriptorProto.Label.LABEL_REPEATED);
   }
 }
