@@ -109,8 +109,7 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
 
     return new HttpAccessTokenRetriever(clientId, clientSecret, scope, sslSocketFactory,
         url.toString(), retryBackoffMs, retryBackoffMaxMs, loginConnectTimeoutMs,
-            loginReadTimeoutMs, false
-    );
+        loginReadTimeoutMs);
   }
 
   private AccessTokenValidator getTokenValidator(Map<String, ?> configs) {
