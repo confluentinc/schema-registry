@@ -44,6 +44,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -690,36 +691,41 @@ public class AvroSchema implements ParsedSchema {
     if (schema == null) {
       return tags;
     }
-    getInlineTaggedEntitiesRecursively(tags, schema);
+    getInlineTaggedEntitiesRecursively(tags, schema, new HashSet<>());
     return tags;
   }
 
   private void getInlineTaggedEntitiesRecursively(
-      Map<SchemaEntity, Set<String>> tags, Schema schema) {
+      Map<SchemaEntity, Set<String>> tags, Schema schema, Set<String> visited) {
     switch (schema.getType()) {
       case UNION:
         for (Schema subtype : schema.getTypes()) {
-          getInlineTaggedEntitiesRecursively(tags, subtype);
+          getInlineTaggedEntitiesRecursively(tags, subtype, visited);
         }
         break;
       case ARRAY:
-        getInlineTaggedEntitiesRecursively(tags, schema.getElementType());
+        getInlineTaggedEntitiesRecursively(tags, schema.getElementType(), visited);
         break;
       case MAP:
-        getInlineTaggedEntitiesRecursively(tags, schema.getValueType());
+        getInlineTaggedEntitiesRecursively(tags, schema.getValueType(), visited);
         break;
       case RECORD:
+        String fullName = schema.getFullName();
+        if (visited.contains(fullName)) {
+          return;
+        } else {
+          visited.add(fullName);
+        }
         Set<String> recordTags = getInlineTags(schema);
         if (!recordTags.isEmpty()) {
-          tags.put(new SchemaEntity(schema.getFullName(), SR_RECORD), recordTags);
+          tags.put(new SchemaEntity(fullName, SR_RECORD), recordTags);
         }
         for (Schema.Field f : schema.getFields()) {
           Set<String> fieldTags = getInlineTags(f);
           if (!fieldTags.isEmpty()) {
-            String x = schema.getFullName() + "." + f.name();
-            tags.put(new SchemaEntity(schema.getFullName() + "." + f.name(), SR_FIELD), fieldTags);
+            tags.put(new SchemaEntity(fullName + "." + f.name(), SR_FIELD), fieldTags);
           }
-          getInlineTaggedEntitiesRecursively(tags, f.schema());
+          getInlineTaggedEntitiesRecursively(tags, f.schema(), visited);
         }
         break;
       default:
