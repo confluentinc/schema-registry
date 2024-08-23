@@ -76,6 +76,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -110,7 +111,7 @@ import org.slf4j.LoggerFactory;
 
 public class JsonSchema implements ParsedSchema {
 
-  private static final Logger log = LoggerFactory.getLogger(JsonSchema.class);
+  private static final Logger log = LoggerFactory/.getLogger(JsonSchema.class);
 
   public static final String DEFAULT_BASE_URI = "mem://input";
 
@@ -874,12 +875,12 @@ public class JsonSchema implements ParsedSchema {
     if (schema == null) {
       return tags;
     }
-    getInlineTaggedEntitiesRecursively(tags, schema, "", false);
+    getInlineTaggedEntitiesRecursively(tags, schema, "", false, new HashSet<>());
     return tags;
   }
 
-  private void getInlineTaggedEntitiesRecursively(
-      Map<SchemaEntity, Set<String>> tags, Schema schema, String scope, boolean inField) {
+  private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
+      Schema schema, String scope, boolean inField, Set<String> visited) {
     if (schema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) schema;
       String scopedName = scope + JsonSchemaComparator.getCriterion(combinedSchema);
@@ -887,14 +888,20 @@ public class JsonSchema implements ParsedSchema {
       subschemas.sort(new JsonSchemaComparator());
       for (int i = 0; i < subschemas.size(); i++) {
         Schema subschema = subschemas.get(i);
-        getInlineTaggedEntitiesRecursively(tags, subschema, scopedName + "." + i + ".", false);
+        getInlineTaggedEntitiesRecursively(
+            tags, subschema, scopedName + "." + i + ".", false, visited);
       }
     } else if (schema instanceof ArraySchema) {
       Schema subschema = ((ArraySchema) schema).getAllItemSchema();
-      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "array.", false);
+      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "array.", false, visited);
     } else if (schema instanceof ObjectSchema) {
       ObjectSchema objectSchema = (ObjectSchema) schema;
       String scopedName = scope + "object";
+      if (visited.contains(scopedName)) {
+        return;
+      } else {
+        visited.add(scopedName);
+      }
       if (!inField) {
         Set<String> recordTags = getInlineTags(schema);
         if (!recordTags.isEmpty()) {
@@ -910,21 +917,21 @@ public class JsonSchema implements ParsedSchema {
           tags.put(new SchemaEntity(scopedPropertyName, SR_FIELD), fieldTags);
         }
         getInlineTaggedEntitiesRecursively(
-            tags, propertySchema, scopedPropertyName + ".", true);
+            tags, propertySchema, scopedPropertyName + ".", true, visited);
       }
       getInlineTaggedEntitiesRecursively(tags, schema.getUnprocessedProperties(), scopedName + ".");
     } else if (schema instanceof ConditionalSchema) {
       ConditionalSchema condSchema = (ConditionalSchema) schema;
       String scopedName = scope + "conditional";
-      condSchema.getIfSchema().ifPresent(
-          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".if.", false));
-      condSchema.getThenSchema().ifPresent(
-          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".then.", false));
-      condSchema.getElseSchema().ifPresent(
-          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".else", false));
+      condSchema.getIfSchema().ifPresent(value -> getInlineTaggedEntitiesRecursively(
+          tags, value, scopedName + ".if.", false, visited));
+      condSchema.getThenSchema().ifPresent(value -> getInlineTaggedEntitiesRecursively(
+          tags, value, scopedName + ".then.", false, visited));
+      condSchema.getElseSchema().ifPresent(value -> getInlineTaggedEntitiesRecursively(
+          tags, value, scopedName + ".else", false, visited));
     } else if (schema instanceof NotSchema) {
       Schema subschema = ((NotSchema) schema).getMustNotMatch();
-      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "not.", false);
+      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "not.", false, visited);
     }
   }
 
