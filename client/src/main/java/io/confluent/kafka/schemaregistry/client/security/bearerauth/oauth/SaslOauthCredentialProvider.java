@@ -76,8 +76,7 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
     Map<String, ?> jaasconfig;
     if (Objects.requireNonNull(appConfigurationEntries).size() == 1
         && appConfigurationEntries.get(0) != null) {
-      jaasconfig = Collections.unmodifiableMap(
-          ((AppConfigurationEntry) appConfigurationEntries.get(0)).getOptions());
+      jaasconfig = Collections.unmodifiableMap(appConfigurationEntries.get(0).getOptions());
     } else {
       throw new ConfigException(
           String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
@@ -123,8 +122,8 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
 
     //Keeping following configs needed by HttpAccessTokenRetriever as constants and not exposed to
     //users for modifications
-    Long retryBackoffMs = SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS;
-    Long retryBackoffMaxMs = SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
+    long retryBackoffMs = SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS;
+    long retryBackoffMaxMs = SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
     Integer loginConnectTimeoutMs = null;
     Integer loginReadTimeoutMs = null;
 
@@ -140,7 +139,7 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
 
     return new HttpAccessTokenRetriever(clientId, clientSecret, scope, sslSocketFactory,
         url.toString(), retryBackoffMs, retryBackoffMaxMs, loginConnectTimeoutMs,
-        loginReadTimeoutMs);
+        loginReadTimeoutMs, false);
   }
 
   private AccessTokenValidator getTokenValidator(ConfigurationUtils cu, Map<String, ?> configs) {
