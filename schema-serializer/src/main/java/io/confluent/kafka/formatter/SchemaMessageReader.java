@@ -21,12 +21,13 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
+import java.io.InputStream;
 import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import kafka.common.MessageReader;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
@@ -57,14 +58,14 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import org.apache.kafka.tools.api.RecordReader;
 
-public abstract class SchemaMessageReader<T> implements MessageReader {
+public abstract class SchemaMessageReader<T> implements RecordReader {
 
   public static final String VALUE_SCHEMA = "value.schema";
   public static final String KEY_SCHEMA = "key.schema";
 
   private String topic = null;
-  private BufferedReader reader = null;
   private Boolean parseKey = false;
   private String keySeparator = "\t";
   private boolean parseHeaders = false;
@@ -91,7 +92,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
    */
   public SchemaMessageReader(
       String url, ParsedSchema keySchema, ParsedSchema valueSchema,
-      String topic, boolean parseKey, BufferedReader reader,
+      String topic, boolean parseKey,
       boolean normalizeSchema, boolean autoRegister, boolean useLatest
   ) {
     this.keySchema = keySchema;
@@ -100,7 +101,6 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     this.keySubject = topic != null ? topic + "-key" : null;
     this.valueSubject = topic != null ? topic + "-value" : null;
     this.parseKey = parseKey;
-    this.reader = reader;
     this.serializer = createSerializer(null);
     Map<String, Object> configs = new HashMap<>();
     configs.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, url);
@@ -113,7 +113,13 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   protected abstract SchemaMessageSerializer<T> createSerializer(Serializer keySerializer);
 
   @Override
-  public void init(java.io.InputStream inputStream, Properties props) {
+  public void configure(Map<String, ?> configs) {
+    Properties props = new Properties();
+    props.putAll(configs);
+    init(props);
+  }
+
+  public void init(Properties props) {
     topic = props.getProperty("topic");
     if (topic == null) {
       throw new ConfigException("Missing topic!");
@@ -165,7 +171,6 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       throw new KafkaException("null.marker and headers.key.separator may not be equal");
     }
 
-    reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
     String url = props.getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
@@ -370,8 +375,9 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   }
 
   @Override
-  public ProducerRecord<byte[], byte[]> readMessage() {
-    try {
+  public Iterator<ProducerRecord<byte[], byte[]>> readRecords(InputStream inputStream) {
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
       String line = reader.readLine();
       if (line == null) {
         return null;
@@ -414,7 +420,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
           serializedValue,
           headers);
 
-      return record;
+      return Collections.singletonList(record).iterator();
     } catch (IOException e) {
       throw new KafkaException("Error reading from input", e);
     }
