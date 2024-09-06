@@ -64,6 +64,7 @@ public class Difference {
     return Objects.hash(fullPath, type);
   }
 
+  @SuppressWarnings("CyclomaticComplexity")
   private String error() {
     String errorDescription = "";
     switch (type) {

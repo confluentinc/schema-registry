@@ -35,4 +35,8 @@ public interface SchemaRegistryResourceExtension extends Closeable {
   default boolean initialized() {
     return true;
   }
+
+  default boolean healthy() {
+    return true;
+  }
 }

@@ -60,7 +60,7 @@ public class DeriveAvroSchemaTest extends DeriveSchemaTest {
   protected void matchAndValidate(String message, JsonNode schemaString, String expectedSchema)
       throws IOException {
     AvroSchema schema = new AvroSchema(schemaString.toString());
-    schema.validate();
+    schema.validate(false);
     assertEquals(schema.toString(), expectedSchema);
     Object test = AvroSchemaUtils.toObject(message, schema);
     byte[] bytes = this.avroSerializer.serialize("test", test);

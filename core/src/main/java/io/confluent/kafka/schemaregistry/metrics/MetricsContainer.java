@@ -46,13 +46,10 @@ public class MetricsContainer {
   public static final String JMX_PREFIX = "kafka.schema.registry";
 
   public static final String RESOURCE_LABEL_PREFIX = "resource.";
+
   public static final String RESOURCE_LABEL_KAFKA_CLUSTER_ID =
           RESOURCE_LABEL_PREFIX + "kafka.cluster.id";
-  public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
-  public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
-  public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
-  public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
-  public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
+
   public static final String METRIC_NAME_MASTER_SLAVE_ROLE = "master-slave-role";
   public static final String METRIC_NAME_NODE_COUNT = "node-count";
   public static final String METRIC_NAME_CUSTOM_SCHEMA_PROVIDER = "custom-schema-provider-count";
@@ -66,6 +63,7 @@ public class MetricsContainer {
   public static final String METRIC_NAME_JSON_SCHEMAS_DELETED = "json-schemas-deleted";
   public static final String METRIC_NAME_PB_SCHEMAS_CREATED = "protobuf-schemas-created";
   public static final String METRIC_NAME_PB_SCHEMAS_DELETED = "protobuf-schemas-deleted";
+  public static final String METRIC_LEADER_INITIALIZATION_LATENCY = "leader-initialization-latency";
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
@@ -86,6 +84,7 @@ public class MetricsContainer {
   private final SchemaRegistryMetric avroSchemasDeleted;
   private final SchemaRegistryMetric jsonSchemasDeleted;
   private final SchemaRegistryMetric protobufSchemasDeleted;
+  private final SchemaRegistryMetric leaderInitializationLatency;
 
   private final MetricsContext metricsContext;
 
@@ -146,6 +145,9 @@ public class MetricsContainer {
 
     this.protobufSchemasDeleted = createMetric(METRIC_NAME_PB_SCHEMAS_DELETED,
             "Number of deleted Protobuf schemas", new CumulativeCount());
+
+    this.leaderInitializationLatency = createMetric(METRIC_LEADER_INITIALIZATION_LATENCY,
+            "Time spent initializing the leader's kafka store", new Value());
   }
 
   public Metrics getMetrics() {
@@ -227,19 +229,24 @@ public class MetricsContainer {
     }
   }
 
-  private static MetricsContext buildMetricsContext(SchemaRegistryConfig config,
-                                                    String kafkaClusterId) {
+  public SchemaRegistryMetric getLeaderInitializationLatencyMetric() {
+    return leaderInitializationLatency;
+  }
+
+  private static MetricsContext buildMetricsContext(
+          SchemaRegistryConfig config, String kafkaClusterId) {
+
     String srGroupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
 
     Map<String, Object> metadata =
             config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX);
 
     metadata.put(RESOURCE_LABEL_KAFKA_CLUSTER_ID, kafkaClusterId);
-    metadata.put(RESOURCE_LABEL_CLUSTER_ID, srGroupId);
-    metadata.put(RESOURCE_LABEL_GROUP_ID, srGroupId);
-    metadata.put(RESOURCE_LABEL_TYPE,  "schema_registry");
-    metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
-    metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+    metadata.put(config.RESOURCE_LABEL_CLUSTER_ID, srGroupId);
+    metadata.put(config.RESOURCE_LABEL_GROUP_ID, srGroupId);
+    metadata.put(config.RESOURCE_LABEL_TYPE,  "schema_registry");
+    metadata.put(config.RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
+    metadata.put(config.RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
 
     return new KafkaMetricsContext(JMX_PREFIX, metadata);
   }

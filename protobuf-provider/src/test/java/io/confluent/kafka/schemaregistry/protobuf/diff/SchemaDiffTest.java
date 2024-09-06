@@ -16,6 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
+import static java.util.stream.Collectors.toList;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -23,22 +29,16 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.squareup.wire.schema.Location;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.ProtoParser;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Map;
-import org.junit.Test;
-
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
-
-import static java.util.stream.Collectors.toList;
-import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
+import org.junit.Test;
 
 public class SchemaDiffTest {
 
@@ -70,7 +70,7 @@ public class SchemaDiffTest {
     checkProtobufSchemaCompatibility(nodes);
   }
 
-  private void checkProtobufSchemaCompatibility(ArrayNode nodes) throws Exception {
+  private void checkProtobufSchemaCompatibility(ArrayNode nodes) {
     for (int i = 0; i < nodes.size(); i++) {
       final ObjectNode testCase = (ObjectNode) nodes.get(i);
       String originalSchema = testCase.get("original_schema").asText();
@@ -124,7 +124,9 @@ public class SchemaDiffTest {
       final String description = testCase.get("description").asText();
 
       ProtobufSchema o = new ProtobufSchema(original, originalSchemaRefs, originalDependencies);
+      o = o.copy(getMetadata(testCase, "original"), null);
       ProtobufSchema u = new ProtobufSchema(update, updateSchemaRefs, updateDependencies);
+      u = u.copy(getMetadata(testCase, "update"), null);
       List<Difference> differences = SchemaDiff.compare(o, u);
       final List<Difference> incompatibleDiffs = differences.stream()
           .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
@@ -138,6 +140,25 @@ public class SchemaDiffTest {
       );
       assertEquals(description, isCompatible, incompatibleDiffs.isEmpty());
     }
+  }
+
+  private Metadata getMetadata(ObjectNode testCase, String version) {
+    ObjectMapper mapper = new ObjectMapper();
+    switch (version) {
+      case "original":
+        if (testCase.has("original_metadata")) {
+          return mapper.convertValue(testCase.get("original_metadata"), Metadata.class);
+        }
+        break;
+      case "update":
+        if (testCase.has("update_metadata")) {
+          return mapper.convertValue(testCase.get("update_metadata"), Metadata.class);
+        }
+        break;
+      default:
+        return null;
+    }
+    return null;
   }
 
   private ProtoFileElement getSchema(String schema) {

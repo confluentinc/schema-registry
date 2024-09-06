@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -36,6 +37,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchema
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
+import java.util.Set;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -57,6 +59,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
@@ -93,6 +96,9 @@ public class RestService implements Closeable, Configurable {
       };
   private static final TypeReference<List<Schema>> GET_SCHEMAS_RESPONSE_TYPE =
       new TypeReference<List<Schema>>() {
+      };
+  private static final TypeReference<List<ExtendedSchema>> GET_EXTENDED_SCHEMAS_RESPONSE_TYPE =
+      new TypeReference<List<ExtendedSchema>>() {
       };
   private static final TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
       new TypeReference<SchemaString>() {
@@ -155,7 +161,6 @@ public class RestService implements Closeable, Configurable {
   private static final TypeReference<SchemaRegistryServerVersion> GET_SR_VERSION_RESPONSE_TYPE =
       new TypeReference<SchemaRegistryServerVersion>() {
       };
-
 
 
   private static final int JSON_PARSE_ERROR_CODE = 50005;
@@ -689,11 +694,12 @@ public class RestService implements Closeable, Configurable {
         httpRequest(path, "POST",
                     registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
                     requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
-    if (verbose) {
-      return response.getMessages() == null ? Collections.emptyList() : response.getMessages();
+    if (response.getIsCompatible()) {
+      return Collections.emptyList();
     } else {
-      return response.getIsCompatible()
-              ? Collections.emptyList() : Collections.singletonList("Schemas are incompatible");
+      return Optional.ofNullable(response.getMessages())
+              .filter(it -> !it.isEmpty())
+              .orElseGet(() -> Collections.singletonList("Schemas are incompatible"));
     }
   }
 
@@ -880,6 +886,38 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public List<ExtendedSchema> getSchemas(Map<String, String> requestProperties,
+      String subjectPrefix,
+      boolean includeAliases,
+      boolean lookupDeletedSchema,
+      boolean latestOnly,
+      String ruleType,
+      Integer offset,
+      Integer limit)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas");
+    if (subjectPrefix != null) {
+      builder.queryParam("subjectPrefix", subjectPrefix);
+    }
+    builder.queryParam("aliases", includeAliases);
+    builder.queryParam("deleted", lookupDeletedSchema);
+    builder.queryParam("latestOnly", latestOnly);
+    if (ruleType != null) {
+      builder.queryParam("ruleType", ruleType);
+    }
+    if (offset != null) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit != null) {
+      builder.queryParam("limit", limit);
+    }
+    String path = builder.build().toString();
+
+    List<ExtendedSchema> response = httpRequest(path, "GET", null, requestProperties,
+        GET_EXTENDED_SCHEMAS_RESPONSE_TYPE);
+    return response;
+  }
+
   public SchemaString getId(int id) throws IOException, RestClientException {
     return getId(DEFAULT_REQUEST_PROPERTIES, id, null, false);
   }
@@ -910,10 +948,21 @@ public class RestService implements Closeable, Configurable {
 
   public SchemaString getId(Map<String, String> requestProperties,
       int id, String subject, boolean fetchMaxId) throws IOException, RestClientException {
+    return getId(requestProperties, id, subject, null, fetchMaxId);
+  }
+
+  public SchemaString getId(Map<String, String> requestProperties,
+      int id, String subject, Set<String> findTags, boolean fetchMaxId)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}")
         .queryParam("fetchMaxId", fetchMaxId);
     if (subject != null) {
       builder.queryParam("subject", subject);
+    }
+    if (findTags != null && !findTags.isEmpty()) {
+      for (String findTag : findTags) {
+        builder.queryParam("findTags", findTag);
+      }
     }
     String path = builder.build(id).toString();
 
@@ -971,8 +1020,19 @@ public class RestService implements Closeable, Configurable {
   public Schema getVersion(Map<String, String> requestProperties,
                            String subject, int version, boolean lookupDeletedSchema)
       throws IOException, RestClientException {
+    return getVersion(requestProperties, subject, version, lookupDeletedSchema, null);
+  }
+
+  public Schema getVersion(Map<String, String> requestProperties,
+      String subject, int version, boolean lookupDeletedSchema, Set<String> findTags)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}")
         .queryParam("deleted", lookupDeletedSchema);
+    if (findTags != null && !findTags.isEmpty()) {
+      for (String findTag : findTags) {
+        builder.queryParam("findTags", findTag);
+      }
+    }
     String path = builder.build(subject, version).toString();
 
     Schema response = httpRequest(path, "GET", null, requestProperties,
@@ -988,7 +1048,16 @@ public class RestService implements Closeable, Configurable {
   public Schema getLatestVersion(Map<String, String> requestProperties,
                                  String subject)
       throws IOException, RestClientException {
+    return getLatestVersion(requestProperties, subject, null);
+  }
+
+  public Schema getLatestVersion(Map<String, String> requestProperties,
+                                 String subject, Set<String> findTags)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/latest");
+    if (findTags != null && !findTags.isEmpty()) {
+      builder.queryParam("findTags", String.join(",", findTags));
+    }
     String path = builder.build(subject).toString();
 
     Schema response = httpRequest(path, "GET", null, requestProperties,

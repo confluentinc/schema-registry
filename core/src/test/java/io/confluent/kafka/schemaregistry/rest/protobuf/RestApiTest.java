@@ -22,7 +22,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.utils.ResourceLoader;
-import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -50,7 +49,6 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.serializers.protobuf.test.Root;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 import static org.junit.Assert.assertTrue;
 
@@ -449,6 +447,74 @@ public class RestApiTest extends ClusterTestHarness {
 
   @Test
   public void testRegisterSchemaTagsBasic() throws Exception {
+    String subject = "test";
+    String schemaString = "syntax = \"proto3\";\n" +
+        "package com.example;\n" +
+        "\n" +
+        "message Message1 {\n" +
+        "  string f1 = 1;\n" +
+        "  string f2 = 2;\n" +
+        "}\n";
+    registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+
+    RegisterSchemaRequest tagSchemaRequest = new RegisterSchemaRequest(new ProtobufSchema(schemaString));
+    tagSchemaRequest.setSchemaTagsToAdd(Arrays.asList(
+        new SchemaTags(new SchemaEntity("Message1.f1", SchemaEntity.EntityType.SR_FIELD),
+            Arrays.asList("TAG1")),
+        new SchemaTags(new SchemaEntity(".Message1.f1", SchemaEntity.EntityType.SR_FIELD),
+            Arrays.asList("TAG2"))
+    ));
+
+    String newSchemaString = "syntax = \"proto3\";\n" +
+        "package com.example;\n" +
+        "\n" +
+        "message Message1 {\n" +
+        "  string f1 = 1 [(confluent.field_meta) = {\n" +
+        "    tags: [\n" +
+        "      \"TAG1\",\n" +
+        "      \"TAG2\"\n" +
+        "    ]\n" +
+        "  }];\n" +
+        "  string f2 = 2;\n" +
+        "}\n";
+    RegisterSchemaResponse responses = restApp.restClient
+        .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, false);
+    assertEquals(2, responses.getId());
+
+    Schema result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(newSchemaString, result.getSchema());
+    assertEquals((Integer) 2, result.getVersion());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    tagSchemaRequest = new RegisterSchemaRequest(new ProtobufSchema(newSchemaString));
+    tagSchemaRequest.setVersion(3);
+    tagSchemaRequest.setSchemaTagsToRemove(Collections.singletonList(
+        new SchemaTags(new SchemaEntity("Message1.f1", SchemaEntity.EntityType.SR_FIELD),
+            Arrays.asList("TAG2"))));
+
+    newSchemaString = "syntax = \"proto3\";\n" +
+        "package com.example;\n" +
+        "\n" +
+        "message Message1 {\n" +
+        "  string f1 = 1 [(confluent.field_meta) = {\n" +
+        "    tags: [\n" +
+        "      \"TAG1\"\n" +
+        "    ]\n" +
+        "  }];\n" +
+        "  string f2 = 2;\n" +
+        "}\n";
+    responses = restApp.restClient
+        .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, false);
+    assertEquals(3, responses.getId());
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(newSchemaString, result.getSchema());
+    assertEquals((Integer) 3, result.getVersion());
+    assertEquals("3", responses.getMetadata().getProperties().get("confluent:version"));
+  }
+
+  @Test
+  public void testRegisterSchemaTagsBasicDeprecated() throws Exception {
     String subject = "test";
     String schemaString = "syntax = \"proto3\";\n" +
         "package com.example;\n" +

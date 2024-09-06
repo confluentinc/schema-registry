@@ -90,6 +90,7 @@ public class Jackson {
     mapper.registerModule(new Jdk8Module());
     mapper.registerModule(new JavaTimeModule());
     mapper.registerModule(new JsonOrgModule());
+    mapper.registerModule(new JsonSkemaModule());
     mapper.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
     mapper.disable(FAIL_ON_UNKNOWN_PROPERTIES);
     mapper.setNodeFactory(sorted

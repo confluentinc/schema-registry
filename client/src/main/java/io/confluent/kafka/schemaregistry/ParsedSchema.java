@@ -20,18 +20,19 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import java.util.stream.Collectors;
 
 /**
  * A parsed schema.
@@ -40,6 +41,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
  * {@link io.confluent.kafka.schemaregistry.SchemaProvider}.
  */
 public interface ParsedSchema {
+
+  String RESERVED = "confluent:reserved";
 
   /**
    * Returns the schema type.
@@ -128,6 +131,15 @@ public interface ParsedSchema {
   }
 
   /**
+   * Returns the inline tagged entities of the schema.
+   *
+   * @return a map of entity name to tags
+   */
+  default Map<SchemaEntity, Set<String>> inlineTaggedEntities() {
+    return Collections.emptyMap();
+  }
+
+  /**
    * Returns a copy of this schema.
    *
    * @return a copy of this schema
@@ -179,6 +191,14 @@ public interface ParsedSchema {
    * Throws an exception if the schema is not valid.
    */
   default void validate() {
+    validate(false);
+  }
+
+  /**
+   * Validates the schema and ensures all references are resolved properly.
+   * Throws an exception if the schema is not valid.
+   */
+  default void validate(boolean strict) {
   }
 
   /**
@@ -217,6 +237,14 @@ public interface ParsedSchema {
   Object rawSchema();
 
   /**
+   * @param field name of the field to check
+   * @return true, if the schema has {@param field} in its top level fields. false, otherwise.
+   */
+  default boolean hasTopLevelField(String field) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Returns whether the underlying raw representations are equal.
    *
    * @return whether the underlying raw representations are equal
@@ -242,5 +270,16 @@ public interface ParsedSchema {
   default Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     throw new UnsupportedOperationException();
+  }
+
+  default Set<String> getReservedFields() {
+    if (metadata() == null || metadata().getProperties() == null
+          || !metadata().getProperties().containsKey(RESERVED)) {
+      return Collections.emptySet();
+    }
+    return Arrays.stream(metadata().getProperties().get(RESERVED).split(","))
+            .map(String::trim)
+            .filter(field -> !field.isEmpty())
+            .collect(Collectors.toSet());
   }
 }

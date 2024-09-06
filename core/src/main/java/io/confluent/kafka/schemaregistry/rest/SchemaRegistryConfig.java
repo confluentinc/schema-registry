@@ -16,6 +16,8 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
+import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
@@ -47,6 +49,13 @@ import static io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGI
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class SchemaRegistryConfig extends RestConfig {
+
+  public static final String RESOURCE_LABEL_PREFIX = "resource.";
+  public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
+  public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
+  public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
+  public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
+  public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryConfig.class);
   public static final String LISTENER_NAME_PREFIX = "listener.name.";
@@ -147,6 +156,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_ELECTION_DELAY = "leader.election.delay";
   public static final boolean DEFAULT_LEADER_ELECTION_DELAY = false;
   /**
+   * <code>leader.election.sticky</code>*
+   */
+  public static final String LEADER_ELECTION_STICKY = "leader.election.sticky";
+  public static final boolean DEFAULT_LEADER_ELECTION_STICKY = false;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -166,6 +180,9 @@ public class SchemaRegistryConfig extends RestConfig {
   @Deprecated
   public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
   public static final String SCHEMA_COMPATIBILITY_CONFIG = "schema.compatibility.level";
+
+  public static final String SCHEMA_VALIDATE_FIELDS_CONFIG = "schema.validate.fields";
+  public static final boolean SCHEMA_VALIDATE_FIELDS_DEFAULT = false;
 
   /**
    * <code>schema.cache.size</code>
@@ -202,6 +219,9 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String METADATA_ENCODER_TOPIC_CONFIG = "metadata.encoder.topic";
   public static final String METADATA_ENCODER_TOPIC_DEFAULT = "_schema_encoders";
+
+  public static final String ENABLE_STORE_HEALTH_CHECK = "enable.store.health.check";
+  public static final boolean DEFAULT_ENABLE_STORE_HEALTH_CHECK = false;
 
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
@@ -248,8 +268,12 @@ public class SchemaRegistryConfig extends RestConfig {
   @Deprecated
   public static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG =
       "schema.registry.resource.extension.class";
+  public static final String INIT_RESOURCE_EXTENSION_CONFIG =
+      "init.resource.extension.class";
   public static final String RESOURCE_EXTENSION_CONFIG =
       "resource.extension.class";
+  public static final String ENABLE_FIPS_CONFIG =
+      "enable.fips";
   public static final String RESOURCE_STATIC_LOCATIONS_CONFIG =
       "resource.static.locations";
   @Deprecated
@@ -332,6 +356,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "forward_transitive (new schema is forward compatible with all previous versions), "
       + "full_transitive (new schema is backward and forward compatible with all previous "
       + "versions)";
+  protected static final String VALIDATE_FIELDS_DOC = "Determines whether field validation is "
+      + "enabled or not. If enabled, it checks whether any top level fields conflict with the "
+      + "reserved fields in metadata. It also checks for the presence of any field names "
+      + "beginning with $$";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
@@ -360,8 +388,13 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for reading responses after forwarding requests to the leader.";
   protected static final String LEADER_ELECTION_DELAY_DOC =
       "Whether to delay leader election until after initialization.";
+  protected static final String LEADER_ELECTION_STICKY_DOC =
+      "If true, leader election will prefer to keep the current leader if possible. This is a "
+      + "cluster wide setting i.e all nodes should have either true or false.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
+  protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
+      "If true, health check will call the local storage.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
       + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";
@@ -413,12 +446,20 @@ public class SchemaRegistryConfig extends RestConfig {
       "Login thread will sleep until the specified window factor of time from last refresh to "
       + "ticket's expiry has "
       + "been reached, at which time it will try to renew the ticket.";
+  protected static final String ENABLE_FIPS_DOC =
+      "Enable FIPS mode on the server. If FIPS mode is enabled, broker listener security protocols,"
+      + " TLS versions and cipher suites will be validated based on FIPS compliance requirement.";
   protected static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC =
       "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
       + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
       + " like filters to Schema Registry. Typically used to add custom capability like logging, "
       + " security, etc. The schema.registry.resource.extension.class name is deprecated; "
       + "prefer using resource.extension.class instead.";
+  protected static final String INIT_RESOURCE_EXTENSION_DOC =
+      "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
+      + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
+      + " to Schema Registry. These resources will be injected before Schema Registry is "
+      + "initialized.";
   protected static final String RESOURCE_STATIC_LOCATIONS_DOC =
       "  A list of classpath resources containing static resources to serve using the default "
           + "servlet.";
@@ -445,7 +486,7 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String HTTPS = "https";
   public static final String HTTP = "http";
 
-  private Properties originalProperties;
+  private final Properties originalProperties;
 
   static {
     config = baseSchemaRegistryConfigDef();
@@ -527,6 +568,9 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
         ConfigDef.Importance.HIGH, COMPATIBILITY_DOC
     )
+    .define(SCHEMA_VALIDATE_FIELDS_CONFIG, ConfigDef.Type.BOOLEAN, SCHEMA_VALIDATE_FIELDS_DEFAULT,
+        ConfigDef.Importance.LOW, VALIDATE_FIELDS_DOC
+    )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
     )
@@ -568,8 +612,14 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(LEADER_ELECTION_DELAY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_DELAY,
         ConfigDef.Importance.LOW, LEADER_ELECTION_DELAY_DOC
     )
+    .define(LEADER_ELECTION_STICKY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_STICKY,
+            ConfigDef.Importance.LOW, LEADER_ELECTION_STICKY_DOC
+    )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
+    )
+    .define(ENABLE_STORE_HEALTH_CHECK, ConfigDef.Type.BOOLEAN, DEFAULT_ENABLE_STORE_HEALTH_CHECK,
+        ConfigDef.Importance.LOW, ENABLE_STORE_HEALTH_CHECK_DOC
     )
     .define(KAFKASTORE_SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING,
         SecurityProtocol.PLAINTEXT.toString(), ConfigDef.Importance.MEDIUM,
@@ -661,8 +711,14 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
     )
+    .define(ENABLE_FIPS_CONFIG, ConfigDef.Type.BOOLEAN, false,
+        ConfigDef.Importance.LOW, ENABLE_FIPS_DOC
+    )
     .define(RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
+    )
+    .define(INIT_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
+            ConfigDef.Importance.LOW, INIT_RESOURCE_EXTENSION_DOC
     )
     .define(RESOURCE_STATIC_LOCATIONS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, RESOURCE_STATIC_LOCATIONS_DOC
@@ -712,6 +768,7 @@ public class SchemaRegistryConfig extends RestConfig {
     if (compatibilityType == null) {
       throw new RestConfigException("Unknown compatibility level: " + compatibilityTypeString);
     }
+    buildMetricsContextLabels();
   }
 
   private static String getDefaultHost() {
@@ -846,7 +903,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
     Map<String, Object> overridden = originals();
     for (Map.Entry<String, ?> entry:originals().entrySet()) {
-      String key = (String) entry.getKey();
+      String key = entry.getKey();
       if (key.toLowerCase().startsWith(prefix) && key.length() > prefix.length()) {
         key = key.substring(prefix.length());
         if (config.names().contains(key)) {
@@ -861,4 +918,14 @@ public class SchemaRegistryConfig extends RestConfig {
     System.out.println(config.toRst());
   }
 
+  private void buildMetricsContextLabels() {
+    RestMetricsContext context = getMetricsContext();
+    String srGroupId = getString(SCHEMAREGISTRY_GROUP_ID_CONFIG);
+
+    context.setLabel(RESOURCE_LABEL_CLUSTER_ID, srGroupId);
+    context.setLabel(RESOURCE_LABEL_GROUP_ID, srGroupId);
+    context.setLabel(RESOURCE_LABEL_TYPE,  "schema_registry");
+    context.setLabel(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
+    context.setLabel(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+  }
 }

@@ -32,6 +32,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.annotation.JsonTypeInfo.As;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -44,6 +47,7 @@ import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.DekRegistryClientFactory;
 import io.confluent.dekregistry.client.MockDekRegistryClientFactory;
 import io.confluent.dekregistry.client.rest.entities.Dek;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -85,6 +89,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
+import org.apache.avro.Schema.Parser;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -118,6 +123,7 @@ public abstract class FieldEncryptionExecutorTest {
   private final KafkaAvroDeserializer reflectionAvroDeserializer;
   private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
   private final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
+  private final KafkaJsonSchemaSerializer<Employee> jsonSchemaSerializer3;
   private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   private final KafkaProtobufSerializer<Widget> protobufSerializer;
   private final KafkaProtobufSerializer<WidgetBytes> protobufSerializerBytes;
@@ -176,8 +182,10 @@ public abstract class FieldEncryptionExecutorTest {
     reflectionAvroSerializer = new KafkaAvroSerializer(schemaRegistry, reflectionClientProps);
     reflectionAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, reflectionClientProps);
 
+    clientProps.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, false);
     jsonSchemaSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaSerializer2 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
+    jsonSchemaSerializer3 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, clientProps);
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
@@ -641,6 +649,109 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("alice", ((OldWidget)obj).getName());
     // Old value is preserved
     assertEquals("alice", widget.getName());
+  }
+
+  @Test
+  public void testKafkaAvroSchemaSerializerUnionWithRefs() throws Exception {
+    String ccStr = "{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"CreditCardInfo\",\n"
+        + "  \"namespace\": \"com.confluent.dto\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"cardNumber\",\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"default\": \"\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"cardPin\",\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"default\": \"\",\n"
+        + "      \"confluent:tags\": [\"PII\"]\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}\n";
+    String bankingStr = "{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"BankingInfo\",\n"
+        + "  \"namespace\": \"com.confluent.dto\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"accountId\",\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"default\": \"\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"accountPassword\",\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"default\": \"\",\n"
+        + "      \"confluent:tags\": [\"PII\"]\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}\n";
+    String schemaStr = "{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"Employee\",\n"
+        + "  \"namespace\": \"com.confluent.dto\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"id\",\n"
+        + "      \"type\": \"string\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"paymentDetails\",\n"
+        + "      \"type\": [\"null\", \"BankingInfo\", \"CreditCardInfo\"],\n"
+        + "      \"default\": null\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}\n";
+
+    Schema.Parser parser = new Schema.Parser();
+    Schema ccSchema = parser.parse(ccStr);
+
+    Schema bankingSchema = parser.parse(bankingStr);
+    GenericRecord banking = new GenericData.Record(bankingSchema);
+    banking.put("accountId", "123");
+    banking.put("accountPassword", "456");
+
+    Schema employeeSchema = parser.parse(schemaStr);
+    GenericRecord employee = new GenericData.Record(employeeSchema);
+    employee.put("id", "789");
+    employee.put("paymentDetails", banking);
+
+    schemaRegistry.register("CreditCardInfoJson", new AvroSchema(ccSchema));
+    schemaRegistry.register("BankingInfoJson", new AvroSchema(bankingSchema));
+
+    AvroSchema avroSchema = new AvroSchema(schemaStr,
+        ImmutableList.of(new SchemaReference("CreditCardInfo", "CreditCardInfoJson", 1),
+            new SchemaReference("BankingInfo", "BankingInfoJson", 1)),
+        ImmutableMap.of("CreditCardInfo", ccStr, "BankingInfo", bankingStr),
+        null);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, employee);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    Object obj = avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+
+    assertTrue(
+        "Returned object should be an employee ",
+        GenericRecord.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned value should be the password",
+        "456",
+        ((GenericRecord) ((GenericRecord) obj).get("paymentDetails")).get("accountPassword")
+    );
   }
 
   @Test
@@ -1312,6 +1423,117 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaJsonSchemaSerializerOneOfWithRefs() throws Exception {
+    BankingInfo bankingInfo = new BankingInfo();
+    bankingInfo.setAccountId("123");
+    bankingInfo.setAccountPassword("456");
+    Employee employee = new Employee();
+    employee.setId("789");
+    employee.setPaymentDetails(bankingInfo);
+
+    String ccStr = "{\n" +
+        "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "  \"additionalProperties\": false,\n" +
+        "  \"properties\": {\n" +
+        "    \"paymentType\": {\"type\":\"string\",\"enum\":[\"CC\"],\"default\":\"CC\"},\n" +
+        "    \"cardNumber\": {\n" +
+        "      \"default\": \"\",\n" +
+        "      \"type\": \"string\"\n" +
+        "    },\n" +
+        "    \"cardPin\": {\n" +
+        "      \"confluent:tags\": [\n" +
+        "        \"PII\"\n" +
+        "      ],\n" +
+        "      \"default\": \"\",\n" +
+        "      \"type\": \"string\"\n" +
+        "    }\n" +
+        "  },\n" +
+        "  \"title\": \"CreditCardInfo\",\n" +
+        "  \"type\": \"object\"\n" +
+        "}";
+    String bankingStr = "{\n" +
+        "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "  \"additionalProperties\": false,\n" +
+        "  \"properties\": {\n" +
+        "    \"paymentType\": {\"type\":\"string\",\"enum\":[\"BANK\"],\"default\":\"BANK\"},\n" +
+        "    \"accountId\": {\n" +
+        "      \"default\": \"\",\n" +
+        "      \"type\": \"string\"\n" +
+        "    },\n" +
+        "    \"accountPassword\": {\n" +
+        "      \"confluent:tags\": [\n" +
+        "        \"PII\"\n" +
+        "      ],\n" +
+        "      \"default\": \"\",\n" +
+        "      \"type\": \"string\"\n" +
+        "    }\n" +
+        "  },\n" +
+        "  \"title\": \"BankingInfo\",\n" +
+        "  \"type\": \"object\"\n" +
+        "}";
+    String schemaStr = "{\n" +
+        "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "  \"additionalProperties\": false,\n" +
+        "  \"properties\": {\n" +
+        "    \"id\": {\n" +
+        "      \"type\": \"string\"\n" +
+        "    },\n" +
+        "    \"paymentDetails\": {\n" +
+        "      \"anyOf\": [\n" +
+        "        {\n" +
+        "          \"$ref\": \"CreditCardInfo\"\n" +
+        "        },\n" +
+        "        {\n" +
+        "          \"$ref\": \"BankingInfo\"\n" +
+        "        },\n" +
+        "        {\n" +
+        "          \"type\": \"null\"\n" +
+        "        }\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  },\n" +
+        "  \"title\": \"Employee\",\n" +
+        "  \"type\": \"object\"\n" +
+        "}";
+
+    JsonSchema ccSchema = new JsonSchema(ccStr);
+    schemaRegistry.register("CreditCardInfoJson", ccSchema);
+    JsonSchema bankingSchema = new JsonSchema(bankingStr);
+    schemaRegistry.register("BankingInfoJson", bankingSchema);
+
+    JsonSchema jsonSchema = new JsonSchema(schemaStr,
+        ImmutableList.of(new SchemaReference("CreditCardInfo", "CreditCardInfoJson", 1),
+            new SchemaReference("BankingInfo", "BankingInfoJson", 1)),
+        ImmutableMap.of("CreditCardInfo", ccStr, "BankingInfo", bankingStr),
+        null);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer3);
+    byte[] bytes = jsonSchemaSerializer3.serialize(topic, headers, employee);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(jsonSchemaDeserializer);
+    Object obj = jsonSchemaDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+
+    assertTrue(
+        "Returned object should be an employee ",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned value should be the password",
+        "456",
+        ((JsonNode)obj).get("paymentDetails").get("accountPassword").textValue()
+    );
+  }
+
+  @Test
   public void testKafkaProtobufSerializer() throws Exception {
     Widget widget = Widget.newBuilder()
         .setName("alice")
@@ -1892,6 +2114,104 @@ public abstract class FieldEncryptionExecutorTest {
     protected byte[] generateDek(DekFormat dekFormat) throws GeneralSecurityException {
       // generate an invalid dek
       return new byte[15];
+    }
+  }
+
+  public class Employee {
+    @JsonProperty(required = true)
+    private String id;
+    @JsonProperty(required = true)
+    private PaymentDetails paymentDetails;
+
+    // Getters and Setters
+    public String getId() {
+      return id;
+    }
+
+    public void setId(String id) {
+      this.id = id;
+    }
+
+    public PaymentDetails getPaymentDetails() {
+      return paymentDetails;
+    }
+
+    public void setPaymentDetails(PaymentDetails paymentDetails) {
+      this.paymentDetails = paymentDetails;
+    }
+  }
+
+  @JsonTypeInfo(
+      use = JsonTypeInfo.Id.NAME,
+      include = As.EXISTING_PROPERTY,
+      property = "paymentType"
+  )
+  @JsonSubTypes({
+      @JsonSubTypes.Type(value = BankingInfo.class, name = "BANK"),
+      @JsonSubTypes.Type(value = CreditCardInfo.class, name = "CC")
+  })
+  public static class PaymentDetails {
+    private String paymentType;
+
+    public PaymentDetails(String paymentType) {
+      this.paymentType = paymentType;
+    }
+
+    // Getters and Setters
+    public String getPaymentType() {
+      return paymentType;
+    }
+  }
+
+  public static class BankingInfo extends PaymentDetails {
+    private String accountId;
+    private String accountPassword;
+
+    public BankingInfo() {
+      super("BANK");
+    }
+
+    // Getters and Setters
+    public String getAccountId() {
+      return accountId;
+    }
+
+    public void setAccountId(String accountId) {
+      this.accountId = accountId;
+    }
+
+    public String getAccountPassword() {
+      return accountPassword;
+    }
+
+    public void setAccountPassword(String accountPassword) {
+      this.accountPassword = accountPassword;
+    }
+  }
+
+  public static class CreditCardInfo extends PaymentDetails {
+    private String cardNumber;
+    private String cardPin;
+
+    public CreditCardInfo() {
+      super("CC");
+    }
+
+    // Getters and Setters
+    public String getCardNumber() {
+      return cardNumber;
+    }
+
+    public void setCardNumber(String cardNumber) {
+      this.cardNumber = cardNumber;
+    }
+
+    public String getCardPin() {
+      return cardPin;
+    }
+
+    public void setCardPin(String cardPin) {
+      this.cardPin = cardPin;
     }
   }
 }

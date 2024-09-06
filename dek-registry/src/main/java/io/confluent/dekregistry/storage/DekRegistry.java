@@ -112,6 +112,8 @@ public class DekRegistry implements Closeable {
   public static final String AZURE_KMS = "azure-kms";
   public static final String GCP_KMS = "gcp-kms";
 
+  private static final String TEST_SUBJECT = "__TEST";
+
   private static final TypeReference<Kek> KEK_TYPE =
       new TypeReference<Kek>() {
       };
@@ -289,11 +291,21 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public List<String> getKekNames(boolean lookupDeleted) {
+  public List<String> getKekNames(List<String> subjectPrefix, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
-    return getKeks(tenant, lookupDeleted).stream()
-        .map(kv -> ((KeyEncryptionKeyId) kv.key).getName())
-        .collect(Collectors.toList());
+    if (subjectPrefix == null || subjectPrefix.isEmpty()) {
+      return getKeks(tenant, lookupDeleted).stream()
+          .map(kv -> ((KeyEncryptionKeyId) kv.key).getName())
+          .collect(Collectors.toList());
+    } else {
+      return getDeks(tenant, lookupDeleted).stream()
+          .filter(kv -> subjectPrefix.stream()
+              .anyMatch(prefix -> ((DataEncryptionKeyId) kv.key).getSubject().startsWith(prefix)))
+          .map(kv -> ((DataEncryptionKeyId) kv.key).getKekName())
+          .sorted()
+          .distinct()
+          .collect(Collectors.toList());
+    }
   }
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getKeks(
@@ -346,13 +358,24 @@ public class DekRegistry implements Closeable {
   }
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
+      String tenant, boolean lookupDeleted) {
+    return getDeks(tenant, String.valueOf(Character.MIN_VALUE),
+        String.valueOf(Character.MAX_VALUE), lookupDeleted);
+  }
+
+  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
       String tenant, String kekName, boolean lookupDeleted) {
+    return getDeks(tenant, kekName, kekName, lookupDeleted);
+  }
+
+  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
+      String tenant, String minKekName, String maxKekName, boolean lookupDeleted) {
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     DataEncryptionKeyId key1 = new DataEncryptionKeyId(
-        tenant, kekName, CONTEXT_PREFIX + CONTEXT_DELIMITER,
+        tenant, minKekName, CONTEXT_PREFIX + CONTEXT_DELIMITER,
         DekFormat.AES128_GCM, MIN_VERSION);
     DataEncryptionKeyId key2 = new DataEncryptionKeyId(
-        tenant, kekName, CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER,
+        tenant, maxKekName, CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER,
         DekFormat.AES256_SIV, Integer.MAX_VALUE);
     try (KeyValueIterator<EncryptionKeyId, EncryptionKey> iter =
         keys().range(key1, true, key2, false)) {
@@ -510,6 +533,16 @@ public class DekRegistry implements Closeable {
     }
   }
 
+  public void testKek(KeyEncryptionKey kek) throws SchemaRegistryException {
+    DataEncryptionKey key = new DataEncryptionKey(kek.getName(), TEST_SUBJECT,
+        DekFormat.AES256_GCM, MIN_VERSION, null, false);
+    if (kek.isShared()) {
+      generateEncryptedDek(kek, key);
+    } else {
+      throw new InvalidKeyException("shared");
+    }
+  }
+
   public Dek createDekOrForward(String kekName, CreateDekRequest request,
       Map<String, String> headerProperties) throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
@@ -599,7 +632,7 @@ public class DekRegistry implements Closeable {
   protected DataEncryptionKey generateEncryptedDek(KeyEncryptionKey kek, DataEncryptionKey key)
       throws DekGenerationException {
     try {
-      Aead aead = toKekEntity(kek).toAead(config.originals());
+      Aead aead = getAead(kek);
       // Generate new dek
       byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
       byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
@@ -624,7 +657,7 @@ public class DekRegistry implements Closeable {
       throws DekGenerationException {
     try {
       // Decrypt dek
-      Aead aead = toKekEntity(kek).toAead(config.originals());
+      Aead aead = getAead(kek);
       byte[] encryptedDek = Base64.getDecoder().decode(
           key.getEncryptedKeyMaterial().getBytes(StandardCharsets.UTF_8));
       byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
@@ -646,6 +679,10 @@ public class DekRegistry implements Closeable {
       }
       throw new DekGenerationException(msg);
     }
+  }
+
+  protected Aead getAead(KeyEncryptionKey kek) throws GeneralSecurityException {
+    return toKekEntity(kek).toAead(config.originals());
   }
 
   public Kek putKekOrForward(String name, UpdateKekRequest request,
