@@ -22,7 +22,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.utils.ResourceLoader;
-import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -50,7 +49,6 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.serializers.protobuf.test.Root;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 import static org.junit.Assert.assertTrue;
 
@@ -166,6 +164,12 @@ public class RestApiTest extends ClusterTestHarness {
         schemas.get("root.proto"),
         schemaString.getSchemaString()
     );
+    schemaString = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES, 3, null, "serialized", false);
+    // the newly registered schema should be immediately readable on the leader
+    assertEquals("Registered schema should be found",
+        schemas.get("root.proto"),
+        new ProtobufSchema(schemaString.getSchemaString()).canonicalString()
+    );
 
     assertEquals("Schema dependencies should be found",
         refs,
@@ -178,6 +182,23 @@ public class RestApiTest extends ClusterTestHarness {
     Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
             ProtobufSchema.TYPE, schema.references(), "referrer", false);
     assertEquals("Registered schema should be found", 3, registeredSchema.getId().intValue());
+    request = new RegisterSchemaRequest();
+    request.setSchema(schema.canonicalString());
+    request.setSchemaType(schema.schemaType());
+    request.setReferences(schema.references());
+    Schema registeredSchema2 = restApp.restClient.lookUpSubjectVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, request, "referrer", false, "serialized", false);
+    assertEquals("Registered schema should be found",
+        registeredSchema.getSchema(),
+        new ProtobufSchema(registeredSchema2.getSchema()).canonicalString());
+
+    Schema latestSchema = restApp.restClient.getLatestVersion("referrer");
+    assertEquals("Registered schema should be found", 3, latestSchema.getId().intValue());
+    Schema latestSchema2 = restApp.restClient.getLatestVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "referrer", "serialized");
+    assertEquals("Registered schema should be found",
+        latestSchema.getSchema(),
+        new ProtobufSchema(latestSchema2.getSchema()).canonicalString());
   }
 
   @Test
