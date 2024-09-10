@@ -654,6 +654,88 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testInlineTagsForRefInArray() {
+    String schemaString = "{\n"
+        + "  \"definitions\": {\n"
+        + "    \"MetricData\": {\n"
+        + "      \"additionalProperties\": false,\n"
+        + "      \"properties\": {\n"
+        + "        \"name\": {\n"
+        + "          \"oneOf\": [\n"
+        + "            {\n"
+        + "              \"title\": \"Not included\",\n"
+        + "              \"type\": \"null\"\n"
+        + "            },\n"
+        + "            {\n"
+        + "              \"type\": \"string\"\n"
+        + "            }\n"
+        + "          ],\n"
+        + "          \"confluent:tags\": [ \"PII\" ]\n"
+        + "        },\n"
+        + "        \"value\": {\n"
+        + "          \"oneOf\": [\n"
+        + "            {\n"
+        + "              \"title\": \"Not included\",\n"
+        + "              \"type\": \"null\"\n"
+        + "            },\n"
+        + "            {\n"
+        + "              \"type\": \"string\"\n"
+        + "            }\n"
+        + "          ]\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"type\": \"object\"\n"
+        + "    },\n"
+        + "    \"SensorData\": {\n"
+        + "      \"additionalProperties\": false,\n"
+        + "      \"properties\": {\n"
+        + "        \"metricData\": {\n"
+        + "          \"oneOf\": [\n"
+        + "            {\n"
+        + "              \"title\": \"Not included\",\n"
+        + "              \"type\": \"null\"\n"
+        + "            },\n"
+        + "            {\n"
+        + "              \"items\": {\n"
+        + "                \"$ref\": \"#/definitions/MetricData\"\n"
+        + "              },\n"
+        + "              \"type\": \"array\"\n"
+        + "            }\n"
+        + "          ]\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"type\": \"object\"\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"properties\": {\n"
+        + "    \"sensorData\": {\n"
+        + "      \"oneOf\": [\n"
+        + "        {\n"
+        + "          \"title\": \"Not included\",\n"
+        + "          \"type\": \"null\"\n"
+        + "        },\n"
+        + "        {\n"
+        + "          \"items\": {\n"
+        + "            \"$ref\": \"#/definitions/SensorData\"\n"
+        + "          },\n"
+        + "          \"type\": \"array\"\n"
+        + "        }\n"
+        + "      ]\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"type\": \"object\"\n"
+        + "}\n";
+    JsonSchema schema = new JsonSchema(schemaString);
+
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("object.definitions.object.name",
+            SchemaEntity.EntityType.SR_FIELD),
+        Collections.singleton("PII"));
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tags);
+    assertEquals(expectedTags, schema.inlineTaggedEntities());
+  }
+
+  @Test
   public void testAddTagsToConditional() {
     String schemaString = "{\n" +
       "  \"else\": {\n" +
