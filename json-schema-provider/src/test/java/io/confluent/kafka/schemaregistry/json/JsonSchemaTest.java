@@ -398,6 +398,12 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testEnvelopeWithReferencesDraft_2019_09() throws Exception {
+    String draft = "\"$schema\": \"https://json-schema.org/draft/2019-09/schema\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
   public void testEnvelopeWithReferencesDraft_2020_12() throws Exception {
     String draft = "\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"";
     testEnvelopeWithReferences(draft);
