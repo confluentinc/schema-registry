@@ -64,6 +64,7 @@ import io.confluent.kafka.serializers.context.NullContextNameStrategy;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -206,9 +207,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         config, RULE_EXECUTORS, RuleExecutor.class, enableRuleServiceLoader);
     ruleActions = initRuleObjects(
         config, RULE_ACTIONS, RuleAction.class, enableRuleServiceLoader);
-    onSuccessActions = new HashMap<>();
-    onFailureActions = new HashMap<>();
-    disabledFlags = new HashMap<>();
+    onSuccessActions = new ConcurrentHashMap<>();
+    onFailureActions = new ConcurrentHashMap<>();
+    disabledFlags = new ConcurrentHashMap<>();
   }
 
   protected void postOp(Object payload) {

@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -107,6 +108,8 @@ public class SubjectsResource {
       @PathParam("subject") String subject,
       @Parameter(description = "Whether to normalize the given schema")
       @QueryParam("normalize") boolean normalize,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to lookup deleted schemas")
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Schema", required = true)
@@ -131,6 +134,10 @@ public class SubjectsResource {
         } else {
           throw Errors.schemaNotFoundException();
         }
+      }
+      if (format != null && !format.trim().isEmpty()) {
+        ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        matchingSchema.setSchema(parsedSchema.formattedString(format));
       }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
@@ -162,6 +169,8 @@ public class SubjectsResource {
       @QueryParam("key") List<String> keys,
       @Parameter(description = "The metadata value")
       @QueryParam("value") List<String> values,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to lookup deleted schemas")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
     log.info("Latest with metadata under subject {}, keys {}, values {}, deleted {}",
@@ -184,6 +193,10 @@ public class SubjectsResource {
         } else {
           throw Errors.schemaNotFoundException();
         }
+      }
+      if (format != null && !format.trim().isEmpty()) {
+        ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        matchingSchema.setSchema(parsedSchema.formattedString(format));
       }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
