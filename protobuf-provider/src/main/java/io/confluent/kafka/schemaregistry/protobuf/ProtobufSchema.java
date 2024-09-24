@@ -1534,7 +1534,8 @@ public class ProtobufSchema implements ParsedSchema {
           Field.Label fieldLabel = field.getLabel();
           String label = fieldLabel != null ? fieldLabel.toString().toLowerCase() : null;
 
-          FieldDefinition fd = toDynamicField(ctx, field, label, false, null, extendElement.getName());
+          FieldDefinition fd = toDynamicField(
+            ctx, field, label, false, null, extendElement.getName());
           schema.addExtendDefinition(ctx, fd);
         }
       }
@@ -1744,7 +1745,8 @@ public class ProtobufSchema implements ParsedSchema {
       }
       MessageDefinition.OneofBuilder oneofBuilder = message.addOneof(oneof.getName(), features);
       for (FieldElement field : oneof.getFields()) {
-        FieldDefinition fd = toDynamicField(ctx, field, "optional", false, oneofBuilder.getIdx(), null);
+        FieldDefinition fd = toDynamicField(
+          ctx, field, "optional", false, oneofBuilder.getIdx(), null);
         oneofBuilder.addField(fd);
         added.add(field.getName());
       }
@@ -1840,7 +1842,8 @@ public class ProtobufSchema implements ParsedSchema {
         Field.Label fieldLabel = field.getLabel();
         String label = fieldLabel != null ? fieldLabel.toString().toLowerCase() : null;
 
-        FieldDefinition fd = toDynamicField(ctx, field, label, false, null, extendElement.getName());
+        FieldDefinition fd = toDynamicField(
+          ctx, field, label, false, null, extendElement.getName());
         message.addExtendDefinition(ctx, fd);
       }
     }

@@ -25,23 +25,13 @@ import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.ExtensionRangeOptions.Declaration;
 import com.google.protobuf.DescriptorProtos.ExtensionRangeOptions.VerificationState;
 import com.google.protobuf.DescriptorProtos.FeatureSet;
-import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
-import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Type;
-import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
-import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 
-import com.squareup.wire.schema.internal.parser.EnumElement;
-import com.squareup.wire.schema.internal.parser.MessageElement;
-import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
-import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.util.List;
-import java.util.Map;
-import kotlin.Pair;
 
 /**
  * MessageDefinition
