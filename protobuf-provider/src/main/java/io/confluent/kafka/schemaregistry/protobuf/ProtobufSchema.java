@@ -1844,7 +1844,7 @@ public class ProtobufSchema implements ParsedSchema {
 
         FieldDefinition fd = toDynamicField(
             ctx, field, label, false, null, extendElement.getName());
-        message.addExtendDefinition(ctx, fd);
+        message.addExtendDefinition(fd);
       }
     }
     Map<String, OptionElement> options = mergeOptions(messageElem.getOptions());
