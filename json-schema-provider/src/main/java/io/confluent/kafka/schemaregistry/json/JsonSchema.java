@@ -76,6 +76,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -874,12 +875,12 @@ public class JsonSchema implements ParsedSchema {
     if (schema == null) {
       return tags;
     }
-    getInlineTaggedEntitiesRecursively(tags, schema, "", false);
+    getInlineTaggedEntitiesRecursively(tags, schema, "", false, new HashSet<>());
     return tags;
   }
 
-  private void getInlineTaggedEntitiesRecursively(
-      Map<SchemaEntity, Set<String>> tags, Schema schema, String scope, boolean inField) {
+  private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
+      Schema schema, String scope, boolean inField, Set<String> visited) {
     if (schema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) schema;
       String scopedName = scope + JsonSchemaComparator.getCriterion(combinedSchema);
@@ -887,14 +888,20 @@ public class JsonSchema implements ParsedSchema {
       subschemas.sort(new JsonSchemaComparator());
       for (int i = 0; i < subschemas.size(); i++) {
         Schema subschema = subschemas.get(i);
-        getInlineTaggedEntitiesRecursively(tags, subschema, scopedName + "." + i + ".", false);
+        getInlineTaggedEntitiesRecursively(
+            tags, subschema, scopedName + "." + i + ".", false, visited);
       }
     } else if (schema instanceof ArraySchema) {
       Schema subschema = ((ArraySchema) schema).getAllItemSchema();
-      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "array.", false);
+      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "array.", false, visited);
     } else if (schema instanceof ObjectSchema) {
       ObjectSchema objectSchema = (ObjectSchema) schema;
       String scopedName = scope + "object";
+      if (visited.contains(scopedName)) {
+        return;
+      } else {
+        visited.add(scopedName);
+      }
       if (!inField) {
         Set<String> recordTags = getInlineTags(schema);
         if (!recordTags.isEmpty()) {
@@ -910,35 +917,41 @@ public class JsonSchema implements ParsedSchema {
           tags.put(new SchemaEntity(scopedPropertyName, SR_FIELD), fieldTags);
         }
         getInlineTaggedEntitiesRecursively(
-            tags, propertySchema, scopedPropertyName + ".", true);
+            tags, propertySchema, scopedPropertyName + ".", true, visited);
       }
-      getInlineTaggedEntitiesRecursively(tags, schema.getUnprocessedProperties(), scopedName + ".");
+      getInlineTaggedEntitiesRecursively(
+          tags, schema.getUnprocessedProperties(), scopedName + ".", visited);
     } else if (schema instanceof ConditionalSchema) {
       ConditionalSchema condSchema = (ConditionalSchema) schema;
       String scopedName = scope + "conditional";
-      condSchema.getIfSchema().ifPresent(
-          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".if.", false));
-      condSchema.getThenSchema().ifPresent(
-          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".then.", false));
-      condSchema.getElseSchema().ifPresent(
-          value -> getInlineTaggedEntitiesRecursively(tags, value, scopedName + ".else", false));
+      condSchema.getIfSchema().ifPresent(value -> getInlineTaggedEntitiesRecursively(
+          tags, value, scopedName + ".if.", false, visited));
+      condSchema.getThenSchema().ifPresent(value -> getInlineTaggedEntitiesRecursively(
+          tags, value, scopedName + ".then.", false, visited));
+      condSchema.getElseSchema().ifPresent(value -> getInlineTaggedEntitiesRecursively(
+          tags, value, scopedName + ".else", false, visited));
     } else if (schema instanceof NotSchema) {
       Schema subschema = ((NotSchema) schema).getMustNotMatch();
-      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "not.", false);
+      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "not.", false, visited);
     }
   }
 
   private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
-      Map<String, Object> unprocessedProperties, String scope) {
+      Map<String, Object> unprocessedProperties, String scope, Set<String> visited) {
     Map<String, Object> defns = (Map<String, Object>) unprocessedProperties.get("definitions");
     if (defns != null) {
       for (Map.Entry<String, Object> entry : defns.entrySet()) {
+        Object rawSchema = null;
         if (entry.getValue() instanceof Map) {
-          Map<String, Object> rawSchema = replaceRefs((Map<String, Object>) entry.getValue());
+          rawSchema = replaceRefs((Map<String, Object>) entry.getValue());
+        } else if (entry.getValue() instanceof List) {
+          rawSchema = replaceRefs((List<Object>) entry.getValue());
+        }
+        if (rawSchema != null) {
           JsonNode jsonNode = objectMapper.valueToTree(rawSchema);
           JsonSchema jsonSchema = new JsonSchema(jsonNode);
           getInlineTaggedEntitiesRecursively(
-              tags, jsonSchema.rawSchema(), scope + "definitions.", false);
+              tags, jsonSchema.rawSchema(), scope + "definitions.", false, visited);
         }
       }
     }
@@ -947,7 +960,7 @@ public class JsonSchema implements ParsedSchema {
       for (Map.Entry<String, Object> entry : defs.entrySet()) {
         if (entry.getValue() instanceof Schema) {
           getInlineTaggedEntitiesRecursively(
-              tags, (Schema) entry.getValue(), scope + "$defs.", false);
+              tags, (Schema) entry.getValue(), scope + "$defs.", false, visited);
         }
       }
     }
@@ -962,6 +975,22 @@ public class JsonSchema implements ParsedSchema {
     for (Map.Entry<String, Object> entry : result.entrySet()) {
       if (entry.getValue() instanceof Map) {
         entry.setValue(replaceRefs((Map<String, Object>) entry.getValue()));
+      } else if (entry.getValue() instanceof List) {
+        entry.setValue(replaceRefs((List<Object>) entry.getValue()));
+      }
+    }
+    return result;
+  }
+
+  private List<Object> replaceRefs(List<Object> items) {
+    List<Object> result = new ArrayList<>();
+    for (Object item : items) {
+      if (item instanceof Map) {
+        result.add(replaceRefs((Map<String, Object>) item));
+      } else if (item instanceof List) {
+        result.add(replaceRefs((List<Object>) item));
+      } else {
+        result.add(item);
       }
     }
     return result;
