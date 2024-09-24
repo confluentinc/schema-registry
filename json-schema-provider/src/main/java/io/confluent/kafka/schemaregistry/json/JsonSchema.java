@@ -941,8 +941,13 @@ public class JsonSchema implements ParsedSchema {
     Map<String, Object> defns = (Map<String, Object>) unprocessedProperties.get("definitions");
     if (defns != null) {
       for (Map.Entry<String, Object> entry : defns.entrySet()) {
+        Object rawSchema = null;
         if (entry.getValue() instanceof Map) {
-          Map<String, Object> rawSchema = replaceRefs((Map<String, Object>) entry.getValue());
+          rawSchema = replaceRefs((Map<String, Object>) entry.getValue());
+        } else if (entry.getValue() instanceof List) {
+          rawSchema = replaceRefs((List<Object>) entry.getValue());
+        }
+        if (rawSchema != null) {
           JsonNode jsonNode = objectMapper.valueToTree(rawSchema);
           JsonSchema jsonSchema = new JsonSchema(jsonNode);
           getInlineTaggedEntitiesRecursively(
@@ -970,6 +975,22 @@ public class JsonSchema implements ParsedSchema {
     for (Map.Entry<String, Object> entry : result.entrySet()) {
       if (entry.getValue() instanceof Map) {
         entry.setValue(replaceRefs((Map<String, Object>) entry.getValue()));
+      } else if (entry.getValue() instanceof List) {
+        entry.setValue(replaceRefs((List<Object>) entry.getValue()));
+      }
+    }
+    return result;
+  }
+
+  private List<Object> replaceRefs(List<Object> items) {
+    List<Object> result = new ArrayList<>();
+    for (Object item : items) {
+      if (item instanceof Map) {
+        result.add(replaceRefs((Map<String, Object>) item));
+      } else if (item instanceof List) {
+        result.add(replaceRefs((List<Object>) item));
+      } else {
+        result.add(item);
       }
     }
     return result;
