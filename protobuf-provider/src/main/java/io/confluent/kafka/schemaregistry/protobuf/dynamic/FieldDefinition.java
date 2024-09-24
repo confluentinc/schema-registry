@@ -27,11 +27,14 @@ import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionRetention;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionTargetType;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import kotlin.Pair;
 
 /**
  * FieldDefinition
