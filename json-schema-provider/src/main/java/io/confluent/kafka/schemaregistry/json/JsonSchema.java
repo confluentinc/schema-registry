@@ -50,6 +50,7 @@ import com.github.erosb.jsonsKema.SchemaLoaderConfig;
 import com.github.erosb.jsonsKema.UnknownSource;
 import com.github.erosb.jsonsKema.ValidationFailure;
 import com.github.erosb.jsonsKema.Validator;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -68,11 +69,15 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -157,6 +162,25 @@ public class JsonSchema implements ParsedSchema {
       new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   private static final Map<String, Map<String, SettableBeanProperty>> beanSetters =
       new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+
+  // prepopulate the draft 2019-09 metaschemas, as the json-sKema library
+  // only prepopulates the draft 2020-12 metaschemas
+  private static final Map<URI, String> prepopulatedMetaSchemas = ImmutableMap.of(
+      URI.create("https://json-schema.org/draft/2019-09/schema"),
+      readFromClassPath("/metaschemas/draft/2019-09/schema"),
+      URI.create("https://json-schema.org/draft/2019-09/meta/core"),
+      readFromClassPath("/metaschemas/draft/2019-09/meta/core"),
+      URI.create("https://json-schema.org/draft/2019-09/meta/validation"),
+      readFromClassPath("/metaschemas/draft/2019-09/meta/validation"),
+      URI.create("https://json-schema.org/draft/2019-09/meta/applicator"),
+      readFromClassPath("/metaschemas/draft/2019-09/meta/applicator"),
+      URI.create("https://json-schema.org/draft/2019-09/meta/meta-data"),
+      readFromClassPath("/metaschemas/draft/2019-09/meta/meta-data"),
+      URI.create("https://json-schema.org/draft/2019-09/meta/format"),
+      readFromClassPath("/metaschemas/draft/2019-09/meta/format"),
+      URI.create("https://json-schema.org/draft/2019-09/meta/content"),
+      readFromClassPath("/metaschemas/draft/2019-09/meta/content")
+  );
 
   public JsonSchema(JsonNode jsonNode) {
     this(jsonNode, Collections.emptyList(), Collections.emptyMap(), null);
@@ -378,16 +402,16 @@ public class JsonSchema implements ParsedSchema {
   }
 
   private void loadLatestDraft() throws URISyntaxException {
-    Map<URI, String> references = new HashMap<>();
+    Map<URI, String> mappings = new HashMap<>(prepopulatedMetaSchemas);
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
       URI uri = new URI(dep.getKey());
-      references.put(uri, dep.getValue());
+      mappings.put(uri, dep.getValue());
       if (!uri.isAbsolute() && !dep.getKey().startsWith(".")) {
         // For backward compatibility
-        references.put(new URI("./" + dep.getKey()), dep.getValue());
+        mappings.put(new URI("./" + dep.getKey()), dep.getValue());
       }
     }
-    SchemaLoaderConfig config = SchemaLoaderConfig.createDefaultConfig(references);
+    SchemaLoaderConfig config = SchemaLoaderConfig.createDefaultConfig(mappings);
     JsonValue schemaJson = objectMapper.convertValue(jsonNode, JsonObject.class);
     skemaObj = new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
     SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator());
@@ -1219,5 +1243,25 @@ public class JsonSchema implements ParsedSchema {
         ((ObjectNode) fieldNodePtr).replace(TAGS, objectMapper.valueToTree(allTags));
       }
     }
+  }
+
+  private static String readFromClassPath(String absPath) {
+    InputStream is = JsonSchema.class.getResourceAsStream(absPath);
+    if (is != null) {
+      BufferedReader reader = null;
+      try {
+        reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+        return reader.lines().collect(Collectors.joining(System.lineSeparator()));
+      } finally {
+        if (reader != null) {
+          try {
+            reader.close();
+          } catch (IOException e) {
+            // ignore
+          }
+        }
+      }
+    }
+    throw new IllegalArgumentException("Could not load resource " + absPath);
   }
 }
