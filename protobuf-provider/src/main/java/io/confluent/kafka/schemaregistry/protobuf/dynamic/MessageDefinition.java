@@ -82,8 +82,8 @@ public class MessageDefinition {
       return addField(ctx, FieldDefinition.newBuilder(name, num, type).build());
     }
 
-    public Builder addField(Context ctx, FieldDefinition fd) {
-      mMsgTypeBuilder.addField(ctx, fd.getFieldType());
+    public Builder addField(FieldDefinition fd) {
+      mMsgTypeBuilder.addField(fd.getFieldType());
       return this;
     }
 
@@ -248,8 +248,8 @@ public class MessageDefinition {
   public static class OneofBuilder {
     // --- public ---
 
-    public OneofBuilder addField(Context ctx, FieldDefinition fd) {
-      mMsgBuilder.addField(ctx, fd);
+    public OneofBuilder addField(FieldDefinition fd) {
+      mMsgBuilder.addField(fd);
       return this;
     }
 
