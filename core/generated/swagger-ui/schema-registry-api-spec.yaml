@@ -2131,6 +2131,70 @@ paths:
             Error code 40403 -- Schema not found
         "500":
           description: Internal server error
+  /schemas/ids:
+    post:
+      tags:
+      - Schemas (v1)
+      summary: Find global schema id
+      description: Get the schemas id matching the specified schema.
+      operationId: findSchemaId
+      requestBody:
+        description: Schema
+        content:
+          application/vnd.schemaregistry.v1+json:
+            schema:
+              $ref: '#/components/schemas/FindSchemaIdRequest'
+          application/vnd.schemaregistry+json:
+            schema:
+              $ref: '#/components/schemas/FindSchemaIdRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FindSchemaIdRequest'
+          application/octet-stream:
+            schema:
+              $ref: '#/components/schemas/FindSchemaIdRequest'
+        required: true
+      responses:
+        "200":
+          description: Returns the global schema id.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                type: integer
+                format: int32
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                type: integer
+                format: int32
+            application/json; qs=0.5:
+              schema:
+                type: integer
+                format: int32
+        "404":
+          description: Not Found. Error code 40403 indicates schema not found.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        "500":
+          description: Internal Server Error. Error code 50001 indicates a failure
+            in the backend data store.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
 components:
   schemas:
     CompatibilityCheckResponse:
@@ -2495,3 +2559,23 @@ components:
           items:
             $ref: '#/components/schemas/Rule'
       description: Schema rule set
+    FindSchemaIdRequest:
+      type: object
+      properties:
+        schemaType:
+          type: string
+          description: Schema type
+        schema:
+          type: string
+          description: Schema definition string
+      description: Find schema id request
+    SchemaEntity:
+      type: object
+      properties:
+        entityPath:
+          type: string
+        entityType:
+          type: string
+          enum:
+          - sr_record
+          - sr_field
