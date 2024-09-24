@@ -281,13 +281,8 @@
             </dependency>
             <dependency>
                 <groupId>com.azure</groupId>
-                <artifactId>azure-identity</artifactId>
-                <version>1.12.1</version>
-            </dependency>
-            <dependency>
-                <groupId>com.azure</groupId>
                 <artifactId>azure-security-keyvault-keys</artifactId>
-                <version>4.6.1</version>
+                <version>4.8.5</version>
             </dependency>
             <dependency>
                 <groupId>io.github.jopenlibs</groupId>
