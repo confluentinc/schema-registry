@@ -36,6 +36,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import io.confluent.protobuf.MetaProto;
@@ -1513,7 +1514,7 @@ public class ProtobufSchemaTest {
   @Test
   public void testDefaultOmittedInProto3String() throws Exception {
     MessageDefinition.Builder message = MessageDefinition.newBuilder("msg1");
-    message.addField(null, "string", "field1", 1, "defaultVal", null);
+    message.addField(new Context(), null, "string", "field1", 1, "defaultVal", null);
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     schema.setSyntax(PROTO3);
     schema.addMessageDefinition(message.build());
