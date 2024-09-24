@@ -103,31 +103,31 @@ public abstract class FieldEncryptionExecutorTest {
     }
   }
 
-  private final FieldEncryptionProperties fieldEncryptionProps;
-  private final SchemaRegistryClient schemaRegistry;
-  private final DekRegistryClient dekRegistry;
-  private final KafkaAvroSerializer avroSerializer;
-  private final KafkaAvroDeserializer avroDeserializer;
-  private final KafkaAvroSerializer avroKeySerializer;
-  private final KafkaAvroDeserializer avroKeyDeserializer;
-  private final KafkaAvroSerializer avroValueSerializer;
-  private final KafkaAvroDeserializer avroValueDeserializer;
-  private final KafkaAvroSerializer avroSerializerWithoutKey;
-  private final KafkaAvroDeserializer avroDeserializerWithoutKey;
-  private final KafkaAvroSerializer reflectionAvroSerializer;
-  private final KafkaAvroDeserializer reflectionAvroDeserializer;
-  private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
-  private final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
-  private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
-  private final KafkaProtobufSerializer<Widget> protobufSerializer;
-  private final KafkaProtobufSerializer<WidgetBytes> protobufSerializerBytes;
-  private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
-  private final KafkaAvroSerializer badSerializer;
-  private final KafkaAvroDeserializer badDeserializer;
-  private final KafkaAvroSerializer goodDekSerializer;
-  private final KafkaAvroSerializer badDekSerializer;
-  private final String topic;
-  private final FakeClock fakeClock = new FakeClock();
+  protected final FieldEncryptionProperties fieldEncryptionProps;
+  protected final SchemaRegistryClient schemaRegistry;
+  protected final DekRegistryClient dekRegistry;
+  protected final KafkaAvroSerializer avroSerializer;
+  protected final KafkaAvroDeserializer avroDeserializer;
+  protected final KafkaAvroSerializer avroKeySerializer;
+  protected final KafkaAvroDeserializer avroKeyDeserializer;
+  protected final KafkaAvroSerializer avroValueSerializer;
+  protected final KafkaAvroDeserializer avroValueDeserializer;
+  protected final KafkaAvroSerializer avroSerializerWithoutKey;
+  protected final KafkaAvroDeserializer avroDeserializerWithoutKey;
+  protected final KafkaAvroSerializer reflectionAvroSerializer;
+  protected final KafkaAvroDeserializer reflectionAvroDeserializer;
+  protected final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
+  protected final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
+  protected final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
+  protected final KafkaProtobufSerializer<Widget> protobufSerializer;
+  protected final KafkaProtobufSerializer<WidgetBytes> protobufSerializerBytes;
+  protected final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
+  protected final KafkaAvroSerializer badSerializer;
+  protected final KafkaAvroDeserializer badDeserializer;
+  protected final KafkaAvroSerializer goodDekSerializer;
+  protected final KafkaAvroSerializer badDekSerializer;
+  protected final String topic;
+  protected final FakeClock fakeClock = new FakeClock();
 
   public FieldEncryptionExecutorTest() throws Exception {
     topic = "test";
@@ -202,11 +202,11 @@ public abstract class FieldEncryptionExecutorTest {
   protected abstract FieldEncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor);
 
-  private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
+  protected Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
     return addSpyToCryptor(serde, DekFormat.AES256_GCM);
   }
 
-  private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, DekFormat dekFormat) throws Exception {
+  protected Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, DekFormat dekFormat) throws Exception {
     Map<String, Map<String, RuleBase>> executors = serde.getRuleExecutors();
     Map<String, RuleBase> executorsByType = executors.get(FieldEncryptionExecutor.TYPE);
     FieldEncryptionExecutor executor = null;
@@ -222,11 +222,11 @@ public abstract class FieldEncryptionExecutorTest {
     return null;
   }
 
-  private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, String name) throws Exception {
+  protected Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, String name) throws Exception {
     return addSpyToCryptor(serde, name, DekFormat.AES256_GCM);
   }
 
-  private Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, String name, DekFormat dekFormat)
+  protected Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde, String name, DekFormat dekFormat)
       throws Exception {
     Map<String, Map<String, RuleBase>> executors = serde.getRuleExecutors();
     Map<String, RuleBase> executorsByType = executors.get(FieldEncryptionExecutor.TYPE);
@@ -258,11 +258,11 @@ public abstract class FieldEncryptionExecutorTest {
     return null;
   }
 
-  private Cryptor addBadSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
+  protected Cryptor addBadSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
     return addBadSpyToCryptor(serde, DekFormat.AES256_GCM);
   }
 
-  private Cryptor addBadSpyToCryptor(AbstractKafkaSchemaSerDe serde, DekFormat dekFormat) throws Exception {
+  protected Cryptor addBadSpyToCryptor(AbstractKafkaSchemaSerDe serde, DekFormat dekFormat) throws Exception {
     Map<String, Map<String, RuleBase>> executors = serde.getRuleExecutors();
     FieldEncryptionExecutor executor =
         (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).entrySet()
@@ -278,7 +278,25 @@ public abstract class FieldEncryptionExecutorTest {
     return null;
   }
 
-  private Schema createUserSchema() {
+  protected Schema createF1Schema() {
+    String userSchema = "{\"type\": \"record\", "
+        + "\"name\": \"myrecord\","
+        + "\"fields\": ["
+        + "{\"name\": \"f1\", \"type\": \"string\", \"confluent:tags\": [\"PII\"]}"
+        + "]}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(userSchema);
+    return schema;
+  }
+
+  protected GenericRecord createF1Record() {
+    Schema schema = createF1Schema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("f1", "hello world");
+    return avroRecord;
+  }
+
+  protected Schema createUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
         + "\"name\": \"User\","
         + "\"fields\": ["
@@ -291,7 +309,7 @@ public abstract class FieldEncryptionExecutorTest {
     return schema;
   }
 
-  private GenericRecord createUserRecord() {
+  protected GenericRecord createUserRecord() {
     Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
@@ -300,7 +318,7 @@ public abstract class FieldEncryptionExecutorTest {
     return avroRecord;
   }
 
-  private GenericRecord createUserRecordWithNull() {
+  protected GenericRecord createUserRecordWithNull() {
     Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", null);
@@ -309,7 +327,7 @@ public abstract class FieldEncryptionExecutorTest {
     return avroRecord;
   }
 
-  private Schema createUserSchemaWithTaggedInt() {
+  protected Schema createUserSchemaWithTaggedInt() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
         + "\"name\": \"User\","
         + "\"fields\": ["
@@ -322,7 +340,7 @@ public abstract class FieldEncryptionExecutorTest {
     return schema;
   }
 
-  private IndexedRecord createUserRecordWithTaggedInt() {
+  protected IndexedRecord createUserRecordWithTaggedInt() {
     Schema schema = createUserSchemaWithTaggedInt();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
@@ -331,7 +349,7 @@ public abstract class FieldEncryptionExecutorTest {
     return avroRecord;
   }
 
-  private Schema createUserBytesSchema() {
+  protected Schema createUserBytesSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
         + "\"name\": \"User\","
         + "\"fields\": ["
@@ -343,7 +361,7 @@ public abstract class FieldEncryptionExecutorTest {
     return schema;
   }
 
-  private IndexedRecord createUserBytesRecord() {
+  protected IndexedRecord createUserBytesRecord() {
     Schema schema = createUserBytesSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", ByteBuffer.wrap("testUser".getBytes(StandardCharsets.UTF_8)));
@@ -351,7 +369,7 @@ public abstract class FieldEncryptionExecutorTest {
     return avroRecord;
   }
 
-  private Schema createWidgetSchema() {
+  protected Schema createWidgetSchema() {
     String userSchema = "{\"type\":\"record\",\"name\":\"OldWidget\",\"namespace\":\"io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest\",\"fields\":\n"
         + "[{\"name\": \"name\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]},\n"
         + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"},\"confluent:tags\": [\"PII\"]},\n"
@@ -391,6 +409,51 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerF1() throws Exception {
+    IndexedRecord avroRecord = createF1Record();
+    AvroSchema avroSchema = new AvroSchema(createF1Schema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("hello world", record.get("f1"));
+
+  }
+
+  @Test
+  public void testKafkaAvr1SerializerDeterministicF1() throws Exception {
+    IndexedRecord avroRecord = createF1Record();
+    AvroSchema avroSchema = new AvroSchema(createF1Schema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1", DekFormat.AES256_SIV);
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer, DekFormat.AES256_SIV);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer, DekFormat.AES256_SIV);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("hello world", record.get("f1"));
   }
 
   @Test
@@ -471,6 +534,30 @@ public abstract class FieldEncryptionExecutorTest {
 
     dek = dekRegistry.getDekLatestVersion("kek1", topic + "-value", null, false);
     assertEquals(3, dek.getVersion());
+  }
+
+  @Test
+  public void testKafkaAvroDekRotationF1() throws Exception {
+    IndexedRecord avroRecord = createF1Record();
+    AvroSchema avroSchema = new AvroSchema(createF1Schema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        ImmutableMap.of("encrypt.dek.expiry.days", "1", "preserve.source.fields", "true"),
+        null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("hello world", record.get("f1"));
   }
 
   @Test(expected = SerializationException.class)
@@ -1641,10 +1728,17 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   protected Metadata getMetadata(String kekName) {
+    return getMetadata(kekName, null);
+  }
+
+  protected Metadata getMetadata(String kekName, DekFormat algorithm) {
     Map<String, String> properties = new HashMap<>();
     properties.put(FieldEncryptionExecutor.ENCRYPT_KEK_NAME, kekName);
     properties.put(FieldEncryptionExecutor.ENCRYPT_KMS_TYPE, fieldEncryptionProps.getKmsType());
     properties.put(FieldEncryptionExecutor.ENCRYPT_KMS_KEY_ID, fieldEncryptionProps.getKmsKeyId());
+    if (algorithm != null) {
+      properties.put(FieldEncryptionExecutor.ENCRYPT_DEK_ALGORITHM, algorithm.name());
+    }
     return getMetadata(properties);
   }
 
