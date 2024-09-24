@@ -949,9 +949,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           ) {
             return new Schema(subject, existingSchema.getId());
           }
-        } else if (existingSchema.getId().equals(schema.getId())
-            && existingSchema.getVersion().equals(schema.getVersion())) {
-          return existingSchema;
+        } else if (existingSchema.getId().equals(schema.getId())) {
+          if (existingSchema.getVersion().equals(schema.getVersion())) {
+            return existingSchema;
+          } else {
+            // In rare cases, a user may have imported the same schema with different versions
+            Schema olderVersionSchema = get(subject, schema.getVersion(), false);
+            if (olderVersionSchema != null
+                && olderVersionSchema.getId().equals(existingSchema.getId())
+                && MD5.ofSchema(olderVersionSchema).equals(MD5.ofSchema(existingSchema))) {
+              return olderVersionSchema;
+            }
+          }
         }
       }
     }
