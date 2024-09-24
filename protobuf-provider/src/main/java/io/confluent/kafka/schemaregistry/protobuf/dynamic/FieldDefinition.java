@@ -26,7 +26,7 @@ import com.google.protobuf.DescriptorProtos.FieldOptions.EditionDefault;
 import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionRetention;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionTargetType;
-import com.squareup.wire.schema.internal.parser.EnumElemeent;
+import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
