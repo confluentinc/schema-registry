@@ -2492,22 +2492,27 @@ public class ProtobufSchema implements ParsedSchema {
     if (schema == null) {
       return tags;
     }
-    getInlineTaggedEntitiesRecursively(tags, schema.getTypes(), "");
+    getInlineTaggedEntitiesRecursively(tags, schema.getTypes(), "", new HashSet<>());
     return tags;
   }
 
-  private void getInlineTaggedEntitiesRecursively(
-      Map<SchemaEntity, Set<String>> tags, List<TypeElement> types, String scope) {
+  private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
+      List<TypeElement> types, String scope, Set<String> visited) {
     for (TypeElement type : types) {
       if (type instanceof MessageElement) {
-        getInlineTaggedEntitiesRecursively(tags, (MessageElement) type, scope);
+        getInlineTaggedEntitiesRecursively(tags, (MessageElement) type, scope, visited);
       }
     }
   }
 
-  private void getInlineTaggedEntitiesRecursively(
-      Map<SchemaEntity, Set<String>> tags, MessageElement message, String scope) {
+  private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
+      MessageElement message, String scope, Set<String> visited) {
     String scopedName = scope + message.getName();
+    if (visited.contains(scopedName)) {
+      return;
+    } else {
+      visited.add(scopedName);
+    }
     Set<String> recordTags = getInlineTags(CONFLUENT_MESSAGE_META, message.getOptions());
     if (!recordTags.isEmpty()) {
       tags.put(new SchemaEntity(scopedName, SR_RECORD), recordTags);
@@ -2527,7 +2532,7 @@ public class ProtobufSchema implements ParsedSchema {
         tags.put(new SchemaEntity(scopedName + "." + field.getName(), SR_FIELD), fieldTags);
       }
     }
-    getInlineTaggedEntitiesRecursively(tags, message.getNestedTypes(), scopedName + ".");
+    getInlineTaggedEntitiesRecursively(tags, message.getNestedTypes(), scopedName + ".", visited);
   }
 
 
