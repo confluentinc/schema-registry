@@ -25,12 +25,23 @@ import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.ExtensionRangeOptions.Declaration;
 import com.google.protobuf.DescriptorProtos.ExtensionRangeOptions.VerificationState;
 import com.google.protobuf.DescriptorProtos.FeatureSet;
+import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Type;
+import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
+import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 
+import com.squareup.wire.schema.internal.parser.EnumElement;
+import com.squareup.wire.schema.internal.parser.MessageElement;
+import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.util.List;
+import java.util.Map;
+import kotlin.Pair;
 
 /**
  * MessageDefinition
@@ -73,15 +84,16 @@ public class MessageDefinition {
     }
 
     public Builder addField(
+        Context ctx,
         String type,
         String name,
         int num
     ) {
-      return addField(FieldDefinition.newBuilder(name, num, type).build());
+      return addField(ctx, FieldDefinition.newBuilder(name, num, type).build());
     }
 
-    public Builder addField(FieldDefinition fd) {
-      mMsgTypeBuilder.addField(fd.getFieldType());
+    public Builder addField(Context ctx, FieldDefinition fd) {
+      mMsgTypeBuilder.addField(ctx, fd.getFieldType());
       return this;
     }
 
@@ -173,8 +185,8 @@ public class MessageDefinition {
       return this;
     }
 
-    public Builder addExtendDefinition(FieldDefinition fd) {
-      mMsgTypeBuilder.addExtension(fd.getFieldType());
+    public Builder addExtendDefinition(Context ctx, FieldDefinition fd) {
+      mMsgTypeBuilder.addExtension(ctx, fd.getFieldType());
       return this;
     }
 
@@ -246,8 +258,8 @@ public class MessageDefinition {
   public static class OneofBuilder {
     // --- public ---
 
-    public OneofBuilder addField(FieldDefinition fd) {
-      mMsgBuilder.addField(fd);
+    public OneofBuilder addField(Context ctx, FieldDefinition fd) {
+      mMsgBuilder.addField(ctx, fd);
       return this;
     }
 

@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -50,6 +51,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import javax.ws.rs.DefaultValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -127,6 +129,8 @@ public class SubjectVersionsResource {
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to include deleted schema")
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Find tagged entities for the given tags or * for all tags")
@@ -158,6 +162,10 @@ public class SubjectVersionsResource {
       }
       if (tags != null && !tags.isEmpty()) {
         schemaRegistry.extractSchemaTags(schema, tags);
+      }
+      if (format != null && !format.trim().isEmpty()) {
+        ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
+        schema.setSchema(parsedSchema.formattedString(format));
       }
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
@@ -202,9 +210,11 @@ public class SubjectVersionsResource {
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to include deleted schema")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
-    return getSchemaByVersion(subject, version, lookupDeletedSchema, null).getSchema();
+    return getSchemaByVersion(subject, version, format, lookupDeletedSchema, null).getSchema();
   }
 
   @GET
@@ -240,7 +250,7 @@ public class SubjectVersionsResource {
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version) {
 
-    Schema schema = getSchemaByVersion(subject, version, true, null);
+    Schema schema = getSchemaByVersion(subject, version, "", true, null);
     if (schema == null) {
       return new ArrayList<>();
     }
@@ -382,6 +392,8 @@ public class SubjectVersionsResource {
       @PathParam("subject") String subjectName,
       @Parameter(description = "Whether to normalize the given schema")
       @QueryParam("normalize") boolean normalize,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
@@ -419,6 +431,10 @@ public class SubjectVersionsResource {
       }
       Schema result =
           schemaRegistry.registerOrForward(subjectName, request, normalize, headerProperties);
+      if (result.getSchema() != null && format != null && !format.trim().isEmpty()) {
+        ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
+        result.setSchema(parsedSchema.formattedString(format));
+      }
       registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);

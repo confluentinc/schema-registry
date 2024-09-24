@@ -39,8 +39,8 @@ import java.util.Map;
 public class FieldDefinition {
   // --- public static ---
 
-  public static Builder newBuilder(String fieldName, int tag, String type) {
-    return new Builder(fieldName).setNumber(tag).setType(type);
+  public static Builder newBuilder(Context ctx, String fieldName, int tag, String type) {
+    return new Builder(fieldName).setNumber(tag).setType(ctx, type);
   }
 
   // --- public ---
@@ -84,12 +84,22 @@ public class FieldDefinition {
       return this;
     }
 
-    public Builder setType(String type) {
+    public Builder setType(Context ctx, String type) {
       FieldDescriptorProto.Type primType = sTypeMap.get(type);
       if (primType != null) {
-        mFieldTypeBuilder.setType(primType);
+        fieldBuilder.setType(primType);
       } else {
-        mFieldTypeBuilder.setTypeName(type);
+        Pair<String, TypeElementInfo> entry =
+                ctx.resolveFull(ctx::getTypeForFullName, type, true);
+        if (entry != null) {
+          TypeElement elem = entry.getSecond().type();
+          if (elem instanceof MessageElement) {
+            fieldBuilder.setType(Type.TYPE_MESSAGE);
+          } else if (elem instanceof EnumElement) {
+            fieldBuilder.setType(Type.TYPE_ENUM);
+          }
+        }
+        fieldBuilder.setTypeName(type);
       }
       return this;
     }

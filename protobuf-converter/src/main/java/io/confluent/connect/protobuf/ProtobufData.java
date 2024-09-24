@@ -36,6 +36,7 @@ import com.google.protobuf.util.Timestamps;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.protobuf.MetaProto;
@@ -305,6 +306,7 @@ public class ProtobufData {
   private boolean useWrapperForRawPrimitives;
   private boolean generateStructForNulls;
   private boolean generateIndexForUnions;
+  private boolean flattenUnions;
 
   public ProtobufData() {
     this(new ProtobufDataConfig.Builder().with(
@@ -331,6 +333,7 @@ public class ProtobufData {
     this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
     this.generateStructForNulls = protobufDataConfig.generateStructForNulls();
     this.generateIndexForUnions = protobufDataConfig.generateIndexForUnions();
+    this.flattenUnions = protobufDataConfig.flattenUnions();
   }
 
   /**
@@ -741,9 +744,9 @@ public class ProtobufData {
           MessageDefinition.OneofBuilder oneofBuilder = message.addOneof("_" + fieldDef.getName());
           fieldDef.setProto3Optional(true);
           fieldDef.setOneofIndex(oneofBuilder.getIdx());
-          oneofBuilder.addField(fieldDef.build());
+          oneofBuilder.addField(new Context(), fieldDef.build());
         } else {
-          message.addField(fieldDef.build());
+          message.addField(new Context(), fieldDef.build());
         }
       }
     }
@@ -773,7 +776,7 @@ public class ProtobufData {
       );
       if (fieldDef != null) {
         fieldDef.setOneofIndex(oneof.getIdx());
-        oneof.addField(fieldDef.build());
+        oneof.addField(new Context(), fieldDef.build());
       }
     }
   }
@@ -832,7 +835,7 @@ public class ProtobufData {
         defaultVal = fieldSchema.defaultValue();
       }
     }
-    FieldDefinition.Builder builder = FieldDefinition.newBuilder(name, tag, type);
+    FieldDefinition.Builder builder = FieldDefinition.newBuilder(ctx, name, tag, type);
     if (label != null) {
       builder.setLabel(label);
     }
@@ -923,7 +926,7 @@ public class ProtobufData {
         KEY_FIELD,
         1
     );
-    map.addField(key.build());
+    map.addField(new Context(), key.build());
     FieldDefinition.Builder val = fieldDefinitionFromConnectSchema(
         ctx,
         schema,
@@ -932,7 +935,7 @@ public class ProtobufData {
         VALUE_FIELD,
         2
     );
-    map.addField(val.build());
+    map.addField(new Context(), val.build());
     return map.build();
   }
 
@@ -1219,7 +1222,11 @@ public class ProtobufData {
               FieldDescriptor fieldDescriptor = message.getOneofFieldDescriptor(oneOfDescriptor);
               Object obj = message.getField(fieldDescriptor);
               if (obj != null) {
-                setUnionField(schema, message, struct, oneOfDescriptor, fieldDescriptor);
+                if (flattenUnions) {
+                  setStructField(schema, message, struct, fieldDescriptor);
+                } else {
+                  setUnionField(schema, message, struct, oneOfDescriptor, fieldDescriptor);
+                }
               }
             }
           }
@@ -1337,8 +1344,15 @@ public class ProtobufData {
       builder.name(name);
       List<OneofDescriptor> oneOfDescriptors = descriptor.getRealOneofs();
       for (OneofDescriptor oneOfDescriptor : oneOfDescriptors) {
-        String unionFieldName = unionFieldName(oneOfDescriptor);
-        builder.field(unionFieldName, toConnectSchema(ctx, oneOfDescriptor));
+        if (flattenUnions) {
+          List<FieldDescriptor> fieldDescriptors = oneOfDescriptor.getFields();
+          for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
+            builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
+          }
+        } else {
+          String unionFieldName = unionFieldName(oneOfDescriptor);
+          builder.field(unionFieldName, toConnectSchema(ctx, oneOfDescriptor));
+        }
       }
       List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
       for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
