@@ -164,7 +164,7 @@ public class RestApiTest extends ClusterTestHarness {
         schemas.get("root.proto"),
         schemaString.getSchemaString()
     );
-    schemaString = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES, 3, null, "serialized", false);
+    schemaString = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES, 3, null, "serialized", null, false);
     // the newly registered schema should be immediately readable on the leader
     assertEquals("Registered schema should be found",
         schemas.get("root.proto"),
@@ -195,7 +195,7 @@ public class RestApiTest extends ClusterTestHarness {
     Schema latestSchema = restApp.restClient.getLatestVersion("referrer");
     assertEquals("Registered schema should be found", 3, latestSchema.getId().intValue());
     Schema latestSchema2 = restApp.restClient.getLatestVersion(
-        RestService.DEFAULT_REQUEST_PROPERTIES, "referrer", "serialized");
+        RestService.DEFAULT_REQUEST_PROPERTIES, "referrer", "serialized", null);
     assertEquals("Registered schema should be found",
         latestSchema.getSchema(),
         new ProtobufSchema(latestSchema2.getSchema()).canonicalString());
