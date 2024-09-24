@@ -744,9 +744,9 @@ public class ProtobufData {
           MessageDefinition.OneofBuilder oneofBuilder = message.addOneof("_" + fieldDef.getName());
           fieldDef.setProto3Optional(true);
           fieldDef.setOneofIndex(oneofBuilder.getIdx());
-          oneofBuilder.addField(new Context(), fieldDef.build());
+          oneofBuilder.addField(fieldDef.build());
         } else {
-          message.addField(new Context(), fieldDef.build());
+          message.addField(fieldDef.build());
         }
       }
     }
@@ -776,7 +776,7 @@ public class ProtobufData {
       );
       if (fieldDef != null) {
         fieldDef.setOneofIndex(oneof.getIdx());
-        oneof.addField(new Context(), fieldDef.build());
+        oneof.addField(fieldDef.build());
       }
     }
   }
@@ -835,7 +835,7 @@ public class ProtobufData {
         defaultVal = fieldSchema.defaultValue();
       }
     }
-    FieldDefinition.Builder builder = FieldDefinition.newBuilder(ctx, name, tag, type);
+    FieldDefinition.Builder builder = FieldDefinition.newBuilder(new Context(), name, tag, type);
     if (label != null) {
       builder.setLabel(label);
     }
@@ -926,7 +926,7 @@ public class ProtobufData {
         KEY_FIELD,
         1
     );
-    map.addField(new Context(), key.build());
+    map.addField(key.build());
     FieldDefinition.Builder val = fieldDefinitionFromConnectSchema(
         ctx,
         schema,
@@ -935,7 +935,7 @@ public class ProtobufData {
         VALUE_FIELD,
         2
     );
-    map.addField(new Context(), val.build());
+    map.addField(val.build());
     return map.build();
   }
 
