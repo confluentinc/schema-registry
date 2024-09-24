@@ -1099,6 +1099,90 @@ public class AvroSchemaTest {
   }
 
   @Test
+  public void testRecursiveFindTags() {
+    String schemaString = "{\n"
+        + "  \"confluent:tags\": [\n"
+        + "    \"PII\"\n"
+        + "  ],\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"name\",\n"
+        + "      \"type\": \"string\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"age\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"default\": null,\n"
+        + "      \"name\": \"parent\",\n"
+        + "      \"type\": [\n"
+        + "        \"null\",\n"
+        + "        \"Person\"\n"
+        + "      ]\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"default\": [],\n"
+        + "      \"name\": \"children\",\n"
+        + "      \"type\": {\n"
+        + "        \"items\": \"Person\",\n"
+        + "        \"type\": \"array\"\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"attributes\",\n"
+        + "      \"type\": {\n"
+        + "        \"type\": \"map\",\n"
+        + "        \"values\": [\n"
+        + "          \"null\",\n"
+        + "          \"int\",\n"
+        + "          \"long\",\n"
+        + "          \"float\",\n"
+        + "          \"double\",\n"
+        + "          \"string\",\n"
+        + "          \"boolean\",\n"
+        + "          {\n"
+        + "            \"fields\": [\n"
+        + "              {\n"
+        + "                \"name\": \"id\",\n"
+        + "                \"type\": \"int\"\n"
+        + "              },\n"
+        + "              {\n"
+        + "                \"name\": \"value\",\n"
+        + "                \"type\": \"string\"\n"
+        + "              }\n"
+        + "            ],\n"
+        + "            \"name\": \"NestedAttribute\",\n"
+        + "            \"type\": \"record\"\n"
+        + "          }\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"fixedSizeData\",\n"
+        + "      \"type\": {\n"
+        + "        \"name\": \"FixedData\",\n"
+        + "        \"size\": 16,\n"
+        + "        \"type\": \"fixed\"\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ],\n"
+        + "  \"name\": \"Person\",\n"
+        + "  \"namespace\": \"com.example\",\n"
+        + "  \"type\": \"record\"\n"
+        + "}";
+
+    AvroSchema schema = new AvroSchema(schemaString);
+    assertEquals(ImmutableSet.of("PII"), schema.inlineTags());
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>();
+    expectedTags.put(new SchemaEntity(
+            "com.example.Person",
+            SchemaEntity.EntityType.SR_RECORD),
+        Collections.singleton("PII"));
+    assertEquals(expectedTags, schema.inlineTaggedEntities());
+  }
+
+  @Test
   public void testNamespace() {
     String schemaString = "[\n" +
       "  {\n" +

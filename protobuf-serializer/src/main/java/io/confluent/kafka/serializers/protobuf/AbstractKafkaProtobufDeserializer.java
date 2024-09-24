@@ -19,6 +19,7 @@ package io.confluent.kafka.serializers.protobuf;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -71,7 +72,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     try {
       this.specificProtobufClass = type;
       if (specificProtobufClass != null && !specificProtobufClass.equals(Object.class)) {
-        this.parseMethod = specificProtobufClass.getDeclaredMethod("parseFrom", ByteBuffer.class);
+        this.parseMethod = specificProtobufClass.getDeclaredMethod(
+            "parseFrom", ByteBuffer.class, ExtensionRegistryLite.class);
       }
       this.deriveType = config.getBoolean(KafkaProtobufDeserializerConfig.DERIVE_TYPE_CONFIG);
     } catch (Exception e) {
@@ -166,7 +168,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       Object message = null;
       if (!migrations.isEmpty()) {
         message = DynamicMessage.parseFrom(schema.toDescriptor(),
-            new ByteArrayInputStream(buffer.array(), start, length));
+            new ByteArrayInputStream(buffer.array(), start, length),
+            ProtobufSchema.EXTENSION_REGISTRY);
         message = executeMigrations(migrations, subject, topic, headers, message);
         message = readerSchema.fromJson((JsonNode) message);
       }
@@ -177,7 +180,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       if (schema.ruleSet() != null && schema.ruleSet().hasRules(RuleMode.READ)) {
         if (message == null) {
           message = DynamicMessage.parseFrom(schema.toDescriptor(),
-              new ByteArrayInputStream(buffer.array(), start, length));
+              new ByteArrayInputStream(buffer.array(), start, length),
+              ProtobufSchema.EXTENSION_REGISTRY);
         }
         message = executeRules(
             subject, topic, headers, payload, RuleMode.READ, null, schema, message
@@ -193,7 +197,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       Object value;
       if (parseMethod != null) {
         try {
-          value = parseMethod.invoke(null, buffer);
+          value = parseMethod.invoke(null, buffer, ProtobufSchema.EXTENSION_REGISTRY);
         } catch (Exception e) {
           throw new ConfigException("Not a valid protobuf builder", e);
         }
@@ -205,7 +209,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
           throw new SerializationException("Could not find descriptor with name " + schema.name());
         }
         value = DynamicMessage.parseFrom(descriptor,
-            new ByteArrayInputStream(buffer.array(), start, length)
+            new ByteArrayInputStream(buffer.array(), start, length),
+            ProtobufSchema.EXTENSION_REGISTRY
         );
       }
 
@@ -249,8 +254,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     }
     try {
       Class<?> cls = Class.forName(clsName);
-      Method parseMethod = cls.getDeclaredMethod("parseFrom", ByteBuffer.class);
-      return parseMethod.invoke(null, buffer);
+      Method parseMethod = cls.getDeclaredMethod(
+          "parseFrom", ByteBuffer.class, ExtensionRegistryLite.class);
+      return parseMethod.invoke(null, buffer, ProtobufSchema.EXTENSION_REGISTRY);
     } catch (ClassNotFoundException e) {
       throw new SerializationException("Class " + clsName + " could not be found.");
     } catch (NoSuchMethodException e) {

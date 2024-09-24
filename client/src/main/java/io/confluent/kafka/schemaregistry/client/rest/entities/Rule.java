@@ -83,8 +83,16 @@ public class Rule {
     this.tags = Collections.unmodifiableSortedSet(sortedTags);
     this.params = Collections.unmodifiableSortedMap(sortedParams);
     this.expr = expr;
-    this.onSuccess = onSuccess;
-    this.onFailure = onFailure;
+    this.onSuccess = onSuccess != null
+        ? onSuccess
+        : mode == RuleMode.WRITEREAD || mode == RuleMode.UPDOWN
+            ? "NONE,NONE"
+            : "NONE";
+    this.onFailure = onFailure != null
+        ? onFailure
+        : mode == RuleMode.WRITEREAD || mode == RuleMode.UPDOWN
+            ? "ERROR,ERROR"
+            : "ERROR";
     this.disabled = disabled;
   }
 
