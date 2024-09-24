@@ -950,8 +950,8 @@ public class JsonSchema implements ParsedSchema {
         if (rawSchema != null) {
           JsonNode jsonNode = objectMapper.valueToTree(rawSchema);
           JsonSchema jsonSchema = new JsonSchema(jsonNode);
-          getInlineTaggedEntitiesRecursively(
-              tags, jsonSchema.rawSchema(), scope + "definitions.", false, visited);
+          getInlineTaggedEntitiesRecursively(tags, jsonSchema.rawSchema(),
+              scope + "definitions." + entry.getKey() + ".", false, visited);
         }
       }
     }
@@ -960,7 +960,8 @@ public class JsonSchema implements ParsedSchema {
       for (Map.Entry<String, Object> entry : defs.entrySet()) {
         if (entry.getValue() instanceof Schema) {
           getInlineTaggedEntitiesRecursively(
-              tags, (Schema) entry.getValue(), scope + "$defs.", false, visited);
+              tags, (Schema) entry.getValue(),
+              scope + "$defs." + entry.getKey() + ".", false, visited);
         }
       }
     }
