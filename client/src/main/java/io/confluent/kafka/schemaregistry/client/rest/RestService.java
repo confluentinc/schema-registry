@@ -978,6 +978,12 @@ public class RestService implements Closeable, Configurable {
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
+                            int id, String subject, Set<String> findTags, boolean fetchMaxId)
+      throws IOException, RestClientException {
+    return getId(requestProperties, id, subject, null, findTags, fetchMaxId);
+  }
+  
+  public SchemaString getId(Map<String, String> requestProperties,
       int id, String subject, String format, Set<String> findTags, boolean fetchMaxId)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}")
@@ -1081,6 +1087,12 @@ public class RestService implements Closeable, Configurable {
                                  String subject)
       throws IOException, RestClientException {
     return getLatestVersion(requestProperties, subject, null, null);
+  }
+
+  public Schema getLatestVersion(Map<String, String> requestProperties,
+                                 String subject, Set<String> findTags)
+          throws IOException, RestClientException {
+    return getLatestVersion(requestProperties, subject, null, findTags);
   }
 
   public Schema getLatestVersion(Map<String, String> requestProperties,
