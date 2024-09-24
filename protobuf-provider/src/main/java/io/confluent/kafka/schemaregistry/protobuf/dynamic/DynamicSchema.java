@@ -454,7 +454,7 @@ public class DynamicSchema {
     }
 
     public Builder addExtendDefinition(Context ctx, FieldDefinition fd) {
-      mFileDescProtoBuilder.addExtension(ctx, fd.getFieldType());
+      mFileDescProtoBuilder.addExtension(fd.getFieldType());
       return this;
     }
 

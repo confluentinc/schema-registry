@@ -79,7 +79,7 @@ public class MessageDefinition {
         String name,
         int num
     ) {
-      return addField(ctx, FieldDefinition.newBuilder(name, num, type).build());
+      return addField(FieldDefinition.newBuilder(ctx, name, num, type).build());
     }
 
     public Builder addField(FieldDefinition fd) {
@@ -175,8 +175,8 @@ public class MessageDefinition {
       return this;
     }
 
-    public Builder addExtendDefinition(Context ctx, FieldDefinition fd) {
-      mMsgTypeBuilder.addExtension(ctx, fd.getFieldType());
+    public Builder addExtendDefinition(FieldDefinition fd) {
+      mMsgTypeBuilder.addExtension(fd.getFieldType());
       return this;
     }
 

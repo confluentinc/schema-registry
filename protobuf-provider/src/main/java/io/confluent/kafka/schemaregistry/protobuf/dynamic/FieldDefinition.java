@@ -26,6 +26,8 @@ import com.google.protobuf.DescriptorProtos.FieldOptions.EditionDefault;
 import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionRetention;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionTargetType;
+import com.squareup.wire.schema.internal.parser.EnumElemeent;
+import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
@@ -90,19 +92,19 @@ public class FieldDefinition {
     public Builder setType(Context ctx, String type) {
       FieldDescriptorProto.Type primType = sTypeMap.get(type);
       if (primType != null) {
-        fieldBuilder.setType(primType);
+        mFieldTypeBuilder.setType(primType);
       } else {
         Pair<String, TypeElementInfo> entry =
                 ctx.resolveFull(ctx::getTypeForFullName, type, true);
         if (entry != null) {
           TypeElement elem = entry.getSecond().type();
           if (elem instanceof MessageElement) {
-            fieldBuilder.setType(Type.TYPE_MESSAGE);
+            mFieldTypeBuilder.setType(Type.TYPE_MESSAGE);
           } else if (elem instanceof EnumElement) {
-            fieldBuilder.setType(Type.TYPE_ENUM);
+            mFieldTypeBuilder.setType(Type.TYPE_ENUM);
           }
         }
-        fieldBuilder.setTypeName(type);
+        mFieldTypeBuilder.setTypeName(type);
       }
       return this;
     }
