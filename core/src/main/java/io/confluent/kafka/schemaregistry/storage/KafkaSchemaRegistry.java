@@ -952,9 +952,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           ) {
             return new Schema(subject, existingSchema.getId());
           }
-        } else if (existingSchema.getId().equals(schema.getId())
-            && existingSchema.getVersion().equals(schema.getVersion())) {
-          return existingSchema;
+        } else if (existingSchema.getId().equals(schema.getId())) {
+          if (existingSchema.getVersion().equals(schema.getVersion())) {
+            return existingSchema;
+          } else {
+            // In rare cases, a user may have imported the same schema with different versions
+            Schema olderVersionSchema = get(subject, schema.getVersion(), false);
+            if (olderVersionSchema != null
+                && olderVersionSchema.getId().equals(existingSchema.getId())
+                && MD5.ofSchema(olderVersionSchema).equals(MD5.ofSchema(existingSchema))) {
+              return olderVersionSchema;
+            }
+          }
         }
       }
     }
@@ -966,7 +975,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       } else {
         // forward registering request to the leader
         if (leaderIdentity != null) {
-          return forwardRegisterRequestToLeader(subject, schema, normalize, headerProperties);
+          return forwardRegisterRequestToLeader(subject, request, normalize, headerProperties);
         } else {
           throw new UnknownLeaderException("Register schema request failed since leader is "
                                            + "unknown");
@@ -1341,11 +1350,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   }
 
   private Schema forwardRegisterRequestToLeader(
-      String subject, Schema schema, boolean normalize, Map<String, String> headerProperties)
+      String subject, RegisterSchemaRequest registerSchemaRequest, boolean normalize,
+      Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
-    RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest(schema);
     log.debug(String.format("Forwarding registering schema request to %s", baseUrl));
     try {
       RegisterSchemaResponse response = leaderRestService.registerSchema(

@@ -28,6 +28,7 @@ import com.google.protobuf.DescriptorProtos.FeatureSet;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.util.List;
@@ -73,11 +74,12 @@ public class MessageDefinition {
     }
 
     public Builder addField(
+        Context ctx,
         String type,
         String name,
         int num
     ) {
-      return addField(FieldDefinition.newBuilder(name, num, type).build());
+      return addField(FieldDefinition.newBuilder(ctx, name, num, type).build());
     }
 
     public Builder addField(FieldDefinition fd) {

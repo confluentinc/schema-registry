@@ -21,17 +21,24 @@ import static io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema.t
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.FeatureSet;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Type;
 import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.EditionDefault;
 import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionRetention;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionTargetType;
+import com.squareup.wire.schema.internal.parser.EnumElement;
+import com.squareup.wire.schema.internal.parser.MessageElement;
+import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import kotlin.Pair;
 
 /**
  * FieldDefinition
@@ -39,8 +46,8 @@ import java.util.Map;
 public class FieldDefinition {
   // --- public static ---
 
-  public static Builder newBuilder(String fieldName, int tag, String type) {
-    return new Builder(fieldName).setNumber(tag).setType(type);
+  public static Builder newBuilder(Context ctx, String fieldName, int tag, String type) {
+    return new Builder(fieldName).setNumber(tag).setType(ctx, type);
   }
 
   // --- public ---
@@ -84,11 +91,21 @@ public class FieldDefinition {
       return this;
     }
 
-    public Builder setType(String type) {
+    public Builder setType(Context ctx, String type) {
       FieldDescriptorProto.Type primType = sTypeMap.get(type);
       if (primType != null) {
         mFieldTypeBuilder.setType(primType);
       } else {
+        Pair<String, TypeElementInfo> entry =
+                ctx.resolveFull(ctx::getTypeForFullName, type, true);
+        if (entry != null) {
+          TypeElement elem = entry.getSecond().type();
+          if (elem instanceof MessageElement) {
+            mFieldTypeBuilder.setType(Type.TYPE_MESSAGE);
+          } else if (elem instanceof EnumElement) {
+            mFieldTypeBuilder.setType(Type.TYPE_ENUM);
+          }
+        }
         mFieldTypeBuilder.setTypeName(type);
       }
       return this;

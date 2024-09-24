@@ -33,7 +33,9 @@ import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DynamicMessage;
 
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.io.ByteArrayOutputStream;
@@ -92,7 +94,8 @@ public class DynamicSchema {
    */
   public static DynamicSchema parseFrom(byte[] schemaDescBuf)
       throws DescriptorValidationException, IOException {
-    return new DynamicSchema(FileDescriptorSet.parseFrom(schemaDescBuf));
+    return new DynamicSchema(FileDescriptorSet.parseFrom(schemaDescBuf,
+        ProtobufSchema.EXTENSION_REGISTRY));
   }
 
   // --- public ---
@@ -450,7 +453,7 @@ public class DynamicSchema {
       return this;
     }
 
-    public Builder addExtendDefinition(FieldDefinition fd) {
+    public Builder addExtendDefinition(Context ctx, FieldDefinition fd) {
       mFileDescProtoBuilder.addExtension(fd.getFieldType());
       return this;
     }
