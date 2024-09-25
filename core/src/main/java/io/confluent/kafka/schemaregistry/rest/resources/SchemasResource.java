@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -109,6 +110,8 @@ public class SchemasResource {
           : null;
       schemas = schemaRegistry.getVersionsWithSubjectPrefix(
           subjectPrefix, aliases, filter, latestOnly, postFilter);
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -171,6 +174,8 @@ public class SchemasResource {
         schemaRegistry.extractSchemaTags(s, tags);
         schema.setSchemaTags(s.getSchemaTags());
       }
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -311,6 +316,8 @@ public class SchemasResource {
     String schema ;
     try {
       schema = schemaRegistry.get(id, subject, format, false).getSchemaString();
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
