@@ -3055,7 +3055,7 @@ public class ProtobufSchemaTest {
     }
   }
 
-  //@Test
+  @Test
   public void testGoogleDescriptor() throws Exception {
     ResourceLoader resourceLoader = new ResourceLoader("/");
     for (int i = 19; i < 28; i++) {
