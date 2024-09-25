@@ -1346,12 +1346,14 @@ public class ProtobufSchema implements ParsedSchema {
         schema.setPackage(rootElem.getPackageName());
       }
       for (TypeElement typeElem : rootElem.getTypes()) {
-        if (typeElem instanceof MessageElement) {
-          MessageDefinition message = toDynamicMessage(ctx, syntax, (MessageElement) typeElem);
-          schema.addMessageDefinition(message);
-        } else if (typeElem instanceof EnumElement) {
-          EnumDefinition enumer = toDynamicEnum((EnumElement) typeElem);
-          schema.addEnumDefinition(enumer);
+        try (Context.NamedScope namedScope = ctx.enterName(typeElem.getName())) {
+          if (typeElem instanceof MessageElement) {
+            MessageDefinition message = toDynamicMessage(ctx, syntax, (MessageElement) typeElem);
+            schema.addMessageDefinition(message);
+          } else if (typeElem instanceof EnumElement) {
+            EnumDefinition enumer = toDynamicEnum((EnumElement) typeElem);
+            schema.addEnumDefinition(enumer);
+          }
         }
       }
       for (ServiceElement serviceElement : rootElem.getServices()) {
@@ -1578,10 +1580,12 @@ public class ProtobufSchema implements ParsedSchema {
     log.trace("*** message: {}", messageElem.getName());
     MessageDefinition.Builder message = MessageDefinition.newBuilder(messageElem.getName());
     for (TypeElement type : messageElem.getNestedTypes()) {
-      if (type instanceof MessageElement) {
-        message.addMessageDefinition(toDynamicMessage(ctx, syntax, (MessageElement) type));
-      } else if (type instanceof EnumElement) {
-        message.addEnumDefinition(toDynamicEnum((EnumElement) type));
+      try (Context.NamedScope namedScope = ctx.enterName(type.getName())) {
+        if (type instanceof MessageElement) {
+          message.addMessageDefinition(toDynamicMessage(ctx, syntax, (MessageElement) type));
+        } else if (type instanceof EnumElement) {
+          message.addEnumDefinition(toDynamicEnum((EnumElement) type));
+        }
       }
     }
     Set<String> added = new HashSet<>();
