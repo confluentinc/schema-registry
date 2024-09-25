@@ -1201,7 +1201,9 @@ public class JsonSchema implements ParsedSchema {
             JavaType type = objectMapper.constructType(message.getClass());
             DeserializationContext ctxt = ((Impl) objectMapper.getDeserializationContext())
                 .createDummyInstance(objectMapper.getDeserializationConfig());
-            JsonDeserializer<Object> deser = ctxt.findRootValueDeserializer(type);
+            // Call findNonContextValueDeserializer instead of findRootValueDeserializer
+            // so we don't get a wrapping TypeDeserializer
+            JsonDeserializer<Object> deser = ctxt.findNonContextualValueDeserializer(type);
             if (deser instanceof BeanDeserializer) {
               Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
               while (propIter.hasNext()) {
