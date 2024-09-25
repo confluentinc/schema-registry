@@ -734,7 +734,7 @@ public class JsonSchemaTest {
     JsonSchema schema = new JsonSchema(schemaString);
 
     Map<SchemaEntity, Set<String>> tags = new HashMap<>();
-    tags.put(new SchemaEntity("object.definitions.object.name",
+    tags.put(new SchemaEntity("object.definitions.MetricData.object.name",
             SchemaEntity.EntityType.SR_FIELD),
         Collections.singleton("PII"));
     Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tags);
