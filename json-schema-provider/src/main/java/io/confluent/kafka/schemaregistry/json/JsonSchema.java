@@ -953,7 +953,7 @@ public class JsonSchema implements ParsedSchema {
       condSchema.getThenSchema().ifPresent(value -> getInlineTaggedEntitiesRecursively(
           tags, value, scopedName + ".then.", false, visited));
       condSchema.getElseSchema().ifPresent(value -> getInlineTaggedEntitiesRecursively(
-          tags, value, scopedName + ".else", false, visited));
+          tags, value, scopedName + ".else.", false, visited));
     } else if (schema instanceof NotSchema) {
       Schema subschema = ((NotSchema) schema).getMustNotMatch();
       getInlineTaggedEntitiesRecursively(tags, subschema, scope + "not.", false, visited);
