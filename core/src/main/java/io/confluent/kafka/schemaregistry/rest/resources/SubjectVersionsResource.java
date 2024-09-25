@@ -167,6 +167,8 @@ public class SubjectVersionsResource {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
         schema.setSchema(parsedSchema.formattedString(format));
       }
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
