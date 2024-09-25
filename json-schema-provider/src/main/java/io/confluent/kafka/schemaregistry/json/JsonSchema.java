@@ -974,8 +974,8 @@ public class JsonSchema implements ParsedSchema {
         if (rawSchema != null) {
           JsonNode jsonNode = objectMapper.valueToTree(rawSchema);
           JsonSchema jsonSchema = new JsonSchema(jsonNode);
-          getInlineTaggedEntitiesRecursively(
-              tags, jsonSchema.rawSchema(), scope + "definitions.", false, visited);
+          getInlineTaggedEntitiesRecursively(tags, jsonSchema.rawSchema(),
+              scope + "definitions." + entry.getKey() + ".", false, visited);
         }
       }
     }
@@ -984,7 +984,8 @@ public class JsonSchema implements ParsedSchema {
       for (Map.Entry<String, Object> entry : defs.entrySet()) {
         if (entry.getValue() instanceof Schema) {
           getInlineTaggedEntitiesRecursively(
-              tags, (Schema) entry.getValue(), scope + "$defs.", false, visited);
+              tags, (Schema) entry.getValue(),
+              scope + "$defs." + entry.getKey() + ".", false, visited);
         }
       }
     }
@@ -1200,7 +1201,9 @@ public class JsonSchema implements ParsedSchema {
             JavaType type = objectMapper.constructType(message.getClass());
             DeserializationContext ctxt = ((Impl) objectMapper.getDeserializationContext())
                 .createDummyInstance(objectMapper.getDeserializationConfig());
-            JsonDeserializer<Object> deser = ctxt.findRootValueDeserializer(type);
+            // Call findNonContextValueDeserializer instead of findRootValueDeserializer
+            // so we don't get a wrapping TypeDeserializer
+            JsonDeserializer<Object> deser = ctxt.findNonContextualValueDeserializer(type);
             if (deser instanceof BeanDeserializer) {
               Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
               while (propIter.hasNext()) {
