@@ -30,6 +30,8 @@ import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -252,7 +254,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   protected static KafkaException toKafkaException(RestClientException e, String errorMessage) {
     int status = e.getStatus();
-    if (status == 429) {        // Too Many Requests
+    if (status == 401) {
+      return new AuthenticationException(errorMessage, e);
+    } else if (status == 403) {
+      return new AuthorizationException(errorMessage, e);
+    } else if (status == 429) {        // Too Many Requests
       return new ThrottlingQuotaExceededException(e.getMessage());
     } else if (status == 408    // Request Timeout
         || status == 503        // Service Unavailable
