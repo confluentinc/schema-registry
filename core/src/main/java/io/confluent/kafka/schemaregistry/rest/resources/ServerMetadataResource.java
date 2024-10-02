@@ -73,6 +73,7 @@ public class ServerMetadataResource {
                       description = "Error code 50001 -- Error in the backend data store\n")
   })
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("metadata.version")
   public SchemaRegistryServerVersion getSchemaRegistryVersion() {
     return new SchemaRegistryServerVersion(AppInfoParser.getVersion(), AppInfoParser.getCommitId());
   }
