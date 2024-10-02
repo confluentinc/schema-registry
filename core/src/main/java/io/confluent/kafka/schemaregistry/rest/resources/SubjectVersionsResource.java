@@ -181,6 +181,7 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}/referencedby")
+  @PerformanceMetric("subjects.versions.list-schema-refs")
   @Operation(summary = "List schemas referencing a schema",
       description = "Retrieves the IDs of schemas that reference the specified schema.",
       responses = {
