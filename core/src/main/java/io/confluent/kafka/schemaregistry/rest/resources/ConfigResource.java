@@ -301,6 +301,7 @@ public class ConfigResource {
                           + "Error code 50001 indicates a failure in the backend data store.",
               content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("config.delete-global")
   public void deleteTopLevelConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers) {
