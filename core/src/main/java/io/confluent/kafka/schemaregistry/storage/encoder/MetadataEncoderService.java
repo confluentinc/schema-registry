@@ -286,7 +286,7 @@ public class MetadataEncoderService implements Closeable {
         byte[] plaintext = aead.decrypt(Base64.getDecoder().decode(value), EMPTY_AAD);
         return new String(plaintext, StandardCharsets.UTF_8);
       } catch (GeneralSecurityException e) {
-        log.error("Could not decrypt sensitive metadata for schema {}", schema, e);
+        log.error("Could not decrypt sensitive metadata for schema id {}", schema.getId(), e);
         // Just return the value as-is if we can't decrypt it
         return value;
       }
