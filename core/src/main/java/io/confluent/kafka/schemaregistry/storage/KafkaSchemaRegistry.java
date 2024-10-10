@@ -710,11 +710,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           SchemaValue schemaValue = ((LazyParsedSchemaHolder) schemaHolder).schemaValue();
           ParsedSchema undeletedSchema = schemaHolder.schema();
           if (parsedSchema != null
-              && parsedSchema.references().isEmpty()
-              && !undeletedSchema.references().isEmpty()
-              && parsedSchema.deepEquals(undeletedSchema)
-              && (schemaId < 0 || schemaId == schemaValue.getId())) {
+              && (schemaId < 0 || schemaId == schemaValue.getId())
+              && areSchemasEquivalent(parsedSchema, undeletedSchema)) {
             // This handles the case where a schema is sent with all references resolved
+            // or without confluent:version
             return modifiedSchema
                 ? schema.copy(schemaValue.getVersion(), schemaValue.getId())
                 : new Schema(subject, schemaValue.getId());
@@ -829,6 +828,33 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
+  private boolean areSchemasEquivalent(ParsedSchema schema, Schema prev)
+      throws SchemaRegistryException {
+    return areSchemasEquivalent(schema, parseSchema(prev));
+  }
+
+  private boolean areSchemasEquivalent(ParsedSchema schema, ParsedSchema prev) {
+    if (schema.references().isEmpty() && !prev.references().isEmpty()) {
+      if (schema.deepEquals(prev)) {
+        // This handles the case where a schema is sent with all references resolved
+        return true;
+      }
+    }
+    String schemaVer = getConfluentVersion(schema.metadata());
+    String prevVer = getConfluentVersion(prev.metadata());
+    if (schemaVer == null && prevVer != null) {
+      ParsedSchema newSchema = schema.metadata() != null
+          ? schema
+          : schema.copy(new Metadata(null, null, null), schema.ruleSet());
+      ParsedSchema newPrev = prev.copy(removeConfluentVersion(prev.metadata()), prev.ruleSet());
+      if (newSchema.deepEquals(newPrev)) {
+        // This handles the case where a schema is sent without confluent:version
+        return true;
+      }
+    }
+    return false;
+  }
+
   private boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
     Mode subjectMode = getModeInScope(subject);
     return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
@@ -910,15 +936,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
     // Set confluent:version if passed in version is not 0,
     // or update confluent:version if it already exists in the metadata
-    if (schema.getVersion() != 0
-        || (mergedMetadata != null
-        && mergedMetadata.getProperties() != null
-        && mergedMetadata.getProperties().containsKey(CONFLUENT_VERSION))) {
-      Map<String, String> newProps =
-          Collections.singletonMap(CONFLUENT_VERSION, String.valueOf(newVersion));
-      mergedMetadata = mergeMetadata(mergedMetadata,
-          new io.confluent.kafka.schemaregistry.client.rest.entities.Metadata(
-              null, newProps, null));
+    if (schema.getVersion() != 0 || getConfluentVersion(mergedMetadata) != null) {
+      mergedMetadata = setConfluentVersion(mergedMetadata, newVersion);
     }
 
     if (mergedMetadata != null || mergedRuleSet != null) {
@@ -927,6 +946,35 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       return true;
     }
     return false;
+  }
+
+  private String getConfluentVersion(Metadata metadata) {
+    return metadata != null && metadata.getProperties() != null
+        ? metadata.getProperties().get(CONFLUENT_VERSION)
+        : null;
+  }
+
+  private Metadata setConfluentVersion(Metadata metadata, int version) {
+    Map<String, String> newProps = metadata != null && metadata.getProperties() != null
+        ? new HashMap<>(metadata.getProperties())
+        : new HashMap<>();
+    newProps.put(CONFLUENT_VERSION, String.valueOf(version));
+    return new Metadata(
+        metadata != null ? metadata.getTags() : null,
+        newProps,
+        metadata != null ? metadata.getSensitive() : null);
+  }
+
+  private Metadata removeConfluentVersion(Metadata metadata) {
+    if (metadata == null || metadata.getProperties() == null) {
+      return metadata;
+    }
+    Map<String, String> newProps = new HashMap<>(metadata.getProperties());
+    newProps.remove(CONFLUENT_VERSION);
+    return new Metadata(
+        metadata.getTags(),
+        newProps,
+        metadata.getSensitive());
   }
 
   public Schema registerOrForward(String subject,
@@ -1003,11 +1051,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     Metadata mergedMetadata = request.getMetadata() != null
         ? request.getMetadata()
         : parsedSchema.metadata();
-    Metadata newMetadata = new Metadata(
-        Collections.emptyMap(),
-        Collections.singletonMap(CONFLUENT_VERSION, String.valueOf(newVersion)),
-        Collections.emptySet());
-    mergedMetadata = Metadata.mergeMetadata(mergedMetadata, newMetadata);
+    mergedMetadata = setConfluentVersion(mergedMetadata, newVersion);
 
     RuleSet ruleSet = maybeModifyPreviousRuleSet(subject, request);
 
@@ -1286,13 +1330,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         Schema prev = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
         if (prev != null
             && parsedSchema != null
-            && parsedSchema.references().isEmpty()
-            && !prev.getReferences().isEmpty()) {
-          ParsedSchema prevSchema = parseSchema(prev);
-          if (parsedSchema.deepEquals(prevSchema)) {
-            // This handles the case where a schema is sent with all references resolved
-            return prev;
-          }
+            && areSchemasEquivalent(parsedSchema, prev)) {
+          // This handles the case where a schema is sent with all references resolved
+          // or without confluent:version
+          return prev;
         }
       }
 
