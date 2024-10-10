@@ -630,6 +630,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Register schema with version -1
     request.setVersion(-1);
+    request.setMetadata(null);
     registerAndVerifySchema(restApp.restClient, request, 2, subject);
 
     result = restApp.restClient.getLatestVersion(subject);
@@ -639,12 +640,14 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Lookup schema with null version
     request.setVersion(null);
+    request.setMetadata(null);
     result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
     assertEquals(schemaString, result.getSchema());
     assertEquals((Integer) 1, result.getVersion());
     assertNull(result.getMetadata());
 
     // Lookup schema with confluent:version 2
+    request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "2"), null));
     result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
     assertEquals(schemaString, result.getSchema());
@@ -655,6 +658,7 @@ public class RestApiTest extends ClusterTestHarness {
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
 
     // Lookup schema with null version
+    request.setVersion(null);
     request.setMetadata(null);
     result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
     assertEquals(schemaString, result.getSchema());
@@ -671,6 +675,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Register schema with version -1
     request.setVersion(-1);
+    request.setMetadata(null);
     registerAndVerifySchema(restApp.restClient, request, 3, subject);
 
     result = restApp.restClient.getLatestVersion(subject);
@@ -680,6 +685,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Register schema with version 3
     request.setVersion(3);
+    request.setMetadata(null);
     try {
       registerAndVerifySchema(restApp.restClient, request, 3, subject);
       fail("Registering version that is not next version should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
@@ -691,9 +697,11 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Register schema with version 4
     request.setVersion(4);
+    request.setMetadata(null);
     registerAndVerifySchema(restApp.restClient, request, 4, subject);
 
     // Lookup schema with null version
+    request.setVersion(null);
     request.setMetadata(null);
     result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
     assertEquals(schemaString, result.getSchema());
@@ -711,14 +719,17 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("5", result.getMetadata().getProperties().get("confluent:version"));
 
     // Register schema with confluent:version 2
+    request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "2"), null));
     registerAndVerifySchema(restApp.restClient, request, 2, subject);
 
     // Register schema with confluent:version 3
+    request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "3"), null));
     registerAndVerifySchema(restApp.restClient, request, 3, subject);
 
     // Register schema with confluent:version 0
+    request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "0"), null));
     registerAndVerifySchema(restApp.restClient, request, 6, subject);
 
@@ -728,10 +739,12 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("6", result.getMetadata().getProperties().get("confluent:version"));
 
     // Register schema with empty metadata
+    request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.emptyMap(), null));
     registerAndVerifySchema(restApp.restClient, request, 6, subject);
 
     // Register schema with new metadata
+    request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("mykey", "myvalue"), null));
     registerAndVerifySchema(restApp.restClient, request, 7, subject);
 
@@ -742,6 +755,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // Register schema with confluent:version -1
     request.setVersion(-1);
+    request.setMetadata(null);
     registerAndVerifySchema(restApp.restClient, request, 8, subject);
 
     result = restApp.restClient.getLatestVersion(subject);
@@ -750,6 +764,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("8", result.getMetadata().getProperties().get("confluent:version"));
 
     // Lookup schema with new metadata
+    request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("mykey", "myvalue"), null));
     result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
     assertEquals(schemaString, result.getSchema());
@@ -760,6 +775,7 @@ public class RestApiTest extends ClusterTestHarness {
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "7");
 
     // Lookup schema with new metadata
+    request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("mykey", "myvalue"), null));
     result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
     assertEquals(schemaString, result.getSchema());
