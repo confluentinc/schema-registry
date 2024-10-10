@@ -13,3 +13,10 @@ semaphore:
     "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
 git:
   enable: true
+sonarqube:
+  enable: true
+  languages:
+    - go
+    - java
+    - python
+    - javascript
