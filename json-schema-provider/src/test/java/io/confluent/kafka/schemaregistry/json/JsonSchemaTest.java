@@ -23,6 +23,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,6 +46,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -419,6 +422,32 @@ public class JsonSchemaTest {
     JsonSchema schema2 = JsonSchemaUtils.getSchema(envelope);
     schema2.validate(true);
     assertEquals(schema, schema2);
+  }
+
+  @Test
+  public void testPrepopulatedMappings() throws Exception {
+    String schema = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "  \"$id\": \"task.schema.json\",\n"
+        + "  \"title\": \"Task\",\n"
+        + "  \"description\": \"A task\",\n"
+        + "  \"type\": [\"null\", \"object\"],\n"
+        + "  \"properties\": {\n"
+        + "    \"title\": {\n"
+        + "        \"description\": \"Task title\",\n"
+        + "        \"type\": \"string\"\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+
+    Map<URI, String> mappings = spy(new HashMap<>(new JsonSchema("{}").getPrepopulatedMappings()));
+
+    JsonSchema jsonSchema = new JsonSchemaWithMappings(schema, mappings);
+    jsonSchema.validate(true);
+    // Verify that the mappings in the prepopulatedMetaSchemas are used
+    // The underlying JSON Schema library calls putMapEntries, which calls size and entrySet
+    verify(mappings).size();
+    verify(mappings).entrySet();
   }
 
   @Test
@@ -1071,6 +1100,51 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testMultiTypeSchemaDraft_2019_09() {
+    String schema = "{ \n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "   \"object_details\": {\n"
+        + "      \"additionalProperties\": true,\n"
+        + "      \"properties\": {\n"
+        + "        \"object_parents\": {\n"
+        + "          \"items\": {\n"
+        + "            \"properties\": {\n"
+        + "              \"object_parents_file_location\": {\n"
+        + "                \"type\": [\n"
+        + "                  \"string\",\n"
+        + "                  \"null\"\n"
+        + "                ]\n"
+        + "              },\n"
+        + "              \"object_parents_id\": {\n"
+        + "                \"type\": [\n"
+        + "                  \"string\",\n"
+        + "                  \"null\"\n"
+        + "                ]\n"
+        + "              }\n"
+        + "            },\n"
+        + "            \"type\": [\n"
+        + "              \"object\",\n"
+        + "              \"null\"\n"
+        + "            ]\n"
+        + "          },\n"
+        + "          \"type\": [\n"
+        + "            \"array\",\n"
+        + "            \"null\"\n"
+        + "          ]\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchema jsonSchema2 = jsonSchema.copyIgnoringModernDialects();
+    assertTrue(jsonSchema2.isBackwardCompatible(jsonSchema).isEmpty());
+    assertTrue(jsonSchema.isBackwardCompatible(jsonSchema2).isEmpty());
+  }
+
+  @Test
   public void testMultiTypeSchemaDraft_2020_12() {
     String schema = "{ \n"
         + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
@@ -1113,6 +1187,56 @@ public class JsonSchemaTest {
     JsonSchema jsonSchema2 = jsonSchema.copyIgnoringModernDialects();
     assertTrue(jsonSchema2.isBackwardCompatible(jsonSchema).isEmpty());
     assertTrue(jsonSchema.isBackwardCompatible(jsonSchema2).isEmpty());
+  }
+
+  @Test
+  public void testLocalReferenceDraft_2019_09() {
+    String parent = "{\n"
+        + "    \"$id\": \"acme.webhooks.checkout-application_updated.jsonschema.json\",\n"
+        + "    \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "    \"$scope\": \"r:application\",\n"
+        + "    \"title\": \"ApplicationUpdatedEvent\",\n"
+        + "    \"description\": \"Application updated event representing a state change in application data.\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": {\n"
+        + "        \"identity\": {\n"
+        + "            \"$ref\": \"https://getbread.github.io/docs/oas/v2/models.openapi3.json#/components/schemas/Identity\"\n"
+        + "        },\n"
+        + "        \"application\": {\n"
+        + "            \"$ref\": \"./checkout.common.webhooks.jsonschema.json#/components/schemas/Application\"\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"required\": [\n"
+        + "        \"identity\",\n"
+        + "        \"application\"\n"
+        + "    ]\n"
+        + "}";
+    String child = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "  \"components\": {\n"
+        + "    \"schemas\": {\n"
+        + "      \"Application\": {\n"
+        + "        \"properties\": {\n"
+        + "          \"id\": {\n"
+        + "            \"description\": \"The unique identifier of the Application.\",\n"
+        + "            \"format\": \"uuid\",\n"
+        + "            \"readOnly\": true,\n"
+        + "            \"type\": \"string\"\n"
+        + "          },\n"
+        + "          \"shippingContact\": {\n"
+        + "            \"$ref\": \"https://getbread.github.io/docs/oas/v2/models.openapi3.json#/components/schemas/Contact\"\n"
+        + "          }\n"
+        + "        },\n"
+        + "        \"title\": \"Application\",\n"
+        + "        \"type\": \"object\"\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    SchemaReference ref = new SchemaReference("checkout.common.webhooks.jsonschema.json", "reference", 1);
+    JsonSchema jsonSchema = new JsonSchema(parent, Collections.singletonList(ref),
+        Collections.singletonMap("checkout.common.webhooks.jsonschema.json", child), null);
+    jsonSchema.validate(true);
   }
 
   @Test
@@ -1163,6 +1287,156 @@ public class JsonSchemaTest {
     JsonSchema jsonSchema = new JsonSchema(parent, Collections.singletonList(ref),
         Collections.singletonMap("checkout.common.webhooks.jsonschema.json", child), null);
     jsonSchema.validate(true);
+  }
+
+  @Test
+  public void testNestedReferenceDraft_2019_09() {
+    String parent = "{\n"
+        + "  \"$schema\" : \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "  \"type\" : \"object\",\n"
+        + "  \"properties\" : {\n"
+        + "    \"applicationSchema\" : {\n"
+        + "      \"$ref\" : \"#/$defs/ApplicationSchema\"\n"
+        + "    },\n"
+        + "    \"additionalProperties\" : false\n"
+        + "  },\n"
+        + "  \"$defs\" : {\n"
+        + "    \"ApplicationSchema\" : {\n"
+        + "      \"type\" : \"object\",\n"
+        + "      \"properties\" : {\n"
+        + "        \"protocolVersion\" : {\n"
+        + "          \"type\" : \"array\",\n"
+        + "          \"minItems\" : 0,\n"
+        + "          \"items\" : {\n"
+        + "            \"$ref\" : \"child.schema.json#/$defs/ProtocolVersionName\"\n"
+        + "          }\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"additionalProperties\" : false\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"additionalProperties\" : false\n"
+        + "}\n";
+    String child = "{\n"
+        + "    \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": {\n"
+        + "        \"message\": {\n"
+        + "            \"$ref\": \"#/$defs/Message\"\n"
+        + "        },\n"
+        + "        \"additionalProperties\": false\n"
+        + "    },\n"
+        + "    \"$defs\": {\n"
+        + "        \"Message\": {\n"
+        + "            \"type\": \"object\",\n"
+        + "            \"properties\": {\n"
+        + "                \"messageId\": {\n"
+        + "                    \"$ref\": \"grandchild.schema.json#/$defs/MessageId\"\n"
+        + "                }\n"
+        + "            },\n"
+        + "            \"additionalProperties\": false\n"
+        + "        },\n"
+        + "        \"ProtocolVersionName\": {\n"
+        + "            \"type\": \"object\",\n"
+        + "            \"properties\": {\n"
+        + "                \"version\": {\n"
+        + "                    \"type\": \"string\"\n"
+        + "                },\n"
+        + "                \"name\": {\n"
+        + "                    \"type\": \"string\"\n"
+        + "                }\n"
+        + "            },\n"
+        + "            \"required\": [\n"
+        + "                \"name\",\n"
+        + "                \"version\"\n"
+        + "            ],\n"
+        + "            \"additionalProperties\": false\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"additionalProperties\": false\n"
+        + "}\n";
+    String messageDef = "{\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": {\n"
+        + "        \"messageId\": {\n"
+        + "            \"$ref\": \"grandchild.schema.json#/$defs/MessageId\"\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"additionalProperties\": false\n"
+        + "}\n";
+    String protocolDef = "{\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": {\n"
+        + "        \"version\": {\n"
+        + "            \"type\": \"string\"\n"
+        + "        },\n"
+        + "        \"name\": {\n"
+        + "            \"type\": \"string\"\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"required\": [\n"
+        + "        \"name\",\n"
+        + "        \"version\"\n"
+        + "    ],\n"
+        + "    \"additionalProperties\": false\n"
+        + "}\n";
+    String grandchild = "{\n"
+        + "    \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": {\n"
+        + "        \"additionalProperties\": false\n"
+        + "    },\n"
+        + "    \"$defs\": {\n"
+        + "        \"MessageId\": {\n"
+        + "            \"type\": \"object\",\n"
+        + "            \"properties\": {\n"
+        + "                \"id\": {\n"
+        + "                    \"type\": \"string\"\n"
+        + "                }\n"
+        + "            },\n"
+        + "            \"additionalProperties\": false\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"additionalProperties\": false\n"
+        + "}\n";
+    String applicationDef = "{\n"
+        + "    \"type\" : \"object\",\n"
+        + "    \"properties\" : {\n"
+        + "      \"protocolVersion\" : {\n"
+        + "        \"type\" : \"array\",\n"
+        + "        \"minItems\" : 0,\n"
+        + "        \"items\" : {\n"
+        + "          \"$ref\" : \"child.schema.json#/$defs/ProtocolVersionName\"\n"
+        + "        }\n"
+        + "      }\n"
+        + "    },\n"
+        + "    \"additionalProperties\" : false\n"
+        + "}\n";
+    SchemaReference ref0 = new SchemaReference("grandchild.schema.json", "reference", 1);
+    JsonSchema jsonSchema0 = new JsonSchema(child, Collections.singletonList(ref0),
+        Collections.singletonMap("grandchild.schema.json", grandchild), null);
+    jsonSchema0.validate(true);
+
+    JsonSchema protocolDefSchema = new JsonSchema(protocolDef);
+    JsonSchema messageDefSchema = new JsonSchema(messageDef, Collections.singletonList(ref0),
+        Collections.singletonMap("grandchild.schema.json", grandchild), null);
+    Map<String, Object> defs = (Map<String, Object>)
+        jsonSchema0.rawSchema().getUnprocessedProperties().get("$defs");
+    assertEquals(protocolDefSchema.rawSchema(), defs.get("ProtocolVersionName"));
+    assertEquals(messageDefSchema.rawSchema(), defs.get("Message"));
+
+    SchemaReference ref = new SchemaReference("child.schema.json", "reference", 1);
+    JsonSchema jsonSchema = new JsonSchema(parent, ImmutableList.of(ref, ref0),
+        ImmutableMap.of("child.schema.json", child,
+            "grandchild.schema.json", grandchild), null);
+    jsonSchema.validate(true);
+
+    JsonSchema applicationDefSchema = new JsonSchema(applicationDef, ImmutableList.of(ref, ref0),
+        ImmutableMap.of("child.schema.json", child,
+            "grandchild.schema.json", grandchild), null);
+    defs = (Map<String, Object>)
+        jsonSchema.rawSchema().getUnprocessedProperties().get("$defs");
+    assertEquals(applicationDefSchema.rawSchema(), defs.get("ApplicationSchema"));
   }
 
   @Test
@@ -1335,6 +1609,19 @@ public class JsonSchemaTest {
   private static JsonSchema createPrimitiveSchema(String type) {
     String schemaString = String.format("{\"type\" : \"%s\"}", type);
     return new JsonSchema(schemaString);
+  }
+
+  static class JsonSchemaWithMappings extends JsonSchema {
+    private Map<URI, String> mappings;
+    public JsonSchemaWithMappings(String schema, Map<URI, String> mappings) {
+      super(schema);
+      this.mappings = mappings;
+    }
+
+    @Override
+    protected Map<URI, String> getPrepopulatedMappings() {
+      return mappings;
+    }
   }
 
   static class TestObj {
