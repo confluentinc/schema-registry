@@ -50,6 +50,7 @@ import com.github.erosb.jsonsKema.SchemaLoaderConfig;
 import com.github.erosb.jsonsKema.UnknownSource;
 import com.github.erosb.jsonsKema.ValidationFailure;
 import com.github.erosb.jsonsKema.Validator;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -401,8 +402,13 @@ public class JsonSchema implements ParsedSchema {
     return schemaObj;
   }
 
+  @VisibleForTesting
+  protected Map<URI, String> getPrepopulatedMappings() {
+    return prepopulatedMetaSchemas;
+  }
+
   private void loadLatestDraft() throws URISyntaxException {
-    Map<URI, String> mappings = new HashMap<>(prepopulatedMetaSchemas);
+    Map<URI, String> mappings = new HashMap<>(getPrepopulatedMappings());
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
       URI uri = new URI(dep.getKey());
       mappings.put(uri, dep.getValue());
