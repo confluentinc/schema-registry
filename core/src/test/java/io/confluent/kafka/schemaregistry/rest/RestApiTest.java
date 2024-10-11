@@ -346,6 +346,23 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testImportSameSchemaDifferentVersion() throws Exception {
+    String schema = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\"}]}";
+
+    restApp.restClient.setMode("IMPORT");
+
+    int id1 = restApp.restClient.registerSchema(schema, "subject1", 1, 1);
+    assertEquals(1, id1);
+    id1 = restApp.restClient.registerSchema(schema, "subject1", 2, 1);
+    assertEquals(1, id1);
+    id1 = restApp.restClient.registerSchema(schema, "subject1", 1, 1);
+    assertEquals(1, id1);
+  }
+
+  @Test
   public void testCompatibleSchemaLookupBySubject() throws Exception {
     String subject = "testSubject";
     int numRegisteredSchemas = 0;
