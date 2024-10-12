@@ -1863,7 +1863,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         return null;
       }
 
-      return lookupCache.schemaIdAndSubjects(toSchemaEntity(schema))
+      SchemaIdAndSubjects schemaIdAndSubjects =
+          this.lookupCache.schemaIdAndSubjects(toSchemaEntity(schema));
+      if (schemaIdAndSubjects == null) {
+        return null;
+      }
+      return schemaIdAndSubjects
           .allSubjectVersions()
           .entrySet()
           .stream()
