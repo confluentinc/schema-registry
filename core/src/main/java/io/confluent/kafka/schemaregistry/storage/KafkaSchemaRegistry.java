@@ -15,6 +15,15 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
+import static io.confluent.kafka.schemaregistry.storage.FilteredIterator.filter;
+import static io.confluent.kafka.schemaregistry.storage.TransformedIterator.transform;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -107,15 +116,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
-
-import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
-import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
-import static io.confluent.kafka.schemaregistry.storage.FilteredIterator.filter;
-import static io.confluent.kafka.schemaregistry.storage.TransformedIterator.transform;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaRegistry {
 
