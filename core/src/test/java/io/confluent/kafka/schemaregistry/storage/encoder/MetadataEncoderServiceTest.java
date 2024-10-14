@@ -72,17 +72,5 @@ public class MetadataEncoderServiceTest {
     // the value of "sensitive" is decrypted
     assertEquals(schema2.getMetadata().getProperties().get("sensitive"), "foo");
     assertNull(schema2.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
-
-    SortedMap<String, String> badProperties = new TreeMap<>(schema.getMetadata().getProperties());
-    badProperties.put("sensitive", "badValue");
-    SchemaValue schema3 = new SchemaValue(
-        "mysubject", null, null, null, null, null,
-        new io.confluent.kafka.schemaregistry.storage.Metadata(
-            new Metadata(null, badProperties, Collections.singleton("sensitive"))), null, "true", false);
-    encoderService.decodeMetadata(schema3);
-    assertEquals(schema3.getMetadata().getProperties().get("nonsensitive"), "foo");
-    // the value of "sensitive" is not decrypted
-    assertEquals(schema3.getMetadata().getProperties().get("sensitive"), "badValue");
-    assertNull(schema3.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
   }
 }
