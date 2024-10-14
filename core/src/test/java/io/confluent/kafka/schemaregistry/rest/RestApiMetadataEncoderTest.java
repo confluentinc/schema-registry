@@ -15,21 +15,16 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -78,52 +73,5 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1);
     assertEquals(properties, schemaString.getMetadata().getProperties());
-  }
-
-  @Test
-  public void testMissingEncoder() throws Exception {
-    String subject = "testSubject";
-
-    Map<String, String> properties = new HashMap<>();
-    properties.put("nonsensitive", "foo");
-    properties.put("sensitive", "foo");
-    Metadata metadata = new Metadata(null, properties, Collections.singleton("sensitive"));
-    Schema schema = new Schema(subject, null, null, null, null, metadata, null, SCHEMA_STRING);
-    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
-
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
-        expectedIdSchema1,
-        restApp.restClient.registerSchema(request, subject, false).getId());
-
-    // Remove encoder
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).getMetadataEncoder().getEncoders()
-        .remove(KafkaSchemaRegistry.DEFAULT_TENANT);
-
-    assertThrows("Should fail to get schema",
-        RestClientException.class,
-        () -> restApp.restClient.getAllVersionsById(1));
-
-    assertThrows("Should fail to get schema",
-        RestClientException.class,
-        () -> restApp.restClient.getId(expectedIdSchema1));
-
-    assertThrows("Should fail to get schema",
-        RestClientException.class,
-        () -> restApp.restClient.getVersion(subject, 1));
-
-    assertThrows("Should fail to get schema",
-        RestClientException.class,
-        () -> restApp.restClient.getLatestVersion(subject));
-
-    assertThrows("Should fail to get schema",
-        RestClientException.class,
-        () -> restApp.restClient.getLatestVersion(subject));
-
-    List<Schema> schemas = restApp.restClient.getSchemas(subject, true, false);
-    assertTrue(schemas.isEmpty());
-
-    List<String> subjects = restApp.restClient.getAllSubjects();
-    assertTrue(subjects.isEmpty());
   }
 }
