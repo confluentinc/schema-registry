@@ -136,15 +136,17 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         }
         schema = (ProtobufSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        id = schemaRegistry.getId(subject, schema);
+        id = useSchemaId;
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
-        schema = (ProtobufSchema) getLatestWithMetadata(subject);
-        id = schemaRegistry.getId(subject, schema);
+        ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
+        schema = (ProtobufSchema) extendedSchema.getSchema();
+        id = extendedSchema.getId();
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
-        schema = (ProtobufSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
-        id = schemaRegistry.getId(subject, schema);
+        ExtendedSchema extendedSchema = lookupLatestVersion(subject, schema, latestCompatStrict);
+        schema = (ProtobufSchema) extendedSchema.getSchema();
+        id = extendedSchema.getId();
       } else {
         restClientErrorMsg = "Error retrieving Protobuf schema: ";
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
@@ -192,7 +194,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Map<SubjectSchema, ParsedSchema> latestVersions,
+      Map<SubjectSchema, ExtendedSchema> latestVersions,
       ReferenceSubjectNameStrategy strategy,
       String topic,
       boolean isKey,
@@ -232,7 +234,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Map<SubjectSchema, ParsedSchema> latestVersions,
+      Map<SubjectSchema, ExtendedSchema> latestVersions,
       boolean skipKnownTypes,
       ReferenceSubjectNameStrategy strategy,
       String topic,
@@ -277,7 +279,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Map<SubjectSchema, ParsedSchema> latestVersions,
+      Map<SubjectSchema, ExtendedSchema> latestVersions,
       boolean skipKnownTypes,
       ReferenceSubjectNameStrategy strategy,
       String topic,
@@ -312,7 +314,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Map<SubjectSchema, ParsedSchema> latestVersions,
+      Map<SubjectSchema, ExtendedSchema> latestVersions,
       boolean skipKnownTypes,
       ReferenceSubjectNameStrategy strategy,
       String topic,
@@ -383,10 +385,11 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         id = response.getId();
         version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
       } else if (useLatestVersion) {
-        schema = (ProtobufSchema) lookupLatestVersion(
+        ExtendedSchema extendedSchema = lookupLatestVersion(
             schemaRegistry, subject, schema, latestVersions, latestCompatStrict);
-        id = schemaRegistry.getId(subject, schema);
-        version = schemaRegistry.getVersion(subject, schema);
+        schema = (ProtobufSchema) extendedSchema.getSchema();
+        id = extendedSchema.getId();
+        version = extendedSchema.getVersion();
       } else {
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
         version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
