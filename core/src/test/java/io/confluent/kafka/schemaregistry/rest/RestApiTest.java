@@ -34,12 +34,16 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+<<<<<<< Updated upstream
 import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
+=======
+>>>>>>> Stashed changes
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
@@ -2010,6 +2014,107 @@ public class RestApiTest extends ClusterTestHarness {
     assertNull(schemaString.getRuleSet());
   }
 
+<<<<<<< Updated upstream
+=======
+  @Test
+  public void testRegisterSchemaWithReservedFields() throws RestClientException, IOException {
+    String subject0 = "testSubject0";
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+                                                     + "\"name\":\"myrecord\","
+                                                     + "\"fields\":"
+                                                     + "[{\"type\":\"string\",\"name\":"
+                                                     + "\"f" + "\"},"
+                                                     + "{\"type\":\"string\",\"name\":"
+                                                     + "\"g\" , \"default\":\"d\"}"
+                                                     + "]}");
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
+    request1.setMetadata(new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "f"),
+        Collections.emptySet()));
+
+    // global validateFields = true
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(BACKWARD.name());
+    configUpdateRequest.setValidateFields(true);
+    assertEquals("Updating config should succeed",
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, null));
+    assertThrows("Fail registering subject0 because of global validateFields",
+        RestClientException.class,
+        () -> restApp.restClient.registerSchema(request1, subject0, false));
+
+    // global validateFields = false
+    configUpdateRequest.setValidateFields(false);
+    assertEquals("Updating config should succeed",
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, null));
+    assertEquals("Should register despite reserved fields",
+        1,
+        restApp.restClient.registerSchema(request1, subject0, false).getId());
+
+    // global validateFields = false; testSubject1 validateFields = true
+    String subject1 = "testSubject1";
+    configUpdateRequest.setValidateFields(true);
+    assertEquals("Updating config should succeed",
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, subject1));
+    assertThrows("Fail registering subject1 because of subject1 validateFields",
+        RestClientException.class,
+        () -> restApp.restClient.registerSchema(request1, subject1, false));
+    String subject2 = "testSubject2";
+    assertEquals("Should register despite reserved fields",
+        1,
+        restApp.restClient.registerSchema(request1, subject2, false).getId());
+
+    // global validateFields = true; testSubject1 validateFields = false
+    configUpdateRequest.setValidateFields(true);
+    assertEquals("Updating config should succeed",
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, null));
+    configUpdateRequest.setValidateFields(false);
+    assertEquals("Updating config should succeed",
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, subject1));
+    assertEquals("Should register despite reserved fields",
+        1,
+        restApp.restClient.registerSchema(request1, subject1, false).getId());
+    String subject3 = "testSubject3";
+    assertThrows("Fail registering because of subject3 validateFields",
+        RestClientException.class,
+        () -> restApp.restClient.registerSchema(request1, subject3, false));
+
+    // remove reserved fields for subject1
+    request1.setMetadata(new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "g"),
+        Collections.emptySet()));
+    assertEquals("Should register despite removal of reserved fields",
+        2,
+        restApp.restClient.registerSchema(request1, subject1, false).getId());
+
+    // remove reserved fields for subject0
+    schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+                                        + "\"name\":\"myrecord\","
+                                        + "\"fields\":"
+                                        + "["
+                                        + "{\"type\":\"string\",\"name\":"
+                                        + "\"g\" , \"default\":\"d\"}"
+                                        + "]}");
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
+    request2.setMetadata(new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "g"),
+        Collections.emptySet()));
+    assertThrows("Fail registering because of removal of reserved fields",
+        RestClientException.class,
+        () -> restApp.restClient.registerSchema(request2, subject0, false));
+  }
+
+  @Test
+  public void testInvalidSchema() {
+    assertThrows(InvalidSchemaException.class, () ->
+        ((KafkaSchemaRegistry) restApp.schemaRegistry()).parseSchema(null));
+  }
+
+>>>>>>> Stashed changes
   @Override
   protected Properties getSchemaRegistryProperties() {
     Properties schemaRegistryProps = new Properties();
