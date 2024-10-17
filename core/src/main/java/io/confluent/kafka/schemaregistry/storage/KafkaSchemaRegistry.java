@@ -17,6 +17,8 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
 import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
+import static io.confluent.kafka.schemaregistry.storage.FilteredIterator.filter;
+import static io.confluent.kafka.schemaregistry.storage.TransformedIterator.transform;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
@@ -1608,10 +1610,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Throwable cause = e.getCause();
       if (cause instanceof InvalidSchemaException) {
         throw (InvalidSchemaException) cause;
-      } else if (cause instanceof RuntimeException) {
-        throw (RuntimeException) cause;
       } else {
-        throw new RuntimeException(e);
+        throw new InvalidSchemaException(e);
       }
     }
   }
@@ -1730,7 +1730,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return schemaString;
   }
 
-  public Schema toSchemaEntity(SchemaValue schemaValue) {
+  public Schema toSchemaEntity(SchemaValue schemaValue) throws SchemaRegistryStoreException {
     metadataEncoder.decodeMetadata(schemaValue);
     return schemaValue.toSchemaEntity();
   }
@@ -2036,7 +2036,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private Schema getLatestVersionFromSubjectSchemas(
-          CloseableIterator<SchemaRegistryValue> schemas) {
+          CloseableIterator<SchemaRegistryValue> schemas) throws SchemaRegistryException {
     int latestVersionId = -1;
     SchemaValue latestSchemaValue = null;
 
@@ -2088,12 +2088,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
       SchemaRegistryKey key1 = keyCreator.apply(start, MIN_VERSION);
       SchemaRegistryKey key2 = keyCreator.apply(end, MAX_VERSION);
-      return TransformedIterator.transform(kafkaStore.getAll(key1, key2), v -> {
+      return filter(transform(kafkaStore.getAll(key1, key2), v -> {
         if (v instanceof SchemaValue) {
-          metadataEncoder.decodeMetadata(((SchemaValue) v));
+          try {
+            metadataEncoder.decodeMetadata(((SchemaValue) v));
+          } catch (SchemaRegistryStoreException e) {
+            log.error("Failed to decode metadata for schema id {}", ((SchemaValue) v).getId(), e);
+            return null;
+          }
         }
         return v;
-      });
+      }), Objects::nonNull);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
@@ -2515,8 +2520,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (!shouldInclude) {
         continue;
       }
+      Schema schemaEntity;
+      try {
+        schemaEntity = toSchemaEntity(schemaValue);
+      } catch (SchemaRegistryStoreException e) {
+        log.error("Failed to decode metadata for schema id {}", schemaValue.getId(), e);
+        continue;
+      }
       List<String> aliases = subjectByAliases.get(schemaValue.getSubject());
-      ExtendedSchema schema = new ExtendedSchema(toSchemaEntity(schemaValue), aliases);
+      ExtendedSchema schema = new ExtendedSchema(schemaEntity, aliases);
       List<ExtendedSchema> schemaList = schemaMap.computeIfAbsent(
           schemaValue.getSubject(), k -> new ArrayList<>());
       if (returnLatestOnly) {
