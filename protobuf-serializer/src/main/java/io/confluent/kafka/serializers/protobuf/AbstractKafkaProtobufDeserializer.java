@@ -148,9 +148,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
       ParsedSchema readerSchema = null;
       if (metadata != null) {
-        readerSchema = getLatestWithMetadata(subject);
+        readerSchema = getLatestWithMetadata(subject).getSchema();
       } else if (useLatestVersion) {
-        readerSchema = lookupLatestVersion(subject, schema, false);
+        readerSchema = lookupLatestVersion(subject, schema, false).getSchema();
       }
       if (includeSchemaAndVersion || readerSchema != null) {
         Integer version = schemaVersion(topic, isKey, id, subject, schema, null);
