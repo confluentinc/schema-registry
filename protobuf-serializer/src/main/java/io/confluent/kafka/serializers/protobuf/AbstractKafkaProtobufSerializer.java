@@ -264,7 +264,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Map<SubjectSchema, ParsedSchema> latestVersions,
+      Map<SubjectSchema, ExtendedSchema> latestVersions,
       boolean skipKnownTypes,
       ReferenceSubjectNameStrategy strategy,
       String topic,
