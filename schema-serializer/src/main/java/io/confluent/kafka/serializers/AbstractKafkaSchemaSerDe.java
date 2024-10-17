@@ -115,8 +115,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
-  protected Cache<SubjectSchema, ParsedSchema> latestVersions;
-  protected Cache<String, ParsedSchema> latestWithMetadata;
+  protected Cache<SubjectSchema, ExtendedSchema> latestVersions;
+  protected Cache<String, ExtendedSchema> latestWithMetadata;
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
   protected Map<String, String> metadata;
@@ -358,34 +358,36 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return isKey;
   }
 
-  protected Map<SubjectSchema, ParsedSchema> latestVersionsCache() {
+  protected Map<SubjectSchema, ExtendedSchema> latestVersionsCache() {
     return latestVersions != null ? latestVersions.asMap() : new HashMap<>();
   }
 
-  protected Map<String, ParsedSchema> latestWithMetadataCache() {
+  protected Map<String, ExtendedSchema> latestWithMetadataCache() {
     return latestWithMetadata != null ? latestWithMetadata.asMap() : new HashMap<>();
   }
 
-  protected ParsedSchema getLatestWithMetadata(String subject)
+  protected ExtendedSchema getLatestWithMetadata(String subject)
       throws IOException, RestClientException {
     if (metadata == null || metadata.isEmpty()) {
       return null;
     }
-    ParsedSchema schema = latestWithMetadata.getIfPresent(subject);
-    if (schema == null) {
+    ExtendedSchema extendedSchema = latestWithMetadata.getIfPresent(subject);
+    if (extendedSchema == null) {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestWithMetadata(subject, metadata, true);
       Optional<ParsedSchema> optSchema =
           schemaRegistry.parseSchema(
               new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
                   null, schemaMetadata));
-      schema = optSchema.orElseThrow(
+      ParsedSchema schema = optSchema.orElseThrow(
           () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
               + " with refs " + schemaMetadata.getReferences()
               + " of type " + schemaMetadata.getSchemaType()));
       schema = schema.copy(schemaMetadata.getVersion());
-      latestWithMetadata.put(subject, schema);
+      extendedSchema = new ExtendedSchema(
+          schemaMetadata.getId(), schemaMetadata.getVersion(), schema);
+      latestWithMetadata.put(subject, extendedSchema);
     }
-    return schema;
+    return extendedSchema;
   }
 
   private ParsedSchema getSchemaMetadata(String subject, int version)
@@ -583,32 +585,32 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return lookupSchema;
   }
 
-  protected ParsedSchema lookupLatestVersion(
+  protected ExtendedSchema lookupLatestVersion(
       String subject, ParsedSchema schema, boolean latestCompatStrict)
       throws IOException, RestClientException {
     return lookupLatestVersion(
         schemaRegistry, subject, schema, latestVersionsCache(), latestCompatStrict);
   }
 
-  protected static ParsedSchema lookupLatestVersion(
+  protected static ExtendedSchema lookupLatestVersion(
       SchemaRegistryClient schemaRegistry,
       String subject,
       ParsedSchema schema,
-      Map<SubjectSchema, ParsedSchema> cache,
+      Map<SubjectSchema, ExtendedSchema> cache,
       boolean latestCompatStrict)
       throws IOException, RestClientException {
     SubjectSchema ss = new SubjectSchema(subject, schema);
-    ParsedSchema latestVersion = null;
+    ExtendedSchema extendedSchema = null;
     if (cache != null) {
-      latestVersion = cache.get(ss);
+      extendedSchema = cache.get(ss);
     }
-    if (latestVersion == null) {
+    if (extendedSchema == null) {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestSchemaMetadata(subject);
       Optional<ParsedSchema> optSchema =
           schemaRegistry.parseSchema(
               new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
                   null, schemaMetadata));
-      latestVersion = optSchema.orElseThrow(
+      ParsedSchema latestVersion = optSchema.orElseThrow(
           () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
               + " with refs " + schemaMetadata.getReferences()
               + " of type " + schemaMetadata.getSchemaType()));
@@ -622,11 +624,13 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
             + "' for schema '" + schema.canonicalString()
             + "'. Set latest.compatibility.strict=false to disable this check");
       }
+      extendedSchema = new ExtendedSchema(
+          schemaMetadata.getId(), schemaMetadata.getVersion(), latestVersion);
       if (cache != null) {
-        cache.put(ss, latestVersion);
+        cache.put(ss, extendedSchema);
       }
     }
-    return latestVersion;
+    return extendedSchema;
   }
 
   protected ByteBuffer getByteBuffer(byte[] payload) {
@@ -941,6 +945,49 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     @Override
     public int hashCode() {
       return Objects.hash(subject, schema);
+    }
+  }
+
+  protected static class ExtendedSchema {
+    private final Integer id;
+    private final Integer version;
+    private final ParsedSchema schema;
+
+    public ExtendedSchema(Integer id, Integer version, ParsedSchema schema) {
+      this.id = id;
+      this.version = version;
+      this.schema = schema;
+    }
+
+    public Integer getId() {
+      return id;
+    }
+
+    public Integer getVersion() {
+      return version;
+    }
+
+    public ParsedSchema getSchema() {
+      return schema;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      ExtendedSchema that = (ExtendedSchema) o;
+      return id.equals(that.id)
+          && version.equals(that.version)
+          && schema.equals(that.schema);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(id, version, schema);
     }
   }
 
