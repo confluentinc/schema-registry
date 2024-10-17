@@ -15,6 +15,7 @@
 package io.confluent.kafka.schemaregistry.client;
 
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import java.time.Duration;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -84,7 +85,7 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
     int i = 0;
     while (i < numMessages) {
-      ConsumerRecords<String, Object> records = consumer.poll(1000);
+      ConsumerRecords<String, Object> records = consumer.poll(Duration.ofMillis(1000));
       for (ConsumerRecord<String, Object> record : records) {
         recordList.add(record.value());
         i++;

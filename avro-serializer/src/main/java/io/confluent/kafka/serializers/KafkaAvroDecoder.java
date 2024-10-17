@@ -17,10 +17,10 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import kafka.serializer.Decoder;
 import kafka.utils.VerifiableProperties;
 
 import org.apache.avro.Schema;
+import org.apache.kafka.tools.api.Decoder;
 
 public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements Decoder<Object> {
 

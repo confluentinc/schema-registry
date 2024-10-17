@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.StoreUpdateHandler.ValidationStatus;
 import io.confluent.kafka.schemaregistry.utils.ShutdownableThread;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -194,7 +195,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   @Override
   public void doWork() {
     try {
-      ConsumerRecords<byte[], byte[]> records = consumer.poll(Long.MAX_VALUE);
+      ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
       storeUpdateHandler.startBatch(records.count());
       for (ConsumerRecord<byte[], byte[]> record : records) {
         K messageKey = null;
