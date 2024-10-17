@@ -47,9 +47,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.IOException;
@@ -2104,6 +2106,11 @@ public class RestApiTest extends ClusterTestHarness {
     assertThrows("Fail registering because of removal of reserved fields",
         RestClientException.class,
         () -> restApp.restClient.registerSchema(request2, subject0, false));
+  }
+
+  public void testInvalidSchema() {
+    assertThrows(InvalidSchemaException.class, () ->
+        ((KafkaSchemaRegistry) restApp.schemaRegistry()).parseSchema(null));
   }
 
   @Override
