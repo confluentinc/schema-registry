@@ -128,15 +128,17 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (AvroSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        id = schemaRegistry.getId(subject, schema);
+        id = useSchemaId;
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
-        schema = (AvroSchema) getLatestWithMetadata(subject);
-        id = schemaRegistry.getId(subject, schema);
+        ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
+        schema = (AvroSchema) extendedSchema.getSchema();
+        id = extendedSchema.getId();
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version of Avro schema";
-        schema = (AvroSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
-        id = schemaRegistry.getId(subject, schema);
+        ExtendedSchema extendedSchema = lookupLatestVersion(subject, schema, latestCompatStrict);
+        schema = (AvroSchema) extendedSchema.getSchema();
+        id = extendedSchema.getId();
       } else {
         restClientErrorMsg = "Error retrieving Avro schema";
         id = schemaRegistry.getId(subject, schema, normalizeSchema);

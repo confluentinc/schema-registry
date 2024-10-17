@@ -141,15 +141,17 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (JsonSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        id = schemaRegistry.getId(subject, schema);
+        id = useSchemaId;
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
-        schema = (JsonSchema) getLatestWithMetadata(subject);
-        id = schemaRegistry.getId(subject, schema);
+        ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
+        schema = (JsonSchema) extendedSchema.getSchema();
+        id = extendedSchema.getId();
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
-        schema = (JsonSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
-        id = schemaRegistry.getId(subject, schema);
+        ExtendedSchema extendedSchema = lookupLatestVersion(subject, schema, latestCompatStrict);
+        schema = (JsonSchema) extendedSchema.getSchema();
+        id = extendedSchema.getId();
       } else {
         restClientErrorMsg = "Error retrieving JSON schema: ";
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
