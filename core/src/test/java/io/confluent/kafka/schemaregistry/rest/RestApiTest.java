@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
@@ -60,6 +61,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -2008,6 +2010,12 @@ public class RestApiTest extends ClusterTestHarness {
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1, subject);
     assertNull(schemaString.getRuleSet());
+  }
+
+  @Test
+  public void testInvalidSchema() {
+    assertThrows(InvalidSchemaException.class, () ->
+        ((KafkaSchemaRegistry) restApp.schemaRegistry()).parseSchema(null));
   }
 
   @Override

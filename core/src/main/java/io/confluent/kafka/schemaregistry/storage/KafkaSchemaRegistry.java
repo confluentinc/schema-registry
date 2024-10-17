@@ -1458,10 +1458,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Throwable cause = e.getCause();
       if (cause instanceof InvalidSchemaException) {
         throw (InvalidSchemaException) cause;
-      } else if (cause instanceof RuntimeException) {
-        throw (RuntimeException) cause;
       } else {
-        throw new RuntimeException(e);
+        throw new InvalidSchemaException(e);
       }
     }
   }
