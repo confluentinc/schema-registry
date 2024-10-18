@@ -201,11 +201,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.ticker = ticker;
 
     long latestTTL = SchemaRegistryClientConfig.getLatestTTL(configs);
-    long missingIdTTL = SchemaRegistryClientConfig.getMissingIdTTL(configs);
-    long missingVersionTTL = SchemaRegistryClientConfig.getMissingVersionTTL(configs);
-    long missingSchemaTTL = SchemaRegistryClientConfig.getMissingSchemaTTL(configs);
-    int maxMissingCacheSize = SchemaRegistryClientConfig.getMaxMissingCacheSize(configs);
-
+    
     CacheBuilder<Object, Object> latestVersionBuilder = CacheBuilder.newBuilder()
         .maximumSize(cacheCapacity)
         .ticker(ticker);
@@ -222,6 +218,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           latestTTL, TimeUnit.SECONDS);
     }
     this.latestWithMetadataCache = latestWithMetadataBuilder.build();
+
+    long missingIdTTL = SchemaRegistryClientConfig.getMissingIdTTL(configs);
+    long missingVersionTTL = SchemaRegistryClientConfig.getMissingVersionTTL(configs);
+    long missingSchemaTTL = SchemaRegistryClientConfig.getMissingSchemaTTL(configs);
+    int maxMissingCacheSize = SchemaRegistryClientConfig.getMaxMissingCacheSize(configs);
+
     this.missingSchemaCache = CacheBuilder.newBuilder()
         .maximumSize(maxMissingCacheSize)
         .ticker(ticker)
