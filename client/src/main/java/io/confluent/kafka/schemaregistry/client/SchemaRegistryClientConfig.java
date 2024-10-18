@@ -44,6 +44,9 @@ public class SchemaRegistryClientConfig {
   public static final String PROXY_HOST = "proxy.host";
   public static final String PROXY_PORT = "proxy.port";
 
+  public static final String LATEST_CACHE_TTL_CONFIG = "latest.cache.ttl.sec";
+  public static final long LATEST_CACHE_TTL_DEFAULT = 60;
+
   public static final String MISSING_CACHE_SIZE_CONFIG = "missing.cache.size";
   public static final String MISSING_ID_CACHE_TTL_CONFIG = "missing.id.cache.ttl.sec";
   public static final String MISSING_VERSION_CACHE_TTL_CONFIG = "missing.version.cache.ttl.sec";
@@ -122,6 +125,12 @@ public class SchemaRegistryClientConfig {
     } else {
       return HTTP_READ_TIMEOUT_MS_DEFAULT;
     }
+  }
+
+  public static long getLatestTTL(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(LATEST_CACHE_TTL_CONFIG)
+        ? (Long) configs.get(LATEST_CACHE_TTL_CONFIG)
+        : LATEST_CACHE_TTL_DEFAULT;
   }
 
   public static long getMissingIdTTL(Map<String, ?> configs) {
