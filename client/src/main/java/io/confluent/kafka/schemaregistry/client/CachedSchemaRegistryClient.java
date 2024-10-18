@@ -201,7 +201,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.ticker = ticker;
 
     long latestTTL = SchemaRegistryClientConfig.getLatestTTL(configs);
-    
+
     CacheBuilder<Object, Object> latestVersionBuilder = CacheBuilder.newBuilder()
         .maximumSize(cacheCapacity)
         .ticker(ticker);
@@ -1002,7 +1002,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         return false;
       }
       SubjectAndMetadata that = (SubjectAndMetadata) o;
-      return Objects.equals(subject, that.subject) && metadata.equals(that.metadata);
+      return Objects.equals(subject, that.subject) && Objects.equals(metadata, that.metadata);
     }
 
     @Override
