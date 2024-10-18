@@ -116,7 +116,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String LATEST_CACHE_SIZE_DOC =
       "The maximum size for caches holding latest schemas";
 
-  public static final String LATEST_CACHE_TTL = "latest.cache.ttl.sec";
+  public static final String LATEST_CACHE_TTL = SchemaRegistryClientConfig.LATEST_CACHE_TTL_CONFIG;
   public static final int LATEST_CACHE_TTL_DEFAULT = -1;
   public static final String LATEST_CACHE_TTL_DOC =
       "The TTL for caches holding latest schemas, or -1 for no TTL";
