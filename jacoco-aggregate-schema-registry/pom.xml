@@ -10,7 +10,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>jacoco-report-aggregate</artifactId>
+    <artifactId>jacoco-aggregate-schema-registry</artifactId>
     <packaging>pom</packaging>
 
     <description>Aggregate Coverage Report for Multi-Module Project</description>
