@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL_DEFAULT;
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS;
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS;
 
