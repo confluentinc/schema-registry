@@ -128,9 +128,14 @@ public class SchemaRegistryClientConfig {
   }
 
   public static long getLatestTTL(Map<String, ?> configs) {
-    return configs != null && configs.containsKey(LATEST_CACHE_TTL_CONFIG)
-        ? (Long) configs.get(LATEST_CACHE_TTL_CONFIG)
-        : LATEST_CACHE_TTL_DEFAULT;
+    if (configs != null && configs.containsKey(LATEST_CACHE_TTL_CONFIG)) {
+      Object latestTTLVal = configs.get(LATEST_CACHE_TTL_CONFIG);
+      return latestTTLVal instanceof String
+          ? Long.parseLong((String) latestTTLVal)
+          : ((Number) latestTTLVal).longValue();
+    } else {
+      return LATEST_CACHE_TTL_DEFAULT;
+    }
   }
 
   public static long getMissingIdTTL(Map<String, ?> configs) {
