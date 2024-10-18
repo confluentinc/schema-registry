@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.FakeTicker;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -547,6 +548,85 @@ public class CachedSchemaRegistryClientTest {
 
     List<ParsedSchema> parsedSchemas = client.getSchemas(SUBJECT_0, false, true);
     assertEquals(0, parsedSchemas.size());
+  }
+
+  @Test
+  public void testLatestVersionCache() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.LATEST_CACHE_TTL_CONFIG, 60L);
+
+    FakeTicker fakeTicker = new FakeTicker();
+    client = new CachedSchemaRegistryClient(
+        restService,
+        CACHE_CAPACITY,
+        null,
+        configs,
+        null,
+        fakeTicker
+    );
+
+    expect(restService.getLatestVersion(eq(SUBJECT_0)))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 1,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 1,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+
+    replay(restService);
+
+    SchemaMetadata schemaMetadata = client.getLatestSchemaMetadata(SUBJECT_0);
+    assertEquals(ID_25, schemaMetadata.getId());
+
+    fakeTicker.advance(59, TimeUnit.SECONDS);
+
+    // Should hit the cache
+    schemaMetadata = client.getLatestSchemaMetadata(SUBJECT_0);
+    assertEquals(ID_25, schemaMetadata.getId());
+
+    fakeTicker.advance(2, TimeUnit.SECONDS);
+    Thread.sleep(100);
+    assertNotNull(client.getLatestSchemaMetadata(SUBJECT_0));
+  }
+
+  @Test
+  public void testLatestWithMetadataCache() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.LATEST_CACHE_TTL_CONFIG, 60L);
+
+    FakeTicker fakeTicker = new FakeTicker();
+    client = new CachedSchemaRegistryClient(
+        restService,
+        CACHE_CAPACITY,
+        null,
+        configs,
+        null,
+        fakeTicker
+    );
+
+    expect(restService.getLatestWithMetadata(eq(SUBJECT_0), anyObject(), eq(false)))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 1,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 1,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+
+    replay(restService);
+
+    Map<String, String> metadata = ImmutableMap.of("key", "value");
+    SchemaMetadata schemaMetadata = client.getLatestWithMetadata(SUBJECT_0, metadata, false);
+    assertEquals(ID_25, schemaMetadata.getId());
+
+    fakeTicker.advance(59, TimeUnit.SECONDS);
+
+    // Should hit the cache
+    schemaMetadata = client.getLatestWithMetadata(SUBJECT_0, metadata, false);
+    assertEquals(ID_25, schemaMetadata.getId());
+
+    fakeTicker.advance(2, TimeUnit.SECONDS);
+    Thread.sleep(100);
+    assertNotNull(client.getLatestWithMetadata(SUBJECT_0, metadata, false));
   }
 
   @Test
