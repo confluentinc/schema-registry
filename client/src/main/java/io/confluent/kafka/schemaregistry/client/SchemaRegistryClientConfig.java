@@ -129,10 +129,10 @@ public class SchemaRegistryClientConfig {
 
   public static long getLatestTTL(Map<String, ?> configs) {
     if (configs != null && configs.containsKey(LATEST_CACHE_TTL_CONFIG)) {
-      Object latestTTLVal = configs.get(LATEST_CACHE_TTL_CONFIG);
-      return latestTTLVal instanceof String
-          ? Long.parseLong((String) latestTTLVal)
-          : ((Number) latestTTLVal).longValue();
+      Object latestVal = configs.get(LATEST_CACHE_TTL_CONFIG);
+      return latestVal instanceof String
+          ? Long.parseLong((String) latestVal)
+          : ((Number) latestVal).longValue();
     } else {
       return LATEST_CACHE_TTL_DEFAULT;
     }
