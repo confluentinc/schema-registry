@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_TTL_DEFAULT;
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS;
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS;
 
@@ -167,7 +168,12 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     if (schemaRegistry == null) {
       List<String> urls = config.getSchemaRegistryUrls();
       int maxSchemaObject = config.getMaxSchemasPerSubject();
-      Map<String, Object> originals = config.originalsWithPrefix("");
+      Map<String, Object> originals = new HashMap<>(config.originalsWithPrefix(""));
+      if (config.getLatestCacheTtl() == LATEST_CACHE_TTL_DEFAULT) {
+        // Ensure default is explicitly set
+        originals.put(SchemaRegistryClientConfig.LATEST_CACHE_TTL_CONFIG,
+            (long) LATEST_CACHE_TTL_DEFAULT);
+      }
       schemaRegistry = SchemaRegistryClientFactory.newClient(
           urls,
           maxSchemaObject,
