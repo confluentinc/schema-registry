@@ -96,10 +96,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
   }
 
   private void createPrincipal(File keytab, String principalNoRealm) throws Exception {
-    Seq<String> principals = JavaConverters.asScalaBuffer(
-            Arrays.asList(principalNoRealm)
-    ).toList();
-    kdc.createPrincipal(keytab, principals);
+    kdc.createPrincipal(keytab, Arrays.asList(principalNoRealm));
   }
 
   @Override
