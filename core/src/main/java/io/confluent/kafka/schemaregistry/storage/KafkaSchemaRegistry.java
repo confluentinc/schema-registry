@@ -650,9 +650,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
 
       // determine the latest version of the schema in the subject
-      List<SchemaKey> allVersions = getAllSchemaKeys(subject);
-      // sort versions in descending
-      Collections.reverse(allVersions);
+      List<SchemaKey> allVersions = getAllSchemaKeysDescending(subject);
 
       List<Schema> deletedVersions = new ArrayList<>();
       List<ParsedSchemaHolder> undeletedVersions = new ArrayList<>();
@@ -1343,8 +1341,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           return prev;
         }
       } else {
-        List<SchemaKey> allVersions = getAllSchemaKeys(subject);
-        Collections.reverse(allVersions);
+        List<SchemaKey> allVersions = getAllSchemaKeysDescending(subject);
 
         for (SchemaKey schemaKey : allVersions) {
           Schema prev = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
@@ -1368,8 +1365,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Schema getLatestWithMetadata(
       String subject, Map<String, String> metadata, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
-    List<SchemaKey> allVersions = getAllSchemaKeys(subject);
-    Collections.reverse(allVersions);
+    List<SchemaKey> allVersions = getAllSchemaKeysDescending(subject);
 
     for (SchemaKey schemaKey : allVersions) {
       Schema schema = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
@@ -2038,11 +2034,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private List<SchemaKey> getAllSchemaKeys(String subject)
+  private List<SchemaKey> getAllSchemaKeysDescending(String subject)
       throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
       List<SchemaKey> schemaKeys = schemaKeysByVersion(allVersions, LookupFilter.INCLUDE_DELETED);
-      Collections.sort(schemaKeys);
+      Collections.sort(schemaKeys, Collections.reverseOrder());
       return schemaKeys;
     }
   }
