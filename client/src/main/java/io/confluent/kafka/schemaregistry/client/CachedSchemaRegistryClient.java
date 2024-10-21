@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client;
 import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -72,6 +73,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Integer, ParsedSchema>> idToSchemaCache;
   private final Map<String, Map<ParsedSchema, Integer>> schemaToVersionCache;
   private final Map<String, Map<Integer, Schema>> versionToSchemaCache;
+  private final Cache<String, SchemaMetadata> latestVersionCache;
+  private final Cache<SubjectAndMetadata, SchemaMetadata> latestWithMetadataCache;
   private final Cache<SubjectAndSchema, Long> missingSchemaCache;
   private final Cache<SubjectAndInt, Long> missingIdCache;
   private final Cache<SubjectAndInt, Long> missingVersionCache;
@@ -197,6 +200,25 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.versionToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.restService = restService;
     this.ticker = ticker;
+
+    long latestTTL = SchemaRegistryClientConfig.getLatestTTL(configs);
+
+    CacheBuilder<Object, Object> latestVersionBuilder = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .ticker(ticker);
+    if (latestTTL >= 0) {
+      latestVersionBuilder = latestVersionBuilder.expireAfterWrite(
+          latestTTL, TimeUnit.SECONDS);
+    }
+    this.latestVersionCache = latestVersionBuilder.build();
+    CacheBuilder<Object, Object> latestWithMetadataBuilder = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .ticker(ticker);
+    if (latestTTL >= 0) {
+      latestWithMetadataBuilder = latestWithMetadataBuilder.expireAfterWrite(
+          latestTTL, TimeUnit.SECONDS);
+    }
+    this.latestWithMetadataCache = latestWithMetadataBuilder.build();
 
     long missingIdTTL = SchemaRegistryClientConfig.getMissingIdTTL(configs);
     long missingVersionTTL = SchemaRegistryClientConfig.getMissingVersionTTL(configs);
@@ -578,17 +600,32 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public SchemaMetadata getLatestSchemaMetadata(String subject)
       throws IOException, RestClientException {
+    SchemaMetadata schema = latestVersionCache.getIfPresent(subject);
+    if (schema != null) {
+      return schema;
+    }
+
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
         = restService.getLatestVersion(subject);
-    return new SchemaMetadata(response);
+    schema = new SchemaMetadata(response);
+    latestVersionCache.put(subject, schema);
+    return schema;
   }
 
   @Override
   public SchemaMetadata getLatestWithMetadata(String subject, Map<String, String> metadata,
       boolean lookupDeletedSchema) throws IOException, RestClientException {
+    SubjectAndMetadata subjectAndMetadata = new SubjectAndMetadata(subject, metadata);
+    SchemaMetadata schema = latestWithMetadataCache.getIfPresent(subjectAndMetadata);
+    if (schema != null) {
+      return schema;
+    }
+
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
         = restService.getLatestWithMetadata(subject, metadata, lookupDeletedSchema);
-    return new SchemaMetadata(response);
+    schema = new SchemaMetadata(response);
+    latestWithMetadataCache.put(subjectAndMetadata, schema);
+    return schema;
   }
 
   @Override
@@ -684,6 +721,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     idToSchemaCache.remove(subject);
     schemaToIdCache.remove(subject);
     schemaToResponseCache.remove(subject);
+    latestVersionCache.invalidate(subject);
+    latestWithMetadataCache.invalidateAll();
     return restService.deleteSubject(requestProperties, subject, isPermanent);
   }
 
@@ -709,6 +748,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           .getOrDefault(subject, Collections.emptyMap())
           .remove(Integer.valueOf(version));
     }
+    latestVersionCache.invalidate(subject);
+    latestWithMetadataCache.invalidateAll();
     return restService.deleteSchemaVersion(requestProperties, subject, version, isPermanent);
   }
 
@@ -819,6 +860,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     idToSchemaCache.clear();
     schemaToVersionCache.clear();
     versionToSchemaCache.clear();
+    latestVersionCache.invalidateAll();
+    latestWithMetadataCache.invalidateAll();
     missingSchemaCache.invalidateAll();
     missingIdCache.invalidateAll();
     missingVersionCache.invalidateAll();
@@ -941,6 +984,46 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     @Override
     public String toString() {
       return "SubjectAndId{" + "subject='" + subject + '\'' + ", id=" + id + '}';
+    }
+  }
+
+  static class SubjectAndMetadata {
+    private final String subject;
+    private final Map<String, String> metadata;
+
+    public SubjectAndMetadata(String subject, Map<String, String> metadata) {
+      this.subject = subject;
+      this.metadata = ImmutableMap.copyOf(metadata);
+    }
+
+    public String subject() {
+      return subject;
+    }
+
+    public Map<String, String> metadata() {
+      return metadata;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      SubjectAndMetadata that = (SubjectAndMetadata) o;
+      return Objects.equals(subject, that.subject) && Objects.equals(metadata, that.metadata);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(subject, metadata);
+    }
+
+    @Override
+    public String toString() {
+      return "SubjectAndMetadata{" + "subject='" + subject + '\'' + ", metadata=" + metadata + '}';
     }
   }
 }
