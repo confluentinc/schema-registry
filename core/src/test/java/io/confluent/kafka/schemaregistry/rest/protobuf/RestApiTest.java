@@ -633,6 +633,11 @@ public class RestApiTest extends ClusterTestHarness {
     request.setMetadata(null);
     registerAndVerifySchema(restApp.restClient, request, 2, subject);
 
+    // Register schema with version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+
     result = restApp.restClient.getLatestVersion(subject);
     assertEquals(schemaString, result.getSchema());
     assertEquals((Integer) 2, result.getVersion());
@@ -672,6 +677,16 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(schemaString, result.getSchema());
     assertEquals((Integer) 2, result.getVersion());
     assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with version 3
+    request.setVersion(3);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+
+    // Register schema with version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 3, subject);
 
     // Register schema with version -1
     request.setVersion(-1);
