@@ -650,9 +650,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
 
       // determine the latest version of the schema in the subject
-      List<SchemaKey> allVersions = getAllSchemaKeys(subject);
-      // sort versions in descending
-      Collections.reverse(allVersions);
+      List<SchemaKey> allVersions = getAllSchemaKeysDescending(subject);
 
       List<Schema> deletedVersions = new ArrayList<>();
       List<ParsedSchemaHolder> undeletedVersions = new ArrayList<>();
@@ -986,13 +984,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throws SchemaRegistryException {
     Schema schema = new Schema(subject, request);
     Config config = getConfigInScope(subject);
+    boolean isLatestVersion = schema.getVersion() == -1;
     if (!request.hasSchemaTagsToAddOrRemove()
         && !request.doPropagateSchemaTags()
-        && schema.getVersion() != -1
         && !config.hasDefaultsOrOverrides()) {
-      Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
+      Schema existingSchema = lookUpSchemaUnderSubject(
+          subject, schema, normalize, false, isLatestVersion);
       if (existingSchema != null) {
-        if (schema.getVersion() == 0) {
+        if (schema.getVersion() == 0 || isLatestVersion) {
           if (schema.getId() == null
               || schema.getId() < 0
               || schema.getId().equals(existingSchema.getId())
@@ -1304,13 +1303,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Schema lookUpSchemaUnderSubject(
       String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
+    return lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema, false);
+  }
+
+  private Schema lookUpSchemaUnderSubject(
+      String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema,
+      boolean lookupLatestOnly)
+      throws SchemaRegistryException {
     try {
       // Pass a copy of the schema so the original is not modified during normalization
       // to ensure that invalid defaults are not dropped since default validation is disabled
       Schema newSchema = schema != null ? schema.copy() : null;
       Config config = getConfigInScope(subject);
       ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, false, normalize);
-      if (parsedSchema != null) {
+      if (parsedSchema != null && !lookupLatestOnly) {
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(newSchema);
         if (schemaIdAndSubjects != null) {
           if (schemaIdAndSubjects.hasSubject(subject)
@@ -1325,17 +1331,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
 
-      List<SchemaKey> allVersions = getAllSchemaKeys(subject);
-      Collections.reverse(allVersions);
-
-      for (SchemaKey schemaKey : allVersions) {
-        Schema prev = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
+      if (lookupLatestOnly) {
+        Schema prev = getLatestVersion(subject);
         if (prev != null
             && parsedSchema != null
             && areSchemasEquivalent(parsedSchema, prev)) {
           // This handles the case where a schema is sent with all references resolved
           // or without confluent:version
           return prev;
+        }
+      } else {
+        List<SchemaKey> allVersions = getAllSchemaKeysDescending(subject);
+
+        for (SchemaKey schemaKey : allVersions) {
+          Schema prev = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
+          if (prev != null
+              && parsedSchema != null
+              && areSchemasEquivalent(parsedSchema, prev)) {
+            // This handles the case where a schema is sent with all references resolved
+            // or without confluent:version
+            return prev;
+          }
         }
       }
 
@@ -1349,8 +1365,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Schema getLatestWithMetadata(
       String subject, Map<String, String> metadata, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
-    List<SchemaKey> allVersions = getAllSchemaKeys(subject);
-    Collections.reverse(allVersions);
+    List<SchemaKey> allVersions = getAllSchemaKeysDescending(subject);
 
     for (SchemaKey schemaKey : allVersions) {
       Schema schema = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
@@ -2019,11 +2034,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private List<SchemaKey> getAllSchemaKeys(String subject)
+  private List<SchemaKey> getAllSchemaKeysDescending(String subject)
       throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
       List<SchemaKey> schemaKeys = schemaKeysByVersion(allVersions, LookupFilter.INCLUDE_DELETED);
-      Collections.sort(schemaKeys);
+      Collections.sort(schemaKeys, Collections.reverseOrder());
       return schemaKeys;
     }
   }
