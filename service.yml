@@ -11,6 +11,13 @@ semaphore:
   downstream_projects: ["kafka-rest", "ksql", "confluent-security-plugins", "kafka-connect-replicator", "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
 git:
   enable: true
+sonarqube:
+  enable: true
+  languages:
+    - go
+    - java
+    - python
+    - javascript
 code_artifact:
   enable: true
   package_paths:
@@ -24,4 +31,5 @@ code_artifact:
     - maven-snapshots/maven/io.confluent/kafka-json-*
     - maven-snapshots/maven/io.confluent/kafka-schema-*
     - maven-snapshots/maven/io.confluent/kafka-avro-serializer
+    - maven-snapshots/maven/io.confluent/jacoco-aggregate-schema-registry
     - pypi-internal/pypi//confluent-ci-tools
