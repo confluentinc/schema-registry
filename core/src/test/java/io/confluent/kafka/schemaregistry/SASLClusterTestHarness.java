@@ -17,7 +17,7 @@ package io.confluent.kafka.schemaregistry;
 
 import kafka.security.minikdc.MiniKdc;
 import kafka.server.KafkaConfig;
-import kafka.security.JaasTestUtils;
+import kafka.utils.JaasTestUtils;
 import kafka.utils.TestUtils;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -28,14 +28,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Option;
 import scala.collection.JavaConverters;
+import scala.collection.immutable.List;
 import scala.collection.immutable.Seq;
+import scala.jdk.javaapi.CollectionConverters;
 
 import javax.security.auth.login.Configuration;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 
 // sets up SASL for ZooKeeper and Kafka. Much of this was borrowed from kafka.api.SaslSetup in Kafka.
@@ -68,16 +68,16 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     File clientKeytab = File.createTempFile("client-", ".keytab");
 
     // create a JAAS file.
-    Optional<File> serverKeytabOption = Optional.of(serverKeytab);
-    Optional<File> clientKeytabOption = Optional.of(clientKeytab);
-    List<String> serverSaslMechanisms = Arrays.asList("GSSAPI");
-    Optional<String> clientSaslMechanism = Optional.of("GSSAPI");
+    Option<File> serverKeytabOption = Option.apply(serverKeytab);
+    Option<File> clientKeytabOption = Option.apply(clientKeytab);
+    List<String> serverSaslMechanisms = JavaConverters.asScalaBuffer(Arrays.asList("GSSAPI")).toList();
+    Option<String> clientSaslMechanism = Option.apply("GSSAPI");
 
-    List<JaasTestUtils.JaasSection> jaasSections = new ArrayList<>();
-    jaasSections.add(JaasTestUtils.kafkaServerSection(JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME, serverSaslMechanisms, serverKeytabOption));
+    java.util.List<JaasTestUtils.JaasSection> jaasSections = new ArrayList<>();
+    jaasSections.add(JaasTestUtils.kafkaServerSection(JaasTestUtils.KafkaServerContextName(), serverSaslMechanisms, serverKeytabOption));
     jaasSections.add(JaasTestUtils.kafkaClientSection(clientSaslMechanism, clientKeytabOption));
-    jaasSections.addAll(JaasTestUtils.zkSections());
-    String jaasFilePath = JaasTestUtils.writeJaasContextsToFile(jaasSections).getAbsolutePath();
+    jaasSections.addAll(CollectionConverters.asJavaCollection(JaasTestUtils.zkSections()));
+    String jaasFilePath = JaasTestUtils.writeJaasContextsToFile(JavaConverters.asScalaBuffer(jaasSections).toSeq()).getAbsolutePath();
 
     log.info("Using KDC home: {}", kdcHome.getAbsolutePath());
     kdc = new MiniKdc(kdcProps, kdcHome);
