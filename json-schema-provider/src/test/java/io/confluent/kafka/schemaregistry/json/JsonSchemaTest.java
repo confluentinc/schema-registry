@@ -771,6 +771,67 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testNestedCombinedSchemasDraft_2020_12() {
+    String schemaString = "{\n" +
+        "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n" +
+        "  \"$id\": \"http://example.com/myURI.schema.json\",\n" +
+        "  \"title\": \"SampleRecord\",\n" +
+        "  \"description\": \"Sample schema to help you get started.\",\n" +
+        "  \"type\": \"object\",\n" +
+        "  \"additionalProperties\": false,\n" +
+        "  \"properties\": {\n" +
+        "    \"myfield1\": {\n" +
+        "      \"type\": \"array\",\n" +
+        "      \"items\": {\n" +
+        "        \"type\": \"object\",\n" +
+        "        \"title\": \"arrayRecord\",\n" +
+        "        \"properties\": {\n" +
+        "          \"field1\" : {\n" +
+        "            \"type\": \"string\",\n" +
+        "            \"confluent:tags\": [ \"PII\" ]\n" +
+        "          },\n" +
+        "          \"field2\": {\n" +
+        "            \"type\": \"number\"\n" +
+        "          }\n" +
+        "        }\n" +
+        "      }\n" +
+        "    },\n" +
+        "    \"myfield2\": {\n" +
+        "      \"allOf\": [\n" +
+        "        { \"type\": \"string\" },\n" +
+        "        { \"type\": \"object\",\n" +
+        "          \"title\": \"nestedUnion\",\n" +
+        "          \"properties\": {\n" +
+        "            \"nestedUnionField1\": { \"type\": \"boolean\"},\n" +
+        "            \"nestedUnionField2\": { \"type\": \"number\"}\n" +
+        "          }\n" +
+        "        },\n" +
+        "        {\n" +
+        "          \"oneOf\": [\n" +
+        "            {\n" +
+        "              \"title\": \"Not included\",\n" +
+        "              \"type\": \"null\"\n" +
+        "            },\n" +
+        "            {\n" +
+        "              \"type\": \"string\"\n" +
+        "            }\n" +
+        "          ]\n" +
+        "        }\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+    JsonSchema schema = new JsonSchema(schemaString);
+
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("object.myfield1.array.object.field1",
+            SchemaEntity.EntityType.SR_FIELD),
+        Collections.singleton("PII"));
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tags);
+    assertEquals(expectedTags, schema.inlineTaggedEntities());
+  }
+
+  @Test
   public void testAddTagsToConditional() {
     String schemaString = "{\n" +
       "  \"else\": {\n" +
