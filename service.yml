@@ -25,3 +25,4 @@ code_artifact:
     - maven-snapshots/maven/io.confluent/kafka-schema-*
     - maven-snapshots/maven/io.confluent/kafka-avro-serializer
     - pypi-internal/pypi//confluent-ci-tools
+    - maven-snapshots/maven/io.confluent/jacoco-aggregate-schema-registry
