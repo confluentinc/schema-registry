@@ -70,6 +70,12 @@ public class JsonSchemaComparator implements Comparator<Schema> {
           return value;
         }
       }
+      // Check whether subclass of the known types, such as CombinedSchemaExt
+      for (SchemaType value : values()) {
+        if (value.cls.isAssignableFrom(cls)) {
+          return value;
+        }
+      }
       throw new IllegalArgumentException("Unknown schema type : " + cls);
     }
   }
