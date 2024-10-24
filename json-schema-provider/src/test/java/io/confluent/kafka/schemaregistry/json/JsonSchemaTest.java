@@ -481,7 +481,23 @@ public class JsonSchemaTest {
     Optional<ParsedSchema> parsedSchemaOptional = jsonSchemaProvider.parseSchema(recordSchemaString,
             new ArrayList<>(), false, false);
 
-    assertNotNull(parsedSchema);
+    assertNotNull(parsedSchema.rawSchema());
+    assertTrue(parsedSchemaOptional.isPresent());
+  }
+
+  @Test
+  public void testParseSchemaDraft4() {
+    String schemaString = "{\"$schema\":\"http://json-schema.org/draft-04/schema#\","
+        + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
+        + "\"properties\":{\"prop\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},"
+        + "{\"type\":\"string\"}]}}}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString), false, false);
+    Optional<ParsedSchema> parsedSchemaOptional = jsonSchemaProvider.parseSchema(schemaString,
+            new ArrayList<>(), false, false);
+
+    assertNotNull(parsedSchema.rawSchema());
     assertTrue(parsedSchemaOptional.isPresent());
   }
 
