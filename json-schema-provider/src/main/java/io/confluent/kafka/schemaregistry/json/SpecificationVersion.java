@@ -73,6 +73,9 @@ public enum SpecificationVersion {
   }
 
   public static SpecificationVersion getFromUrl(String url) {
+    if (url != null && url.endsWith("#")) {
+      url = url.substring(0, url.length() - 1);
+    }
     return urlLookup.get(url);
   }
 
