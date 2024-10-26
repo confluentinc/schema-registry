@@ -127,7 +127,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    */
   public static final int MIN_VERSION = 1;
   public static final int MAX_VERSION = Integer.MAX_VALUE;
-  public static final String CONFLUENT_VERSION = "confluent:version";
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
   private static final String RESERVED_FIELD_REMOVED = "The new schema has reserved field %s "
       + "removed from its metadata which is present in the old schema's metadata.";
@@ -711,7 +710,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           ParsedSchema undeletedSchema = schemaHolder.schema();
           if (parsedSchema != null
               && (schemaId < 0 || schemaId == schemaValue.getId())
-              && areSchemasEquivalent(parsedSchema, undeletedSchema)) {
+              && parsedSchema.canLookup(undeletedSchema, this)) {
             // This handles the case where a schema is sent with all references resolved
             // or without confluent:version
             return modifiedSchema
@@ -828,33 +827,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private boolean areSchemasEquivalent(ParsedSchema schema, Schema prev)
-      throws SchemaRegistryException {
-    return areSchemasEquivalent(schema, parseSchema(prev));
-  }
-
-  private boolean areSchemasEquivalent(ParsedSchema schema, ParsedSchema prev) {
-    if (schema.references().isEmpty() && !prev.references().isEmpty()) {
-      if (schema.deepEquals(prev)) {
-        // This handles the case where a schema is sent with all references resolved
-        return true;
-      }
-    }
-    String schemaVer = getConfluentVersion(schema.metadata());
-    String prevVer = getConfluentVersion(prev.metadata());
-    if (schemaVer == null && prevVer != null) {
-      ParsedSchema newSchema = schema.metadata() != null
-          ? schema
-          : schema.copy(new Metadata(null, null, null), schema.ruleSet());
-      ParsedSchema newPrev = prev.copy(removeConfluentVersion(prev.metadata()), prev.ruleSet());
-      if (newSchema.deepEquals(newPrev)) {
-        // This handles the case where a schema is sent without confluent:version
-        return true;
-      }
-    }
-    return false;
-  }
-
   private boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
     Mode subjectMode = getModeInScope(subject);
     return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
@@ -937,7 +909,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     // Set confluent:version if passed in version is not 0,
     // or update confluent:version if it already exists in the metadata
     if (schema.getVersion() != 0 || getConfluentVersion(mergedMetadata) != null) {
-      mergedMetadata = setConfluentVersion(mergedMetadata, newVersion);
+      mergedMetadata = Metadata.setConfluentVersion(mergedMetadata, newVersion);
     }
 
     if (mergedMetadata != null || mergedRuleSet != null) {
@@ -949,32 +921,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private String getConfluentVersion(Metadata metadata) {
-    return metadata != null && metadata.getProperties() != null
-        ? metadata.getProperties().get(CONFLUENT_VERSION)
-        : null;
-  }
-
-  private Metadata setConfluentVersion(Metadata metadata, int version) {
-    Map<String, String> newProps = metadata != null && metadata.getProperties() != null
-        ? new HashMap<>(metadata.getProperties())
-        : new HashMap<>();
-    newProps.put(CONFLUENT_VERSION, String.valueOf(version));
-    return new Metadata(
-        metadata != null ? metadata.getTags() : null,
-        newProps,
-        metadata != null ? metadata.getSensitive() : null);
-  }
-
-  private Metadata removeConfluentVersion(Metadata metadata) {
-    if (metadata == null || metadata.getProperties() == null) {
-      return metadata;
-    }
-    Map<String, String> newProps = new HashMap<>(metadata.getProperties());
-    newProps.remove(CONFLUENT_VERSION);
-    return new Metadata(
-        metadata.getTags(),
-        newProps,
-        metadata.getSensitive());
+    return metadata != null ? metadata.getConfluentVersion() : null;
   }
 
   public Schema registerOrForward(String subject,
@@ -1052,7 +999,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     Metadata mergedMetadata = request.getMetadata() != null
         ? request.getMetadata()
         : parsedSchema.metadata();
-    mergedMetadata = setConfluentVersion(mergedMetadata, newVersion);
+    mergedMetadata = Metadata.setConfluentVersion(mergedMetadata, newVersion);
 
     RuleSet ruleSet = maybeModifyPreviousRuleSet(subject, request);
 
@@ -1335,7 +1282,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         Schema prev = getLatestVersion(subject);
         if (prev != null
             && parsedSchema != null
-            && areSchemasEquivalent(parsedSchema, prev)) {
+            && parsedSchema.canLookup(parseSchema(prev), this)) {
           // This handles the case where a schema is sent with all references resolved
           // or without confluent:version
           return prev;
@@ -1347,7 +1294,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           Schema prev = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
           if (prev != null
               && parsedSchema != null
-              && areSchemasEquivalent(parsedSchema, prev)) {
+              && parsedSchema.canLookup(parseSchema(prev), this)) {
             // This handles the case where a schema is sent with all references resolved
             // or without confluent:version
             return prev;
