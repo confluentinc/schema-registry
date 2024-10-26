@@ -42,18 +42,19 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
     return schemaVersionFetcher;
   }
 
-  protected Map<String, String> resolveReferences(Schema schema) {
+  protected Map<String, String> resolveReferences(Schema schema, boolean isNew) {
     List<SchemaReference> references = schema.getReferences();
     if (references == null) {
       return Collections.emptyMap();
     }
     Map<String, String> result = new LinkedHashMap<>();
     Set<String> visited = new HashSet<>();
-    resolveReferences(schema, result, visited);
+    resolveReferences(schema, isNew, result, visited);
     return result;
   }
 
-  private void resolveReferences(Schema schema, Map<String, String> schemas, Set<String> visited) {
+  private void resolveReferences(
+      Schema schema, boolean isNew, Map<String, String> schemas, Set<String> visited) {
     List<SchemaReference> references = schema.getReferences();
     for (SchemaReference reference : references) {
       if (reference.getName() == null
@@ -71,8 +72,8 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
                 + "\" and version "
                 + reference.getVersion());
       }
-      if (reference.getVersion() == -1) {
-        // Update the version with the latest
+      if (isNew && reference.getVersion() == -1) {
+        // Update the version with the latest, but only if this is a new schema
         reference.setVersion(s.getVersion());
       }
       if (visited.contains(reference.getName())) {
@@ -81,7 +82,7 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
         visited.add(reference.getName());
       }
       if (!schemas.containsKey(reference.getName())) {
-        resolveReferences(s, schemas, visited);
+        resolveReferences(s, isNew, schemas, visited);
         schemas.put(reference.getName(), s.getSchema());
       }
     }
