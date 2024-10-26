@@ -127,6 +127,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    */
   public static final int MIN_VERSION = 1;
   public static final int MAX_VERSION = Integer.MAX_VALUE;
+  public static final String CONFLUENT_VERSION = "confluent:version";
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
   private static final String RESERVED_FIELD_REMOVED = "The new schema has reserved field %s "
       + "removed from its metadata which is present in the old schema's metadata.";
