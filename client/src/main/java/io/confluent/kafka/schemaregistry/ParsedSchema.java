@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -245,7 +246,7 @@ public interface ParsedSchema {
   }
 
   /**
-   * Returns whether the underlying raw representations are equal.
+   * Returns whether the underlying raw representations are equal, ignoring references.
    *
    * @return whether the underlying raw representations are equal
    */
@@ -281,5 +282,39 @@ public interface ParsedSchema {
             .map(String::trim)
             .filter(field -> !field.isEmpty())
             .collect(Collectors.toSet());
+  }
+
+  /**
+   * Returns whether the schema can be used to lookup the specified schema.
+   *
+   * @param prev the schema to lookup
+   * @return whether the schema can be used to lookup the specified schema
+   */
+  default boolean canLookup(ParsedSchema prev, SchemaVersionFetcher fetcher) {
+    // This schema can be used to lookup a previous schema if this schema
+    // has no references and the previous schema has references,
+    // (which can happen with Avro schemas) and the schemas are the same except
+    // for the previous schema possibly having a confluent:version.
+    if (references().isEmpty() && !prev.references().isEmpty()) {
+      if (AbstractSchemaProvider.areDeepEqualExcludingConfluentVersion(this, prev)) {
+        // This handles the case where a schema is sent with all references resolved
+        return true;
+      }
+    }
+    // This schema can be used to lookup a previous schema if this schema
+    // and the previous schema having matching references when all versions of -1
+    // are replaced by the latest version, and the schemas are the same except
+    // for the previous schema possibly having a confluent:version.
+    String schemaVer = AbstractSchemaProvider.getConfluentVersion(metadata());
+    String prevVer = AbstractSchemaProvider.getConfluentVersion(prev.metadata());
+    if ((schemaVer == null && prevVer != null)
+        || AbstractSchemaProvider.hasLatestVersion(this.references())
+        || AbstractSchemaProvider.hasLatestVersion(prev.references())) {
+      boolean areRefsEquivalent = AbstractSchemaProvider.replaceLatestVersion(references(), fetcher)
+          .equals(AbstractSchemaProvider.replaceLatestVersion(prev.references(), fetcher));
+      return areRefsEquivalent
+          && AbstractSchemaProvider.areDeepEqualExcludingConfluentVersion(this, prev);
+    }
+    return false;
   }
 }
