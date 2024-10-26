@@ -16,6 +16,11 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.canLookupIgnoringVersion;
+import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.getConfluentVersion;
+import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.hasLatestVersion;
+import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.replaceLatestVersion;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -296,7 +301,7 @@ public interface ParsedSchema {
     // (which can happen with Avro schemas) and the schemas are the same except
     // for the previous schema possibly having a confluent:version.
     if (references().isEmpty() && !prev.references().isEmpty()) {
-      if (AbstractSchemaProvider.areDeepEqualExcludingConfluentVersion(this, prev)) {
+      if (canLookupIgnoringVersion(this, prev)) {
         // This handles the case where a schema is sent with all references resolved
         return true;
       }
@@ -305,15 +310,14 @@ public interface ParsedSchema {
     // and the previous schema having matching references when all versions of -1
     // are replaced by the latest version, and the schemas are the same except
     // for the previous schema possibly having a confluent:version.
-    String schemaVer = AbstractSchemaProvider.getConfluentVersion(metadata());
-    String prevVer = AbstractSchemaProvider.getConfluentVersion(prev.metadata());
+    String schemaVer = getConfluentVersion(metadata());
+    String prevVer = getConfluentVersion(prev.metadata());
     if ((schemaVer == null && prevVer != null)
-        || AbstractSchemaProvider.hasLatestVersion(this.references())
-        || AbstractSchemaProvider.hasLatestVersion(prev.references())) {
-      boolean areRefsEquivalent = AbstractSchemaProvider.replaceLatestVersion(references(), fetcher)
-          .equals(AbstractSchemaProvider.replaceLatestVersion(prev.references(), fetcher));
-      return areRefsEquivalent
-          && AbstractSchemaProvider.areDeepEqualExcludingConfluentVersion(this, prev);
+        || hasLatestVersion(this.references())
+        || hasLatestVersion(prev.references())) {
+      boolean areRefsEquivalent = replaceLatestVersion(references(), fetcher)
+          .equals(replaceLatestVersion(prev.references(), fetcher));
+      return areRefsEquivalent && canLookupIgnoringVersion(this, prev);
     }
     return false;
   }

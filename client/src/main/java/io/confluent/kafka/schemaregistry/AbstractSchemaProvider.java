@@ -91,7 +91,7 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
 
   // Parking this method and the following ones here instead of in ParsedSchema as interfaces can't
   // have private methods in Java 8.  Move these to ParsedSchema in 8.0.x
-  protected static boolean areDeepEqualExcludingConfluentVersion(
+  protected static boolean canLookupIgnoringVersion(
       ParsedSchema current, ParsedSchema prev) {
     String schemaVer = getConfluentVersion(current.metadata());
     String prevVer = getConfluentVersion(prev.metadata());
