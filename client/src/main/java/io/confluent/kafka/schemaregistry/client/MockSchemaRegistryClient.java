@@ -137,7 +137,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         idToSchemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
     if (!idSchemaMap.isEmpty()) {
       for (Map.Entry<Integer, ParsedSchema> entry : idSchemaMap.entrySet()) {
-        if (schemasEqual(entry.getValue(), schema)) {
+        if (areSchemasEquivalent(schema, entry.getValue())) {
           if (registerRequest) {
             if (id < 0 || id == entry.getKey()) {
               generateVersion(subject, schema);
@@ -173,9 +173,18 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
-  private boolean schemasEqual(ParsedSchema schema1, ParsedSchema schema2) {
-    return schema1.canonicalString().equals(schema2.canonicalString())
-        || schema1.deepEquals(schema2);
+  private boolean areSchemasEquivalent(ParsedSchema schema, ParsedSchema prev) {
+    if (schema.references().isEmpty() && !prev.references().isEmpty()) {
+      if (schema.deepEquals(prev)) {
+        // This handles the case where a schema is sent with all references resolved
+        return true;
+      }
+    } else if (schema.references().equals(prev.references())) {
+      if (schema.deepEquals(prev)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private void generateVersion(String subject, ParsedSchema schema) {
@@ -404,7 +413,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     int id = -1;
     Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
     for (Map.Entry<Integer, ParsedSchema> entry : idSchemaMap.entrySet()) {
-      if (schemasEqual(entry.getValue(), schema)) {
+      if (areSchemasEquivalent(schema, entry.getValue())) {
         id = entry.getKey();
       }
     }
@@ -436,7 +445,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     int id = -1;
     Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
     for (Map.Entry<Integer, ParsedSchema> entry : idSchemaMap.entrySet()) {
-      if (schemasEqual(entry.getValue(), schema)) {
+      if (areSchemasEquivalent(schema, entry.getValue())) {
         id = entry.getKey();
       }
     }
@@ -468,7 +477,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
           int id = -1;
           Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
           for (Map.Entry<Integer, ParsedSchema> e : idSchemaMap.entrySet()) {
-            if (schemasEqual(e.getValue(), schema)) {
+            if (areSchemasEquivalent(schema, e.getValue())) {
               id = e.getKey();
             }
           }

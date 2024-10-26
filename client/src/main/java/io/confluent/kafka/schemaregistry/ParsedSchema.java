@@ -246,6 +246,7 @@ public interface ParsedSchema {
 
   /**
    * Returns whether the underlying raw representations are equal.
+   * References are not considered.
    *
    * @return whether the underlying raw representations are equal
    */
