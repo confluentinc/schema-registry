@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -24,6 +25,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -42,6 +44,8 @@ import java.util.stream.Collectors;
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Metadata {
+
+  public static final String CONFLUENT_VERSION = "confluent:version";
 
   @JsonPropertyOrder(alphabetic = true)
   private final SortedMap<String, SortedSet<String>> tags;
@@ -132,6 +136,34 @@ public class Metadata {
     if (sensitive != null) {
       sensitive.forEach(s -> md.update(s.getBytes(StandardCharsets.UTF_8)));
     }
+  }
+
+  @JsonIgnore
+  public String getConfluentVersion() {
+    return getProperties() != null ? getProperties().get(CONFLUENT_VERSION) : null;
+  }
+
+  public static Metadata setConfluentVersion(Metadata metadata, int version) {
+    Map<String, String> newProps = metadata != null && metadata.getProperties() != null
+        ? new HashMap<>(metadata.getProperties())
+        : new HashMap<>();
+    newProps.put(CONFLUENT_VERSION, String.valueOf(version));
+    return new Metadata(
+        metadata != null ? metadata.getTags() : null,
+        newProps,
+        metadata != null ? metadata.getSensitive() : null);
+  }
+
+  public static Metadata removeConfluentVersion(Metadata metadata) {
+    if (metadata == null || metadata.getProperties() == null) {
+      return metadata;
+    }
+    Map<String, String> newProps = new HashMap<>(metadata.getProperties());
+    newProps.remove(CONFLUENT_VERSION);
+    return new Metadata(
+        metadata.getTags(),
+        newProps,
+        metadata.getSensitive());
   }
 
   public static Metadata mergeMetadata(Metadata oldMetadata, Metadata newMetadata) {
