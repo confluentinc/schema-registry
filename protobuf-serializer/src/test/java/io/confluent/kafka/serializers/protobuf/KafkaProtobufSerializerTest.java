@@ -33,8 +33,6 @@ import io.confluent.kafka.serializers.protobuf.test.DecimalValuePb2OuterClass.De
 import io.confluent.kafka.serializers.protobuf.test.Ranges;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.Optional;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
