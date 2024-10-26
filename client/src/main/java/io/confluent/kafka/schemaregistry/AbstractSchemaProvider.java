@@ -16,7 +16,9 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -85,5 +87,46 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
         schemas.put(reference.getName(), s.getSchema());
       }
     }
+  }
+
+  // Parking this method and the following ones here instead of in ParsedSchema as interfaces can't
+  // have private methods in Java 8.  Move these to ParsedSchema in 8.0.x
+  protected static boolean areDeepEqualExcludingConfluentVersion(
+      ParsedSchema current, ParsedSchema prev) {
+    String schemaVer = getConfluentVersion(current.metadata());
+    String prevVer = getConfluentVersion(prev.metadata());
+    if (schemaVer == null && prevVer != null) {
+      ParsedSchema newSchema = current.metadata() != null
+          ? current
+          : current.copy(new Metadata(null, null, null), current.ruleSet());
+      ParsedSchema newPrev = prev.copy(
+          Metadata.removeConfluentVersion(prev.metadata()), prev.ruleSet());
+      // This handles the case where a schema is sent without confluent:version
+      return newSchema.deepEquals(newPrev);
+    } else {
+      return current.deepEquals(prev);
+    }
+  }
+
+  protected static boolean hasLatestVersion(List<SchemaReference> refs) {
+    return refs.stream().anyMatch(e -> e.getVersion() == -1);
+  }
+
+  protected static List<SchemaReference> replaceLatestVersion(
+      List<SchemaReference> refs, SchemaVersionFetcher fetcher) {
+    List<SchemaReference> result = new ArrayList<>();
+    for (SchemaReference ref : refs) {
+      if (ref.getVersion() == -1) {
+        Schema s = fetcher.getByVersion(ref.getSubject(), -1, false);
+        result.add(new SchemaReference(ref.getName(), ref.getSubject(), s.getVersion()));
+      } else {
+        result.add(ref);
+      }
+    }
+    return result;
+  }
+
+  protected static String getConfluentVersion(Metadata metadata) {
+    return metadata != null ? metadata.getConfluentVersion() : null;
   }
 }
