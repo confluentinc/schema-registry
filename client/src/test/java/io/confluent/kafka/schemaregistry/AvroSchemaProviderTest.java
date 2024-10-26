@@ -55,8 +55,8 @@ public class AvroSchemaProviderTest {
     Schema schemaTest3 = new Schema("test3", 1, 1001, AvroSchema.TYPE, referencesForTest3, schemaTest3Str);
 
     mockSchemaRegistryClient.register("test2", new AvroSchema(schemaTest2Str));
-    mockSchemaRegistryClient.register("test1", new AvroSchema(schemaTest1Str, referencesForTest1, avroSchemaProvider.resolveReferences(schemaTest1), null));
-    mockSchemaRegistryClient.register("test3", new AvroSchema(schemaTest3Str, referencesForTest3, avroSchemaProvider.resolveReferences(schemaTest3), null));
+    mockSchemaRegistryClient.register("test1", new AvroSchema(schemaTest1Str, referencesForTest1, avroSchemaProvider.resolveReferences(schemaTest1, true), null));
+    mockSchemaRegistryClient.register("test3", new AvroSchema(schemaTest3Str, referencesForTest3, avroSchemaProvider.resolveReferences(schemaTest3, true), null));
 
     List<SchemaReference> referencesForTest1Resolved = Arrays.asList(
             new SchemaReference("test2", "test2", 1)
@@ -98,12 +98,12 @@ public class AvroSchemaProviderTest {
     Schema schemaTest3 = new Schema("test3", 1, 1001, AvroSchema.TYPE, referencesForTest3, schemaTest3Str);
 
     mockSchemaRegistryClient.register("test2", new AvroSchema(schemaTest2Str));
-    mockSchemaRegistryClient.register("test1", new AvroSchema(schemaTest1Str, referencesForTest1, avroSchemaProvider.resolveReferences(schemaTest1), null));
-    mockSchemaRegistryClient.register("test3", new AvroSchema(schemaTest3Str, referencesForTest3, avroSchemaProvider.resolveReferences(schemaTest3), null));
+    mockSchemaRegistryClient.register("test1", new AvroSchema(schemaTest1Str, referencesForTest1, avroSchemaProvider.resolveReferences(schemaTest1, true), null));
+    mockSchemaRegistryClient.register("test3", new AvroSchema(schemaTest3Str, referencesForTest3, avroSchemaProvider.resolveReferences(schemaTest3, true), null));
 
 
     schemaTest2Str =  "{ \"type\": \"record\", \"name\": \"test2U\", \"fields\": [ { \"type\": \"string\", \"name\": \"field1\" }, { \"type\": \"int\", \"name\": \"field2\" }]}";
-    mockSchemaRegistryClient.register("test2", new AvroSchema(schemaTest2Str, referencesForTest2, avroSchemaProvider.resolveReferences(schemaTest2), null));
+    mockSchemaRegistryClient.register("test2", new AvroSchema(schemaTest2Str, referencesForTest2, avroSchemaProvider.resolveReferences(schemaTest2, true), null));
 
     List<SchemaReference> referencesForTest1Resolved = Arrays.asList(
             new SchemaReference("test2", "test2", 1)
