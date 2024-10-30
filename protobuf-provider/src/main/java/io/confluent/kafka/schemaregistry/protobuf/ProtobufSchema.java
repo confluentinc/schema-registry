@@ -2409,6 +2409,9 @@ public class ProtobufSchema implements ParsedSchema {
     if (field.isMapField()) {
       return RuleContext.Type.MAP;
     }
+    if (field.isRepeated()) {
+      return RuleContext.Type.ARRAY;
+    }
     switch (field.getType()) {
       case MESSAGE:
         return RuleContext.Type.RECORD;
