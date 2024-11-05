@@ -23,6 +23,7 @@ import static org.junit.Assert.assertTrue;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
@@ -51,6 +52,7 @@ import io.confluent.kafka.schemaregistry.rules.NewSpecificWidget;
 import io.confluent.kafka.schemaregistry.rules.NewWidgetProto;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
+import io.confluent.kafka.schemaregistry.rules.cel.CelFieldExecutor;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
@@ -217,6 +219,59 @@ public class JsonataExecutorTest {
     assertTrue(
         "Returned object should be a NewWidget",
         GenericRecord.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        123,
+        ((GenericRecord)obj).get("height")
+    );
+    assertEquals(
+        id,
+        ((GenericRecord)obj).get("id")
+    );
+  }
+
+  @Test
+  public void testKafkaAvroSerializerGenericRecordWithCel() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    String ruleString =
+        "$merge([$sift($, function($v, $k) {$k != 'size'}), {'height': $.'size'}])";
+
+    OldWidget widget = new OldWidget(id, "alice");
+    widget.setSize(123);
+    Schema schema = AvroSchemaUtils.getReflectData().getSchema(OldWidget.class);
+    AvroSchema avroSchema = new AvroSchema(schema);
+    SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
+    Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
+    avroSchema = avroSchema.copy(metadata, null);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    schema = createNewGenericWidgetSchema();
+    avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.UPGRADE,
+        JsonataExecutor.TYPE, null, null, ruleString, null, null, false);
+    Rule rule2 = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.READ,
+        CelFieldExecutor.TYPE, null, null, "name == 'name' ; value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.singletonList(rule), Collections.singletonList(rule2));
+    props = ImmutableSortedMap.of("application.version", "v2");
+    metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    bytes = reflectionAvroSerializer.serialize(topic, widget);
+
+    obj = avroDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a NewWidget",
+        GenericRecord.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice-suffix",
+        ((GenericRecord)obj).get("name")
     );
     assertEquals(
         "Returned object should be a NewWidget",
