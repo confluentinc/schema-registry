@@ -249,6 +249,40 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testRegisterBadReferenceInContext() throws Exception {
+    List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    String subject = "testSubject";
+    String avroSchema = avroSchemas.get(0);
+
+    int id1 = restApp.restClient.registerSchema(avroSchema, subject);
+    assertEquals("1st schema registered in first context should have id 1", 1,
+        id1);
+
+    // Create another context so that lookup will search it
+    String subject2 = ":.ctx:testFoo";
+    String avroSchema2 = avroSchemas.get(1);
+
+    int id2 = restApp.restClient.registerSchema(avroSchema2, subject2);
+    assertEquals("2nd schema registered in second context should have id 1", 1,
+        id2);
+
+    SchemaReference reference = new SchemaReference("testSubject", "testSubject", 1);
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"somerecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\"}]}";
+
+    try {
+      restApp.restClient.lookUpSubjectVersion(schemaString, "AVRO",
+          Collections.singletonList(reference), subject, false);
+      fail(String.format("Subject %s should not be found", subject));
+    } catch (RestClientException rce) {
+      assertEquals("Subject Not Found", Errors.SCHEMA_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+    }
+  }
+
+  @Test
   public void testRegisterDiffSchemaType() throws Exception {
     String subject = "testSubject";
     String avroSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
@@ -807,8 +841,8 @@ public class RestApiTest extends ClusterTestHarness {
     // Note that we pass an empty list of refs since SR will perform a deep equality check
     Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
         AvroSchema.TYPE, Collections.emptyList(), subject2, false);
+    
     assertEquals("Registered schema should be found", parentId, registeredSchema.getId().intValue());
-
     try {
       restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
           subject,
