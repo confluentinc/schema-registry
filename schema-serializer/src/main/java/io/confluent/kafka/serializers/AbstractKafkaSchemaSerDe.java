@@ -908,6 +908,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     } else if (status == 429) {        // Too Many Requests
       return new ThrottlingQuotaExceededException(e.getMessage());
     } else if (status == 408    // Request Timeout
+        || status == 500        // Internal Server Error (includes timeouts and forwarding errors)
         || status == 503        // Service Unavailable
         || status == 504) {     // Gateway Timeout
       return new TimeoutException(errorMessage, e);
