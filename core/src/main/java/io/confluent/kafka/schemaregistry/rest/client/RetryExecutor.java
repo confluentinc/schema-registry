@@ -15,12 +15,12 @@
 
 package io.confluent.kafka.schemaregistry.rest.client;
 
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.IOException;
 import java.util.concurrent.Callable;
 
 public class RetryExecutor {
-  private static final int HTTP_TOO_MANY_REQUESTS = 429;
   private final int maxRetries;
   private final int retriesWaitMs;
 
@@ -35,7 +35,7 @@ public class RetryExecutor {
       try {
         result = callable.call();
       } catch (RestClientException e) {
-        if (i >= maxRetries || e.getStatus() != HTTP_TOO_MANY_REQUESTS) {
+        if (i >= maxRetries || !RestService.isRetriable(e)) {
           throw e;
         }
       } catch (IOException e) {
