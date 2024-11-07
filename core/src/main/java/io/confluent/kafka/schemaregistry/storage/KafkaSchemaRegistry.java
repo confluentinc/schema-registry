@@ -1236,8 +1236,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
             new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
         Schema qualSchema = schema.copy();
         qualSchema.setSubject(qualSub.toQualifiedSubject());
-        matchingSchema = lookUpSchemaUnderSubject(
-            qualSub.toQualifiedSubject(), qualSchema, normalize, lookupDeletedSchema);
+        try {
+          matchingSchema = lookUpSchemaUnderSubject(
+              qualSub.toQualifiedSubject(), qualSchema, normalize, lookupDeletedSchema);
+        } catch (InvalidSchemaException e) {
+          // ignore
+        }
         if (matchingSchema != null) {
           return matchingSchema;
         }
