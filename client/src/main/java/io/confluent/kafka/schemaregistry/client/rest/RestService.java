@@ -410,10 +410,12 @@ public class RestService implements Closeable, Configurable {
     throw new IOException("Internal HTTP retry error"); // Can't get here
   }
 
-  private boolean isRetriable(RestClientException e) {
+  public static boolean isRetriable(RestClientException e) {
     int status = e.getStatus();
-    boolean isClientErrorToIgnore = status == 408 || status == 429;
-    boolean isServerErrorToIgnore = status == 502 || status == 503 || status == 504;
+    boolean isClientErrorToIgnore =
+        status == 408 || status == 429;
+    boolean isServerErrorToIgnore =
+        status == 500 || status == 502 || status == 503 || status == 504;
     return isClientErrorToIgnore || isServerErrorToIgnore;
   }
 
