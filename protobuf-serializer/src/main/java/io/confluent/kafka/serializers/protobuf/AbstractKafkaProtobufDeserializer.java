@@ -146,11 +146,14 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         schema = schemaForDeserialize(id, schema, subject, isKey);
       }
 
-      ParsedSchema readerSchema = null;
+      ProtobufSchema readerSchema = null;
       if (metadata != null) {
-        readerSchema = getLatestWithMetadata(subject).getSchema();
+        readerSchema = (ProtobufSchema) getLatestWithMetadata(subject).getSchema();
       } else if (useLatestVersion) {
-        readerSchema = lookupLatestVersion(subject, schema, false).getSchema();
+        readerSchema = (ProtobufSchema) lookupLatestVersion(subject, schema, false).getSchema();
+      }
+      if (readerSchema != null && readerSchema.toDescriptor(name) != null) {
+        readerSchema = schemaWithName(readerSchema, name);
       }
       if (includeSchemaAndVersion || readerSchema != null) {
         Integer version = schemaVersion(topic, isKey, id, subject, schema, null);
@@ -175,7 +178,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       }
 
       if (readerSchema != null) {
-        schema = (ProtobufSchema) readerSchema;
+        schema = readerSchema;
       }
       if (schema.ruleSet() != null && schema.ruleSet().hasRules(RuleMode.READ)) {
         if (message == null) {
