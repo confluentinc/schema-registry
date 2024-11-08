@@ -51,6 +51,7 @@ import io.confluent.kafka.schemaregistry.rules.ExpiringSpecificWidgetProto;
 import io.confluent.kafka.schemaregistry.rules.NewSpecificWidget;
 import io.confluent.kafka.schemaregistry.rules.NewWidgetProto;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto;
+import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
 import io.confluent.kafka.schemaregistry.rules.cel.CelFieldExecutor;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -88,6 +89,7 @@ public class JsonataExecutorTest {
   private final KafkaAvroDeserializer specificAvroDeserializer;
   private final KafkaProtobufSerializer<WidgetProto.Widget> protobufSerializer;
   private final KafkaProtobufSerializer<ExpiringSpecificWidgetProto.ExpiringSpecificWidget> protobufSerializer2;
+  private final KafkaProtobufSerializer<WidgetProto.Pii> protobufSerializer3;
   private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   private final KafkaProtobufDeserializer<NewWidgetProto.NewWidget> specificProtobufDeserializer;
   private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
@@ -140,6 +142,7 @@ public class JsonataExecutorTest {
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
     protobufSerializer2 = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
+    protobufSerializer3 = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);
     protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, defaultConfig2);
 
     specificProps2.put(KafkaProtobufDeserializerConfig.DERIVE_TYPE_CONFIG, "true");
@@ -568,6 +571,45 @@ public class JsonataExecutorTest {
         "Returned object should be a NewWidget",
         123,
         newWidget.getHeight()
+    );
+  }
+
+  @Test
+  public void testKafkaProtobufSerializerGenericWithSecondMessage() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    String ruleString = "$sift($, function($v, $k) {$k != 'size'})";
+
+    Pii pii = WidgetProto.Pii.newBuilder().setPii("secret").build();
+    ProtobufSchema protobufSchema = new ProtobufSchema(pii.getDescriptorForType());
+    SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
+    Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
+    protobufSchema = protobufSchema.copy(metadata, null);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    protobufSchema = new ProtobufSchema(NewWidgetProto.Pii.getDescriptor());
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.UPGRADE,
+        JsonataExecutor.TYPE, null, null, ruleString, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.singletonList(rule), Collections.emptyList());
+    props = ImmutableSortedMap.of("application.version", "v2");
+    metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
+    protobufSchema = protobufSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    bytes = protobufSerializer3.serialize(topic, pii);
+
+    obj = protobufDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a Pii",
+        DynamicMessage.class.isInstance(obj)
+    );
+    DynamicMessage dynamicMessage = (DynamicMessage) obj;
+    Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
+    assertEquals(
+        "Returned object should be a Pii",
+        "secret",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("pii"))
     );
   }
 
