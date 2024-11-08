@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 import scala.Option;
 import scala.collection.JavaConverters;
 import scala.collection.immutable.List;
-import scala.collection.immutable.Seq;
 import scala.jdk.javaapi.CollectionConverters;
 
 import javax.security.auth.login.Configuration;
@@ -96,10 +95,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
   }
 
   private void createPrincipal(File keytab, String principalNoRealm) throws Exception {
-    Seq<String> principals = JavaConverters.asScalaBuffer(
-            Arrays.asList(principalNoRealm)
-    ).toList();
-    kdc.createPrincipal(keytab, principals);
+    kdc.createPrincipal(keytab, Arrays.asList(principalNoRealm));
   }
 
   @Override
