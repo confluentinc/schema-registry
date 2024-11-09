@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
+import com.kjetland.jackson.jsonSchema.JsonSchemaConfig.JsonSchemaConfigBuilder;
 import com.kjetland.jackson.jsonSchema.JsonSchemaDraft;
 import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
 
@@ -32,7 +33,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.annotations.Schema;
@@ -182,7 +182,7 @@ public class JsonSchemaUtils {
                         + " with refs " + references));
       }
     }
-    JsonSchemaConfig config = getConfig(useOneofForNullables, failUnknownProperties);
+    JsonSchemaConfigBuilder config = getConfig(useOneofForNullables, failUnknownProperties);
     JsonSchemaDraft draft;
     switch (specVersion) {
       case DRAFT_4:
@@ -201,8 +201,8 @@ public class JsonSchemaUtils {
         draft = JsonSchemaDraft.DRAFT_07;
         break;
     }
-    config = config.withJsonSchemaDraft(draft);
-    JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(objectMapper, config);
+    config = config.jsonSchemaDraft(draft);
+    JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(objectMapper, config.build());
     JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(cls);
     return new JsonSchema(jsonSchema);
   }
@@ -228,28 +228,11 @@ public class JsonSchemaUtils {
     return new JsonSchema(schemaNode, references, resolvedReferences, null);
   }
 
-  private static JsonSchemaConfig getConfig(
+  private static JsonSchemaConfigBuilder getConfig(
       boolean useOneofForNullables, boolean failUnknownProperties) {
-    final JsonSchemaConfig vanilla = JsonSchemaConfig.vanillaJsonSchemaDraft4();
-    return JsonSchemaConfig.create(
-        vanilla.autoGenerateTitleForProperties(),
-        Optional.empty(),
-        true,
-        useOneofForNullables,
-        vanilla.usePropertyOrdering(),
-        vanilla.hidePolymorphismTypeProperty(),
-        vanilla.disableWarnings(),
-        vanilla.useMinLengthForNotNull(),
-        vanilla.useTypeIdForDefinitionName(),
-        Collections.emptyMap(),
-        vanilla.useMultipleEditorSelectViaProperty(),
-        Collections.emptySet(),
-        Collections.emptyMap(),
-        Collections.emptyMap(),
-        vanilla.subclassesResolver(),
-        failUnknownProperties,
-        null
-    );
+    return JsonSchemaConfig.builder()
+        .useOneOfForNullables(useOneofForNullables)
+        .failOnUnknownProperties(failUnknownProperties);
   }
 
   public static Object getValue(Object object) {
