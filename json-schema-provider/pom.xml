@@ -56,8 +56,8 @@
             <artifactId>jackson-module-parameter-names</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.kjetland</groupId>
-            <artifactId>mbknor-jackson-jsonschema_${kafka.scala.version}</artifactId>
+            <groupId>one.duckling</groupId>
+            <artifactId>mbknor-jackson-jsonschema-java8</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
