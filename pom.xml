@@ -197,7 +197,6 @@
                 <version>${json-schema.version}</version>
             </dependency>
             <dependency>
-            <dependency>
                 <groupId>one.duckling</groupId>
                 <artifactId>mbknor-jackson-jsonschema-java8</artifactId>
                 <version>1.0.39.1</version>
