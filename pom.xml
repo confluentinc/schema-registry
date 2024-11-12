@@ -90,19 +90,19 @@
         <kotlin.version>1.9.10</kotlin.version>
         <antlr.version>4.13.1</antlr.version>
         <caffeine.version>2.9.3</caffeine.version>
-        <cel-version>0.3.12</cel-version>
+        <cel-version>0.4.5</cel-version>
         <google.api-client.version>1.35.2</google.api-client.version>
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.4.5</jsonata-version>
-        <json-schema.version>1.14.3</json-schema.version>
+        <json-schema.version>1.14.4</json-schema.version>
         <json-skema.version>0.19.0</json-skema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <okio.version>3.4.0</okio.version>
-        <tink.version>1.12.0</tink.version>
-        <tink.aws.kms.version>1.9.1</tink.aws.kms.version>
-        <tink.gcp.kms.version>1.9.0</tink.gcp.kms.version>
+        <tink.version>1.15.0</tink.version>
+        <tink.aws.kms.version>1.10.1</tink.aws.kms.version>
+        <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
         <wire.version>4.9.7</wire.version>
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.6.4-0</io.confluent.schema-registry.version>
@@ -264,15 +264,9 @@
                 <version>${json-skema.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.kjetland</groupId>
-                <artifactId>mbknor-jackson-jsonschema_${kafka.scala.version}</artifactId>
-                <version>${mbknor-jackson-jsonschema.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>org.jetbrains.kotlin</groupId>
-                        <artifactId>kotlin-stdlib</artifactId>
-                    </exclusion>
-                </exclusions>
+                <groupId>one.duckling</groupId>
+                <artifactId>mbknor-jackson-jsonschema-java8</artifactId>
+                <version>1.0.39.1</version>
             </dependency>
             <dependency>
                 <groupId>org.antlr</groupId>
