@@ -199,7 +199,6 @@
                 <groupId>one.duckling</groupId>
                 <artifactId>mbknor-jackson-jsonschema-java8</artifactId>
                 <version>1.0.39.1</version>
-                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
