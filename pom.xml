@@ -88,13 +88,14 @@
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.9.10</kotlin.version>
+<<<<<<< HEAD
         <antlr.version>4.13.1</antlr.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.4.5</cel-version>
         <google.api-client.version>1.35.2</google.api-client.version>
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.4.9</jsonata-version>
-        <json-schema.version>1.14.4</json-schema.version>
+        <json-schema.version>1.14.3</json-schema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
@@ -261,6 +262,7 @@
                 <groupId>one.duckling</groupId>
                 <artifactId>mbknor-jackson-jsonschema-java8</artifactId>
                 <version>1.0.39.1</version>
+<<<<<<< HEAD
             </dependency>
             <dependency>
                 <groupId>org.antlr</groupId>
@@ -313,6 +315,8 @@
                 <groupId>info.picocli</groupId>
                 <artifactId>picocli</artifactId>
                 <version>4.7.5</version>
+=======
+>>>>>>> 7.3.x
             </dependency>
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
