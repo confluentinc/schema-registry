@@ -111,6 +111,19 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String HTTP_READ_TIMEOUT_MS_DOC = "Specify the http read timeout"
       + " in milliseconds for schema registry client";
 
+  public static final String MAX_RETRIES_CONFIG = SchemaRegistryClientConfig
+      .MAX_RETRIES_CONFIG;
+  public static final int MAX_RETRIES_DEFAULT =
+      SchemaRegistryClientConfig.MAX_RETRIES_DEFAULT;
+  public static final String MAX_RETRIES_DOC = "The maximum number of retries for a request";
+
+  public static final String RETRIES_WAIT_MS_CONFIG = SchemaRegistryClientConfig
+      .RETRIES_WAIT_MS_CONFIG;
+  public static final int RETRIES_WAIT_MS_DEFAULT =
+      SchemaRegistryClientConfig.RETRIES_WAIT_MS_DEFAULT;
+  public static final String RETRIES_WAIT_MS_DOC = "The maximum time to wait for the first retry."
+      + " When jitter is applied, the actual wait may be less.";
+
   public static final String LATEST_CACHE_SIZE = "latest.cache.size";
   public static final int LATEST_CACHE_SIZE_DEFAULT = 1000;
   public static final String LATEST_CACHE_SIZE_DOC =
@@ -351,7 +364,13 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
             HTTP_CONNECT_TIMEOUT_MS_DOC)
         .define(HTTP_READ_TIMEOUT_MS, Type.INT,
             HTTP_READ_TIMEOUT_MS_DEFAULT, Importance.LOW,
-            HTTP_READ_TIMEOUT_MS_DOC);
+            HTTP_READ_TIMEOUT_MS_DOC)
+        .define(MAX_RETRIES_CONFIG, Type.INT,
+            MAX_RETRIES_DEFAULT, Importance.LOW,
+            MAX_RETRIES_DOC)
+        .define(RETRIES_WAIT_MS_CONFIG, Type.INT,
+            RETRIES_WAIT_MS_DEFAULT, Importance.LOW,
+            RETRIES_WAIT_MS_DOC);
     SchemaRegistryClientConfig.withClientSslSupport(
         configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
     return configDef;
