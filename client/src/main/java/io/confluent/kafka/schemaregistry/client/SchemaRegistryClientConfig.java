@@ -38,6 +38,11 @@ public class SchemaRegistryClientConfig {
   public static final String HTTP_READ_TIMEOUT_MS = "http.read.timeout.ms";
   public static final int HTTP_READ_TIMEOUT_MS_DEFAULT = 60000;
 
+  public static final String MAX_RETRIES_CONFIG = "max.retries";
+  public static final int MAX_RETRIES_DEFAULT = 3;
+  public static final String RETRIES_WAIT_MS_CONFIG = "retries.wait.ms";
+  public static final int RETRIES_WAIT_MS_DEFAULT = 1000;
+
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE = "bearer.auth.credentials.source";
   public static final String BEARER_AUTH_TOKEN_CONFIG = "bearer.auth.token";
 
@@ -124,6 +129,30 @@ public class SchemaRegistryClientConfig {
           : (Integer) httpReadTimeoutMsVal;
     } else {
       return HTTP_READ_TIMEOUT_MS_DEFAULT;
+    }
+  }
+
+  public static Integer getMaxRetries(Map<String, ?> configs) {
+    if (configs != null && configs.containsKey(MAX_RETRIES_CONFIG)) {
+      Object maxRetriesVal
+          = configs.get(SchemaRegistryClientConfig.MAX_RETRIES_CONFIG);
+      return maxRetriesVal instanceof String
+          ? Integer.valueOf((String) maxRetriesVal)
+          : (Integer) maxRetriesVal;
+    } else {
+      return MAX_RETRIES_DEFAULT;
+    }
+  }
+
+  public static Integer getRetriesWaitMs(Map<String, ?> configs) {
+    if (configs != null && configs.containsKey(RETRIES_WAIT_MS_CONFIG)) {
+      Object retriesWaitMsVal
+          = configs.get(SchemaRegistryClientConfig.RETRIES_WAIT_MS_CONFIG);
+      return retriesWaitMsVal instanceof String
+          ? Integer.valueOf((String) retriesWaitMsVal)
+          : (Integer) retriesWaitMsVal;
+    } else {
+      return RETRIES_WAIT_MS_DEFAULT;
     }
   }
 
