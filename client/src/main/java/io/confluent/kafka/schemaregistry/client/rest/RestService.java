@@ -205,7 +205,7 @@ public class RestService implements Closeable, Configurable {
     this.baseUrls = baseUrls;
     this.isForward = isForward;
     // ensure retry executor is set for tests
-    this.retryExecutor = new RetryExecutor(0, 0);
+    this.retryExecutor = new RetryExecutor(0, 0, 0);
   }
 
   @Override

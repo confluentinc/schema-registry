@@ -25,7 +25,7 @@ public class RetryExecutorTest {
 
   @Test
   public void testRetryExecutor() throws IOException, RestClientException {
-    RetryExecutor retryExecutor = new RetryExecutor(3, 0);
+    RetryExecutor retryExecutor = new RetryExecutor(3, 0, 0);
     TestCallable testCallable = new TestCallable();
     int result = retryExecutor.retry(testCallable);
     Assert.assertEquals(3, result);
