@@ -25,6 +25,7 @@ import com.kjetland.jackson.jsonSchema.JsonSchemaConfig.JsonSchemaConfigBuilder;
 import com.kjetland.jackson.jsonSchema.JsonSchemaDraft;
 import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
 
+import com.kjetland.jackson.jsonSchema.SubclassesResolver;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
@@ -158,6 +159,17 @@ public class JsonSchemaUtils {
       boolean failUnknownProperties,
       ObjectMapper objectMapper,
       SchemaRegistryClient client) throws IOException {
+    return getSchema(object, specVersion, null, useOneofForNullables, true, objectMapper, client);
+  }
+
+  public static JsonSchema getSchema(
+      Object object,
+      SpecificationVersion specVersion,
+      List<String> scanPackages,
+      boolean useOneofForNullables,
+      boolean failUnknownProperties,
+      ObjectMapper objectMapper,
+      SchemaRegistryClient client) throws IOException {
     if (object == null) {
       return null;
     }
@@ -205,6 +217,9 @@ public class JsonSchemaUtils {
         break;
     }
     config = config.jsonSchemaDraft(draft);
+    if (scanPackages != null && !scanPackages.isEmpty()) {
+      config = config.subclassesResolver(new SubclassesResolver(scanPackages, null));
+    }
     JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(objectMapper, config.build());
     JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(cls);
     return new JsonSchema(jsonSchema);
