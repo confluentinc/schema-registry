@@ -117,7 +117,7 @@ public class TestUtils {
     // the newly registered schema should be immediately readable on the leader
     assertEquals("Registered schema should be found",
             schemaString,
-            restService.getId(expectedId).getSchemaString());
+            restService.getId(expectedId, subject).getSchemaString());
   }
 
   public static void registerAndVerifySchema(RestService restService, String schemaString,

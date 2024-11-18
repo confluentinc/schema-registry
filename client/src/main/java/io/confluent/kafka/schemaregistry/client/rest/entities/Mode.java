@@ -35,7 +35,8 @@ public class Mode {
   public static final String MODE_DESC = "Schema Registry operating mode";
 
   @Schema(description = MODE_DESC,
-          allowableValues = "READWRITE, READONLY, READONLY_OVERRIDE, IMPORT")
+          allowableValues = {"READWRITE", "READONLY", "READONLY_OVERRIDE", "IMPORT"},
+          example = "READWRITE")
   private String mode;
 
   public static Mode fromJson(String json) throws IOException {

@@ -16,19 +16,17 @@
 package io.confluent.kafka.schemaregistry.client.rest;
 
 import static junit.framework.TestCase.assertEquals;
-import static org.easymock.EasyMock.anyInt;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.anyString;
-import static org.easymock.EasyMock.createMock;
-import static org.easymock.EasyMock.createNiceMock;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.powermock.api.easymock.PowerMock.expectNew;
-import static org.powermock.api.easymock.PowerMock.replay;
-import java.io.ByteArrayInputStream;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.io.InputStream;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
@@ -38,19 +36,16 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
 import com.google.common.collect.ImmutableMap;
-import org.easymock.EasyMock;
-import org.easymock.IArgumentMatcher;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
+import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest(RestService.class)
+@RunWith(MockitoJUnitRunner.class)
 public class RestServiceTest {
 
   @Test
@@ -94,37 +89,31 @@ public class RestServiceTest {
   @Test
   public void testSetBasicAuthRequestHeader() throws Exception {
     RestService restService = new RestService("http://localhost:8081");
+    RestService restServiceSpy = spy(restService);
 
-    BasicAuthCredentialProvider basicAuthCredentialProvider = createMock(BasicAuthCredentialProvider.class);
-    restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
+    BasicAuthCredentialProvider basicAuthCredentialProvider = mock(BasicAuthCredentialProvider.class);
+    restServiceSpy.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
 
-    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
-    InputStream inputStream = createNiceMock(InputStream.class);
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+    InputStream inputStream = mock(InputStream.class);
 
-    expectNew(URL.class, anyString()).andReturn(url);
-    expect(url.openConnection()).andReturn(httpURLConnection);
-    expect(httpURLConnection.getURL()).andReturn(url);
-    expect(basicAuthCredentialProvider.getUserInfo(anyObject(URL.class))).andReturn("user:password");
-    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
+    doReturn(url).when(restServiceSpy).url(anyString());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getURL()).thenReturn(url);
+    when(basicAuthCredentialProvider.getUserInfo(any(URL.class))).thenReturn("user:password");
+    when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_OK);
 
+    when(httpURLConnection.getInputStream()).thenReturn(inputStream);
+    when(inputStream.read(any(), anyInt(), anyInt())).thenAnswer(invocationOnMock -> {
+      byte[] b = invocationOnMock.getArgument(0);
+      byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
+      System.arraycopy(json, 0, b, 0, json.length);
+      return json.length;
+    });
+
+    restServiceSpy.getAllSubjects();
     // Make sure that the Authorization header is set with the correct value for "user:password"
-    httpURLConnection.setRequestProperty("Authorization", "Basic dXNlcjpwYXNzd29yZA==");
-    expectLastCall().once();
-
-    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
-
-    expect(inputStream.read(anyObject(), anyInt(), anyInt()))
-        .andDelegateTo(createInputStream("[\"abc\"]"))
-        .anyTimes();
-
-    replay(URL.class, url);
-    replay(HttpURLConnection.class, httpURLConnection);
-    replay(basicAuthCredentialProvider);
-    replay(InputStream.class, inputStream);
-
-    restService.getAllSubjects();
-
-    verify(httpURLConnection);
+    verify(httpURLConnection).setRequestProperty("Authorization", "Basic dXNlcjpwYXNzd29yZA==");
   }
 
 
@@ -134,36 +123,37 @@ public class RestServiceTest {
   @Test
   public void testSetBearerAuthRequestHeader() throws Exception {
     RestService restService = new RestService("http://localhost:8081");
+    RestService restServiceSpy = spy(restService);
 
-    BearerAuthCredentialProvider bearerAuthCredentialProvider = createMock(BearerAuthCredentialProvider.class);
-    restService.setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
+    BearerAuthCredentialProvider bearerAuthCredentialProvider = mock(BearerAuthCredentialProvider.class);
+    restServiceSpy.setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
 
-    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
-    InputStream inputStream = createNiceMock(InputStream.class);
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+    InputStream inputStream = mock(InputStream.class);
 
-    expectNew(URL.class, anyString()).andReturn(url);
-    expect(url.openConnection()).andReturn(httpURLConnection);
-    expect(httpURLConnection.getURL()).andReturn(url);
-    expect(bearerAuthCredentialProvider.getBearerToken(anyObject(URL.class))).andReturn("auth-token");
-    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
+    doReturn(url).when(restServiceSpy).url(anyString());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getURL()).thenReturn(url);
+    when(bearerAuthCredentialProvider.getBearerToken(any(URL.class))).thenReturn("auth-token");
+    when(bearerAuthCredentialProvider.getTargetSchemaRegistry()).thenReturn("lsrc-dummy");
+    when(bearerAuthCredentialProvider.getTargetIdentityPoolId()).thenReturn("my-pool-id");
+    when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_OK);
 
-    // Make sure that the Authorization header is set with the correct value for "user:password"
-    httpURLConnection.setRequestProperty("Authorization", "Bearer auth-token");
-    expectLastCall().once();
+    when(httpURLConnection.getInputStream()).thenReturn(inputStream);
+    when(inputStream.read(any(), anyInt(), anyInt())).thenAnswer(invocationOnMock -> {
+      byte[] b = invocationOnMock.getArgument(0);
+      byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
+      System.arraycopy(json, 0, b, 0, json.length);
+      return json.length;
+    });
 
-    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
+    restServiceSpy.getAllSubjects();
 
-    expect(inputStream.read((byte[]) anyObject(), anyInt(), anyInt()))
-            .andDelegateTo(createInputStream("[\"abc\"]")).anyTimes();
 
-    replay(URL.class, url);
-    replay(HttpURLConnection.class, httpURLConnection);
-    replay(bearerAuthCredentialProvider);
-    replay(InputStream.class, inputStream);
-
-    restService.getAllSubjects();
-
-    verify(httpURLConnection);
+    // Make sure that the Authorization header is set with the correct token
+    verify(httpURLConnection).setRequestProperty("Authorization", "Bearer auth-token");
+    verify(httpURLConnection).setRequestProperty("target-sr-cluster", "lsrc-dummy");
+    verify(httpURLConnection).setRequestProperty("Confluent-Identity-Pool-Id", "my-pool-id");
   }
 
   /*
@@ -172,64 +162,47 @@ public class RestServiceTest {
   @Test
   public void testSetHttpHeaders() throws Exception {
     RestService restService = new RestService("http://localhost:8081");
+    RestService restServiceSpy = spy(restService);
 
-    BasicAuthCredentialProvider basicAuthCredentialProvider = createMock(BasicAuthCredentialProvider.class);
-    restService.setHttpHeaders(
+    restServiceSpy.setHttpHeaders(
         ImmutableMap.of("api-key", "test-api-key","source-app", "foo"));
 
-    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
-    InputStream inputStream = createNiceMock(InputStream.class);
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+    InputStream inputStream = mock(InputStream.class);
 
-    expectNew(URL.class, anyString()).andReturn(url);
-    expect(url.openConnection()).andReturn(httpURLConnection);
-    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
+    doReturn(url).when(restServiceSpy).url(anyString());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_OK);
 
-    // Make sure that the Authorization header is set with the correct value for "user:password"
-    httpURLConnection.setRequestProperty("api-key", "test-api-key");
-    httpURLConnection.setRequestProperty("source-app", "foo");
-    expectLastCall().once();
+    when(httpURLConnection.getInputStream()).thenReturn(inputStream);
+    when(inputStream.read(any(), anyInt(), anyInt())).thenAnswer(invocationOnMock -> {
+      byte[] b = invocationOnMock.getArgument(0);
+      byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
+      System.arraycopy(json, 0, b, 0, json.length);
+      return json.length;
+    });
 
-    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
+    restServiceSpy.getAllSubjects();
 
-    expect(inputStream.read(anyObject(), anyInt(), anyInt()))
-        .andDelegateTo(createInputStream("[\"abc\"]"))
-        .anyTimes();
-
-    replay(URL.class, url);
-    replay(HttpURLConnection.class, httpURLConnection);
-    replay(InputStream.class, inputStream);
-
-    restService.getAllSubjects();
-
-    verify(httpURLConnection);
+    // Make sure that the correct header is set
+    verify(httpURLConnection).setRequestProperty("api-key", "test-api-key");
+    verify(httpURLConnection).setRequestProperty("source-app", "foo");
   }
 
   @Test
   public void testErrorResponseWithNullErrorStreamFromConnection() throws Exception {
     RestService restService = new RestService("http://localhost:8081");
+    RestService restServiceSpy = spy(restService);
 
-    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
-    InputStream inputStream = createNiceMock(InputStream.class);
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
 
-    expectNew(URL.class, anyString()).andReturn(url);
-    expect(url.openConnection()).andReturn(httpURLConnection);
-    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_BAD_REQUEST);
-
-    expectLastCall().once();
-
-    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
-    expect(httpURLConnection.getErrorStream()).andReturn(null);
-
-    expect(inputStream.read(anyObject(), anyInt(), anyInt()))
-        .andDelegateTo(createInputStream("[\"abc\"]"))
-        .anyTimes();
-
-    replay(URL.class, url);
-    replay(HttpURLConnection.class, httpURLConnection);
-    replay(InputStream.class, inputStream);
+    doReturn(url).when(restServiceSpy).url(anyString());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_BAD_REQUEST);
+    when(httpURLConnection.getErrorStream()).thenReturn(null);
 
     try {
-      restService.getAllSubjects();
+      restServiceSpy.getAllSubjects();
       fail("Expected RestClientException to be thrown");
     } catch (RestClientException exception) {
       assertTrue(exception.getMessage().endsWith("error code: 50005"));
@@ -237,88 +210,35 @@ public class RestServiceTest {
   }
 
   @Test
-  public void testConfigureHttpConnection() throws Exception {
-    RestService restService = new RestService("http://localhost:8081");
-
-    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
-    InputStream inputStream = createNiceMock(InputStream.class);
-
-    Map<String, Object> configs = new HashMap<>();
-    configs.put("http.connect.timeout.ms", 10);
-    configs.put("http.read.timeout.ms", 10);
-    restService.configure(configs);
-
-    expect(url.openConnection()).andReturn(httpURLConnection);
-    expectNew(URL.class, anyString()).andReturn(url);
-    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
-    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
-    expect(inputStream.read(anyObject(), anyInt(), anyInt()))
-        .andDelegateTo(createInputStream("[\"abc\"]")).anyTimes();
-
-    replay(URL.class, url);
-    replay(HttpURLConnection.class, httpURLConnection);
-    replay(InputStream.class, inputStream);
-
-    restService.getAllSubjects();
-
-    verify(httpURLConnection);
-  }
-
-  @Test
   public void testSetProxy() throws Exception {
     RestService restService = new RestService("http://localhost:8081");
+    RestService restServiceSpy = spy(restService);
 
-    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
-    InputStream inputStream = createNiceMock(InputStream.class);
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+    InputStream inputStream = mock(InputStream.class);
     Map<String, Object> configs = new HashMap<>();
     configs.put("proxy.host", "http://localhost");
     configs.put("proxy.port", 8080);
-    restService.configure(configs);
+    restServiceSpy.configure(configs);
 
-    expectNew(URL.class, anyString()).andReturn(url);
-    expect(url.openConnection(withProxy())).andReturn(httpURLConnection);
-    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
-    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
-    expect(inputStream.read(anyObject(), anyInt(), anyInt()))
-            .andDelegateTo(createInputStream("[\"abc\"]")).anyTimes();
+    doReturn(url).when(restServiceSpy).url(anyString());
 
-    replay(URL.class, url);
-    replay(HttpURLConnection.class, httpURLConnection);
-    replay(InputStream.class, inputStream);
-
-    restService.getAllSubjects();
-
-    verify(httpURLConnection);
-  }
-
-  private ByteArrayInputStream createInputStream(String content) {
-    return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
-  }
-
-  private static Proxy withProxy() {
-    EasyMock.reportMatcher(new IArgumentMatcher() {
-      private final String proxyHost = "http://localhost";
-      private final int proxyPort = 8080;
-
-      @Override
-      public boolean matches(Object proxyObj) {
-        if (proxyObj instanceof Proxy) {
-          Proxy proxy = (Proxy) proxyObj;
-          SocketAddress socketAddress = proxy.address();
-          if (socketAddress instanceof InetSocketAddress) {
-            InetSocketAddress inetAddress = (InetSocketAddress) socketAddress;
-            return inetAddress.getHostName().equals(proxyHost) &&
-                    inetAddress.getPort() == proxyPort;
-          }
-        }
-        return false;
-      }
-
-      @Override
-      public void appendTo(StringBuffer stringBuffer) {
-        stringBuffer.append("HTTP @ ").append(proxyHost).append(":").append(proxyPort);
-      }
+    when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_OK);
+    when(url.openConnection(any())).thenReturn(httpURLConnection);
+    when(httpURLConnection.getInputStream()).thenReturn(inputStream);
+    when(inputStream.read(any(), anyInt(), anyInt())).thenAnswer(invocationOnMock -> {
+      byte[] b = invocationOnMock.getArgument(0);
+      byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
+      System.arraycopy(json, 0, b, 0, json.length);
+      return json.length;
     });
-    return null;
+
+    restServiceSpy.getAllSubjects();
+
+    ArgumentCaptor<Proxy> proxyCaptor = ArgumentCaptor.forClass(Proxy.class);
+    verify(url).openConnection(proxyCaptor.capture());
+    InetSocketAddress inetAddress = (InetSocketAddress) proxyCaptor.getValue().address();
+    assertEquals("http://localhost", inetAddress.getHostName());
+    assertEquals(8080, inetAddress.getPort());
   }
 }

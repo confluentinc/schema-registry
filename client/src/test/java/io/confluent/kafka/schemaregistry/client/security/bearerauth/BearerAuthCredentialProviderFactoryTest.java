@@ -17,16 +17,16 @@
 package io.confluent.kafka.schemaregistry.client.security.bearerauth;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.OauthCredentialProvider;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
 public class BearerAuthCredentialProviderFactoryTest {
+
   private Map<String, String> CONFIG_MAP = new HashMap<>();
 
   @Before
@@ -35,19 +35,48 @@ public class BearerAuthCredentialProviderFactoryTest {
   }
 
   @Test
-  public void testSuccess() {
+  public void testStaticTokenCredentialProvider() {
+    Map<String, String> CONFIG_MAP = new HashMap<>();
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_TOKEN_CONFIG, "auth-token");
     assertInstance(BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
-            "STATIC_TOKEN", CONFIG_MAP), StaticTokenCredentialProvider.class);
+        "STATIC_TOKEN", CONFIG_MAP), StaticTokenCredentialProvider.class);
+  }
+
+  @Test
+  public void testOAuthCredentialProvider() {
+    Map<String, String> CONFIG_MAP = new HashMap<>();
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, "lsrc-dummy");
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, "my-pool-id");
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE, "test-scope");
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET, "mysecret");
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_ID, "myid");
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_URL, "https://okta.com");
+
+    assertInstance(BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
+        "OAUTHBEARER", CONFIG_MAP), OauthCredentialProvider.class);
+  }
+
+  @Test
+  public void testCustomBearerAuthCredentialProvider() {
+    Map<String, String> CONFIG_MAP = new HashMap<>();
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, "lsrc-dummy");
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, "my-pool-id");
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_PROVIDER_CLASS,
+        StaticTokenCredentialProvider.class.getName());
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_TOKEN_CONFIG, "custom-token");
+
+    assertInstance(BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
+        "CUSTOM", CONFIG_MAP), CustomBearerAuthCredentialProvider.class);
   }
 
   @Test
   public void testUnknownProvider() {
     Assert.assertNull(BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
-            "UNKNOWN", CONFIG_MAP));
+        "UNKNOWN", CONFIG_MAP));
   }
 
   public void assertInstance(BearerAuthCredentialProvider instance,
-                             Class<? extends BearerAuthCredentialProvider> klass) {
+      Class<? extends BearerAuthCredentialProvider> klass) {
     Assert.assertNotNull(instance);
     Assert.assertEquals(klass, instance.getClass());
   }
