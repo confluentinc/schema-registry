@@ -23,11 +23,6 @@ import java.util.concurrent.Callable;
 
 public class RetryExecutor {
   /*
-   * Maximum backoff time set to 20 seconds.
-   */
-  static Duration MAX_BACKOFF_TIME = Duration.ofSeconds(20);
-
-  /*
    * Max permitted retry times. To prevent exponentialDelay from overflow, there must be
    * 2 ^ retriesAttempted &lt;= 2 ^ 31 - 1, which means retriesAttempted &lt;= 30, so that
    * is the ceil for retriesAttempted.
@@ -37,15 +32,17 @@ public class RetryExecutor {
 
   private final int maxRetries;
   private final Duration initialWaitMs;
+  private final Duration maxWaitMs;
   private final Random random;
 
-  public RetryExecutor(int maxRetries, int initialWaitMs) {
-    this(maxRetries, initialWaitMs, new Random());
+  public RetryExecutor(int maxRetries, int initialWaitMs, int maxWaitMs) {
+    this(maxRetries, initialWaitMs, maxWaitMs, new Random());
   }
 
-  public RetryExecutor(int maxRetries, int initialWaitMs, Random random) {
+  public RetryExecutor(int maxRetries, int initialWaitMs, int maxWaitMs, Random random) {
     this.maxRetries = maxRetries;
     this.initialWaitMs = Duration.ofMillis(initialWaitMs);
+    this.maxWaitMs = Duration.ofMillis(maxWaitMs);
     this.random = random;
   }
 
@@ -88,6 +85,6 @@ public class RetryExecutor {
   protected int calculateExponentialDelay(int retriesAttempted) {
     int cappedRetries = Math.min(retriesAttempted, RETRIES_ATTEMPTED_CEILING);
     return (int) Math.min(
-        initialWaitMs.multipliedBy(1L << cappedRetries).toMillis(), MAX_BACKOFF_TIME.toMillis());
+        initialWaitMs.multipliedBy(1L << cappedRetries).toMillis(), maxWaitMs.toMillis());
   }
 }

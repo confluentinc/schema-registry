@@ -77,7 +77,7 @@ public class RetryExecutorBackoffTest {
 
     @Before
     public void setUp() throws Exception {
-        testCase.retryExecutor = new RetryExecutor(3, 1000, mockRandom);
+        testCase.retryExecutor = new RetryExecutor(3, 1000, 20000, mockRandom);
     }
 
     @Test

@@ -212,7 +212,8 @@ public class RestService implements Closeable, Configurable {
   public void configure(Map<String, ?> configs) {
     this.retryExecutor = new RetryExecutor(
         SchemaRegistryClientConfig.getMaxRetries(configs),
-        SchemaRegistryClientConfig.getRetriesWaitMs(configs)
+        SchemaRegistryClientConfig.getRetriesWaitMs(configs),
+        SchemaRegistryClientConfig.getRetriesMaxWaitMs(configs)
     );
     setHttpConnectTimeoutMs(SchemaRegistryClientConfig.getHttpConnectTimeoutMs(configs));
     setHttpReadTimeoutMs(SchemaRegistryClientConfig.getHttpReadTimeoutMs(configs));

@@ -124,6 +124,12 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String RETRIES_WAIT_MS_DOC = "The maximum time to wait for the first retry."
       + " When jitter is applied, the actual wait may be less.";
 
+  public static final String RETRIES_MAX_WAIT_MS_CONFIG = SchemaRegistryClientConfig
+      .RETRIES_MAX_WAIT_MS_CONFIG;
+  public static final int RETRIES_MAX_WAIT_MS_DEFAULT =
+      SchemaRegistryClientConfig.RETRIES_MAX_WAIT_MS_DEFAULT;
+  public static final String RETRIES_MAX_WAIT_MS_DOC = "The maximum time to wait for any retry.";
+
   public static final String LATEST_CACHE_SIZE = "latest.cache.size";
   public static final int LATEST_CACHE_SIZE_DEFAULT = 1000;
   public static final String LATEST_CACHE_SIZE_DOC =
@@ -370,7 +376,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
             MAX_RETRIES_DOC)
         .define(RETRIES_WAIT_MS_CONFIG, Type.INT,
             RETRIES_WAIT_MS_DEFAULT, Importance.LOW,
-            RETRIES_WAIT_MS_DOC);
+            RETRIES_WAIT_MS_DOC)
+        .define(RETRIES_MAX_WAIT_MS_CONFIG, Type.INT,
+            RETRIES_MAX_WAIT_MS_DEFAULT, Importance.LOW,
+            RETRIES_MAX_WAIT_MS_DOC);
     SchemaRegistryClientConfig.withClientSslSupport(
         configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
     return configDef;

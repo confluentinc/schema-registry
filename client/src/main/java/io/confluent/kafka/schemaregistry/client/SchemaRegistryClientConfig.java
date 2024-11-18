@@ -42,6 +42,8 @@ public class SchemaRegistryClientConfig {
   public static final int MAX_RETRIES_DEFAULT = 2;
   public static final String RETRIES_WAIT_MS_CONFIG = "retries.wait.ms";
   public static final int RETRIES_WAIT_MS_DEFAULT = 1000;
+  public static final String RETRIES_MAX_WAIT_MS_CONFIG = "retries.max.wait.ms";
+  public static final int RETRIES_MAX_WAIT_MS_DEFAULT = 20000;
 
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE = "bearer.auth.credentials.source";
   public static final String BEARER_AUTH_TOKEN_CONFIG = "bearer.auth.token";
@@ -153,6 +155,18 @@ public class SchemaRegistryClientConfig {
           : (Integer) retriesWaitMsVal;
     } else {
       return RETRIES_WAIT_MS_DEFAULT;
+    }
+  }
+
+  public static Integer getRetriesMaxWaitMs(Map<String, ?> configs) {
+    if (configs != null && configs.containsKey(RETRIES_MAX_WAIT_MS_CONFIG)) {
+      Object retriesMaxWaitMsVal
+          = configs.get(SchemaRegistryClientConfig.RETRIES_MAX_WAIT_MS_CONFIG);
+      return retriesMaxWaitMsVal instanceof String
+          ? Integer.valueOf((String) retriesMaxWaitMsVal)
+          : (Integer) retriesMaxWaitMsVal;
+    } else {
+      return RETRIES_MAX_WAIT_MS_DEFAULT;
     }
   }
 
