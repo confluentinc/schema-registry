@@ -159,7 +159,8 @@ public class JsonSchemaUtils {
       boolean failUnknownProperties,
       ObjectMapper objectMapper,
       SchemaRegistryClient client) throws IOException {
-    return getSchema(object, specVersion, null, useOneofForNullables, true, objectMapper, client);
+    return getSchema(object, specVersion, null, useOneofForNullables,
+        failUnknownProperties, objectMapper, client);
   }
 
   public static JsonSchema getSchema(
