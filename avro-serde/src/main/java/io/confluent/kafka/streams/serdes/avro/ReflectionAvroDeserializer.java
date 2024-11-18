@@ -22,6 +22,7 @@ import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 /**
@@ -74,10 +75,15 @@ public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
         isDeserializerForRecordKeys);
   }
 
-  @SuppressWarnings("unchecked")
   @Override
   public T deserialize(final String topic, final byte[] bytes) {
-    return (T) inner.deserialize(topic, bytes, schema);
+    return deserialize(topic, null, bytes);
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public T deserialize(final String topic, final Headers headers, final byte[] bytes) {
+    return (T) inner.deserialize(topic, headers, bytes, schema);
   }
 
   @Override

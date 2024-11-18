@@ -18,7 +18,9 @@ package io.confluent.kafka.formatter.protobuf;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
+import java.util.Map;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
@@ -74,19 +76,13 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
   /**
    * For testing only.
    */
-  ProtobufMessageFormatter(
-      SchemaRegistryClient schemaRegistryClient,
-      Deserializer keyDeserializer
-  ) {
-    super(schemaRegistryClient, keyDeserializer);
+  ProtobufMessageFormatter(String url, Deserializer keyDeserializer) {
+    super(url, keyDeserializer);
   }
 
   @Override
-  protected SchemaMessageDeserializer<Message> createDeserializer(
-      SchemaRegistryClient schemaRegistryClient,
-      Deserializer keyDeserializer
-  ) {
-    return new ProtobufMessageDeserializer(schemaRegistryClient, keyDeserializer);
+  protected SchemaMessageDeserializer<Message> createDeserializer(Deserializer keyDeserializer) {
+    return new ProtobufMessageDeserializer(keyDeserializer);
   }
 
   @Override
@@ -100,8 +96,9 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
   }
 
   @Override
-  protected void writeTo(String topic, byte[] data, PrintStream output) throws IOException {
-    Message object = deserializer.deserialize(topic, data);
+  protected void writeTo(String topic, Boolean isKey, Headers headers,
+      byte[] data, PrintStream output) throws IOException {
+    Message object = deserializer.deserialize(topic, isKey, headers, data);
     try {
       JsonFormat.Printer printer = JsonFormat.printer()
               .includingDefaultValueFields()
@@ -127,10 +124,13 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
     /**
      * For testing only.
      */
-    ProtobufMessageDeserializer(SchemaRegistryClient schemaRegistryClient,
-                                Deserializer keyDeserializer) {
-      this.schemaRegistry = schemaRegistryClient;
+    ProtobufMessageDeserializer(Deserializer keyDeserializer) {
       this.keyDeserializer = keyDeserializer;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+      configure(deserializerConfig(configs), null);
     }
 
     @Override
@@ -139,13 +139,19 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
     }
 
     @Override
-    public Object deserializeKey(String topic, byte[] payload) {
-      return keyDeserializer.deserialize(topic, payload);
+    public Object deserializeKey(String topic, Headers headers, byte[] payload) {
+      return keyDeserializer.deserialize(topic, headers, payload);
     }
 
     @Override
-    public Message deserialize(String topic, byte[] payload) throws SerializationException {
-      return (Message) super.deserialize(false, topic, isKey, payload);
+    public Message deserialize(String topic, Boolean isKey, Headers headers, byte[] payload)
+        throws SerializationException {
+      return (Message) super.deserialize(false, topic, isKey, headers, payload);
+    }
+
+    @Override
+    public SchemaRegistryClient getSchemaRegistryClient() {
+      return schemaRegistry;
     }
 
     @Override

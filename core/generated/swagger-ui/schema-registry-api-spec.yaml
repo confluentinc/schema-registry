@@ -2081,6 +2081,56 @@ paths:
         "500":
           description: |
             Error code 50001 -- Error in the backend data store
+  /subjects/{subject}/metadata:
+    get:
+      summary: Retrieve the latest version with the given metadata.
+      description: Retrieve the latest version with the given metadata.
+      operationId: getLatestWithMetadata
+      parameters:
+      - name: subject
+        in: path
+        description: Subject under which the schema will be registered
+        required: true
+        schema:
+          type: string
+      - name: key
+        in: query
+        description: The metadata key
+        schema:
+          type: array
+          items:
+            type: string
+      - name: value
+        in: query
+        description: The metadata value
+        schema:
+          type: array
+          items:
+            type: string
+      - name: deleted
+        in: query
+        description: Whether to lookup deleted schemas
+        schema:
+          type: boolean
+      responses:
+        "200":
+          description: The schema
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/Schema'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/Schema'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/Schema'
+        "404":
+          description: |-
+            Error code 40401 -- Subject not found
+            Error code 40403 -- Schema not found
+        "500":
+          description: Internal server error
 components:
   schemas:
     CompatibilityCheckResponse:
@@ -2117,6 +2167,10 @@ components:
           description: References to other schemas
           items:
             $ref: '#/components/schemas/SchemaReference'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        ruleSet:
+          $ref: '#/components/schemas/RuleSet'
         schema:
           type: string
           description: Schema definition string
@@ -2153,10 +2207,28 @@ components:
           - FULL
           - FULL_TRANSITIVE
           - NONE
+        alias:
+          type: string
+        normalize:
+          type: boolean
+        compatibilityGroup:
+          type: string
+        defaultMetadata:
+          $ref: '#/components/schemas/Metadata'
+        overrideMetadata:
+          $ref: '#/components/schemas/Metadata'
+        defaultRuleSet:
+          $ref: '#/components/schemas/RuleSet'
+        overrideRuleSet:
+          $ref: '#/components/schemas/RuleSet'
       description: Config
     ConfigUpdateRequest:
       type: object
       properties:
+        alias:
+          type: string
+        normalize:
+          type: boolean
         compatibility:
           type: string
           description: Compatibility Level
@@ -2169,6 +2241,16 @@ components:
           - FULL
           - FULL_TRANSITIVE
           - NONE
+        compatibilityGroup:
+          type: string
+        defaultMetadata:
+          $ref: '#/components/schemas/Metadata'
+        overrideMetadata:
+          $ref: '#/components/schemas/Metadata'
+        defaultRuleSet:
+          $ref: '#/components/schemas/RuleSet'
+        overrideRuleSet:
+          $ref: '#/components/schemas/RuleSet'
       description: Config update request
     Mode:
       type: object
@@ -2212,6 +2294,10 @@ components:
           description: References to other schemas
           items:
             $ref: '#/components/schemas/SchemaReference'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        ruleSet:
+          $ref: '#/components/schemas/RuleSet'
         maxId:
           type: integer
           description: Maximum ID
@@ -2244,10 +2330,16 @@ components:
           description: References to other schemas
           items:
             $ref: '#/components/schemas/SchemaReference'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        ruleset:
+          $ref: '#/components/schemas/RuleSet'
         schema:
           type: string
           description: Schema definition string
           example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+        ruleSet:
+          $ref: '#/components/schemas/RuleSet'
       description: Schema
     SubjectVersion:
       type: object
@@ -2279,6 +2371,25 @@ components:
           description: Globally unique identifier of the schema
           format: int32
           example: 100001
+        version:
+          type: integer
+          description: Version number
+          format: int32
+        schemaType:
+          type: string
+          description: Schema type
+        references:
+          type: array
+          description: References to other schemas
+          items:
+            $ref: '#/components/schemas/SchemaReference'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        ruleSet:
+          $ref: '#/components/schemas/RuleSet'
+        schema:
+          type: string
+          description: Schema definition string
       description: Schema register response
     ErrorMessage:
       type: object
@@ -2298,3 +2409,89 @@ components:
           type: string
         commitId:
           type: string
+    Metadata:
+      type: object
+      properties:
+        tags:
+          type: object
+          additionalProperties:
+            uniqueItems: true
+            type: array
+            items:
+              type: string
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+        sensitive:
+          uniqueItems: true
+          type: array
+          items:
+            type: string
+      description: User-defined metadata
+    Rule:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Rule name
+        doc:
+          type: string
+          description: Rule doc
+        kind:
+          type: string
+          description: Rule kind
+          enum:
+          - TRANSFORM
+          - CONDITION
+        mode:
+          type: string
+          description: Rule mode
+          enum:
+          - UPGRADE
+          - DOWNGRADE
+          - UPDOWN
+          - WRITE
+          - READ
+          - WRITEREAD
+        type:
+          type: string
+          description: Rule type
+        tags:
+          uniqueItems: true
+          type: array
+          description: The tags to which this rule applies
+          items:
+            type: string
+            description: The tags to which this rule applies
+        params:
+          type: object
+          additionalProperties:
+            type: string
+            description: Optional params for the rule
+          description: Optional params for the rule
+        expr:
+          type: string
+          description: Rule expression
+        onSuccess:
+          type: string
+          description: Rule action on success
+        onFailure:
+          type: string
+          description: Rule action on failure
+        disabled:
+          type: boolean
+          description: Whether the rule is disabled
+      description: Rule
+    RuleSet:
+      type: object
+      properties:
+        migrationRules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+        domainRules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+      description: Schema rule set

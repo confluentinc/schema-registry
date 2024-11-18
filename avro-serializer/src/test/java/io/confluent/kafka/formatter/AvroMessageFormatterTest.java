@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 
 import java.io.ByteArrayOutputStream;
@@ -35,6 +36,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -52,6 +54,7 @@ public class AvroMessageFormatterTest {
 
   private AvroMessageFormatter formatter;
   private Properties props;
+  private String url = "mock://test";
   private SchemaRegistryClient schemaRegistry;
   private ConsumerRecord<byte[], byte[]> recordWithValue;
   private ConsumerRecord<byte[], byte[]> recordWithKeyAndValue;
@@ -59,9 +62,9 @@ public class AvroMessageFormatterTest {
   @Before
   public void setup() throws IOException, RestClientException {
     props = new Properties();
-    props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, url);
 
-    schemaRegistry = new MockSchemaRegistryClient();
+    schemaRegistry = MockSchemaRegistry.getClientForScope("test");
     recordWithValue = createConsumerRecord(false);
     recordWithKeyAndValue = createConsumerRecord(true);
 
@@ -71,7 +74,12 @@ public class AvroMessageFormatterTest {
     schemaRegistry.register("topicname", new AvroSchema(schema1));
     schemaRegistry.register("othertopic", new AvroSchema(schema2));
 
-    formatter = new AvroMessageFormatter(schemaRegistry, null);
+    formatter = new AvroMessageFormatter(url, null);
+  }
+
+  @After
+  public void tearDown() {
+    MockSchemaRegistry.dropScope("test");
   }
 
   @Test

@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -100,7 +101,7 @@ public class RestApiTest extends ClusterTestHarness {
           JsonSchema.TYPE,
           Collections.emptyList(),
           subject1
-      );
+      ).getId();
       assertEquals("Re-registering an existing schema should return the existing version",
           expectedId,
           foundId
@@ -147,7 +148,7 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchemaType(JsonSchema.TYPE);
     SchemaReference ref = new SchemaReference("ref.json", "reference", 1);
     request.setReferences(Collections.singletonList(ref));
-    int registeredId = restApp.restClient.registerSchema(request, "referrer", false);
+    int registeredId = restApp.restClient.registerSchema(request, "referrer", false).getId();
     assertEquals("Registering a new schema should succeed", 2, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(2);
@@ -258,7 +259,7 @@ public class RestApiTest extends ClusterTestHarness {
     registerRequest.setSchemaType(JsonSchema.TYPE);
     registerRequest.setReferences(Arrays.asList(ref1, ref2));
     int idOfRegisteredSchema1Subject1 =
-        restApp.restClient.registerSchema(registerRequest, subject1, true);
+        restApp.restClient.registerSchema(registerRequest, subject1, true).getId();
     RegisterSchemaRequest lookUpRequest = new RegisterSchemaRequest();
     lookUpRequest.setSchema(schemaString2);
     lookUpRequest.setSchemaType(JsonSchema.TYPE);
@@ -308,6 +309,66 @@ public class RestApiTest extends ClusterTestHarness {
     );
   }
 
+  @Test
+  public void testIncompatibleSchema() throws Exception {
+    String subject = "testSubject";
+
+    // Make two incompatible schemas - field 'myField2' has different types
+    String schema1String = "{"
+                            + "\"$schema\": \"http://json-schema.org/draft-07/schema#\","
+                            + "\"$id\": \"https://acme.com/referrer.json\","
+                            + "\"type\":\"object\",\"properties\":{"
+                            + "\"myField1\": {\"type\":\"string\"},"
+                            + "\"myField2\": {\"type\":\"number\"}"
+                            + "},\"additionalProperties\":false"
+                            + "}";
+
+    RegisterSchemaRequest registerRequest = new RegisterSchemaRequest();
+    registerRequest.setSchema(schema1String);
+    registerRequest.setSchemaType(JsonSchema.TYPE);
+
+    String schema2String = "{"
+                             + "\"$schema\": \"http://json-schema.org/draft-07/schema#\","
+                             + "\"$id\": \"https://acme.com/referrer.json\","
+                             + "\"type\":\"object\",\"properties\":{"
+                             + "\"myField1\": {\"type\":\"string\"},"
+                             + "\"myField2\": {\"type\":\"string\"}"
+                             + "},\"additionalProperties\":false"
+                             + "}";
+
+    // ensure registering incompatible schemas will raise an error
+    restApp.restClient.updateCompatibility(
+      CompatibilityLevel.FULL.name, subject);
+
+    // test that compatibility check for incompatible schema returns false and the appropriate
+    // error response from Avro
+    int idOfRegisteredSchema1Subject1 = restApp.restClient.registerSchema(registerRequest, subject, true).getId();
+
+    try {
+      registerRequest.setSchema(schema2String);
+      registerRequest.setSchemaType(JsonSchema.TYPE);
+      restApp.restClient.registerSchema(registerRequest, subject, true);
+      fail("Registering incompatible schema should fail with "
+             + Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE);
+    } catch(RestClientException e) {
+      assertTrue(e.getMessage().length() > 0);
+      assertTrue(e.getMessage().contains("oldSchemaVersion:"));
+      assertTrue(e.getMessage().contains("oldSchema:"));
+      assertTrue(e.getMessage().contains("compatibility:"));
+    }
+
+    List<String> response = restApp.restClient.testCompatibility(registerRequest, subject,
+      String.valueOf(
+        idOfRegisteredSchema1Subject1),
+      false,
+      true);
+    assertTrue(response.size() > 0);
+    assertTrue(response.get(2).contains("oldSchemaVersion:"));
+    assertTrue(response.get(3).contains("oldSchema:"));
+    assertTrue(response.get(4).contains("compatibility:"));
+  }
+
+
   public static void registerAndVerifySchema(
       RestService restService,
       String schemaString,
@@ -330,7 +391,7 @@ public class RestApiTest extends ClusterTestHarness {
         JsonSchema.TYPE,
         references,
         subject
-    );
+    ).getId();
     Assert.assertEquals(
         "Registering a new schema should succeed",
         expectedId,

@@ -21,11 +21,13 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
-import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
@@ -40,6 +42,8 @@ public class RegisterSchemaRequest {
   private Integer id;
   private String schemaType;
   private List<SchemaReference> references = null;
+  private Metadata metadata = null;
+  private RuleSet ruleSet = null;
   private String schema;
 
   public RegisterSchemaRequest() {
@@ -48,6 +52,8 @@ public class RegisterSchemaRequest {
   public RegisterSchemaRequest(ParsedSchema schema) {
     this.schemaType = schema.schemaType();
     this.references = schema.references();
+    this.metadata = schema.metadata();
+    this.ruleSet = schema.ruleSet();
     this.schema = schema.canonicalString();
   }
 
@@ -56,6 +62,8 @@ public class RegisterSchemaRequest {
     this.id = schema.getId();
     this.schemaType = schema.getSchemaType();
     this.references = schema.getReferences();
+    this.metadata = schema.getMetadata();
+    this.ruleSet = schema.getRuleSet();
     this.schema = schema.getSchema();
   }
 
@@ -108,6 +116,28 @@ public class RegisterSchemaRequest {
     this.references = references;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.METADATA_DESC)
+  @JsonProperty("metadata")
+  public Metadata getMetadata() {
+    return this.metadata;
+  }
+
+  @JsonProperty("metadata")
+  public void setMetadata(Metadata metadata) {
+    this.metadata = metadata;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.RULESET_DESC)
+  @JsonProperty("ruleSet")
+  public RuleSet getRuleSet() {
+    return this.ruleSet;
+  }
+
+  @JsonProperty("ruleSet")
+  public void setRuleSet(RuleSet ruleSet) {
+    this.ruleSet = ruleSet;
+  }
+
   @io.swagger.v3.oas.annotations.media.Schema(description = Schema.SCHEMA_DESC)
   @JsonProperty("schema")
   public String getSchema() {
@@ -132,12 +162,14 @@ public class RegisterSchemaRequest {
         && Objects.equals(id, that.id)
         && Objects.equals(schemaType, that.schemaType)
         && Objects.equals(references, that.references)
+        && Objects.equals(metadata, that.metadata)
+        && Objects.equals(ruleSet, that.ruleSet)
         && Objects.equals(schema, that.schema);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaType, references, version, id, schema);
+    return Objects.hash(schemaType, references, metadata, ruleSet, version, id, schema);
   }
 
   @Override
@@ -150,8 +182,10 @@ public class RegisterSchemaRequest {
     if (id != null) {
       buf.append("id=").append(id).append(", ");
     }
-    buf.append("schemaType=").append(this.schemaType).append(",");
-    buf.append("references=").append(this.references).append(",");
+    buf.append("schemaType=").append(this.schemaType).append(", ");
+    buf.append("references=").append(this.references).append(", ");
+    buf.append("metadata=").append(this.metadata).append(", ");
+    buf.append("ruleSet=").append(this.ruleSet).append(", ");
     buf.append("schema=").append(schema).append("}");
     return buf.toString();
   }

@@ -14,6 +14,9 @@
  */
 package io.confluent.kafka.schemaregistry.rest;
 
+import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -212,6 +215,36 @@ public class RestApiModeTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testRegisterSchemaWithNoIdAfterImport() throws Exception {
+    // Represents a production use case where auto-registering clients
+    // do not fail when SR is in import mode and the schema already exists
+    String subject = "testSubject";
+    String mode = "READWRITE";
+
+    // set mode to read write
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    mode = "IMPORT";
+
+    // set mode to import
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+
+    // register same schema with no id
+    assertEquals("Registering without id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+  }
+
+  @Test
   public void testRegisterSchemaWithDifferentIdAfterImport() throws Exception {
     String subject = "testSubject";
     String mode = "READWRITE";
@@ -286,6 +319,65 @@ public class RestApiModeTest extends ClusterTestHarness {
     assertEquals("Getting schema by id should succeed",
             SCHEMA_STRING,
             restApp.restClient.getVersion(subject, 1).getSchema());
+  }
+
+  @Test
+  public void testRegisterSchemaWithSameIdButWithMetadataAfterImport() throws Exception {
+    String subject = "testSubject";
+    String mode = "READWRITE";
+
+    // set mode to read write
+    assertEquals(
+            mode,
+            restApp.restClient.setMode(mode).getMode());
+
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering without id should succeed",
+            expectedIdSchema1,
+            restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+
+    // delete subject so we can switch to import mode
+    restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
+
+    mode = "IMPORT";
+
+    // set mode to import
+    assertEquals(
+            mode,
+            restApp.restClient.setMode(mode).getMode());
+
+    // register same schema with same id but with metadata
+    expectedIdSchema1 = 1;
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(SCHEMA_STRING);
+    request.setMetadata(new Metadata(null, ImmutableMap.of("foo", "bar"), null));
+    request.setVersion(1);
+    request.setId(expectedIdSchema1);
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request, subject, false).getId());
+
+    assertEquals("Getting schema by id should succeed",
+        SCHEMA_STRING,
+        restApp.restClient.getVersion(subject, 1).getSchema());
+
+    // delete subject again
+    restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
+
+    // register same schema with same id but with metadata
+    expectedIdSchema1 = 1;
+    request = new RegisterSchemaRequest();
+    request.setSchema(SCHEMA_STRING);
+    request.setMetadata(new Metadata(null, ImmutableMap.of("foo", "bar"), null));
+    request.setVersion(1);
+    request.setId(expectedIdSchema1);
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request, subject, false).getId());
+
+    assertEquals("Getting schema by id should succeed",
+        SCHEMA_STRING,
+        restApp.restClient.getVersion(subject, 1).getSchema());
   }
 
   @Test

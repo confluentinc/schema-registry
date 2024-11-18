@@ -30,11 +30,16 @@ import com.google.protobuf.Timestamp;
 import io.confluent.connect.protobuf.test.DescriptorRef;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
 import io.confluent.kafka.serializers.subject.DefaultReferenceSubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
@@ -71,6 +76,7 @@ import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessag
 
 import static io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerTest.getField;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class RestApiSerializerTest extends ClusterTestHarness {
 
@@ -398,6 +404,42 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     checkNormalization(schemaRegistry, "DescriptorRef.proto");
   }
 
+  @Test
+  public void testSchemaReferencesConfigMetadata() throws Exception {
+    Map<String, String> properties = new HashMap<>();
+    properties.put("configKey", "configValue");
+    Metadata metadata = new Metadata(null, properties, null);
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setDefaultMetadata(metadata);
+    // add config metadata
+    assertEquals("Adding config with initial metadata should succeed",
+        config,
+        restApp.restClient.updateConfig(config, null));
+
+    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
+        10,
+        Collections.singletonList(new ProtobufSchemaProvider()),
+        Collections.emptyMap(),
+        Collections.emptyMap());
+    ProtobufSchema schema = ProtobufSchemaUtils.getSchema(DEPENDENCY_MESSAGE);
+    schema = AbstractKafkaProtobufSerializer.resolveDependencies(
+        schemaRegistry, true, false, false, null,
+        new DefaultReferenceSubjectNameStrategy(), "referrer", false, schema);
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    int registeredId = restApp.restClient.registerSchema(request, "referrer", false).getId();
+    assertEquals("Registering a new schema should succeed", 4, registeredId);
+
+    SchemaString schemaString = restApp.restClient.getId(4);
+    // the newly registered schema should be immediately readable on the leader
+    assertNotNull("Registered schema should be found", schemaString);
+
+    assertEquals("Schema dependencies should be found",
+        2,
+        schemaString.getReferences().size()
+    );
+  }
+
   @Test(expected = RestClientException.class)
   public void testInvalidSchema() throws Exception {
     String schemaString = getInvalidSchema();
@@ -442,7 +484,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
         references,
         subject,
         normalize
-    );
+    ).getId();
     assertEquals(
         "Registering a new schema should succeed",
         (long) expectedId,

@@ -15,11 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
@@ -35,8 +37,11 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedE
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,6 +51,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import javax.ws.rs.DefaultValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,6 +129,8 @@ public class SubjectVersionsResource {
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to include deleted schema")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
 
@@ -149,6 +157,10 @@ public class SubjectVersionsResource {
         } else {
           throw Errors.versionNotFoundException(versionId.getVersionId());
         }
+      }
+      if (format != null && !format.trim().isEmpty()) {
+        ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
+        schema.setSchema(parsedSchema.formattedString(format));
       }
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
@@ -193,9 +205,11 @@ public class SubjectVersionsResource {
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to include deleted schema")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
-    return getSchemaByVersion(subject, version, lookupDeletedSchema).getSchema();
+    return getSchemaByVersion(subject, version, format, lookupDeletedSchema).getSchema();
   }
 
   @GET
@@ -232,7 +246,7 @@ public class SubjectVersionsResource {
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version) {
 
-    Schema schema = getSchemaByVersion(subject, version, true);
+    Schema schema = getSchemaByVersion(subject, version, "", true);
     if (schema == null) {
       return new ArrayList<>();
     }
@@ -292,7 +306,7 @@ public class SubjectVersionsResource {
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     // check if subject exists. If not, throw 404
-    Iterator<Schema> resultSchemas;
+    Iterator<SchemaKey> resultSchemas;
     List<Integer> allVersions = new ArrayList<>();
     String errorMessage = "Error while validating that subject "
                           + subject
@@ -323,7 +337,7 @@ public class SubjectVersionsResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     while (resultSchemas.hasNext()) {
-      Schema schema = resultSchemas.next();
+      SchemaKey schema = resultSchemas.next();
       allVersions.add(schema.getVersion());
     }
     return allVersions;
@@ -374,12 +388,23 @@ public class SubjectVersionsResource {
       @PathParam("subject") String subjectName,
       @Parameter(description = "Whether to normalize the given schema")
       @QueryParam("normalize") boolean normalize,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
+    schemaRegistry.getCompositeUpdateRequestHandler().handle(subjectName, normalize, request);
+
+    if (request.getRuleSet() != null) {
+      try {
+        request.getRuleSet().validate();
+      } catch (RuleException e) {
+        throw new RestInvalidRuleSetException(e.getMessage());
+      }
+    }
     if (subjectName != null
         && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subjectName)) {
       throw Errors.invalidSubjectException(subjectName);
@@ -391,9 +416,18 @@ public class SubjectVersionsResource {
         headers, schemaRegistry.config().whitelistHeaders());
 
     Schema schema = new Schema(subjectName, request);
-    int id;
+    RegisterSchemaResponse registerSchemaResponse;
     try {
-      id = schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
+      if (!normalize) {
+        normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
+      }
+      Schema result =
+          schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
+      if (result.getSchema() != null && format != null && !format.trim().isEmpty()) {
+        ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
+        result.setSchema(parsedSchema.formattedString(format));
+      }
+      registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
@@ -419,8 +453,6 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while registering schema", e);
     }
-    RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
-    registerSchemaResponse.setId(id);
     asyncResponse.resume(registerSchemaResponse);
   }
 
@@ -536,5 +568,132 @@ public class SubjectVersionsResource {
     }
 
     asyncResponse.resume(schema.getVersion());
+  }
+
+  @POST
+  @Path("/{version}/tags")
+  @DocumentedName("modifySchemaTags")
+  @PerformanceMetric("subjects.versions.modify.tags")
+  @Operation(summary = "Create or remove schema embedded tags for a subject version",
+      description = "Create new schema subject version with the provided field or record level "
+          + "schema tags embedded (or remove) in the schema string, as well as the given metadata "
+          + "and ruleset.",
+      responses = {
+          @ApiResponse(responseCode = "200", description = "Schema successfully registered.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = RegisterSchemaResponse.class))),
+          @ApiResponse(responseCode = "409", description = "Conflict. Incompatible schema.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "422",
+              description = "Unprocessable entity. "
+                  + "Error code 42201 indicates an invalid schema or schema type. ",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+              description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store."
+                  + "Error code 50002 indicates operation timed out. "
+                  + "Error code 50003 indicates a failure forwarding the request to the primary.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
+  public void modifyTags(
+      final @Suspended AsyncResponse asyncResponse,
+      @Context HttpHeaders headers,
+      @Parameter(description = "Name of the subject", required = true)
+      @PathParam("subject") String subjectName,
+      @Parameter(description = VERSION_PARAM_DESC, required = true)
+      @PathParam("version") String version,
+      @Parameter(description = "Tag schema request", required = true)
+      @NotNull TagSchemaRequest request) {
+    log.info("Modifying schema tags: subject {}, version {}, newVersion {}, "
+            + "adding {} tags, removing {} tags",
+        subjectName, version, request.getNewVersion(),
+        request.getTagsToAdd() == null ? 0 : request.getTagsToAdd().size(),
+        request.getTagsToRemove() == null ? 0 : request.getTagsToRemove().size());
+
+    // get schema by subject version
+    if (!QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subjectName)) {
+      throw Errors.invalidSubjectException(subjectName);
+    }
+    VersionId versionId;
+    try {
+      versionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException(e.getMessage());
+    }
+    String subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subjectName);
+    Schema schema;
+    try {
+      schema = schemaRegistry.getUsingContexts(subject, versionId.getVersionId(), false);
+      if (schema == null) {
+        if (!schemaRegistry.hasSubjects(subject, false)) {
+          throw Errors.subjectNotFoundException(subjectName);
+        } else {
+          throw Errors.versionNotFoundException(versionId.getVersionId());
+        }
+      }
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(
+          String.format("Error while getting schema of subject %s version %s",
+              subjectName, version), e);
+    }
+    schemaRegistry.getCompositeUpdateRequestHandler().handle(schema, request);
+
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+    RegisterSchemaResponse registerSchemaResponse;
+    try {
+      if (request.getRulesToMerge() != null || request.getRulesToRemove() != null) {
+        if (request.getRuleSet() != null) {
+          throw new RestInvalidRuleSetException(
+              "ruleSet should be omitted if specifying rulesToMerge or rulesToRemove");
+        }
+      }
+
+      if (request.getRulesToMerge() != null) {
+        try {
+          request.getRulesToMerge().validate();
+        } catch (RuleException e) {
+          throw new RestInvalidRuleSetException(e.getMessage());
+        }
+      }
+
+      if (request.getRuleSet() != null) {
+        try {
+          request.getRuleSet().validate();
+        } catch (RuleException e) {
+          throw new RestInvalidRuleSetException(e.getMessage());
+        }
+      }
+
+      Schema result =
+          schemaRegistry.modifySchemaTagsOrForward(subject, schema, request, headerProperties);
+      registerSchemaResponse = new RegisterSchemaResponse(result);
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
+    } catch (SchemaTooLargeException e) {
+      throw Errors.schemaTooLargeException("Register operation failed because schema is too large");
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
+    } catch (SchemaRegistryTimeoutException e) {
+      throw Errors.operationTimeoutException("Register operation timed out", e);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Register schema operation failed while writing"
+          + " to the Kafka store", e);
+    } catch (SchemaRegistryRequestForwardingException e) {
+      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
+          + " to the leader", e);
+    } catch (IncompatibleSchemaException e) {
+      throw Errors.incompatibleSchemaException("Schema being registered is incompatible with"
+          + " an earlier schema for subject \"" + subjectName + "\", details: "
+          + e.getMessage(), e);
+    } catch (UnknownLeaderException e) {
+      throw Errors.unknownLeaderException("Leader not known.", e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while registering schema", e);
+    }
+    asyncResponse.resume(registerSchemaResponse);
   }
 }

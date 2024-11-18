@@ -17,9 +17,12 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 import java.io.File;
+import java.util.Optional;
 import org.apache.maven.plugins.annotations.Mojo;
 
 import java.io.IOException;
@@ -45,7 +48,17 @@ public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
       );
     }
 
-    Integer id = this.client().register(subject, schema, normalizeSchemas);
+    RegisterSchemaResponse response =
+        this.client().registerWithResponse(subject, schema, normalizeSchemas);
+    if (response.getSchema() != null) {
+      Optional<ParsedSchema> optSchema =
+          this.client().parseSchema(new Schema(subject, response));
+      if (optSchema.isPresent()) {
+        schema = optSchema.get();
+        schema = schema.copy(response.getVersion());
+      }
+    }
+    Integer id = response.getId();
     Integer version = this.client().getVersion(subject, schema, normalizeSchemas);
     getLog().info(
         String.format(

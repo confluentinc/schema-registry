@@ -51,6 +51,7 @@ public class RequestHeaderBuilder {
     addIfNotEmpty(httpHeaders, headerProperties, "Content-Type");
     addIfNotEmpty(httpHeaders, headerProperties, "Accept");
     addIfNotEmpty(httpHeaders, headerProperties, "Authorization");
+    addIfNotEmpty(httpHeaders, headerProperties, "X-Request-ID");
   }
 
   private void addIfNotEmpty(
