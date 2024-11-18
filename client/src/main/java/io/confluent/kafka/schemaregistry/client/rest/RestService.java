@@ -183,6 +183,7 @@ public class RestService implements Closeable, Configurable {
   private Map<String, String> httpHeaders;
   private Proxy proxy;
   private boolean isForward;
+  private RetryExecutor retryExecutor;
 
   public RestService(UrlList baseUrls) {
     this(baseUrls, false);
@@ -203,10 +204,17 @@ public class RestService implements Closeable, Configurable {
   public RestService(UrlList baseUrls, boolean isForward) {
     this.baseUrls = baseUrls;
     this.isForward = isForward;
+    // ensure retry executor is set for tests
+    this.retryExecutor = new RetryExecutor(0, 0, 0);
   }
 
   @Override
   public void configure(Map<String, ?> configs) {
+    this.retryExecutor = new RetryExecutor(
+        SchemaRegistryClientConfig.getMaxRetries(configs),
+        SchemaRegistryClientConfig.getRetriesWaitMs(configs),
+        SchemaRegistryClientConfig.getRetriesMaxWaitMs(configs)
+    );
     setHttpConnectTimeoutMs(SchemaRegistryClientConfig.getHttpConnectTimeoutMs(configs));
     setHttpReadTimeoutMs(SchemaRegistryClientConfig.getHttpReadTimeoutMs(configs));
 
@@ -410,11 +418,11 @@ public class RestService implements Closeable, Configurable {
       String baseUrl = baseUrls.current();
       String requestUrl = buildRequestUrl(baseUrl, path);
       try {
-        return sendHttpRequest(requestUrl,
-                               method,
-                               requestBodyData,
-                               requestProperties,
-                               responseFormat);
+        return retryExecutor.retry(() -> sendHttpRequest(requestUrl,
+            method,
+            requestBodyData,
+            requestProperties,
+            responseFormat));
       } catch (IOException | RestClientException e) {
         if (e instanceof RestClientException && !isRetriable((RestClientException) e)) {
           throw e;
