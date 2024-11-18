@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
 import java.io.InterruptedIOException;
+import java.util.List;
 import java.util.Optional;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -53,6 +54,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected boolean latestCompatStrict;
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected SpecificationVersion specVersion;
+  protected List<String> scanPackages;
   protected boolean oneofForNullables;
   protected boolean failUnknownProperties;
   protected boolean validate;
@@ -73,6 +75,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
         SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, !writeDatesAsIso8601);
     this.specVersion = SpecificationVersion.get(
         config.getString(KafkaJsonSchemaSerializerConfig.SCHEMA_SPEC_VERSION));
+    this.scanPackages = config.getList(KafkaJsonSchemaSerializerConfig.SCHEMA_SCAN_PACKAGES);
     this.oneofForNullables = config.getBoolean(KafkaJsonSchemaSerializerConfig.ONEOF_FOR_NULLABLES);
     String inclusion = config.getString(KafkaJsonSchemaSerializerConfig.DEFAULT_PROPERTY_INCLUSION);
     if (inclusion != null) {

@@ -48,6 +48,7 @@ import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -354,6 +355,20 @@ public class JsonSchemaTest {
     TestObj testObj = new TestObj();
     String actual =
         JsonSchemaUtils.getSchema(testObj, SpecificationVersion.DRAFT_4, true, null).toString();
+    String expected = "{\"$schema\":\"http://json-schema.org/draft-04/schema#\","
+        + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
+        + "\"properties\":{\"prop\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},"
+        + "{\"type\":\"string\"}]}}}";
+    assertEquals(expected, actual);
+  }
+
+  @Test
+  public void testSchemaWithPackageScan() throws Exception {
+    TestObj testObj = new TestObj();
+    String actual =
+        JsonSchemaUtils.getSchema(testObj, SpecificationVersion.DRAFT_4,
+            Arrays.asList("io.confluent.kafka.schemaregistry.json"), true, true,
+            new ObjectMapper(), null).toString();
     String expected = "{\"$schema\":\"http://json-schema.org/draft-04/schema#\","
         + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
         + "\"properties\":{\"prop\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},"
