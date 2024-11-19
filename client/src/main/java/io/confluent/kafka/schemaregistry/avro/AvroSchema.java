@@ -571,19 +571,17 @@ public class AvroSchema implements ParsedSchema {
           String fullName = schema.getFullName() + "." + f.name();
           try (FieldContext fc = ctx.enterField(
               message, fullName, f.name(), getType(f.schema()), getInlineTags(f))) {
-            if (fc != null) {
-              Object value = data.getField(message, f.name(), f.pos());
-              if (value instanceof Utf8) {
-                value = value.toString();
+            Object value = data.getField(message, f.name(), f.pos());
+            if (value instanceof Utf8) {
+              value = value.toString();
+            }
+            Object newValue = toTransformedMessage(ctx, f.schema(), value, transform);
+            if (ctx.rule().getKind() == RuleKind.CONDITION) {
+              if (Boolean.FALSE.equals(newValue)) {
+                throw new RuntimeException(new RuleConditionException(ctx.rule()));
               }
-              Object newValue = toTransformedMessage(ctx, f.schema(), value, transform);
-              if (ctx.rule().getKind() == RuleKind.CONDITION) {
-                if (Boolean.FALSE.equals(newValue)) {
-                  throw new RuntimeException(new RuleConditionException(ctx.rule()));
-                }
-              } else {
-                data.setField(message, f.name(), f.pos(), newValue);
-              }
+            } else {
+              data.setField(message, f.name(), f.pos(), newValue);
             }
           }
         }

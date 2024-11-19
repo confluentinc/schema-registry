@@ -112,6 +112,7 @@ public class CelExecutorTest {
   private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
   private final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
   private final KafkaJsonSchemaSerializer<JsonNode> jsonSchemaSerializer3;
+  private final KafkaJsonSchemaSerializer<Person> jsonSchemaSerializer4;
   private final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   private final String topic;
   private final KafkaProducer<byte[], byte[]> producer;
@@ -180,6 +181,10 @@ public class CelExecutorTest {
     jsonSchemaSerializer2 = new KafkaJsonSchemaSerializer<>(schemaRegistry, defaultConfig);
     jsonSchemaSerializer3 = new KafkaJsonSchemaSerializer<>(schemaRegistry, defaultConfig);
     jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, defaultConfig);
+
+    Map<String, Object> newProps = new HashMap<>(defaultConfig);
+    newProps.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, "false");
+    jsonSchemaSerializer4 = new KafkaJsonSchemaSerializer<>(schemaRegistry, newProps);
   }
 
   private Schema createEnumSchema() {
@@ -2359,6 +2364,75 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaJsonSchemaSerializerFieldTransformWithDef() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    Address address = new Address(123, "Main St");
+    Person person = new Person("bob", address);
+    String schemaStr = "{\n"
+        + "  \"$scheΩma\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"additionalProperties\": false,\n"
+        + "  \"definitions\": {\n"
+        + "    \"Address\": {\n"
+        + "      \"additionalProperties\": false,\n"
+        + "      \"properties\": {\n"
+        + "        \"doornumber\": {\n"
+        + "          \"type\": \"integer\"\n"
+        + "        },\n"
+        + "        \"doorpin\": {\n"
+        + "          \"confluent:tags\": [\n"
+        + "            \"PII\"\n"
+        + "          ],\n"
+        + "          \"type\": \"string\"\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"type\": \"object\"\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"properties\": {\n"
+        + "    \"address\": {\n"
+        + "      \"$ref\": \"#/definitions/Address\"\n"
+        + "    },\n"
+        + "    \"name\": {\n"
+        + "      \"confluent:tags\": [\n"
+        + "        \"PII\"\n"
+        + "      ],\n"
+        + "      \"type\": \"string\"\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"title\": \"Sample Event\",\n"
+        + "  \"type\": \"object\"\n"
+        + "}";
+
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    bytes = jsonSchemaSerializer4.serialize(topic, person);
+
+    obj = jsonSchemaDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object does not match",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object does not match",
+        "bob-suffix",
+        ((JsonNode)obj).get("name").textValue()
+    );
+    assertEquals(
+        "Returned object does not match",
+        "Main St-suffix",
+        ((JsonNode)obj).get("address").get("doorpin").textValue()
+    );
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializerAnnotatedFieldTransform() throws Exception {
     byte[] bytes;
     Object obj;
@@ -3073,6 +3147,33 @@ public class CelExecutorTest {
     @Override
     public int hashCode() {
       return Objects.hash(annotatedPii);
+    }
+  }
+
+  public class Address {
+
+    @JsonProperty
+    private int doornumber;
+
+    @JsonProperty
+    private String doorpin;
+
+    public Address(int doornumber, String doorpin) {
+      this.doornumber = doornumber;
+      this.doorpin = doorpin;
+    }
+  }
+
+  public class Person {
+    @JsonProperty
+    public Address address;
+
+    @JsonProperty
+    public String name;
+
+    public Person(String name, Address address) {
+      this.name = name;
+      this.address = address;
     }
   }
 }
