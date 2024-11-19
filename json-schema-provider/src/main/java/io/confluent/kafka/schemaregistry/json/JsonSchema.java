@@ -588,18 +588,16 @@ public class JsonSchema implements ParsedSchema {
         String fullName = path + "." + propertyName;
         try (FieldContext fc = ctx.enterField(message, fullName, propertyName,
             getType(propertySchema), getInlineTags(propertySchema))) {
-          if (fc != null) {
-            PropertyAccessor propertyAccessor =
-                getPropertyAccessor(ctx, message, propertyName);
-            Object value = propertyAccessor.getPropertyValue();
-            Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
-            if (ctx.rule().getKind() == RuleKind.CONDITION) {
-              if (Boolean.FALSE.equals(newValue)) {
-                throw new RuntimeException(new RuleConditionException(ctx.rule()));
-              }
-            } else {
-              propertyAccessor.setPropertyValue(newValue);
+          PropertyAccessor propertyAccessor =
+              getPropertyAccessor(ctx, message, propertyName);
+          Object value = propertyAccessor.getPropertyValue();
+          Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
+          if (ctx.rule().getKind() == RuleKind.CONDITION) {
+            if (Boolean.FALSE.equals(newValue)) {
+              throw new RuntimeException(new RuleConditionException(ctx.rule()));
             }
+          } else {
+            propertyAccessor.setPropertyValue(newValue);
           }
         }
       }
