@@ -340,7 +340,17 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     }
   }
 
-  public void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) throws StoreException {
+  /**
+   * Wait until the specified offset is reached in the Kafka topic.
+   * @param offset Offset to wait for.
+   * @param timeout Timeout before giving up waiting for the offset to be reached.
+   * @param timeUnit Timeout time unit
+   * @param strict if true, throw an exception if the offset is not reached within the timeout.
+   * @return Returns true if the offset is reached within the timeout interval, false otherwise.
+   * @throws StoreException if strict is true and the offset is not reached within the timeout
+   */
+  public boolean waitUntilOffset(long offset, long timeout, TimeUnit timeUnit, boolean strict)
+      throws StoreException {
     if (offset < 0) {
       throw new StoreException("KafkaStoreReaderThread can't wait for a negative offset.");
     }
@@ -363,11 +373,16 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     }
 
     if (offsetInSchemasTopic < offset) {
-      throw new StoreTimeoutException(
-          "KafkaStoreReaderThread failed to reach target offset within the timeout interval. "
-          + "targetOffset: " + offset + ", offsetReached: " + offsetInSchemasTopic
-          + ", timeout(ms): " + TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
+      if (strict) {
+        throw new StoreTimeoutException(
+            "KafkaStoreReaderThread failed to reach target offset within the timeout interval. "
+            + "targetOffset: " + offset + ", offsetReached: " + offsetInSchemasTopic
+            + ", timeout(ms): " + TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
+      } else {
+        return false;
+      }
     }
+    return true;
   }
 
   /* for testing purposes */
