@@ -20,5 +20,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 
 public interface SchemaVersionFetcher {
 
+  String tenant();
+
   Schema getByVersion(String subject, int version, boolean lookupDeletedSchema);
 }

@@ -50,6 +50,7 @@ import org.apache.kafka.connect.json.DecimalFormat;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
@@ -193,6 +194,22 @@ public class JsonSchemaDataTest {
   public void testFromConnectString() {
     StringSchema schema = StringSchema.builder().build();
     checkNonObjectConversion(schema, TextNode.valueOf("string"), Schema.STRING_SCHEMA, "string");
+  }
+
+  @Test
+  public void testFromConnectConst() {
+    ConstSchema schema = ConstSchema.builder()
+        .permittedValue("one")
+        .build();
+    Schema connectSchema = new SchemaBuilder(Schema.Type.STRING).parameter(JSON_TYPE_ENUM, "")
+        .parameter(JSON_TYPE_ENUM + ".one", "one")
+        .build();
+
+    // const is syntactic sugar for enum with one element
+    EnumSchema expected = EnumSchema.builder()
+        .possibleValue("one")
+        .build();
+    checkNonObjectConversion(expected, TextNode.valueOf("one"), connectSchema, "one");
   }
 
   @Test
@@ -1255,6 +1272,18 @@ public class JsonSchemaDataTest {
         .parameter(SCALE_FIELD, Integer.toString(17))
         .build();
     checkNonObjectConversion(expectedSchema, reference, schema, DecimalNode.valueOf(reference));
+  }
+
+  @Test
+  public void testToConnectConst() {
+    ConstSchema schema = ConstSchema.builder()
+        .permittedValue("one")
+        .build();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).parameter(JSON_TYPE_ENUM, "")
+        .parameter(JSON_TYPE_ENUM + ".one", "one")
+        .build();
+
+    checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
   }
 
   @Test

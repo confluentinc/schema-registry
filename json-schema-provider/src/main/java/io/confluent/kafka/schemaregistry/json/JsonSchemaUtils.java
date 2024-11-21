@@ -25,20 +25,24 @@ import com.kjetland.jackson.jsonSchema.JsonSchemaConfig.JsonSchemaConfigBuilder;
 import com.kjetland.jackson.jsonSchema.JsonSchemaDraft;
 import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
 
+import com.kjetland.jackson.jsonSchema.SubclassesResolver;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.annotations.Schema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import org.apache.commons.compress.utils.Lists;
 
 public class JsonSchemaUtils {
 
@@ -155,6 +159,18 @@ public class JsonSchemaUtils {
       boolean failUnknownProperties,
       ObjectMapper objectMapper,
       SchemaRegistryClient client) throws IOException {
+    return getSchema(object, specVersion, null, useOneofForNullables,
+        failUnknownProperties, objectMapper, client);
+  }
+
+  public static JsonSchema getSchema(
+      Object object,
+      SpecificationVersion specVersion,
+      List<String> scanPackages,
+      boolean useOneofForNullables,
+      boolean failUnknownProperties,
+      ObjectMapper objectMapper,
+      SchemaRegistryClient client) throws IOException {
     if (object == null) {
       return null;
     }
@@ -202,6 +218,9 @@ public class JsonSchemaUtils {
         break;
     }
     config = config.jsonSchemaDraft(draft);
+    if (scanPackages != null && !scanPackages.isEmpty()) {
+      config = config.subclassesResolver(new SubclassesResolver(scanPackages, null));
+    }
     JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(objectMapper, config.build());
     JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(cls);
     return new JsonSchema(jsonSchema);
@@ -275,5 +294,109 @@ public class JsonSchemaUtils {
     jsonMapper.writeValue(out, value);
     String jsonString = out.toString();
     return jsonString.getBytes(StandardCharsets.UTF_8);
+  }
+
+  public static JsonNode findMatchingEntity(JsonNode node, SchemaEntity entity) {
+    String[] identifiers = entity.getEntityPath().split("\\.");
+    LinkedList<String> identifiersList = new LinkedList<>();
+    Collections.addAll(identifiersList, identifiers);
+    JsonNode entityNode = findNodeHelper(node, entity.getEntityType(), identifiersList);
+    if (entityNode == null) {
+      throw new IllegalArgumentException(String.format(
+        "No matching path '%s' found in the schema", entity.getEntityPath()));
+    }
+    return entityNode;
+  }
+
+  public static JsonNode findNodeFromNameBuilder(JsonNode node,
+                                                 LinkedList<String> identifiersList) {
+    if (identifiersList.isEmpty() || node == null) {
+      return null;
+    }
+    String word = identifiersList.poll();
+    StringBuilder fieldNameBuilder = new StringBuilder(word);
+    while (!node.has(fieldNameBuilder.toString()) && !identifiersList.isEmpty()) {
+      fieldNameBuilder.append(".");
+      word = identifiersList.poll();
+      if (word == null) {
+        return null;
+      }
+      fieldNameBuilder.append(word);
+    }
+    return node.get(fieldNameBuilder.toString());
+  }
+
+  private static JsonNode findNodeHelper(JsonNode node,
+                                         SchemaEntity.EntityType entityType,
+                                         LinkedList<String> identifiersList) {
+    String type = identifiersList.poll();
+    if (type == null) {
+      return null;
+    }
+    switch (type) {
+      case "object":
+        if (SchemaEntity.EntityType.SR_RECORD == entityType && identifiersList.isEmpty()) {
+          return node;
+        }
+
+        String word = identifiersList.peek();
+        if (word == null) {
+          return null;
+        }
+        JsonNode result;
+        if ("definitions".equals(word)) {
+          identifiersList.poll();
+          result = findNodeFromNameBuilder(node.get("definitions"), identifiersList);
+        } else {
+          result = findNodeFromNameBuilder(node.get("properties"), identifiersList);
+        }
+        if (result == null || identifiersList.isEmpty()) {
+          return result;
+        } else {
+          return findNodeHelper(result, entityType, identifiersList);
+        }
+      case "array":
+        return findNodeHelper(node.get("items"), entityType, identifiersList);
+      case "anyof":
+        if (node.has("anyOf")) {
+          return findSubSchemasFromIndex(node, entityType, "anyOf", identifiersList);
+        }
+
+        // handle "type": ["null", "object"] etc
+        identifiersList.poll();
+        return findNodeHelper(node, entityType, identifiersList);
+      case "allof":
+        if (node.has("allOf")) {
+          return findSubSchemasFromIndex(node, entityType, "allOf", identifiersList);
+        }
+
+        // handle if-then-else
+        identifiersList.poll();
+        if ("conditional".equals(identifiersList.peek())) {
+          identifiersList.poll();
+          return findNodeHelper(node.get(identifiersList.poll()), entityType, identifiersList);
+        } else {
+          return findNodeHelper(node, entityType, identifiersList);
+        }
+      case "oneof":
+        return findSubSchemasFromIndex(node, entityType, "oneOf", identifiersList);
+      case "not":
+        return findNodeHelper(node.get(type), entityType, identifiersList);
+      default:
+        return null;
+    }
+  }
+
+  private static JsonNode findSubSchemasFromIndex(JsonNode node,
+                                                  SchemaEntity.EntityType entityType,
+                                                  String compositionType,
+                                                  LinkedList<String> identifiersList) {
+    String index = identifiersList.poll();
+    if (index == null) {
+      return null;
+    }
+    List<JsonNode> jsonNodeList = Lists.newArrayList(node.get(compositionType).elements());
+    jsonNodeList.sort(new JsonNodeComparator());
+    return findNodeHelper(jsonNodeList.get(Integer.parseInt(index)), entityType, identifiersList);
   }
 }

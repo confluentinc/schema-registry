@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.rest.exceptions;
 import io.confluent.rest.exceptions.RestConstraintViolationException;
 
 /**
- * Indicates a reference exists to the given schema so it cannot be deleted.
+ * Indicates a reference exists to the given schema, so it cannot be deleted.
  */
 public class RestReferenceExistsException extends RestConstraintViolationException {
 

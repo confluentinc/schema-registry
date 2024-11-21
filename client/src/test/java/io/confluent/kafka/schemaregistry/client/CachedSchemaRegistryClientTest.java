@@ -15,8 +15,10 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.FakeTicker;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -163,7 +165,7 @@ public class CachedSchemaRegistryClientTest {
     // Expect one call to register schema
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(SUBJECT_0), anyBoolean()))
-        .andReturn(ID_25)
+        .andReturn(new RegisterSchemaResponse(ID_25))
         .once();
 
     replay(restService);
@@ -179,7 +181,7 @@ public class CachedSchemaRegistryClientTest {
     // Expect one call to register schema
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(SUBJECT_0), anyBoolean()))
-        .andReturn(ID_25)
+        .andReturn(new RegisterSchemaResponse(ID_25))
         .once();
 
     replay(restService);
@@ -194,11 +196,11 @@ public class CachedSchemaRegistryClientTest {
   public void testRegisterEquivalentSchemaDifferentid() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(SUBJECT_0), anyBoolean()))
-        .andReturn(ID_25)
+        .andReturn(new RegisterSchemaResponse(ID_25))
         .once();
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(SUBJECT_0), anyBoolean()))
-        .andReturn(ID_50)
+        .andReturn(new RegisterSchemaResponse(ID_50))
         .once();
 
     replay(restService);
@@ -213,11 +215,12 @@ public class CachedSchemaRegistryClientTest {
   public void testRegisterOverCapacity() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         anyString(), anyBoolean()))
-        .andReturn(ID_25)
-        .andReturn(26)
-        .andReturn(27)
-        .andReturn(28)
-        .andReturn(29);
+        .andReturn(new RegisterSchemaResponse(ID_25))
+        .andReturn(new RegisterSchemaResponse(26))
+        .andReturn(new RegisterSchemaResponse(27))
+        .andReturn(new RegisterSchemaResponse(28))
+        .andReturn(new RegisterSchemaResponse(29))
+        .andReturn(new RegisterSchemaResponse(30));
 
     replay(restService);
 
@@ -236,7 +239,7 @@ public class CachedSchemaRegistryClientTest {
   public void testIdCache() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(SUBJECT_0), anyBoolean()))
-        .andReturn(ID_25);
+        .andReturn(new RegisterSchemaResponse(ID_25));
 
     // Expect only one call to getId (the rest should hit the cache)
     expect(restService.getId(ID_25, SUBJECT_0))
@@ -263,7 +266,7 @@ public class CachedSchemaRegistryClientTest {
 
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(SUBJECT_0), anyBoolean()))
-        .andReturn(ID_25);
+        .andReturn(new RegisterSchemaResponse(ID_25));
 
     // Expect only one call to lookup the subject (the rest should hit the cache)
     expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
@@ -292,10 +295,10 @@ public class CachedSchemaRegistryClientTest {
 
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(subjectOne), anyBoolean()))
-        .andReturn(ID_25);
+        .andReturn(new RegisterSchemaResponse(ID_25));
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(subjectTwo), anyBoolean()))
-        .andReturn(ID_25);
+        .andReturn(new RegisterSchemaResponse(ID_25));
 
     expect(restService.getId(ID_25, subjectOne))
             .andReturn(schemaStringOne);
@@ -333,7 +336,7 @@ public class CachedSchemaRegistryClientTest {
   public void testDeleteSchemaCache() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(SUBJECT_0), anyBoolean()))
-        .andReturn(ID_25)
+        .andReturn(new RegisterSchemaResponse(ID_25))
         .once();
 
     expect(restService.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT_0, false))
@@ -359,7 +362,7 @@ public class CachedSchemaRegistryClientTest {
 
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(SUBJECT_0), anyBoolean()))
-        .andReturn(ID_25);
+        .andReturn(new RegisterSchemaResponse(ID_25));
 
     // Expect only one call to lookup the subject (the rest should hit the cache)
     expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
@@ -450,7 +453,7 @@ public class CachedSchemaRegistryClientTest {
   public void testThreadSafe() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(SUBJECT_0), anyBoolean()))
-        .andReturn(ID_25)
+        .andReturn(new RegisterSchemaResponse(ID_25))
         .anyTimes();
 
     expect(restService.getId(ID_25, SUBJECT_0))
@@ -502,11 +505,11 @@ public class CachedSchemaRegistryClientTest {
   public void testGetSchemas() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         anyString(), anyBoolean()))
-            .andReturn(ID_25)
-            .andReturn(26)
-            .andReturn(27)
-            .andReturn(28)
-            .andReturn(29);
+            .andReturn(new RegisterSchemaResponse(ID_25))
+            .andReturn(new RegisterSchemaResponse(26))
+            .andReturn(new RegisterSchemaResponse(27))
+            .andReturn(new RegisterSchemaResponse(28))
+            .andReturn(new RegisterSchemaResponse(29));
 
     List<Schema> schemas = IntStream.range(0, 5)
         .mapToObj( idx -> new Schema(
@@ -545,6 +548,85 @@ public class CachedSchemaRegistryClientTest {
 
     List<ParsedSchema> parsedSchemas = client.getSchemas(SUBJECT_0, false, true);
     assertEquals(0, parsedSchemas.size());
+  }
+
+  @Test
+  public void testLatestVersionCache() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.LATEST_CACHE_TTL_CONFIG, 60L);
+
+    FakeTicker fakeTicker = new FakeTicker();
+    client = new CachedSchemaRegistryClient(
+        restService,
+        CACHE_CAPACITY,
+        null,
+        configs,
+        null,
+        fakeTicker
+    );
+
+    expect(restService.getLatestVersion(eq(SUBJECT_0)))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 1,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 1,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+
+    replay(restService);
+
+    SchemaMetadata schemaMetadata = client.getLatestSchemaMetadata(SUBJECT_0);
+    assertEquals(ID_25, schemaMetadata.getId());
+
+    fakeTicker.advance(59, TimeUnit.SECONDS);
+
+    // Should hit the cache
+    schemaMetadata = client.getLatestSchemaMetadata(SUBJECT_0);
+    assertEquals(ID_25, schemaMetadata.getId());
+
+    fakeTicker.advance(2, TimeUnit.SECONDS);
+    Thread.sleep(100);
+    assertNotNull(client.getLatestSchemaMetadata(SUBJECT_0));
+  }
+
+  @Test
+  public void testLatestWithMetadataCache() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.LATEST_CACHE_TTL_CONFIG, 60L);
+
+    FakeTicker fakeTicker = new FakeTicker();
+    client = new CachedSchemaRegistryClient(
+        restService,
+        CACHE_CAPACITY,
+        null,
+        configs,
+        null,
+        fakeTicker
+    );
+
+    expect(restService.getLatestWithMetadata(eq(SUBJECT_0), anyObject(), eq(false)))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 1,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 1,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+
+    replay(restService);
+
+    Map<String, String> metadata = ImmutableMap.of("key", "value");
+    SchemaMetadata schemaMetadata = client.getLatestWithMetadata(SUBJECT_0, metadata, false);
+    assertEquals(ID_25, schemaMetadata.getId());
+
+    fakeTicker.advance(59, TimeUnit.SECONDS);
+
+    // Should hit the cache
+    schemaMetadata = client.getLatestWithMetadata(SUBJECT_0, metadata, false);
+    assertEquals(ID_25, schemaMetadata.getId());
+
+    fakeTicker.advance(2, TimeUnit.SECONDS);
+    Thread.sleep(100);
+    assertNotNull(client.getLatestWithMetadata(SUBJECT_0, metadata, false));
   }
 
   @Test

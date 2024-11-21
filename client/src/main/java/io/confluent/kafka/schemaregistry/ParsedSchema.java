@@ -16,9 +16,21 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
+import java.io.IOException;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 /**
@@ -63,11 +75,94 @@ public interface ParsedSchema {
   }
 
   /**
+   * Returns the version of the schema if set.
+   *
+   * @return the version
+   */
+  Integer version();
+
+  /**
    * Returns a list of schema references.
    *
    * @return the schema references
    */
   List<SchemaReference> references();
+
+  /**
+   * Returns metadata.
+   *
+   * @return the metadata
+   */
+  Metadata metadata();
+
+  /**
+   * Returns a rule set.
+   *
+   * @return the rule set
+   */
+  RuleSet ruleSet();
+
+  /**
+   * Returns the set of tags used by the schema.
+   *
+   * @return the tags
+   */
+  default Set<String> tags() {
+    Set<String> inlineTags = inlineTags();
+    Metadata metadata = metadata();
+    if (metadata == null || metadata.getTags() == null) {
+      return inlineTags;
+    }
+    Set<String> allTags = new LinkedHashSet<>(inlineTags);
+    metadata.getTags().forEach((key, value) -> allTags.addAll(value));
+    return allTags;
+  }
+
+  /**
+   * Returns the set of inline tags embedded in the schema.
+   *
+   * @return the tags
+   */
+  default Set<String> inlineTags() {
+    return Collections.emptySet();
+  }
+
+  /**
+   * Returns a copy of this schema.
+   *
+   * @return a copy of this schema
+   */
+  ParsedSchema copy();
+
+  /**
+   * Returns a copy of this schema, but with the given version.
+   *
+   * @param version the version
+   * @return a copy of this schema, but with the given version
+   */
+  ParsedSchema copy(Integer version);
+
+  /**
+   * Returns a copy of this schema, but with the given metadata and rule set.
+   *
+   * @param metadata the metadata
+   * @param ruleSet the rule set
+   * @return a copy of this schema, but with the given metadata and rule set
+   */
+  ParsedSchema copy(Metadata metadata, RuleSet ruleSet);
+
+  /**
+   * Returns a copy of this schema, but with the given tags.
+   *
+   * @param tagsToAdd map of tags to add to the schema record or field, where the key is the entity
+   *                  and the value is the set of tags. If the tag already exists, do nothing.
+   * @param tagsToRemove map of tags to remove from the schema record or field, where the key is
+   *                     the entity and the value is the set of tags. If the tag does not exist,
+   *                     do nothing.
+   * @return a copy of this schema, but with the given tags
+   */
+  ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                    Map<SchemaEntity, Set<String>> tagsToRemove);
 
   /**
    * Returns a normalized copy of this schema.
@@ -110,15 +205,8 @@ public interface ParsedSchema {
    *         the list of error messages
    */
   default List<String> isCompatible(
-      CompatibilityLevel level, List<? extends ParsedSchema> previousSchemas) {
-    if (level != CompatibilityLevel.NONE) {
-      for (ParsedSchema previousSchema : previousSchemas) {
-        if (!schemaType().equals(previousSchema.schemaType())) {
-          return Collections.singletonList("Incompatible because of different schema type");
-        }
-      }
-    }
-    return CompatibilityChecker.checker(level).isCompatible(this, previousSchemas);
+      CompatibilityLevel level, List<ParsedSchemaHolder> previousSchemas) {
+    return CompatibilityChecker.checker(level).isCompatibleWithHolders(this, previousSchemas);
   }
 
   /**
@@ -134,6 +222,25 @@ public interface ParsedSchema {
    * @return whether the underlying raw representations are equal
    */
   default boolean deepEquals(ParsedSchema schema) {
-    return Objects.equals(rawSchema(), schema.rawSchema());
+    return Objects.equals(rawSchema(), schema.rawSchema())
+        && Objects.equals(metadata(), schema.metadata())
+        && Objects.equals(ruleSet(), schema.ruleSet());
+  }
+
+  default Object fromJson(JsonNode json) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  default JsonNode toJson(Object object) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  default Object copyMessage(Object message) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  default Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
+      throws RuleException {
+    throw new UnsupportedOperationException();
   }
 }

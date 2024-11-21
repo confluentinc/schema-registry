@@ -45,6 +45,7 @@ public class SchemaRegistrySerializer
 
   private static final long serialVersionUID = -2564877824075394626L;
 
+  // The default ctor is required since this instance may be serialized for persistent caches.
   public SchemaRegistrySerializer() {
   }
 

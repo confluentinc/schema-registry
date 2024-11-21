@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
+import io.confluent.kafka.schemaregistry.rest.filters.AliasFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.ContextFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.RestCallMetricFilter;
 import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
@@ -48,7 +49,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryRestApplication.class);
   private KafkaSchemaRegistry schemaRegistry = null;
-  private List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions = null;
 
   public SchemaRegistryRestApplication(Properties props) throws RestConfigException {
     this(new SchemaRegistryConfig(props));
@@ -58,6 +58,8 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   protected void configurePreResourceHandling(ServletContextHandler context) {
     super.configurePreResourceHandling(context);
     context.setErrorHandler(new JsonErrorHandler());
+    // This handler runs before first Session, Security or ServletHandler
+    context.insertHandler(new RequestIdHandler());
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
@@ -101,11 +103,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   @Override
   public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
-    schemaRegistryResourceExtensions =
-        schemaRegistryConfig.getConfiguredInstances(
-            schemaRegistryConfig.definedResourceExtensionConfigName(),
-            SchemaRegistryResourceExtension.class);
-
     config.register(RootResource.class);
     config.register(new ConfigResource(schemaRegistry));
     config.register(new ContextsResource(schemaRegistry));
@@ -116,10 +113,13 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new ModeResource(schemaRegistry));
     config.register(new ServerMetadataResource(schemaRegistry));
     config.register(new ContextFilter());
+    config.register(new AliasFilter(schemaRegistry));
     config.register(new RestCallMetricFilter(
             schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
             schemaRegistry.getMetricsContainer().getApiCallsFailure()));
 
+    List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions =
+        schemaRegistry.getResourceExtensions();
     if (schemaRegistryResourceExtensions != null) {
       try {
         for (SchemaRegistryResourceExtension
@@ -148,15 +148,18 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   @Override
   public void onShutdown() {
-
-    if (schemaRegistry != null) {
-      try {
-        schemaRegistry.close();
-      } catch (IOException e) {
-        log.error("Error closing schema registry", e);
-      }
+    if (schemaRegistry == null) {
+      return;
     }
 
+    try {
+      schemaRegistry.close();
+    } catch (IOException e) {
+      log.error("Error closing schema registry", e);
+    }
+
+    List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions =
+        schemaRegistry.getResourceExtensions();
     if (schemaRegistryResourceExtensions != null) {
       for (SchemaRegistryResourceExtension
           schemaRegistryResourceExtension : schemaRegistryResourceExtensions) {
