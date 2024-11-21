@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
@@ -40,6 +41,23 @@ public class RegisterSchemaRequest {
   private String schemaType;
   private List<SchemaReference> references = null;
   private String schema;
+
+  public RegisterSchemaRequest() {
+  }
+
+  public RegisterSchemaRequest(ParsedSchema schema) {
+    this.schemaType = schema.schemaType();
+    this.references = schema.references();
+    this.schema = schema.canonicalString();
+  }
+
+  public RegisterSchemaRequest(Schema schema) {
+    this.version = schema.getVersion();
+    this.id = schema.getId();
+    this.schemaType = schema.getSchemaType();
+    this.references = schema.getReferences();
+    this.schema = schema.getSchema();
+  }
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, RegisterSchemaRequest.class);

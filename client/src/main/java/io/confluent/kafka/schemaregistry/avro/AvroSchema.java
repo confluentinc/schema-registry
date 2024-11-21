@@ -16,11 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
+import com.google.common.collect.EnumHashBiMap;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
@@ -157,6 +159,24 @@ public class AvroSchema implements ParsedSchema {
       canonicalString = schemaObj.toString(schemaRefs, false);
     }
     return canonicalString;
+  }
+
+  @Override
+  public String formattedString(String format) {
+    if (format == null || format.trim().isEmpty()) {
+      return canonicalString();
+    }
+    Format formatEnum = Format.get(format);
+    switch (formatEnum) {
+      case DEFAULT:
+        return canonicalString();
+      case RESOLVED:
+        return schemaObj.toString();
+      default:
+        // Don't throw an exception for forward compatibility of formats
+        log.warn("Unsupported format {}", format);
+        return canonicalString();
+    }
   }
 
   public Integer version() {
@@ -403,6 +423,43 @@ public class AvroSchema implements ParsedSchema {
           + "key=" + key
           + ", value=" + value
           + '}';
+    }
+  }
+
+  public enum Format {
+    DEFAULT("default"),
+    RESOLVED("resolved");
+
+    private static final EnumHashBiMap<Format, String> lookup =
+        EnumHashBiMap.create(Format.class);
+
+    static {
+      for (Format type : Format.values()) {
+        lookup.put(type, type.symbol());
+      }
+    }
+
+    private final String symbol;
+
+    Format(String symbol) {
+      this.symbol = symbol;
+    }
+
+    public String symbol() {
+      return symbol;
+    }
+
+    public static Format get(String symbol) {
+      return lookup.inverse().get(symbol);
+    }
+
+    public static Set<String> symbols() {
+      return lookup.inverse().keySet();
+    }
+
+    @Override
+    public String toString() {
+      return symbol();
     }
   }
 }

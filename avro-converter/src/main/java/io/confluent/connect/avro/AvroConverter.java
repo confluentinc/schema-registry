@@ -18,8 +18,8 @@ package io.confluent.connect.avro;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 import io.confluent.kafka.serializers.GenericContainerWithVersion;
@@ -67,7 +67,7 @@ public class AvroConverter implements Converter {
     AvroConverterConfig avroConverterConfig = new AvroConverterConfig(configs);
 
     if (schemaRegistry == null) {
-      schemaRegistry = new CachedSchemaRegistryClient(
+      schemaRegistry = SchemaRegistryClientFactory.newClient(
           avroConverterConfig.getSchemaRegistryUrls(),
           avroConverterConfig.getMaxSchemasPerSubject(),
           Collections.singletonList(new AvroSchemaProvider()),
