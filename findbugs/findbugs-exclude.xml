@@ -98,8 +98,28 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <Class name="otherns.Subrecord"/>
-        <Bug pattern="MS_EXPOSE_REP"/>
+        <Class name="~io.confluent.kafka.schemaregistry.client.security.SslFactory.*"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.*"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.kafka.schemaregistry.tools.*"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.kafka.serializers.*"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.schemaregistry.benchmark.*"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
     </Match>
 
     <Match>
@@ -143,5 +163,9 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     <!-- false positive in Java 11, see https://github.com/spotbugs/spotbugs/issues/756 -->
     <Match>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
+    </Match>
+
+    <Match>
+        <Bug pattern="THROWS_METHOD_THROWS_RUNTIMEEXCEPTION"/>
     </Match>
 </FindBugsFilter>

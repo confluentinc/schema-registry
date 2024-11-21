@@ -16,12 +16,11 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
-import java.util.List;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,12 +45,15 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
   }
 
   @Override
-  public ParsedSchema parseSchemaOrElseThrow(String schemaString,
-                                             List<SchemaReference> references,
-                                             boolean isNew) {
+  public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize) {
     try {
-      return new AvroSchema(schemaString, references, resolveReferences(references), null,
-                      validateDefaults && isNew);
+      return new AvroSchema(
+          schema.getSchema(),
+          schema.getReferences(),
+          resolveReferences(schema),
+          null,
+          (validateDefaults || normalize) && isNew
+      );
     } catch (Exception e) {
       log.error("Could not parse Avro schema", e);
       throw e;

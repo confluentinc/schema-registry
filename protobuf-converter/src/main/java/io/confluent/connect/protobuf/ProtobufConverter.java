@@ -17,6 +17,7 @@
 package io.confluent.connect.protobuf;
 
 import com.google.protobuf.Message;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -30,7 +31,6 @@ import org.apache.kafka.connect.storage.Converter;
 import java.util.Collections;
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -67,7 +67,7 @@ public class ProtobufConverter implements Converter {
     ProtobufConverterConfig protobufConverterConfig = new ProtobufConverterConfig(configs);
 
     if (schemaRegistry == null) {
-      schemaRegistry = new CachedSchemaRegistryClient(
+      schemaRegistry = SchemaRegistryClientFactory.newClient(
           protobufConverterConfig.getSchemaRegistryUrls(),
           protobufConverterConfig.getMaxSchemasPerSubject(),
           Collections.singletonList(new ProtobufSchemaProvider()),

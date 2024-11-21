@@ -16,20 +16,14 @@
 
 package io.confluent.connect.avro;
 
-import org.apache.kafka.common.config.AbstractConfig;
+import io.confluent.connect.schema.AbstractDataConfig;
 import org.apache.kafka.common.config.ConfigDef;
 
 import java.util.HashMap;
 import java.util.Map;
 
 
-public class AvroDataConfig extends AbstractConfig {
-
-  public static final String GENERALIZED_SUM_TYPE_SUPPORT_CONFIG = "generalized.sum.type.support";
-  public static final boolean GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT = false;
-  public static final String GENERALIZED_SUM_TYPE_SUPPORT_DOC =
-      "Toggle for enabling/disabling generalized sum type support: interoperability of enum/union "
-      + "with other schema formats";
+public class AvroDataConfig extends AbstractDataConfig {
 
   public static final String ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG = "enhanced.avro.schema.support";
   public static final boolean ENHANCED_AVRO_SCHEMA_SUPPORT_DEFAULT = false;
@@ -48,11 +42,6 @@ public class AvroDataConfig extends AbstractConfig {
       "Toggle for enabling/disabling connect converter to add its meta data to the output schema "
       + "or not";
 
-  public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.config";
-  public static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
-  public static final String SCHEMAS_CACHE_SIZE_DOC =
-      "Size of the converted schemas cache";
-
   public static final String ALLOW_OPTIONAL_MAP_KEYS_CONFIG = "allow.optional.map.keys";
   public static final boolean ALLOW_OPTIONAL_MAP_KEYS_DEFAULT = false;
   public static final String ALLOW_OPTIONAL_MAP_KEYS_DOC =
@@ -66,12 +55,7 @@ public class AvroDataConfig extends AbstractConfig {
           + "and Connect schema.";
 
   public static ConfigDef baseConfigDef() {
-    return new ConfigDef()
-        .define(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG,
-                ConfigDef.Type.BOOLEAN,
-                GENERALIZED_SUM_TYPE_SUPPORT_DEFAULT,
-                ConfigDef.Importance.MEDIUM,
-                GENERALIZED_SUM_TYPE_SUPPORT_DOC)
+    return AbstractDataConfig.baseConfigDef()
         .define(ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG,
                 ConfigDef.Type.BOOLEAN,
                 ENHANCED_AVRO_SCHEMA_SUPPORT_DEFAULT,
@@ -81,8 +65,6 @@ public class AvroDataConfig extends AbstractConfig {
                 ConfigDef.Importance.MEDIUM, SCRUB_INVALID_NAMES_DOC)
         .define(CONNECT_META_DATA_CONFIG, ConfigDef.Type.BOOLEAN, CONNECT_META_DATA_DEFAULT,
                 ConfigDef.Importance.LOW, CONNECT_META_DATA_DOC)
-        .define(SCHEMAS_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMAS_CACHE_SIZE_DEFAULT,
-                ConfigDef.Importance.LOW, SCHEMAS_CACHE_SIZE_DOC)
         .define(DISCARD_TYPE_DOC_DEFAULT_CONFIG,
                 ConfigDef.Type.BOOLEAN,
                 DISCARD_TYPE_DOC_DEFAULT_DEFAULT,
@@ -99,10 +81,6 @@ public class AvroDataConfig extends AbstractConfig {
     super(baseConfigDef(), props);
   }
 
-  public boolean isGeneralizedSumTypeSupport() {
-    return this.getBoolean(GENERALIZED_SUM_TYPE_SUPPORT_CONFIG);
-  }
-
   public boolean isEnhancedAvroSchemaSupport() {
     return this.getBoolean(ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG);
   }
@@ -115,10 +93,6 @@ public class AvroDataConfig extends AbstractConfig {
     return this.getBoolean(SCRUB_INVALID_NAMES_CONFIG);
   }
 
-  public int getSchemasCacheSize() {
-    return Math.max(1, this.getInt(SCHEMAS_CACHE_SIZE_CONFIG));
-  }
-
   public boolean isDiscardTypeDocDefault() {
     return this.getBoolean(DISCARD_TYPE_DOC_DEFAULT_CONFIG);
   }
@@ -127,10 +101,9 @@ public class AvroDataConfig extends AbstractConfig {
     return this.getBoolean(ALLOW_OPTIONAL_MAP_KEYS_CONFIG);
   }
 
-
   public static class Builder {
 
-    private Map<String, Object> props = new HashMap<>();
+    private final Map<String, Object> props = new HashMap<>();
 
     public Builder with(String key, Object value) {
       props.put(key, value);

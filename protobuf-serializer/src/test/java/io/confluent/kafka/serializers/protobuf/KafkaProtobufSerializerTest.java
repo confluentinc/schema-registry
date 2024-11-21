@@ -19,7 +19,13 @@ import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
-import io.confluent.kafka.serializers.protobuf.test.TestMessageOptionalProtos.TestMessageOptional;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
+import io.confluent.kafka.serializers.protobuf.test.CustomOptions.CustomMessageOptions;
+import io.confluent.kafka.serializers.protobuf.test.CustomOptions2;
+import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass.DecimalValue;
+import io.confluent.kafka.serializers.protobuf.test.DecimalValuePb2OuterClass.DecimalValuePb2;
+import io.confluent.kafka.serializers.protobuf.test.Ranges;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -102,13 +108,22 @@ public class KafkaProtobufSerializerTest {
           .setTestString("hi")
           .setTestOptionalString("")
           .build();
-
+  private static final CustomMessageOptions CUSTOM_MESSAGE_OPTIONS =
+      CustomMessageOptions.newBuilder()
+          .setTestString("hi")
+          .setTestInt(123)
+          .build();
+  private static final CustomOptions2.FooBar FOO_BAR =
+      CustomOptions2.FooBar.newBuilder()
+          .setFoo(123)
+          .build();
 
   public KafkaProtobufSerializerTest() {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     serializerConfig.put(KafkaProtobufSerializerConfig.NORMALIZE_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_FORMAT, "ignore_extensions");
     schemaRegistry = new MockSchemaRegistryClient();
     protobufSerializer = new KafkaProtobufSerializer(schemaRegistry, new HashMap(serializerConfig));
 
@@ -428,5 +443,369 @@ public class KafkaProtobufSerializerTest {
     message = builder.build();
     assertEquals(OPTIONAL_MESSAGE_DEFAULT.getTestString(), getField(message, "test_string"));
     assertEquals(true, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
+  }
+
+  @Test
+  public void testCustomOptions() throws Exception {
+    String expected = "syntax = \"proto3\";\n"
+        + "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option (io.confluent.kafka.serializers.protobuf.test.file_custom) = \"test\";\n"
+        + "option (io.confluent.kafka.serializers.protobuf.test.file_custom2) = \"hello\";\n"
+        + "option (io.confluent.kafka.serializers.protobuf.test.file_custom2) = \"world\";\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message CustomMessageOptions {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    doc: \"message\"\n"
+        + "  };\n"
+        + "  option (io.confluent.kafka.serializers.protobuf.test.message_custom) = true;\n"
+        + "  option (io.confluent.kafka.serializers.protobuf.test.message_custom2) = true;\n"
+        + "  option (io.confluent.kafka.serializers.protobuf.test.message_custom2) = false;\n"
+        + "\n"
+        + "  string test_string = 1 [\n"
+        + "    (io.confluent.kafka.serializers.protobuf.test.field_custom) = 123,\n"
+        + "    (io.confluent.kafka.serializers.protobuf.test.field_custom2) = 456,\n"
+        + "    (io.confluent.kafka.serializers.protobuf.test.field_custom2) = 789\n"
+        + "  ];\n"
+        + "  int32 test_int = 2 [(confluent.field_meta) = {\n"
+        + "    doc: \"field\"\n"
+        + "  }];\n"
+        + "}\n"
+        + "message MyMessage {\n"
+        + "  int32 id = 1;\n"
+        + "  float f = 2;\n"
+        + "  double d = 3;\n"
+        + "  string doc = 4;\n"
+        + "  map<string, string> params = 5;\n"
+        + "  repeated int32 list = 6;\n"
+        + "}\n"
+        + "enum CustomEnumOptions {\n"
+        + "  option (confluent.enum_meta) = {\n"
+        + "    doc: \"enum\"\n"
+        + "  };\n"
+        + "  option (io.confluent.kafka.serializers.protobuf.test.enum_custom) = {\n"
+        + "    d: 456,\n"
+        + "    doc: \"hi\",\n"
+        + "    f: 123,\n"
+        + "    id: 1\n"
+        + "  };\n"
+        + "  option (io.confluent.kafka.serializers.protobuf.test.enum_custom2) = {\n"
+        + "    doc: \"hi\",\n"
+        + "    id: 2,\n"
+        + "    list: [\n"
+        + "      4,\n"
+        + "      5,\n"
+        + "      6\n"
+        + "    ],\n"
+        + "    params: {\n"
+        + "      key: \"hello\",\n"
+        + "      value: \"world\"\n"
+        + "    }\n"
+        + "  };\n"
+        + "  option (io.confluent.kafka.serializers.protobuf.test.enum_custom2) = {\n"
+        + "    doc: \"bye\",\n"
+        + "    id: 3,\n"
+        + "    list: [\n"
+        + "      7,\n"
+        + "      8,\n"
+        + "      9\n"
+        + "    ],\n"
+        + "    params: {\n"
+        + "      key: \"goodbye\",\n"
+        + "      value: \"world\"\n"
+        + "    }\n"
+        + "  };\n"
+        + "  CUSTOM0 = 0 [(io.confluent.kafka.serializers.protobuf.test.enum_value_custom) = ENUM1];\n"
+        + "  CUSTOM1 = 1 [\n"
+        + "    (io.confluent.kafka.serializers.protobuf.test.enum_value_custom2) = ENUM1,\n"
+        + "    (io.confluent.kafka.serializers.protobuf.test.enum_value_custom2) = ENUM2\n"
+        + "  ];\n"
+        + "  CUSTOM2 = 2 [(confluent.enum_value_meta) = {\n"
+        + "    doc: \"enum_value\"\n"
+        + "  }];\n"
+        + "}\n"
+        + "enum MyEnum {\n"
+        + "  ENUM0 = 0;\n"
+        + "  ENUM1 = 1;\n"
+        + "  ENUM2 = 2;\n"
+        + "}\n"
+        + "\n"
+        + "extend .google.protobuf.FileOptions {\n"
+        + "  string file_custom = 1111;\n"
+        + "  repeated string file_custom2 = 1112;\n"
+        + "}\n"
+        + "extend .google.protobuf.MessageOptions {\n"
+        + "  bool message_custom = 1111;\n"
+        + "  repeated bool message_custom2 = 1112;\n"
+        + "}\n"
+        + "extend .google.protobuf.FieldOptions {\n"
+        + "  int32 field_custom = 1111;\n"
+        + "  repeated int32 field_custom2 = 1112;\n"
+        + "}\n"
+        + "extend .google.protobuf.EnumOptions {\n"
+        + "  .io.confluent.kafka.serializers.protobuf.test.MyMessage enum_custom = 1111;\n"
+        + "  repeated .io.confluent.kafka.serializers.protobuf.test.MyMessage enum_custom2 = 1112;\n"
+        + "}\n"
+        + "extend .google.protobuf.EnumValueOptions {\n"
+        + "  .io.confluent.kafka.serializers.protobuf.test.MyEnum enum_value_custom = 1111;\n"
+        + "  repeated .io.confluent.kafka.serializers.protobuf.test.MyEnum enum_value_custom2 = 1112;\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(CustomMessageOptions.getDescriptor());
+    schema = schema.normalize();
+    assertEquals(expected, schema.canonicalString());
+    schema = new ProtobufSchema(schema.canonicalString());
+    assertEquals(expected, schema.canonicalString());
+
+    expected = "syntax = \"proto3\";\n"
+        + "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message CustomMessageOptions {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    doc: \"message\"\n"
+        + "  };\n"
+        + "\n"
+        + "  string test_string = 1;\n"
+        + "  int32 test_int = 2 [(confluent.field_meta) = {\n"
+        + "    doc: \"field\"\n"
+        + "  }];\n"
+        + "}\n"
+        + "message MyMessage {\n"
+        + "  int32 id = 1;\n"
+        + "  float f = 2;\n"
+        + "  double d = 3;\n"
+        + "  string doc = 4;\n"
+        + "  map<string, string> params = 5;\n"
+        + "  repeated int32 list = 6;\n"
+        + "}\n"
+        + "enum CustomEnumOptions {\n"
+        + "  option (confluent.enum_meta) = {\n"
+        + "    doc: \"enum\"\n"
+        + "  };\n"
+        + "  CUSTOM0 = 0;\n"
+        + "  CUSTOM1 = 1;\n"
+        + "  CUSTOM2 = 2 [(confluent.enum_value_meta) = {\n"
+        + "    doc: \"enum_value\"\n"
+        + "  }];\n"
+        + "}\n"
+        + "enum MyEnum {\n"
+        + "  ENUM0 = 0;\n"
+        + "  ENUM1 = 1;\n"
+        + "  ENUM2 = 2;\n"
+        + "}\n";
+    String noCustSchema = schema.formattedString(Format.IGNORE_EXTENSIONS.symbol());
+    assertEquals(expected, noCustSchema);
+
+    protobufSerializer.serialize(topic, CUSTOM_MESSAGE_OPTIONS);
+    ParsedSchema retrievedSchema = schemaRegistry.getSchemaBySubjectAndId(topic + "-value", 1);
+    assertEquals(expected, retrievedSchema.canonicalString());
+  }
+
+  @Test
+  public void testCustomOptions2() throws Exception {
+    String expected = "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message FooBar {\n"
+        + "  optional int32 foo = 1;\n"
+        + "  optional string bar = 2;\n"
+        + "  repeated .io.confluent.kafka.serializers.protobuf.test.FooBar nested = 3;\n"
+        + "\n"
+        + "  extensions 100 to 200;\n"
+        + "\n"
+        + "  extend .google.protobuf.EnumOptions {\n"
+        + "    optional string foobar_string = 71001;\n"
+        + "  }\n"
+        + "\n"
+        + "  message More {\n"
+        + "    option (io.confluent.kafka.serializers.protobuf.test.my_message_option) = {\n"
+        + "      [io.confluent.kafka.serializers.protobuf.test.FooBar.More.more_string]: \"foobar\",\n"
+        + "      [io.confluent.kafka.serializers.protobuf.test.rep]: [\n"
+        + "        FOO,\n"
+        + "        BAR\n"
+        + "      ]\n"
+        + "    };\n"
+        + "  \n"
+        + "    repeated int32 serial = 1;\n"
+        + "  \n"
+        + "    extend .io.confluent.kafka.serializers.protobuf.test.FooBar {\n"
+        + "      optional string more_string = 150;\n"
+        + "    }\n"
+        + "  }\n"
+        + "  message More2 {\n"
+        + "    option (io.confluent.kafka.serializers.protobuf.test.my_message_option) = {\n"
+        + "      [io.confluent.kafka.serializers.protobuf.test.FooBar.More2.more2_string]: \"foobar\",\n"
+        + "      foo: 123\n"
+        + "    };\n"
+        + "  \n"
+        + "    repeated int32 serial = 1;\n"
+        + "  \n"
+        + "    extend .io.confluent.kafka.serializers.protobuf.test.FooBar {\n"
+        + "      optional string more2_string = 151;\n"
+        + "    }\n"
+        + "  }\n"
+        + "  enum FooBarBazEnum {\n"
+        + "    option (io.confluent.kafka.serializers.protobuf.test.FooBar.foobar_string) = \"foobar\";\n"
+        + "    FOO = 1;\n"
+        + "    BAR = 2;\n"
+        + "    BAZ = 3;\n"
+        + "  }\n"
+        + "}\n"
+        + "\n"
+        + "extend .google.protobuf.MessageOptions {\n"
+        + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar my_message_option = 50001;\n"
+        + "}\n"
+        + "extend .io.confluent.kafka.serializers.protobuf.test.FooBar {\n"
+        + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar.FooBarBazEnum ext = 101;\n"
+        + "  repeated .io.confluent.kafka.serializers.protobuf.test.FooBar.FooBarBazEnum rep = 102;\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(CustomOptions2.FooBar.getDescriptor());
+    schema = schema.normalize();
+    assertEquals(expected, schema.canonicalString());
+    schema = new ProtobufSchema(schema.canonicalString());
+    assertEquals(expected, schema.canonicalString());
+
+    expected = "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message FooBar {\n"
+        + "  optional int32 foo = 1;\n"
+        + "  optional string bar = 2;\n"
+        + "  repeated .io.confluent.kafka.serializers.protobuf.test.FooBar nested = 3;\n"
+        + "\n"
+        + "  message More {\n"
+        + "    repeated int32 serial = 1;\n"
+        + "  }\n"
+        + "  message More2 {\n"
+        + "    repeated int32 serial = 1;\n"
+        + "  }\n"
+        + "  enum FooBarBazEnum {\n"
+        + "    FOO = 1;\n"
+        + "    BAR = 2;\n"
+        + "    BAZ = 3;\n"
+        + "  }\n"
+        + "}\n";
+    String noCustSchema = schema.formattedString(Format.IGNORE_EXTENSIONS.symbol());
+    assertEquals(expected, noCustSchema);
+
+    protobufSerializer.serialize(topic, FOO_BAR);
+    ParsedSchema retrievedSchema = schemaRegistry.getSchemaBySubjectAndId(topic + "-value", 1);
+    assertEquals(expected, retrievedSchema.canonicalString());
+  }
+
+  @Test
+  public void testNormalizeBothPb2andPb3() throws Exception {
+    String expected = "syntax = \"proto3\";\n"
+        + "\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message DecimalValue {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    doc: \"message\"\n"
+        + "  };\n"
+        + "\n"
+        + "  .confluent.type.Decimal value = 1 [(confluent.field_meta) = {\n"
+        + "    params: [\n"
+        + "      {\n"
+        + "        key: \"precision\",\n"
+        + "        value: \"8\"\n"
+        + "      },\n"
+        + "      {\n"
+        + "        key: \"scale\",\n"
+        + "        value: \"3\"\n"
+        + "      }\n"
+        + "    ]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(DecimalValue.getDescriptor());
+    schema = schema.normalize();
+    assertEquals(expected, schema.canonicalString());
+    schema = new ProtobufSchema(schema.canonicalString());
+    assertEquals(expected, schema.canonicalString());
+
+    expected = "\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message DecimalValuePb2 {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    doc: \"message\"\n"
+        + "  };\n"
+        + "\n"
+        + "  optional .confluent.type.Decimal value = 1 [(confluent.field_meta) = {\n"
+        + "    params: [\n"
+        + "      {\n"
+        + "        key: \"precision\",\n"
+        + "        value: \"8\"\n"
+        + "      },\n"
+        + "      {\n"
+        + "        key: \"scale\",\n"
+        + "        value: \"3\"\n"
+        + "      }\n"
+        + "    ]\n"
+        + "  }];\n"
+        + "}\n";
+    schema = new ProtobufSchema(DecimalValuePb2.getDescriptor());
+    schema = schema.normalize();
+    assertEquals(expected, schema.canonicalString());
+    schema = new ProtobufSchema(schema.canonicalString());
+    assertEquals(expected, schema.canonicalString());
+  }
+
+  @Test
+  public void testRanges() {
+    String expected = "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message FooBar {\n"
+        + "  reserved 5000 to 6000;\n"
+        + "  reserved 10000 to 10001;\n"
+        + "  reserved 20000;\n"
+        + "\n"
+        + "  optional int32 foo = 1;\n"
+        + "  optional string bar = 2;\n"
+        + "\n"
+        + "  extensions 100 to 200;\n"
+        + "  extensions 1000 to 1001;\n"
+        + "  extensions 2000;\n"
+        + "\n"
+        + "  enum FooBarBazEnum {\n"
+        + "    reserved 100 to 200;\n"
+        + "    reserved 1000 to 1001;\n"
+        + "    reserved 2000;\n"
+        + "    NONE = 0;\n"
+        + "    FOO = 1;\n"
+        + "    BAR = 2;\n"
+        + "    BAZ = 3;\n"
+        + "  }\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(Ranges.FooBar.getDescriptor());
+    schema = schema.normalize();
+    assertEquals(expected, schema.canonicalString());
+    schema = new ProtobufSchema(schema.canonicalString());
+    assertEquals(expected, schema.canonicalString());
+
   }
 }

@@ -1,0 +1,71 @@
+syntax = "proto3";
+package io.confluent.kafka.serializers.protobuf.test;
+
+import "confluent/meta.proto";
+import "google/protobuf/descriptor.proto";
+
+option java_package = "io.confluent.kafka.serializers.protobuf.test";
+option (file_custom) = "test";
+option (file_custom2) = "hello";
+option (file_custom2) = "world";
+
+message CustomMessageOptions {
+    option (.confluent.message_meta).doc = "message";
+    option (message_custom) = true;
+    option (message_custom2) = true;
+    option (message_custom2) = false;
+
+    string test_string = 1 [(field_custom) = 123, (field_custom2) = 456, (field_custom2) = 789];
+    int32 test_int = 2 [(.confluent.field_meta).doc = "field"];
+}
+
+enum CustomEnumOptions {
+    option (.confluent.enum_meta).doc = "enum";
+    option (enum_custom) = { doc: "hi" };
+    option (enum_custom).id = 1;
+    option (enum_custom).f = 123.0;
+    option (enum_custom).d = 456.0;
+    //  Repeated message options must be initialized using an aggregate value.
+    option (enum_custom2) = { id: 2, doc: "hi", params: [ {key: "hello", value: "world"} ], list: [ 4, 5, 6]};
+    option (enum_custom2) = { id: 3, doc: "bye", params: [ {key: "goodbye", value: "world"} ], list: [ 7, 8, 9]};
+
+    CUSTOM0 = 0 [(enum_value_custom) = ENUM1];
+    CUSTOM1 = 1 [(enum_value_custom2) = ENUM1, (enum_value_custom2) = ENUM2];
+    CUSTOM2 = 2 [(.confluent.enum_value_meta).doc = "enum_value"];
+}
+
+message MyMessage {
+    int32 id = 1;
+    float f = 2;
+    double d = 3;
+    string doc = 4;
+    map<string, string> params = 5;
+    repeated int32 list = 6;
+}
+
+enum MyEnum {
+    ENUM0 = 0;
+    ENUM1 = 1;
+    ENUM2 = 2;
+}
+
+extend google.protobuf.FileOptions {
+    string file_custom = 1111;
+    repeated string file_custom2 = 1112;
+}
+extend google.protobuf.MessageOptions {
+    bool message_custom = 1111;
+    repeated bool message_custom2 = 1112;
+}
+extend google.protobuf.FieldOptions {
+    int32 field_custom = 1111;
+    repeated int32 field_custom2 = 1112;
+}
+extend google.protobuf.EnumOptions {
+    MyMessage enum_custom = 1111;
+    repeated MyMessage enum_custom2 = 1112;
+}
+extend google.protobuf.EnumValueOptions {
+    MyEnum enum_value_custom = 1111;
+    repeated MyEnum enum_value_custom2 = 1112;
+}
