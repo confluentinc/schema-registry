@@ -18,7 +18,6 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -54,28 +53,16 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
     KafkaSchemaRegistry sr = (KafkaSchemaRegistry) restApp.schemaRegistry();
     KafkaStoreReaderThread readerThread = sr.getKafkaStore().getKafkaStoreReaderThread();
     try {
-      readerThread.waitUntilOffset(50L, 500L, TimeUnit.MILLISECONDS, true);
+      readerThread.waitUntilOffset(50L, 500L, TimeUnit.MILLISECONDS);
       fail("Should have timed out waiting to reach non-existent offset.");
     } catch (StoreTimeoutException e) {
       // This is expected
     }
     
     try {
-      Assert.assertTrue(readerThread.waitUntilOffset(0L, 5000L, TimeUnit.MILLISECONDS, true));
+      readerThread.waitUntilOffset(0L, 5000L, TimeUnit.MILLISECONDS);
     } catch (StoreTimeoutException e) {
       fail("5 seconds should be more than enough time to reach offset 0 in the log.");
-    }
-
-    try {
-      Assert.assertTrue(readerThread.waitUntilOffset(1L, 5000L, TimeUnit.MILLISECONDS, false));
-    } catch (StoreTimeoutException e) {
-      fail("5 seconds should be more than enough time to reach offset 1 in the log.");
-    }
-
-    try {
-      Assert.assertFalse(readerThread.waitUntilOffset(50L, 500L, TimeUnit.MILLISECONDS, false));
-    } catch (StoreTimeoutException e) {
-      fail("Should not have thrown timeout exception waiting to reach non-existent offset.");
     }
   }
 }
