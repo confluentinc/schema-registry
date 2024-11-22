@@ -149,7 +149,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final Mode defaultMode;
   private final int kafkaStoreTimeoutMs;
   private final int initTimeout;
-  private final boolean initReaderTimeoutStrict;
   private final int kafkaStoreMaxRetries;
   private final int searchDefaultLimit;
   private final int searchMaxLimit;
@@ -207,8 +206,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
-    this.initReaderTimeoutStrict =
-        config.getBoolean(SchemaRegistryConfig.KAFKASTORE_INIT_READER_TIMEOUT_STRICT_CONFIG);
     this.kafkaStoreMaxRetries =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_MAX_RETRIES_CONFIG);
     this.serializer = serializer;
@@ -539,7 +536,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           //ensure the new leader catches up with the offsets before it gets nextid and assigns
           // leader
           try {
-            kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout, initReaderTimeoutStrict);
+            kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
           } catch (StoreException e) {
             throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
           }
