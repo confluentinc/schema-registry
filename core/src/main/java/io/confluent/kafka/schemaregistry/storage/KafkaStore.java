@@ -69,7 +69,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final AtomicBoolean initialized = new AtomicBoolean(false);
   private final CountDownLatch initLatch = new CountDownLatch(1);
   private final int initTimeout;
-  private final boolean initReaderTimeoutStrict;
+  private final boolean initWaitForReader;
   private final int timeout;
   private final String bootstrapBrokers;
   private final boolean skipSchemaTopicValidation;
@@ -100,8 +100,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
                         config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG), port)
                    : config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG);
     initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
-    initReaderTimeoutStrict =
-        config.getBoolean(SchemaRegistryConfig.KAFKASTORE_INIT_READER_TIMEOUT_STRICT_CONFIG);
+    initWaitForReader =
+        config.getBoolean(SchemaRegistryConfig.KAFKASTORE_INIT_WAIT_FOR_READER_CONFIG);
     timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.storeUpdateHandler = storeUpdateHandler;
     this.serializer = serializer;
@@ -149,10 +149,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
     final Map<TopicPartition, Long> checkpoints = new HashMap<>(kafkaTopicReader.checkpoints());
     this.kafkaTopicReader.start();
 
-    try {
-      waitUntilKafkaReaderReachesLastOffset(initTimeout, initReaderTimeoutStrict);
-    } catch (StoreException e) {
-      throw new StoreInitializationException(e);
+    if (initWaitForReader) {
+      try {
+        waitUntilKafkaReaderReachesLastOffset(initTimeout);
+      } catch (StoreException e) {
+        throw new StoreInitializationException(e);
+      }
     }
 
     boolean isInitialized = initialized.compareAndSet(false, true);
@@ -296,15 +298,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
   /**
    * Wait until the KafkaStore catches up to the last message in the Kafka topic.
    */
-  public void waitUntilKafkaReaderReachesLastOffset(int timeoutMs, boolean strict)
-      throws StoreException {
+  public void waitUntilKafkaReaderReachesLastOffset(int timeoutMs) throws StoreException {
     long offsetOfLastMessage = getLatestOffset(timeoutMs);
-    waitUntilKafkaReaderReachesOffset(offsetOfLastMessage, timeoutMs, strict);
+    waitUntilKafkaReaderReachesOffset(offsetOfLastMessage, timeoutMs);
   }
 
   /**
    * Wait until the KafkaStore catches up to the last message for the given subject.
-   * Throws exception on timeout.
    */
   public void waitUntilKafkaReaderReachesLastOffset(String subject, int timeoutMs)
       throws StoreException {
@@ -317,24 +317,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
   /**
    * Wait until the KafkaStore catches up to the given offset in the Kafka topic.
-   * Throws exception on timeout.
    */
-  private void waitUntilKafkaReaderReachesOffset(long offset, int timeoutMs)
-      throws StoreException {
-    waitUntilKafkaReaderReachesOffset(offset, timeoutMs, true);
-  }
-
-  /**
-   * Wait until the KafkaStore catches up to the given offset in the Kafka topic.
-   */
-  private void waitUntilKafkaReaderReachesOffset(long offset, int timeoutMs, boolean strict)
-      throws StoreException {
+  private void waitUntilKafkaReaderReachesOffset(long offset, int timeoutMs) throws StoreException {
     log.info("Wait to catch up until the offset at {}", offset);
-    if (kafkaTopicReader.waitUntilOffset(offset, timeoutMs, TimeUnit.MILLISECONDS, strict)) {
-      log.info("Reached offset at {}", offset);
-    } else {
-      log.warn("Timed out before reaching offset at {}", offset);
-    }
+    kafkaTopicReader.waitUntilOffset(offset, timeoutMs, TimeUnit.MILLISECONDS);
+    log.info("Reached offset at {}", offset);
   }
 
   public void markLastWrittenOffsetInvalid() {
