@@ -289,18 +289,17 @@ public class ProtobufSchemaUtils {
   }
 
   protected static String toFormattedString(FormatContext ctx, ProtobufSchema schema) {
-    if (ctx.normalize()) {
-      ctx.collectTypeInfo(schema, true);
-    }
+    // Collect type info even if not normalizing in order to emit map fields correctly
+    ctx.collectTypeInfo(schema, true);
     return toString(ctx, schema.rawSchema());
   }
 
-  protected static String toString(ProtoFileElement protoFile) {
+  protected static String toString(ProtobufSchema schema) {
     FormatContext ctx = new FormatContext(false, false);
-    return toString(ctx, protoFile);
+    return toFormattedString(ctx, schema);
   }
 
-  private static String toString(FormatContext ctx, ProtoFileElement protoFile) {
+  protected static String toString(FormatContext ctx, ProtoFileElement protoFile) {
     StringBuilder sb = new StringBuilder();
     if (protoFile.getSyntax() != null) {
       if (!ctx.normalize() || protoFile.getSyntax() == Syntax.PROTO_3) {
@@ -863,28 +862,13 @@ public class ProtobufSchemaUtils {
     ProtoType fieldProtoType = ProtoType.get(fieldType);
     if (ctx.normalize()) {
       if (!fieldProtoType.isScalar() && !fieldProtoType.isMap()) {
-        // See if the fieldType resolves to a message representing a map
         fieldType = resolve(ctx, fieldType);
-        TypeElementInfo typeInfo = ctx.getTypeForFullName(fieldType, true);
-        if (typeInfo != null && typeInfo.isMap()) {
-          fieldProtoType = typeInfo.getMapType();
-        } else {
-          fieldProtoType = ProtoType.get(fieldType);
-        }
       }
-      ProtoType mapValueType = fieldProtoType.getValueType();
-      if (fieldProtoType.isMap() && mapValueType != null) {
-        // Ensure the value of the map is fully resolved
-        String valueType = ctx.resolve(mapValueType.toString(), true);
-        if (valueType != null) {
-          fieldProtoType = ProtoType.get(
-              // Note we add a leading dot to valueType
-              "map<" + fieldProtoType.getKeyType() + ", ." + valueType + ">"
-          );
-        }
-        label = null;  // don't emit label for map
-      }
-      fieldType = fieldProtoType.toString();
+    }
+    String mapFieldType = toMapFieldString(ctx, fieldType);
+    if (mapFieldType != null) {
+      fieldType = mapFieldType;
+      label = null;  // don't emit label for map
     }
     if (label != null) {
       sb.append(label.name().toLowerCase(Locale.US));
@@ -962,22 +946,44 @@ public class ProtobufSchemaUtils {
     return sb.toString();
   }
 
-  private static List<TypeElement> filterTypes(FormatContext ctx, List<TypeElement> types) {
-    if (ctx.normalize()) {
-      return types.stream()
-          .filter(type -> {
-            if (type instanceof MessageElement) {
-              TypeElementInfo typeInfo = ctx.getType(type.getName(), true);
-              // Don't emit synthetic map message
-              return typeInfo == null || !typeInfo.isMap();
-            } else {
-              return true;
-            }
-          })
-          .collect(Collectors.toList());
-    } else {
-      return types;
+  private static String toMapFieldString(FormatContext ctx, String fieldType) {
+    ProtoType fieldProtoType = ProtoType.get(fieldType);
+    if (!fieldProtoType.isScalar() && !fieldProtoType.isMap()) {
+      // See if the fieldType resolves to a message representing a map
+      TypeElementInfo typeInfo = ctx.getType(fieldType, true);
+      if (typeInfo != null && typeInfo.isMap()) {
+        fieldProtoType = typeInfo.getMapType();
+      }
     }
+    ProtoType mapValueType = fieldProtoType.getValueType();
+    if (fieldProtoType.isMap() && mapValueType != null) {
+      if (ctx.normalize()) {
+        // Ensure the value of the map is fully resolved
+        String valueType = ctx.resolve(mapValueType.toString(), true);
+        if (valueType != null) {
+          fieldProtoType = ProtoType.get(
+              // Note we add a leading dot to valueType
+              "map<" + fieldProtoType.getKeyType() + ", ." + valueType + ">"
+          );
+        }
+      }
+      return fieldProtoType.toString();
+    }
+    return null;
+  }
+
+  private static List<TypeElement> filterTypes(FormatContext ctx, List<TypeElement> types) {
+    return types.stream()
+        .filter(type -> {
+          if (type instanceof MessageElement) {
+            TypeElementInfo typeInfo = ctx.getType(type.getName(), true);
+            // Don't emit synthetic map message
+            return typeInfo == null || !typeInfo.isMap();
+          } else {
+            return true;
+          }
+        })
+        .collect(Collectors.toList());
   }
 
   private static void formatOptionMap(
