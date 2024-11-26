@@ -1505,7 +1505,8 @@ public class ProtobufSchema implements ParsedSchema {
     }
 
     if (log.isTraceEnabled()) {
-      log.trace("*** toDynamicSchema: {}", ProtobufSchemaUtils.toString(rootElem));
+      FormatContext formatCtx = new FormatContext(false, false);
+      log.trace("*** toDynamicSchema: {}", ProtobufSchemaUtils.toString(formatCtx, rootElem));
     }
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     try {
@@ -2292,7 +2293,7 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      canonicalString = ProtobufSchemaUtils.toString(schemaObj);
+      canonicalString = ProtobufSchemaUtils.toString(this);
     }
     return canonicalString;
   }
@@ -2330,10 +2331,11 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public Map<String, String> resolvedReferences() {
+    FormatContext ctx = new FormatContext(false, false);
     return dependencies.entrySet()
         .stream()
         .collect(Collectors.toMap(
-                Map.Entry::getKey, e -> ProtobufSchemaUtils.toString(e.getValue())));
+                Map.Entry::getKey, e -> ProtobufSchemaUtils.toString(ctx, e.getValue())));
   }
 
   public Map<String, ProtoFileElement> dependencies() {
