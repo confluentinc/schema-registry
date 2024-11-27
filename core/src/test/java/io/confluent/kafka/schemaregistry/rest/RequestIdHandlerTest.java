@@ -26,6 +26,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.MDC;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -60,7 +61,6 @@ public class RequestIdHandlerTest {
 
     verify(requestIdHandlerSpy, times(1)).getRequestId(Collections.singletonList("request-ID-4329"));
     verify(baseRequest, times(1)).getHeaders(RequestIdHandler.REQUEST_ID_HEADER);
-    // TODO: Validate mutableRequest.putHeader() call.
     verify(response, times(1)).setHeader(RequestIdHandler.REQUEST_ID_HEADER, "request-ID-4329");
 
     // Validate that the MDC.requestId was set
@@ -79,7 +79,6 @@ public class RequestIdHandlerTest {
 
     verify(requestIdHandlerSpy, times(1)).getRequestId(Collections.emptyList());
     verify(baseRequest, times(1)).getHeaders(RequestIdHandler.REQUEST_ID_HEADER);
-    // TODO: Validate mutableRequest.putHeader() call.
     verify(response, times(1)).setHeader(eq(RequestIdHandler.REQUEST_ID_HEADER), requestIdCaptor.capture());
 
     String generatedRequestId = requestIdCaptor.getValue();
@@ -100,13 +99,43 @@ public class RequestIdHandlerTest {
 
     verify(requestIdHandlerSpy, times(1)).getRequestId(Arrays.asList("request-ID6", "request-ID4"));
     verify(baseRequest, times(1)).getHeaders(RequestIdHandler.REQUEST_ID_HEADER);
-    // TODO: Validate mutableRequest.putHeader() call.
     verify(response, times(1)).setHeader(eq(RequestIdHandler.REQUEST_ID_HEADER), requestIdCaptor.capture());
 
     String generatedRequestId = requestIdCaptor.getValue();
     // Validate that the MDC.requestId was set
     Assert.assertEquals(generatedRequestId, MDC.get("requestId"));
     validateUuid(generatedRequestId);
+  }
+
+  @Test
+  public void testAddRequestIdToRequest() {
+    MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
+
+    Enumeration<String> headers = Collections.enumeration(Collections.singletonList("request-ID-4329"));
+    when(baseRequest.getHeaders(RequestIdHandler.REQUEST_ID_HEADER)).thenReturn(headers);
+
+    RequestIdHandler requestIdHandler = new RequestIdHandler();
+    requestIdHandler.addRequestIdToRequest(baseRequest, mutableRequest, response);
+
+    verify(baseRequest, times(1)).getHeaders(RequestIdHandler.REQUEST_ID_HEADER);
+    verify(response, times(1)).setHeader(RequestIdHandler.REQUEST_ID_HEADER, "request-ID-4329");
+    String requestId = mutableRequest.getHeader(RequestIdHandler.REQUEST_ID_HEADER);
+    Assert.assertEquals("request-ID-4329", requestId);
+
+    // Validate that the MDC.requestId was set
+    Assert.assertEquals("request-ID-4329", MDC.get("requestId"));
+  }
+
+  @Test
+  public void testAddCallerIpToRequest() {
+    MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
+    when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+
+    RequestIdHandler requestIdHandler = new RequestIdHandler();
+    requestIdHandler.addCallerIpToRequest(mutableRequest, request);
+
+    String callerIp = mutableRequest.getHeader(RequestIdHandler.CALLER_IP_HEADER);
+    Assert.assertEquals("127.0.0.1", callerIp);
   }
 
   @Test
