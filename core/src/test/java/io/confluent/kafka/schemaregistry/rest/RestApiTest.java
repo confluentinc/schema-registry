@@ -484,6 +484,28 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testBadFormat() throws Exception {
+    String subject = "testSubject";
+
+    String schema1String = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":"
+        + "\"f" + "\"}]}";
+    String schema1 = AvroUtils.parseSchema(schema1String).canonicalString();
+
+    restApp.restClient.registerSchema(schema1, subject);
+
+    SchemaString schemaString = restApp.restClient.getId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, "bad-format", false);
+    // the newly registered schema should be immediately readable on the leader
+    assertEquals("Registered schema should be found",
+        schema1,
+        schemaString.getSchemaString()
+    );
+  }
+
+  @Test
   public void testSchemaRegistrationUnderDiffSubjects() throws Exception {
     String subject1 = "testSubject1";
     String subject2 = "testSubject2";
