@@ -34,7 +34,8 @@ public class RequestIdHandler extends HandlerWrapper {
   public static final String CALLER_IP_HEADER = "X-Forwarded-For";
 
   @Override
-  public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
+  public void handle(String target, Request baseRequest, HttpServletRequest request,
+                     HttpServletResponse response) throws IOException, ServletException {
     // Clear MDC at the beginning of each request to remove stale values
     MDC.clear();
     MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
