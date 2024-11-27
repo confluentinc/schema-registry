@@ -267,6 +267,10 @@ public class AvroSchema implements ParsedSchema {
       return canonicalString();
     }
     Format formatEnum = Format.get(format);
+    if (formatEnum == null) {
+      log.warn("Unsupported format {}", format);
+      return canonicalString();
+    }
     switch (formatEnum) {
       case DEFAULT:
         return canonicalString();
