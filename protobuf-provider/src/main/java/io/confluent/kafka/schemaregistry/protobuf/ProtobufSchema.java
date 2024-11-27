@@ -1956,6 +1956,11 @@ public class ProtobufSchema implements ParsedSchema {
       return canonicalString();
     }
     Format formatEnum = Format.get(format);
+    if (formatEnum == null) {
+      // Don't throw an exception for forward compatibility of formats
+      log.warn("Unsupported format {}", format);
+      return canonicalString();
+    }
     switch (formatEnum) {
       case DEFAULT:
         return canonicalString();
