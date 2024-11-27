@@ -31,24 +31,32 @@ import org.slf4j.MDC;
 
 public class RequestIdHandler extends HandlerWrapper {
   public static final String REQUEST_ID_HEADER = "X-Request-ID";
+  public static final String CALLER_IP_HEADER = "X-Forwarded-For";
 
   @Override
-  public void handle(String target, Request baseRequest, HttpServletRequest request,
-                     HttpServletResponse response) throws IOException, ServletException {
-    // Clear MDC at beginning of each request to remove stale values
+  public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
+    // Clear MDC at the beginning of each request to remove stale values
     MDC.clear();
     MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
-    List<String> inputHeaders = Collections.list(baseRequest.getHeaders(REQUEST_ID_HEADER));
+    addRequestIdToRequest(baseRequest, mutableRequest, response);
+    addCallerIpToRequest(mutableRequest, request);
 
+    // Call the next handler in the chain
+    super.handle(target, baseRequest, mutableRequest, response);
+  }
+
+  protected void addRequestIdToRequest(Request baseRequest, MutableHttpServletRequest mutableRequest, HttpServletResponse response) {
+    List<String> inputHeaders = Collections.list(baseRequest.getHeaders(REQUEST_ID_HEADER));
     String requestId = getRequestId(inputHeaders);
 
     // Add request ID to request and response header and MDC
     mutableRequest.putHeader(REQUEST_ID_HEADER, requestId);
     response.setHeader(REQUEST_ID_HEADER, requestId);
     MDC.put("requestId", requestId);
+  }
 
-    // Call the next handler in the chain
-    super.handle(target, baseRequest, mutableRequest, response);
+  protected void addCallerIpToRequest(MutableHttpServletRequest mutableRequest, HttpServletRequest request) {
+    mutableRequest.putHeader(CALLER_IP_HEADER, request.getRemoteAddr());
   }
 
   protected String getRequestId(List<String> headers) {
