@@ -108,7 +108,7 @@ public class RequestIdHandlerTest {
   }
 
   @Test
-  public void testAddRequestIdToRequestAndResponse() {
+  public void testAddRequestIdToRequest() {
     MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
 
     Enumeration<String> headers = Collections.enumeration(Collections.singletonList("request-ID-4329"));
