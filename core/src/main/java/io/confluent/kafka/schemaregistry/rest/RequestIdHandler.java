@@ -38,17 +38,18 @@ public class RequestIdHandler extends HandlerWrapper {
     // Clear MDC at the beginning of each request to remove stale values
     MDC.clear();
     MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
-    addRequestIdToRequestAndResponse(baseRequest, mutableRequest, response);
+    addRequestIdToRequest(baseRequest, mutableRequest, response);
     addCallerIpToRequest(mutableRequest, request);
 
     // Call the next handler in the chain
     super.handle(target, baseRequest, mutableRequest, response);
   }
 
-  protected void addRequestIdToRequestAndResponse(Request baseRequest, MutableHttpServletRequest mutableRequest, HttpServletResponse response) {
+  protected void addRequestIdToRequest(Request baseRequest, MutableHttpServletRequest mutableRequest, HttpServletResponse response) {
     List<String> inputHeaders = Collections.list(baseRequest.getHeaders(REQUEST_ID_HEADER));
     String requestId = getRequestId(inputHeaders);
 
+    // Add request ID to request and response header and MDC
     mutableRequest.putHeader(REQUEST_ID_HEADER, requestId);
     response.setHeader(REQUEST_ID_HEADER, requestId);
     MDC.put("requestId", requestId);
@@ -57,7 +58,6 @@ public class RequestIdHandler extends HandlerWrapper {
   protected void addCallerIpToRequest(MutableHttpServletRequest mutableRequest, HttpServletRequest request) {
     mutableRequest.putHeader(CALLER_IP_HEADER, request.getRemoteAddr());
   }
-
 
   protected String getRequestId(List<String> headers) {
     if (headers.size() == 1 && StringUtil.isNotBlank(headers.get(0))) {

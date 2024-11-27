@@ -115,7 +115,7 @@ public class RequestIdHandlerTest {
     when(baseRequest.getHeaders(RequestIdHandler.REQUEST_ID_HEADER)).thenReturn(headers);
 
     RequestIdHandler requestIdHandler = new RequestIdHandler();
-    requestIdHandler.addRequestIdToRequestAndResponse(baseRequest, mutableRequest, response);
+    requestIdHandler.addRequestIdToRequest(baseRequest, mutableRequest, response);
 
     verify(baseRequest, times(1)).getHeaders(RequestIdHandler.REQUEST_ID_HEADER);
     verify(response, times(1)).setHeader(RequestIdHandler.REQUEST_ID_HEADER, "request-ID-4329");
