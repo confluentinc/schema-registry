@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -67,23 +68,19 @@ public class CompositeDeserializer implements Deserializer<Object> {
 
   @Override
   public Object deserialize(String topic, Headers headers, byte[] bytes) {
-    try {
-      if (bytes == null) {
-        return null;
-      }
+    if (bytes == null) {
+      return null;
+    }
 
-      // We assume TopicNameStrategy
-      String subject = topic + "-value";
+    // We assume TopicNameStrategy
+    String subject = topic + "-value";
 
-      int schemaId = getSchemaId(ByteBuffer.wrap(bytes));
+    int schemaId = getSchemaId(ByteBuffer.wrap(bytes));
 
-      if (isValidSchemaId(subject, schemaId)) {
-        return confluentDeserializer.deserialize(topic, headers, bytes);
-      } else {
-        return oldDeserializer.deserialize(topic, bytes);
-      }
-    } catch (Exception e) {
-      throw new SerializationException(e);
+    if (isValidSchemaId(subject, schemaId)) {
+      return confluentDeserializer.deserialize(topic, headers, bytes);
+    } else {
+      return oldDeserializer.deserialize(topic, bytes);
     }
   }
 
@@ -98,19 +95,22 @@ public class CompositeDeserializer implements Deserializer<Object> {
     return payload.getInt();
   }
 
-  protected boolean isValidSchemaId(String subject, int id)
-      throws IOException, RestClientException {
+  protected boolean isValidSchemaId(String subject, int id) {
     if (id == 0) {
       return false;
     }
 
-    // Obtain the schema.
-    ParsedSchema schema = schemaRegistryClient.getSchemaBySubjectAndId(subject, id);
+    try {
+      // Obtain the schema.
+      ParsedSchema schema = schemaRegistryClient.getSchemaBySubjectAndId(subject, id);
 
-    // Get the id of the schema that was saved in the registry.
-    int savedId = schemaRegistryClient.getId(subject, schema);
+      // Get the id of the schema that was saved in the registry.
+      int savedId = schemaRegistryClient.getId(subject, schema);
 
-    return id == savedId;
+      return id == savedId;
+    } catch (Exception e) {
+      return false;
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -127,12 +127,8 @@ public class CompositeDeserializer implements Deserializer<Object> {
   }
   @Override
   public void close() {
-    try {
-      oldDeserializer.close();
-      confluentDeserializer.close();
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+    oldDeserializer.close();
+    confluentDeserializer.close();
   }
 
 }
