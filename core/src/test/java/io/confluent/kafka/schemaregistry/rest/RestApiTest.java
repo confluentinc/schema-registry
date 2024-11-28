@@ -518,7 +518,7 @@ public class RestApiTest extends ClusterTestHarness {
     restApp.restClient.registerSchema(schema1, subject);
 
     SchemaString schemaString = restApp.restClient.getId(
-        RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, "bad-format", false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, "bad-format", null, false);
     assertEquals("Registered schema should be found",
         schema1,
         schemaString.getSchemaString()
