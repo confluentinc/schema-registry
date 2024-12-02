@@ -64,6 +64,7 @@ public class RequestHeaderHandler extends HandlerWrapper {
 
   protected void addCallerIpToRequest(MutableHttpServletRequest mutableRequest,
                                       HttpServletRequest request) {
+    // Do not propagate on leader call, or it would override follower IP
     if (mutableRequest.getHeader(X_FORWARD_HEADER) == null) {
       mutableRequest.putHeader(CALLER_IP_HEADER, request.getRemoteAddr());
     }
