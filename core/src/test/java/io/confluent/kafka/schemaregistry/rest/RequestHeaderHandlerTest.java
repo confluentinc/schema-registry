@@ -35,7 +35,7 @@ import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class RequestIdHandlerTest {
-  RequestIdHandler requestIdHandler = new RequestIdHandler();
+  RequestHeaderHandler requestHeaderHandler = new RequestHeaderHandler();
 
   @Mock
   Request baseRequest;
@@ -53,15 +53,15 @@ public class RequestIdHandlerTest {
 
   @Test
   public void testRequestHandlerWith1RequestId() throws IOException, ServletException {
-    RequestIdHandler requestIdHandlerSpy = spy(new RequestIdHandler());
+    RequestHeaderHandler requestHeaderHandlerSpy = spy(new RequestHeaderHandler());
     Enumeration<String> headers = Collections.enumeration(Collections.singletonList("request-ID-4329"));
-    when(baseRequest.getHeaders(RequestIdHandler.REQUEST_ID_HEADER)).thenReturn(headers);
+    when(baseRequest.getHeaders(RequestHeaderHandler.REQUEST_ID_HEADER)).thenReturn(headers);
 
-    requestIdHandlerSpy.handle("/subjects/subject-2/versions", baseRequest, request, response);
+    requestHeaderHandlerSpy.handle("/subjects/subject-2/versions", baseRequest, request, response);
 
-    verify(requestIdHandlerSpy, times(1)).getRequestId(Collections.singletonList("request-ID-4329"));
-    verify(baseRequest, times(1)).getHeaders(RequestIdHandler.REQUEST_ID_HEADER);
-    verify(response, times(1)).setHeader(RequestIdHandler.REQUEST_ID_HEADER, "request-ID-4329");
+    verify(requestHeaderHandlerSpy, times(1)).getRequestId(Collections.singletonList("request-ID-4329"));
+    verify(baseRequest, times(1)).getHeaders(RequestHeaderHandler.REQUEST_ID_HEADER);
+    verify(response, times(1)).setHeader(RequestHeaderHandler.REQUEST_ID_HEADER, "request-ID-4329");
 
     // Validate that the MDC.requestId was set
     Assert.assertEquals("request-ID-4329", MDC.get("requestId"));
@@ -71,15 +71,15 @@ public class RequestIdHandlerTest {
   public void testRequestHandlerWithoutRequestId() throws IOException, ServletException {
     ArgumentCaptor<String> requestIdCaptor = ArgumentCaptor.forClass(String.class);;
 
-    RequestIdHandler requestIdHandlerSpy = spy(new RequestIdHandler());
+    RequestHeaderHandler requestHeaderHandlerSpy = spy(new RequestHeaderHandler());
     Enumeration<String> headers = Collections.enumeration(Collections.emptyList());
-    when(baseRequest.getHeaders(RequestIdHandler.REQUEST_ID_HEADER)).thenReturn(headers);
+    when(baseRequest.getHeaders(RequestHeaderHandler.REQUEST_ID_HEADER)).thenReturn(headers);
 
-    requestIdHandlerSpy.handle("/subjects/subject-2/versions", baseRequest, request, response);
+    requestHeaderHandlerSpy.handle("/subjects/subject-2/versions", baseRequest, request, response);
 
-    verify(requestIdHandlerSpy, times(1)).getRequestId(Collections.emptyList());
-    verify(baseRequest, times(1)).getHeaders(RequestIdHandler.REQUEST_ID_HEADER);
-    verify(response, times(1)).setHeader(eq(RequestIdHandler.REQUEST_ID_HEADER), requestIdCaptor.capture());
+    verify(requestHeaderHandlerSpy, times(1)).getRequestId(Collections.emptyList());
+    verify(baseRequest, times(1)).getHeaders(RequestHeaderHandler.REQUEST_ID_HEADER);
+    verify(response, times(1)).setHeader(eq(RequestHeaderHandler.REQUEST_ID_HEADER), requestIdCaptor.capture());
 
     String generatedRequestId = requestIdCaptor.getValue();
     // Validate that the MDC.requestId was set
@@ -91,15 +91,15 @@ public class RequestIdHandlerTest {
   public void testRequestHandlerWithMultipleRequestId() throws IOException, ServletException {
     ArgumentCaptor<String> requestIdCaptor = ArgumentCaptor.forClass(String.class);;
 
-    RequestIdHandler requestIdHandlerSpy = spy(new RequestIdHandler());
+    RequestHeaderHandler requestHeaderHandlerSpy = spy(new RequestHeaderHandler());
     Enumeration<String> headers = Collections.enumeration(Arrays.asList("request-ID6", "request-ID4"));
-    when(baseRequest.getHeaders(RequestIdHandler.REQUEST_ID_HEADER)).thenReturn(headers);
+    when(baseRequest.getHeaders(RequestHeaderHandler.REQUEST_ID_HEADER)).thenReturn(headers);
 
-    requestIdHandlerSpy.handle("/subjects/subject-2/versions", baseRequest, request, response);
+    requestHeaderHandlerSpy.handle("/subjects/subject-2/versions", baseRequest, request, response);
 
-    verify(requestIdHandlerSpy, times(1)).getRequestId(Arrays.asList("request-ID6", "request-ID4"));
-    verify(baseRequest, times(1)).getHeaders(RequestIdHandler.REQUEST_ID_HEADER);
-    verify(response, times(1)).setHeader(eq(RequestIdHandler.REQUEST_ID_HEADER), requestIdCaptor.capture());
+    verify(requestHeaderHandlerSpy, times(1)).getRequestId(Arrays.asList("request-ID6", "request-ID4"));
+    verify(baseRequest, times(1)).getHeaders(RequestHeaderHandler.REQUEST_ID_HEADER);
+    verify(response, times(1)).setHeader(eq(RequestHeaderHandler.REQUEST_ID_HEADER), requestIdCaptor.capture());
 
     String generatedRequestId = requestIdCaptor.getValue();
     // Validate that the MDC.requestId was set
@@ -112,14 +112,14 @@ public class RequestIdHandlerTest {
     MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
 
     Enumeration<String> headers = Collections.enumeration(Collections.singletonList("request-ID-4329"));
-    when(baseRequest.getHeaders(RequestIdHandler.REQUEST_ID_HEADER)).thenReturn(headers);
+    when(baseRequest.getHeaders(RequestHeaderHandler.REQUEST_ID_HEADER)).thenReturn(headers);
 
-    RequestIdHandler requestIdHandler = new RequestIdHandler();
-    requestIdHandler.addRequestIdToRequest(baseRequest, mutableRequest, response);
+    RequestHeaderHandler requestHeaderHandler = new RequestHeaderHandler();
+    requestHeaderHandler.addRequestIdToRequest(baseRequest, mutableRequest, response);
 
-    verify(baseRequest, times(1)).getHeaders(RequestIdHandler.REQUEST_ID_HEADER);
-    verify(response, times(1)).setHeader(RequestIdHandler.REQUEST_ID_HEADER, "request-ID-4329");
-    String requestId = mutableRequest.getHeader(RequestIdHandler.REQUEST_ID_HEADER);
+    verify(baseRequest, times(1)).getHeaders(RequestHeaderHandler.REQUEST_ID_HEADER);
+    verify(response, times(1)).setHeader(RequestHeaderHandler.REQUEST_ID_HEADER, "request-ID-4329");
+    String requestId = mutableRequest.getHeader(RequestHeaderHandler.REQUEST_ID_HEADER);
     Assert.assertEquals("request-ID-4329", requestId);
 
     // Validate that the MDC.requestId was set
@@ -131,17 +131,17 @@ public class RequestIdHandlerTest {
     MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
     when(request.getRemoteAddr()).thenReturn("127.0.0.1");
 
-    RequestIdHandler requestIdHandler = new RequestIdHandler();
-    requestIdHandler.addCallerIpToRequest(mutableRequest, request);
+    RequestHeaderHandler requestHeaderHandler = new RequestHeaderHandler();
+    requestHeaderHandler.addCallerIpToRequest(mutableRequest, request);
 
-    String callerIp = mutableRequest.getHeader(RequestIdHandler.CALLER_IP_HEADER);
+    String callerIp = mutableRequest.getHeader(RequestHeaderHandler.CALLER_IP_HEADER);
     Assert.assertEquals("127.0.0.1", callerIp);
   }
 
   @Test
   public void testGetRequestIdWith1RequestId() {
     // A single non-blank request id should be taken as is
-    String requestId = requestIdHandler.getRequestId(Collections.singletonList("request-ID-1234"));
+    String requestId = requestHeaderHandler.getRequestId(Collections.singletonList("request-ID-1234"));
 
     Assert.assertEquals(
         "Request ID must not change",
@@ -153,14 +153,14 @@ public class RequestIdHandlerTest {
   @Test
   public void testGetRequestIdWithoutRequestId() {
     // No request id should result in a new request UUID being generated
-    String requestId = requestIdHandler.getRequestId(Collections.emptyList());
+    String requestId = requestHeaderHandler.getRequestId(Collections.emptyList());
     validateUuid(requestId);
   }
 
   @Test
   public void testGetRequestIdWithMultipleRequestId() {
     // Multiple request ids in the request header should result in a new request UUID being generated
-    String requestId = requestIdHandler.getRequestId(Arrays.asList("request-ID1", "request-ID2"));
+    String requestId = requestHeaderHandler.getRequestId(Arrays.asList("request-ID1", "request-ID2"));
     validateUuid(requestId);
   }
 
@@ -168,7 +168,7 @@ public class RequestIdHandlerTest {
   public void testGetRequestIdWithBlankRequestId() {
     // Blank request ids should result in a new request UUID being generated
     // A single non-blank request id should be taken as is
-    String requestId = requestIdHandler.getRequestId(Collections.singletonList("   "));
+    String requestId = requestHeaderHandler.getRequestId(Collections.singletonList("   "));
     validateUuid(requestId);
   }
 
