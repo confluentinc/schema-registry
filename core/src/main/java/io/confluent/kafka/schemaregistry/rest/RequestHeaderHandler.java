@@ -29,26 +29,46 @@ import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.server.Request;
 import org.slf4j.MDC;
 
-public class RequestIdHandler extends HandlerWrapper {
-  public static final String REQUEST_ID_HEADER = "X-Request-ID";
+import static io.confluent.kafka.schemaregistry.client.rest.RestService.X_FORWARD_HEADER;
+
+public class RequestHeaderHandler extends HandlerWrapper {
+  public static final String X_REQUEST_ID_HEADER = "X-Request-ID";
+  public static final String X_FORWARDED_FOR_HEADER = "X-Forwarded-For";
 
   @Override
-  public void handle(String target, Request baseRequest, HttpServletRequest request,
+  public void handle(String target,
+                     Request baseRequest,
+                     HttpServletRequest request,
                      HttpServletResponse response) throws IOException, ServletException {
-    // Clear MDC at beginning of each request to remove stale values
+    // Clear MDC at the beginning of each request to remove stale values
     MDC.clear();
     MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
-    List<String> inputHeaders = Collections.list(baseRequest.getHeaders(REQUEST_ID_HEADER));
-
-    String requestId = getRequestId(inputHeaders);
-
-    // Add request ID to request and response header and MDC
-    mutableRequest.putHeader(REQUEST_ID_HEADER, requestId);
-    response.setHeader(REQUEST_ID_HEADER, requestId);
-    MDC.put("requestId", requestId);
+    addXRequestIdToRequest(baseRequest, mutableRequest, response);
+    addXForwardedForToRequest(mutableRequest, request);
 
     // Call the next handler in the chain
     super.handle(target, baseRequest, mutableRequest, response);
+  }
+
+  protected void addXRequestIdToRequest(Request baseRequest,
+                                        MutableHttpServletRequest mutableRequest,
+                                        HttpServletResponse response) {
+    List<String> inputHeaders = Collections.list(baseRequest.getHeaders(X_REQUEST_ID_HEADER));
+    String requestId = getRequestId(inputHeaders);
+
+    // Add request ID to request and response header and MDC
+    mutableRequest.putHeader(X_REQUEST_ID_HEADER, requestId);
+    response.setHeader(X_REQUEST_ID_HEADER, requestId);
+    MDC.put("requestId", requestId);
+  }
+
+  protected void addXForwardedForToRequest(MutableHttpServletRequest mutableRequest,
+                                           HttpServletRequest request) {
+    // Do not propagate on leader call, or it would override follower IP
+    if (mutableRequest.getHeader(X_FORWARD_HEADER) == null
+        && mutableRequest.getHeader(X_FORWARDED_FOR_HEADER) == null) {
+      mutableRequest.putHeader(X_FORWARDED_FOR_HEADER, request.getRemoteAddr());
+    }
   }
 
   protected String getRequestId(List<String> headers) {
