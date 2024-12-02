@@ -25,6 +25,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.MDC;
 
+import static io.confluent.kafka.schemaregistry.client.rest.RestService.X_FORWARD_HEADER;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
@@ -34,7 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
-public class RequestIdHandlerTest {
+public class RequestHeaderHandlerTest {
   RequestHeaderHandler requestHeaderHandler = new RequestHeaderHandler();
 
   @Mock
@@ -130,11 +131,19 @@ public class RequestIdHandlerTest {
   public void testAddCallerIpToRequest() {
     MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
     when(request.getRemoteAddr()).thenReturn("127.0.0.1");
-
     RequestHeaderHandler requestHeaderHandler = new RequestHeaderHandler();
-    requestHeaderHandler.addCallerIpToRequest(mutableRequest, request);
 
+    // Forwarded request
+    when(request.getHeader(X_FORWARD_HEADER)).thenReturn(null);
+    requestHeaderHandler.addCallerIpToRequest(mutableRequest, request);
     String callerIp = mutableRequest.getHeader(RequestHeaderHandler.CALLER_IP_HEADER);
+    Assert.assertEquals("127.0.0.1", callerIp);
+
+    // Not forwarded request
+    when(request.getHeader(X_FORWARD_HEADER)).thenReturn("true");
+    when(request.getRemoteAddr()).thenReturn("should_not_use");
+    requestHeaderHandler.addCallerIpToRequest(mutableRequest, request);
+    callerIp = mutableRequest.getHeader(RequestHeaderHandler.CALLER_IP_HEADER);
     Assert.assertEquals("127.0.0.1", callerIp);
   }
 

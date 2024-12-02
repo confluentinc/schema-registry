@@ -29,12 +29,16 @@ import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.server.Request;
 import org.slf4j.MDC;
 
-public class RequestIdHandler extends HandlerWrapper {
+import static io.confluent.kafka.schemaregistry.client.rest.RestService.X_FORWARD_HEADER;
+
+public class RequestHeaderHandler extends HandlerWrapper {
   public static final String REQUEST_ID_HEADER = "X-Request-ID";
   public static final String CALLER_IP_HEADER = "X-Forwarded-For";
 
   @Override
-  public void handle(String target, Request baseRequest, HttpServletRequest request,
+  public void handle(String target,
+                     Request baseRequest,
+                     HttpServletRequest request,
                      HttpServletResponse response) throws IOException, ServletException {
     // Clear MDC at the beginning of each request to remove stale values
     MDC.clear();
@@ -46,7 +50,9 @@ public class RequestIdHandler extends HandlerWrapper {
     super.handle(target, baseRequest, mutableRequest, response);
   }
 
-  protected void addRequestIdToRequest(Request baseRequest, MutableHttpServletRequest mutableRequest, HttpServletResponse response) {
+  protected void addRequestIdToRequest(Request baseRequest,
+                                       MutableHttpServletRequest mutableRequest,
+                                       HttpServletResponse response) {
     List<String> inputHeaders = Collections.list(baseRequest.getHeaders(REQUEST_ID_HEADER));
     String requestId = getRequestId(inputHeaders);
 
@@ -56,8 +62,11 @@ public class RequestIdHandler extends HandlerWrapper {
     MDC.put("requestId", requestId);
   }
 
-  protected void addCallerIpToRequest(MutableHttpServletRequest mutableRequest, HttpServletRequest request) {
-    mutableRequest.putHeader(CALLER_IP_HEADER, request.getRemoteAddr());
+  protected void addCallerIpToRequest(MutableHttpServletRequest mutableRequest,
+                                      HttpServletRequest request) {
+    if (mutableRequest.getHeader(X_FORWARD_HEADER) == null) {
+      mutableRequest.putHeader(CALLER_IP_HEADER, request.getRemoteAddr());
+    }
   }
 
   protected String getRequestId(List<String> headers) {
