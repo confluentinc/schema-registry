@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.avro;
 
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.avro.AvroTypeException;
 import org.apache.avro.SchemaParseException;
 
 public class AvroUtils {
@@ -30,7 +31,7 @@ public class AvroUtils {
   public static AvroSchema parseSchema(String schemaString) {
     try {
       return new AvroSchema(schemaString);
-    } catch (SchemaParseException e) {
+    } catch (SchemaParseException | AvroTypeException e) {
       return null;
     }
   }
