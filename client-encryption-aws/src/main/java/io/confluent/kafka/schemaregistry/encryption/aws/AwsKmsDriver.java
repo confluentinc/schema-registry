@@ -16,25 +16,30 @@
 
 package io.confluent.kafka.schemaregistry.encryption.aws;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.auth.PropertiesCredentials;
-import com.amazonaws.services.kms.AWSKMS;
+import com.google.common.base.Splitter;
 import com.google.crypto.tink.KmsClient;
-import com.google.crypto.tink.integration.awskms.AwsKmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
-import java.io.ByteArrayInputStream;
 import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
+import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
 
 public class AwsKmsDriver implements KmsDriver {
 
   public static final String ACCESS_KEY_ID = "access.key.id";
   public static final String SECRET_ACCESS_KEY = "secret.access.key";
+  public static final String ROLE_ARN = "role.arn";
+  public static final String ROLE_SESSION_NAME = "role.session.name";
+  public static final String ROLE_EXTERNAL_ID = "role.external.id";
 
   public AwsKmsDriver() {
   }
@@ -44,35 +49,80 @@ public class AwsKmsDriver implements KmsDriver {
     return AwsKmsClient.PREFIX;
   }
 
-  private AWSCredentialsProvider getCredentials(Map<String, ?> configs)
+  private AwsCredentialsProvider getCredentials(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
     try {
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
+      String roleArn = (String) configs.get(ROLE_ARN);
+      String roleSessionName = (String) configs.get(ROLE_SESSION_NAME);
+      String roleExternalId = (String) configs.get(ROLE_EXTERNAL_ID);
+      AwsCredentialsProvider provider;
       if (accessKey != null && secretKey != null) {
-        String keys = "accessKey=" + accessKey + "\n" + "secretKey=" + secretKey + "\n";
-        return new AWSStaticCredentialsProvider(new PropertiesCredentials(
-            new ByteArrayInputStream(keys.getBytes(StandardCharsets.UTF_8))));
+        provider = StaticCredentialsProvider.create(
+            AwsBasicCredentials.create(accessKey, secretKey));
       } else {
-        return new DefaultAWSCredentialsProviderChain();
+        provider = DefaultCredentialsProvider.create();
+      }
+      if (roleArn != null) {
+        Region region = getRegionFromKeyId(
+            AwsKmsClient.removePrefix(AwsKmsClient.PREFIX, kekUrl.get()));
+        return buildRoleProvider(provider, region, roleArn, roleSessionName, roleExternalId);
+      } else {
+        return provider;
       }
     } catch (Exception e) {
       throw new GeneralSecurityException("cannot load credentials", e);
     }
   }
 
+  private AwsCredentialsProvider buildRoleProvider(
+      AwsCredentialsProvider provider, Region region,
+      String roleArn, String roleSessionName, String roleExternalId) {
+    StsClient stsClient = StsClient.builder()
+        .credentialsProvider(provider)
+        .region(region)
+        .build();
+    return StsAssumeRoleCredentialsProvider.builder()
+        .stsClient(stsClient)
+        .refreshRequest(() -> buildRoleRequest(roleArn, roleSessionName, roleExternalId))
+        .build();
+  }
+
+  private AssumeRoleRequest buildRoleRequest(
+      String roleArn, String roleSessionName, String roleExternalId) {
+    AssumeRoleRequest.Builder req = AssumeRoleRequest.builder()
+        .roleArn(roleArn)
+        .roleSessionName(roleSessionName != null ? roleSessionName : "confluent-encrypt");
+    if (roleExternalId != null) {
+      req = req.externalId(roleExternalId);
+    }
+    return req.build();
+  }
+
+  public static Region getRegionFromKeyId(String keyId) {
+    List<String> tokens = Splitter.on(':').splitToList(keyId);
+    if (tokens.size() < 4) {
+      throw new IllegalArgumentException("invalid key URI");
+    }
+    String regionName = tokens.get(3);
+    return Region.of(regionName);
+  }
+
   @Override
   public KmsClient newKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
-    AWSKMS testClient = (AWSKMS) getTestClient(configs);
-    Optional<AWSCredentialsProvider> creds = testClient != null
+    software.amazon.awssdk.services.kms.KmsClient testClient =
+        (software.amazon.awssdk.services.kms.KmsClient) getTestClient(configs);
+    Optional<AwsCredentialsProvider> creds = testClient != null
         ? Optional.empty()
-        : Optional.of(getCredentials(configs));
+        : Optional.of(getCredentials(configs, kekUrl));
     return newKmsClientWithAwsKms(kekUrl, creds, testClient);
   }
 
   protected static KmsClient newKmsClientWithAwsKms(
-      Optional<String> keyUri, Optional<AWSCredentialsProvider> credentials, AWSKMS awsKms)
+      Optional<String> keyUri, Optional<AwsCredentialsProvider> credentials,
+      software.amazon.awssdk.services.kms.KmsClient awsKms)
       throws GeneralSecurityException {
     AwsKmsClient client;
     if (keyUri.isPresent()) {
@@ -91,7 +141,8 @@ public class AwsKmsDriver implements KmsDriver {
     return client;
   }
 
-  private static void setAwsKms(AwsKmsClient client, AWSKMS awsKms) {
+  private static void setAwsKms(AwsKmsClient client,
+      software.amazon.awssdk.services.kms.KmsClient awsKms) {
     try {
       Field field = AwsKmsClient.class.getDeclaredField("awsKms");
       field.setAccessible(true);
