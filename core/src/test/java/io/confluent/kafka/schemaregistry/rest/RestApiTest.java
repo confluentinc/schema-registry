@@ -65,7 +65,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.SchemaParseException;
 import org.junit.Test;
@@ -216,8 +215,8 @@ public class RestApiTest extends ClusterTestHarness {
     try {
         new Parser().parse(badSchemaString);
         fail("Parsing invalid schema string should fail with SchemaParseException or AvroTypeException");
-    } catch (SchemaParseException | AvroTypeException e) {
-      expectedErrorMessage = e.getMessage();
+    } catch (SchemaParseException spe) {
+        expectedErrorMessage = spe.getMessage();
     }
 
     try {
