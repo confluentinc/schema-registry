@@ -214,7 +214,7 @@ public class RestApiTest extends ClusterTestHarness {
     String expectedErrorMessage = null;
     try {
         new Parser().parse(badSchemaString);
-        fail("Parsing invalid schema string should fail with SchemaParseException");
+        fail("Parsing invalid schema string should fail with SchemaParseException or AvroTypeException");
     } catch (SchemaParseException spe) {
         expectedErrorMessage = spe.getMessage();
     }
