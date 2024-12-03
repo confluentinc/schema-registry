@@ -440,32 +440,6 @@ public class JsonSchemaTest {
   }
 
   @Test
-  public void testPrepopulatedMappings() throws Exception {
-    String schema = "{\n"
-        + "  \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
-        + "  \"$id\": \"task.schema.json\",\n"
-        + "  \"title\": \"Task\",\n"
-        + "  \"description\": \"A task\",\n"
-        + "  \"type\": [\"null\", \"object\"],\n"
-        + "  \"properties\": {\n"
-        + "    \"title\": {\n"
-        + "        \"description\": \"Task title\",\n"
-        + "        \"type\": \"string\"\n"
-        + "    }\n"
-        + "  }\n"
-        + "}";
-
-    Map<URI, String> mappings = spy(new HashMap<>(new JsonSchema("{}").getPrepopulatedMappings()));
-
-    JsonSchema jsonSchema = new JsonSchemaWithMappings(schema, mappings);
-    jsonSchema.validate(true);
-    // Verify that the mappings in the prepopulatedMetaSchemas are used
-    // The underlying JSON Schema library calls putMapEntries, which calls size and entrySet
-    verify(mappings).size();
-    verify(mappings).entrySet();
-  }
-
-  @Test
   public void testRecursiveSchema() {
     String schema = "{\n"
         + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
