@@ -18,14 +18,9 @@ package io.confluent.kafka.serializers.migration;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.Map;
-import org.apache.commons.lang3.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
@@ -37,8 +32,9 @@ public class CompositeDeserializer implements Deserializer<Object> {
 
   protected static final byte MAGIC_BYTE = 0x0;
 
-  private Deserializer oldDeserializer;
-  private Deserializer confluentDeserializer;
+  private boolean isKey;
+  private Deserializer<?> oldDeserializer;
+  private Deserializer<?> confluentDeserializer;
   private SchemaRegistryClient schemaRegistryClient;
 
   /**
@@ -52,8 +48,8 @@ public class CompositeDeserializer implements Deserializer<Object> {
     configure(new CompositeDeserializerConfig(configs), isKey);
   }
 
-  @SuppressWarnings("unchecked")
   protected void configure(CompositeDeserializerConfig config, boolean isKey) {
+    this.isKey = isKey;
     Map<String, Object> originals = config.originals();
     this.oldDeserializer = config.getConfiguredInstance(
         CompositeDeserializerConfig.OLD_DESERIALIZER, Deserializer.class);
@@ -76,7 +72,7 @@ public class CompositeDeserializer implements Deserializer<Object> {
     }
 
     // We assume TopicNameStrategy
-    String subject = topic + "-value";
+    String subject = isKey ? topic + "-key" : topic + "-value";
 
     int schemaId = getSchemaId(ByteBuffer.wrap(bytes));
 
@@ -88,18 +84,14 @@ public class CompositeDeserializer implements Deserializer<Object> {
   }
 
   private int getSchemaId(ByteBuffer payload) {
-    if (payload == null) {
-      // Skip validation if no strategy is specified or if no data is present.
-      return 0;
-    }
-    if (payload.get() != MAGIC_BYTE) {
-      return 0;
+    if (payload == null || payload.get() != MAGIC_BYTE) {
+      return -1;
     }
     return payload.getInt();
   }
 
   protected boolean isValidSchemaId(String subject, int id) {
-    if (id == 0) {
+    if (id == -1) {
       return false;
     }
 
@@ -117,22 +109,18 @@ public class CompositeDeserializer implements Deserializer<Object> {
     }
   }
 
-  @SuppressWarnings("unchecked")
   private SchemaRegistryClient getSchemaRegistryClient() {
-    // We use reflection to access the SR client as it is a protected member right now
-    // We should consider making it public in the future
-    try {
-      Field f = AbstractKafkaSchemaSerDe.class.getDeclaredField("schemaRegistry");
-      f.setAccessible(true);
-      return (SchemaRegistryClient) f.get(confluentDeserializer);
-    } catch (NoSuchFieldException | IllegalAccessException e) {
-      throw new RuntimeException(e);
+    if (!(confluentDeserializer instanceof AbstractKafkaSchemaSerDe)) {
+      throw new IllegalArgumentException("Value of 'confluent.deserializer' "
+          + "property must be an instance of "
+          + "'io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe'");
     }
+    return ((AbstractKafkaSchemaSerDe) confluentDeserializer).getSchemaRegistryClient();
   }
+
   @Override
   public void close() {
     oldDeserializer.close();
     confluentDeserializer.close();
   }
-
 }
