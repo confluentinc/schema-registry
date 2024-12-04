@@ -48,8 +48,12 @@
             <artifactId>tink</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.google.crypto.tink</groupId>
-            <artifactId>tink-awskms</artifactId>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>kms</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>sts</artifactId>
         </dependency>
 
         <dependency>
