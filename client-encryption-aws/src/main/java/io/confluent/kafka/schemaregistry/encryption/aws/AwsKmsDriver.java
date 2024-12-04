@@ -41,6 +41,10 @@ public class AwsKmsDriver implements KmsDriver {
   public static final String ROLE_SESSION_NAME = "role.session.name";
   public static final String ROLE_EXTERNAL_ID = "role.external.id";
 
+  public static final String AWS_ROLE_ARN = "AWS_ROLE_ARN";
+  public static final String AWS_ROLE_SESSION_NAME = "AWS_ROLE_SESSION_NAME";
+  public static final String AWS_ROLE_EXTERNAL_ID = "AWS_ROLE_EXTERNAL_ID";
+
   public AwsKmsDriver() {
   }
 
@@ -52,11 +56,20 @@ public class AwsKmsDriver implements KmsDriver {
   private AwsCredentialsProvider getCredentials(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
     try {
+      String roleArn = (String) configs.get(ROLE_ARN);
+      if (roleArn == null) {
+        roleArn = System.getenv(AWS_ROLE_ARN);
+      }
+      String roleSessionName = (String) configs.get(ROLE_SESSION_NAME);
+      if (roleSessionName == null) {
+        roleSessionName = System.getenv(AWS_ROLE_SESSION_NAME);
+      }
+      String roleExternalId = (String) configs.get(ROLE_EXTERNAL_ID);
+      if (roleExternalId == null) {
+        roleExternalId = System.getenv(AWS_ROLE_EXTERNAL_ID);
+      }
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
-      String roleArn = (String) configs.get(ROLE_ARN);
-      String roleSessionName = (String) configs.get(ROLE_SESSION_NAME);
-      String roleExternalId = (String) configs.get(ROLE_EXTERNAL_ID);
       AwsCredentialsProvider provider;
       if (accessKey != null && secretKey != null) {
         provider = StaticCredentialsProvider.create(
