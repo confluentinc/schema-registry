@@ -299,7 +299,7 @@ public interface ParsedSchema {
     // This schema can be used to lookup a previous schema if this schema
     // has no references and the previous schema has references,
     // (which can happen with Avro schemas) and the schemas are the same except
-    // for the previous schema possibly having a confluent:version.
+    // for the one of the schemas possibly having a confluent:version.
     if (references().isEmpty() && !prev.references().isEmpty()) {
       if (canLookupIgnoringVersion(this, prev)) {
         // This handles the case where a schema is sent with all references resolved
@@ -309,10 +309,10 @@ public interface ParsedSchema {
     // This schema can be used to lookup a previous schema if this schema
     // and the previous schema having matching references when all versions of -1
     // are replaced by the latest version, and the schemas are the same except
-    // for the previous schema possibly having a confluent:version.
+    // for the one of the schemas possibly having a confluent:version.
     String schemaVer = getConfluentVersion(metadata());
     String prevVer = getConfluentVersion(prev.metadata());
-    if ((schemaVer == null && prevVer != null)
+    if (schemaVer != null || prevVer != null
         || hasLatestVersion(this.references())
         || hasLatestVersion(prev.references())) {
       boolean areRefsEquivalent = replaceLatestVersion(references(), fetcher)
