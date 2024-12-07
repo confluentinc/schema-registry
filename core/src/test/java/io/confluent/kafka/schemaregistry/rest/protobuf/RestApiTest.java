@@ -651,6 +651,14 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals((Integer) 1, result.getVersion());
     assertNull(result.getMetadata());
 
+    // Lookup schema with confluent:version 1 (should return one without metadata)
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "1"), null));
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 1, result.getVersion());
+    assertNull(result.getMetadata());
+
     // Lookup schema with confluent:version 2
     request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "2"), null));
