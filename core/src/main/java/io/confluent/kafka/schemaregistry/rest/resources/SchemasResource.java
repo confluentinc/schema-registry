@@ -117,7 +117,7 @@ public class SchemasResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    limit = schemaRegistry.normalizeLimit(limit);
+    limit = schemaRegistry.normalizeSchemaLimit(limit);
     int toIndex = offset + limit;
     int index = 0;
     while (schemas.hasNext() && index < toIndex) {

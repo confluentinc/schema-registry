@@ -151,8 +151,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final int initTimeout;
   private final boolean initWaitForReader;
   private final int kafkaStoreMaxRetries;
-  private final int searchDefaultLimit;
-  private final int searchMaxLimit;
+  private final int schemaSearchDefaultLimit;
+  private final int schemaSearchMaxLimit;
+  private final int subjectSearchDefaultLimit;
+  private final int subjectSearchMaxLimit;
   private final boolean delayLeaderElection;
   private final boolean allowModeChanges;
   private final boolean enableStoreHealthCheck;
@@ -225,9 +227,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
                 TimeUnit.SECONDS)
         .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
-    this.searchDefaultLimit =
-        config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
-    this.searchMaxLimit = config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_MAX_LIMIT_CONFIG);
+    this.schemaSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.schemaSearchMaxLimit = config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_MAX_LIMIT_CONFIG);
+    this.subjectSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.subjectSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_MAX_LIMIT_CONFIG);
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
@@ -599,9 +605,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return providers.get(schemaType);
   }
 
-  public int normalizeLimit(int suppliedLimit) {
-    int limit = searchDefaultLimit;
-    if (suppliedLimit > 0 && suppliedLimit <= searchMaxLimit) {
+  public int normalizeSchemaLimit(int suppliedLimit) {
+    int limit = schemaSearchDefaultLimit;
+    if (suppliedLimit > 0 && suppliedLimit <= schemaSearchMaxLimit) {
+      limit = suppliedLimit;
+    }
+    return limit;
+  }
+
+  public int normalizeSubjectLimit(int suppliedLimit) {
+    int limit = subjectSearchDefaultLimit;
+    if (suppliedLimit > 0 && suppliedLimit <= subjectSearchMaxLimit) {
       limit = suppliedLimit;
     }
     return limit;
