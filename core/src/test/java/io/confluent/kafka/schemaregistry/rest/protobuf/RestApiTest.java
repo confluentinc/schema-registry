@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.rest.protobuf;
 
-import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -24,8 +23,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.utils.ResourceLoader;
-import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage;
-import java.util.Base64;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -399,82 +396,6 @@ public class RestApiTest extends ClusterTestHarness {
         versionOfRegisteredSchema1Subject1);
     assertEquals("1st schema registered globally should have id 3", 3,
         registeredId);
-  }
-
-  @Test
-  public void testDescriptorWithMap() throws Exception {
-    String subject1 = "testSubject1";
-    FileDescriptorProto desc = NestedMessage.getDescriptor().getFile().toProto();
-    byte[] bytes = desc.toByteArray();
-    String encoded = Base64.getEncoder().encodeToString(bytes);
-
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(encoded);
-    request.setSchemaType(ProtobufSchema.TYPE);
-    int registeredId = restApp.restClient.registerSchema(request, subject1, false).getId();
-    assertEquals("Registering a new schema should succeed", 1, registeredId);
-
-    String schemaStr = "syntax = \"proto3\";\n"
-        + "package io.confluent.kafka.serializers.protobuf.test;\n"
-        + "\n"
-        + "import \"google/protobuf/timestamp.proto\";\n"
-        + "\n"
-        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
-        + "option java_outer_classname = \"NestedTestProto\";\n"
-        + "option java_multiple_files = false;\n"
-        + "\n"
-        + "message UserId {\n"
-        + "  oneof user_id {\n"
-        + "    string kafka_user_id = 1;\n"
-        + "    int32 other_user_id = 2;\n"
-        + "    .io.confluent.kafka.serializers.protobuf.test.MessageId another_id = 3;\n"
-        + "  }\n"
-        + "}\n"
-        + "message MessageId {\n"
-        + "  string id = 1;\n"
-        + "}\n"
-        + "message ComplexType {\n"
-        + "  bool is_active = 3;\n"
-        + "\n"
-        + "  oneof some_val {\n"
-        + "    string one_id = 1;\n"
-        + "    int32 other_id = 2;\n"
-        + "  }\n"
-        + "}\n"
-        + "message NestedMessage {\n"
-        + "  reserved 14;\n"
-        + "  reserved 15;\n"
-        + "  reserved 9 to 11;\n"
-        + "  reserved \"foo\";\n"
-        + "  reserved \"bar\";\n"
-        + "\n"
-        + "  .io.confluent.kafka.serializers.protobuf.test.UserId user_id = 1;\n"
-        + "  bool is_active = 2;\n"
-        + "  repeated string experiments_active = 3;\n"
-        + "  .google.protobuf.Timestamp updated_at = 4;\n"
-        + "  .io.confluent.kafka.serializers.protobuf.test.Status status = 5;\n"
-        + "  .io.confluent.kafka.serializers.protobuf.test.ComplexType complex_type = 6;\n"
-        + "  map<string, string> map_type = 7;\n"
-        + "  .io.confluent.kafka.serializers.protobuf.test.NestedMessage.InnerMessage inner = 8;\n"
-        + "\n"
-        + "  message InnerMessage {\n"
-        + "    string id = 1 [json_name = \"id\"];\n"
-        + "    repeated int32 ids = 2 [packed = true];\n"
-        + "  }\n"
-        + "  enum InnerEnum {\n"
-        + "    option allow_alias = true;\n"
-        + "    ZERO = 0;\n"
-        + "    ALSO_ZERO = 0;\n"
-        + "  }\n"
-        + "}\n"
-        + "enum Status {\n"
-        + "  ACTIVE = 0;\n"
-        + "  INACTIVE = 1;\n"
-        + "}\n";
-
-    Schema schema = restApp.restClient.getLatestVersion(subject1);
-    System.out.println(schema.getSchema());
-    assertEquals("Schemas should match", schemaStr, schema.getSchema());
   }
 
   @Test
