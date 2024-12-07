@@ -101,11 +101,33 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
           : current.copy(new Metadata(null, null, null), current.ruleSet());
       ParsedSchema newPrev = prev.copy(
           Metadata.removeConfluentVersion(prev.metadata()), prev.ruleSet());
-      // This handles the case where a schema is sent without confluent:version
+      // This handles the case where current schema is without confluent:version
+      return newSchema.deepEquals(newPrev);
+    } else if (schemaVer != null && prevVer == null) {
+      if (!versionsMatch(schemaVer, prev.version())) {
+        // The incoming confluent:version must match the actual version of the prev schema
+        return false;
+      }
+      ParsedSchema newPrev = prev.metadata() != null
+          ? prev
+          : prev.copy(new Metadata(null, null, null), prev.ruleSet());
+      ParsedSchema newSchema = current.copy(
+          Metadata.removeConfluentVersion(current.metadata()), current.ruleSet());
+      // This handles the case where prev schema is without confluent:version
       return newSchema.deepEquals(newPrev);
     } else {
       return current.deepEquals(prev);
     }
+  }
+
+  private static boolean versionsMatch(String schemaVer, int prevVer) {
+    int schemaVersion = 0;
+    try {
+      schemaVersion = Integer.parseInt(schemaVer);
+    } catch (NumberFormatException e) {
+      // ignore
+    }
+    return schemaVersion == prevVer;
   }
 
   protected static boolean hasLatestVersion(List<SchemaReference> refs) {
