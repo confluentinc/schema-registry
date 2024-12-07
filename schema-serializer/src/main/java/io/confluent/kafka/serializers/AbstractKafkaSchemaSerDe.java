@@ -308,6 +308,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     ruleObject.configure(params);
   }
 
+  public SchemaRegistryClient getSchemaRegistryClient() {
+    return schemaRegistry;
+  }
+
   // Visible for testing
   public Map<String, Map<String, RuleBase>> getRuleExecutors() {
     return ruleExecutors;
