@@ -28,7 +28,6 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import java.util.Objects;
 import java.util.Set;
 
 public abstract class AbstractSchemaProvider implements SchemaProvider {
@@ -105,7 +104,7 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       // This handles the case where current schema is without confluent:version
       return newSchema.deepEquals(newPrev);
     } else if (schemaVer != null && prevVer == null) {
-      if (!Objects.equals(schemaVer, prev.version())) {
+      if (!schemaVer.equals(prev.version())) {
         // The incoming confluent:version must match the actual version of the prev schema
         return false;
       }
