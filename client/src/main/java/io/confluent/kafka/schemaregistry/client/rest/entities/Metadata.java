@@ -139,6 +139,19 @@ public class Metadata {
   }
 
   @JsonIgnore
+  public Integer getConfluentVersionNumber() {
+    String version = getConfluentVersion();
+    if (version == null) {
+      return null;
+    }
+    try {
+      return Integer.parseInt(version);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  @JsonIgnore
   public String getConfluentVersion() {
     return getProperties() != null ? getProperties().get(CONFLUENT_VERSION) : null;
   }
