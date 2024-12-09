@@ -1287,6 +1287,19 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public List<String> getAllSubjectsWithPagination(int limit)
+          throws IOException, RestClientException {
+    return getAllSubjectsWithPagination(DEFAULT_REQUEST_PROPERTIES, limit);
+  }
+
+  public List<String> getAllSubjectsWithPagination(Map<String, String> requestProperties, int limit)
+          throws IOException, RestClientException {
+    String url = "/subjects?limit=" + limit;
+    List<String> response = httpRequest(url, "GET", null, requestProperties,
+            ALL_TOPICS_RESPONSE_TYPE);
+    return response;
+  }
+
   public List<String> getDeletedOnlySubjects(String subjectPrefix)
       throws IOException, RestClientException {
     return getAllSubjects(DEFAULT_REQUEST_PROPERTIES, subjectPrefix, false, true);
