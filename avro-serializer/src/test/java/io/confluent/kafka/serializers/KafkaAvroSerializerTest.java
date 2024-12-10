@@ -356,7 +356,7 @@ public class KafkaAvroSerializerTest {
       GenericData.Array<?> array = new GenericData.Array<>(avroSchema.rawSchema(), input);
       byte[] bytes = avroSerializer.serialize(topic + "_" + index, array);
       Object object = avroDeserializer.deserialize(topic + "_" + index, bytes);
-      List<String> result = ((GenericData.Array<?>) object).stream()
+      List<String> result = ((List<?>) object).stream()
           .map(Object::toString)
           .collect(Collectors.toList());
       assertEquals(expected, result);
