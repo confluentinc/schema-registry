@@ -27,6 +27,7 @@ import java.util.Optional;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sts.StsClient;
@@ -37,6 +38,7 @@ public class AwsKmsDriver implements KmsDriver {
 
   public static final String ACCESS_KEY_ID = "access.key.id";
   public static final String SECRET_ACCESS_KEY = "secret.access.key";
+  public static final String PROFILE = "profile";
   public static final String ROLE_ARN = "role.arn";
   public static final String ROLE_SESSION_NAME = "role.session.name";
   public static final String ROLE_EXTERNAL_ID = "role.external.id";
@@ -70,10 +72,13 @@ public class AwsKmsDriver implements KmsDriver {
       }
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
+      String profile = (String) configs.get(PROFILE);
       AwsCredentialsProvider provider;
       if (accessKey != null && secretKey != null) {
         provider = StaticCredentialsProvider.create(
             AwsBasicCredentials.create(accessKey, secretKey));
+      } else if (profile != null) {
+        provider = ProfileCredentialsProvider.create(profile);
       } else {
         provider = DefaultCredentialsProvider.create();
       }
