@@ -123,6 +123,26 @@ public class ProtobufSchemaTest {
 
   private static final ProtobufSchema mapSchema = new ProtobufSchema(mapSchemaString);
 
+  private static final String mapEntrySchemaString = "syntax = \"proto3\";\n"
+      + "\n"
+      + "import \"google/protobuf/descriptor.proto\";\n"
+      + "\n"
+      + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+      + "option java_outer_classname = \"TestMapProtos\";\n"
+      + "\n"
+      + "message TestMap {\n"
+      + "  repeated TestMapEntry test_map = 1;\n"
+      + "\n"
+      + "  message TestMapEntry {\n"
+      + "    option map_entry = true;\n"
+      + "  \n"
+      + "    string key = 1;\n"
+      + "    string value = 2;\n"
+      + "  }\n"
+      + "}\n";
+
+  private static final ProtobufSchema mapEntrySchema = new ProtobufSchema(mapEntrySchemaString);
+
   private static final String unionSchemaString = "syntax = \"proto3\";\n"
       + "\n"
       + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
@@ -286,6 +306,9 @@ public class ProtobufSchemaTest {
     Descriptor desc = resultRecord.getDescriptorForType();
     FieldDescriptor fd = desc.findFieldByName("test_map");
     assertEquals(2, ((List<DynamicMessage>) resultRecord.getField(fd)).size());
+
+    ProtobufSchema mapDescriptor = new ProtobufSchema(mapSchema.toDescriptor());
+    assertEquals(mapEntrySchema.toString(), mapDescriptor.toString());
   }
 
   @Test
