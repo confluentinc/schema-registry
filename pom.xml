@@ -111,8 +111,6 @@
         <commons.lang3.version>3.17.0</commons.lang3.version>
         <commons.validator.version>1.7</commons.validator.version>
         <snappy.version>1.1.10.5</snappy.version>
-        <!-- override avro.version from common -->
-        <avro.version>1.11.4</avro.version>
     </properties>
 
     <repositories>
