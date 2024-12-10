@@ -100,6 +100,7 @@ after_pipeline:
           - checkout
           - sem-version java 11
           - artifact pull workflow target
+          - export SONAR_SCANNER_JAVA_OPTS="Xmx8g"
           - emit-sonarqube-data --run_only_sonar_scan
       - name: Trigger downstream projects
         commands:
