@@ -14,7 +14,7 @@
  *
  */
 
-package io.confluent.kafka.serializers.migration;
+package io.confluent.kafka.serializers.wrapper;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;

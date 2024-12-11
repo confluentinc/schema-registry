@@ -14,7 +14,7 @@
  *
  */
 
-package io.confluent.kafka.serializers.migration;
+package io.confluent.kafka.serializers.wrapper;
 
 import java.util.Map;
 import org.apache.kafka.common.config.AbstractConfig;
