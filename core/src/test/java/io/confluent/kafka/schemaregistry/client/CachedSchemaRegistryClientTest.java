@@ -14,11 +14,9 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
-import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
-import java.util.HashMap;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
