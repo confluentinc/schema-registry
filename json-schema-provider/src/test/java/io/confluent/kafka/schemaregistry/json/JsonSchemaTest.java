@@ -465,8 +465,8 @@ public class JsonSchemaTest {
     verify(mappings).entrySet();
   }
 
-  @Test
-  public void testFoo() throws Exception {
+  @Test(expected = ValidationException.class)
+  public void testUnevaluatedProperties() throws Exception {
     String schema = " {\n"
         + "              \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
         + "              \"if\": {\n"
