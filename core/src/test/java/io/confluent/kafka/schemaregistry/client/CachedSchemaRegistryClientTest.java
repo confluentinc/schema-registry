@@ -74,6 +74,23 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     return props;
   }
 
+  private Properties createCompositeConsumerProps() {
+    Properties props = new Properties();
+    props.put("bootstrap.servers", brokerList);
+    props.put("group.id", "avroGroup");
+    props.put("session.timeout.ms", "6000"); // default value of group.min.session.timeout.ms.
+    props.put("heartbeat.interval.ms", "2000");
+    props.put("auto.commit.interval.ms", "1000");
+    props.put("auto.offset.reset", "earliest");
+    props.put("key.deserializer", org.apache.kafka.common.serialization.StringDeserializer.class);
+    props.put("value.deserializer",
+        io.confluent.kafka.serializers.migration.CompositeDeserializer.class);
+    props.put("old.deserializer", io.confluent.kafka.serializers.KafkaAvroDeserializer.class);
+    props.put("confluent.deserializer", io.confluent.kafka.serializers.KafkaAvroDeserializer.class);
+    props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
+    return props;
+  }
+
   private Consumer<String, Object> createConsumer(Properties props) {
     return new KafkaConsumer<>(props);
   }
@@ -150,6 +167,21 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     produce(producer, topic, objects);
 
     Properties consumerProps = createConsumerProps();
+    Consumer<String, Object> consumer = createConsumer(consumerProps);
+    ArrayList<Object> recordList = consume(consumer, topic, objects.length);
+    assertArrayEquals(objects, recordList.toArray());
+  }
+
+  @Test
+  public void testAvroProducerWithCompositeDeserializer() {
+    String topic = "testAvro";
+    IndexedRecord avroRecord = createAvroRecord();
+    Object[] objects = new Object[]{avroRecord};
+    Properties producerProps = createProducerProps();
+    Producer<String, Object> producer = createProducer(producerProps);
+    produce(producer, topic, objects);
+
+    Properties consumerProps = createCompositeConsumerProps();
     Consumer<String, Object> consumer = createConsumer(consumerProps);
     ArrayList<Object> recordList = consume(consumer, topic, objects.length);
     assertArrayEquals(objects, recordList.toArray());
