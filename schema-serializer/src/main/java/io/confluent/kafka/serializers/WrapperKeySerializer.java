@@ -42,6 +42,7 @@ public class WrapperKeySerializer<T> implements Serializer<T> {
     }
     this.inner = config.getConfiguredInstance(
         WrapperKeySerializerConfig.WRAPPED_KEY_SERIALIZER, Serializer.class);
+    this.inner.configure(config.originals(), isKey);
   }
 
   @Override
