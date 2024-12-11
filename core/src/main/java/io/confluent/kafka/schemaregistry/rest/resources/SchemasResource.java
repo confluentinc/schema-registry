@@ -46,10 +46,9 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.DefaultValue;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.PathParam;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Path("/schemas")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -100,8 +99,7 @@ public class SchemasResource {
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
-    Iterator<ExtendedSchema> schemas;
-    List<ExtendedSchema> filteredSchemas = new ArrayList<>();
+    List<ExtendedSchema> schemas;
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
     LookupFilter filter = lookupDeletedSchema ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT;
     try {
@@ -118,16 +116,10 @@ public class SchemasResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     limit = schemaRegistry.normalizeSchemaLimit(limit);
-    int toIndex = offset + limit;
-    int index = 0;
-    while (schemas.hasNext() && index < toIndex) {
-      ExtendedSchema schema = schemas.next();
-      if (index >= offset) {
-        filteredSchemas.add(schema);
-      }
-      index++;
-    }
-    return filteredSchemas;
+    return schemas.stream()
+      .skip(offset)
+      .limit(limit)
+      .collect(Collectors.toList());
   }
 
   @GET
