@@ -42,6 +42,7 @@ public class WrapperKeyDeserializer<T> implements Deserializer<T> {
     }
     this.inner = config.getConfiguredInstance(
         WrapperKeyDeserializerConfig.WRAPPED_KEY_DESERIALIZER, Deserializer.class);
+    this.inner.configure(config.originals(), isKey);
   }
 
   @Override
