@@ -87,7 +87,7 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     props.put("auto.offset.reset", "earliest");
     props.put("key.deserializer", org.apache.kafka.common.serialization.StringDeserializer.class);
     props.put("value.deserializer",
-        io.confluent.kafka.serializers.migration.CompositeDeserializer.class);
+        io.confluent.kafka.serializers.wrapper.CompositeDeserializer.class);
     props.put("old.deserializer", org.apache.kafka.common.serialization.StringDeserializer.class);
     props.put("confluent.deserializer", io.confluent.kafka.serializers.KafkaAvroDeserializer.class);
     props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
