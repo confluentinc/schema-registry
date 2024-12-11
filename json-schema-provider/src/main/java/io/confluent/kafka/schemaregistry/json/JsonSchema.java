@@ -576,10 +576,11 @@ public class JsonSchema implements ParsedSchema {
   }
 
   public JsonNode validate(JsonNode value) throws JsonProcessingException, ValidationException {
+    Schema rawSchema = rawSchema();
     if (skemaObj != null) {
       return validate(skemaObj, value);
     } else {
-      return validate(rawSchema(), value);
+      return validate(rawSchema, value);
     }
   }
 
