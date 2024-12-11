@@ -605,20 +605,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return providers.get(schemaType);
   }
 
-  public int normalizeSchemaLimit(int suppliedLimit) {
-    int limit = schemaSearchDefaultLimit;
-    if (suppliedLimit > 0 && suppliedLimit <= schemaSearchMaxLimit) {
+  public int normalizeLimit(int suppliedLimit, int defaultLimit, int maxLimit) {
+    int limit = defaultLimit;
+    if (suppliedLimit > 0 && suppliedLimit <= maxLimit) {
       limit = suppliedLimit;
     }
     return limit;
   }
 
+  public int normalizeSchemaLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, schemaSearchDefaultLimit, schemaSearchMaxLimit);
+  }
+
   public int normalizeSubjectLimit(int suppliedLimit) {
-    int limit = subjectSearchDefaultLimit;
-    if (suppliedLimit > 0 && suppliedLimit <= subjectSearchMaxLimit) {
-      limit = suppliedLimit;
-    }
-    return limit;
+    return normalizeLimit(suppliedLimit, subjectSearchDefaultLimit, subjectSearchMaxLimit);
   }
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
@@ -1921,7 +1921,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   @Override
-  public Iterator<ExtendedSchema> getVersionsWithSubjectPrefix(String prefix,
+  public List<ExtendedSchema> getVersionsWithSubjectPrefix(String prefix,
       boolean includeAliases,
       LookupFilter filter,
       boolean returnLatestOnly,
@@ -1935,7 +1935,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private Iterator<ExtendedSchema> allVersionsWithSubjectPrefix(String prefix,
+  private List<ExtendedSchema> allVersionsWithSubjectPrefix(String prefix,
       LookupFilter filter,
       boolean returnLatestOnly,
       Predicate<Schema> postFilter)
@@ -1948,11 +1948,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         result.addAll(schemaList);
       }
       Collections.sort(result);
-      return result.iterator();
+      return result;
     }
   }
 
-  public Iterator<ExtendedSchema> allVersionsIncludingAliasesWithSubjectPrefix(String prefix,
+  public List<ExtendedSchema> allVersionsIncludingAliasesWithSubjectPrefix(String prefix,
       LookupFilter filter,
       boolean returnLatestOnly,
       Predicate<Schema> postFilter)
@@ -1979,7 +1979,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
       Collections.sort(result);
-      return result.iterator();
+      return result;
     }
   }
 

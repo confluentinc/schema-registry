@@ -254,9 +254,10 @@ public class SubjectsResource {
       Stream<String> stream = subjects.stream();
 
       limit = schemaRegistry.normalizeSubjectLimit(limit);
-
-      stream = stream.skip(offset).limit(limit);
-      return stream.collect(Collectors.toCollection(LinkedHashSet::new)); // preserve order
+      return stream
+        .skip(offset)
+        .limit(limit)
+        .collect(Collectors.toCollection(LinkedHashSet::new)); // preserve order
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {
