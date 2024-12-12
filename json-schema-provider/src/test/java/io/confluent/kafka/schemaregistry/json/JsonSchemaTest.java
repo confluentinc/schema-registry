@@ -498,6 +498,67 @@ public class JsonSchemaTest {
     jsonSchema.validate(data);
   }
 
+  @Test(expected = ValidationException.class)
+  public void testUnevaluatedProperties() throws Exception {
+    String schema = " {\n"
+        + "              \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "              \"if\": {\n"
+        + "                \"properties\": {\n"
+        + "                  \"type\": {\n"
+        + "                    \"const\": \"business\"\n"
+        + "                  }\n"
+        + "                },\n"
+        + "                \"required\": [\n"
+        + "                  \"type\"\n"
+        + "                ],\n"
+        + "                \"type\": \"object\"\n"
+        + "              },\n"
+        + "              \"properties\": {\n"
+        + "                \"city\": {\n"
+        + "                  \"type\": \"string\"\n"
+        + "                },\n"
+        + "                \"state\": {\n"
+        + "                  \"type\": \"string\"\n"
+        + "                },\n"
+        + "                \"street_address\": {\n"
+        + "                  \"type\": \"string\"\n"
+        + "                },\n"
+        + "                \"type\": {\n"
+        + "                  \"enum\": [\n"
+        + "                    \"residential\",\n"
+        + "                    \"business\"\n"
+        + "                  ]\n"
+        + "                }\n"
+        + "              },\n"
+        + "              \"required\": [\n"
+        + "                \"street_address\",\n"
+        + "                \"city\",\n"
+        + "                \"state\",\n"
+        + "                \"type\"\n"
+        + "              ],\n"
+        + "              \"then\": {\n"
+        + "                \"properties\": {\n"
+        + "                  \"department\": {\n"
+        + "                    \"type\": \"string\"\n"
+        + "                  }\n"
+        + "                }\n"
+        + "              },\n"
+        + "              \"title\": \"MyTestSchema\",\n"
+        + "              \"type\": \"object\",\n"
+        + "              \"unevaluatedProperties\": false\n"
+        + "            }\n";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    String json = " {\n"
+        + "              \"street_address\": \"1600 Pennsylvania Avenue NW\",\n"
+        + "              \"city\": \"Washington\",\n"
+        + "              \"state\": \"DC\",\n"
+        + "              \"type\": \"residential\",\n"
+        + "              \"department\": \"HR\"\n"
+        + "            }\n";
+    JsonNode data = new ObjectMapper().readTree(json);
+    jsonSchema.validate(data);
+  }
+
   @Test
   public void testRecursiveSchema() {
     String schema = "{\n"
