@@ -39,7 +39,7 @@ public class SchemaRegistryClientConfig {
   public static final int HTTP_READ_TIMEOUT_MS_DEFAULT = 60000;
 
   public static final String MAX_RETRIES_CONFIG = "max.retries";
-  public static final int MAX_RETRIES_DEFAULT = 2;
+  public static final int MAX_RETRIES_DEFAULT = 3;
   public static final String RETRIES_WAIT_MS_CONFIG = "retries.wait.ms";
   public static final int RETRIES_WAIT_MS_DEFAULT = 1000;
   public static final String RETRIES_MAX_WAIT_MS_CONFIG = "retries.max.wait.ms";
