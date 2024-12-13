@@ -96,11 +96,7 @@ after_pipeline:
         commands:
           - test-results gen-pipeline-report
       - name: SonarQube
-        commands:
-          - checkout
-          - sem-version java 11
-          - artifact pull workflow target
-          - emit-sonarqube-data --run_only_sonar_scan
+        commands_file: sonarqube-wrapper.sh
       - name: Trigger downstream projects
         commands:
           - >-
