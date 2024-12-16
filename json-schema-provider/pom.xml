@@ -60,7 +60,7 @@
             <artifactId>jackson-module-parameter-names</artifactId>
         </dependency>
         <dependency>
-            <groupId>one.duckling</groupId>
+            <groupId>io.yokota</groupId>
             <artifactId>mbknor-jackson-jsonschema-java8</artifactId>
         </dependency>
         <dependency>
