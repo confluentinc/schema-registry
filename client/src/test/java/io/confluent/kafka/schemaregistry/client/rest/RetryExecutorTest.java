@@ -31,6 +31,14 @@ public class RetryExecutorTest {
     Assert.assertEquals(3, result);
   }
 
+  @Test
+  public void testRetryExecutorWithVoid() throws IOException, RestClientException {
+    RetryExecutor retryExecutor = new RetryExecutor(3, 0, 0);
+    TestVoidCallable testCallable = new TestVoidCallable();
+    retryExecutor.retry(testCallable);
+    Assert.assertEquals(1, testCallable.count);
+  }
+
   class TestCallable implements Callable<Integer> {
     private int count = 0;
     @Override
@@ -40,6 +48,15 @@ public class RetryExecutorTest {
         throw new RestClientException("test", 500, 50001);
       }
       return count;
+    }
+  }
+
+  class TestVoidCallable implements Callable<Void> {
+    protected int count = 0;
+    @Override
+    public Void call() throws RestClientException {
+      count++;
+      return null;
     }
   }
 }
