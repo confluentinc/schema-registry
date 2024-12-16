@@ -49,10 +49,13 @@ public class RetryExecutor {
   public <T> T retry(Callable<T> callable) throws RestClientException, IOException {
     T result = null;
     for (int i = 0; i < maxRetries + 1; i++) {
+      boolean retry = false;
       try {
         result = callable.call();
       } catch (RestClientException e) {
-        if (i >= maxRetries || !RestService.isRetriable(e)) {
+        if (i < maxRetries && RestService.isRetriable(e)) {
+          retry = true;
+        } else {
           throw e;
         }
       } catch (IOException e) {
@@ -60,7 +63,7 @@ public class RetryExecutor {
       } catch (Exception e) {
         throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
       }
-      if (result != null) {
+      if (!retry) {
         break;
       }
       long delayMs = computeDelayBeforeNextRetry(i).toMillis();
