@@ -264,9 +264,9 @@
                 <version>${json-skema.version}</version>
             </dependency>
             <dependency>
-                <groupId>one.duckling</groupId>
+                <groupId>io.yokota</groupId>
                 <artifactId>mbknor-jackson-jsonschema-java8</artifactId>
-                <version>1.0.39.1</version>
+                <version>1.0.39.2</version>
             </dependency>
             <dependency>
                 <groupId>org.antlr</groupId>
