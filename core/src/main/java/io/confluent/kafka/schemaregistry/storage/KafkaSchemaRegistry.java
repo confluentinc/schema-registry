@@ -2113,14 +2113,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   @Override
   public void close() throws IOException {
     log.info("Shutting down schema registry");
-    kafkaStore.close();
-    metadataEncoder.close();
     if (leaderElector != null) {
       leaderElector.close();
     }
     if (leaderRestService != null) {
       leaderRestService.close();
     }
+    kafkaStore.close();
+    metadataEncoder.close();
   }
 
   public void updateConfig(String subject, Config config)
