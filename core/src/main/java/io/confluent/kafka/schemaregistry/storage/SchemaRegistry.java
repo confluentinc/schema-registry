@@ -77,7 +77,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Iterator<SchemaKey> getAllVersions(String subject, LookupFilter filter)
       throws SchemaRegistryException;
 
-  Iterator<ExtendedSchema> getVersionsWithSubjectPrefix(
+  List<ExtendedSchema> getVersionsWithSubjectPrefix(
       String prefix, boolean includeAliases, LookupFilter filter,
       boolean latestOnly, Predicate<Schema> postFilter)
       throws SchemaRegistryException;
