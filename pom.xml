@@ -68,7 +68,6 @@
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
         <module>benchmark</module>
-        <module>jacoco-aggregate-schema-registry</module>
     </modules>
 
     <properties>
