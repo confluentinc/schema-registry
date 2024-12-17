@@ -545,10 +545,12 @@ public class JsonSchema implements ParsedSchema {
   }
 
   public JsonNode validate(JsonNode value) throws JsonProcessingException, ValidationException {
+    // Obtain the raw schema to ensure skemaObj is populated
+    Schema rawSchema = rawSchema();
     if (skemaObj != null) {
       return validate(skemaObj, value);
     } else {
-      return validate(rawSchema(), value);
+      return validate(rawSchema, value);
     }
   }
 
