@@ -2113,11 +2113,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     if (leaderElector != null) {
       leaderElector.close();
     }
-    kafkaStore.close();
-    metadataEncoder.close();
     if (leaderRestService != null) {
       leaderRestService.close();
     }
+    kafkaStore.close();
+    metadataEncoder.close();
   }
 
   public void updateConfig(String subject, Config config)
