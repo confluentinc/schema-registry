@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.Configurat
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
 
 public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider {
 
