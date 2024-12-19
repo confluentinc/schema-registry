@@ -7,6 +7,9 @@ semaphore:
   enable: true
   pipeline_type: cp
   nano_version: true
+  pr_ci_gating:
+    enable: true
+    project_name: schema-registry
   status_level: block
   branches:
     - master
