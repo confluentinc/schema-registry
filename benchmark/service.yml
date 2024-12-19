@@ -1,0 +1,10 @@
+name: benchmark-schema-registry
+lang: java
+lang_version: 11
+git:
+  enable: true
+github:
+  enable: true
+  repo_name: confluentinc/schema-registry
+sonarqube:
+  enable: true
