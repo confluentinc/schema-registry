@@ -13,5 +13,12 @@ semaphore:
     "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
 sonarqube:
   enable: true
+  subprojects:
+    core:
+      subdir: core
+    client:
+      subdir: client
+    benchmark:
+      subdir: benchmark
 git:
   enable: true

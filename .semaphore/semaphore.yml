@@ -98,7 +98,7 @@ after_pipeline:
       - name: SonarQube
         commands:
           - >-
-            modules=("client" "core");
+            modules=("client" "core" "benchmark");
             checkout;
             sem-version java 11;
             artifact pull workflow target;
