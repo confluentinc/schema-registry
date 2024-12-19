@@ -11,5 +11,14 @@ semaphore:
   downstream_projects: ["kafka-rest", "ksql",
     "confluent-security-plugins", "kafka-connect-replicator",
     "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
+sonarqube:
+  enable: true
+#  subprojects:
+#    core:
+#      subdir: core
+#    client:
+#      subdir: client
+#    benchmark:
+#      subdir: benchmark
 git:
   enable: true
