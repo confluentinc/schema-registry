@@ -44,9 +44,9 @@ blocks:
         always:
           commands:
             - . publish-test-results
-            - artifact push workflow core/target
-            - artifact push workflow client/target
-            - artifact push workflow benchmark/target
+            - artifact push workflow core/target -d core_target
+            - artifact push workflow client/target -d client_target
+            - artifact push workflow benchmark/target -d benchmark_target
 
   - name: Release
     dependencies: ["Test"]
@@ -105,7 +105,7 @@ after_pipeline:
             for dir in ${modules[@]}; do
               echo "Scanning $dir"
               cd $dir
-              artifact pull workflow "${dir}/target";
+              artifact pull workflow "${dir}_target";
               emit-sonarqube-data --run_only_sonar_scan
               cd ..
             done;
