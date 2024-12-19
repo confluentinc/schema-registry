@@ -1,4 +1,4 @@
-name: schema-registry-core
+name: core-schema-registry
 lang: java
 lang_version: 11
 git:

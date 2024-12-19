@@ -1,4 +1,4 @@
-name: client-schema-registry
+name: benchmark-schema-registry
 lang: java
 lang_version: 11
 git:
