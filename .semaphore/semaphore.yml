@@ -44,8 +44,9 @@ blocks:
         always:
           commands:
             - . publish-test-results
-            - artifact push workflow target/test-results
-            - artifact push workflow target
+            - artifact push workflow core/target
+            - artifact push workflow client/target
+            - artifact push workflow benchmark/target
 
   - name: Release
     dependencies: ["Test"]
@@ -101,10 +102,10 @@ after_pipeline:
             modules=("client" "core" "benchmark");
             checkout;
             sem-version java 11;
-            artifact pull workflow target;
             for dir in ${modules[@]}; do
               echo "Scanning $dir"
               cd $dir
+              artifact pull workflow "${dir}/target";
               emit-sonarqube-data --run_only_sonar_scan
               cd ..
             done;
