@@ -16,7 +16,8 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
@@ -44,7 +45,7 @@ public class RestApiSslTest extends ClusterTestHarness {
   Properties props = new Properties();
 
   public RestApiSslTest() {
-    super(1, true, AvroCompatibilityLevel.BACKWARD.name);
+    super(1, true, CompatibilityLevel.BACKWARD.name);
   }
 
 
@@ -91,7 +92,7 @@ public class RestApiSslTest extends ClusterTestHarness {
     assertEquals(
         "Registering should succeed",
         expectedIdSchema1,
-        schemaRegistryClient.register(subject, schema)
+        schemaRegistryClient.register(subject, new AvroSchema(schema))
     );
 
   }
@@ -135,7 +136,7 @@ public class RestApiSslTest extends ClusterTestHarness {
     assertEquals(
         "Registering should succeed",
         expectedIdSchema1,
-        schemaRegistryClient.register(subject, schema)
+        schemaRegistryClient.register(subject, new AvroSchema(schema))
     );
 
   }
