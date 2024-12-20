@@ -11,5 +11,44 @@ semaphore:
   downstream_projects: ["kafka-rest", "ksql",
     "confluent-security-plugins", "kafka-connect-replicator",
     "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
+sonarqube:
+  enable: true
+  subprojects:
+    avro-converter:
+      subdir: avro-converter
+    avro-data:
+      subdir: avro-data
+    avro-serde:
+      subdir: avro-serde
+    avro-serializer:
+      subdir: avro-serializer
+    benchmark:
+      subdir: benchmark
+    client:
+      subdir: client
+    core:
+      subdir: core
+    json-schema-converter:
+      subdir: json-schema-converter
+    json-schema-provider:
+      subdir: json-schema-provider
+    json-schema-serde:
+      subdir: json-schema-serde
+    json-schema-serializer:
+      subdir: json-schema-serializer
+    json-serializer:
+      subdir: json-serializer
+    maven-plugin:
+      subdir: maven-plugin
+    protobuf-converter:
+      subdir: protobuf-converter
+    protobuf-provider:
+      subdir: protobuf-provider
+    protobuf-serde:
+      subdir: protobuf-serde
+    protobuf-serializer:
+      subdir: protobuf-serializer
+    schema-serializer:
+      subdir: schema-serializer
 git:
   enable: true
