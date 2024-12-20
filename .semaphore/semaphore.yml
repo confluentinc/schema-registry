@@ -26,6 +26,7 @@ global_job_config:
       - checkout
       - sem-version java 11
       - . cache-maven restore
+      - export MODULES=("avro-converter" "avro-data" "avro-serde" "avro-serializer" "benchmark" "client" "client-console-scripts" "core" "json-schema-converter" "json-schema-provider" "json-schema-serde" "json-schema-serializer" "json-serializer" "maven-plugin" "protobuf-converter" "protobuf-provider" "protobuf-serde" "protobuf-serializer" "protobuf-types" "schema-serializer")
 
 blocks:
   - name: Test
@@ -44,8 +45,7 @@ blocks:
         always:
           commands:
             - . publish-test-results
-            - artifact push workflow target/test-results
-            - artifact push workflow target
+            - for module in ${MODULES[@]}; do artifact push workflow ${module}_target -d ${module}_target; done;
 
   - name: Release
     dependencies: ["Test"]
@@ -97,10 +97,16 @@ after_pipeline:
           - test-results gen-pipeline-report
       - name: SonarQube
         commands:
-          - checkout
-          - sem-version java 11
-          - artifact pull workflow target
-          - emit-sonarqube-data --run_only_sonar_scan
+          - >-
+            checkout;
+            sem-version java 11;
+            for dir in "${MODULES[@]}";
+              echo "Scanning $dir"
+              cd $dir
+              artifact pull workflow "${dir}_target" -d target;
+              emit-sonarqube-data --run_only_sonar_scan
+              cd ..
+            done;
       - name: Trigger downstream projects
         commands:
           - >-
