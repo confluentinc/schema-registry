@@ -100,7 +100,7 @@ after_pipeline:
           - >-
             checkout;
             sem-version java 11;
-            for dir in "${MODULES[@]}";
+            for dir in "${MODULES[@]}"; do
               echo "Scanning $dir"
               cd $dir
               artifact pull workflow "${dir}_target" -d target;
