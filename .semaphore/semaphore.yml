@@ -44,8 +44,9 @@ blocks:
         always:
           commands:
             - . publish-test-results
-            - artifact push workflow target/test-results
-            - artifact push workflow target
+            - artifact push workflow core/target -d core_target
+            - artifact push workflow client/target -d client_target
+            - artifact push workflow benchmark/target -d benchmark_target
 
   - name: Release
     dependencies: ["Test"]
@@ -96,11 +97,7 @@ after_pipeline:
         commands:
           - test-results gen-pipeline-report
       - name: SonarQube
-        commands:
-          - checkout
-          - sem-version java 11
-          - artifact pull workflow target
-          - emit-sonarqube-data --run_only_sonar_scan
+        commands_file: sonarqube-wrapper.sh
       - name: Trigger downstream projects
         commands:
           - >-
