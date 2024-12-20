@@ -52,10 +52,10 @@ public class CompositeDeserializer implements Deserializer<Object> {
     this.isKey = isKey;
     Map<String, Object> originals = config.originals();
     this.oldDeserializer = config.getConfiguredInstance(
-        CompositeDeserializerConfig.OLD_DESERIALIZER, Deserializer.class);
+        CompositeDeserializerConfig.COMPOSITE_OLD_DESERIALIZER, Deserializer.class);
     this.oldDeserializer.configure(originals, isKey);
     this.confluentDeserializer = config.getConfiguredInstance(
-        CompositeDeserializerConfig.CONFLUENT_DESERIALIZER, Deserializer.class);
+        CompositeDeserializerConfig.COMPOSITE_CONFLUENT_DESERIALIZER, Deserializer.class);
     this.confluentDeserializer.configure(originals, isKey);
     this.schemaRegistryClient = getSchemaRegistryClient();
   }
