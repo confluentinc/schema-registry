@@ -12,6 +12,6 @@ for dir in ${modules[@]}; do
   artifact pull workflow "${dir}_target" -d target;
   emit-sonarqube-data --run_only_sonar_scan
   cd ..
-done;
+done
 
 echo "SonarQube scanning workflow completed"
