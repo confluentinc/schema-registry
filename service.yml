@@ -14,11 +14,41 @@ semaphore:
 sonarqube:
   enable: true
   subprojects:
-    core:
-      subdir: core
-    client:
-      subdir: client
+    avro-converter:
+      subdir: avro-converter
+    avro-data:
+      subdir: avro-data
+    avro-serde:
+      subdir: avro-serde
+    avro-serializer:
+      subdir: avro-serializer
     benchmark:
       subdir: benchmark
+    client:
+      subdir: client
+    core:
+      subdir: core
+    json-schema-converter:
+      subdir: json-schema-converter
+    json-schema-provider:
+      subdir: json-schema-provider
+    json-schema-serde:
+      subdir: json-schema-serde
+    json-schema-serializer:
+      subdir: json-schema-serializer
+    json-serializer:
+      subdir: json-serializer
+    maven-plugin:
+      subdir: maven-plugin
+    protobuf-converter:
+      subdir: protobuf-converter
+    protobuf-provider:
+      subdir: protobuf-provider
+    protobuf-serde:
+      subdir: protobuf-serde
+    protobuf-serializer:
+      subdir: protobuf-serializer
+    schema-serializer:
+      subdir: schema-serializer
 git:
   enable: true
