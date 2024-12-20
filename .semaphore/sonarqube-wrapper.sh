@@ -6,10 +6,12 @@ modules=("avro-converter" "avro-data" "avro-serde" "avro-serializer" "benchmark"
 
 checkout
 sem-version java 11
-artifact pull workflow target
 for dir in ${modules[@]}; do
   echo "Scanning $dir"
+  cd $dir
+  artifact pull workflow "${dir}_target" -d target;
   emit-sonarqube-data --run_only_sonar_scan
-done
+  cd ..
+done;
 
 echo "SonarQube scanning workflow completed"

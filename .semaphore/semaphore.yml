@@ -97,18 +97,7 @@ after_pipeline:
         commands:
           - test-results gen-pipeline-report
       - name: SonarQube
-        commands:
-          - >-
-            modules=("client" "core" "benchmark");
-            checkout;
-            sem-version java 11;
-            for dir in ${modules[@]}; do
-              echo "Scanning $dir"
-              cd $dir
-              artifact pull workflow "${dir}_target" -d target;
-              emit-sonarqube-data --run_only_sonar_scan
-              cd ..
-            done;
+        commands_file: sonarqube-wrapper.sh
       - name: Trigger downstream projects
         commands:
           - >-
