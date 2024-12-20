@@ -45,7 +45,7 @@ blocks:
         always:
           commands:
             - . publish-test-results
-            - for module in ${MODULES[@]}; do artifact push workflow ${module}_target -d ${module}_target; done;
+            - for module in ${MODULES[@]}; do artifact push workflow ${module}/target -d ${module}_target; done;
 
   - name: Release
     dependencies: ["Test"]
@@ -100,7 +100,7 @@ after_pipeline:
           - >-
             checkout;
             sem-version java 11;
-            for dir in "${MODULES[@]}";
+            for dir in "${MODULES[@]}"; do
               echo "Scanning $dir"
               cd $dir
               artifact pull workflow "${dir}_target" -d target;
