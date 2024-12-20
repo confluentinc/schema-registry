@@ -26,7 +26,7 @@ global_job_config:
       - checkout
       - sem-version java 11
       - . cache-maven restore
-      - export MODULES=("avro-converter" "avro-data" "avro-serde" "avro-serializer" "benchmark" "client" "client-console-scripts" "core" "json-schema-converter" "json-schema-provider" "json-schema-serde" "json-schema-serializer" "json-serializer" "maven-plugin" "protobuf-converter" "protobuf-provider" "protobuf-serde" "protobuf-serializer" "protobuf-types" "schema-serializer")
+      - export SCAN_MODULES=("avro-converter" "avro-data" "avro-serde" "avro-serializer" "benchmark" "client" "client-console-scripts" "core" "json-schema-converter" "json-schema-provider" "json-schema-serde" "json-schema-serializer" "json-serializer" "maven-plugin" "protobuf-converter" "protobuf-provider" "protobuf-serde" "protobuf-serializer" "protobuf-types" "schema-serializer")
 
 blocks:
   - name: Test
@@ -45,7 +45,7 @@ blocks:
         always:
           commands:
             - . publish-test-results
-            - for module in ${MODULES[@]}; do artifact push workflow ${module}/target -d ${module}_target; done;
+            - for module in ${SCAN_MODULES[@]}; do artifact push workflow ${module}/target -d ${module}_target; done;
 
   - name: Release
     dependencies: ["Test"]
@@ -100,7 +100,7 @@ after_pipeline:
           - >-
             checkout;
             sem-version java 11;
-            for dir in "${MODULES[@]}"; do
+            for dir in "${SCAN_MODULES[@]}"; do
               echo "Scanning $dir"
               cd $dir
               artifact pull workflow "${dir}_target" -d target;
