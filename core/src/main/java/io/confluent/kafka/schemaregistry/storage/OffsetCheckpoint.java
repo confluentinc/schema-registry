@@ -64,7 +64,7 @@ public class OffsetCheckpoint implements Closeable {
 
   private static final Pattern WHITESPACE_MINIMUM_ONCE = Pattern.compile("\\s+");
 
-  private final File file;
+  protected final File file;
   private final Object lock;
   private FileChannel channel;
   private FileLock fileLock;
@@ -74,7 +74,11 @@ public class OffsetCheckpoint implements Closeable {
     File baseDir = baseDir(checkpointDir, topic);
     this.file = new File(baseDir, CHECKPOINT_FILE_NAME);
     lock = new Object();
+    setUpLockFile(baseDir);
+    this.version = version;
+  }
 
+  protected void setUpLockFile(File baseDir) throws IOException {
     final File lockFile = new File(baseDir, LOCK_FILE_NAME);
     final FileChannel channel =
         FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -85,10 +89,9 @@ public class OffsetCheckpoint implements Closeable {
     }
     this.channel = channel;
     this.fileLock = fileLock;
-    this.version = version;
   }
 
-  private File baseDir(final String checkpointDir, String topic) throws IOException {
+  protected File baseDir(final String checkpointDir, String topic) throws IOException {
     final File dir = new File(checkpointDir, topic);
     if ((!dir.exists() && !dir.mkdirs()) || !dir.isDirectory() || !dir.canWrite()) {
       throw new IOException(

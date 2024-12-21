@@ -19,6 +19,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+
+import java.util.Map;
 
 public interface UpdateRequestHandler {
 
@@ -31,4 +34,24 @@ public interface UpdateRequestHandler {
   void handle(String subject, boolean normalize, RegisterSchemaRequest request);
 
   void handle(Schema schema, TagSchemaRequest request);
+
+  default void handle(ConfigUpdateRequest request,
+                      Map<String, String> headerProperties) throws SchemaRegistryException {
+    handle(null, request);
+  }
+
+  default void handle(String subject, ConfigUpdateRequest request,
+                      Map<String, String> headerProperties) throws SchemaRegistryException {
+    handle(subject, request);
+  }
+
+  default void handle(String subject, boolean normalize, RegisterSchemaRequest request,
+                      Map<String, String> headerProperties) throws SchemaRegistryException {
+    handle(subject, normalize, request);
+  }
+
+  default void handle(Schema schema, TagSchemaRequest request,
+                      Map<String, String> headerProperties) throws SchemaRegistryException {
+    handle(schema, request);
+  }
 }

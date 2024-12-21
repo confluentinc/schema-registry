@@ -272,7 +272,7 @@ public class JsonSchemaUtils {
   public static Object toObject(JsonNode value, JsonSchema schema, boolean validate)
       throws IOException {
     if (validate) {
-      schema.validate(value);
+      value = schema.validate(value);
     }
     return envelope(schema, value);
   }
@@ -347,6 +347,9 @@ public class JsonSchemaUtils {
         if ("definitions".equals(word)) {
           identifiersList.poll();
           result = findNodeFromNameBuilder(node.get("definitions"), identifiersList);
+        } else if ("$defs".equals(word)) {
+          identifiersList.poll();
+          result = findNodeFromNameBuilder(node.get("$defs"), identifiersList);
         } else {
           result = findNodeFromNameBuilder(node.get("properties"), identifiersList);
         }

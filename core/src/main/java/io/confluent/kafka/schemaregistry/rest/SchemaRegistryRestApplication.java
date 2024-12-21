@@ -16,6 +16,8 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.JettyEofExceptionMapper;
+import io.confluent.kafka.schemaregistry.rest.exceptions.JettyEofExceptionWriterInterceptor;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.rest.filters.AliasFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.ContextFilter;
@@ -98,7 +100,9 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
       final Map<String, String> metricTags) {
     super.configureBaseApplication(config, metricTags);
 
-    schemaRegistry = initSchemaRegistry(getConfiguration());
+    SchemaRegistryConfig schemaRegistryConfig = getConfiguration();
+    registerInitResourceExtensions(config, schemaRegistryConfig);
+    schemaRegistry = initSchemaRegistry(schemaRegistryConfig);
   }
 
   @Override
@@ -117,6 +121,8 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new RestCallMetricFilter(
             schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
             schemaRegistry.getMetricsContainer().getApiCallsFailure()));
+    config.register(new JettyEofExceptionMapper());
+    config.register(new JettyEofExceptionWriterInterceptor());
 
     List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions =
         schemaRegistry.getResourceExtensions();
@@ -130,6 +136,40 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
         log.error("Error starting the schema registry", e);
         System.exit(1);
       }
+    }
+  }
+
+  public void registerInitResourceExtensions(
+      Configurable<?> config,
+      SchemaRegistryConfig schemaRegistryConfig) {
+    List<SchemaRegistryResourceExtension> preInitResourceExtensions =
+        schemaRegistryConfig.getConfiguredInstances(
+          SchemaRegistryConfig.INIT_RESOURCE_EXTENSION_CONFIG,
+          SchemaRegistryResourceExtension.class);
+    boolean fipsExtensionProvided = false;
+    final String fipsResourceExtensionClassName =
+        "io.confluent.kafka.schemaregistry.security.SchemaRegistryFipsResourceExtension";
+    if (preInitResourceExtensions != null) {
+      try {
+        for (SchemaRegistryResourceExtension
+            schemaRegistryResourceExtension : preInitResourceExtensions) {
+          schemaRegistryResourceExtension.register(config, schemaRegistryConfig, schemaRegistry);
+          if (fipsResourceExtensionClassName.equals(
+              schemaRegistryResourceExtension.getClass().getCanonicalName())) {
+            fipsExtensionProvided = true;
+          }
+        }
+      } catch (SchemaRegistryException e) {
+        log.error("Error starting the schema registry resource extension", e);
+        System.exit(1);
+      }
+    }
+    if (schemaRegistryConfig.getBoolean(SchemaRegistryConfig.ENABLE_FIPS_CONFIG)
+        && !fipsExtensionProvided) {
+      log.error("Error enabling the FIPS resource extension: `enable.fips` is set to true but the "
+          + "`init.resource.extension.class` config is either not configured or does not contain \""
+          + fipsResourceExtensionClassName + "\"");
+      System.exit(1);
     }
   }
 
