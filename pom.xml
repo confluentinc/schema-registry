@@ -68,6 +68,7 @@
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
         <module>benchmark</module>
+        <module>jacoco-aggregate-schema-registry</module>
     </modules>
 
     <properties>
@@ -445,6 +446,25 @@
                         <phase>compile</phase>
                         <goals>
                             <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.8</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>generate-code-coverage-report</id>
+                        <goals>
+                            <goal>report</goal>
                         </goals>
                     </execution>
                 </executions>
