@@ -78,7 +78,6 @@
         <module>client-encryption-hcvault</module>
         <module>client-encryption</module>
         <module>benchmark</module>
-        <module>jacoco-aggregate-schema-registry</module>
     </modules>
 
     <properties>
