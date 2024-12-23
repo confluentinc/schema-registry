@@ -462,7 +462,7 @@ public class JsonSchemaTest {
     // Verify that the mappings in the prepopulatedMetaSchemas are used
     // The underlying JSON Schema library calls putMapEntries, which calls size and entrySet
     verify(mappings).size();
-//    verify(mappings).entrySet();
+    verify(mappings).entrySet();
   }
 
   @Test(expected = ValidationException.class)
