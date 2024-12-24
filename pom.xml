@@ -598,7 +598,7 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <argLine>
-                                --add-opens java.base/java.lang=ALL-UNNAMED
+                                @{argLine} --add-opens java.base/java.lang=ALL-UNNAMED
                             </argLine>
                         </configuration>
                     </plugin>
@@ -607,7 +607,7 @@
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <configuration>
                             <argLine>
-                                --add-opens java.security.jgss/sun.security.krb5=ALL-UNNAMED
+                                @{argLine} --add-opens java.security.jgss/sun.security.krb5=ALL-UNNAMED
                             </argLine>
                         </configuration>
                     </plugin>
