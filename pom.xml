@@ -78,6 +78,7 @@
         <module>client-encryption-hcvault</module>
         <module>client-encryption</module>
         <module>benchmark</module>
+        <module>jacoco-aggregate-schema-registry</module>
     </modules>
 
     <properties>
@@ -561,6 +562,25 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.8</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>generate-code-coverage-report</id>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
 
     </build>
@@ -578,7 +598,7 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <argLine>
-                                --add-opens java.base/java.lang=ALL-UNNAMED
+                                @{argLine} --add-opens java.base/java.lang=ALL-UNNAMED
                             </argLine>
                         </configuration>
                     </plugin>
@@ -587,7 +607,7 @@
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <configuration>
                             <argLine>
-                                --add-opens java.security.jgss/sun.security.krb5=ALL-UNNAMED
+                                @{argLine} --add-opens java.security.jgss/sun.security.krb5=ALL-UNNAMED
                             </argLine>
                         </configuration>
                     </plugin>
