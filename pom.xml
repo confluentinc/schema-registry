@@ -78,6 +78,7 @@
         <module>client-encryption-hcvault</module>
         <module>client-encryption</module>
         <module>benchmark</module>
+        <module>jacoco-aggregate-schema-registry</module>
     </modules>
 
     <properties>
@@ -447,6 +448,11 @@
             <dependency>
                 <groupId>io.confluent</groupId>
                 <artifactId>kafka-json-schema-serializer</artifactId>
+                <version>${io.confluent.schema-registry.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>jacoco-aggregate-schema-registry</artifactId>
                 <version>${io.confluent.schema-registry.version}</version>
             </dependency>
             <dependency>
