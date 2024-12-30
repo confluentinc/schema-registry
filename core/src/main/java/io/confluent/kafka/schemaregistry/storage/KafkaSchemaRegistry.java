@@ -149,6 +149,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final Mode defaultMode;
   private final int kafkaStoreTimeoutMs;
   private final int initTimeout;
+  private final boolean initWaitForReader;
   private final int kafkaStoreMaxRetries;
   private final int searchDefaultLimit;
   private final int searchMaxLimit;
@@ -206,6 +207,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
+    this.initWaitForReader =
+        config.getBoolean(SchemaRegistryConfig.KAFKASTORE_INIT_WAIT_FOR_READER_CONFIG);
     this.kafkaStoreMaxRetries =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_MAX_RETRIES_CONFIG);
     this.serializer = serializer;
@@ -533,12 +536,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           // The new leader may not know the exact last offset in the Kafka log. So, mark the
           // last offset invalid here
           kafkaStore.markLastWrittenOffsetInvalid();
-          //ensure the new leader catches up with the offsets before it gets nextid and assigns
-          // leader
-          try {
-            kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
-          } catch (StoreException e) {
-            throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
+          if (initWaitForReader) {
+            //ensure the new leader catches up with the offsets before it gets nextid and assigns
+            // leader
+            try {
+              kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
+            } catch (StoreException e) {
+              throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
+            }
           }
           idGenerator.init();
         }
@@ -2105,14 +2110,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public void close() throws IOException {
     log.info("Shutting down schema registry");
-    kafkaStore.close();
-    metadataEncoder.close();
     if (leaderElector != null) {
       leaderElector.close();
     }
     if (leaderRestService != null) {
       leaderRestService.close();
     }
+    kafkaStore.close();
+    metadataEncoder.close();
   }
 
   public void updateConfig(String subject, Config config)

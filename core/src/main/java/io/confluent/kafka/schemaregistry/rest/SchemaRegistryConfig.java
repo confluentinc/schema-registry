@@ -115,6 +115,11 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String KAFKASTORE_INIT_TIMEOUT_CONFIG = "kafkastore.init.timeout.ms";
   /**
+   * <code>kafkastore.init.wait.for.reader</code>
+   */
+  public static final String KAFKASTORE_INIT_WAIT_FOR_READER_CONFIG =
+      "kafkastore.init.wait.for.reader";
+  /**
    * <code>kafkastore.update.handler</code>
    */
   public static final String KAFKASTORE_UPDATE_HANDLERS_CONFIG = "kafkastore.update.handlers";
@@ -321,6 +326,9 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_INIT_TIMEOUT_DOC =
       "The timeout for initialization of the Kafka store, including creation of the Kafka topic "
       + "that stores schema data.";
+  protected static final String KAFKASTORE_INIT_WAIT_FOR_READER_DOC =
+      "If true, Kafka store initialization and leader election will wait for the Kafka reader to "
+      + "reach the last offset.";
   protected static final String KAFKASTORE_CHECKPOINT_DIR_DOC =
       "For persistent stores, the directory in which to store offset checkpoints.";
   protected static final String KAFKASTORE_CHECKPOINT_VERSION_DOC =
@@ -531,6 +539,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC
+    )
+    .define(KAFKASTORE_INIT_WAIT_FOR_READER_CONFIG, ConfigDef.Type.BOOLEAN, true,
+        ConfigDef.Importance.LOW, KAFKASTORE_INIT_WAIT_FOR_READER_DOC
     )
     .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC

@@ -25,6 +25,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Assert;
 import org.junit.Before;
@@ -86,6 +88,21 @@ public class OauthCredentialProviderTest {
           });
 
     }
+  }
+
+  @Test
+  public void testClientSslConfigurations() throws MalformedURLException {
+
+    Map<String, Object> CONFIG_WITH_SSL = new HashMap<>(CONFIG_MAP);
+    CONFIG_WITH_SSL.put("ssl.truststore.location", "truststore.jks");
+    CONFIG_WITH_SSL.put("ssl.truststore.password", "password");
+
+    // SSL configurations should get loaded if present in configuration
+    Assert.assertThrows("Message", KafkaException.class,
+        () -> {
+          oAuthCredentialProvider.configure(CONFIG_WITH_SSL);
+        });
+
   }
 
   private Map<String, Object> getInsufficentConfigs(String missingConfig) {
