@@ -6,7 +6,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks:
     get:
       summary: Get a list of dek subjects.
-      operationId: getDekSubjects
+      operationId: getDekSubjects_1
       parameters:
       - name: name
         in: path
@@ -47,7 +47,7 @@ paths:
           description: Error code 42271 -- Invalid key
     post:
       summary: Create a dek.
-      operationId: createDek
+      operationId: createDek_1
       parameters:
       - name: name
         in: path
@@ -94,7 +94,7 @@ paths:
   /dek-registry/v1/keks:
     get:
       summary: Get a list of kek names.
-      operationId: getKekNames
+      operationId: getKekNames_1
       parameters:
       - name: subjectPrefix
         in: query
@@ -132,7 +132,7 @@ paths:
                   example: mykek
     post:
       summary: Create a kek.
-      operationId: createKek
+      operationId: createKek_1
       parameters:
       - name: testSharing
         in: query
@@ -176,7 +176,7 @@ paths:
   /dek-registry/v1/keks/{name}:
     get:
       summary: Get a kek by name.
-      operationId: getKek
+      operationId: getKek_1
       parameters:
       - name: name
         in: path
@@ -208,7 +208,7 @@ paths:
           description: Error code 42271 -- Invalid key
     put:
       summary: Alters a kek.
-      operationId: putKek
+      operationId: putKek_1
       parameters:
       - name: name
         in: path
@@ -258,7 +258,7 @@ paths:
           description: Error code 42271 -- Invalid key
     delete:
       summary: Delete a kek.
-      operationId: deleteKek
+      operationId: deleteKek_1
       parameters:
       - name: name
         in: path
@@ -283,7 +283,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks/{subject}:
     get:
       summary: Get a dek by subject.
-      operationId: getDek
+      operationId: getDek_1
       parameters:
       - name: name
         in: path
@@ -332,7 +332,7 @@ paths:
           description: Error code 50070 -- Dek generation error
     delete:
       summary: Delete all versions of a dek.
-      operationId: deleteDekVersions
+      operationId: deleteDekVersions_1
       parameters:
       - name: name
         in: path
@@ -371,7 +371,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}:
     get:
       summary: Get a dek by subject and version.
-      operationId: getDekByVersion
+      operationId: getDekByVersion_1
       parameters:
       - name: name
         in: path
@@ -427,7 +427,7 @@ paths:
           description: Error code 50070 -- Dek generation error
     delete:
       summary: Delete a dek version.
-      operationId: deleteDekVersion
+      operationId: deleteDekVersion_1
       parameters:
       - name: name
         in: path
@@ -473,7 +473,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks/{subject}/versions:
     get:
       summary: List versions of dek.
-      operationId: getDekVersions
+      operationId: getDekVersions_1
       parameters:
       - name: name
         in: path
@@ -533,7 +533,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}/undelete:
     post:
       summary: Undelete a dek version.
-      operationId: undeleteDekVersion
+      operationId: undeleteDekVersion_1
       parameters:
       - name: name
         in: path
@@ -574,7 +574,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks/{subject}/undelete:
     post:
       summary: Undelete all versions of a dek.
-      operationId: undeleteDekVersions
+      operationId: undeleteDekVersions_1
       parameters:
       - name: name
         in: path
@@ -608,7 +608,7 @@ paths:
   /dek-registry/v1/keks/{name}/undelete:
     post:
       summary: Undelete a kek.
-      operationId: undeleteKek
+      operationId: undeleteKek_1
       parameters:
       - name: name
         in: path
@@ -627,7 +627,7 @@ paths:
   /dek-registry/v1/keks/{name}/test:
     post:
       summary: Test a kek.
-      operationId: testKek_1
+      operationId: testKek
       parameters:
       - name: name
         in: path
