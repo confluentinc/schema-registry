@@ -2448,6 +2448,46 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testContainedEnum() {
+    String sampleProtoFile = "syntax = \"proto2\";\n" +
+        "\n" +
+        "package sample;\n" +
+        "\n" +
+        "import \"withenum/imported.proto\";\n" +
+        "\n" +
+        "message SampleMessage {\n" +
+        "\n" +
+        "  optional uint64 timestamp = 1;\n" +
+        "  optional withenum.ContainingNestedEnum containing_nested_enum = 5;\n" +
+        "}\n" +
+        "\n" +
+        "message Action {\n" +
+        "  optional string id = 1;\n" +
+        "}";
+    String importedProto = "syntax = \"proto2\";\n" +
+        "\n" +
+        "package withenum;\n" +
+        "\n" +
+        "message ContainingNestedEnum {\n" +
+        "\n" +
+        "  optional Action action = 1;\n" +
+        "\n" +
+        "  enum Action {\n" +
+        "    TEST = 1;\n" +
+        "  }\n" +
+        "}";
+
+    ProtobufSchema protobufSchema = new ProtobufSchema(sampleProtoFile,
+        Collections.singletonList(new SchemaReference("withenum/imported.proto", "withenum/imported.proto", 1)),
+        new HashMap<String, String>() {{
+          put("withenum/imported.proto", importedProto);
+        }},
+        1,
+        "test");
+    protobufSchema.toDescriptor();
+  }
+
+  @Test
   public void testParseSchema() {
     SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
     ParsedSchema parsedSchema = protobufSchemaProvider.parseSchemaOrElseThrow(
