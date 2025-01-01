@@ -2351,14 +2351,11 @@ public class ProtobufSchema implements ParsedSchema {
 
   public Map<String, ProtoFileElement> dependenciesWithLogicalTypes() {
     Map<String, ProtoFileElement> deps = new HashMap<>(dependencies);
-    /*
     for (Map.Entry<String, ProtoFileElement> entry : KNOWN_DEPENDENCIES.entrySet()) {
       if (!deps.containsKey(entry.getKey())) {
         deps.put(entry.getKey(), entry.getValue());
       }
     }
-
-     */
     return deps;
   }
 
