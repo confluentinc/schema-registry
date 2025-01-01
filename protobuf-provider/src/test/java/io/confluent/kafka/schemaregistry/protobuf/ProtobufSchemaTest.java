@@ -2483,8 +2483,9 @@ public class ProtobufSchemaTest {
           put("withenum/imported.proto", importedProto);
         }},
         1,
-        "test");
-    protobufSchema.toDescriptor();
+        null);
+    assertEquals(protobufSchema.canonicalString(),
+        new ProtobufSchema(protobufSchema.toDescriptor()).canonicalString());
   }
 
   @Test
