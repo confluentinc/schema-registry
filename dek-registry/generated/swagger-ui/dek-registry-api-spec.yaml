@@ -132,7 +132,7 @@ paths:
                   example: mykek
     post:
       summary: Create a kek.
-      operationId: createKek_1
+      operationId: createKek
       parameters:
       - name: testSharing
         in: query
