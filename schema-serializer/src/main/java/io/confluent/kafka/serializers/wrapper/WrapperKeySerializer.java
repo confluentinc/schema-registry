@@ -14,48 +14,49 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.serializers;
+package io.confluent.kafka.serializers.wrapper;
 
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import java.util.Map;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 
-public class WrapperKeyDeserializer<T> implements Deserializer<T> {
+public class WrapperKeySerializer<T> implements Serializer<T> {
 
-  private Deserializer<T> inner;
+  private Serializer<T> inner;
 
   /**
-   * Constructor used by Kafka consumer.
+   * Constructor used by Kafka producer.
    */
-  public WrapperKeyDeserializer() {
+  public WrapperKeySerializer() {
   }
 
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
-    configure(new WrapperKeyDeserializerConfig(configs), isKey);
+    configure(new WrapperKeySerializerConfig(configs), isKey);
   }
 
   @SuppressWarnings("unchecked")
-  protected void configure(WrapperKeyDeserializerConfig config, boolean isKey) {
+  protected void configure(WrapperKeySerializerConfig config, boolean isKey) {
     if (!isKey) {
-      throw new IllegalArgumentException("WrapperKeyDeserializer is only for keys");
+      throw new IllegalArgumentException("WrapperKeySerializer is only for keys");
     }
     this.inner = config.getConfiguredInstance(
-        WrapperKeyDeserializerConfig.WRAPPED_KEY_DESERIALIZER, Deserializer.class);
+        WrapperKeySerializerConfig.WRAPPED_KEY_SERIALIZER, Serializer.class);
     this.inner.configure(config.originals(), isKey);
   }
 
   @Override
-  public T deserialize(String topic, byte[] bytes) {
-    return deserialize(topic, null, bytes);
+  public byte[] serialize(String topic, T data) {
+    return serialize(topic, null, data);
   }
 
   @Override
-  public T deserialize(String topic, Headers headers, byte[] bytes) {
+  public byte[] serialize(String topic, Headers headers, T data) {
     try {
-      return inner.deserialize(topic, headers, bytes);
+      return inner.serialize(topic, headers, data);
     } finally {
-      AbstractKafkaSchemaSerDe.setKey(bytes);
+      AbstractKafkaSchemaSerDe.setKey(data);
     }
   }
 

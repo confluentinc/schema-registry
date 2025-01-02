@@ -40,8 +40,9 @@ import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
-import io.confluent.kafka.serializers.WrapperKeyDeserializer;
-import io.confluent.kafka.serializers.WrapperKeySerializer;
+import io.confluent.kafka.serializers.wrapper.WrapperKeyDeserializer;
+import io.confluent.kafka.serializers.wrapper.WrapperKeySerializer;
+import java.time.Duration;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -166,7 +167,7 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
 
     int i = 0;
     do {
-      ConsumerRecords<String, Object> records = consumer.poll(1000);
+      ConsumerRecords<String, Object> records = consumer.poll(Duration.ofMillis(1000));
       for (ConsumerRecord<String, Object> record : records) {
         recordList.add(new SimpleEntry<>(record.key(), record.value()));
         i++;
