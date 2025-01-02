@@ -1544,15 +1544,19 @@ public class ProtobufSchema implements ParsedSchema {
       for (String ref : rootElem.getImports()) {
         ProtoFileElement dep = dependencies.get(ref);
         if (dep != null) {
+          final Context subctx = ctx.getSubcontext();
+          subctx.setPackageName(dep.getPackageName(), true);
           schema.addDependency(ref);
-          schema.addSchema(toDynamicSchema(ctx, ref, dep, dependencies, cache));
+          schema.addSchema(toDynamicSchema(subctx, ref, dep, dependencies, cache));
         }
       }
       for (String ref : rootElem.getPublicImports()) {
         ProtoFileElement dep = dependencies.get(ref);
         if (dep != null) {
+          final Context subctx = ctx.getSubcontext();
+          subctx.setPackageName(dep.getPackageName(), true);
           schema.addPublicDependency(ref);
-          schema.addSchema(toDynamicSchema(ctx, ref, dep, dependencies, cache));
+          schema.addSchema(toDynamicSchema(subctx, ref, dep, dependencies, cache));
         }
       }
       Map<String, OptionElement> options = mergeOptions(rootElem.getOptions());
