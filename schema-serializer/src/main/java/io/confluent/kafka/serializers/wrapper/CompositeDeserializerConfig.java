@@ -22,29 +22,29 @@ import org.apache.kafka.common.config.ConfigDef;
 
 public class CompositeDeserializerConfig extends AbstractConfig {
 
-  public static final String OLD_DESERIALIZER = "old.deserializer";
-  public static final String OLD_DESERIALIZER_DOC =
+  public static final String COMPOSITE_OLD_DESERIALIZER = "composite.old.deserializer";
+  public static final String COMPOSITE_OLD_DESERIALIZER_DOC =
       "Old deserializer that is schema-unaware";
 
-  public static final String CONFLUENT_DESERIALIZER = "confluent.deserializer";
-  public static final String CONFLUENT_DESERIALIZER_DOC =
+  public static final String COMPOSITE_CONFLUENT_DESERIALIZER = "composite.confluent.deserializer";
+  public static final String COMPOSITE_CONFLUENT_DESERIALIZER_DOC =
       "Confluent deserializer, one of Avro, Protobuf, JSON Schema";
 
   private static final ConfigDef config;
 
   static {
     config = new ConfigDef().define(
-        OLD_DESERIALIZER,
+        COMPOSITE_OLD_DESERIALIZER,
         ConfigDef.Type.CLASS,
         Object.class,
         ConfigDef.Importance.HIGH,
-        OLD_DESERIALIZER_DOC
+        COMPOSITE_OLD_DESERIALIZER_DOC
     ).define(
-        CONFLUENT_DESERIALIZER,
+        COMPOSITE_CONFLUENT_DESERIALIZER,
         ConfigDef.Type.CLASS,
         Object.class,
         ConfigDef.Importance.HIGH,
-        CONFLUENT_DESERIALIZER_DOC
+        COMPOSITE_CONFLUENT_DESERIALIZER_DOC
     );
   }
 
