@@ -244,7 +244,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
       switch (assignment.error()) {
         case SchemaRegistryProtocol.Assignment.NO_ERROR:
           if (assignment.leaderIdentity() == null) {
-            log.error(
+            log.warn(
                 "No leader eligible schema registry instances joined the schema registry group. "
                 + "Rebalancing was successful and this instance can serve reads, but no writes "
                 + "can be processed."
