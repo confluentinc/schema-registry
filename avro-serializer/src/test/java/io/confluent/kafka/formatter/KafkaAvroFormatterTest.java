@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
+import java.util.Iterator;
 import java.util.Optional;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
@@ -102,6 +103,39 @@ public class KafkaAvroFormatterTest {
         "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
         null, serializedValue);
     formatter.writeTo(crecord, ps);
+    String outputJson = baos.toString();
+
+    assertEquals("Input value json should match output value json", inputJson, outputJson);
+  }
+
+  @Test
+  public void testKafkaAvroValueFormatterMultipleRecords() {
+    formatter.init(props);
+
+    String inputJson = "{\"name\":\"myname\"}\n{\"name\":\"myname2\"}\n";
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
+    AvroMessageReader avroReader =
+        new AvroMessageReader(url, null, recordSchema, "topic1", false,
+            false, true, false);
+    Iterator<ProducerRecord<byte[], byte[]>> iter = avroReader.readRecords(is);
+    ProducerRecord<byte[], byte[]> message1 = iter.next();
+    ProducerRecord<byte[], byte[]> message2 = iter.next();
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+
+    byte[] serializedValue = message1.value();
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
+        null, serializedValue);
+    formatter.writeTo(crecord, ps);
+
+    serializedValue = message2.value();
+    crecord = new ConsumerRecord<>(
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
+        null, serializedValue);
+    formatter.writeTo(crecord, ps);
+
     String outputJson = baos.toString();
 
     assertEquals("Input value json should match output value json", inputJson, outputJson);
