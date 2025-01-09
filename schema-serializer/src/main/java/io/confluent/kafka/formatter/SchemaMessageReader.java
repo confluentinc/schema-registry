@@ -23,6 +23,7 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.io.InputStream;
 import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Objects;
@@ -376,54 +377,58 @@ public abstract class SchemaMessageReader<T> implements RecordReader {
 
   @Override
   public Iterator<ProducerRecord<byte[], byte[]>> readRecords(InputStream inputStream) {
+    List<ProducerRecord<byte[], byte[]>> records = new ArrayList<>();
     try (BufferedReader reader =
         new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-      String line = reader.readLine();
-      if (line == null) {
-        return null;
-      }
-
-      String headersString = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter");
-      int headersOffset = headersString == null
-          ? 0
-          : headersString.length() + headersDelimiter.length();
-      Headers headers = new RecordHeaders();
-      if (headersString != null && !headersString.equals(nullMarker)) {
-        splitHeaders(headersString, line).forEach(
-            header -> headers.add(header.getKey(), header.getValue()));
-      }
-
-      String keyString = parse(parseKey, line, headersOffset, keySeparator, "key separator");
-      int keyOffset = keyString == null ? 0 : keyString.length() + keySeparator.length();
-      byte[] serializedKey = null;
-      if (keyString != null && !keyString.equals(nullMarker)) {
-        if (serializer.getKeySerializer() != null) {
-          serializedKey = serializeNonSchemaKey(headers, keyString);
-        } else {
-          T key = readFrom(keyString, keySchema);
-          serializedKey = serializer.serialize(keySubject, topic, true, headers, key, keySchema);
+      while (true) {
+        String line = reader.readLine();
+        if (line == null) {
+          break;
         }
+
+        String headersString = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter");
+        int headersOffset = headersString == null
+            ? 0
+            : headersString.length() + headersDelimiter.length();
+        Headers headers = new RecordHeaders();
+        if (headersString != null && !headersString.equals(nullMarker)) {
+          splitHeaders(headersString, line).forEach(
+              header -> headers.add(header.getKey(), header.getValue()));
+        }
+
+        String keyString = parse(parseKey, line, headersOffset, keySeparator, "key separator");
+        int keyOffset = keyString == null ? 0 : keyString.length() + keySeparator.length();
+        byte[] serializedKey = null;
+        if (keyString != null && !keyString.equals(nullMarker)) {
+          if (serializer.getKeySerializer() != null) {
+            serializedKey = serializeNonSchemaKey(headers, keyString);
+          } else {
+            T key = readFrom(keyString, keySchema);
+            serializedKey = serializer.serialize(keySubject, topic, true, headers, key, keySchema);
+          }
+        }
+
+        String valueString = line.substring(headersOffset + keyOffset);
+        byte[] serializedValue = null;
+        if (valueString != null && !valueString.equals(nullMarker)) {
+          T value = readFrom(valueString, valueSchema);
+          serializedValue = serializer.serialize(valueSubject, topic, false, headers,
+              value, valueSchema);
+        }
+
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+            topic,
+            null,
+            serializedKey,
+            serializedValue,
+            headers);
+
+        records.add(record);
       }
-
-      String valueString = line.substring(headersOffset + keyOffset);
-      byte[] serializedValue = null;
-      if (valueString != null && !valueString.equals(nullMarker)) {
-        T value = readFrom(valueString, valueSchema);
-        serializedValue = serializer.serialize(valueSubject, topic, false, headers,
-            value, valueSchema);
-      }
-
-      ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
-          topic,
-          null,
-          serializedKey,
-          serializedValue,
-          headers);
-
-      return Collections.singletonList(record).iterator();
     } catch (IOException e) {
       throw new KafkaException("Error reading from input", e);
     }
+    return records.iterator();
   }
 
   private String parse(
@@ -501,3 +506,4 @@ public abstract class SchemaMessageReader<T> implements RecordReader {
 
   protected abstract SchemaProvider getProvider();
 }
+
