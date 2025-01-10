@@ -154,6 +154,14 @@ public class RestApiTest extends ClusterTestHarness {
                  allSubjects,
                  restApp.restClient.getAllSubjects());
 
+    // test pagination with limit of 1
+    assertEquals("Getting all subjects with pagination offset=0, limit=1 should return first registered subject",
+            ImmutableList.of(allSubjects.get(0)),
+            restApp.restClient.getAllSubjectsWithPagination(0, 1));
+    assertEquals("Getting all subjects with pagination offset=1, limit=1 should return second registered subject",
+            ImmutableList.of(allSubjects.get(1)),
+            restApp.restClient.getAllSubjectsWithPagination(1, 1));
+
     List<Schema> latestSchemas = restApp.restClient.getSchemas(null, false, true);
     assertEquals("Getting latest schemas should return two schemas",
                  2,
