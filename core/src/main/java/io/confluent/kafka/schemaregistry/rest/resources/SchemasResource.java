@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import com.google.common.collect.Streams;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -35,6 +36,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import java.util.Iterator;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +51,7 @@ import javax.ws.rs.PathParam;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 
 @Path("/schemas")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -99,7 +102,7 @@ public class SchemasResource {
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
-    List<ExtendedSchema> schemas;
+    Iterator<ExtendedSchema> schemas;
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
     LookupFilter filter = lookupDeletedSchema ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT;
     try {
@@ -116,7 +119,7 @@ public class SchemasResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     limit = schemaRegistry.normalizeSchemaLimit(limit);
-    return schemas.stream()
+    return Streams.stream(schemas)
       .skip(offset)
       .limit(limit)
       .collect(Collectors.toList());

@@ -259,7 +259,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subjectPrefix = schemaRegistry.tenant() + TENANT_DELIMITER + subjectPrefix;
     }
-    List<ExtendedSchema> schemas;
+    Iterator<ExtendedSchema> schemas = null;
+    List<ParsedSchema> result = new ArrayList<>();
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
     try {
       schemas = schemaRegistry.getVersionsWithSubjectPrefix(
@@ -273,9 +274,11 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    return schemas.stream()
-      .map(schema -> parseSchema(schema).get())
-      .collect(Collectors.toList());
+    while (schemas.hasNext()) {
+      Schema s = schemas.next();
+      result.add(parseSchema(s).get());
+    }
+    return result;
   }
 
   @Override

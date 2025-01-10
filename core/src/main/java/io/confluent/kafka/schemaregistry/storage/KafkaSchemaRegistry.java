@@ -1921,7 +1921,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   @Override
-  public List<ExtendedSchema> getVersionsWithSubjectPrefix(String prefix,
+  public Iterator<ExtendedSchema> getVersionsWithSubjectPrefix(String prefix,
       boolean includeAliases,
       LookupFilter filter,
       boolean returnLatestOnly,
@@ -1935,7 +1935,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private List<ExtendedSchema> allVersionsWithSubjectPrefix(String prefix,
+  private Iterator<ExtendedSchema> allVersionsWithSubjectPrefix(String prefix,
       LookupFilter filter,
       boolean returnLatestOnly,
       Predicate<Schema> postFilter)
@@ -1948,11 +1948,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         result.addAll(schemaList);
       }
       Collections.sort(result);
-      return result;
+      return result.iterator();
     }
   }
 
-  public List<ExtendedSchema> allVersionsIncludingAliasesWithSubjectPrefix(String prefix,
+  public Iterator<ExtendedSchema> allVersionsIncludingAliasesWithSubjectPrefix(String prefix,
       LookupFilter filter,
       boolean returnLatestOnly,
       Predicate<Schema> postFilter)
@@ -1979,7 +1979,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       }
       Collections.sort(result);
-      return result;
+      return result.iterator();
     }
   }
 
