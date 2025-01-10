@@ -127,14 +127,14 @@ public class KafkaAvroFormatterTest {
 
     byte[] serializedValue = message1.value();
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+        null, serializedValue, new RecordHeaders(), Optional.empty());
     formatter.writeTo(crecord, ps);
 
     serializedValue = message2.value();
     crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+        null, serializedValue, new RecordHeaders(), Optional.empty());
     formatter.writeTo(crecord, ps);
 
     String outputJson = baos.toString();
