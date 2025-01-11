@@ -375,17 +375,15 @@ public class RestApiTest extends ClusterTestHarness {
   public void testConfluentVersion() throws Exception {
     String subject = "test";
     String schemaString = "{\n" +
-        "  \"id\": \"urn:jsonschema:com:MySchema\",\n" +
-        "  \"properties\": {\n" +
-        "    \"myEnum\": {\n" +
-        "      \"enum\": [\n" +
+        "  \"id\":\"urn:jsonschema:com:MySchema\",\n" +
+        "  \"properties\":{\n" +
+        "    \"myEnum\":{\"enum\":[\n" +
         "        \"YES_VALUE\",\n" +
         "        \"NO_VALUE\"\n" +
         "      ],\n" +
-        "      \"type\": \"string\"\n" +
-        "    }\n" +
-        "  },\n" +
-        "  \"type\": \"object\"\n" +
+        "      \"type\":\"string\"\n" +
+        "    }},\n" +
+        "  \"type\":\"object\"\n" +
         "}";
 
     RegisterSchemaRequest request = new RegisterSchemaRequest();
