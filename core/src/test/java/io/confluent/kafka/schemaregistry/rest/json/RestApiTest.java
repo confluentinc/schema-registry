@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.rest.json;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.junit.Assert;
 import org.junit.Test;
 
