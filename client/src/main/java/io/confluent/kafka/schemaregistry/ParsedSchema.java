@@ -268,6 +268,12 @@ public interface ParsedSchema {
    * @return whether the underlying raw representations are equivalent
    */
   default boolean equivalent(ParsedSchema schema) {
+    if (this == schema) {
+      return true;
+    }
+    if (schema == null || getClass() != schema.getClass()) {
+      return false;
+    }
     return Objects.equals(canonicalString(), schema.canonicalString())
         && Objects.equals(metadata(), schema.metadata())
         && Objects.equals(ruleSet(), schema.ruleSet());

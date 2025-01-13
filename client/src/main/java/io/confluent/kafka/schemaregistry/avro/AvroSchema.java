@@ -359,11 +359,17 @@ public class AvroSchema implements ParsedSchema {
    */
   @Override
   public boolean equivalent(ParsedSchema schema) {
-    // For Avro we use the raw schema instead of the canonical string, since we want
-    // to compare the Avro schemas with all references resolved.
-    return Objects.equals(rawSchema(), schema.rawSchema())
-        && Objects.equals(metadata(), schema.metadata())
-        && Objects.equals(ruleSet(), schema.ruleSet());
+    if (this == schema) {
+      return true;
+    }
+    if (schema == null || getClass() != schema.getClass()) {
+      return false;
+    }
+    AvroSchema that = (AvroSchema) schema;
+    return Objects.equals(schemaObj, that.schemaObj)
+        && Objects.equals(metadata, that.metadata)
+        && Objects.equals(ruleSet, that.ruleSet)
+        && metaEqual(schemaObj, that.schemaObj, new HashMap<>());
   }
 
   @Override
