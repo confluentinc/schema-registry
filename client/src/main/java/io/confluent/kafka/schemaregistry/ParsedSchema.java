@@ -251,12 +251,24 @@ public interface ParsedSchema {
   }
 
   /**
-   * Returns whether the underlying raw representations are equal, ignoring references.
+   * Returns whether the underlying raw representations are equivalent,
+   * ignoring version and references.
    *
-   * @return whether the underlying raw representations are equal
+   * @return whether the underlying raw representations are equivalent
+   * @deprecated use {@link #equivalent(ParsedSchema)} instead
    */
   default boolean deepEquals(ParsedSchema schema) {
-    return Objects.equals(rawSchema(), schema.rawSchema())
+    return equivalent(schema);
+  }
+
+  /**
+   * Returns whether the underlying raw representations are equivalent,
+   * ignoring version and references.
+   *
+   * @return whether the underlying raw representations are equivalent
+   */
+  default boolean equivalent(ParsedSchema schema) {
+    return Objects.equals(canonicalString(), schema.canonicalString())
         && Objects.equals(metadata(), schema.metadata())
         && Objects.equals(ruleSet(), schema.ruleSet());
   }
