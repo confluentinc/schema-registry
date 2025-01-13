@@ -102,7 +102,7 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       ParsedSchema newPrev = prev.copy(
           Metadata.removeConfluentVersion(prev.metadata()), prev.ruleSet());
       // This handles the case where current schema is without confluent:version
-      return newSchema.deepEquals(newPrev);
+      return newSchema.equivalent(newPrev);
     } else if (schemaVer != null && prevVer == null) {
       if (!schemaVer.equals(prev.version())) {
         // The incoming confluent:version must match the actual version of the prev schema
@@ -114,9 +114,9 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       ParsedSchema newSchema = current.copy(
           Metadata.removeConfluentVersion(current.metadata()), current.ruleSet());
       // This handles the case where prev schema is without confluent:version
-      return newSchema.deepEquals(newPrev);
+      return newSchema.equivalent(newPrev);
     } else {
-      return current.deepEquals(prev);
+      return current.equivalent(prev);
     }
   }
 
