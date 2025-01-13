@@ -351,6 +351,21 @@ public class AvroSchema implements ParsedSchema {
     }
   }
 
+  /**
+   * Returns whether the underlying raw representations are equivalent,
+   * ignoring version and references.
+   *
+   * @return whether the underlying raw representations are equivalent
+   */
+  @Override
+  public boolean equivalent(ParsedSchema schema) {
+    // For Avro we use the raw schema instead of the canonical string, since we want
+    // to compare the Avro schemas with all references resolved.
+    return Objects.equals(rawSchema(), schema.rawSchema())
+        && Objects.equals(metadata(), schema.metadata())
+        && Objects.equals(ruleSet(), schema.ruleSet());
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
