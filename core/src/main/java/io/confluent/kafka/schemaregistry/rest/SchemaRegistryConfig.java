@@ -221,6 +221,17 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_SEARCH_MAX_LIMIT_CONFIG = "schema.search.max.limit";
   public static final int SCHEMA_SEARCH_MAX_LIMIT_DEFAULT = 1000;
 
+  /**
+   * <code>subject.search.default.limit</code>
+   */
+  public static final String SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG = "subject.search.default.limit";
+  public static final int SUBJECT_SEARCH_DEFAULT_LIMIT_DEFAULT = 20000;
+  /**
+   * <code>subject.search.max.limit</code>
+   */
+  public static final String SUBJECT_SEARCH_MAX_LIMIT_CONFIG = "subject.search.max.limit";
+  public static final int SUBJECT_SEARCH_MAX_LIMIT_DEFAULT = 20000;
+
   public static final String METADATA_ENCODER_SECRET_CONFIG = "metadata.encoder.secret";
   public static final String METADATA_ENCODER_OLD_SECRET_CONFIG = "metadata.encoder.old.secret";
 
@@ -380,6 +391,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "The default limit for schema searches.";
   protected static final String SCHEMA_SEARCH_MAX_LIMIT_DOC =
       "The max limit for schema searches.";
+  protected static final String SUBJECT_SEARCH_DEFAULT_LIMIT_DOC =
+          "The default limit for subject searches.";
+  protected static final String SUBJECT_SEARCH_MAX_LIMIT_DOC =
+          "The max limit for subject searches.";
   protected static final String METADATA_ENCODER_SECRET_DOC =
       "The secret used to encrypt and decrypt encoder keysets. "
       + "Use a random string with high entropy.";
@@ -600,6 +615,14 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
         SCHEMA_SEARCH_MAX_LIMIT_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_SEARCH_MAX_LIMIT_DOC
+    )
+    .define(SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SUBJECT_SEARCH_DEFAULT_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, SUBJECT_SEARCH_DEFAULT_LIMIT_DOC
+    )
+    .define(SUBJECT_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SUBJECT_SEARCH_MAX_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, SUBJECT_SEARCH_MAX_LIMIT_DOC
     )
     .define(METADATA_ENCODER_SECRET_CONFIG, ConfigDef.Type.PASSWORD, null,
         ConfigDef.Importance.HIGH, METADATA_ENCODER_SECRET_DOC
