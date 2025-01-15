@@ -30,7 +30,7 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
-import org.junit.Ignore;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
@@ -275,7 +275,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
 
 
   @Test
-  @Ignore("Temporarily disabled since seems flakey with KRaft")
+  @Disabled("Temporarily disabled since seems flakey with KRaft")
   /**
    * Trigger reelection with both a leader cluster and follower cluster present.
    * Ensure that nodes in follower cluster are never elected leader.
