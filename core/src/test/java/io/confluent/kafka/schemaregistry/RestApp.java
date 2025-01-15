@@ -57,9 +57,6 @@ public class RestApp {
       prop.putAll(schemaRegistryProps);
     }
     prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
-    if (zkConnect != null) {
-      prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    }
     if (bootstrapBrokers != null) {
       prop.setProperty(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
     }
