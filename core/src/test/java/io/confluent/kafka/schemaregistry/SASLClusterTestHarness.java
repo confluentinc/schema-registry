@@ -22,8 +22,7 @@ import kafka.utils.TestUtils;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.LoginManager;
-import org.junit.After;
-import org.junit.Before;
+import org.junit.jupiter.api.AfterEach;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Option;
@@ -52,13 +51,12 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
   }
 
   @Override
-  protected SecurityProtocol getSecurityProtocol() {
+  protected SecurityProtocol getBrokerSecurityProtocol() {
     return SecurityProtocol.SASL_PLAINTEXT;
   }
 
-  @Before
   @Override
-  public void setUp() throws Exception {
+  protected void setUp() throws Exception {
     // Important if tests leak consumers, producers or brokers.
     LoginManager.closeAll();
 
@@ -103,20 +101,19 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     final Option<SecurityProtocol> saslInterBrokerSecurityProtocol =
             scala.Option.apply(SecurityProtocol.SASL_PLAINTEXT);
     Properties props = TestUtils.createBrokerConfig(
-            brokerId, zkConnect, false, false, TestUtils.RandomPort(), saslInterBrokerSecurityProtocol,
+            brokerId, false, false, TestUtils.RandomPort(), saslInterBrokerSecurityProtocol,
             trustStoreFileOption, EMPTY_SASL_PROPERTIES, false, true, TestUtils.RandomPort(),
             false, TestUtils.RandomPort(),
             false, TestUtils.RandomPort(), Option.<String>empty(), 1, false, 1, (short) 1, false);
 
     injectProperties(props);
-    props.setProperty("zookeeper.connection.timeout.ms", "30000");
     props.setProperty("sasl.mechanism.inter.broker.protocol", "GSSAPI");
     props.setProperty(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "GSSAPI");
 
     return KafkaConfig.fromProps(props);
   }
 
-  @After
+  @AfterEach
   @Override
   public void tearDown() throws Exception {
     if (kdc != null) {
