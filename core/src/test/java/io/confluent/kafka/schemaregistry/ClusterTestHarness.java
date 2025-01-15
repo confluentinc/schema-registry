@@ -344,14 +344,18 @@ public abstract class ClusterTestHarness {
           p -> p == protocol).orElse(false);
 
       List<Tuple2<SecurityProtocol, Integer>> protocolAndPorts = new ArrayList<>();
-      if (enablePlaintext || shouldEnable.apply(SecurityProtocol.PLAINTEXT))
+      if (enablePlaintext || shouldEnable.apply(SecurityProtocol.PLAINTEXT)) {
         protocolAndPorts.add(new Tuple2<>(SecurityProtocol.PLAINTEXT, port));
-      if (enableSsl || shouldEnable.apply(SecurityProtocol.SSL))
+      }
+      if (enableSsl || shouldEnable.apply(SecurityProtocol.SSL)) {
         protocolAndPorts.add(new Tuple2<>(SecurityProtocol.SSL, sslPort));
-      if (enableSaslPlaintext || shouldEnable.apply(SecurityProtocol.SASL_PLAINTEXT))
+      }
+      if (enableSaslPlaintext || shouldEnable.apply(SecurityProtocol.SASL_PLAINTEXT)) {
         protocolAndPorts.add(new Tuple2<>(SecurityProtocol.SASL_PLAINTEXT, saslPlaintextPort));
-      if (enableSaslSsl || shouldEnable.apply(SecurityProtocol.SASL_SSL))
+      }
+      if (enableSaslSsl || shouldEnable.apply(SecurityProtocol.SASL_SSL)) {
         protocolAndPorts.add(new Tuple2<>(SecurityProtocol.SASL_SSL, saslSslPort));
+      }
 
       String listeners = protocolAndPorts.stream()
           .map(p -> p._1.name() + "://localhost:" + p._2)
@@ -391,23 +395,25 @@ public abstract class ClusterTestHarness {
       props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
       props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
       props.put(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, "100");
-      if (!props.containsKey(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG))
-        ;
-      props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "5");
-      if (!props.containsKey(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG))
-        ;
-      props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0");
+      if (!props.containsKey(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG)) {
+        props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "5");
+      }
+      if (!props.containsKey(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG)) {
+        props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0");
+      }
       rack.ifPresent(r -> props.put(ServerConfigs.BROKER_RACK_CONFIG, r));
       // Reduce number of threads per broker
       props.put(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, "2");
       props.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "2");
 
-      if (protocolAndPorts.stream().anyMatch(p -> usesSslTransportLayer(p._1)))
+      if (protocolAndPorts.stream().anyMatch(p -> usesSslTransportLayer(p._1))) {
         props.putAll(sslConfigs(ConnectionMode.SERVER, false, trustStoreFile,
             "server" + nodeId));
+      }
 
-      if (protocolAndPorts.stream().anyMatch(p -> usesSaslAuthentication(p._1)))
+      if (protocolAndPorts.stream().anyMatch(p -> usesSaslAuthentication(p._1))) {
         props.putAll(saslConfigs(saslProperties));
+      }
 
       interBrokerSecurityProtocol.ifPresent(protocol ->
           props.put(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG, protocol.name)
@@ -456,7 +462,7 @@ public abstract class ClusterTestHarness {
   }
 
   public static Properties sslConfigs(ConnectionMode mode, boolean clientCert, Optional<File> trustStoreFile, String certAlias, String certCn, String tlsProtocol) throws Exception {
-    File trustStore = (File)trustStoreFile.orElseThrow(() -> new Exception("SSL enabled but no trustStoreFile provided"));
+    File trustStore = trustStoreFile.orElseThrow(() -> new Exception("SSL enabled but no trustStoreFile provided"));
     Properties sslProps = new Properties();
     sslProps.putAll((new TestSslUtils.SslConfigsBuilder(mode)).useClientCert(clientCert).createNewTrustStore(trustStore).certAlias(certAlias).cn(certCn).tlsProtocol(tlsProtocol).build());
     return sslProps;
@@ -465,7 +471,7 @@ public abstract class ClusterTestHarness {
   private static final boolean IS_IBM_SECURITY = Java.isIbmJdk() && !Java.isIbmJdkSemeru();
 
   public static Properties saslConfigs(Optional<Properties> saslProperties) {
-    Properties result = (Properties)saslProperties.orElse(new Properties());
+    Properties result = saslProperties.orElse(new Properties());
     if (IS_IBM_SECURITY && !result.containsKey("sasl.kerberos.service.name")) {
       result.put("sasl.kerberos.service.name", "kafka");
     }
