@@ -15,15 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
-
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Properties;
 
 import javax.ws.rs.container.ContainerRequestContext;
@@ -37,24 +29,12 @@ import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
-@RunWith(Parameterized.class)
 public class SchemaRegistryExtensionTest extends ClusterTestHarness {
-
-  @Parameters(name = "{0}")
-  public static Collection<Object[]> data() {
-    return Arrays.asList(new Object[][] {
-        { SchemaRegistryConfig.RESOURCE_EXTENSION_CONFIG },
-        { SchemaRegistryConfig.SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG },
-        { SchemaRegistryConfig.INIT_RESOURCE_EXTENSION_CONFIG}
-    });
-  }
-
-  @Parameter
-  public String resourceExtensionConfigName;
 
   public SchemaRegistryExtensionTest() {
     super(1, true, CompatibilityLevel.BACKWARD.name);
@@ -70,9 +50,9 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
     int expectedIdSchema1 = 1;
     assertEquals(
-        "Registering should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(schemaString1, subject)
+        restApp.restClient.registerSchema(schemaString1, subject),
+        "Registering should succeed"
     );
 
   }
@@ -86,9 +66,9 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
       fail("Getting all versions from non-existing subject1 should fail with 401");
     } catch (RestClientException rce) {
       assertEquals(
-          "Should get a 401 status for GET operations",
           401,
-          rce.getStatus()
+          rce.getStatus(),
+          "Should get a 401 status for GET operations"
       );
     }
   }
@@ -97,7 +77,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   protected Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
     props.put(
-        resourceExtensionConfigName,
+        SchemaRegistryConfig.RESOURCE_EXTENSION_CONFIG,
         TestSchemaRegistryExtension.class.getName()
     );
     return props;

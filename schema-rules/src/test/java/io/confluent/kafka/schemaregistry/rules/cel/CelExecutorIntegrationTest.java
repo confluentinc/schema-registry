@@ -16,7 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
@@ -63,8 +63,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,8 +85,8 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
     super(1, true);
   }
 
-  @Before
-  public void setUp() throws Exception {
+  @Override
+  protected void setUp() throws Exception {
     super.setUp();
     ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
       public void handle(String subject, ConfigUpdateRequest request) {
@@ -208,7 +207,7 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
     value.setAge(45); // rule: > 18
     value.setIBAN("GB33BUKB20201555555555"); // rule: matches regex
     value.setActive(isActive); // rule: is true
-    value.setBalance(new Float(10.0).floatValue()); // rule: >= 0.0
+    value.setBalance(Float.valueOf(10.0f).floatValue()); // rule: >= 0.0
     value.setMode(mode);
     return value;
   }
