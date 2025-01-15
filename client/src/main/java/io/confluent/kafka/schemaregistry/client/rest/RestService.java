@@ -360,7 +360,7 @@ public class RestService implements Closeable, Configurable {
     }
   }
 
-  private HttpURLConnection buildConnection(URL url, String method, Map<String,
+  protected HttpURLConnection buildConnection(URL url, String method, Map<String,
                                             String> requestProperties)
       throws IOException {
     HttpURLConnection connection = null;
