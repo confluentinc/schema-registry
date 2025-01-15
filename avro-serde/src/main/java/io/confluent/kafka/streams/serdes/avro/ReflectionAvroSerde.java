@@ -44,7 +44,7 @@ import org.apache.kafka.common.serialization.Serializer;
  * streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, ReflectionAvroSerde.class);
  * streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, ReflectionAvroSerde.class);
  * streamsConfiguration.put(
- *     AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+ *     AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *     "http://confluent-schema-registry-server:8081/");
  * }</pre>
  *
@@ -56,7 +56,7 @@ import org.apache.kafka.common.serialization.Serializer;
  * boolean isKeySerde = false;
  * reflectionAvroSerde.configure(
  *     Collections.singletonMap(
- *         AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+ *         AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *         "http://confluent-schema-registry-server:8081/"),
  *     isKeySerde);
  * KStream<String, MyJavaClassGeneratedFromAvroSchema> stream = ...;

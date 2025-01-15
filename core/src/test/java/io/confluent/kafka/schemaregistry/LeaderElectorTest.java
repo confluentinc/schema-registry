@@ -14,15 +14,8 @@
  */
 package io.confluent.kafka.schemaregistry;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
-
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -37,15 +30,16 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
+import org.junit.jupiter.api.Test;
 
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class LeaderElectorTest extends ClusterTestHarness {
 
@@ -54,7 +48,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
   }
 
   private String bootstrapServers() {
-    return bootstrapServers;
+    return brokerList;
   }
 
   @Test
@@ -84,10 +78,11 @@ public class LeaderElectorTest extends ClusterTestHarness {
                                          zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                          CompatibilityLevel.NONE.name, true, null);
     restApp2.start();
-    assertTrue("Schema registry instance 1 should be the leader", restApp1.isLeader());
-    assertFalse("Schema registry instance 2 shouldn't be the leader", restApp2.isLeader());
-    assertEquals("Instance 2's leader should be instance 1",
-                 restApp1.myIdentity(), restApp2.leaderIdentity());
+    assertTrue(restApp1.isLeader(), "Schema registry instance 1 should be the leader");
+    assertFalse(restApp2.isLeader(), "Schema registry instance 2 shouldn't be the leader");
+    assertEquals(
+        restApp1.myIdentity(), restApp2.leaderIdentity(),
+        "Instance 2's leader should be instance 1");
 
     // test registering a schema to the leader and finding it on the expected version
     final String firstSchema = avroSchemas.get(0);
@@ -102,41 +97,53 @@ public class LeaderElectorTest extends ClusterTestHarness {
     final String secondSchema = avroSchemas.get(1);
     final int secondSchemaExpectedId = 2;
     final int secondSchemaExpectedVersion = 2;
-    assertEquals("Registering a new schema to the non-leader should succeed",
-            secondSchemaExpectedId,
-            restApp2.restClient.registerSchema(secondSchema, subject));
+    assertEquals(
+        secondSchemaExpectedId,
+        restApp2.restClient.registerSchema(secondSchema, subject),
+        "Registering a new schema to the non-leader should succeed"
+    );
 
     // the newly registered schema should be immediately readable on the leader using the id
-    assertEquals("Registered schema should be found on the leader",
-            secondSchema,
-            restApp1.restClient.getId(secondSchemaExpectedId).getSchemaString());
+    assertEquals(
+        secondSchema,
+        restApp1.restClient.getId(secondSchemaExpectedId).getSchemaString(),
+        "Registered schema should be found on the leader"
+    );
 
     // the newly registered schema should be immediately readable on the leader using the version
-    assertEquals("Registered schema should be found on the leader",
-            secondSchema,
-            restApp1.restClient.getVersion(subject,
-                    secondSchemaExpectedVersion).getSchema());
+    assertEquals(
+        secondSchema,
+        restApp1.restClient.getVersion(subject,
+            secondSchemaExpectedVersion).getSchema(),
+        "Registered schema should be found on the leader"
+    );
 
     // the newly registered schema should be eventually readable on the non-leader
     verifyIdAndSchema(restApp2.restClient, secondSchemaExpectedId, secondSchema,
                       "Registered schema should be found on the non-leader");
 
     // test registering an existing schema to the leader
-    assertEquals("Registering an existing schema to the leader should return its id",
-                 secondSchemaExpectedId,
-                 restApp1.restClient.registerSchema(secondSchema, subject));
+    assertEquals(
+        secondSchemaExpectedId,
+        restApp1.restClient.registerSchema(secondSchema, subject),
+        "Registering an existing schema to the leader should return its id"
+    );
 
     // test registering an existing schema to the non-leader
-    assertEquals("Registering an existing schema to the non-leader should return its id",
-            secondSchemaExpectedId,
-            restApp2.restClient.registerSchema(secondSchema, subject));
+    assertEquals(
+        secondSchemaExpectedId,
+        restApp2.restClient.registerSchema(secondSchema, subject),
+        "Registering an existing schema to the non-leader should return its id"
+    );
 
     // update config to leader
     restApp1.restClient
         .updateCompatibility(CompatibilityLevel.FORWARD.name, configSubject);
-    assertEquals("New compatibility level should be FORWARD on the leader",
-                 FORWARD.name,
-                 restApp1.restClient.getConfig(configSubject).getCompatibilityLevel());
+    assertEquals(
+        FORWARD.name,
+        restApp1.restClient.getConfig(configSubject).getCompatibilityLevel(),
+        "New compatibility level should be FORWARD on the leader"
+    );
 
     // the new config should be eventually readable on the non-leader
     waitUntilCompatibilityLevelSet(restApp2.restClient, configSubject,
@@ -146,9 +153,11 @@ public class LeaderElectorTest extends ClusterTestHarness {
     // update config to non-leader
     restApp2.restClient
         .updateCompatibility(CompatibilityLevel.NONE.name, configSubject);
-    assertEquals("New compatibility level should be NONE on the leader",
-                 NONE.name,
-                 restApp1.restClient.getConfig(configSubject).getCompatibilityLevel());
+    assertEquals(
+        NONE.name,
+        restApp1.restClient.getConfig(configSubject).getCompatibilityLevel(),
+        "New compatibility level should be NONE on the leader"
+    );
 
     // the new config should be eventually readable on the non-leader
     waitUntilCompatibilityLevelSet(restApp2.restClient, configSubject,
@@ -176,10 +185,10 @@ public class LeaderElectorTest extends ClusterTestHarness {
       statusCodeFromRestApp2 = e.getStatus();
     }
 
-    assertEquals("Status code from a non-leader rest app for register schema should be 500",
-                 500, statusCodeFromRestApp1);
-    assertEquals("Error code from the leader and the non-leader should be the same",
-                 statusCodeFromRestApp1, statusCodeFromRestApp2);
+    assertEquals(500, statusCodeFromRestApp1,
+        "Status code from a non-leader rest app for register schema should be 500");
+    assertEquals(statusCodeFromRestApp1, statusCodeFromRestApp2,
+        "Error code from the leader and the non-leader should be the same");
 
     // update config should fail if leader is not available
     int updateConfigStatusCodeFromRestApp1 = 0;
@@ -202,15 +211,17 @@ public class LeaderElectorTest extends ClusterTestHarness {
       updateConfigStatusCodeFromRestApp2 = e.getStatus();
     }
 
-    assertEquals("Status code from a non-leader rest app for update config should be 500",
-                 500, updateConfigStatusCodeFromRestApp1);
-    assertEquals("Error code from the leader and the non-leader should be the same",
-                 updateConfigStatusCodeFromRestApp1, updateConfigStatusCodeFromRestApp2);
+    assertEquals(500, updateConfigStatusCodeFromRestApp1,
+        "Status code from a non-leader rest app for update config should be 500");
+    assertEquals(updateConfigStatusCodeFromRestApp1, updateConfigStatusCodeFromRestApp2,
+        "Error code from the leader and the non-leader should be the same");
 
     // test registering an existing schema to the non-leader when the leader is not available
-    assertEquals("Registering an existing schema to the non-leader should return its id",
-            secondSchemaExpectedId,
-            restApp2.restClient.registerSchema(secondSchema, subject));
+    assertEquals(
+        secondSchemaExpectedId,
+        restApp2.restClient.registerSchema(secondSchema, subject),
+        "Registering an existing schema to the non-leader should return its id"
+    );
 
     // set the correct leader identity back
     restApp1.setLeader(restApp1.myIdentity());
@@ -219,9 +230,11 @@ public class LeaderElectorTest extends ClusterTestHarness {
     final String thirdSchema = avroSchemas.get(2);
     final int thirdSchemaExpectedVersion = 3;
     final int thirdSchemaExpectedId = secondSchemaExpectedId + 1;
-    assertEquals("Registering a new schema to the leader should succeed",
-            thirdSchemaExpectedId,
-            restApp1.restClient.registerSchema(thirdSchema, subject));
+    assertEquals(
+        thirdSchemaExpectedId,
+        restApp1.restClient.registerSchema(thirdSchema, subject),
+        "Registering a new schema to the leader should succeed"
+    );
 
     // stop schema registry instance 1; instance 2 should become the new leader
     restApp1.stop();
@@ -235,15 +248,19 @@ public class LeaderElectorTest extends ClusterTestHarness {
                             "Schema registry instance 2 should become the leader");
 
     // the latest version should be immediately available on the new leader using the id
-    assertEquals("Latest version should be found on the new leader",
-            thirdSchema,
-            restApp2.restClient.getId(thirdSchemaExpectedId).getSchemaString());
+    assertEquals(
+        thirdSchema,
+        restApp2.restClient.getId(thirdSchemaExpectedId).getSchemaString(),
+        "Latest version should be found on the new leader"
+    );
 
     // the latest version should be immediately available on the new leader using the version
-    assertEquals("Latest version should be found on the new leader",
-            thirdSchema,
-            restApp2.restClient.getVersion(subject,
-                    thirdSchemaExpectedVersion).getSchema());
+    assertEquals(
+        thirdSchema,
+        restApp2.restClient.getVersion(subject,
+            thirdSchemaExpectedVersion).getSchema(),
+        "Latest version should be found on the new leader"
+    );
 
     // register a schema to the new leader
     final String fourthSchema = avroSchemas.get(3);
@@ -280,8 +297,8 @@ public class LeaderElectorTest extends ClusterTestHarness {
 
     // Check that nothing in the follower cluster points to a leader
     for (RestApp follower : followerApps) {
-      assertFalse("No follower should be leader.", follower.isLeader());
-      assertNull("No follower should be present in a follower cluster.", follower.leaderIdentity());
+      assertFalse(follower.isLeader(), "No follower should be leader.");
+      assertNull(follower.leaderIdentity(), "No follower should be present in a follower cluster.");
     }
 
     // It should not be possible to set a follower node as leader
@@ -290,8 +307,8 @@ public class LeaderElectorTest extends ClusterTestHarness {
     } catch (IllegalStateException e) {
       // This is expected
     }
-    assertFalse("Should not be able to set a follower to be leader.", aFollower.isLeader());
-    assertNull("There should be no leader present.", aFollower.leaderIdentity());
+    assertFalse(aFollower.isLeader(), "Should not be able to set a follower to be leader.");
+    assertNull(aFollower.leaderIdentity(), "There should be no leader present.");
 
     // Make a leader-eligible 'cluster'
     final Set<RestApp> leaderApps = new HashSet<RestApp>();
@@ -365,8 +382,8 @@ public class LeaderElectorTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       // registration should fail
     }
-    assertFalse("Should not be possible to register with no leaders present.",
-                successfullyRegistered);
+    assertFalse(successfullyRegistered,
+        "Should not be possible to register with no leaders present.");
 
     // Make a leader-eligible 'cluster'
     final Set<RestApp> leaderApps = new HashSet<RestApp>();
@@ -409,8 +426,8 @@ public class LeaderElectorTest extends ClusterTestHarness {
         SchemaString followerResponse = aFollower.restClient.getId(id);
         SchemaString leaderResponse = aLeader.restClient.getId(id);
         assertEquals(
-            "Leader and follower responded with different schemas when queried with the same id.",
-            followerResponse.getSchemaString(), leaderResponse.getSchemaString());
+            followerResponse.getSchemaString(), leaderResponse.getSchemaString(),
+            "Leader and follower responded with different schemas when queried with the same id.");
       }
     } catch (RestClientException e) {
       fail("Expected ids were not found in the schema registry.");
@@ -433,8 +450,8 @@ public class LeaderElectorTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       // should fail
     }
-    assertFalse("Should not be possible to register with no leaders present.",
-                successfullyRegistered);
+    assertFalse(successfullyRegistered,
+        "Should not be possible to register with no leaders present.");
 
     // Try fetching preregistered ids from followers - should succeed
     try {
@@ -443,7 +460,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
         SchemaString schemaString = aFollower.restClient.getId(id);
       }
       List<Integer> versions = aFollower.restClient.getAllVersions(subject);
-      assertEquals("Number of ids should match number of versions.", ids.size(), versions.size());
+      assertEquals(ids.size(), versions.size(), "Number of ids should match number of versions.");
     } catch (RestClientException e) {
       fail("Should be possible to fetch registered schemas even with no leaders present.");
     }
@@ -496,8 +513,8 @@ public class LeaderElectorTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       // registration should fail
     }
-    assertFalse("Should not be possible to register with no leaders present.",
-        successfullyRegistered);
+    assertFalse(successfullyRegistered,
+        "Should not be possible to register with no leaders present.");
 
     // Make a leader-eligible 'cluster'
     final Set<RestApp> leaderApps = new HashSet<RestApp>();
@@ -548,8 +565,8 @@ public class LeaderElectorTest extends ClusterTestHarness {
         SchemaString followerResponse = aFollower.restClient.getId(id);
         SchemaString leaderResponse = aLeader.restClient.getId(id);
         assertEquals(
-            "Leader and follower responded with different schemas when queried with the same id.",
-            followerResponse.getSchemaString(), leaderResponse.getSchemaString());
+            followerResponse.getSchemaString(), leaderResponse.getSchemaString(),
+            "Leader and follower responded with different schemas when queried with the same id.");
       }
     } catch (RestClientException e) {
       fail("Expected ids were not found in the schema registry.");
@@ -572,8 +589,8 @@ public class LeaderElectorTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       // should fail
     }
-    assertFalse("Should not be possible to register with no leaders present.",
-        successfullyRegistered);
+    assertFalse(successfullyRegistered,
+        "Should not be possible to register with no leaders present.");
 
     // Try fetching preregistered ids from followers - should succeed
     try {
@@ -582,7 +599,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
         SchemaString schemaString = aFollower.restClient.getId(id);
       }
       List<Integer> versions = aFollower.restClient.getAllVersions(subject);
-      assertEquals("Number of ids should match number of versions.", ids.size(), versions.size());
+      assertEquals(ids.size(), versions.size(), "Number of ids should match number of versions.");
     } catch (RestClientException e) {
       fail("Should be possible to fetch registered schemas even with no leaders present.");
     }
@@ -605,7 +622,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
 
   /** Verify that no node in cluster reports itself as leader. */
   private static void checkNoneIsLeader(Collection<RestApp> cluster) {
-    assertNull("Expected none of the nodes in this cluster to report itself as leader.", findLeader(cluster));
+    assertNull(findLeader(cluster), "Expected none of the nodes in this cluster to report itself as leader.");
   }
 
   /** Verify that all nodes agree on the expected leader identity. */
@@ -624,8 +641,8 @@ public class LeaderElectorTest extends ClusterTestHarness {
           }
           continue;
         }
-        assertEquals("Each leader identity should be " + expectedLeaderIdentity,
-            expectedLeaderIdentity, leaderIdentity);
+        assertEquals(expectedLeaderIdentity, leaderIdentity,
+            "Each leader identity should be " + expectedLeaderIdentity);
       }
     }
   }
@@ -658,7 +675,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
       }
     }
 
-    assertEquals("Expected one leader but found " + leaderCount, 1, leaderCount);
+    assertEquals(1, leaderCount, "Expected one leader but found " + leaderCount);
     return leader;
   }
 
@@ -726,6 +743,6 @@ public class LeaderElectorTest extends ClusterTestHarness {
       fail(errMsg);
     }
 
-    assertEquals(errMsg, expectedSchemaString, schemaString);
+    assertEquals(expectedSchemaString, schemaString, errMsg);
   }
 }
