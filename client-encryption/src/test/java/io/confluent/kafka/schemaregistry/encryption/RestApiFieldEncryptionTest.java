@@ -15,9 +15,9 @@
 package io.confluent.kafka.schemaregistry.encryption;
 
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.CLOCK;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -62,8 +62,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
 
@@ -92,8 +91,8 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     return props;
   }
 
-  @Before
-  public void setUp() throws Exception {
+  @Override
+  protected void setUp() throws Exception {
     super.setUp();
     ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
       public void handle(String subject, ConfigUpdateRequest request) {
@@ -300,10 +299,10 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
       int expectedId, String subject)
       throws IOException, RestClientException {
     int registeredId = schemaRegistry.register(subject, schema);
-    assertEquals("Registering a new schema should succeed", expectedId, registeredId);
+    assertEquals(expectedId, registeredId, "Registering a new schema should succeed");
 
     ParsedSchema newSchema = schemaRegistry.getSchemaBySubjectAndId(subject, expectedId);
-    assertNotNull("Registered schema should be found", newSchema);
+    assertNotNull(newSchema, "Registered schema should be found");
   }
 }
 

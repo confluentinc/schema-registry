@@ -23,7 +23,6 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import org.apache.avro.Schema;
 import org.apache.kafka.common.config.types.Password;
-import org.junit.Test;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
@@ -37,8 +36,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RestApiSslTest extends ClusterTestHarness {
 
@@ -90,9 +90,9 @@ public class RestApiSslTest extends ClusterTestHarness {
     CachedSchemaRegistryClient schemaRegistryClient = new CachedSchemaRegistryClient(restApp.restClient, 10, clientsslConfigs);
 
     assertEquals(
-        "Registering should succeed",
         expectedIdSchema1,
-        schemaRegistryClient.register(subject, new AvroSchema(schema))
+        schemaRegistryClient.register(subject, new AvroSchema(schema)),
+        "Registering should succeed"
     );
 
   }
@@ -134,9 +134,9 @@ public class RestApiSslTest extends ClusterTestHarness {
     CachedSchemaRegistryClient schemaRegistryClient = new CachedSchemaRegistryClient(restApp.restClient, 10, clientsslConfigs);
 
     assertEquals(
-        "Registering should succeed",
         expectedIdSchema1,
-        schemaRegistryClient.register(subject, new AvroSchema(schema))
+        schemaRegistryClient.register(subject, new AvroSchema(schema)),
+        "Registering should succeed"
     );
 
   }
