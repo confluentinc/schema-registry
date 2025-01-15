@@ -17,12 +17,22 @@ package io.confluent.kafka.schemaregistry;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.stream.Collectors.toList;
 
+import io.vavr.Tuple;
+import io.vavr.Tuple2;
+import java.io.File;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import kafka.security.JaasTestUtils;
 import kafka.server.KafkaBroker;
 import kafka.server.QuorumTestHarness;
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
 
@@ -36,16 +46,27 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.raft.QuorumConfig;
+import org.apache.kafka.server.config.DelegationTokenManagerConfigs;
+import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.config.ReplicationConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.Int;
 import scala.Option;
 import scala.Option$;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
+import scala.jdk.javaapi.OptionConverters;
 
 /**
  * Test harness to run against a real, local Kafka cluster and REST proxy. This is essentially
@@ -60,7 +81,7 @@ public abstract class ClusterTestHarness {
   public static final int DEFAULT_NUM_BROKERS = 1;
   public static final int MAX_MESSAGE_SIZE = (2 << 20) * 10; // 10 MiB
   public static final String KAFKASTORE_TOPIC = SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC;
-  protected static final Option<Properties> EMPTY_SASL_PROPERTIES = Option$.MODULE$.<Properties>empty();
+  protected static final Optional<Properties> EMPTY_SASL_PROPERTIES = Optional.empty();
 
   /**
    * Choose a number of random available ports
@@ -183,13 +204,13 @@ public abstract class ClusterTestHarness {
   }
 
   protected KafkaConfig getKafkaConfig(int brokerId) {
-    final Option<java.io.File> noFile = scala.Option.apply(null);
-    Properties props = TestUtils.createBrokerConfig(
+    final Optional<java.io.File> noFile = Optional.empty();
+    Properties props = createBrokerConfig(
         brokerId,
         false,
         true,
         TestUtils.RandomPort(),
-        Option.apply(getBrokerSecurityProtocol()),
+        Optional.of(getBrokerSecurityProtocol()),
         noFile,
         EMPTY_SASL_PROPERTIES,
         true,
@@ -199,8 +220,7 @@ public abstract class ClusterTestHarness {
         TestUtils.RandomPort(),
         false,
         TestUtils.RandomPort(),
-        Option.<String>empty(),
-        1,
+        Optional.empty(),
         false,
         1,
         (short) 1,
@@ -281,7 +301,6 @@ public abstract class ClusterTestHarness {
     log.info("Stopping controller of {}", getClass().getSimpleName());
     quorumTestHarness.tearDown();
   }
-
   /** A concrete class of QuorumTestHarness so that we can customize for testing purposes */
   static class DefaultQuorumTestHarness extends QuorumTestHarness {
     private final Properties kraftControllerConfig;
@@ -303,4 +322,118 @@ public abstract class ClusterTestHarness {
       return JavaConverters.asScalaBuffer(Collections.singletonList(kraftControllerConfig));
     }
   }
+
+  protected static Properties createBrokerConfig(
+      int nodeId,
+      boolean enableControlledShutdown,
+      boolean enableDeleteTopic,
+      int port,
+      Optional<SecurityProtocol> interBrokerSecurityProtocol,
+      Optional<File> trustStoreFile,
+      Optional<Properties> saslProperties,
+      boolean enablePlaintext,
+      boolean enableSaslPlaintext,
+      int saslPlaintextPort,
+      boolean enableSsl,
+      int sslPort,
+      boolean enableSaslSsl,
+      int saslSslPort,
+      Optional<String> rack,
+      boolean enableToken,
+      int numPartitions,
+      short defaultReplicationFactor,
+      boolean enableFetchFromFollower) {
+
+    try {
+      Function<SecurityProtocol, Boolean> shouldEnable = (protocol) -> interBrokerSecurityProtocol.map(
+          p -> p == protocol).orElse(false);
+
+      List<Tuple2<SecurityProtocol, Integer>> protocolAndPorts = new ArrayList<>();
+      if (enablePlaintext || shouldEnable.apply(SecurityProtocol.PLAINTEXT))
+        protocolAndPorts.add(new Tuple2<>(SecurityProtocol.PLAINTEXT, port));
+      if (enableSsl || shouldEnable.apply(SecurityProtocol.SSL))
+        protocolAndPorts.add(new Tuple2<>(SecurityProtocol.SSL, sslPort));
+      if (enableSaslPlaintext || shouldEnable.apply(SecurityProtocol.SASL_PLAINTEXT))
+        protocolAndPorts.add(new Tuple2<>(SecurityProtocol.SASL_PLAINTEXT, saslPlaintextPort));
+      if (enableSaslSsl || shouldEnable.apply(SecurityProtocol.SASL_SSL))
+        protocolAndPorts.add(new Tuple2<>(SecurityProtocol.SASL_SSL, saslSslPort));
+
+      String listeners = protocolAndPorts.stream()
+          .map(p -> p._1.name() + "://localhost:" + p._2)
+          .reduce((a, b) -> a + "," + b)
+          .get();
+      String protocolMap = protocolAndPorts.stream()
+          .map(p -> p._1.name() + ":" + p._1)
+          .reduce((a, b) -> a + "," + b)
+          .get();
+
+      Properties props = new Properties();
+      props.put(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true");
+      props.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
+      props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
+          String.valueOf(TimeUnit.MINUTES.toMillis(10)));
+      props.put(KRaftConfigs.NODE_ID_CONFIG, String.valueOf(nodeId));
+      props.put(ServerConfigs.BROKER_ID_CONFIG, String.valueOf(nodeId));
+      props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, listeners);
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners);
+      props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
+      props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
+          protocolMap + ",CONTROLLER:PLAINTEXT");
+
+      props.put(ServerLogConfigs.LOG_DIR_CONFIG, TestUtils.tempDir().getAbsolutePath());
+      props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
+      // Note: this is just a placeholder value for controller.quorum.voters. JUnit
+      // tests use random port assignment, so the controller ports are not known ahead of
+      // time. Therefore, we ignore controller.quorum.voters and use
+      // controllerQuorumVotersFuture instead.
+      props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1000@localhost:0");
+      props.put(ReplicationConfigs.REPLICA_SOCKET_TIMEOUT_MS_CONFIG, "1500");
+      props.put(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG, "1500");
+      props.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG,
+          String.valueOf(enableControlledShutdown));
+      props.put(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, String.valueOf(enableDeleteTopic));
+      props.put(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000");
+      props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
+      props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
+      props.put(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, "100");
+      if (!props.containsKey(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG))
+        ;
+      props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "5");
+      if (!props.containsKey(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG))
+        ;
+      props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0");
+      rack.ifPresent(r -> props.put(ServerConfigs.BROKER_RACK_CONFIG, r));
+      // Reduce number of threads per broker
+      props.put(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, "2");
+      props.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "2");
+
+      if (protocolAndPorts.stream().anyMatch(p -> JaasTestUtils.usesSslTransportLayer(p._1)))
+        props.putAll(JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, trustStoreFile,
+            "server" + nodeId));
+
+      if (protocolAndPorts.stream().anyMatch(p -> JaasTestUtils.usesSaslAuthentication(p._1)))
+        props.putAll(JaasTestUtils.saslConfigs(saslProperties));
+
+      interBrokerSecurityProtocol.ifPresent(protocol ->
+          props.put(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG, protocol.name)
+      );
+
+      if (enableToken)
+        props.put(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "secretkey");
+
+      props.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, String.valueOf(numPartitions));
+      props.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG,
+          String.valueOf(defaultReplicationFactor));
+
+      if (enableFetchFromFollower) {
+        props.put(ServerConfigs.BROKER_RACK_CONFIG, String.valueOf(nodeId));
+        props.put(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG,
+            "org.apache.kafka.common.replica.RackAwareReplicaSelector");
+      }
+      return props;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
 }

@@ -97,14 +97,14 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
 
   @Override
   protected KafkaConfig getKafkaConfig(int brokerId) {
-    final Option<File> trustStoreFileOption = scala.Option.apply(null);
-    final Option<SecurityProtocol> saslInterBrokerSecurityProtocol =
-            scala.Option.apply(SecurityProtocol.SASL_PLAINTEXT);
-    Properties props = TestUtils.createBrokerConfig(
+    final Optional<File> trustStoreFileOption = Optional.empty();
+    final Optional<SecurityProtocol> saslInterBrokerSecurityProtocol =
+            Optional.of(SecurityProtocol.SASL_PLAINTEXT);
+    Properties props = createBrokerConfig(
             brokerId, false, false, TestUtils.RandomPort(), saslInterBrokerSecurityProtocol,
             trustStoreFileOption, EMPTY_SASL_PROPERTIES, false, true, TestUtils.RandomPort(),
             false, TestUtils.RandomPort(),
-            false, TestUtils.RandomPort(), Option.<String>empty(), 1, false, 1, (short) 1, false);
+            false, TestUtils.RandomPort(), Optional.empty(), false, 1, (short) 1, false);
 
     injectProperties(props);
     props.setProperty("sasl.mechanism.inter.broker.protocol", "GSSAPI");

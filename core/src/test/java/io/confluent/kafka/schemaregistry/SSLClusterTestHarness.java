@@ -14,6 +14,7 @@
  */
 package io.confluent.kafka.schemaregistry;
 
+import java.util.Optional;
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
 import org.apache.kafka.common.network.ConnectionMode;
@@ -46,12 +47,12 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
     } catch (IOException ioe) {
       throw new RuntimeException("Unable to create temporary file for the truststore.");
     }
-    final Option<File> trustStoreFileOption = scala.Option.apply(trustStoreFile);
-    final Option<SecurityProtocol> sslInterBrokerSecurityProtocol = scala.Option.apply(SecurityProtocol.SSL);
-    Properties props = TestUtils.createBrokerConfig(
+    final Optional<File> trustStoreFileOption = Optional.of(trustStoreFile);
+    final Optional<SecurityProtocol> sslInterBrokerSecurityProtocol = Optional.of(SecurityProtocol.SSL);
+    Properties props = createBrokerConfig(
             brokerId, false, false, TestUtils.RandomPort(), sslInterBrokerSecurityProtocol,
             trustStoreFileOption, EMPTY_SASL_PROPERTIES, false, false, TestUtils.RandomPort(),
-            true, TestUtils.RandomPort(), false, TestUtils.RandomPort(), Option.empty(), 1, false,
+            true, TestUtils.RandomPort(), false, TestUtils.RandomPort(), Optional.empty(), false,
             1, (short) 1, false);
 
     // setup client SSL. Needs to happen before the broker is initialized, because the client's cert
