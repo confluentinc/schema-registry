@@ -192,9 +192,9 @@ public abstract class ClusterTestHarness {
   protected void injectProperties(Properties props) {
     // Make sure that broker only role is "broker"
     props.setProperty("process.roles", "broker");
-    props.setProperty("auto.create.topics.enable", "false");
     props.setProperty("message.max.bytes", String.valueOf(MAX_MESSAGE_SIZE));
 
+    props.setProperty("auto.create.topics.enable", "true");
     props.setProperty("num.partitions", "1");
   }
 
