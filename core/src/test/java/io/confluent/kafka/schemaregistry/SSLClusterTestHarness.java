@@ -34,7 +34,7 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
   }
 
   @Override
-  protected SecurityProtocol getSecurityProtocol() {
+  protected SecurityProtocol getBrokerSecurityProtocol() {
     return SecurityProtocol.SSL;
   }
 
@@ -49,7 +49,7 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
     final Option<File> trustStoreFileOption = scala.Option.apply(trustStoreFile);
     final Option<SecurityProtocol> sslInterBrokerSecurityProtocol = scala.Option.apply(SecurityProtocol.SSL);
     Properties props = TestUtils.createBrokerConfig(
-            brokerId, zkConnect, false, false, TestUtils.RandomPort(), sslInterBrokerSecurityProtocol,
+            brokerId, false, false, TestUtils.RandomPort(), sslInterBrokerSecurityProtocol,
             trustStoreFileOption, EMPTY_SASL_PROPERTIES, false, false, TestUtils.RandomPort(),
             true, TestUtils.RandomPort(), false, TestUtils.RandomPort(), Option.empty(), 1, false,
             1, (short) 1, false);
