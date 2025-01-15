@@ -195,7 +195,6 @@ public abstract class ClusterTestHarness {
     props.setProperty("auto.create.topics.enable", "false");
     props.setProperty("message.max.bytes", String.valueOf(MAX_MESSAGE_SIZE));
 
-    props.setProperty("auto.create.topics.enable", "true");
     props.setProperty("num.partitions", "1");
   }
 
