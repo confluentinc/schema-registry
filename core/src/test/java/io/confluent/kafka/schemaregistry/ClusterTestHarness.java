@@ -17,10 +17,8 @@ package io.confluent.kafka.schemaregistry;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.stream.Collectors.toList;
 
-import io.vavr.Tuple;
 import io.vavr.Tuple2;
 import java.io.File;
-import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Optional;
@@ -29,11 +27,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import kafka.security.JaasTestUtils;
 import kafka.server.KafkaBroker;
 import kafka.server.QuorumTestHarness;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Time;
 
 import java.io.IOException;
@@ -55,18 +53,16 @@ import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.test.TestSslUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.Int;
 import scala.Option;
-import scala.Option$;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
-import scala.jdk.javaapi.OptionConverters;
 
 /**
  * Test harness to run against a real, local Kafka cluster and REST proxy. This is essentially
@@ -323,7 +319,7 @@ public abstract class ClusterTestHarness {
     }
   }
 
-  protected static Properties createBrokerConfig(
+  public static Properties createBrokerConfig(
       int nodeId,
       boolean enableControlledShutdown,
       boolean enableDeleteTopic,
@@ -407,12 +403,12 @@ public abstract class ClusterTestHarness {
       props.put(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, "2");
       props.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "2");
 
-      if (protocolAndPorts.stream().anyMatch(p -> JaasTestUtils.usesSslTransportLayer(p._1)))
-        props.putAll(JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, trustStoreFile,
+      if (protocolAndPorts.stream().anyMatch(p -> usesSslTransportLayer(p._1)))
+        props.putAll(sslConfigs(ConnectionMode.SERVER, false, trustStoreFile,
             "server" + nodeId));
 
-      if (protocolAndPorts.stream().anyMatch(p -> JaasTestUtils.usesSaslAuthentication(p._1)))
-        props.putAll(JaasTestUtils.saslConfigs(saslProperties));
+      if (protocolAndPorts.stream().anyMatch(p -> usesSaslAuthentication(p._1)))
+        props.putAll(saslConfigs(saslProperties));
 
       interBrokerSecurityProtocol.ifPresent(protocol ->
           props.put(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG, protocol.name)
@@ -436,4 +432,45 @@ public abstract class ClusterTestHarness {
     }
   }
 
+  public static boolean usesSslTransportLayer(SecurityProtocol securityProtocol) {
+    switch (securityProtocol) {
+      case SSL:
+      case SASL_SSL:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  public static boolean usesSaslAuthentication(SecurityProtocol securityProtocol) {
+    switch (securityProtocol) {
+      case SASL_SSL:
+      case SASL_PLAINTEXT:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  public static Properties sslConfigs(ConnectionMode mode, boolean clientCert, Optional<File> trustStoreFile, String certAlias) throws Exception {
+    return sslConfigs(mode, clientCert, trustStoreFile, certAlias, "localhost", "TLSv1.3");
+  }
+
+  public static Properties sslConfigs(ConnectionMode mode, boolean clientCert, Optional<File> trustStoreFile, String certAlias, String certCn, String tlsProtocol) throws Exception {
+    File trustStore = (File)trustStoreFile.orElseThrow(() -> new Exception("SSL enabled but no trustStoreFile provided"));
+    Properties sslProps = new Properties();
+    sslProps.putAll((new TestSslUtils.SslConfigsBuilder(mode)).useClientCert(clientCert).createNewTrustStore(trustStore).certAlias(certAlias).cn(certCn).tlsProtocol(tlsProtocol).build());
+    return sslProps;
+  }
+
+  private static final boolean IS_IBM_SECURITY = Java.isIbmJdk() && !Java.isIbmJdkSemeru();
+
+  public static Properties saslConfigs(Optional<Properties> saslProperties) {
+    Properties result = (Properties)saslProperties.orElse(new Properties());
+    if (IS_IBM_SECURITY && !result.containsKey("sasl.kerberos.service.name")) {
+      result.put("sasl.kerberos.service.name", "kafka");
+    }
+
+    return result;
+  }
 }
