@@ -249,7 +249,6 @@ public class AvroSchemaTest {
       + "  \"default\" : \"HEARTS\"\n"
       + "}");
 
-
   @Test
   public void testPrimitiveTypesToAvro() throws Exception {
     Object result = AvroSchemaUtils.toObject((JsonNode) null, createPrimitiveSchema("null"));
