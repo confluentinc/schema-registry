@@ -703,6 +703,41 @@ public class AvroSchemaTest {
   }
 
   @Test
+  public void testArrayWithDoc() {
+    String s1 = "\n"
+        + "{\n"
+        + "    \"type\": \"array\",\n"
+        + "    \"items\": { \n"
+        + "        \"type\": \"record\",\n"
+        + "        \"name\": \"top\",\n"
+        + "        \"doc\": \"test\",\n"
+        + "        \"fields\": [\n"
+        + "            {\n"
+        + "                \"name\": \"field1\",\n"
+        + "                \"type\": \"string\"\n"
+        + "            }\n"
+        + "        ]\n"
+        + "    }\n"
+        + "}";
+    String s2 = "\n"
+        + "{\n"
+        + "    \"type\": \"array\",\n"
+        + "    \"items\": { \n"
+        + "        \"type\": \"record\",\n"
+        + "        \"name\": \"top\",\n"
+        + "        \"doc\": \"test2\",\n"
+        + "        \"fields\": [\n"
+        + "            {\n"
+        + "                \"name\": \"field1\",\n"
+        + "                \"type\": \"string\"\n"
+        + "            }\n"
+        + "        ]\n"
+        + "    }\n"
+        + "}";
+    assertNotEquals(new AvroSchema(s1), new AvroSchema(s2));
+  }
+
+  @Test
   public void testBasicAddAndRemoveTags() {
     String schemaString = "{\n" +
       "  \"name\": \"sampleRecord\",\n" +
@@ -1170,7 +1205,6 @@ public class AvroSchemaTest {
 
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
-
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {
