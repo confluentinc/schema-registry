@@ -30,7 +30,6 @@ import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.util.Utf8;
-import org.checkerframework.checker.units.qual.A;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
