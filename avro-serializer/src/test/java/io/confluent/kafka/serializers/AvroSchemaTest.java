@@ -249,6 +249,7 @@ public class AvroSchemaTest {
       + "  \"default\" : \"HEARTS\"\n"
       + "}");
 
+
   @Test
   public void testPrimitiveTypesToAvro() throws Exception {
     Object result = AvroSchemaUtils.toObject((JsonNode) null, createPrimitiveSchema("null"));
@@ -685,6 +686,41 @@ public class AvroSchemaTest {
   @Test
   public void testEnumWithDefault() throws Exception {
     assertNotEquals(new AvroSchema(enumSchema), new AvroSchema(enumSchemaWithDefault));
+  }
+
+  @Test
+  public void testArrayWithDoc() {
+    String s1 = "\n"
+        + "{\n"
+        + "    \"type\": \"array\",\n"
+        + "    \"items\": { \n"
+        + "        \"type\": \"record\",\n"
+        + "        \"name\": \"top\",\n"
+        + "        \"doc\": \"test\"\n"
+        + "        \"fields\": [\n"
+        + "            {\n"
+        + "                \"name\": \"field1\",\n"
+        + "                \"type\": \"string\"\n"
+        + "            }\n"
+        + "        ]\n"
+        + "    }\n"
+        + "}";
+    String s2 = "\n"
+        + "{\n"
+        + "    \"type\": \"array\",\n"
+        + "    \"items\": { \n"
+        + "        \"type\": \"record\",\n"
+        + "        \"name\": \"top\",\n"
+        + "        \"doc\": \"test\"\n"
+        + "        \"fields\": [\n"
+        + "            {\n"
+        + "                \"name\": \"field1\",\n"
+        + "                \"type\": \"string\"\n"
+        + "            }\n"
+        + "        ]\n"
+        + "    }\n"
+        + "}";
+    assertNotEquals(new AvroSchema(s1), new AvroSchema(s2));
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {
