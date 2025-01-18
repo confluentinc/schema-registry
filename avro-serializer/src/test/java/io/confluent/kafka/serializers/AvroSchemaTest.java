@@ -30,6 +30,7 @@ import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.util.Utf8;
+import org.checkerframework.checker.units.qual.A;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -248,6 +249,7 @@ public class AvroSchemaTest {
       + "  \"symbols\" : [\"SPADES\", \"HEARTS\", \"DIAMONDS\", \"CLUBS\"],\n"
       + "  \"default\" : \"HEARTS\"\n"
       + "}");
+
 
   @Test
   public void testPrimitiveTypesToAvro() throws Exception {
@@ -685,6 +687,41 @@ public class AvroSchemaTest {
   @Test
   public void testEnumWithDefault() throws Exception {
     assertNotEquals(new AvroSchema(enumSchema), new AvroSchema(enumSchemaWithDefault));
+  }
+
+  @Test
+  public void testArrayWithDoc() {
+    String s1 = "\n"
+        + "{\n"
+        + "    \"type\": \"array\",\n"
+        + "    \"items\": { \n"
+        + "        \"type\": \"record\",\n"
+        + "        \"name\": \"top\",\n"
+        + "        \"doc\": \"test\"\n"
+        + "        \"fields\": [\n"
+        + "            {\n"
+        + "                \"name\": \"field1\",\n"
+        + "                \"type\": \"string\"\n"
+        + "            }\n"
+        + "        ]\n"
+        + "    }\n"
+        + "}";
+    String s2 = "\n"
+        + "{\n"
+        + "    \"type\": \"array\",\n"
+        + "    \"items\": { \n"
+        + "        \"type\": \"record\",\n"
+        + "        \"name\": \"top\",\n"
+        + "        \"doc\": \"test\"\n"
+        + "        \"fields\": [\n"
+        + "            {\n"
+        + "                \"name\": \"field1\",\n"
+        + "                \"type\": \"string\"\n"
+        + "            }\n"
+        + "        ]\n"
+        + "    }\n"
+        + "}";
+    assertNotEquals(new AvroSchema(s1), new AvroSchema(s2));
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {
