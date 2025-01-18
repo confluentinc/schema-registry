@@ -260,6 +260,10 @@ public class AvroSchema implements ParsedSchema {
         return Objects.equals(schema1.getAliases(), schema2.getAliases())
             && Objects.equals(schema1.getDoc(), schema2.getDoc())
             && Objects.equals(schema1.getEnumDefault(), schema2.getEnumDefault());
+      case ARRAY:
+        return metaEqual(schema1.getElementType(), schema2.getElementType(), cache);
+      case MAP:
+        return metaEqual(schema1.getValueType(), schema2.getValueType(), cache);
       case FIXED:
         return Objects.equals(schema1.getAliases(), schema2.getAliases())
             && Objects.equals(schema1.getDoc(), schema2.getDoc());
@@ -335,6 +339,10 @@ public class AvroSchema implements ParsedSchema {
         return result;
       case ENUM:
         return Objects.hash(schema.getAliases(), schema.getDoc(), schema.getEnumDefault());
+      case ARRAY:
+        return metaHash(schema.getElementType(), cache);
+      case MAP:
+        return metaHash(schema.getValueType(), cache);
       case FIXED:
         return Objects.hash(schema.getAliases(), schema.getDoc());
       case UNION:
