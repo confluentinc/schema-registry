@@ -223,12 +223,12 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>subject.search.default.limit</code>
    */
   public static final String SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG = "subject.search.default.limit";
-  public static final int SUBJECT_SEARCH_DEFAULT_LIMIT_DEFAULT = 20000;
+  public static final int SUBJECT_SEARCH_DEFAULT_LIMIT_DEFAULT = 200000;
   /**
    * <code>subject.search.max.limit</code>
    */
   public static final String SUBJECT_SEARCH_MAX_LIMIT_CONFIG = "subject.search.max.limit";
-  public static final int SUBJECT_SEARCH_MAX_LIMIT_DEFAULT = 20000;
+  public static final int SUBJECT_SEARCH_MAX_LIMIT_DEFAULT = 200000;
 
   public static final String METADATA_ENCODER_SECRET_CONFIG = "metadata.encoder.secret";
   public static final String METADATA_ENCODER_OLD_SECRET_CONFIG = "metadata.encoder.old.secret";
