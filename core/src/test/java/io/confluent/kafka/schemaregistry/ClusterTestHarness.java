@@ -17,8 +17,10 @@ package io.confluent.kafka.schemaregistry;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.stream.Collectors.toList;
 
+import io.confluent.kafka.schemaregistry.ClusterTestHarness.AddKraftQuorum;
 import io.vavr.Tuple2;
 import java.io.File;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Optional;
@@ -56,6 +58,8 @@ import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestSslUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayNameGeneration;
+import org.junit.jupiter.api.DisplayNameGenerator;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
@@ -70,6 +74,7 @@ import scala.collection.Seq;
  * the addition of the REST proxy. Defaults to a 1-ZK, 3-broker, 1 REST proxy cluster.
  */
 @Tag("IntegrationTest")
+@DisplayNameGeneration(AddKraftQuorum.class)
 public abstract class ClusterTestHarness {
 
   private static final Logger log = LoggerFactory.getLogger(ClusterTestHarness.class);
@@ -477,5 +482,26 @@ public abstract class ClusterTestHarness {
     }
 
     return result;
+  }
+
+  static class AddKraftQuorum extends DisplayNameGenerator.Standard {
+    @Override
+    public String generateDisplayNameForClass(Class<?> testClass) {
+      return addKraftQuorum(super.generateDisplayNameForClass(testClass));
+    }
+
+    @Override
+    public String generateDisplayNameForNestedClass(Class<?> nestedClass) {
+      return addKraftQuorum(super.generateDisplayNameForNestedClass(nestedClass));
+    }
+
+    @Override
+    public String generateDisplayNameForMethod(Class<?> testClass, Method testMethod) {
+      return this.addKraftQuorum(super.generateDisplayNameForMethod(testClass, testMethod));
+    }
+
+    String addKraftQuorum(String name) {
+      return name + ",quorum=kraft";
+    }
   }
 }
