@@ -1,6 +1,6 @@
 name: schema-registry
 lang: java
-lang_version: 11
+lang_version: 17
 codeowners:
   enable: true
 semaphore:
