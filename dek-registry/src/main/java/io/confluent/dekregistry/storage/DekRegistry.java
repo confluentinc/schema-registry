@@ -127,6 +127,8 @@ public class DekRegistry implements Closeable {
   private final KafkaSchemaRegistry schemaRegistry;
   private final MetricsManager metricsManager;
   private final DekRegistryConfig config;
+  private final int dekRegistrySearchDefaultLimit;
+  private final int dekRegistrySearchMaxLimit;
   // visible for testing
   final Cache<EncryptionKeyId, EncryptionKey> keys;
   private final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
@@ -146,6 +148,10 @@ public class DekRegistry implements Closeable {
       this.schemaRegistry.addUpdateRequestHandler(new EncryptionUpdateRequestHandler());
       this.metricsManager = metricsManager;
       this.config = new DekRegistryConfig(schemaRegistry.config().originalProperties());
+      this.dekRegistrySearchDefaultLimit =
+              config.getInt(DekRegistryConfig.DEK_REGISTRY_SEARCH_DEFAULT_LIMIT_CONFIG);
+      this.dekRegistrySearchMaxLimit =
+              config.getInt(DekRegistryConfig.DEK_REGISTRY_SEARCH_MAX_LIMIT_CONFIG);
       this.keys = createCache(new EncryptionKeyIdSerde(), new EncryptionKeySerde(),
           config.topic(), getCacheUpdateHandler(config));
       this.sharedKeys = Multimaps.synchronizedSetMultimap(TreeMultimap.create());
@@ -704,6 +710,11 @@ public class DekRegistry implements Closeable {
     } finally {
       unlock(tenant);
     }
+  }
+
+  public int normalizeDekLimit(int suppliedLimit) {
+    return schemaRegistry.normalizeLimit(suppliedLimit, dekRegistrySearchDefaultLimit,
+            dekRegistrySearchMaxLimit);
   }
 
   private Kek forwardPutKekRequestToLeader(String name,
