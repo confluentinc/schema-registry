@@ -112,8 +112,17 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Subject name prefix")
       @QueryParam("subjectPrefix") List<String> subjectPrefix,
       @Parameter(description = "Whether to include deleted keys")
-      @QueryParam("deleted") boolean lookupDeleted) {
-    return dekRegistry.getKekNames(subjectPrefix, lookupDeleted);
+      @QueryParam("deleted") boolean lookupDeleted,
+      @Parameter(description = "Pagination offset for results.")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
+    limit = dekRegistry.normalizeKekLimit(limit);
+    List<String> kekNames = dekRegistry.getKekNames(subjectPrefix, lookupDeleted);
+    return kekNames.stream()
+            .skip(offset)
+            .limit(limit)
+            .collect(Collectors.toList());
   }
 
   @GET
