@@ -159,6 +159,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   private final int schemaSearchMaxLimit;
   private final int subjectSearchDefaultLimit;
   private final int subjectSearchMaxLimit;
+  private final int subjectVersionSearchDefaultLimit;
+  private final int subjectVersionSearchMaxLimit;
   private final boolean delayLeaderElection;
   private final boolean allowModeChanges;
   private final boolean enableStoreHealthCheck;
@@ -239,6 +241,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
             config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG);
     this.subjectSearchMaxLimit =
             config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_MAX_LIMIT_CONFIG);
+    this.subjectVersionSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.subjectVersionSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG);
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
@@ -624,6 +630,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   public int normalizeSubjectLimit(int suppliedLimit) {
     return normalizeLimit(suppliedLimit, subjectSearchDefaultLimit, subjectSearchMaxLimit);
+  }
+
+  public int normalizeSubjectVersionLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, subjectVersionSearchDefaultLimit, subjectVersionSearchMaxLimit);
   }
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)

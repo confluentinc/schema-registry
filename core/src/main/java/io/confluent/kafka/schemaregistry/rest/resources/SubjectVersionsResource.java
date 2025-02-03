@@ -73,6 +73,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Path("/subjects/{subject}/versions")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -310,7 +311,11 @@ public class SubjectVersionsResource {
       @Parameter(description = "Whether to include deleted schemas")
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Whether to return deleted schemas only")
-      @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema) {
+      @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
@@ -349,7 +354,12 @@ public class SubjectVersionsResource {
       SchemaKey schema = resultSchemas.next();
       allVersions.add(schema.getVersion());
     }
-    return allVersions;
+
+    limit = schemaRegistry.normalizeSubjectVersionLimit(limit);
+    return allVersions.stream()
+            .skip(offset)
+            .limit(limit)
+            .collect(Collectors.toList());
   }
 
   @POST
