@@ -42,11 +42,11 @@ public class DekRegistryConfig extends SchemaRegistryConfig {
 
   protected static final String DEK_REGISTRY_SEARCH_DEFAULT_LIMIT_CONFIG =
           "dek.registry.search.default.limit";
-  protected static final int DEK_REGISTRY_SEARCH_DEFAULT_LIMIT_DEFAULT = 10000;
+  protected static final int DEK_REGISTRY_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;
 
   protected static final String DEK_REGISTRY_SEARCH_MAX_LIMIT_CONFIG =
           "dek.registry.search.max.limit";
-  protected static final int DEK_REGISTRY_SEARCH_MAX_LIMIT_DEFAULT = 10000;
+  protected static final int DEK_REGISTRY_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
 
   protected static final String DEK_REGISTRY_TOPIC_DOC =
       "The topic used to persist keys for the dek registry.";
