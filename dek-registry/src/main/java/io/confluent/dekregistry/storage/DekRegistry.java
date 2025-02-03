@@ -129,6 +129,8 @@ public class DekRegistry implements Closeable {
   private final DekRegistryConfig config;
   private final int dekRegistrySearchDefaultLimit;
   private final int dekRegistrySearchMaxLimit;
+  private final int kekRegistrySearchDefaultLimit;
+  private final int kekRegistrySearchMaxLimit;
   // visible for testing
   final Cache<EncryptionKeyId, EncryptionKey> keys;
   private final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
@@ -152,6 +154,10 @@ public class DekRegistry implements Closeable {
               config.getInt(DekRegistryConfig.DEK_REGISTRY_SEARCH_DEFAULT_LIMIT_CONFIG);
       this.dekRegistrySearchMaxLimit =
               config.getInt(DekRegistryConfig.DEK_REGISTRY_SEARCH_MAX_LIMIT_CONFIG);
+      this.kekRegistrySearchDefaultLimit =
+              config.getInt(DekRegistryConfig.KEK_REGISTRY_SEARCH_DEFAULT_LIMIT_CONFIG);
+      this.kekRegistrySearchMaxLimit =
+              config.getInt(DekRegistryConfig.KEK_REGISTRY_SEARCH_MAX_LIMIT_CONFIG);
       this.keys = createCache(new EncryptionKeyIdSerde(), new EncryptionKeySerde(),
           config.topic(), getCacheUpdateHandler(config));
       this.sharedKeys = Multimaps.synchronizedSetMultimap(TreeMultimap.create());
@@ -715,6 +721,11 @@ public class DekRegistry implements Closeable {
   public int normalizeDekLimit(int suppliedLimit) {
     return schemaRegistry.normalizeLimit(suppliedLimit, dekRegistrySearchDefaultLimit,
             dekRegistrySearchMaxLimit);
+  }
+
+  public int normalizeKekLimit(int suppliedLimit) {
+    return schemaRegistry.normalizeLimit(suppliedLimit, kekRegistrySearchDefaultLimit,
+            kekRegistrySearchMaxLimit);
   }
 
   private Kek forwardPutKekRequestToLeader(String name,
