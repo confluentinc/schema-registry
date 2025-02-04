@@ -163,6 +163,16 @@ public class RestApiTest extends ClusterTestHarness {
         "Getting all versions from subject2 should match all registered versions"
     );
 
+    // test getAllVersions with pagination offset=0, limit=1 should return first registered subject version
+    assertEquals("Getting all versions from subject2 with pagination offset=0, limit=1 should return first registered subject version",
+            ImmutableList.of(allVersionsInSubject2.get(0)),
+            restApp.restClient.getAllSubjectVersionsWithPagination(subject2, 0, 1));
+
+    // test getAllVersions with pagination offset=1, limit=1 should return first registered subject version
+    assertEquals("Getting all versions from subject2 with pagination offset=1, limit=1 should return first registered subject version",
+            ImmutableList.of(allVersionsInSubject2.get(1)),
+            restApp.restClient.getAllSubjectVersionsWithPagination(subject2, 1, 1));
+
     // test getAllSubjects with existing data
     assertEquals(
         allSubjects,

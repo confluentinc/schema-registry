@@ -633,7 +633,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   }
 
   public int normalizeSubjectVersionLimit(int suppliedLimit) {
-    return normalizeLimit(suppliedLimit, subjectVersionSearchDefaultLimit, subjectVersionSearchMaxLimit);
+    return normalizeLimit(suppliedLimit, subjectVersionSearchDefaultLimit,
+            subjectVersionSearchMaxLimit);
   }
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)

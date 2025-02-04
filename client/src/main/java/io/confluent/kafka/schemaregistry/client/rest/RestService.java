@@ -1231,6 +1231,27 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public List<Integer> getAllSubjectVersionsWithPagination(String subject, int offset, int limit)
+          throws IOException, RestClientException {
+    return getAllSubjectVersionsWithPagination(DEFAULT_REQUEST_PROPERTIES, subject, offset, limit);
+  }
+
+  public List<Integer> getAllSubjectVersionsWithPagination(Map<String, String> requestProperties,
+                                                          String subject,
+                                                          int offset, int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions");
+    builder.queryParam("deleted", false);
+    builder.queryParam("deletedOnly", false);
+    builder.queryParam("offset", offset);
+    builder.queryParam("limit", limit);
+    String path = builder.build(subject).toString();
+
+    List<Integer> response = httpRequest(path, "GET", null, requestProperties,
+            ALL_VERSIONS_RESPONSE_TYPE);
+    return response;
+  }
+
   public List<Integer> getDeletedOnlyVersions(String subject)
       throws IOException, RestClientException {
     return getAllVersions(DEFAULT_REQUEST_PROPERTIES, subject, false, true);
