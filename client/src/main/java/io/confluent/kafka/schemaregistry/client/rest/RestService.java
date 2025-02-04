@@ -384,7 +384,6 @@ public class RestService implements Closeable, Configurable {
     }
   }
 
-
   /**
    * Send an HTTP request.
    *
