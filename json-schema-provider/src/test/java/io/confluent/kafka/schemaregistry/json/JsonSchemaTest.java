@@ -835,6 +835,38 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testInlineTagsForNullInArray() {
+    String s = "{\n"
+        + "  \"$id\": \"http://example.com/myURI.schema.json\",\n"
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"additionalProperties\": false,\n"
+        + "  \"description\": \"Sample schema to help you get started.\",\n"
+        + "  \"definitions\": {\n"
+        + "    \"banana\": {\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"enum\": [\"a\", \"b\", null]\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"properties\": {\n"
+        + "    \"f1\": {\n"
+        + "      \"$ref\": \"#/definitions/banana\",\n"
+        + "      \"confluent:tags\": [ \"PII\" ]\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"title\": \"SampleRecord\",\n"
+        + "  \"type\": \"object\"\n"
+        + "}";
+    JsonSchema schema = new JsonSchema(s);
+
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    tags.put(new SchemaEntity("object.f1",
+            SchemaEntity.EntityType.SR_FIELD),
+        Collections.singleton("PII"));
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tags);
+    assertEquals(expectedTags, schema.inlineTaggedEntities());
+  }
+
+  @Test
   public void testNestedCombinedSchemasDraft_2020_12() {
     String schemaString = "{\n" +
         "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n" +
