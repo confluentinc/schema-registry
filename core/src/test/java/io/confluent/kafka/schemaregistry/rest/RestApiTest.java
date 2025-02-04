@@ -897,6 +897,15 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> refs = restApp.restClient.getReferencedBy(subject, 1);
     assertEquals(parentId, refs.get(0).intValue());
 
+    // test getReferences with pagination offset=0 limit=1
+    refs = restApp.restClient.getReferencedByWithPagination(subject, 1, 0, 1);
+    assertEquals(refs.get(0), ref.getVersion());
+
+    // test getReferences with pagination offset=1 limit=1
+    refs = restApp.restClient.getReferencedByWithPagination(subject, 1, 1, 1);
+    assertEquals(refs, ImmutableList.of());
+
+
     ns.MyRecord myrecord = new ns.MyRecord();
     AvroSchema schema = new AvroSchema(AvroSchemaUtils.getSchema(myrecord));
     // Note that we pass an empty list of refs since SR will perform a deep equality check
