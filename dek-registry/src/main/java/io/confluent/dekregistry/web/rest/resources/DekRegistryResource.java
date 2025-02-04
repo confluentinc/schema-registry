@@ -264,7 +264,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
       throw DekRegistryErrors.keyNotFoundException(kekName);
     }
     limit = dekRegistry.normalizeDekVersionsLimit(limit);
-    List<Integer> dekVersions = dekRegistry.getDekVersions(kekName, subject, algorithm, lookupDeleted);
+    List<Integer> dekVersions = dekRegistry
+            .getDekVersions(kekName, subject, algorithm, lookupDeleted);
     return dekVersions.stream()
             .skip(offset)
             .limit(limit)
