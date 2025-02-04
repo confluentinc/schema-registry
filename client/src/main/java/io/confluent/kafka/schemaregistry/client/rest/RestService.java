@@ -1198,6 +1198,19 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public List<Integer> getReferencedByWithPagination(String subject,
+                                                     int version, int offset, int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/referencedby");
+    builder.queryParam("offset", offset);
+    builder.queryParam("limit", limit);
+    String path = builder.build(subject, version).toString();
+
+    List<Integer> response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
+            GET_REFERENCED_BY_RESPONSE_TYPE);
+    return response;
+  }
+
   public List<Integer> getAllVersions(String subject)
       throws IOException, RestClientException {
     return getAllVersions(DEFAULT_REQUEST_PROPERTIES, subject);

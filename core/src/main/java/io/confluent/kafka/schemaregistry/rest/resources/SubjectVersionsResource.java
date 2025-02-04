@@ -254,7 +254,11 @@ public class SubjectVersionsResource {
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
-      @PathParam("version") String version) {
+      @PathParam("version") String version,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
     Schema schema = getSchemaByVersion(subject, version, "", true, null);
     if (schema == null) {
@@ -272,7 +276,12 @@ public class SubjectVersionsResource {
         + version
         + " from the schema registry";
     try {
-      return schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
+      limit = schemaRegistry.normalizeSchemaReferencedByLimit(limit);
+      List<Integer> ids = schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
+      return ids.stream()
+        .skip(offset)
+        .limit(limit)
+        .collect(Collectors.toList());
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
