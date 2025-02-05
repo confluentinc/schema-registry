@@ -36,6 +36,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
+
+import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -52,6 +54,7 @@ import java.net.MalformedURLException;
 import java.net.Proxy;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -62,6 +65,7 @@ import java.util.Set;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
@@ -372,7 +376,7 @@ public class RestService implements Closeable, Configurable {
     connection.setConnectTimeout(this.httpConnectTimeoutMs);
     connection.setReadTimeout(this.httpReadTimeoutMs);
 
-    setupSsl(connection);
+    setupSsl(connection, url);
     connection.setRequestMethod(method);
     setAuthRequestHeaders(connection);
     setCustomHeaders(connection);
@@ -389,9 +393,19 @@ public class RestService implements Closeable, Configurable {
     return connection;
   }
 
-  private void setupSsl(HttpURLConnection connection) {
-    if (connection instanceof HttpsURLConnection && sslSocketFactory != null) {
-      ((HttpsURLConnection) connection).setSSLSocketFactory(sslSocketFactory);
+  private void setupSsl(HttpURLConnection connection, URL url) {
+    if (connection instanceof HttpsURLConnection) {
+      SSLSocketFactory configuredSslSocketFactory = sslSocketFactory;
+      if (configuredSslSocketFactory == null) {
+        try {
+          configuredSslSocketFactory = SSLContext.getDefault().getSocketFactory();
+        } catch (NoSuchAlgorithmException e) {
+          log.error("Error while getting default SSLContext: ", e);
+          throw new RuntimeException(e);
+        }
+      }
+      ((HttpsURLConnection) connection).setSSLSocketFactory(
+              new HostSslSocketFactory(configuredSslSocketFactory, url.getHost()));
       if (hostnameVerifier != null) {
         ((HttpsURLConnection) connection).setHostnameVerifier(hostnameVerifier);
       }
@@ -991,7 +1005,7 @@ public class RestService implements Closeable, Configurable {
       throws IOException, RestClientException {
     return getId(requestProperties, id, subject, null, findTags, fetchMaxId);
   }
-  
+
   public SchemaString getId(Map<String, String> requestProperties,
       int id, String subject, String format, Set<String> findTags, boolean fetchMaxId)
       throws IOException, RestClientException {
