@@ -23,6 +23,8 @@ import java.net.URL;
 import java.util.Map;
 import javax.net.ssl.SSLSocketFactory;
 
+
+import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
