@@ -26,6 +26,8 @@ import java.util.Map;
 import java.util.Objects;
 import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
+
+import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -38,6 +40,7 @@ import org.apache.kafka.common.security.oauthbearer.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.secured.LoginAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler;
 
+@SuppressWarnings("checkstyle:ClassDataAbstractionCoupling")
 public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider {
 
   public static final String SASL_IDENTITY_POOL_CONFIG = "extension_identityPoolId";
@@ -132,7 +135,7 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
         : cu.validateUrl(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
     if (jou.shouldCreateSSLSocketFactory(url)) {
-      sslSocketFactory = jou.createSSLSocketFactory();
+      sslSocketFactory = new HostSslSocketFactory(jou.createSSLSocketFactory(), url.getHost());
     }
 
     return new HttpAccessTokenRetriever(clientId, clientSecret, scope, sslSocketFactory,
