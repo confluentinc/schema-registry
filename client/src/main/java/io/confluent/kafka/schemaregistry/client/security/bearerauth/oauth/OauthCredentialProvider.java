@@ -22,6 +22,8 @@ import java.net.URL;
 import java.util.Collections;
 import java.util.Map;
 import javax.net.ssl.SSLSocketFactory;
+
+import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
@@ -99,7 +101,7 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
     SSLSocketFactory sslSocketFactory = null;
     URL url = cu.validateUrl(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_URL);
     if (jou.shouldCreateSSLSocketFactory(url)) {
-      sslSocketFactory = jou.createSSLSocketFactory();
+      sslSocketFactory = new HostSslSocketFactory(jou.createSSLSocketFactory(), url.getHost());
     }
 
     return new HttpAccessTokenRetriever(clientId, clientSecret, scope, sslSocketFactory,
