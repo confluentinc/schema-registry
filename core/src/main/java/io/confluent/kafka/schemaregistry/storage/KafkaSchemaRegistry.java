@@ -1698,7 +1698,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           + " store", e);
     }
     Schema schemaEntity = toSchemaEntity(schema);
-    SchemaString schemaString = subject != null && !subject.isEmpty()
+    SchemaString schemaString = subject != null
         ? new SchemaString(schemaEntity)
         : new SchemaString(null, null, schemaEntity);
     if (format != null && !format.trim().isEmpty()) {
