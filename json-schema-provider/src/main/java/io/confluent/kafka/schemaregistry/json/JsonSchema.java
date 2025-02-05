@@ -1008,6 +1008,8 @@ public class JsonSchema implements ParsedSchema {
         entry.setValue(replaceRefs((Map<String, Object>) entry.getValue()));
       } else if (entry.getValue() instanceof List) {
         entry.setValue(replaceRefs((List<Object>) entry.getValue()));
+      } else if (entry.getValue() == JSONObject.NULL) {
+        entry.setValue(null);
       }
     }
     return result;
@@ -1020,6 +1022,8 @@ public class JsonSchema implements ParsedSchema {
         result.add(replaceRefs((Map<String, Object>) item));
       } else if (item instanceof List) {
         result.add(replaceRefs((List<Object>) item));
+      } else if (item == JSONObject.NULL) {
+        result.add(null);
       } else {
         result.add(item);
       }
