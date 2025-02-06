@@ -194,7 +194,7 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaString schemaString = restApp.restClient.getId(
         RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, null, null, false);
     SchemaString schemaString2 = restApp.restClient.getByGuid(
-        RestService.DEFAULT_REQUEST_PROPERTIES, schemaString.getGuid());
+        RestService.DEFAULT_REQUEST_PROPERTIES, schemaString.getGuid(), null);
     assertEquals(schemaString.getGuid(), schemaString2.getGuid());
 
     List<ContextId> contextId = restApp.restClient.getAllContextIds(

@@ -1414,13 +1414,17 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
-  public SchemaString getByGuid(String guid) throws IOException, RestClientException {
-    return getByGuid(DEFAULT_REQUEST_PROPERTIES, guid);
+  public SchemaString getByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    return getByGuid(DEFAULT_REQUEST_PROPERTIES, guid, format);
   }
 
-  public SchemaString getByGuid(Map<String, String> requestProperties, String guid)
+  public SchemaString getByGuid(Map<String, String> requestProperties, String guid, String format)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/guids/{guid}");
+    if (format != null) {
+      builder.queryParam("format", format);
+    }
     String path = builder.build(guid).toString();
 
     SchemaString response = httpRequest(path, "GET", null, requestProperties,
