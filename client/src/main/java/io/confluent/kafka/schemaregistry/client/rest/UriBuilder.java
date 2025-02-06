@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-class UriBuilder {
+public class UriBuilder {
 
   /**
    * Escapes all characters but the allowed ones in path segments based on

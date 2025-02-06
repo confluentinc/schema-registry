@@ -139,7 +139,7 @@ public class ObjectSchemaDiff {
           } else if (originalDependencies == null) {
             ctx.addDifference(DEPENDENCY_ARRAY_ADDED);
           } else {
-            if (originalDependencies.equals(updateDependencies)) {
+            if (!originalDependencies.equals(updateDependencies)) {
               if (updateDependencies.containsAll(originalDependencies)) {
                 ctx.addDifference(DEPENDENCY_ARRAY_EXTENDED);
               } else if (originalDependencies.containsAll(updateDependencies)) {

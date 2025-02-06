@@ -218,7 +218,7 @@ public class OffsetCheckpoint implements Closeable {
           }
           return offsets;
         } else {
-          LOG.warn("Old offset checkpoint version: " + oldVersion);
+          LOG.warn("Old offset checkpoint version: {}", oldVersion);
         }
       } catch (final NoSuchFileException e) {
         // ignore

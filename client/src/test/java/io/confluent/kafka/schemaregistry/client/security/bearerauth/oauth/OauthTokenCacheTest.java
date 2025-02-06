@@ -20,7 +20,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.secured.BasicOAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
 import org.junit.Assert;
 import org.junit.Test;
 

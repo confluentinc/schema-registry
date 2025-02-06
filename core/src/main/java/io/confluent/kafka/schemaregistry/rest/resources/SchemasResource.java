@@ -33,6 +33,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,6 +90,8 @@ public class SchemasResource {
       @Parameter(description =
           "Whether to return latest schema versions only for each matching subject")
       @DefaultValue("false") @QueryParam("latestOnly") boolean latestOnly,
+      @Parameter(description = "Filters results by the given rule type")
+      @DefaultValue("") @QueryParam("ruleType") String ruleType,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
@@ -98,13 +101,18 @@ public class SchemasResource {
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
     LookupFilter filter = lookupDeletedSchema ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT;
     try {
-      schemas = schemaRegistry.getVersionsWithSubjectPrefix(subjectPrefix, filter, latestOnly);
+      Predicate<Schema> postFilter = ruleType != null && !ruleType.isEmpty()
+          ? schema -> schema.getRuleSet() != null && schema.getRuleSet().hasRulesWithType(ruleType)
+          : null;
+      schemas = schemaRegistry.getVersionsWithSubjectPrefix(
+          subjectPrefix, filter, latestOnly, postFilter);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    int toIndex = limit > 0 ? offset + limit : Integer.MAX_VALUE;
+    limit = schemaRegistry.normalizeLimit(limit);
+    int toIndex = offset + limit;
     int index = 0;
     while (schemas.hasNext() && index < toIndex) {
       Schema schema = schemas.next();

@@ -21,8 +21,10 @@ import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.CONFLUEN
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.DEFAULT_LOCATION;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.transform;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.google.common.base.Ascii;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -60,6 +62,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -74,6 +77,14 @@ import org.apache.commons.lang3.math.NumberUtils;
 public class ProtobufSchemaUtils {
 
   private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
+
+  private static final ObjectMapper mapperWithProtoFileDeserializer = new ObjectMapper();
+  private static final SimpleModule module = new SimpleModule();
+
+  static {
+    module.addDeserializer(ProtoFileElement.class, new ProtoFileElementDeserializer());
+    mapperWithProtoFileDeserializer.registerModule(module);
+  }
 
   public static ProtobufSchema copyOf(ProtobufSchema schema) {
     return schema.copy();
@@ -105,6 +116,170 @@ public class ProtobufSchemaUtils {
         .omittingInsignificantWhitespace()
         .print(message);
     return jsonString.getBytes(StandardCharsets.UTF_8);
+  }
+
+  public static ProtoFileElement jsonToFile(JsonNode node) throws JsonProcessingException {
+    return mapperWithProtoFileDeserializer.convertValue(node, ProtoFileElement.class);
+  }
+
+  public static JsonNode findMatchingNodeHelper(JsonNode node, String arrayField,
+                                                String targetFieldName, String targetFieldValue) {
+    Iterator<JsonNode> iter = node.get(arrayField).elements();
+    while (iter.hasNext()) {
+      JsonNode currNode = iter.next();
+      if (targetFieldValue.equals(currNode.get(targetFieldName).asText())) {
+        return currNode;
+      }
+    }
+    return null;
+  }
+
+  public static JsonNode findMatchingNode(JsonNode node, String[] identifiers,
+                                          boolean isFieldPath) {
+    JsonNode nodePtr = null;
+    // the idx of last message identifier (exclusive)
+    int end = isFieldPath ? identifiers.length - 1 : identifiers.length;
+    int idx = 0;
+    for (; idx < end; idx++) {
+      JsonNode found;
+      String targetName = identifiers[idx];
+      if (idx == 0) {
+        found = findMatchingNodeHelper(node, "types", "name", targetName);
+      } else {
+        found = findMatchingNodeHelper(nodePtr, "nestedTypes", "name", targetName);
+      }
+
+      if (found != null) {
+        nodePtr = found;
+      } else if (idx == end - 1 && isFieldPath) {
+        // if the last message cannot be found, it could be the last identifier is the oneof
+        // field's name, return the previous messageElement in this case
+        break;
+      } else {
+        throw new IllegalArgumentException(
+            String.format("No matching Message with name '%s' found in the schema", targetName));
+      }
+    }
+
+    if (!isFieldPath) {
+      return nodePtr;
+    }
+
+    // need to find the fieldNode
+    JsonNode fieldNode = null;
+    String fieldName = identifiers[identifiers.length - 1];
+    if (nodePtr == null) {
+      throw new IllegalArgumentException(
+          String.format("No matching Field with name '%s' found in the schema", fieldName));
+    }
+    if (idx == end) {
+      fieldNode = findMatchingNodeHelper(nodePtr, "fields", "name", fieldName);
+      if (fieldNode == null) {
+        // find in oneOf fields
+        Iterator<JsonNode> oneOfs = nodePtr.get("oneOfs").elements();
+        while (oneOfs.hasNext()) {
+          JsonNode currNode = oneOfs.next();
+          fieldNode = findMatchingNodeHelper(currNode, "fields", "name", fieldName);
+          if (fieldNode != null) {
+            return fieldNode;
+          }
+        }
+      }
+    } else {
+      // path may contain oneOf fieldName
+      JsonNode oneOfNode = findMatchingNodeHelper(nodePtr, "oneOfs", "name", identifiers[idx]);
+      if (oneOfNode != null) {
+        fieldNode = findMatchingNodeHelper(oneOfNode, "fields", "name", fieldName);
+      }
+    }
+    if (fieldNode != null) {
+      return fieldNode;
+    } else {
+      throw new IllegalArgumentException(
+          String.format("No matching Field with name '%s' found in the schema", fieldName));
+    }
+  }
+
+  public static MessageElement findMatchingMessage(List<TypeElement> typeElementList, String name) {
+    for (TypeElement typeElement : typeElementList) {
+      if (typeElement instanceof MessageElement && name.equals(typeElement.getName())) {
+        return (MessageElement) typeElement;
+      }
+    }
+    return null;
+  }
+
+  public static Object findMatchingElement(ProtoFileElement original,
+                                           String[] identifiers,
+                                           boolean isFieldPath) {
+    MessageElement messageElement = null;
+    int i = 0;
+    // the idx of last message identifier (exclusive)
+    int end = isFieldPath ? identifiers.length - 1 : identifiers.length;
+
+    for (; i < end; i++) {
+      MessageElement found;
+      String targetName = identifiers[i];
+      if (i == 0) {
+        found = findMatchingMessage(original.getTypes(), targetName);
+      } else {
+        found = findMatchingMessage(messageElement.getNestedTypes(), targetName);
+      }
+      if (found != null) {
+        messageElement = found;
+      } else if (i == end - 1 && isFieldPath) {
+        // if the last message cannot be found, it could be the last identifier is the oneof
+        // field's name, return the previous messageElement in this case
+        break;
+      } else {
+        throw new IllegalArgumentException(
+            String.format("No matching Message with name '%s' found in the schema", targetName));
+      }
+    }
+
+    if (!isFieldPath) {
+      return messageElement;
+    }
+
+    // need to find FieldElement
+    String fieldName = identifiers[identifiers.length - 1];
+    if (messageElement == null) {
+      throw new IllegalArgumentException(
+          String.format("No matching Field with name '%s' found in the schema", fieldName));
+    }
+    if (i == end) {
+      for (FieldElement fieldElement : messageElement.getFields()) {
+        if (fieldName.equals(fieldElement.getName())) {
+          return fieldElement;
+        }
+      }
+      // search oneOf fields
+      for (OneOfElement oneOfElement : messageElement.getOneOfs()) {
+        for (FieldElement fieldElement : oneOfElement.getFields()) {
+          if (fieldName.equals(fieldElement.getName())) {
+            return fieldElement;
+          }
+        }
+      }
+    } else {
+      // path may contain oneOf fieldName
+      String oneOfFieldName = identifiers[i];
+      OneOfElement foundOneOfElement = null;
+      for (OneOfElement oneOfElement : messageElement.getOneOfs()) {
+        if (oneOfFieldName.equals(oneOfElement.getName())) {
+          foundOneOfElement = oneOfElement;
+        }
+      }
+      if (foundOneOfElement != null) {
+        for (FieldElement fieldElement : foundOneOfElement.getFields()) {
+          if (fieldName.equals(fieldElement.getName())) {
+            return fieldElement;
+          }
+        }
+      }
+    }
+    throw new IllegalArgumentException(
+        String.format("No matching Field with name '%s' found in the schema", fieldName));
   }
 
   protected static String toNormalizedString(ProtobufSchema schema) {
@@ -796,7 +971,7 @@ public class ProtobufSchemaUtils {
       return types;
     }
   }
-  
+
   private static void formatOptionMap(
       FormatContext ctx, StringBuilder sb, Map<String, Object> valueMap) {
     if (ctx.normalize()) {
