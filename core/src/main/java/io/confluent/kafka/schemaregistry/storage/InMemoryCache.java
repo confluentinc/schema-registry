@@ -159,6 +159,22 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
+  public Integer idByGuid(String guid, String context) throws StoreException {
+    MD5 md5;
+    try {
+      md5 = MD5.fromString(guid);
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), context);
+    String ctx = qs != null ? qs.getContext() : DEFAULT_CONTEXT;
+    Map<String, Map<MD5, Integer>> ctxIds =
+        hashToGuid.getOrDefault(tenant(), Collections.emptyMap());
+    Map<MD5, Integer> ids = ctxIds.getOrDefault(ctx, Collections.emptyMap());
+    return ids.get(md5);
+  }
+
+  @Override
   public void schemaDeleted(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
