@@ -78,6 +78,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Cache<SubjectAndSchema, Long> missingSchemaCache;
   private final Cache<SubjectAndInt, Long> missingIdCache;
   private final Cache<SubjectAndInt, Long> missingVersionCache;
+  private final Cache<Schema, ParsedSchema> parsedSchemaCache;
   private final Map<String, SchemaProvider> providers;
   private final Ticker ticker;
 
@@ -240,6 +241,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         .ticker(ticker)
         .expireAfterWrite(missingVersionTTL, TimeUnit.SECONDS)
         .build();
+    this.parsedSchemaCache = CacheBuilder.newBuilder()
+            .maximumSize(maxMissingCacheSize)
+            .ticker(ticker)
+            .expireAfterWrite(missingVersionTTL, TimeUnit.SECONDS)
+            .build();
 
     this.providers = providers != null && !providers.isEmpty()
         ? providers.stream().collect(Collectors.toMap(SchemaProvider::schemaType, p -> p))
@@ -311,6 +317,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public Optional<ParsedSchema> parseSchema(Schema schema) {
+    if (parsedSchemaCache.getIfPresent(schema) != null) {
+      return Optional.of(parsedSchemaCache.getIfPresent(schema));
+    }
     String schemaType = schema.getSchemaType();
     if (schemaType == null) {
       schemaType = AvroSchema.TYPE;
@@ -320,7 +329,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       log.error("Invalid schema type {}", schemaType);
       return Optional.empty();
     }
-    return schemaProvider.parseSchema(schema, false, false);
+    Optional<ParsedSchema> parsedSchema = schemaProvider.parseSchema(schema, false, false);
+    parsedSchema.ifPresent(value -> parsedSchemaCache.put(schema, value));
+    return parsedSchema;
   }
 
   public Map<String, SchemaProvider> getSchemaProviders() {
