@@ -19,7 +19,6 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
@@ -33,6 +32,8 @@ import java.util.Objects;
 @io.swagger.v3.oas.annotations.media.Schema(description = "Schema definition")
 public class SchemaString {
 
+  private String subject;
+  private Integer version;
   private String schemaType = AvroSchema.TYPE;
   private String schemaString;
   private List<SchemaReference> references = Collections.emptyList();
@@ -50,6 +51,19 @@ public class SchemaString {
   }
 
   public SchemaString(Schema schema) {
+    this.subject = schema.getSubject();
+    this.version = schema.getVersion();
+    this.schemaType = schema.getSchemaType();
+    this.schemaString = schema.getSchema();
+    this.references = schema.getReferences();
+    this.metadata = schema.getMetadata();
+    this.ruleSet = schema.getRuleSet();
+    this.schemaTags = schema.getSchemaTags();
+  }
+
+  public SchemaString(String subject, Integer version, Schema schema) {
+    this.subject = subject;
+    this.version = version;
     this.schemaType = schema.getSchemaType();
     this.schemaString = schema.getSchema();
     this.references = schema.getReferences();
@@ -62,10 +76,29 @@ public class SchemaString {
     return JacksonMapper.INSTANCE.readValue(json, SchemaString.class);
   }
 
+  @JsonProperty("subject")
+  public String getSubject() {
+    return subject;
+  }
+
+  @JsonProperty("subject")
+  public void setSubject(String subject) {
+    this.subject = subject;
+  }
+
+  @JsonProperty("version")
+  public Integer getVersion() {
+    return this.version;
+  }
+
+  @JsonProperty("version")
+  public void setVersion(Integer version) {
+    this.version = version;
+  }
+
   @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC,
       example = Schema.TYPE_EXAMPLE)
   @JsonProperty("schemaType")
-  @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
     return schemaType;
   }
@@ -155,7 +188,8 @@ public class SchemaString {
       return false;
     }
     SchemaString that = (SchemaString) o;
-    return Objects.equals(schemaType, that.schemaType)
+    return Objects.equals(subject, that.subject)
+        && Objects.equals(version, that.version)
         && Objects.equals(schemaString, that.schemaString)
         && Objects.equals(references, that.references)
         && Objects.equals(metadata, that.metadata)
@@ -165,6 +199,7 @@ public class SchemaString {
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaType, schemaString, references, metadata, ruleSet, maxId);
+    return Objects.hash(
+        subject, version, schemaType, schemaString, references, metadata, ruleSet, maxId);
   }
 }
