@@ -61,6 +61,7 @@ public class Schema implements Comparable<Schema> {
   private String subject;
   private Integer version;
   private Integer id;
+  private String guid;
   private String schemaType;
   private List<SchemaReference> references;
   private Metadata metadata;
@@ -70,23 +71,45 @@ public class Schema implements Comparable<Schema> {
 
   @JsonCreator
   public Schema(@JsonProperty("subject") String subject,
-                @JsonProperty("version") Integer version,
-                @JsonProperty("id") Integer id,
-                @JsonProperty("schemaType") String schemaType,
-                @JsonProperty("references") List<SchemaReference> references,
-                @JsonProperty("metadata") Metadata metadata,
-                @JsonProperty("ruleset") RuleSet ruleSet,
-                @JsonProperty("schema") String schema,
-                @JsonProperty("schemaTags") List<SchemaTags> schemaTags) {
+      @JsonProperty("version") Integer version,
+      @JsonProperty("id") Integer id,
+      @JsonProperty("guid") String guid,
+      @JsonProperty("schemaType") String schemaType,
+      @JsonProperty("references") List<SchemaReference> references,
+      @JsonProperty("metadata") Metadata metadata,
+      @JsonProperty("ruleset") RuleSet ruleSet,
+      @JsonProperty("schema") String schema,
+      @JsonProperty("schemaTags") List<SchemaTags> schemaTags) {
     this.subject = subject;
     this.version = version;
     this.id = id;
+    this.guid = guid;
     this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
     this.references = references != null ? references : Collections.emptyList();
     this.metadata = metadata;
     this.ruleSet = ruleSet;
     this.schema = schema;
     this.schemaTags = schemaTags;
+  }
+
+  public Schema(@JsonProperty("subject") String subject,
+      @JsonProperty("version") Integer version,
+      @JsonProperty("id") Integer id,
+      @JsonProperty("guid") String guid,
+      @JsonProperty("schemaType") String schemaType,
+      @JsonProperty("references") List<SchemaReference> references,
+      @JsonProperty("metadata") Metadata metadata,
+      @JsonProperty("ruleset") RuleSet ruleSet,
+      @JsonProperty("schema") String schema) {
+    this.subject = subject;
+    this.version = version;
+    this.id = id;
+    this.guid = guid;
+    this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
+    this.references = references != null ? references : Collections.emptyList();
+    this.metadata = metadata;
+    this.ruleSet = ruleSet;
+    this.schema = schema;
   }
 
   public Schema(@JsonProperty("subject") String subject,
@@ -127,6 +150,7 @@ public class Schema implements Comparable<Schema> {
     this.subject = subject;
     this.version = schemaMetadata.getVersion();
     this.id = schemaMetadata.getId();
+    this.guid = schemaMetadata.getGuid();
     this.schemaType = schemaMetadata.getSchemaType() != null
         ? schemaMetadata.getSchemaType() : AvroSchema.TYPE;
     this.references = schemaMetadata.getReferences() != null
@@ -140,6 +164,7 @@ public class Schema implements Comparable<Schema> {
     this.subject = subject;
     this.version = version;
     this.id = id;
+    this.guid = schemaString.getGuid();
     this.schemaType = schemaString.getSchemaType() != null
         ? schemaString.getSchemaType() : AvroSchema.TYPE;
     this.references = schemaString.getReferences() != null
@@ -190,6 +215,7 @@ public class Schema implements Comparable<Schema> {
     this.subject = subject;
     this.version = response.getVersion() != null ? response.getVersion() : 0;
     this.id = response.getId();
+    this.guid = response.getGuid();
     this.schemaType = response.getSchemaType() != null
         ? response.getSchemaType() : AvroSchema.TYPE;
     this.references = response.getReferences() != null
@@ -201,12 +227,12 @@ public class Schema implements Comparable<Schema> {
 
   public Schema copy() {
     return new Schema(
-        subject, version, id, schemaType, references, metadata, ruleSet, schema, schemaTags);
+        subject, version, id, guid, schemaType, references, metadata, ruleSet, schema, schemaTags);
   }
 
   public Schema copy(Integer version, Integer id) {
     return new Schema(
-        subject, version, id, schemaType, references, metadata, ruleSet, schema, schemaTags);
+        subject, version, id, guid, schemaType, references, metadata, ruleSet, schema, schemaTags);
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC, example = SUBJECT_EXAMPLE)
@@ -240,6 +266,16 @@ public class Schema implements Comparable<Schema> {
   @JsonProperty("id")
   public void setId(Integer id) {
     this.id = id;
+  }
+
+  @JsonProperty("guid")
+  public String getGuid() {
+    return guid;
+  }
+
+  @JsonProperty("guid")
+  public void setGuid(String guid) {
+    this.guid = guid;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = TYPE_DESC, example = TYPE_EXAMPLE)
@@ -320,6 +356,7 @@ public class Schema implements Comparable<Schema> {
     return Objects.equals(subject, schema1.subject)
         && Objects.equals(version, schema1.version)
         && Objects.equals(id, schema1.id)
+        && Objects.equals(guid, schema1.guid)
         && Objects.equals(schemaType, schema1.schemaType)
         && Objects.equals(references, schema1.references)
         && Objects.equals(metadata, schema1.metadata)
@@ -330,7 +367,7 @@ public class Schema implements Comparable<Schema> {
   @Override
   public int hashCode() {
     return Objects.hash(
-        subject, version, id, schemaType, references, metadata, ruleSet, schema);
+        subject, version, id, guid, schemaType, references, metadata, ruleSet, schema);
   }
 
   @Override
@@ -339,6 +376,7 @@ public class Schema implements Comparable<Schema> {
     sb.append("{subject=" + this.subject + ",");
     sb.append("version=" + this.version + ",");
     sb.append("id=" + this.id + ",");
+    sb.append("guid=" + this.guid + ",");
     sb.append("schemaType=" + this.schemaType + ",");
     sb.append("references=" + this.references + ",");
     sb.append("metadata=" + this.metadata + ",");
