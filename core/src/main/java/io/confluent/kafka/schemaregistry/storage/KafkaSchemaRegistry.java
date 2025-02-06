@@ -696,9 +696,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       Config config = getConfigInScope(subject);
       Mode mode = getModeInScope(subject);
 
-      boolean modifiedSchema = false;
       if (mode != Mode.IMPORT) {
-        modifiedSchema = maybePopulateFromPrevious(
+        maybePopulateFromPrevious(
             config, schema, undeletedVersions, newVersion, propagateSchemaTags);
       }
 
@@ -714,10 +713,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
               && schemaIdAndSubjects.hasSubject(subject)
               && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
             // return only if the schema was previously registered under the input subject
-            return modifiedSchema
-                ? schema.copy(
-                    schemaIdAndSubjects.getVersion(subject), schemaIdAndSubjects.getSchemaId())
-                : new Schema(subject, schemaIdAndSubjects.getSchemaId());
+            return schema.copy(
+                schemaIdAndSubjects.getVersion(subject), schemaIdAndSubjects.getSchemaId());
           } else {
             // need to register schema under the input subject
             schemaId = schemaIdAndSubjects.getSchemaId();
@@ -735,9 +732,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
               && parsedSchema.canLookup(undeletedSchema, this)) {
             // This handles the case where a schema is sent with all references resolved
             // or without confluent:version
-            return modifiedSchema
-                ? schema.copy(schemaValue.getVersion(), schemaValue.getId())
-                : new Schema(subject, schemaValue.getId());
+            return schema.copy(schemaValue.getVersion(), schemaValue.getId());
           }
         }
       }
@@ -808,9 +803,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         }
         kafkaStore.put(schemaKey, schemaValue);
 
-        return modifiedSchema
-            ? schema
-            : new Schema(subject, schema.getId());
+        return schema;
       } else {
         throw new IncompatibleSchemaException(compatibilityErrorLogs.toString());
       }
@@ -966,7 +959,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
               || schema.getId() < 0
               || schema.getId().equals(existingSchema.getId())
           ) {
-            return new Schema(subject, existingSchema.getId());
+            return existingSchema;
           }
         } else if (existingSchema.getId().equals(schema.getId())) {
           if (existingSchema.getVersion().equals(schema.getVersion())) {
@@ -1727,7 +1720,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           + " store", e);
     }
     Schema schemaEntity = toSchemaEntity(schema);
-    SchemaString schemaString = new SchemaString(schemaEntity);
+    SchemaString schemaString = subject != null
+        ? new SchemaString(schemaEntity)
+        : new SchemaString(null, null, schemaEntity);
     if (format != null && !format.trim().isEmpty()) {
       ParsedSchema parsedSchema = parseSchema(schemaEntity, false, false);
       schemaString.setSchemaString(parsedSchema.formattedString(format));
