@@ -26,6 +26,7 @@ import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONArray;
@@ -42,16 +43,28 @@ public class SchemaDiffTest {
   }
 
   @Test
+  public void checkJsonSchemaCompatibility_2020_12() {
+    final JSONArray testCases = new JSONArray(Objects.requireNonNull(readFile("diff-schema-examples-2020-12.json")));
+    checkJsonSchemaCompatibility(testCases);
+  }
+
+  @Test
   public void checkJsonSchemaCompatibilityForCombinedSchemas() {
     final JSONArray testCases = new JSONArray(Objects.requireNonNull(readFile("diff-combined-schema-examples.json")));
+    checkJsonSchemaCompatibility(testCases);
+  }
+
+  @Test
+  public void checkJsonSchemaCompatibilityForCombinedSchemas_2020_12() {
+    final JSONArray testCases = new JSONArray(Objects.requireNonNull(readFile("diff-combined-schema-examples-2020-12.json")));
     checkJsonSchemaCompatibility(testCases);
   }
 
   private void checkJsonSchemaCompatibility(JSONArray testCases) {
     for (final Object testCaseObject : testCases) {
       final JSONObject testCase = (JSONObject) testCaseObject;
-      final Schema original = SchemaLoader.load(testCase.getJSONObject("original_schema"));
-      final Schema update = SchemaLoader.load(testCase.getJSONObject("update_schema"));
+      final JsonSchema original = new JsonSchema(testCase.getJSONObject("original_schema").toString());
+      final JsonSchema update = new JsonSchema(testCase.getJSONObject("update_schema").toString());
       final JSONArray changes = (JSONArray) testCase.get("changes");
       boolean isCompatible = testCase.getBoolean("compatible");
       final List<String> errorMessages = changes.toList()
@@ -60,7 +73,7 @@ public class SchemaDiffTest {
           .collect(toList());
       final String description = (String) testCase.get("description");
 
-      List<Difference> differences = SchemaDiff.compare(original, update);
+      List<Difference> differences = SchemaDiff.compare(original.rawSchema(), update.rawSchema());
       final List<Difference> incompatibleDiffs = differences.stream()
           .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
           .collect(Collectors.toList());

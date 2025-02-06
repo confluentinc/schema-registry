@@ -16,6 +16,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 
 import java.io.File;
 import java.io.IOException;
@@ -63,6 +64,27 @@ public class OffsetCheckpointTest {
             assertEquals(Collections.<TopicPartition, Long>emptyMap(), checkpoint.read());
 
             // deleting a non-exist checkpoint file should be fine
+            checkpoint.delete();
+        }
+    }
+
+    @Test
+    public void testReadOnly() throws Exception {
+        try (final OffsetCheckpoint checkpoint = new OffsetCheckpoint("/tmp", 0, topic)) {
+            final Map<TopicPartition, Long> offsets = new HashMap<>();
+            offsets.put(new TopicPartition(topic, 0), 0L);
+            offsets.put(new TopicPartition(topic, 1), 1L);
+            offsets.put(new TopicPartition(topic, 2), 2L);
+
+            checkpoint.write(offsets);
+            assertEquals(offsets, checkpoint.read());
+
+            try (final OffsetCheckpointReadOnly checkpointReadOnly =
+                     new OffsetCheckpointReadOnly("/tmp", 0, topic)) {
+                assertEquals(offsets, checkpointReadOnly.read());
+                assertThrows(UnsupportedOperationException.class,
+                    () -> checkpointReadOnly.write(offsets));
+            }
             checkpoint.delete();
         }
     }

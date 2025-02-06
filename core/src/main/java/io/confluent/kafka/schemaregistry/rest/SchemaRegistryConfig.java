@@ -220,6 +220,9 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String METADATA_ENCODER_TOPIC_CONFIG = "metadata.encoder.topic";
   public static final String METADATA_ENCODER_TOPIC_DEFAULT = "_schema_encoders";
 
+  public static final String ENABLE_STORE_HEALTH_CHECK = "enable.store.health.check";
+  public static final boolean DEFAULT_ENABLE_STORE_HEALTH_CHECK = false;
+
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
   public static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG =
@@ -265,8 +268,12 @@ public class SchemaRegistryConfig extends RestConfig {
   @Deprecated
   public static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG =
       "schema.registry.resource.extension.class";
+  public static final String INIT_RESOURCE_EXTENSION_CONFIG =
+      "init.resource.extension.class";
   public static final String RESOURCE_EXTENSION_CONFIG =
       "resource.extension.class";
+  public static final String ENABLE_FIPS_CONFIG =
+      "enable.fips";
   public static final String RESOURCE_STATIC_LOCATIONS_CONFIG =
       "resource.static.locations";
   @Deprecated
@@ -386,6 +393,8 @@ public class SchemaRegistryConfig extends RestConfig {
       + "cluster wide setting i.e all nodes should have either true or false.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
+  protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
+      "If true, health check will call the local storage.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
       + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";
@@ -437,12 +446,20 @@ public class SchemaRegistryConfig extends RestConfig {
       "Login thread will sleep until the specified window factor of time from last refresh to "
       + "ticket's expiry has "
       + "been reached, at which time it will try to renew the ticket.";
+  protected static final String ENABLE_FIPS_DOC =
+      "Enable FIPS mode on the server. If FIPS mode is enabled, broker listener security protocols,"
+      + " TLS versions and cipher suites will be validated based on FIPS compliance requirement.";
   protected static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC =
       "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
       + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
       + " like filters to Schema Registry. Typically used to add custom capability like logging, "
       + " security, etc. The schema.registry.resource.extension.class name is deprecated; "
       + "prefer using resource.extension.class instead.";
+  protected static final String INIT_RESOURCE_EXTENSION_DOC =
+      "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
+      + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
+      + " to Schema Registry. These resources will be injected before Schema Registry is "
+      + "initialized.";
   protected static final String RESOURCE_STATIC_LOCATIONS_DOC =
       "  A list of classpath resources containing static resources to serve using the default "
           + "servlet.";
@@ -601,6 +618,9 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
     )
+    .define(ENABLE_STORE_HEALTH_CHECK, ConfigDef.Type.BOOLEAN, DEFAULT_ENABLE_STORE_HEALTH_CHECK,
+        ConfigDef.Importance.LOW, ENABLE_STORE_HEALTH_CHECK_DOC
+    )
     .define(KAFKASTORE_SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING,
         SecurityProtocol.PLAINTEXT.toString(), ConfigDef.Importance.MEDIUM,
         KAFKASTORE_SECURITY_PROTOCOL_DOC
@@ -691,8 +711,14 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
     )
+    .define(ENABLE_FIPS_CONFIG, ConfigDef.Type.BOOLEAN, false,
+        ConfigDef.Importance.LOW, ENABLE_FIPS_DOC
+    )
     .define(RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
+    )
+    .define(INIT_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
+            ConfigDef.Importance.LOW, INIT_RESOURCE_EXTENSION_DOC
     )
     .define(RESOURCE_STATIC_LOCATIONS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, RESOURCE_STATIC_LOCATIONS_DOC

@@ -963,6 +963,12 @@ paths:
         schema:
           type: string
           default: ""
+      - name: aliases
+        in: query
+        description: Whether to include aliases in the search
+        schema:
+          type: boolean
+          default: false
       - name: deleted
         in: query
         description: Whether to return soft deleted schemas
@@ -976,6 +982,12 @@ paths:
         schema:
           type: boolean
           default: false
+      - name: ruleType
+        in: query
+        description: Filters results by the given rule type
+        schema:
+          type: string
+          default: ""
       - name: offset
         in: query
         description: Pagination offset for results
@@ -1048,6 +1060,13 @@ paths:
         schema:
           type: string
           default: ""
+      - name: findTags
+        in: query
+        description: Find tagged entities for the given tags or * for all tags
+        schema:
+          type: array
+          items:
+            type: string
       - name: fetchMaxId
         in: query
         description: Whether to fetch the maximum schema identifier that exists
@@ -1356,6 +1375,12 @@ paths:
         description: Whether to normalize the given schema
         schema:
           type: boolean
+      - name: format
+        in: query
+        description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
       - name: deleted
         in: query
         description: Whether to lookup deleted schemas
@@ -1580,6 +1605,12 @@ paths:
         description: Whether to normalize the given schema
         schema:
           type: boolean
+      - name: format
+        in: query
+        description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
       requestBody:
         description: Schema
         content:
@@ -1673,11 +1704,24 @@ paths:
         required: true
         schema:
           type: string
+      - name: format
+        in: query
+        description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
       - name: deleted
         in: query
         description: Whether to include deleted schema
         schema:
           type: boolean
+      - name: findTags
+        in: query
+        description: Find tagged entities for the given tags or * for all tags
+        schema:
+          type: array
+          items:
+            type: string
       responses:
         "200":
           description: The schema.
@@ -1916,7 +1960,7 @@ paths:
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly_2
+      operationId: getSchemaOnly
       parameters:
       - name: subject
         in: path
@@ -1934,6 +1978,12 @@ paths:
         required: true
         schema:
           type: string
+      - name: format
+        in: query
+        description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
       - name: deleted
         in: query
         description: Whether to include deleted schema
@@ -2010,7 +2060,7 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly
+      operationId: getSchemaOnly_1
       parameters:
       - name: id
         in: path
@@ -2107,6 +2157,12 @@ paths:
           type: array
           items:
             type: string
+      - name: format
+        in: query
+        description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
       - name: deleted
         in: query
         description: Whether to lookup deleted schemas
@@ -2131,6 +2187,100 @@ paths:
             Error code 40403 -- Schema not found
         "500":
           description: Internal server error
+  /subjects/{subject}/versions/{version}/tags:
+    post:
+      tags:
+      - Subjects (v1)
+      summary: Create or remove schema embedded tags for a subject version
+      description: "Create new schema subject version with the provided field or record\
+        \ level schema tags embedded (or remove) in the schema string, as well as\
+        \ the given metadata and ruleset."
+      operationId: modifyTags_1
+      parameters:
+      - name: subject
+        in: path
+        description: Name of the subject
+        required: true
+        schema:
+          type: string
+      - name: version
+        in: path
+        description: "Version of the schema to be returned. Valid values for versionId\
+          \ are between [1,2^31-1] or the string \"latest\". \"latest\" returns the\
+          \ last registered schema under the specified subject. Note that there may\
+          \ be a new latest schema that gets registered right after this request is\
+          \ served."
+        required: true
+        schema:
+          type: string
+      requestBody:
+        description: Tag schema request
+        content:
+          application/vnd.schemaregistry.v1+json:
+            schema:
+              $ref: '#/components/schemas/TagSchemaRequest'
+          application/vnd.schemaregistry+json:
+            schema:
+              $ref: '#/components/schemas/TagSchemaRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagSchemaRequest'
+          application/octet-stream:
+            schema:
+              $ref: '#/components/schemas/TagSchemaRequest'
+        required: true
+      responses:
+        "200":
+          description: Schema successfully registered.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/RegisterSchemaResponse'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/RegisterSchemaResponse'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/RegisterSchemaResponse'
+        "409":
+          description: Conflict. Incompatible schema.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        "422":
+          description: 'Unprocessable entity. Error code 42201 indicates an invalid
+            schema or schema type. '
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        "500":
+          description: Internal Server Error. Error code 50001 indicates a failure
+            in the backend data store.Error code 50002 indicates operation timed out.
+            Error code 50003 indicates a failure forwarding the request to the primary.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
 components:
   schemas:
     CompatibilityCheckResponse:
@@ -2174,6 +2324,16 @@ components:
         schema:
           type: string
           description: Schema definition string
+        schemaTagsToAdd:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchemaTags'
+        schemaTagsToRemove:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchemaTags'
+        propagateSchemaTags:
+          type: boolean
       description: Schema register request
     SchemaReference:
       type: object
@@ -2211,6 +2371,10 @@ components:
           type: string
         normalize:
           type: boolean
+        validateFields:
+          type: boolean
+        validateRules:
+          type: boolean
         compatibilityGroup:
           type: string
         defaultMetadata:
@@ -2228,6 +2392,10 @@ components:
         alias:
           type: string
         normalize:
+          type: boolean
+        validateFields:
+          type: boolean
+        validateRules:
           type: boolean
         compatibility:
           type: string
@@ -2298,6 +2466,11 @@ components:
           $ref: '#/components/schemas/Metadata'
         ruleSet:
           $ref: '#/components/schemas/RuleSet'
+        schemaTags:
+          type: array
+          description: Schema tags
+          items:
+            $ref: '#/components/schemas/SchemaTags'
         maxId:
           type: integer
           description: Maximum ID
@@ -2338,6 +2511,11 @@ components:
           type: string
           description: Schema definition string
           example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+        schemaTags:
+          type: array
+          description: Schema tags
+          items:
+            $ref: '#/components/schemas/SchemaTags'
         ruleSet:
           $ref: '#/components/schemas/RuleSet'
       description: Schema
@@ -2495,3 +2673,97 @@ components:
           items:
             $ref: '#/components/schemas/Rule'
       description: Schema rule set
+    SchemaEntity:
+      type: object
+      properties:
+        entityPath:
+          type: string
+        entityType:
+          type: string
+          enum:
+          - sr_record
+          - sr_field
+    SchemaTags:
+      type: object
+      properties:
+        schemaEntity:
+          $ref: '#/components/schemas/SchemaEntity'
+        tags:
+          type: array
+          items:
+            type: string
+    ExtendedSchema:
+      type: object
+      properties:
+        subject:
+          type: string
+          description: Name of the subject
+          example: User
+        version:
+          type: integer
+          description: Version number
+          format: int32
+          example: 1
+        id:
+          type: integer
+          description: Globally unique identifier of the schema
+          format: int32
+          example: 100001
+        schemaType:
+          type: string
+          description: Schema type
+          example: AVRO
+        references:
+          type: array
+          description: References to other schemas
+          items:
+            $ref: '#/components/schemas/SchemaReference'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        ruleset:
+          $ref: '#/components/schemas/RuleSet'
+        schema:
+          type: string
+          description: Schema definition string
+          example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+        aliases:
+          type: array
+          description: Aliases for the given subject
+          items:
+            type: string
+            description: Aliases for the given subject
+        ruleSet:
+          $ref: '#/components/schemas/RuleSet'
+        schemaTags:
+          type: array
+          description: Schema tags
+          items:
+            $ref: '#/components/schemas/SchemaTags'
+      description: ExtendedSchema
+    TagSchemaRequest:
+      type: object
+      properties:
+        newVersion:
+          type: integer
+          description: "The new version should be the latest version in the subject\
+            \ + 1. If set, the new version will be encoded to the schema metadata."
+          format: int32
+        tagsToAdd:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchemaTags'
+        tagsToRemove:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchemaTags'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        ruleSet:
+          $ref: '#/components/schemas/RuleSet'
+        rulesToMerge:
+          $ref: '#/components/schemas/RuleSet'
+        rulesToRemove:
+          type: array
+          items:
+            type: string
+      description: Schema tags register request
