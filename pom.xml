@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[7.6.5-0, 7.6.6-0)</version>
+        <version>[7.7.3-0, 7.7.4-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>7.6.5-0</version>
+    <version>7.7.3-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -107,10 +107,11 @@
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
         <wire.version>4.9.7</wire.version>
         <swagger.version>2.1.10</swagger.version>
-        <io.confluent.schema-registry.version>7.6.5-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>7.7.3-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.17.0</commons.lang3.version>
         <commons.validator.version>1.7</commons.validator.version>
+        <snappy.version>1.1.10.5</snappy.version>
     </properties>
 
     <repositories>
@@ -156,6 +157,11 @@
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-lang3</artifactId>
                 <version>${commons.lang3.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.xerial.snappy</groupId>
+                <artifactId>snappy-java</artifactId>
+                <version>${snappy.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.github.ben-manes.caffeine</groupId>

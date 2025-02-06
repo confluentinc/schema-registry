@@ -49,9 +49,13 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
 
   public static final String DECIMAL_FORMAT_CONFIG = "decimal.format";
   public static final String DECIMAL_FORMAT_DEFAULT = DecimalFormat.BASE64.name();
-  private static final String DECIMAL_FORMAT_DOC =
+  public static final String DECIMAL_FORMAT_DOC =
       "Controls which format this converter will serialize decimals in."
       + " This value is case insensitive and can be either 'BASE64' (default) or 'NUMERIC'";
+
+  public static final String FLATTEN_SINGLETON_UNIONS_CONFIG = "flatten.singleton.unions";
+  public static final boolean FLATTEN_SINGLETON_UNIONS_DEFAULT = true;
+  public static final String FLATTEN_SINGLETON_UNIONS_DOC = "Whether to flatten singleton unions";
 
   public static ConfigDef baseConfigDef() {
     return AbstractDataConfig.baseConfigDef().define(
@@ -80,7 +84,13 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
             DecimalFormat.BASE64.name(),
             DecimalFormat.NUMERIC.name()),
         ConfigDef.Importance.LOW,
-        DECIMAL_FORMAT_DOC);
+        DECIMAL_FORMAT_DOC
+    ).define(
+        FLATTEN_SINGLETON_UNIONS_CONFIG,
+        ConfigDef.Type.BOOLEAN,
+        FLATTEN_SINGLETON_UNIONS_DEFAULT,
+        ConfigDef.Importance.LOW,
+        FLATTEN_SINGLETON_UNIONS_DOC);
   }
 
   public JsonSchemaDataConfig(Map<?, ?> props) {
@@ -106,6 +116,10 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
 
   public boolean ignoreModernDialects() {
     return getBoolean(IGNORE_MODERN_DIALECTS_CONFIG);
+  }
+
+  public boolean isFlattenSingletonUnions() {
+    return this.getBoolean(FLATTEN_SINGLETON_UNIONS_CONFIG);
   }
 
   public static class Builder {
