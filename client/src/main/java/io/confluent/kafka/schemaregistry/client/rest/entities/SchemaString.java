@@ -75,6 +75,21 @@ public class SchemaString {
     this.schemaTags = schema.getSchemaTags();
   }
 
+  public SchemaString copy() {
+    SchemaString schema = new SchemaString();
+    schema.setSubject(getSubject());
+    schema.setVersion(getVersion());
+    schema.setGuid(getGuid());
+    schema.setSchemaType(getSchemaType());
+    schema.setSchemaString(getSchemaString());
+    schema.setReferences(getReferences());
+    schema.setMetadata(getMetadata());
+    schema.setRuleSet(getRuleSet());
+    schema.setSchemaTags(getSchemaTags());
+    schema.setMaxId(getMaxId());
+    return schema;
+  }
+
   public static SchemaString fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, SchemaString.class);
   }

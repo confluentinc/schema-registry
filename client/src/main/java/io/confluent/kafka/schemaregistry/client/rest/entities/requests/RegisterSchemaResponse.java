@@ -65,6 +65,19 @@ public class RegisterSchemaResponse {
     this.schema = schema.getSchema();
   }
 
+  public RegisterSchemaResponse copy() {
+    RegisterSchemaResponse response = new RegisterSchemaResponse();
+    response.setId(getId());
+    response.setVersion(getVersion());
+    response.setGuid(getGuid());
+    response.setSchemaType(getSchemaType());
+    response.setReferences(getReferences());
+    response.setMetadata(getMetadata());
+    response.setRuleSet(getRuleSet());
+    response.setSchema(getSchema());
+    return response;
+  }
+
   public static RegisterSchemaResponse fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, RegisterSchemaResponse.class);
   }
