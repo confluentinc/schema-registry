@@ -193,9 +193,12 @@ public class RestApiTest extends ClusterTestHarness {
 
     SchemaString schemaString = restApp.restClient.getId(
         RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, null, null, false);
+    assertNotNull(schemaString.getTimestamp());
+
     SchemaString schemaString2 = restApp.restClient.getByGuid(
         RestService.DEFAULT_REQUEST_PROPERTIES, schemaString.getGuid(), null);
     assertEquals(schemaString.getGuid(), schemaString2.getGuid());
+    assertNotNull(schemaString.getTimestamp());
 
     List<ContextId> contextId = restApp.restClient.getAllContextIds(
         RestService.DEFAULT_REQUEST_PROPERTIES, schemaString.getGuid());
@@ -389,6 +392,7 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaString schemaString2 = restApp.restClient.getId(
         RestService.DEFAULT_REQUEST_PROPERTIES, 2, subject2, null, null, false);
     assertEquals(schemaString.getGuid(), schemaString2.getGuid());
+    assertNotNull(schemaString.getTimestamp());
   }
 
   @Test
@@ -2698,7 +2702,7 @@ public class RestApiTest extends ClusterTestHarness {
   ) throws IOException, RestClientException {
     RegisterSchemaResponse response = restService.registerSchema(request, subject, false);
     assertNotNull(response.getVersion());
-    
+
     int registeredId = response.getId();
     assertEquals(
         (long) expectedId,
