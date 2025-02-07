@@ -308,13 +308,16 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
         getSubject(),
         getVersion(),
         getId(),
+        null,
         getSchemaType(),
         getReferences() == null ? null : getReferences().stream()
             .map(SchemaReference::toRefEntity)
             .collect(Collectors.toList()),
         getMetadata() == null ? null : getMetadata().toMetadataEntity(),
         getRuleSet() == null ? null : getRuleSet().toRuleSetEntity(),
-        getSchema()
+        getSchema(),
+        null,
+        getTimestamp()
     );
   }
 }
