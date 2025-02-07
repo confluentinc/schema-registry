@@ -34,6 +34,7 @@ public class SchemaString {
 
   private String subject;
   private Integer version;
+  private String guid;
   private String schemaType = AvroSchema.TYPE;
   private String schemaString;
   private List<SchemaReference> references = Collections.emptyList();
@@ -41,6 +42,7 @@ public class SchemaString {
   private RuleSet ruleSet = null;
   private List<SchemaTags> schemaTags;
   private Integer maxId;
+  private Long timestamp;
 
   public SchemaString() {
   }
@@ -53,23 +55,43 @@ public class SchemaString {
   public SchemaString(Schema schema) {
     this.subject = schema.getSubject();
     this.version = schema.getVersion();
+    this.guid = schema.getGuid();
     this.schemaType = schema.getSchemaType();
     this.schemaString = schema.getSchema();
     this.references = schema.getReferences();
     this.metadata = schema.getMetadata();
     this.ruleSet = schema.getRuleSet();
     this.schemaTags = schema.getSchemaTags();
+    this.timestamp = schema.getTimestamp();
   }
 
   public SchemaString(String subject, Integer version, Schema schema) {
     this.subject = subject;
     this.version = version;
+    this.guid = schema.getGuid();
     this.schemaType = schema.getSchemaType();
     this.schemaString = schema.getSchema();
     this.references = schema.getReferences();
     this.metadata = schema.getMetadata();
     this.ruleSet = schema.getRuleSet();
     this.schemaTags = schema.getSchemaTags();
+    this.timestamp = schema.getTimestamp();
+  }
+
+  public SchemaString copy() {
+    SchemaString schema = new SchemaString();
+    schema.setSubject(getSubject());
+    schema.setVersion(getVersion());
+    schema.setGuid(getGuid());
+    schema.setSchemaType(getSchemaType());
+    schema.setSchemaString(getSchemaString());
+    schema.setReferences(getReferences());
+    schema.setMetadata(getMetadata());
+    schema.setRuleSet(getRuleSet());
+    schema.setSchemaTags(getSchemaTags());
+    schema.setMaxId(getMaxId());
+    schema.setTimestamp(getTimestamp());
+    return schema;
   }
 
   public static SchemaString fromJson(String json) throws IOException {
@@ -94,6 +116,16 @@ public class SchemaString {
   @JsonProperty("version")
   public void setVersion(Integer version) {
     this.version = version;
+  }
+
+  @JsonProperty("guid")
+  public String getGuid() {
+    return guid;
+  }
+
+  @JsonProperty("guid")
+  public void setGuid(String guid) {
+    this.guid = guid;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC,
@@ -175,6 +207,16 @@ public class SchemaString {
     this.maxId = maxId;
   }
 
+  @JsonProperty("ts")
+  public Long getTimestamp() {
+    return this.timestamp;
+  }
+
+  @JsonProperty("ts")
+  public void setTimestamp(Long timestamp) {
+    this.timestamp = timestamp;
+  }
+
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
@@ -190,6 +232,7 @@ public class SchemaString {
     SchemaString that = (SchemaString) o;
     return Objects.equals(subject, that.subject)
         && Objects.equals(version, that.version)
+        && Objects.equals(guid, that.guid)
         && Objects.equals(schemaString, that.schemaString)
         && Objects.equals(references, that.references)
         && Objects.equals(metadata, that.metadata)
@@ -200,6 +243,6 @@ public class SchemaString {
   @Override
   public int hashCode() {
     return Objects.hash(
-        subject, version, schemaType, schemaString, references, metadata, ruleSet, maxId);
+        subject, version, guid, schemaType, schemaString, references, metadata, ruleSet, maxId);
   }
 }

@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedExcepti
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
+import io.confluent.kafka.schemaregistry.storage.MD5;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -142,6 +143,7 @@ public class SubjectsResource {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
         matchingSchema.setSchema(parsedSchema.formattedString(format));
       }
+      matchingSchema.setGuid(MD5.ofSchema(matchingSchema).toString());
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryException e) {
@@ -201,6 +203,7 @@ public class SubjectsResource {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
         matchingSchema.setSchema(parsedSchema.formattedString(format));
       }
+      matchingSchema.setGuid(MD5.ofSchema(matchingSchema).toString());
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryException e) {
