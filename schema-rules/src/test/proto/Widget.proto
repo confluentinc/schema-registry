@@ -18,21 +18,21 @@ message Widget {
     float myfloat = 7;
     double mydouble = 8;
     bool myboolean = 9;
-    Kind kind = 10;
+    WKind kind = 10;
     repeated string ssn = 11 [(.confluent.field_meta).tags = "PII", (.confluent.field_meta).tags = "PRIVATE"];
-    repeated Pii pii_array = 12;
-    map<string, Pii> pii_map = 13;
+    repeated WPii pii_array = 12;
+    map<string, WPii> pii_map = 13;
     int32 size = 14;
     int32 version = 15;
 }
 
-message Pii {
+message WPii {
     string pii = 1 [(.confluent.field_meta).tags = "PII"];
 }
 
-enum Kind {
-    ZERO = 0;
-    ONE = 1;
-    TWO = 2;
+enum WKind {
+    W_ZERO = 0;
+    W_ONE = 1;
+    W_TWO = 2;
 }
 

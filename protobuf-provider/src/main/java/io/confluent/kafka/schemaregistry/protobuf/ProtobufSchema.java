@@ -77,7 +77,7 @@ import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.EmptyProto;
 import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.FieldMaskProto;
-import com.google.protobuf.GeneratedMessageV3.ExtendableMessage;
+import com.google.protobuf.GeneratedMessage.ExtendableMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.SourceContextProto;
 import com.google.protobuf.StructProto;
@@ -206,7 +206,6 @@ public class ProtobufSchema implements ParsedSchema {
   private static final String CC_GENERIC_SERVICES = "cc_generic_services";
   private static final String JAVA_GENERIC_SERVICES = "java_generic_services";
   private static final String PY_GENERIC_SERVICES = "py_generic_services";
-  private static final String PHP_GENERIC_SERVICES = "php_generic_services";
   private static final String DEPRECATED = "deprecated";
   private static final String DEBUG_REDACT = "debug_redact";
   private static final String RETENTION = "retention";
@@ -778,10 +777,6 @@ public class ProtobufSchema implements ParsedSchema {
     if (file.getOptions().hasPyGenericServices()) {
       options.add(new OptionElement(
           PY_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getPyGenericServices(), false));
-    }
-    if (file.getOptions().hasPhpGenericServices()) {
-      options.add(new OptionElement(
-          PHP_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getPhpGenericServices(), false));
     }
     if (file.getOptions().hasDeprecated()) {
       options.add(new OptionElement(
@@ -1602,11 +1597,6 @@ public class ProtobufSchema implements ParsedSchema {
       OptionElement pyGenericServices = options.get(PY_GENERIC_SERVICES);
       if (pyGenericServices != null) {
         schema.setPyGenericServices(Boolean.parseBoolean(pyGenericServices.getValue().toString()));
-      }
-      OptionElement phpGenericServices = options.get(PHP_GENERIC_SERVICES);
-      if (phpGenericServices != null) {
-        schema.setPhpGenericServices(
-            Boolean.parseBoolean(phpGenericServices.getValue().toString()));
       }
       OptionElement isDeprecated = options.get(DEPRECATED);
       if (isDeprecated != null) {

@@ -13,7 +13,7 @@ message WidgetWithRef {
     string name = 1 [(.confluent.field_meta).tags = "PII", (.confluent.field_meta).tags = "PUBLIC"];
     string lastName = 2;
     string fullName = 3;
-    Kind kind = 4;
+    WRKind kind = 4;
     repeated string ssn = 5 [(.confluent.field_meta).tags = "PII", (.confluent.field_meta).tags = "PRIVATE"];
     repeated Pii pii_array = 6;
     map<string, Pii> pii_map = 7;
@@ -21,8 +21,8 @@ message WidgetWithRef {
     int32 version = 9;
 }
 
-enum Kind {
-    ZERO = 0;
-    ONE = 1;
-    TWO = 2;
+enum WRKind {
+    WR_ZERO = 0;
+    WR_ONE = 1;
+    WR_TWO = 2;
 }
