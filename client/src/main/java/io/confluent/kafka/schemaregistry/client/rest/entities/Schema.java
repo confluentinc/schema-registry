@@ -68,6 +68,7 @@ public class Schema implements Comparable<Schema> {
   private RuleSet ruleSet;
   private String schema;
   private List<SchemaTags> schemaTags;
+  private Long timestamp;
 
   @JsonCreator
   public Schema(@JsonProperty("subject") String subject,
@@ -79,7 +80,8 @@ public class Schema implements Comparable<Schema> {
       @JsonProperty("metadata") Metadata metadata,
       @JsonProperty("ruleset") RuleSet ruleSet,
       @JsonProperty("schema") String schema,
-      @JsonProperty("schemaTags") List<SchemaTags> schemaTags) {
+      @JsonProperty("schemaTags") List<SchemaTags> schemaTags,
+      @JsonProperty("ts") Long timestamp) {
     this.subject = subject;
     this.version = version;
     this.id = id;
@@ -90,6 +92,7 @@ public class Schema implements Comparable<Schema> {
     this.ruleSet = ruleSet;
     this.schema = schema;
     this.schemaTags = schemaTags;
+    this.timestamp = timestamp;
   }
 
   public Schema(@JsonProperty("subject") String subject,
@@ -158,6 +161,7 @@ public class Schema implements Comparable<Schema> {
     this.metadata = schemaMetadata.getMetadata();
     this.ruleSet = schemaMetadata.getRuleSet();
     this.schema = schemaMetadata.getSchema();
+    this.timestamp = schemaMetadata.getTimestamp();
   }
 
   public Schema(String subject, Integer version, Integer id, SchemaString schemaString) {
@@ -172,6 +176,7 @@ public class Schema implements Comparable<Schema> {
     this.metadata = schemaString.getMetadata();
     this.ruleSet = schemaString.getRuleSet();
     this.schema = schemaString.getSchemaString();
+    this.timestamp = schemaString.getTimestamp();
   }
 
   public Schema(String subject, Integer version, Integer id, ParsedSchema schema) {
@@ -223,16 +228,19 @@ public class Schema implements Comparable<Schema> {
     this.metadata = response.getMetadata();
     this.ruleSet = response.getRuleSet();
     this.schema = response.getSchema();
+    this.timestamp = response.getTimestamp();
   }
 
   public Schema copy() {
     return new Schema(
-        subject, version, id, guid, schemaType, references, metadata, ruleSet, schema, schemaTags);
+        subject, version, id, guid, schemaType, references, metadata,
+        ruleSet, schema, schemaTags, timestamp);
   }
 
   public Schema copy(Integer version, Integer id) {
     return new Schema(
-        subject, version, id, guid, schemaType, references, metadata, ruleSet, schema, schemaTags);
+        subject, version, id, guid, schemaType, references, metadata,
+        ruleSet, schema, schemaTags, timestamp);
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC, example = SUBJECT_EXAMPLE)
@@ -344,6 +352,16 @@ public class Schema implements Comparable<Schema> {
     this.schemaTags = schemaTags;
   }
 
+  @JsonProperty("ts")
+  public Long getTimestamp() {
+    return this.timestamp;
+  }
+
+  @JsonProperty("ts")
+  public void setTimestamp(Long timestamp) {
+    this.timestamp = timestamp;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -382,7 +400,8 @@ public class Schema implements Comparable<Schema> {
     sb.append("metadata=" + this.metadata + ",");
     sb.append("ruleSet=" + this.ruleSet + ",");
     sb.append("schema=" + this.schema + ",");
-    sb.append("schemaTags=" + this.schemaTags + "}");
+    sb.append("schemaTags=" + this.schemaTags + ",");
+    sb.append("ts=" + this.timestamp + "}");
     return sb.toString();
   }
 

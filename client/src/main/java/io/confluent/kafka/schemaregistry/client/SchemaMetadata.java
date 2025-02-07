@@ -37,6 +37,7 @@ public class SchemaMetadata {
   private List<SchemaReference> references;
   private Metadata metadata = null;
   private RuleSet ruleSet = null;
+  private Long timestamp = null;
 
   public SchemaMetadata(int id,
                         int version,
@@ -69,6 +70,7 @@ public class SchemaMetadata {
     this.references = schema.getReferences();
     this.metadata = schema.getMetadata();
     this.ruleSet = schema.getRuleSet();
+    this.timestamp = schema.getTimestamp();
   }
 
   public String getSubject() {
@@ -105,6 +107,10 @@ public class SchemaMetadata {
 
   public RuleSet getRuleSet() {
     return this.ruleSet;
+  }
+
+  public Long getTimestamp() {
+    return this.timestamp;
   }
 
   @Override
