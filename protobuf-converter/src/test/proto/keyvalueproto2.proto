@@ -3,7 +3,7 @@ syntax = "proto2";
 option java_package = "io.confluent.connect.protobuf.test";
 option java_outer_classname = "KeyValueProto2";
 
-message KeyValueMessage {
+message KeyValueMessage2 {
     optional int32 key = 1;
     optional string value = 2;
 }
