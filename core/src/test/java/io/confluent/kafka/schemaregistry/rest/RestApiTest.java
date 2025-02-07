@@ -2698,7 +2698,8 @@ public class RestApiTest extends ClusterTestHarness {
   ) throws IOException, RestClientException {
     RegisterSchemaResponse response = restService.registerSchema(request, subject, false);
     assertNotNull(response.getVersion());
-    
+    assertNotNull(response.getTimestamp());
+
     int registeredId = response.getId();
     assertEquals(
         (long) expectedId,
