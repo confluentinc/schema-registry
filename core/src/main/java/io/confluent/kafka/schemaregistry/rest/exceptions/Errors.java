@@ -129,6 +129,14 @@ public class Errors {
         String.format(SCHEMA_NOT_FOUND_MESSAGE_FORMAT, id), SCHEMA_NOT_FOUND_ERROR_CODE);
   }
 
+  public static RestException schemaNotFoundException(String guid) {
+    if (guid == null) {
+      return schemaNotFoundException();
+    }
+    return new RestNotFoundException(
+        String.format(SCHEMA_NOT_FOUND_MESSAGE_FORMAT, guid), SCHEMA_NOT_FOUND_ERROR_CODE);
+  }
+
   public static RestIncompatibleSchemaException incompatibleSchemaException(String message,
                                                                             Throwable cause) {
     return new RestIncompatibleSchemaException(message,

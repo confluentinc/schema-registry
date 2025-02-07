@@ -34,6 +34,7 @@ public class SchemaString {
 
   private String subject;
   private Integer version;
+  private String guid;
   private String schemaType = AvroSchema.TYPE;
   private String schemaString;
   private List<SchemaReference> references = Collections.emptyList();
@@ -53,6 +54,7 @@ public class SchemaString {
   public SchemaString(Schema schema) {
     this.subject = schema.getSubject();
     this.version = schema.getVersion();
+    this.guid = schema.getGuid();
     this.schemaType = schema.getSchemaType();
     this.schemaString = schema.getSchema();
     this.references = schema.getReferences();
@@ -64,6 +66,7 @@ public class SchemaString {
   public SchemaString(String subject, Integer version, Schema schema) {
     this.subject = subject;
     this.version = version;
+    this.guid = schema.getGuid();
     this.schemaType = schema.getSchemaType();
     this.schemaString = schema.getSchema();
     this.references = schema.getReferences();
@@ -94,6 +97,16 @@ public class SchemaString {
   @JsonProperty("version")
   public void setVersion(Integer version) {
     this.version = version;
+  }
+
+  @JsonProperty("guid")
+  public String getGuid() {
+    return guid;
+  }
+
+  @JsonProperty("guid")
+  public void setGuid(String guid) {
+    this.guid = guid;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC,
@@ -190,6 +203,7 @@ public class SchemaString {
     SchemaString that = (SchemaString) o;
     return Objects.equals(subject, that.subject)
         && Objects.equals(version, that.version)
+        && Objects.equals(guid, that.guid)
         && Objects.equals(schemaString, that.schemaString)
         && Objects.equals(references, that.references)
         && Objects.equals(metadata, that.metadata)
@@ -200,6 +214,6 @@ public class SchemaString {
   @Override
   public int hashCode() {
     return Objects.hash(
-        subject, version, schemaType, schemaString, references, metadata, ruleSet, maxId);
+        subject, version, guid, schemaType, schemaString, references, metadata, ruleSet, maxId);
   }
 }
