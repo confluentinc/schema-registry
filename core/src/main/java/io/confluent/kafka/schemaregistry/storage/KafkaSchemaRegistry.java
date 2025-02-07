@@ -36,6 +36,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -90,6 +91,7 @@ import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import java.io.IOException;
 import java.security.KeyStore;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -1787,6 +1789,72 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
               "Error from the backend Kafka store", e);
+    }
+  }
+
+  public SchemaString getByGuid(String guid, String format) throws SchemaRegistryException {
+    try {
+      Map.Entry<Integer, String> id = getIdUsingContexts(guid);
+      if (id == null) {
+        return null;
+      }
+      SchemaString schema = get(id.getKey(), id.getValue(), format, false);
+      schema.setSubject(null);
+      schema.setVersion(null);
+      return schema;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while retrieving schema with guid "
+              + guid
+              + " from the backend Kafka"
+              + " store", e);
+    }
+  }
+
+  private Map.Entry<Integer, String> getIdUsingContexts(String guid)
+      throws StoreException, SchemaRegistryException {
+    Integer id = lookupCache.idByGuid(guid, DEFAULT_CONTEXT);
+    if (id != null) {
+      return new AbstractMap.SimpleEntry<>(id, DEFAULT_CONTEXT);
+    }
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        ContextValue v = (ContextValue) iter.next();
+        QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), null);
+        String ctx = qualSub.toQualifiedContext();
+        id = lookupCache.idByGuid(guid, ctx);
+        if (id != null) {
+          return new AbstractMap.SimpleEntry<>(id, ctx);
+        }
+      }
+    }
+    return null;
+  }
+
+  public List<ContextId> listIdsForGuid(String guid)
+      throws SchemaRegistryException {
+    try {
+      List<ContextId> ids = new ArrayList<>();
+      Integer id = lookupCache.idByGuid(guid, DEFAULT_CONTEXT);
+      if (id != null) {
+        ids.add(new ContextId(DEFAULT_CONTEXT, id));
+      }
+      try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+        while (iter.hasNext()) {
+          ContextValue v = (ContextValue) iter.next();
+          QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), null);
+          String ctx = qualSub.toQualifiedContext();
+          id = lookupCache.idByGuid(guid, ctx);
+          if (id != null) {
+            ids.add(new ContextId(qualSub.getContext(), id));
+          }
+        }
+      }
+      Collections.sort(ids);
+      return ids;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with guid "
+          + guid + " from the backend Kafka store", e);
     }
   }
 
