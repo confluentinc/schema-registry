@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -46,6 +47,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -188,6 +190,18 @@ public class RestApiTest extends ClusterTestHarness {
     );
     assertEquals(Integer.valueOf(10), latestSchemas.get(0).getVersion());
     assertEquals(Integer.valueOf(5), latestSchemas.get(1).getVersion());
+
+    SchemaString schemaString = restApp.restClient.getId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, null, null, false);
+    SchemaString schemaString2 = restApp.restClient.getByGuid(
+        RestService.DEFAULT_REQUEST_PROPERTIES, schemaString.getGuid(), null);
+    assertEquals(schemaString.getGuid(), schemaString2.getGuid());
+
+    List<ContextId> contextId = restApp.restClient.getAllContextIds(
+        RestService.DEFAULT_REQUEST_PROPERTIES, schemaString.getGuid());
+    assertEquals(1, contextId.size());
+    assertEquals(DEFAULT_CONTEXT, contextId.get(0).getContext());
+    assertEquals(1, contextId.get(0).getId());
   }
 
   @Test
@@ -366,6 +380,15 @@ public class RestApiTest extends ClusterTestHarness {
 
     List<Schema> schemas2 = restApp.restClient.getSchemas(":.ctx:", false, false);
     assertEquals(avroSchema2, schemas2.get(0).getSchema());
+
+    int id3 = restApp.restClient.registerSchema(avroSchema, subject2);
+    assertEquals(2, id3, "3nd schema registered in second context should have id 2");
+
+    SchemaString schemaString = restApp.restClient.getId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, subject, null, null, false);
+    SchemaString schemaString2 = restApp.restClient.getId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 2, subject2, null, null, false);
+    assertEquals(schemaString.getGuid(), schemaString2.getGuid());
   }
 
   @Test
@@ -950,6 +973,9 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(parentId, registeredId, "Registering a new schema should succeed");
 
     SchemaString schemaString = restApp.restClient.getId(parentId, subject2);
+    assertEquals(subject2, schemaString.getSubject());
+    assertEquals(1, schemaString.getVersion());
+
     // the newly registered schema should be immediately readable on the leader
     assertEquals(
         schemas.get(1),
@@ -2670,7 +2696,10 @@ public class RestApiTest extends ClusterTestHarness {
       int expectedId,
       String subject
   ) throws IOException, RestClientException {
-    int registeredId = restService.registerSchema(request, subject, false).getId();
+    RegisterSchemaResponse response = restService.registerSchema(request, subject, false);
+    assertNotNull(response.getVersion());
+    
+    int registeredId = response.getId();
     assertEquals(
         (long) expectedId,
         (long) registeredId,
