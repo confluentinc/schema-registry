@@ -44,6 +44,7 @@ public class RegisterSchemaResponse {
   private Metadata metadata = null;
   private RuleSet ruleSet = null;
   private String schema;
+  private Long timestamp;
 
   public RegisterSchemaResponse() {
   }
@@ -63,6 +64,7 @@ public class RegisterSchemaResponse {
     this.metadata = schema.getMetadata();
     this.ruleSet = schema.getRuleSet();
     this.schema = schema.getSchema();
+    this.timestamp = schema.getTimestamp();
   }
 
   public RegisterSchemaResponse copy() {
@@ -75,6 +77,7 @@ public class RegisterSchemaResponse {
     response.setMetadata(getMetadata());
     response.setRuleSet(getRuleSet());
     response.setSchema(getSchema());
+    response.setTimestamp(getTimestamp());
     return response;
   }
 
@@ -170,6 +173,16 @@ public class RegisterSchemaResponse {
     this.schema = schema;
   }
 
+  @JsonProperty("ts")
+  public Long getTimestamp() {
+    return this.timestamp;
+  }
+
+  @JsonProperty("ts")
+  public void setTimestamp(Long timestamp) {
+    this.timestamp = timestamp;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -207,7 +220,8 @@ public class RegisterSchemaResponse {
     buf.append("references=").append(this.references).append(", ");
     buf.append("metadata=").append(this.metadata).append(", ");
     buf.append("ruleSet=").append(this.ruleSet).append(", ");
-    buf.append("schema=").append(schema).append("}");
+    buf.append("schema=").append(schema).append(",");
+    buf.append("ts=").append(timestamp).append("}");
     return buf.toString();
   }
 
