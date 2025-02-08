@@ -1283,4 +1283,27 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
       }
     }
   }
+
+  @Test
+  public void testRegisterEmptyRuleSet() throws Exception {
+    String subject = "testSubject";
+
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
+    List<Rule> rules = Collections.emptyList();
+    RuleSet ruleSet = new RuleSet(null, rules);
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
+    request1.setRuleSet(ruleSet);
+    int expectedIdSchema1 = 1;
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request1, subject, false).getId());
+
+    request1.setRuleSet(null);
+    Schema s = restApp.restClient.lookUpSubjectVersion(request1, subject, false, false);
+    assertEquals(expectedIdSchema1, s.getId().intValue());
+  }
 }

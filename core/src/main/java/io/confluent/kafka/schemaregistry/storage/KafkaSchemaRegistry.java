@@ -879,7 +879,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private boolean maybeSetMetadataRuleSet(
-      Config config, Schema schema, Schema previousSchema, int newVersion) {
+      Config config, Schema schema, Schema previousSchema, Integer newVersion) {
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata specificMetadata = null;
     if (schema.getMetadata() != null) {
       specificMetadata = schema.getMetadata();
@@ -908,7 +908,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
     // Set confluent:version if passed in version is not 0,
     // or update confluent:version if it already exists in the metadata
-    if (schema.getVersion() != 0 || getConfluentVersion(mergedMetadata) != null) {
+    if (newVersion != null
+        && (schema.getVersion() != 0 || getConfluentVersion(mergedMetadata) != null)) {
       mergedMetadata = Metadata.setConfluentVersion(mergedMetadata, newVersion);
     }
 
@@ -936,7 +937,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         && !request.doPropagateSchemaTags()
         && !config.hasDefaultsOrOverrides()) {
       Schema existingSchema = lookUpSchemaUnderSubject(
-          subject, schema, normalize, false, isLatestVersion);
+          config, subject, schema, normalize, false, isLatestVersion);
       if (existingSchema != null) {
         if (schema.getVersion() == 0 || isLatestVersion) {
           if (schema.getId() == null
@@ -1254,18 +1255,39 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Schema lookUpSchemaUnderSubject(
       String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
-    return lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema, false);
+    if (schema == null) {
+      return null;
+    }
+    Config config = getConfigInScope(subject);
+    Schema existingSchema = lookUpSchemaUnderSubject(
+        config, subject, schema, normalize, lookupDeletedSchema, false);
+    if (existingSchema != null) {
+      return existingSchema;
+    }
+    Schema prev = getLatestVersion(subject);
+    if (prev == null) {
+      return null;
+    }
+    Schema next = schema.copy();
+    // If a previous schema is available, possibly populate the new schema with the
+    // metadata and rule set and perform another lookup.
+    // This mimics the additional lookup during schema registration.
+    maybeSetMetadataRuleSet(config, next, prev, null);
+    if (next.equals(schema)) {
+      return null;
+    }
+    return lookUpSchemaUnderSubject(
+        config, subject, next, normalize, lookupDeletedSchema, false);
   }
 
   private Schema lookUpSchemaUnderSubject(
-      String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema,
+      Config config, String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema,
       boolean lookupLatestOnly)
       throws SchemaRegistryException {
     try {
       // Pass a copy of the schema so the original is not modified during normalization
       // to ensure that invalid defaults are not dropped since default validation is disabled
       Schema newSchema = schema != null ? schema.copy() : null;
-      Config config = getConfigInScope(subject);
       ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, false, normalize);
       if (parsedSchema != null && !lookupLatestOnly) {
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(newSchema);
