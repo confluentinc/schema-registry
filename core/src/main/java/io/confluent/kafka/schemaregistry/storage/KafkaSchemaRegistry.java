@@ -163,6 +163,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   private final int subjectVersionSearchMaxLimit;
   private final int schemaReferencedBySearchDefaultLimit;
   private final int schemaReferencedBySearchMaxLimit;
+  private final int schemaContextSearchDefaultLimit;
+  private final int schemaContextSearchMaxLimit;
   private final boolean delayLeaderElection;
   private final boolean allowModeChanges;
   private final boolean enableStoreHealthCheck;
@@ -251,6 +253,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
             config.getInt(SchemaRegistryConfig.SCHEMA_REFERENCED_BY_SEARCH_DEFAULT_LIMIT_CONFIG);
     this.schemaReferencedBySearchMaxLimit =
             config.getInt(SchemaRegistryConfig.SCHEMA_REFERENCED_BY_SEARCH_MAX_LIMIT_CONFIG);
+    this.schemaContextSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.SCHEMA_CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.schemaContextSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.SCHEMA_CONTEXT_SEARCH_MAX_LIMIT_CONFIG);
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
@@ -646,6 +652,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public int normalizeSchemaReferencedByLimit(int suppliedLimit) {
     return normalizeLimit(suppliedLimit, schemaReferencedBySearchDefaultLimit,
             schemaReferencedBySearchMaxLimit);
+  }
+
+  public int normalizeSchemaSearchContextLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, schemaContextSearchDefaultLimit, schemaContextSearchMaxLimit);
   }
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
