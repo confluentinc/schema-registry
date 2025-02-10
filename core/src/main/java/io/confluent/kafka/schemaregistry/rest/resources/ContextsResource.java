@@ -38,6 +38,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Path("/contexts")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -74,7 +75,12 @@ public class ContextsResource {
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
     try {
-      return schemaRegistry.listContexts();
+      limit = schemaRegistry.normalizeSchemaSearchContextLimit(limit);
+      List<String> contexts = schemaRegistry.listContexts();
+      return contexts.stream()
+        .skip(offset)
+        .limit(limit)
+        .collect(Collectors.toList());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing contexts", e);
     } catch (SchemaRegistryException e) {
