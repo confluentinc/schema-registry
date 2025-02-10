@@ -369,12 +369,12 @@ public class RestService implements Closeable, Configurable {
     if (!(connection instanceof HttpsURLConnection)) {
       return;
     }
-    HttpsURLConnection httpsURLConnection = (HttpsURLConnection) connection;
+    HttpsURLConnection httpsUrlConnection = (HttpsURLConnection) connection;
     SSLSocketFactory configuredSslSocketFactory;
     if (sslSocketFactory != null) {
       configuredSslSocketFactory = sslSocketFactory;
-    } else if (httpsURLConnection.getSSLSocketFactory() != null) {
-      configuredSslSocketFactory = httpsURLConnection.getSSLSocketFactory();
+    } else if (httpsUrlConnection.getSSLSocketFactory() != null) {
+      configuredSslSocketFactory = httpsUrlConnection.getSSLSocketFactory();
     } else {
       try {
         configuredSslSocketFactory = SSLContext.getDefault().getSocketFactory();
@@ -383,10 +383,10 @@ public class RestService implements Closeable, Configurable {
         throw new RuntimeException(e);
       }
     }
-    httpsURLConnection.setSSLSocketFactory(
+    httpsUrlConnection.setSSLSocketFactory(
         new HostSslSocketFactory(configuredSslSocketFactory, url.getHost()));
     if (hostnameVerifier != null) {
-      httpsURLConnection.setHostnameVerifier(hostnameVerifier);
+      httpsUrlConnection.setHostnameVerifier(hostnameVerifier);
     }
   }
 
