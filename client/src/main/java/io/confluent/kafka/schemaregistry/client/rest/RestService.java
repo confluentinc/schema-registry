@@ -53,7 +53,6 @@ import java.net.MalformedURLException;
 import java.net.Proxy;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -64,7 +63,6 @@ import java.util.Set;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
