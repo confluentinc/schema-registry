@@ -655,7 +655,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   }
 
   public int normalizeSchemaSearchContextLimit(int suppliedLimit) {
-    return normalizeLimit(suppliedLimit, schemaContextSearchDefaultLimit, schemaContextSearchMaxLimit);
+    return normalizeLimit(suppliedLimit, schemaContextSearchDefaultLimit,
+            schemaContextSearchMaxLimit);
   }
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
