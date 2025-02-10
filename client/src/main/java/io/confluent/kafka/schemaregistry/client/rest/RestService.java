@@ -396,12 +396,7 @@ public class RestService implements Closeable, Configurable {
     if (connection instanceof HttpsURLConnection) {
       SSLSocketFactory configuredSslSocketFactory = sslSocketFactory;
       if (configuredSslSocketFactory == null) {
-        try {
-          configuredSslSocketFactory = SSLContext.getDefault().getSocketFactory();
-        } catch (NoSuchAlgorithmException e) {
-          log.error("Error while getting default SSLContext: ", e);
-          throw new RuntimeException(e);
-        }
+        configuredSslSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory();
       }
       ((HttpsURLConnection) connection).setSSLSocketFactory(
               new HostSslSocketFactory(configuredSslSocketFactory, url.getHost()));
