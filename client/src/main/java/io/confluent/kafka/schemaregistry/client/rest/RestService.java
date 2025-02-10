@@ -366,21 +366,27 @@ public class RestService implements Closeable, Configurable {
   }
 
   private void setupSsl(HttpURLConnection connection, URL url) {
-    if (connection instanceof HttpsURLConnection) {
-      SSLSocketFactory configuredSslSocketFactory = sslSocketFactory;
-      if (configuredSslSocketFactory == null) {
-        try {
-          configuredSslSocketFactory = SSLContext.getDefault().getSocketFactory();
-        } catch (NoSuchAlgorithmException e) {
-          log.error("Error while getting default SSLContext: ", e);
-          throw new RuntimeException(e);
-        }
+    if (!(connection instanceof HttpsURLConnection)) {
+      return;
+    }
+    HttpsURLConnection httpsURLConnection = (HttpsURLConnection) connection;
+    SSLSocketFactory configuredSslSocketFactory;
+    if (sslSocketFactory != null) {
+      configuredSslSocketFactory = sslSocketFactory;
+    } else if (httpsURLConnection.getSSLSocketFactory() != null) {
+      configuredSslSocketFactory = httpsURLConnection.getSSLSocketFactory();
+    } else {
+      try {
+        configuredSslSocketFactory = SSLContext.getDefault().getSocketFactory();
+      } catch (NoSuchAlgorithmException e) {
+        log.error("Error while getting default SSLContext: ", e);
+        throw new RuntimeException(e);
       }
-      ((HttpsURLConnection) connection).setSSLSocketFactory(
-              new HostSslSocketFactory(configuredSslSocketFactory, url.getHost()));
-      if (hostnameVerifier != null) {
-        ((HttpsURLConnection) connection).setHostnameVerifier(hostnameVerifier);
-      }
+    }
+    httpsURLConnection.setSSLSocketFactory(
+        new HostSslSocketFactory(configuredSslSocketFactory, url.getHost()));
+    if (hostnameVerifier != null) {
+      httpsURLConnection.setHostnameVerifier(hostnameVerifier);
     }
   }
 
