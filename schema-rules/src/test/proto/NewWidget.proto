@@ -28,7 +28,7 @@ message Pii {
     string pii = 1;
 }
 
-enum NWKind {
+enum Kind {
     ZERO = 0;
     ONE = 1;
     TWO = 2;
