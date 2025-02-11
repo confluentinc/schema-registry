@@ -100,6 +100,7 @@
         <json-skema.version>0.19.0</json-skema.version>
         <kcache.version>5.2.0</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
+        <protobuf.version>4.29.3</protobuf.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <okio.version>3.4.0</okio.version>
         <tink.version>1.15.0</tink.version>
@@ -511,6 +512,28 @@
                     <version>${exec-maven-plugin.version}</version>
                 </plugin>
                 <plugin>
+                    <groupId>io.github.ascopes</groupId>
+                    <artifactId>protobuf-maven-plugin</artifactId>
+
+                    <configuration>
+                        <protocVersion>${protobuf.version}</protocVersion>
+                        <outputDirectory>src/test/java</outputDirectory>
+                        <sourceDirectories>
+                            <include>src/test/proto</include>
+                        </sourceDirectories>
+                        <embedSourcesInClassOutputs>true</embedSourcesInClassOutputs>
+                    </configuration>
+
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>generate-test</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <!--
+                <plugin>
                     <groupId>com.github.os72</groupId>
                     <artifactId>protoc-jar-maven-plugin</artifactId>
                     <version>${protoc.jar.maven.plugin.version}</version>
@@ -534,6 +557,7 @@
                         </execution>
                     </executions>
                 </plugin>
+                -->
             </plugins>
         </pluginManagement>
         <plugins>

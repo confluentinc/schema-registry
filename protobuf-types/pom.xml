@@ -54,6 +54,27 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>io.github.ascopes</groupId>
+                <artifactId>protobuf-maven-plugin</artifactId>
+
+                <configuration>
+                    <protocVersion>${protobuf.version}</protocVersion>
+                    <outputDirectory>src/main/java</outputDirectory>
+                    <sourceDirectories>
+                        <include>src/main/proto</include>
+                    </sourceDirectories>
+                </configuration>
+
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+            <plugin>
                 <groupId>com.github.os72</groupId>
                 <artifactId>protoc-jar-maven-plugin</artifactId>
                 <executions>
@@ -75,6 +96,7 @@
                     </execution>
                 </executions>
             </plugin>
+            -->
         </plugins>
     </build>
 </project>
