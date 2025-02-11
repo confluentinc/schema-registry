@@ -685,16 +685,20 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_REFERENCED_BY_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
             SCHEMA_REFERENCED_BY_SEARCH_DEFAULT_LIMIT,
-            ConfigDef.Importance.LOW, SCHEMA_REFERENCED_BY_SEARCH_DEFAULT_LIMIT_DOC)
+            ConfigDef.Importance.LOW, SCHEMA_REFERENCED_BY_SEARCH_DEFAULT_LIMIT_DOC
+    )
     .define(SCHEMA_REFERENCED_BY_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
             SCHEMA_REFERENCED_BY_SEARCH_MAX_LIMIT,
-            ConfigDef.Importance.LOW, SCHEMA_REFERENCED_BY_SEARCH_MAX_LIMIT_DOC)
+            ConfigDef.Importance.LOW, SCHEMA_REFERENCED_BY_SEARCH_MAX_LIMIT_DOC
+    )
     .define(SCHEMA_CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
             SCHEMA_CONTEXT_SEARCH_DEFAULT_LIMIT,
-            ConfigDef.Importance.LOW, SCHEMA_CONTEXT_SEARCH_DEFAULT_LIMIT_DOC)
+            ConfigDef.Importance.LOW, SCHEMA_CONTEXT_SEARCH_DEFAULT_LIMIT_DOC
+    )
     .define(SCHEMA_CONTEXT_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
             SCHEMA_CONTEXT_SEARCH_MAX_LIMIT,
-            ConfigDef.Importance.LOW, SCHEMA_CONTEXT_SEARCH_MAX_LIMIT_DOC)
+            ConfigDef.Importance.LOW, SCHEMA_CONTEXT_SEARCH_MAX_LIMIT_DOC
+    )
     .define(METADATA_ENCODER_SECRET_CONFIG, ConfigDef.Type.PASSWORD, null,
         ConfigDef.Importance.HIGH, METADATA_ENCODER_SECRET_DOC
     )
