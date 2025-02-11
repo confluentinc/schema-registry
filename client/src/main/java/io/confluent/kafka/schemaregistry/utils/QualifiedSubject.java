@@ -130,18 +130,32 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   public String toQualifiedContext() {
-    String qualifiedContext = DEFAULT_CONTEXT.equals(context)
+    String unqualifiedContext = toUnqualifiedContext();
+    if (DEFAULT_TENANT.equals(tenant)) {
+      return unqualifiedContext;
+    } else {
+      return tenant + TENANT_DELIMITER + unqualifiedContext;
+    }
+  }
+
+  public String toUnqualifiedContext() {
+    return DEFAULT_CONTEXT.equals(context)
         ? ""
         : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
-    if (DEFAULT_TENANT.equals(tenant)) {
-      return qualifiedContext;
-    } else {
-      return tenant + TENANT_DELIMITER + qualifiedContext;
-    }
   }
 
   public String toQualifiedSubject() {
     return toQualifiedContext() + subject;
+  }
+
+  public String toUnqualifiedSubject() {
+    return toUnqualifiedContext() + subject;
+  }
+
+  public static boolean isQualified(String tenant, String subject) {
+    return !DEFAULT_TENANT.equals(tenant)
+        && subject != null
+        && subject.startsWith(tenant + TENANT_DELIMITER);
   }
 
   public static QualifiedSubject create(String tenant, String qualifiedSubject) {
