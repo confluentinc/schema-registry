@@ -26,9 +26,9 @@ public final class WidgetWithRefProto {
         (com.google.protobuf.ExtensionRegistryLite) registry);
   }
   /**
-   * Protobuf enum {@code io.confluent.kafka.schemaregistry.rules.widgetref.WRKind}
+   * Protobuf enum {@code io.confluent.kafka.schemaregistry.rules.widgetref.Kind}
    */
-  public enum WRKind
+  public enum Kind
       implements com.google.protobuf.ProtocolMessageEnum {
     /**
      * <code>ZERO = 0;</code>
@@ -52,7 +52,7 @@ public final class WidgetWithRefProto {
         /* minor= */ 29,
         /* patch= */ 3,
         /* suffix= */ "",
-        WRKind.class.getName());
+        Kind.class.getName());
     }
     /**
      * <code>ZERO = 0;</code>
@@ -82,7 +82,7 @@ public final class WidgetWithRefProto {
      * @deprecated Use {@link #forNumber(int)} instead.
      */
     @java.lang.Deprecated
-    public static WRKind valueOf(int value) {
+    public static Kind valueOf(int value) {
       return forNumber(value);
     }
 
@@ -90,7 +90,7 @@ public final class WidgetWithRefProto {
      * @param value The numeric wire value of the corresponding enum entry.
      * @return The enum associated with the given numeric wire value.
      */
-    public static WRKind forNumber(int value) {
+    public static Kind forNumber(int value) {
       switch (value) {
         case 0: return ZERO;
         case 1: return ONE;
@@ -99,15 +99,15 @@ public final class WidgetWithRefProto {
       }
     }
 
-    public static com.google.protobuf.Internal.EnumLiteMap<WRKind>
+    public static com.google.protobuf.Internal.EnumLiteMap<Kind>
         internalGetValueMap() {
       return internalValueMap;
     }
     private static final com.google.protobuf.Internal.EnumLiteMap<
-        WRKind> internalValueMap =
-          new com.google.protobuf.Internal.EnumLiteMap<WRKind>() {
-            public WRKind findValueByNumber(int number) {
-              return WRKind.forNumber(number);
+        Kind> internalValueMap =
+          new com.google.protobuf.Internal.EnumLiteMap<Kind>() {
+            public Kind findValueByNumber(int number) {
+              return Kind.forNumber(number);
             }
           };
 
@@ -128,9 +128,9 @@ public final class WidgetWithRefProto {
       return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.getDescriptor().getEnumTypes().get(0);
     }
 
-    private static final WRKind[] VALUES = values();
+    private static final Kind[] VALUES = values();
 
-    public static WRKind valueOf(
+    public static Kind valueOf(
         com.google.protobuf.Descriptors.EnumValueDescriptor desc) {
       if (desc.getType() != getDescriptor()) {
         throw new java.lang.IllegalArgumentException(
@@ -144,11 +144,11 @@ public final class WidgetWithRefProto {
 
     private final int value;
 
-    private WRKind(int value) {
+    private Kind(int value) {
       this.value = value;
     }
 
-    // @@protoc_insertion_point(enum_scope:io.confluent.kafka.schemaregistry.rules.widgetref.WRKind)
+    // @@protoc_insertion_point(enum_scope:io.confluent.kafka.schemaregistry.rules.widgetref.Kind)
   }
 
   public interface WidgetWithRefOrBuilder extends
@@ -192,15 +192,15 @@ public final class WidgetWithRefProto {
         getFullNameBytes();
 
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.Kind kind = 4;</code>
      * @return The enum numeric value on the wire for kind.
      */
     int getKindValue();
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.Kind kind = 4;</code>
      * @return The kind.
      */
-    io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind getKind();
+    io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind getKind();
 
     /**
      * <code>repeated string ssn = 5 [(.confluent.field_meta) = { ... }</code>
@@ -473,19 +473,19 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue);
     public static final int KIND_FIELD_NUMBER = 4;
     private int kind_ = 0;
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.Kind kind = 4;</code>
      * @return The enum numeric value on the wire for kind.
      */
     @java.lang.Override public int getKindValue() {
       return kind_;
     }
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.Kind kind = 4;</code>
      * @return The kind.
      */
-    @java.lang.Override public io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind getKind() {
-      io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind result = io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind.forNumber(kind_);
-      return result == null ? io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind.UNRECOGNIZED : result;
+    @java.lang.Override public io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind getKind() {
+      io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind result = io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.forNumber(kind_);
+      return result == null ? io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.UNRECOGNIZED : result;
     }
 
     public static final int SSN_FIELD_NUMBER = 5;
@@ -690,7 +690,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
       if (!com.google.protobuf.GeneratedMessage.isStringEmpty(fullName_)) {
         com.google.protobuf.GeneratedMessage.writeString(output, 3, fullName_);
       }
-      if (kind_ != io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind.ZERO.getNumber()) {
+      if (kind_ != io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.ZERO.getNumber()) {
         output.writeEnum(4, kind_);
       }
       for (int i = 0; i < ssn_.size(); i++) {
@@ -729,7 +729,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
       if (!com.google.protobuf.GeneratedMessage.isStringEmpty(fullName_)) {
         size += com.google.protobuf.GeneratedMessage.computeStringSize(3, fullName_);
       }
-      if (kind_ != io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind.ZERO.getNumber()) {
+      if (kind_ != io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.ZERO.getNumber()) {
         size += com.google.protobuf.CodedOutputStream
           .computeEnumSize(4, kind_);
       }
@@ -1466,14 +1466,14 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
 
       private int kind_ = 0;
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.Kind kind = 4;</code>
        * @return The enum numeric value on the wire for kind.
        */
       @java.lang.Override public int getKindValue() {
         return kind_;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.Kind kind = 4;</code>
        * @param value The enum numeric value on the wire for kind to set.
        * @return This builder for chaining.
        */
@@ -1484,20 +1484,20 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.Kind kind = 4;</code>
        * @return The kind.
        */
       @java.lang.Override
-      public io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind getKind() {
-        io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind result = io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind.forNumber(kind_);
-        return result == null ? io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind.UNRECOGNIZED : result;
+      public io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind getKind() {
+        io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind result = io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.forNumber(kind_);
+        return result == null ? io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind.UNRECOGNIZED : result;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.Kind kind = 4;</code>
        * @param value The kind to set.
        * @return This builder for chaining.
        */
-      public Builder setKind(io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind value) {
+      public Builder setKind(io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.Kind value) {
         if (value == null) {
           throw new NullPointerException();
         }
@@ -1507,7 +1507,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.Kind kind = 4;</code>
        * @return This builder for chaining.
        */
       public Builder clearKind() {
@@ -2159,22 +2159,22 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
     java.lang.String[] descriptorData = {
       "\n\023WidgetWithRef.proto\0221io.confluent.kafk" +
       "a.schemaregistry.rules.widgetref\032\024conflu" +
-      "ent/meta.proto\032\tPii.proto\"\330\003\n\rWidgetWith" +
+      "ent/meta.proto\032\tPii.proto\"\326\003\n\rWidgetWith" +
       "Ref\022\036\n\004name\030\001 \001(\tB\020\202D\r\032\003PII\032\006PUBLIC\022\020\n\010l" +
-      "astName\030\002 \001(\t\022\020\n\010fullName\030\003 \001(\t\022G\n\004kind\030" +
-      "\004 \001(\01629.io.confluent.kafka.schemaregistr" +
-      "y.rules.widgetref.WRKind\022\036\n\003ssn\030\005 \003(\tB\021\202" +
-      "D\016\032\003PII\032\007PRIVATE\022?\n\tpii_array\030\006 \003(\0132,.io" +
-      ".confluent.kafka.schemaregistry.rules.Pi" +
-      "i\022]\n\007pii_map\030\007 \003(\0132L.io.confluent.kafka." +
-      "schemaregistry.rules.widgetref.WidgetWit" +
-      "hRef.PiiMapEntry\022\014\n\004size\030\010 \001(\005\022\017\n\007versio" +
-      "n\030\t \001(\005\032[\n\013PiiMapEntry\022\013\n\003key\030\001 \001(\t\022;\n\005v" +
-      "alue\030\002 \001(\0132,.io.confluent.kafka.schemare" +
-      "gistry.rules.Pii:\0028\001*$\n\006WRKind\022\010\n\004ZERO\020\000" +
-      "\022\007\n\003ONE\020\001\022\007\n\003TWO\020\002B?\n\'io.confluent.kafka" +
-      ".schemaregistry.rulesB\022WidgetWithRefProt" +
-      "oP\000b\006proto3"
+      "astName\030\002 \001(\t\022\020\n\010fullName\030\003 \001(\t\022E\n\004kind\030" +
+      "\004 \001(\01627.io.confluent.kafka.schemaregistr" +
+      "y.rules.widgetref.Kind\022\036\n\003ssn\030\005 \003(\tB\021\202D\016" +
+      "\032\003PII\032\007PRIVATE\022?\n\tpii_array\030\006 \003(\0132,.io.c" +
+      "onfluent.kafka.schemaregistry.rules.Pii\022" +
+      "]\n\007pii_map\030\007 \003(\0132L.io.confluent.kafka.sc" +
+      "hemaregistry.rules.widgetref.WidgetWithR" +
+      "ef.PiiMapEntry\022\014\n\004size\030\010 \001(\005\022\017\n\007version\030" +
+      "\t \001(\005\032[\n\013PiiMapEntry\022\013\n\003key\030\001 \001(\t\022;\n\005val" +
+      "ue\030\002 \001(\0132,.io.confluent.kafka.schemaregi" +
+      "stry.rules.Pii:\0028\001*\"\n\004Kind\022\010\n\004ZERO\020\000\022\007\n\003" +
+      "ONE\020\001\022\007\n\003TWO\020\002B?\n\'io.confluent.kafka.sch" +
+      "emaregistry.rulesB\022WidgetWithRefProtoP\000b" +
+      "\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
