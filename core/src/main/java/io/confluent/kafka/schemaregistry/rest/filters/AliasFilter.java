@@ -118,6 +118,13 @@ public class AliasFilter implements ContainerRequestFilter {
     if (subject.isEmpty()) {
       return subject;
     }
+    String tenant = schemaRegistry.tenant();
+    String originalSubject = subject;
+    boolean isQualified = QualifiedSubject.isQualified(tenant, originalSubject);
+    if (!isQualified) {
+      subject = QualifiedSubject.createFromUnqualified(tenant, originalSubject)
+          .toQualifiedSubject();
+    }
     Config config = null;
     try {
       config = schemaRegistry.getConfig(URLDecoder.decode(subject, "UTF-8"));
@@ -125,15 +132,15 @@ public class AliasFilter implements ContainerRequestFilter {
       // fall through
     }
     if (config == null) {
-      return subject;
+      return originalSubject;
     }
     String alias = config.getAlias();
     if (alias != null && !alias.isEmpty()) {
       QualifiedSubject qualAlias =
-          QualifiedSubject.qualifySubjectWithParent(schemaRegistry.tenant(), subject, alias, true);
-      return qualAlias.toQualifiedSubject();
+          QualifiedSubject.qualifySubjectWithParent(tenant, subject, alias, true);
+      return isQualified ? qualAlias.toQualifiedSubject() : qualAlias.toUnqualifiedSubject();
     } else {
-      return subject;
+      return originalSubject;
     }
   }
 }
