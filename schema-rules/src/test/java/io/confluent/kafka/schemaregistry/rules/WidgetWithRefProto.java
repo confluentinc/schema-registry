@@ -26,22 +26,22 @@ public final class WidgetWithRefProto {
         (com.google.protobuf.ExtensionRegistryLite) registry);
   }
   /**
-   * Protobuf enum {@code io.confluent.kafka.schemaregistry.rules.WRKind}
+   * Protobuf enum {@code io.confluent.kafka.schemaregistry.rules.widgetref.WRKind}
    */
   public enum WRKind
       implements com.google.protobuf.ProtocolMessageEnum {
     /**
-     * <code>WR_ZERO = 0;</code>
+     * <code>ZERO = 0;</code>
      */
-    WR_ZERO(0),
+    ZERO(0),
     /**
-     * <code>WR_ONE = 1;</code>
+     * <code>ONE = 1;</code>
      */
-    WR_ONE(1),
+    ONE(1),
     /**
-     * <code>WR_TWO = 2;</code>
+     * <code>TWO = 2;</code>
      */
-    WR_TWO(2),
+    TWO(2),
     UNRECOGNIZED(-1),
     ;
 
@@ -55,17 +55,17 @@ public final class WidgetWithRefProto {
         WRKind.class.getName());
     }
     /**
-     * <code>WR_ZERO = 0;</code>
+     * <code>ZERO = 0;</code>
      */
-    public static final int WR_ZERO_VALUE = 0;
+    public static final int ZERO_VALUE = 0;
     /**
-     * <code>WR_ONE = 1;</code>
+     * <code>ONE = 1;</code>
      */
-    public static final int WR_ONE_VALUE = 1;
+    public static final int ONE_VALUE = 1;
     /**
-     * <code>WR_TWO = 2;</code>
+     * <code>TWO = 2;</code>
      */
-    public static final int WR_TWO_VALUE = 2;
+    public static final int TWO_VALUE = 2;
 
 
     public final int getNumber() {
@@ -92,9 +92,9 @@ public final class WidgetWithRefProto {
      */
     public static WRKind forNumber(int value) {
       switch (value) {
-        case 0: return WR_ZERO;
-        case 1: return WR_ONE;
-        case 2: return WR_TWO;
+        case 0: return ZERO;
+        case 1: return ONE;
+        case 2: return TWO;
         default: return null;
       }
     }
@@ -148,11 +148,11 @@ public final class WidgetWithRefProto {
       this.value = value;
     }
 
-    // @@protoc_insertion_point(enum_scope:io.confluent.kafka.schemaregistry.rules.WRKind)
+    // @@protoc_insertion_point(enum_scope:io.confluent.kafka.schemaregistry.rules.widgetref.WRKind)
   }
 
   public interface WidgetWithRefOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:io.confluent.kafka.schemaregistry.rules.WidgetWithRef)
+      // @@protoc_insertion_point(interface_extends:io.confluent.kafka.schemaregistry.rules.widgetref.WidgetWithRef)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -192,12 +192,12 @@ public final class WidgetWithRefProto {
         getFullNameBytes();
 
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.WRKind kind = 4;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
      * @return The enum numeric value on the wire for kind.
      */
     int getKindValue();
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.WRKind kind = 4;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
      * @return The kind.
      */
     io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind getKind();
@@ -298,11 +298,11 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue);
     int getVersion();
   }
   /**
-   * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.WidgetWithRef}
+   * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.widgetref.WidgetWithRef}
    */
   public static final class WidgetWithRef extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:io.confluent.kafka.schemaregistry.rules.WidgetWithRef)
+      // @@protoc_insertion_point(message_implements:io.confluent.kafka.schemaregistry.rules.widgetref.WidgetWithRef)
       WidgetWithRefOrBuilder {
   private static final long serialVersionUID = 0L;
     static {
@@ -330,7 +330,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue);
 
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_descriptor;
+      return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_descriptor;
     }
 
     @SuppressWarnings({"rawtypes"})
@@ -348,7 +348,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue);
     @java.lang.Override
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_fieldAccessorTable
+      return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef.class, io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef.Builder.class);
     }
@@ -473,14 +473,14 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue);
     public static final int KIND_FIELD_NUMBER = 4;
     private int kind_ = 0;
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.WRKind kind = 4;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
      * @return The enum numeric value on the wire for kind.
      */
     @java.lang.Override public int getKindValue() {
       return kind_;
     }
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.WRKind kind = 4;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
      * @return The kind.
      */
     @java.lang.Override public io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind getKind() {
@@ -572,7 +572,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue);
           java.lang.String, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii> defaultEntry =
               com.google.protobuf.MapEntry
               .<java.lang.String, io.confluent.kafka.schemaregistry.rules.PiiProto.Pii>newDefaultInstance(
-                  io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_PiiMapEntry_descriptor, 
+                  io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_PiiMapEntry_descriptor, 
                   com.google.protobuf.WireFormat.FieldType.STRING,
                   "",
                   com.google.protobuf.WireFormat.FieldType.MESSAGE,
@@ -690,7 +690,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
       if (!com.google.protobuf.GeneratedMessage.isStringEmpty(fullName_)) {
         com.google.protobuf.GeneratedMessage.writeString(output, 3, fullName_);
       }
-      if (kind_ != io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind.WR_ZERO.getNumber()) {
+      if (kind_ != io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind.ZERO.getNumber()) {
         output.writeEnum(4, kind_);
       }
       for (int i = 0; i < ssn_.size(); i++) {
@@ -729,7 +729,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
       if (!com.google.protobuf.GeneratedMessage.isStringEmpty(fullName_)) {
         size += com.google.protobuf.GeneratedMessage.computeStringSize(3, fullName_);
       }
-      if (kind_ != io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind.WR_ZERO.getNumber()) {
+      if (kind_ != io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind.ZERO.getNumber()) {
         size += com.google.protobuf.CodedOutputStream
           .computeEnumSize(4, kind_);
       }
@@ -928,15 +928,15 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
       return builder;
     }
     /**
-     * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.WidgetWithRef}
+     * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.widgetref.WidgetWithRef}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:io.confluent.kafka.schemaregistry.rules.WidgetWithRef)
+        // @@protoc_insertion_point(builder_implements:io.confluent.kafka.schemaregistry.rules.widgetref.WidgetWithRef)
         io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRefOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_descriptor;
+        return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_descriptor;
       }
 
       @SuppressWarnings({"rawtypes"})
@@ -964,7 +964,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
       @java.lang.Override
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_fieldAccessorTable
+        return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef.class, io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef.Builder.class);
       }
@@ -1005,7 +1005,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
       @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_descriptor;
+        return io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_descriptor;
       }
 
       @java.lang.Override
@@ -1466,14 +1466,14 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
 
       private int kind_ = 0;
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.WRKind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
        * @return The enum numeric value on the wire for kind.
        */
       @java.lang.Override public int getKindValue() {
         return kind_;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.WRKind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
        * @param value The enum numeric value on the wire for kind to set.
        * @return This builder for chaining.
        */
@@ -1484,7 +1484,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.WRKind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
        * @return The kind.
        */
       @java.lang.Override
@@ -1493,7 +1493,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
         return result == null ? io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WRKind.UNRECOGNIZED : result;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.WRKind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
        * @param value The kind to set.
        * @return This builder for chaining.
        */
@@ -1507,7 +1507,7 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.WRKind kind = 4;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.widgetref.WRKind kind = 4;</code>
        * @return This builder for chaining.
        */
       public Builder clearKind() {
@@ -2087,10 +2087,10 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
         return this;
       }
 
-      // @@protoc_insertion_point(builder_scope:io.confluent.kafka.schemaregistry.rules.WidgetWithRef)
+      // @@protoc_insertion_point(builder_scope:io.confluent.kafka.schemaregistry.rules.widgetref.WidgetWithRef)
     }
 
-    // @@protoc_insertion_point(class_scope:io.confluent.kafka.schemaregistry.rules.WidgetWithRef)
+    // @@protoc_insertion_point(class_scope:io.confluent.kafka.schemaregistry.rules.widgetref.WidgetWithRef)
     private static final io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef();
@@ -2139,15 +2139,15 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
   }
 
   private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_descriptor;
+    internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_fieldAccessorTable;
+      internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_PiiMapEntry_descriptor;
+    internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_PiiMapEntry_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_PiiMapEntry_fieldAccessorTable;
+      internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_PiiMapEntry_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -2157,23 +2157,24 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023WidgetWithRef.proto\022\'io.confluent.kafk" +
-      "a.schemaregistry.rules\032\024confluent/meta.p" +
-      "roto\032\tPii.proto\"\304\003\n\rWidgetWithRef\022\036\n\004nam" +
-      "e\030\001 \001(\tB\020\202D\r\032\003PII\032\006PUBLIC\022\020\n\010lastName\030\002 " +
-      "\001(\t\022\020\n\010fullName\030\003 \001(\t\022=\n\004kind\030\004 \001(\0162/.io" +
-      ".confluent.kafka.schemaregistry.rules.WR" +
-      "Kind\022\036\n\003ssn\030\005 \003(\tB\021\202D\016\032\003PII\032\007PRIVATE\022?\n\t" +
-      "pii_array\030\006 \003(\0132,.io.confluent.kafka.sch" +
-      "emaregistry.rules.Pii\022S\n\007pii_map\030\007 \003(\0132B" +
-      ".io.confluent.kafka.schemaregistry.rules" +
-      ".WidgetWithRef.PiiMapEntry\022\014\n\004size\030\010 \001(\005" +
-      "\022\017\n\007version\030\t \001(\005\032[\n\013PiiMapEntry\022\013\n\003key\030" +
-      "\001 \001(\t\022;\n\005value\030\002 \001(\0132,.io.confluent.kafk" +
-      "a.schemaregistry.rules.Pii:\0028\001*-\n\006WRKind" +
-      "\022\013\n\007WR_ZERO\020\000\022\n\n\006WR_ONE\020\001\022\n\n\006WR_TWO\020\002B?\n" +
-      "\'io.confluent.kafka.schemaregistry.rules" +
-      "B\022WidgetWithRefProtoP\000b\006proto3"
+      "\n\023WidgetWithRef.proto\0221io.confluent.kafk" +
+      "a.schemaregistry.rules.widgetref\032\024conflu" +
+      "ent/meta.proto\032\tPii.proto\"\330\003\n\rWidgetWith" +
+      "Ref\022\036\n\004name\030\001 \001(\tB\020\202D\r\032\003PII\032\006PUBLIC\022\020\n\010l" +
+      "astName\030\002 \001(\t\022\020\n\010fullName\030\003 \001(\t\022G\n\004kind\030" +
+      "\004 \001(\01629.io.confluent.kafka.schemaregistr" +
+      "y.rules.widgetref.WRKind\022\036\n\003ssn\030\005 \003(\tB\021\202" +
+      "D\016\032\003PII\032\007PRIVATE\022?\n\tpii_array\030\006 \003(\0132,.io" +
+      ".confluent.kafka.schemaregistry.rules.Pi" +
+      "i\022]\n\007pii_map\030\007 \003(\0132L.io.confluent.kafka." +
+      "schemaregistry.rules.widgetref.WidgetWit" +
+      "hRef.PiiMapEntry\022\014\n\004size\030\010 \001(\005\022\017\n\007versio" +
+      "n\030\t \001(\005\032[\n\013PiiMapEntry\022\013\n\003key\030\001 \001(\t\022;\n\005v" +
+      "alue\030\002 \001(\0132,.io.confluent.kafka.schemare" +
+      "gistry.rules.Pii:\0028\001*$\n\006WRKind\022\010\n\004ZERO\020\000" +
+      "\022\007\n\003ONE\020\001\022\007\n\003TWO\020\002B?\n\'io.confluent.kafka" +
+      ".schemaregistry.rulesB\022WidgetWithRefProt" +
+      "oP\000b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -2181,17 +2182,17 @@ io.confluent.kafka.schemaregistry.rules.PiiProto.Pii defaultValue) {
           io.confluent.protobuf.MetaProto.getDescriptor(),
           io.confluent.kafka.schemaregistry.rules.PiiProto.getDescriptor(),
         });
-    internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_descriptor =
+    internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_descriptor =
       getDescriptor().getMessageTypes().get(0);
-    internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_fieldAccessorTable = new
+    internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_descriptor,
+        internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_descriptor,
         new java.lang.String[] { "Name", "LastName", "FullName", "Kind", "Ssn", "PiiArray", "PiiMap", "Size", "Version", });
-    internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_PiiMapEntry_descriptor =
-      internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_descriptor.getNestedTypes().get(0);
-    internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_PiiMapEntry_fieldAccessorTable = new
+    internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_PiiMapEntry_descriptor =
+      internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_descriptor.getNestedTypes().get(0);
+    internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_PiiMapEntry_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_io_confluent_kafka_schemaregistry_rules_WidgetWithRef_PiiMapEntry_descriptor,
+        internal_static_io_confluent_kafka_schemaregistry_rules_widgetref_WidgetWithRef_PiiMapEntry_descriptor,
         new java.lang.String[] { "Key", "Value", });
     descriptor.resolveAllFeaturesImmutable();
     io.confluent.protobuf.MetaProto.getDescriptor();

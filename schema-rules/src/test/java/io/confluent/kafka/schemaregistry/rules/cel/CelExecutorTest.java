@@ -1335,7 +1335,7 @@ public class CelExecutorTest {
 
     Widget widget = Widget.newBuilder()
         .setName("alice")
-        .setKind(WKind.W_ONE)
+        .setKind(WKind.ONE)
         .addSsn("123")
         .addSsn("456")
         .addPiiArray(WPii.newBuilder().setPii("789").build())
@@ -1375,7 +1375,7 @@ public class CelExecutorTest {
 
     Widget2 widget = Widget2.newBuilder()
         .setName("alice")
-        .setKind(W2Kind.W2_ONE)
+        .setKind(W2Kind.ONE)
         .addSsn("123")
         .addSsn("456")
         .addPiiArray(W2Pii.newBuilder().setPii("789").build())
@@ -1416,7 +1416,7 @@ public class CelExecutorTest {
 
     Widget widget = Widget.newBuilder()
         .setName("alice")
-        .setKind(WKind.W_ONE)
+        .setKind(WKind.ONE)
         .addSsn("123")
         .addSsn("456")
         .addPiiArray(WPii.newBuilder().setPii("789").build())
@@ -1529,7 +1529,7 @@ public class CelExecutorTest {
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
     Metadata metadata = new Metadata(Collections.singletonMap(
-        "io.confluent.kafka.schemaregistry.rules.Widget.lastName", ImmutableSet.of("PII")), null, null);
+        "io.confluent.kafka.schemaregistry.rules.widget.Widget.lastName", ImmutableSet.of("PII")), null, null);
     protobufSchema = protobufSchema.copy(metadata, ruleSet);
     schemaRegistry.register(topic + "-value", protobufSchema);
 
@@ -1819,7 +1819,7 @@ public class CelExecutorTest {
         .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
-        CelExecutor.TYPE, null, null, "io.confluent.kafka.schemaregistry.rules.Widget{ name: \"Bob\" }",
+        CelExecutor.TYPE, null, null, "io.confluent.kafka.schemaregistry.rules.widget.Widget{ name: \"Bob\" }",
         null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
 

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package io.confluent.kafka.schemaregistry.rules;
+package io.confluent.kafka.schemaregistry.rules.newwidget;
 
 option java_package = "io.confluent.kafka.schemaregistry.rules";
 option java_outer_classname = "NewWidgetProto";
@@ -16,20 +16,20 @@ message NewWidget {
     float myfloat = 7;
     double mydouble = 8;
     bool myboolean = 9;
-    NWKind kind = 10;
+    Kind kind = 10;
     repeated string ssn = 11;
-    repeated NWPii pii_array = 12;
-    map<string, NWPii> pii_map = 13;
+    repeated Pii pii_array = 12;
+    map<string, Pii> pii_map = 13;
     int32 height = 14;
     int32 version = 15;
 }
 
-message NWPii {
+message Pii {
     string pii = 1;
 }
 
 enum NWKind {
-    NW_ZERO = 0;
-    NW_ONE = 1;
-    NW_TWO = 2;
+    ZERO = 0;
+    ONE = 1;
+    TWO = 2;
 }

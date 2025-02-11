@@ -2,7 +2,7 @@ syntax = "proto2";
 
 import "confluent/meta.proto";
 
-package io.confluent.kafka.schemaregistry.rules;
+package io.confluent.kafka.schemaregistry.rules.widget2;
 
 option java_package = "io.confluent.kafka.schemaregistry.rules";
 option java_outer_classname = "WidgetProto2";
@@ -18,21 +18,21 @@ message Widget2 {
     optional float myfloat = 7;
     optional double mydouble = 8;
     optional bool myboolean = 9;
-    optional W2Kind kind = 10;
+    optional Kind kind = 10;
     repeated string ssn = 11 [(.confluent.field_meta).tags = "PII", (.confluent.field_meta).tags = "PRIVATE"];
-    repeated W2Pii pii_array = 12;
-    map<string, W2Pii> pii_map = 13;
+    repeated Pii pii_array = 12;
+    map<string, Pii> pii_map = 13;
     optional int32 size = 14;
     optional int32 version = 15;
 }
 
-message W2Pii {
+message Pii {
     optional string pii = 1 [(.confluent.field_meta).tags = "PII"];
 }
 
-enum W2Kind {
-    W2_ZERO = 0;
-    W2_ONE = 1;
-    W2_TWO = 2;
+enum Kind {
+    ZERO = 0;
+    ONE = 1;
+    TWO = 2;
 }
 
