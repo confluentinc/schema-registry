@@ -122,7 +122,8 @@ public class AliasFilter implements ContainerRequestFilter {
     String originalSubject = subject;
     boolean isQualified = QualifiedSubject.isQualified(tenant, originalSubject);
     if (!isQualified) {
-      subject = QualifiedSubject.createFromUnqualified(tenant, subject).toQualifiedSubject();
+      subject = QualifiedSubject.createFromUnqualified(tenant, originalSubject)
+          .toQualifiedSubject();
     }
     Config config = null;
     try {
