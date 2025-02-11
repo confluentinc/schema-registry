@@ -118,7 +118,7 @@ public class SchemasResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    limit = schemaRegistry.normalizeSchemaLimit(limit);
+    limit = schemaRegistry.normalizeSchemaSearchContextLimit(limit);
     return Streams.stream(schemas)
       .skip(offset)
       .limit(limit)
