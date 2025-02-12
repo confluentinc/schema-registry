@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package io.confluent.kafka.schemaregistry.rules;
+package io.confluent.kafka.schemaregistry.rules.newwidget;
 
 option java_package = "io.confluent.kafka.schemaregistry.rules";
 option java_outer_classname = "NewWidgetProto";
