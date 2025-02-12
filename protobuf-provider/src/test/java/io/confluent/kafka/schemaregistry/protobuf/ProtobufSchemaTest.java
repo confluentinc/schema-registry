@@ -3120,7 +3120,7 @@ public class ProtobufSchemaTest {
   @Test
   public void testGoogleDescriptor() throws Exception {
     ResourceLoader resourceLoader = new ResourceLoader("/");
-    for (int i = 19; i < 28; i++) {
+    for (int i = 19; i < 30; i++) {
       ProtoFileElement original = resourceLoader.readObj("com/google/protobuf/descriptor-v" + i + ".proto");
       ProtobufSchema schema = new ProtobufSchema(original, Collections.emptyList(), Collections.emptyMap());
       Descriptor desc = schema.toDescriptor();
@@ -3128,8 +3128,7 @@ public class ProtobufSchemaTest {
       ProtobufSchema normalizedSchema = schema.normalize();
       ProtobufSchema normalizedSchema2 = schema2.normalize();
       // v24 has an incompatible change of edition string "2023" changing to edition enum EDITION_2023
-      // v27 introduced feature_support
-      if (i != 24 && i != 27) {
+      if (i != 24) {
         assertEquals(normalizedSchema.canonicalString(), normalizedSchema2.canonicalString());
       }
     }
