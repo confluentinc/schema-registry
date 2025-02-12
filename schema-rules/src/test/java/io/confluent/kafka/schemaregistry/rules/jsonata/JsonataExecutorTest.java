@@ -50,8 +50,8 @@ import io.confluent.kafka.schemaregistry.rules.ExpiringSpecificWidget;
 import io.confluent.kafka.schemaregistry.rules.ExpiringSpecificWidgetProto;
 import io.confluent.kafka.schemaregistry.rules.NewSpecificWidget;
 import io.confluent.kafka.schemaregistry.rules.NewWidgetProto;
+import io.confluent.kafka.schemaregistry.rules.PiiProto;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto;
-import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
 import io.confluent.kafka.schemaregistry.rules.cel.CelFieldExecutor;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -89,7 +89,7 @@ public class JsonataExecutorTest {
   private final KafkaAvroDeserializer specificAvroDeserializer;
   private final KafkaProtobufSerializer<WidgetProto.Widget> protobufSerializer;
   private final KafkaProtobufSerializer<ExpiringSpecificWidgetProto.ExpiringSpecificWidget> protobufSerializer2;
-  private final KafkaProtobufSerializer<WidgetProto.Pii> protobufSerializer3;
+  private final KafkaProtobufSerializer<PiiProto.Pii> protobufSerializer3;
   private final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   private final KafkaProtobufDeserializer<NewWidgetProto.NewWidget> specificProtobufDeserializer;
   private final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
@@ -581,14 +581,14 @@ public class JsonataExecutorTest {
 
     String ruleString = "$sift($, function($v, $k) {$k != 'size'})";
 
-    Pii pii = WidgetProto.Pii.newBuilder().setPii("secret").build();
+    PiiProto.Pii pii = PiiProto.Pii.newBuilder().setPii("secret").build();
     ProtobufSchema protobufSchema = new ProtobufSchema(pii.getDescriptorForType());
     SortedMap<String, String> props = ImmutableSortedMap.of("application.version", "v1");
     Metadata metadata = new Metadata(Collections.emptySortedMap(), props, Collections.emptySortedSet());
     protobufSchema = protobufSchema.copy(metadata, null);
     schemaRegistry.register(topic + "-value", protobufSchema);
 
-    protobufSchema = new ProtobufSchema(NewWidgetProto.Pii.getDescriptor());
+    protobufSchema = new ProtobufSchema(PiiProto.Pii.getDescriptor());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.UPGRADE,
         JsonataExecutor.TYPE, null, null, ruleString, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.singletonList(rule), Collections.emptyList());
