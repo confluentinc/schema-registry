@@ -50,7 +50,6 @@ import io.confluent.kafka.serializers.protobuf.test.DateValueOuterClass.DateValu
 import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass.DecimalValue;
 import io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.EnumUnion;
-import io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status;
 import io.confluent.kafka.serializers.protobuf.test.Int16ValueOuterClass.Int16Value;
 import io.confluent.kafka.serializers.protobuf.test.Int8ValueOuterClass.Int8Value;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos;
@@ -171,14 +170,14 @@ public class ProtobufDataTest {
   private EnumUnion createEnumUnionWithString() throws ParseException {
     EnumUnion.Builder message = EnumUnion.newBuilder();
     message.setOneId("ID");
-    message.setStatus(Status.INACTIVE);
+    message.setStatus(NestedTestProto.Status.INACTIVE);
     return message.build();
   }
 
   private EnumUnion createEnumUnionWithSomeStatus() throws ParseException {
     EnumUnion.Builder message = EnumUnion.newBuilder();
-    message.setSomeStatus(Status.INACTIVE);
-    message.setStatus(Status.INACTIVE);
+    message.setSomeStatus(NestedTestProto.Status.INACTIVE);
+    message.setStatus(NestedTestProto.Status.INACTIVE);
     return message.build();
   }
 
@@ -2448,7 +2447,7 @@ public class ProtobufDataTest {
 
   @Test
   public void testToConnectOptionalProto2() {
-    KeyValueProto2.KeyValueMessage message = KeyValueProto2.KeyValueMessage.newBuilder()
+    KeyValueProto2.KeyValueMessage2 message = KeyValueProto2.KeyValueMessage2.newBuilder()
         .setKey(123)
         .build();
 
@@ -2462,7 +2461,7 @@ public class ProtobufDataTest {
 
   @Test
   public void testToConnectOptionalProto2Disabled() {
-    KeyValueProto2.KeyValueMessage message = KeyValueProto2.KeyValueMessage.newBuilder()
+    KeyValueProto2.KeyValueMessage2 message = KeyValueProto2.KeyValueMessage2.newBuilder()
         .setKey(123)
         .build();
 
