@@ -648,7 +648,7 @@ public class KafkaProtobufSerializerTest {
         + "}\n"
         + "\n"
         + "extend .google.protobuf.MessageOptions {\n"
-        + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar my_message_option = 50001;\n"
+        + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar my_message_option = 50099;\n"
         + "}\n"
         + "extend .io.confluent.kafka.serializers.protobuf.test.FooBar {\n"
         + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar.FooBarBazEnum ext = 101;\n"
@@ -763,7 +763,7 @@ public class KafkaProtobufSerializerTest {
         + "\n"
         + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
         + "\n"
-        + "message FooBar {\n"
+        + "message FooBar2 {\n"
         + "  reserved 5000 to 6000;\n"
         + "  reserved 10000 to 10001;\n"
         + "  reserved 20000;\n"
@@ -779,13 +779,11 @@ public class KafkaProtobufSerializerTest {
         + "    reserved 100 to 200;\n"
         + "    reserved 1000 to 1001;\n"
         + "    reserved 2000;\n"
-        + "    NONE = 0;\n"
-        + "    FOO = 1;\n"
-        + "    BAR = 2;\n"
-        + "    BAZ = 3;\n"
+        + "    BUG = 0;\n"
+        + "    ZAP = 1;\n"
         + "  }\n"
         + "}\n";
-    ProtobufSchema schema = new ProtobufSchema(Ranges.FooBar.getDescriptor());
+    ProtobufSchema schema = new ProtobufSchema(Ranges.FooBar2.getDescriptor());
     schema = schema.normalize();
     assertEquals(expected, schema.canonicalString());
     schema = new ProtobufSchema(schema.canonicalString());
