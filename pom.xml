@@ -101,7 +101,6 @@
         <kcache.version>5.2.0</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protobuf.version>4.29.3</protobuf.version>
-        <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <okio.version>3.4.0</okio.version>
         <tink.version>1.15.0</tink.version>
         <tink.aws.kms.version>1.10.1</tink.aws.kms.version>
