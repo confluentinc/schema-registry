@@ -1014,7 +1014,6 @@ public class RestApiTest extends ClusterTestHarness {
 
     List<Integer> refs = restApp.restClient.getReferencedBy(subject, 1);
     assertEquals(parentId, refs.get(0).intValue());
-
     // test getReferences with pagination offset=0 limit=1
     refs = restApp.restClient.getReferencedByWithPagination(subject, 1, 0, 1);
     assertEquals(parentId, refs.get(0).intValue());
