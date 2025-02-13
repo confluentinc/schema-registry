@@ -101,6 +101,7 @@
         <kcache.version>5.2.0</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protobuf.version>4.29.3</protobuf.version>
+        <protobuf.maven.plugin.version>2.10.3</protobuf.maven.plugin.version>
         <okio.version>3.4.0</okio.version>
         <tink.version>1.15.0</tink.version>
         <tink.aws.kms.version>1.10.1</tink.aws.kms.version>
@@ -513,6 +514,7 @@
                 <plugin>
                     <groupId>io.github.ascopes</groupId>
                     <artifactId>protobuf-maven-plugin</artifactId>
+                    <version>${protobuf.maven.plugin.version}</version>
 
                     <configuration>
                         <protocVersion>${protobuf.version}</protocVersion>
