@@ -230,6 +230,45 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SUBJECT_SEARCH_MAX_LIMIT_CONFIG = "subject.search.max.limit";
   public static final int SUBJECT_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
 
+  /**
+   * <code>subject.version.search.default.limit</code>
+   */
+  public static final String SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG =
+          "subject.version.search.default.limit";
+  public static final int SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;
+  /**
+   * <code>subject.version.search.max.limit</code>
+   */
+  public static final String SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG =
+          "subject.version.search.max.limit";
+  public static final int SUBJECT_VERSION_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
+  /**
+   * <code>schema.referenced.by.search.default.limit</code>
+   */
+  public static final String SCHEMA_REFERENCED_BY_SEARCH_DEFAULT_LIMIT_CONFIG =
+          "schema.referenced.by.search.default.limit";
+  public static final int SCHEMA_REFERENCED_BY_SEARCH_DEFAULT_LIMIT = Integer.MAX_VALUE;
+  /**
+   * <code>schema.referenced.by.search.max.limit</code>
+   */
+  public static final String SCHEMA_REFERENCED_BY_SEARCH_MAX_LIMIT_CONFIG =
+          "schema.referenced.by.search.max.limit";
+  public static final int SCHEMA_REFERENCED_BY_SEARCH_MAX_LIMIT = Integer.MAX_VALUE;
+
+  /**
+   * <code>schema.context.search.default.limit</code>
+   */
+  public static final String SCHEMA_CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG =
+          "schema.context.search.default.limit";
+  public static final int SCHEMA_CONTEXT_SEARCH_DEFAULT_LIMIT = Integer.MAX_VALUE;
+  /**
+   * <code>schema.context.search.max.limit</code>
+   */
+  public static final String SCHEMA_CONTEXT_SEARCH_MAX_LIMIT_CONFIG =
+          "schema.context.search.max.limit";
+  public static final int SCHEMA_CONTEXT_SEARCH_MAX_LIMIT = Integer.MAX_VALUE;
+
   public static final String METADATA_ENCODER_SECRET_CONFIG = "metadata.encoder.secret";
   public static final String METADATA_ENCODER_OLD_SECRET_CONFIG = "metadata.encoder.old.secret";
 
@@ -393,6 +432,18 @@ public class SchemaRegistryConfig extends RestConfig {
           "The default limit for subject searches.";
   protected static final String SUBJECT_SEARCH_MAX_LIMIT_DOC =
           "The max limit for subject searches.";
+  protected static final String SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DOC =
+          "The default limit for subject version searches.";
+  protected static final String SUBJECT_VERSION_SEARCH_MAX_LIMIT_DOC =
+          "The max limit for subject version searches.";
+  protected static final String SCHEMA_REFERENCED_BY_SEARCH_DEFAULT_LIMIT_DOC =
+          "The default limit for schema referenced by searches.";
+  protected static final String SCHEMA_REFERENCED_BY_SEARCH_MAX_LIMIT_DOC =
+          "The max limit for schema referenced by searches.";
+  protected static final String SCHEMA_CONTEXT_SEARCH_DEFAULT_LIMIT_DOC =
+          "The default limit for schema context searches.";
+  protected static final String SCHEMA_CONTEXT_SEARCH_MAX_LIMIT_DOC =
+          "The max limit for schema context searches.";
   protected static final String METADATA_ENCODER_SECRET_DOC =
       "The secret used to encrypt and decrypt encoder keysets. "
       + "Use a random string with high entropy.";
@@ -621,6 +672,30 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SUBJECT_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
             SUBJECT_SEARCH_MAX_LIMIT_DEFAULT,
             ConfigDef.Importance.LOW, SUBJECT_SEARCH_MAX_LIMIT_DOC
+    )
+    .define(SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DOC
+    )
+    .define(SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SUBJECT_VERSION_SEARCH_MAX_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, SUBJECT_VERSION_SEARCH_MAX_LIMIT_DOC
+    )
+    .define(SCHEMA_REFERENCED_BY_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SCHEMA_REFERENCED_BY_SEARCH_DEFAULT_LIMIT,
+            ConfigDef.Importance.LOW, SCHEMA_REFERENCED_BY_SEARCH_DEFAULT_LIMIT_DOC
+    )
+    .define(SCHEMA_REFERENCED_BY_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SCHEMA_REFERENCED_BY_SEARCH_MAX_LIMIT,
+            ConfigDef.Importance.LOW, SCHEMA_REFERENCED_BY_SEARCH_MAX_LIMIT_DOC
+    )
+    .define(SCHEMA_CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SCHEMA_CONTEXT_SEARCH_DEFAULT_LIMIT,
+            ConfigDef.Importance.LOW, SCHEMA_CONTEXT_SEARCH_DEFAULT_LIMIT_DOC
+    )
+    .define(SCHEMA_CONTEXT_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SCHEMA_CONTEXT_SEARCH_MAX_LIMIT,
+            ConfigDef.Importance.LOW, SCHEMA_CONTEXT_SEARCH_MAX_LIMIT_DOC
     )
     .define(METADATA_ENCODER_SECRET_CONFIG, ConfigDef.Type.PASSWORD, null,
         ConfigDef.Importance.HIGH, METADATA_ENCODER_SECRET_DOC
