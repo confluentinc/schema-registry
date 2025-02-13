@@ -1017,7 +1017,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test getReferences with pagination offset=0 limit=1
     refs = restApp.restClient.getReferencedByWithPagination(subject, 1, 0, 1);
-    assertEquals(refs.get(refs.size()-1), ref.getVersion());
+    assertEquals(parentId, refs.get(0).intValue());
 
     ns.MyRecord myrecord = new ns.MyRecord();
     AvroSchema schema = new AvroSchema(AvroSchemaUtils.getSchema(myrecord));
