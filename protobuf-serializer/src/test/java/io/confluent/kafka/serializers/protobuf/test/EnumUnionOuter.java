@@ -15,114 +15,6 @@ public final class EnumUnionOuter {
     registerAllExtensions(
         (com.google.protobuf.ExtensionRegistryLite) registry);
   }
-  /**
-   * Protobuf enum {@code io.confluent.kafka.serializers.protobuf.test.Status}
-   */
-  public enum Status
-      implements com.google.protobuf.ProtocolMessageEnum {
-    /**
-     * <code>ACTIVE = 0;</code>
-     */
-    ACTIVE(0),
-    /**
-     * <code>INACTIVE = 1;</code>
-     */
-    INACTIVE(1),
-    UNRECOGNIZED(-1),
-    ;
-
-    /**
-     * <code>ACTIVE = 0;</code>
-     */
-    public static final int ACTIVE_VALUE = 0;
-    /**
-     * <code>INACTIVE = 1;</code>
-     */
-    public static final int INACTIVE_VALUE = 1;
-
-
-    public final int getNumber() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalArgumentException(
-            "Can't get the number of an unknown enum value.");
-      }
-      return value;
-    }
-
-    /**
-     * @param value The numeric wire value of the corresponding enum entry.
-     * @return The enum associated with the given numeric wire value.
-     * @deprecated Use {@link #forNumber(int)} instead.
-     */
-    @java.lang.Deprecated
-    public static Status valueOf(int value) {
-      return forNumber(value);
-    }
-
-    /**
-     * @param value The numeric wire value of the corresponding enum entry.
-     * @return The enum associated with the given numeric wire value.
-     */
-    public static Status forNumber(int value) {
-      switch (value) {
-        case 0: return ACTIVE;
-        case 1: return INACTIVE;
-        default: return null;
-      }
-    }
-
-    public static com.google.protobuf.Internal.EnumLiteMap<Status>
-        internalGetValueMap() {
-      return internalValueMap;
-    }
-    private static final com.google.protobuf.Internal.EnumLiteMap<
-        Status> internalValueMap =
-          new com.google.protobuf.Internal.EnumLiteMap<Status>() {
-            public Status findValueByNumber(int number) {
-              return Status.forNumber(number);
-            }
-          };
-
-    public final com.google.protobuf.Descriptors.EnumValueDescriptor
-        getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
-      return getDescriptor().getValues().get(ordinal());
-    }
-    public final com.google.protobuf.Descriptors.EnumDescriptor
-        getDescriptorForType() {
-      return getDescriptor();
-    }
-    public static final com.google.protobuf.Descriptors.EnumDescriptor
-        getDescriptor() {
-      return io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.getDescriptor().getEnumTypes().get(0);
-    }
-
-    private static final Status[] VALUES = values();
-
-    public static Status valueOf(
-        com.google.protobuf.Descriptors.EnumValueDescriptor desc) {
-      if (desc.getType() != getDescriptor()) {
-        throw new java.lang.IllegalArgumentException(
-          "EnumValueDescriptor is not for this type.");
-      }
-      if (desc.getIndex() == -1) {
-        return UNRECOGNIZED;
-      }
-      return VALUES[desc.getIndex()];
-    }
-
-    private final int value;
-
-    private Status(int value) {
-      this.value = value;
-    }
-
-    // @@protoc_insertion_point(enum_scope:io.confluent.kafka.serializers.protobuf.test.Status)
-  }
-
   public interface EnumUnionOrBuilder extends
       // @@protoc_insertion_point(interface_extends:io.confluent.kafka.serializers.protobuf.test.EnumUnion)
       com.google.protobuf.MessageOrBuilder {
@@ -169,7 +61,7 @@ public final class EnumUnionOuter {
      * <code>.io.confluent.kafka.serializers.protobuf.test.Status some_status = 3;</code>
      * @return The someStatus.
      */
-    io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status getSomeStatus();
+    io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status getSomeStatus();
 
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 4;</code>
@@ -180,7 +72,7 @@ public final class EnumUnionOuter {
      * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 4;</code>
      * @return The status.
      */
-    io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status getStatus();
+    io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status getStatus();
 
     io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.EnumUnion.SomeValCase getSomeValCase();
   }
@@ -359,13 +251,13 @@ public final class EnumUnionOuter {
      * <code>.io.confluent.kafka.serializers.protobuf.test.Status some_status = 3;</code>
      * @return The someStatus.
      */
-    public io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status getSomeStatus() {
+    public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status getSomeStatus() {
       if (someValCase_ == 3) {
-        io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status result = io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.forNumber(
+        io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status result = io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.forNumber(
             (java.lang.Integer) someVal_);
-        return result == null ? io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.UNRECOGNIZED : result;
+        return result == null ? io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.UNRECOGNIZED : result;
       }
-      return io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.ACTIVE;
+      return io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.ACTIVE;
     }
 
     public static final int STATUS_FIELD_NUMBER = 4;
@@ -381,9 +273,9 @@ public final class EnumUnionOuter {
      * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 4;</code>
      * @return The status.
      */
-    @java.lang.Override public io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status getStatus() {
-      io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status result = io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.forNumber(status_);
-      return result == null ? io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.UNRECOGNIZED : result;
+    @java.lang.Override public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status getStatus() {
+      io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status result = io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.forNumber(status_);
+      return result == null ? io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.UNRECOGNIZED : result;
     }
 
     private byte memoizedIsInitialized = -1;
@@ -410,7 +302,7 @@ public final class EnumUnionOuter {
       if (someValCase_ == 3) {
         output.writeEnum(3, ((java.lang.Integer) someVal_));
       }
-      if (status_ != io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.ACTIVE.getNumber()) {
+      if (status_ != io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.ACTIVE.getNumber()) {
         output.writeEnum(4, status_);
       }
       getUnknownFields().writeTo(output);
@@ -434,7 +326,7 @@ public final class EnumUnionOuter {
         size += com.google.protobuf.CodedOutputStream
           .computeEnumSize(3, ((java.lang.Integer) someVal_));
       }
-      if (status_ != io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.ACTIVE.getNumber()) {
+      if (status_ != io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.ACTIVE.getNumber()) {
         size += com.google.protobuf.CodedOutputStream
           .computeEnumSize(4, status_);
       }
@@ -994,20 +886,20 @@ public final class EnumUnionOuter {
        * @return The someStatus.
        */
       @java.lang.Override
-      public io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status getSomeStatus() {
+      public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status getSomeStatus() {
         if (someValCase_ == 3) {
-          io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status result = io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.forNumber(
+          io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status result = io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.forNumber(
               (java.lang.Integer) someVal_);
-          return result == null ? io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.UNRECOGNIZED : result;
+          return result == null ? io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.UNRECOGNIZED : result;
         }
-        return io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.ACTIVE;
+        return io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.ACTIVE;
       }
       /**
        * <code>.io.confluent.kafka.serializers.protobuf.test.Status some_status = 3;</code>
        * @param value The someStatus to set.
        * @return This builder for chaining.
        */
-      public Builder setSomeStatus(io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status value) {
+      public Builder setSomeStatus(io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status value) {
         if (value == null) {
           throw new NullPointerException();
         }
@@ -1053,16 +945,16 @@ public final class EnumUnionOuter {
        * @return The status.
        */
       @java.lang.Override
-      public io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status getStatus() {
-        io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status result = io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.forNumber(status_);
-        return result == null ? io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status.UNRECOGNIZED : result;
+      public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status getStatus() {
+        io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status result = io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.forNumber(status_);
+        return result == null ? io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.UNRECOGNIZED : result;
       }
       /**
        * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 4;</code>
        * @param value The status to set.
        * @return This builder for chaining.
        */
-      public Builder setStatus(io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status value) {
+      public Builder setStatus(io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status value) {
         if (value == null) {
           throw new NullPointerException();
         }
@@ -1160,19 +1052,20 @@ public final class EnumUnionOuter {
   static {
     java.lang.String[] descriptorData = {
       "\n\017EnumUnion.proto\022,io.confluent.kafka.se" +
-      "rializers.protobuf.test\"\320\001\n\tEnumUnion\022\020\n" +
-      "\006one_id\030\001 \001(\tH\000\022\022\n\010other_id\030\002 \001(\005H\000\022K\n\013s" +
-      "ome_status\030\003 \001(\01624.io.confluent.kafka.se" +
-      "rializers.protobuf.test.StatusH\000\022D\n\006stat" +
-      "us\030\004 \001(\01624.io.confluent.kafka.serializer" +
-      "s.protobuf.test.StatusB\n\n\010some_val*\"\n\006St" +
-      "atus\022\n\n\006ACTIVE\020\000\022\014\n\010INACTIVE\020\001B@\n,io.con" +
-      "fluent.kafka.serializers.protobuf.testB\016" +
-      "EnumUnionOuterP\000b\006proto3"
+      "rializers.protobuf.test\032\025NestedTestProto" +
+      ".proto\"\320\001\n\tEnumUnion\022\020\n\006one_id\030\001 \001(\tH\000\022\022" +
+      "\n\010other_id\030\002 \001(\005H\000\022K\n\013some_status\030\003 \001(\0162" +
+      "4.io.confluent.kafka.serializers.protobu" +
+      "f.test.StatusH\000\022D\n\006status\030\004 \001(\01624.io.con" +
+      "fluent.kafka.serializers.protobuf.test.S" +
+      "tatusB\n\n\010some_valB@\n,io.confluent.kafka." +
+      "serializers.protobuf.testB\016EnumUnionOute" +
+      "rP\000b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
+          io.confluent.kafka.serializers.protobuf.test.NestedTestProto.getDescriptor(),
         });
     internal_static_io_confluent_kafka_serializers_protobuf_test_EnumUnion_descriptor =
       getDescriptor().getMessageTypes().get(0);
@@ -1180,6 +1073,7 @@ public final class EnumUnionOuter {
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_io_confluent_kafka_serializers_protobuf_test_EnumUnion_descriptor,
         new java.lang.String[] { "OneId", "OtherId", "SomeStatus", "Status", "SomeVal", });
+    io.confluent.kafka.serializers.protobuf.test.NestedTestProto.getDescriptor();
   }
 
   // @@protoc_insertion_point(outer_class_scope)

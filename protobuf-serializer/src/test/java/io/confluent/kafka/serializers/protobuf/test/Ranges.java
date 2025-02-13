@@ -15,10 +15,10 @@ public final class Ranges {
     registerAllExtensions(
         (com.google.protobuf.ExtensionRegistryLite) registry);
   }
-  public interface FooBarOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:io.confluent.kafka.serializers.protobuf.test.FooBar)
+  public interface FooBar2OrBuilder extends
+      // @@protoc_insertion_point(interface_extends:io.confluent.kafka.serializers.protobuf.test.FooBar2)
       com.google.protobuf.GeneratedMessageV3.
-          ExtendableMessageOrBuilder<FooBar> {
+          ExtendableMessageOrBuilder<FooBar2> {
 
     /**
      * <code>optional int32 foo = 1;</code>
@@ -49,19 +49,19 @@ public final class Ranges {
         getBarBytes();
   }
   /**
-   * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.FooBar}
+   * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.FooBar2}
    */
-  public static final class FooBar extends
+  public static final class FooBar2 extends
       com.google.protobuf.GeneratedMessageV3.ExtendableMessage<
-        FooBar> implements
-      // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.FooBar)
-      FooBarOrBuilder {
+        FooBar2> implements
+      // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.FooBar2)
+      FooBar2OrBuilder {
   private static final long serialVersionUID = 0L;
-    // Use FooBar.newBuilder() to construct.
-    private FooBar(com.google.protobuf.GeneratedMessageV3.ExtendableBuilder<io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar, ?> builder) {
+    // Use FooBar2.newBuilder() to construct.
+    private FooBar2(com.google.protobuf.GeneratedMessageV3.ExtendableBuilder<io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2, ?> builder) {
       super(builder);
     }
-    private FooBar() {
+    private FooBar2() {
       bar_ = "";
     }
 
@@ -69,61 +69,45 @@ public final class Ranges {
     @SuppressWarnings({"unused"})
     protected java.lang.Object newInstance(
         UnusedPrivateParameter unused) {
-      return new FooBar();
+      return new FooBar2();
     }
 
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.confluent.kafka.serializers.protobuf.test.Ranges.internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar_descriptor;
+      return io.confluent.kafka.serializers.protobuf.test.Ranges.internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar2_descriptor;
     }
 
     @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.confluent.kafka.serializers.protobuf.test.Ranges.internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar_fieldAccessorTable
+      return io.confluent.kafka.serializers.protobuf.test.Ranges.internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar2_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar.class, io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar.Builder.class);
+              io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2.class, io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2.Builder.class);
     }
 
     /**
-     * Protobuf enum {@code io.confluent.kafka.serializers.protobuf.test.FooBar.FooBarBazEnum}
+     * Protobuf enum {@code io.confluent.kafka.serializers.protobuf.test.FooBar2.FooBarBazEnum}
      */
     public enum FooBarBazEnum
         implements com.google.protobuf.ProtocolMessageEnum {
       /**
-       * <code>NONE = 0;</code>
+       * <code>BUG = 0;</code>
        */
-      NONE(0),
+      BUG(0),
       /**
-       * <code>FOO = 1;</code>
+       * <code>ZAP = 1;</code>
        */
-      FOO(1),
-      /**
-       * <code>BAR = 2;</code>
-       */
-      BAR(2),
-      /**
-       * <code>BAZ = 3;</code>
-       */
-      BAZ(3),
+      ZAP(1),
       ;
 
       /**
-       * <code>NONE = 0;</code>
+       * <code>BUG = 0;</code>
        */
-      public static final int NONE_VALUE = 0;
+      public static final int BUG_VALUE = 0;
       /**
-       * <code>FOO = 1;</code>
+       * <code>ZAP = 1;</code>
        */
-      public static final int FOO_VALUE = 1;
-      /**
-       * <code>BAR = 2;</code>
-       */
-      public static final int BAR_VALUE = 2;
-      /**
-       * <code>BAZ = 3;</code>
-       */
-      public static final int BAZ_VALUE = 3;
+      public static final int ZAP_VALUE = 1;
 
 
       public final int getNumber() {
@@ -146,10 +130,8 @@ public final class Ranges {
        */
       public static FooBarBazEnum forNumber(int value) {
         switch (value) {
-          case 0: return NONE;
-          case 1: return FOO;
-          case 2: return BAR;
-          case 3: return BAZ;
+          case 0: return BUG;
+          case 1: return ZAP;
           default: return null;
         }
       }
@@ -176,7 +158,7 @@ public final class Ranges {
       }
       public static final com.google.protobuf.Descriptors.EnumDescriptor
           getDescriptor() {
-        return io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar.getDescriptor().getEnumTypes().get(0);
+        return io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2.getDescriptor().getEnumTypes().get(0);
       }
 
       private static final FooBarBazEnum[] VALUES = values();
@@ -196,7 +178,7 @@ public final class Ranges {
         this.value = value;
       }
 
-      // @@protoc_insertion_point(enum_scope:io.confluent.kafka.serializers.protobuf.test.FooBar.FooBarBazEnum)
+      // @@protoc_insertion_point(enum_scope:io.confluent.kafka.serializers.protobuf.test.FooBar2.FooBarBazEnum)
     }
 
     private int bitField0_;
@@ -287,7 +269,7 @@ public final class Ranges {
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       com.google.protobuf.GeneratedMessageV3
-        .ExtendableMessage<io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar>.ExtensionWriter
+        .ExtendableMessage<io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2>.ExtensionWriter
           extensionWriter = newExtensionWriter();
       if (((bitField0_ & 0x00000001) != 0)) {
         output.writeInt32(1, foo_);
@@ -323,10 +305,10 @@ public final class Ranges {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar)) {
+      if (!(obj instanceof io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2)) {
         return super.equals(obj);
       }
-      io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar other = (io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar) obj;
+      io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 other = (io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2) obj;
 
       if (hasFoo() != other.hasFoo()) return false;
       if (hasFoo()) {
@@ -365,44 +347,44 @@ public final class Ranges {
       return hash;
     }
 
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseFrom(
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseFrom(
         java.nio.ByteBuffer data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseFrom(
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseFrom(
         java.nio.ByteBuffer data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseFrom(
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseFrom(
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseFrom(byte[] data)
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseFrom(
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseFrom(java.io.InputStream input)
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseFrom(
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -410,26 +392,26 @@ public final class Ranges {
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseDelimitedFrom(java.io.InputStream input)
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
 
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseDelimitedFrom(
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseFrom(
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar parseFrom(
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -442,7 +424,7 @@ public final class Ranges {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar prototype) {
+    public static Builder newBuilder(io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     @java.lang.Override
@@ -458,27 +440,27 @@ public final class Ranges {
       return builder;
     }
     /**
-     * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.FooBar}
+     * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.FooBar2}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.ExtendableBuilder<
-          io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar, Builder> implements
-        // @@protoc_insertion_point(builder_implements:io.confluent.kafka.serializers.protobuf.test.FooBar)
-        io.confluent.kafka.serializers.protobuf.test.Ranges.FooBarOrBuilder {
+          io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2, Builder> implements
+        // @@protoc_insertion_point(builder_implements:io.confluent.kafka.serializers.protobuf.test.FooBar2)
+        io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2OrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.confluent.kafka.serializers.protobuf.test.Ranges.internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar_descriptor;
+        return io.confluent.kafka.serializers.protobuf.test.Ranges.internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar2_descriptor;
       }
 
       @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.confluent.kafka.serializers.protobuf.test.Ranges.internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar_fieldAccessorTable
+        return io.confluent.kafka.serializers.protobuf.test.Ranges.internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar2_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar.class, io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar.Builder.class);
+                io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2.class, io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2.Builder.class);
       }
 
-      // Construct using io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar.newBuilder()
+      // Construct using io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2.newBuilder()
       private Builder() {
 
       }
@@ -500,17 +482,17 @@ public final class Ranges {
       @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.confluent.kafka.serializers.protobuf.test.Ranges.internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar_descriptor;
+        return io.confluent.kafka.serializers.protobuf.test.Ranges.internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar2_descriptor;
       }
 
       @java.lang.Override
-      public io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar getDefaultInstanceForType() {
-        return io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar.getDefaultInstance();
+      public io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 getDefaultInstanceForType() {
+        return io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2.getDefaultInstance();
       }
 
       @java.lang.Override
-      public io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar build() {
-        io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar result = buildPartial();
+      public io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 build() {
+        io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
@@ -518,14 +500,14 @@ public final class Ranges {
       }
 
       @java.lang.Override
-      public io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar buildPartial() {
-        io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar result = new io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar(this);
+      public io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 buildPartial() {
+        io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 result = new io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2(this);
         if (bitField0_ != 0) { buildPartial0(result); }
         onBuilt();
         return result;
       }
 
-      private void buildPartial0(io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar result) {
+      private void buildPartial0(io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 result) {
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -574,42 +556,42 @@ public final class Ranges {
       @java.lang.Override
       public <Type> Builder setExtension(
           com.google.protobuf.GeneratedMessage.GeneratedExtension<
-              io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar, Type> extension,
+              io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2, Type> extension,
           Type value) {
         return super.setExtension(extension, value);
       }
       @java.lang.Override
       public <Type> Builder setExtension(
           com.google.protobuf.GeneratedMessage.GeneratedExtension<
-              io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar, java.util.List<Type>> extension,
+              io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2, java.util.List<Type>> extension,
           int index, Type value) {
         return super.setExtension(extension, index, value);
       }
       @java.lang.Override
       public <Type> Builder addExtension(
           com.google.protobuf.GeneratedMessage.GeneratedExtension<
-              io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar, java.util.List<Type>> extension,
+              io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2, java.util.List<Type>> extension,
           Type value) {
         return super.addExtension(extension, value);
       }
       @java.lang.Override
       public <T> Builder clearExtension(
           com.google.protobuf.GeneratedMessage.GeneratedExtension<
-              io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar, T> extension) {
+              io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2, T> extension) {
         return super.clearExtension(extension);
       }
       @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar) {
-          return mergeFrom((io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar)other);
+        if (other instanceof io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2) {
+          return mergeFrom((io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar other) {
-        if (other == io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar.getDefaultInstance()) return this;
+      public Builder mergeFrom(io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 other) {
+        if (other == io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2.getDefaultInstance()) return this;
         if (other.hasFoo()) {
           setFoo(other.getFoo());
         }
@@ -807,23 +789,23 @@ public final class Ranges {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:io.confluent.kafka.serializers.protobuf.test.FooBar)
+      // @@protoc_insertion_point(builder_scope:io.confluent.kafka.serializers.protobuf.test.FooBar2)
     }
 
-    // @@protoc_insertion_point(class_scope:io.confluent.kafka.serializers.protobuf.test.FooBar)
-    private static final io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar DEFAULT_INSTANCE;
+    // @@protoc_insertion_point(class_scope:io.confluent.kafka.serializers.protobuf.test.FooBar2)
+    private static final io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar();
+      DEFAULT_INSTANCE = new io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2();
     }
 
-    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar getDefaultInstance() {
+    public static io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
-    @java.lang.Deprecated public static final com.google.protobuf.Parser<FooBar>
-        PARSER = new com.google.protobuf.AbstractParser<FooBar>() {
+    @java.lang.Deprecated public static final com.google.protobuf.Parser<FooBar2>
+        PARSER = new com.google.protobuf.AbstractParser<FooBar2>() {
       @java.lang.Override
-      public FooBar parsePartialFrom(
+      public FooBar2 parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
@@ -842,27 +824,27 @@ public final class Ranges {
       }
     };
 
-    public static com.google.protobuf.Parser<FooBar> parser() {
+    public static com.google.protobuf.Parser<FooBar2> parser() {
       return PARSER;
     }
 
     @java.lang.Override
-    public com.google.protobuf.Parser<FooBar> getParserForType() {
+    public com.google.protobuf.Parser<FooBar2> getParserForType() {
       return PARSER;
     }
 
     @java.lang.Override
-    public io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar getDefaultInstanceForType() {
+    public io.confluent.kafka.serializers.protobuf.test.Ranges.FooBar2 getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
   }
 
   private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar_descriptor;
+    internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar2_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-      internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar_fieldAccessorTable;
+      internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar2_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -874,23 +856,23 @@ public final class Ranges {
     java.lang.String[] descriptorData = {
       "\n\014Ranges.proto\022,io.confluent.kafka.seria" +
       "lizers.protobuf.test\032 google/protobuf/de" +
-      "scriptor.proto\"\240\001\n\006FooBar\022\013\n\003foo\030\001 \001(\005\022\013" +
-      "\n\003bar\030\002 \001(\t\"K\n\rFooBarBazEnum\022\010\n\004NONE\020\000\022\007" +
-      "\n\003FOO\020\001\022\007\n\003BAR\020\002\022\007\n\003BAZ\020\003\"\005\010d\020\310\001\"\006\010\350\007\020\351\007" +
-      "\"\006\010\320\017\020\320\017*\005\010d\020\311\001*\006\010\350\007\020\352\007*\006\010\320\017\020\321\017J\006\010\210\'\020\361.J" +
-      "\006\010\220N\020\222NJ\010\010\240\234\001\020\241\234\001B.\n,io.confluent.kafka." +
-      "serializers.protobuf.test"
+      "scriptor.proto\"\216\001\n\007FooBar2\022\013\n\003foo\030\001 \001(\005\022" +
+      "\013\n\003bar\030\002 \001(\t\"8\n\rFooBarBazEnum\022\007\n\003BUG\020\000\022\007" +
+      "\n\003ZAP\020\001\"\005\010d\020\310\001\"\006\010\350\007\020\351\007\"\006\010\320\017\020\320\017*\005\010d\020\311\001*\006\010" +
+      "\350\007\020\352\007*\006\010\320\017\020\321\017J\006\010\210\'\020\361.J\006\010\220N\020\222NJ\010\010\240\234\001\020\241\234\001B" +
+      ".\n,io.confluent.kafka.serializers.protob" +
+      "uf.test"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
           com.google.protobuf.DescriptorProtos.getDescriptor(),
         });
-    internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar_descriptor =
+    internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar2_descriptor =
       getDescriptor().getMessageTypes().get(0);
-    internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar_fieldAccessorTable = new
+    internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar2_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar_descriptor,
+        internal_static_io_confluent_kafka_serializers_protobuf_test_FooBar2_descriptor,
         new java.lang.String[] { "Foo", "Bar", });
     com.google.protobuf.DescriptorProtos.getDescriptor();
   }
