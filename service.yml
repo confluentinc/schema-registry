@@ -14,6 +14,22 @@ semaphore:
 sonarqube:
   enable: true
   coverage_exclusions:
-    - protobuf-serializer/**
+    - "**/*.pb.*"
+    - "**/mk-include/**/*"
+    - "protobuf-serializer/**"
 git:
   enable: true
+code_artifact:
+  enable: true
+  package_paths:
+    - maven-snapshots/maven/io.confluent/schema-registry-console-scripts
+    - maven-snapshots/maven/io.confluent/client-console-scripts
+    - maven-snapshots/maven/io.confluent/kafka-serde-tools-package
+    - maven-snapshots/maven/io.confluent/kafka-streams-*
+    - maven-snapshots/maven/io.confluent/kafka-connect-*
+    - maven-snapshots/maven/io.confluent/dek-registry*
+    - maven-snapshots/maven/io.confluent/kafka-protobuf-*
+    - maven-snapshots/maven/io.confluent/kafka-json-*
+    - maven-snapshots/maven/io.confluent/kafka-schema-*
+    - maven-snapshots/maven/io.confluent/kafka-avro-serializer
+    - maven-snapshots/maven/io.confluent/jacoco-aggregate-schema-registry
