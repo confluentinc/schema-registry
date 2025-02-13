@@ -20,19 +20,19 @@ public final class NestedKeyValue {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+     * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
      * @return Whether the wrapperField field is set.
      */
     boolean hasWrapperField();
     /**
-     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+     * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
      * @return The wrapperField.
      */
-    io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getWrapperField();
+    io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry getWrapperField();
     /**
-     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+     * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
      */
-    io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder getWrapperFieldOrBuilder();
+    io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntryOrBuilder getWrapperFieldOrBuilder();
 
     /**
      * <code>double inner_field = 2;</code>
@@ -77,9 +77,9 @@ public final class NestedKeyValue {
 
     private int bitField0_;
     public static final int WRAPPER_FIELD_FIELD_NUMBER = 1;
-    private io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry wrapperField_;
+    private io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry wrapperField_;
     /**
-     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+     * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
      * @return Whether the wrapperField field is set.
      */
     @java.lang.Override
@@ -87,19 +87,19 @@ public final class NestedKeyValue {
       return ((bitField0_ & 0x00000001) != 0);
     }
     /**
-     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+     * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
      * @return The wrapperField.
      */
     @java.lang.Override
-    public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getWrapperField() {
-      return wrapperField_ == null ? io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance() : wrapperField_;
+    public io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry getWrapperField() {
+      return wrapperField_ == null ? io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.getDefaultInstance() : wrapperField_;
     }
     /**
-     * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+     * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
      */
     @java.lang.Override
-    public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder getWrapperFieldOrBuilder() {
-      return wrapperField_ == null ? io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance() : wrapperField_;
+    public io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntryOrBuilder getWrapperFieldOrBuilder() {
+      return wrapperField_ == null ? io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.getDefaultInstance() : wrapperField_;
     }
 
     public static final int INNER_FIELD_FIELD_NUMBER = 2;
@@ -485,31 +485,31 @@ public final class NestedKeyValue {
       }
       private int bitField0_;
 
-      private io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry wrapperField_;
+      private io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry wrapperField_;
       private com.google.protobuf.SingleFieldBuilderV3<
-          io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder> wrapperFieldBuilder_;
+          io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry, io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.Builder, io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntryOrBuilder> wrapperFieldBuilder_;
       /**
-       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+       * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
        * @return Whether the wrapperField field is set.
        */
       public boolean hasWrapperField() {
         return ((bitField0_ & 0x00000001) != 0);
       }
       /**
-       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+       * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
        * @return The wrapperField.
        */
-      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getWrapperField() {
+      public io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry getWrapperField() {
         if (wrapperFieldBuilder_ == null) {
-          return wrapperField_ == null ? io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance() : wrapperField_;
+          return wrapperField_ == null ? io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.getDefaultInstance() : wrapperField_;
         } else {
           return wrapperFieldBuilder_.getMessage();
         }
       }
       /**
-       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+       * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
        */
-      public Builder setWrapperField(io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry value) {
+      public Builder setWrapperField(io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry value) {
         if (wrapperFieldBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -523,10 +523,10 @@ public final class NestedKeyValue {
         return this;
       }
       /**
-       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+       * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
        */
       public Builder setWrapperField(
-          io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder builderForValue) {
+          io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.Builder builderForValue) {
         if (wrapperFieldBuilder_ == null) {
           wrapperField_ = builderForValue.build();
         } else {
@@ -537,13 +537,13 @@ public final class NestedKeyValue {
         return this;
       }
       /**
-       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+       * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
        */
-      public Builder mergeWrapperField(io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry value) {
+      public Builder mergeWrapperField(io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry value) {
         if (wrapperFieldBuilder_ == null) {
           if (((bitField0_ & 0x00000001) != 0) &&
             wrapperField_ != null &&
-            wrapperField_ != io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance()) {
+            wrapperField_ != io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.getDefaultInstance()) {
             getWrapperFieldBuilder().mergeFrom(value);
           } else {
             wrapperField_ = value;
@@ -558,7 +558,7 @@ public final class NestedKeyValue {
         return this;
       }
       /**
-       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+       * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
        */
       public Builder clearWrapperField() {
         bitField0_ = (bitField0_ & ~0x00000001);
@@ -571,33 +571,33 @@ public final class NestedKeyValue {
         return this;
       }
       /**
-       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+       * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
        */
-      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder getWrapperFieldBuilder() {
+      public io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.Builder getWrapperFieldBuilder() {
         bitField0_ |= 0x00000001;
         onChanged();
         return getWrapperFieldFieldBuilder().getBuilder();
       }
       /**
-       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+       * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
        */
-      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder getWrapperFieldOrBuilder() {
+      public io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntryOrBuilder getWrapperFieldOrBuilder() {
         if (wrapperFieldBuilder_ != null) {
           return wrapperFieldBuilder_.getMessageOrBuilder();
         } else {
           return wrapperField_ == null ?
-              io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance() : wrapperField_;
+              io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.getDefaultInstance() : wrapperField_;
         }
       }
       /**
-       * <code>.AttributeFieldEntry wrapper_field = 1;</code>
+       * <code>.NestedAttributeFieldEntry wrapper_field = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
-          io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder> 
+          io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry, io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.Builder, io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntryOrBuilder> 
           getWrapperFieldFieldBuilder() {
         if (wrapperFieldBuilder_ == null) {
           wrapperFieldBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder>(
+              io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry, io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.Builder, io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntryOrBuilder>(
                   getWrapperField(),
                   getParentForChildren(),
                   isClean());
@@ -701,8 +701,8 @@ public final class NestedKeyValue {
 
   }
 
-  public interface AttributeFieldEntryOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:AttributeFieldEntry)
+  public interface NestedAttributeFieldEntryOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:NestedAttributeFieldEntry)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -712,38 +712,38 @@ public final class NestedKeyValue {
     double getNestedField();
   }
   /**
-   * Protobuf type {@code AttributeFieldEntry}
+   * Protobuf type {@code NestedAttributeFieldEntry}
    */
-  public static final class AttributeFieldEntry extends
+  public static final class NestedAttributeFieldEntry extends
       com.google.protobuf.GeneratedMessageV3 implements
-      // @@protoc_insertion_point(message_implements:AttributeFieldEntry)
-      AttributeFieldEntryOrBuilder {
+      // @@protoc_insertion_point(message_implements:NestedAttributeFieldEntry)
+      NestedAttributeFieldEntryOrBuilder {
   private static final long serialVersionUID = 0L;
-    // Use AttributeFieldEntry.newBuilder() to construct.
-    private AttributeFieldEntry(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+    // Use NestedAttributeFieldEntry.newBuilder() to construct.
+    private NestedAttributeFieldEntry(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
-    private AttributeFieldEntry() {
+    private NestedAttributeFieldEntry() {
     }
 
     @java.lang.Override
     @SuppressWarnings({"unused"})
     protected java.lang.Object newInstance(
         UnusedPrivateParameter unused) {
-      return new AttributeFieldEntry();
+      return new NestedAttributeFieldEntry();
     }
 
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.confluent.connect.protobuf.test.NestedKeyValue.internal_static_AttributeFieldEntry_descriptor;
+      return io.confluent.connect.protobuf.test.NestedKeyValue.internal_static_NestedAttributeFieldEntry_descriptor;
     }
 
     @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.confluent.connect.protobuf.test.NestedKeyValue.internal_static_AttributeFieldEntry_fieldAccessorTable
+      return io.confluent.connect.protobuf.test.NestedKeyValue.internal_static_NestedAttributeFieldEntry_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.class, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder.class);
+              io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.class, io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.Builder.class);
     }
 
     public static final int NESTED_FIELD_FIELD_NUMBER = 1;
@@ -797,10 +797,10 @@ public final class NestedKeyValue {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry)) {
+      if (!(obj instanceof io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry)) {
         return super.equals(obj);
       }
-      io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry other = (io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry) obj;
+      io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry other = (io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry) obj;
 
       if (java.lang.Double.doubleToLongBits(getNestedField())
           != java.lang.Double.doubleToLongBits(
@@ -824,44 +824,44 @@ public final class NestedKeyValue {
       return hash;
     }
 
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseFrom(
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseFrom(
         java.nio.ByteBuffer data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseFrom(
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseFrom(
         java.nio.ByteBuffer data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseFrom(
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseFrom(
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseFrom(byte[] data)
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseFrom(
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseFrom(java.io.InputStream input)
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseFrom(
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -869,26 +869,26 @@ public final class NestedKeyValue {
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseDelimitedFrom(java.io.InputStream input)
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
 
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseDelimitedFrom(
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseFrom(
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry parseFrom(
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -901,7 +901,7 @@ public final class NestedKeyValue {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry prototype) {
+    public static Builder newBuilder(io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     @java.lang.Override
@@ -917,26 +917,26 @@ public final class NestedKeyValue {
       return builder;
     }
     /**
-     * Protobuf type {@code AttributeFieldEntry}
+     * Protobuf type {@code NestedAttributeFieldEntry}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:AttributeFieldEntry)
-        io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntryOrBuilder {
+        // @@protoc_insertion_point(builder_implements:NestedAttributeFieldEntry)
+        io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntryOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.confluent.connect.protobuf.test.NestedKeyValue.internal_static_AttributeFieldEntry_descriptor;
+        return io.confluent.connect.protobuf.test.NestedKeyValue.internal_static_NestedAttributeFieldEntry_descriptor;
       }
 
       @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.confluent.connect.protobuf.test.NestedKeyValue.internal_static_AttributeFieldEntry_fieldAccessorTable
+        return io.confluent.connect.protobuf.test.NestedKeyValue.internal_static_NestedAttributeFieldEntry_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.class, io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.Builder.class);
+                io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.class, io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.Builder.class);
       }
 
-      // Construct using io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.newBuilder()
+      // Construct using io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.newBuilder()
       private Builder() {
 
       }
@@ -957,17 +957,17 @@ public final class NestedKeyValue {
       @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.confluent.connect.protobuf.test.NestedKeyValue.internal_static_AttributeFieldEntry_descriptor;
+        return io.confluent.connect.protobuf.test.NestedKeyValue.internal_static_NestedAttributeFieldEntry_descriptor;
       }
 
       @java.lang.Override
-      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getDefaultInstanceForType() {
-        return io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance();
+      public io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry getDefaultInstanceForType() {
+        return io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.getDefaultInstance();
       }
 
       @java.lang.Override
-      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry build() {
-        io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry result = buildPartial();
+      public io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry build() {
+        io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
@@ -975,14 +975,14 @@ public final class NestedKeyValue {
       }
 
       @java.lang.Override
-      public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry buildPartial() {
-        io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry result = new io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry(this);
+      public io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry buildPartial() {
+        io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry result = new io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry(this);
         if (bitField0_ != 0) { buildPartial0(result); }
         onBuilt();
         return result;
       }
 
-      private void buildPartial0(io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry result) {
+      private void buildPartial0(io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry result) {
         int from_bitField0_ = bitField0_;
         if (((from_bitField0_ & 0x00000001) != 0)) {
           result.nestedField_ = nestedField_;
@@ -1023,16 +1023,16 @@ public final class NestedKeyValue {
       }
       @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry) {
-          return mergeFrom((io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry)other);
+        if (other instanceof io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry) {
+          return mergeFrom((io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry other) {
-        if (other == io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry.getDefaultInstance()) return this;
+      public Builder mergeFrom(io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry other) {
+        if (other == io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry.getDefaultInstance()) return this;
         if (other.getNestedField() != 0D) {
           setNestedField(other.getNestedField());
         }
@@ -1128,23 +1128,23 @@ public final class NestedKeyValue {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:AttributeFieldEntry)
+      // @@protoc_insertion_point(builder_scope:NestedAttributeFieldEntry)
     }
 
-    // @@protoc_insertion_point(class_scope:AttributeFieldEntry)
-    private static final io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry DEFAULT_INSTANCE;
+    // @@protoc_insertion_point(class_scope:NestedAttributeFieldEntry)
+    private static final io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry();
+      DEFAULT_INSTANCE = new io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry();
     }
 
-    public static io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getDefaultInstance() {
+    public static io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
-    private static final com.google.protobuf.Parser<AttributeFieldEntry>
-        PARSER = new com.google.protobuf.AbstractParser<AttributeFieldEntry>() {
+    private static final com.google.protobuf.Parser<NestedAttributeFieldEntry>
+        PARSER = new com.google.protobuf.AbstractParser<NestedAttributeFieldEntry>() {
       @java.lang.Override
-      public AttributeFieldEntry parsePartialFrom(
+      public NestedAttributeFieldEntry parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1163,17 +1163,17 @@ public final class NestedKeyValue {
       }
     };
 
-    public static com.google.protobuf.Parser<AttributeFieldEntry> parser() {
+    public static com.google.protobuf.Parser<NestedAttributeFieldEntry> parser() {
       return PARSER;
     }
 
     @java.lang.Override
-    public com.google.protobuf.Parser<AttributeFieldEntry> getParserForType() {
+    public com.google.protobuf.Parser<NestedAttributeFieldEntry> getParserForType() {
       return PARSER;
     }
 
     @java.lang.Override
-    public io.confluent.connect.protobuf.test.NestedKeyValue.AttributeFieldEntry getDefaultInstanceForType() {
+    public io.confluent.connect.protobuf.test.NestedKeyValue.NestedAttributeFieldEntry getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -1185,10 +1185,10 @@ public final class NestedKeyValue {
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_NestedKeyValueMessage_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_AttributeFieldEntry_descriptor;
+    internal_static_NestedAttributeFieldEntry_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-      internal_static_AttributeFieldEntry_fieldAccessorTable;
+      internal_static_NestedAttributeFieldEntry_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -1199,12 +1199,12 @@ public final class NestedKeyValue {
   static {
     java.lang.String[] descriptorData = {
       "\n\021nestedfield.proto\032 google/protobuf/des" +
-      "criptor.proto\"Y\n\025NestedKeyValueMessage\022+" +
-      "\n\rwrapper_field\030\001 \001(\0132\024.AttributeFieldEn" +
-      "try\022\023\n\013inner_field\030\002 \001(\001\"+\n\023AttributeFie" +
-      "ldEntry\022\024\n\014nested_field\030\001 \001(\001B4\n\"io.conf" +
-      "luent.connect.protobuf.testB\016NestedKeyVa" +
-      "lueb\006proto3"
+      "criptor.proto\"_\n\025NestedKeyValueMessage\0221" +
+      "\n\rwrapper_field\030\001 \001(\0132\032.NestedAttributeF" +
+      "ieldEntry\022\023\n\013inner_field\030\002 \001(\001\"1\n\031Nested" +
+      "AttributeFieldEntry\022\024\n\014nested_field\030\001 \001(" +
+      "\001B4\n\"io.confluent.connect.protobuf.testB" +
+      "\016NestedKeyValueb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -1217,11 +1217,11 @@ public final class NestedKeyValue {
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_NestedKeyValueMessage_descriptor,
         new java.lang.String[] { "WrapperField", "InnerField", });
-    internal_static_AttributeFieldEntry_descriptor =
+    internal_static_NestedAttributeFieldEntry_descriptor =
       getDescriptor().getMessageTypes().get(1);
-    internal_static_AttributeFieldEntry_fieldAccessorTable = new
+    internal_static_NestedAttributeFieldEntry_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_AttributeFieldEntry_descriptor,
+        internal_static_NestedAttributeFieldEntry_descriptor,
         new java.lang.String[] { "NestedField", });
     com.google.protobuf.DescriptorProtos.getDescriptor();
   }

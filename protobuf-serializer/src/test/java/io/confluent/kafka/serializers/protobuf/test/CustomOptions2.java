@@ -2453,7 +2453,7 @@ public final class CustomOptions2 {
           null);
   }
 
-  public static final int MY_MESSAGE_OPTION_FIELD_NUMBER = 50001;
+  public static final int MY_MESSAGE_OPTION_FIELD_NUMBER = 50099;
   /**
    * <code>extend .google.protobuf.MessageOptions { ... }</code>
    */
@@ -2517,15 +2517,15 @@ public final class CustomOptions2 {
       ".confluent.kafka.serializers.protobuf.te" +
       "st.FooBar\032w\n\004More\022\016\n\006serial\030\001 \003(\0052J\n\013mor" +
       "e_string\0224.io.confluent.kafka.serializer" +
-      "s.protobuf.test.FooBar\030\226\001 \001(\t:\023\212\265\030\017\260\006\001\260\006" +
+      "s.protobuf.test.FooBar\030\226\001 \001(\t:\023\232\273\030\017\260\006\001\260\006" +
       "\002\262\t\006foobar\032u\n\005More2\022\016\n\006serial\030\001 \003(\0052K\n\014m" +
       "ore2_string\0224.io.confluent.kafka.seriali" +
-      "zers.protobuf.test.FooBar\030\227\001 \001(\t:\017\212\265\030\013\010{" +
+      "zers.protobuf.test.FooBar\030\227\001 \001(\t:\017\232\273\030\013\010{" +
       "\272\t\006foobar\"6\n\rFooBarBazEnum\022\007\n\003FOO\020\001\022\007\n\003B" +
       "AR\020\002\022\007\n\003BAZ\020\003\032\n\312\325\"\006foobar*\005\010d\020\311\00125\n\rfoob" +
       "ar_string\022\034.google.protobuf.EnumOptions\030" +
       "\331\252\004 \001(\t:r\n\021my_message_option\022\037.google.pr" +
-      "otobuf.MessageOptions\030\321\206\003 \001(\01324.io.confl" +
+      "otobuf.MessageOptions\030\263\207\003 \001(\01324.io.confl" +
       "uent.kafka.serializers.protobuf.test.Foo" +
       "Bar:\205\001\n\003ext\0224.io.confluent.kafka.seriali" +
       "zers.protobuf.test.FooBar\030e \001(\0162B.io.con" +
