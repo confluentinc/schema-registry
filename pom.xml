@@ -532,32 +532,6 @@
                         </execution>
                     </executions>
                 </plugin>
-                <!--
-                <plugin>
-                    <groupId>com.github.os72</groupId>
-                    <artifactId>protoc-jar-maven-plugin</artifactId>
-                    <version>${protoc.jar.maven.plugin.version}</version>
-                    <executions>
-                        <execution>
-                            <phase>generate-test-sources</phase>
-                            <goals>
-                                <goal>run</goal>
-                            </goals>
-                            <configuration>
-                                <protocArtifact>com.google.protobuf:protoc:${protobuf.version}</protocArtifact>
-                                <protocVersion>${protobuf.version}</protocVersion>
-                                <includeStdTypes>true</includeStdTypes>
-                                <includeMavenTypes>direct</includeMavenTypes>
-                                <addSources>none</addSources>
-                                <outputDirectory>src/test/java</outputDirectory>
-                                <inputDirectories>
-                                    <include>src/test/proto</include>
-                                </inputDirectories>
-                            </configuration>
-                        </execution>
-                    </executions>
-                </plugin>
-                -->
             </plugins>
         </pluginManagement>
         <plugins>
