@@ -16,7 +16,7 @@ public final class NewWidgetProto {
         (com.google.protobuf.ExtensionRegistryLite) registry);
   }
   /**
-   * Protobuf enum {@code io.confluent.kafka.schemaregistry.rules.Kind}
+   * Protobuf enum {@code io.confluent.kafka.schemaregistry.rules.newwidget.Kind}
    */
   public enum Kind
       implements com.google.protobuf.ProtocolMessageEnum {
@@ -129,11 +129,11 @@ public final class NewWidgetProto {
       this.value = value;
     }
 
-    // @@protoc_insertion_point(enum_scope:io.confluent.kafka.schemaregistry.rules.Kind)
+    // @@protoc_insertion_point(enum_scope:io.confluent.kafka.schemaregistry.rules.newwidget.Kind)
   }
 
   public interface NewWidgetOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:io.confluent.kafka.schemaregistry.rules.NewWidget)
+      // @@protoc_insertion_point(interface_extends:io.confluent.kafka.schemaregistry.rules.newwidget.NewWidget)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -209,12 +209,12 @@ public final class NewWidgetProto {
     boolean getMyboolean();
 
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.newwidget.Kind kind = 10;</code>
      * @return The enum numeric value on the wire for kind.
      */
     int getKindValue();
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.newwidget.Kind kind = 10;</code>
      * @return The kind.
      */
     io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Kind getKind();
@@ -245,35 +245,35 @@ public final class NewWidgetProto {
         getSsnBytes(int index);
 
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
      */
     java.util.List<io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> 
         getPiiArrayList();
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
      */
     io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiArray(int index);
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
      */
     int getPiiArrayCount();
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
      */
     java.util.List<? extends io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder> 
         getPiiArrayOrBuilderList();
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
      */
     io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder getPiiArrayOrBuilder(
         int index);
 
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
      */
     int getPiiMapCount();
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
      */
     boolean containsPiiMap(
         java.lang.String key);
@@ -284,12 +284,12 @@ public final class NewWidgetProto {
     java.util.Map<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii>
     getPiiMap();
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
      */
     java.util.Map<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii>
     getPiiMapMap();
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
      */
     /* nullable */
 io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiMapOrDefault(
@@ -297,7 +297,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiMapOrDefault(
         /* nullable */
 io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue);
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
      */
     io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiMapOrThrow(
         java.lang.String key);
@@ -315,11 +315,11 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue);
     int getVersion();
   }
   /**
-   * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.NewWidget}
+   * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.newwidget.NewWidget}
    */
   public static final class NewWidget extends
       com.google.protobuf.GeneratedMessageV3 implements
-      // @@protoc_insertion_point(message_implements:io.confluent.kafka.schemaregistry.rules.NewWidget)
+      // @@protoc_insertion_point(message_implements:io.confluent.kafka.schemaregistry.rules.newwidget.NewWidget)
       NewWidgetOrBuilder {
   private static final long serialVersionUID = 0L;
     // Use NewWidget.newBuilder() to construct.
@@ -346,7 +346,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue);
 
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_descriptor;
+      return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_descriptor;
     }
 
     @SuppressWarnings({"rawtypes"})
@@ -364,7 +364,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue);
     @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_fieldAccessorTable
+      return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.confluent.kafka.schemaregistry.rules.NewWidgetProto.NewWidget.class, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.NewWidget.Builder.class);
     }
@@ -555,14 +555,14 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue);
     public static final int KIND_FIELD_NUMBER = 10;
     private int kind_ = 0;
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.newwidget.Kind kind = 10;</code>
      * @return The enum numeric value on the wire for kind.
      */
     @java.lang.Override public int getKindValue() {
       return kind_;
     }
     /**
-     * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
+     * <code>.io.confluent.kafka.schemaregistry.rules.newwidget.Kind kind = 10;</code>
      * @return The kind.
      */
     @java.lang.Override public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Kind getKind() {
@@ -611,14 +611,14 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue);
     @SuppressWarnings("serial")
     private java.util.List<io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> piiArray_;
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
      */
     @java.lang.Override
     public java.util.List<io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> getPiiArrayList() {
       return piiArray_;
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
      */
     @java.lang.Override
     public java.util.List<? extends io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder> 
@@ -626,21 +626,21 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue);
       return piiArray_;
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
      */
     @java.lang.Override
     public int getPiiArrayCount() {
       return piiArray_.size();
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
      */
     @java.lang.Override
     public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiArray(int index) {
       return piiArray_.get(index);
     }
     /**
-     * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+     * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
      */
     @java.lang.Override
     public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder getPiiArrayOrBuilder(
@@ -654,7 +654,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue);
           java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> defaultEntry =
               com.google.protobuf.MapEntry
               .<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii>newDefaultInstance(
-                  io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_PiiMapEntry_descriptor, 
+                  io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_PiiMapEntry_descriptor, 
                   com.google.protobuf.WireFormat.FieldType.STRING,
                   "",
                   com.google.protobuf.WireFormat.FieldType.MESSAGE,
@@ -675,7 +675,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue);
       return internalGetPiiMap().getMap().size();
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
      */
     @java.lang.Override
     public boolean containsPiiMap(
@@ -692,14 +692,14 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue);
       return getPiiMapMap();
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
      */
     @java.lang.Override
     public java.util.Map<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> getPiiMapMap() {
       return internalGetPiiMap().getMap();
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
      */
     @java.lang.Override
     public /* nullable */
@@ -713,7 +713,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
       return map.containsKey(key) ? map.get(key) : defaultValue;
     }
     /**
-     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+     * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
      */
     @java.lang.Override
     public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiMapOrThrow(
@@ -1082,15 +1082,15 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
       return builder;
     }
     /**
-     * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.NewWidget}
+     * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.newwidget.NewWidget}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:io.confluent.kafka.schemaregistry.rules.NewWidget)
+        // @@protoc_insertion_point(builder_implements:io.confluent.kafka.schemaregistry.rules.newwidget.NewWidget)
         io.confluent.kafka.schemaregistry.rules.NewWidgetProto.NewWidgetOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_descriptor;
+        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_descriptor;
       }
 
       @SuppressWarnings({"rawtypes"})
@@ -1118,7 +1118,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
       @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_fieldAccessorTable
+        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.confluent.kafka.schemaregistry.rules.NewWidgetProto.NewWidget.class, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.NewWidget.Builder.class);
       }
@@ -1165,7 +1165,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
       @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_descriptor;
+        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_descriptor;
       }
 
       @java.lang.Override
@@ -1916,14 +1916,14 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
 
       private int kind_ = 0;
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.newwidget.Kind kind = 10;</code>
        * @return The enum numeric value on the wire for kind.
        */
       @java.lang.Override public int getKindValue() {
         return kind_;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.newwidget.Kind kind = 10;</code>
        * @param value The enum numeric value on the wire for kind to set.
        * @return This builder for chaining.
        */
@@ -1934,7 +1934,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.newwidget.Kind kind = 10;</code>
        * @return The kind.
        */
       @java.lang.Override
@@ -1943,7 +1943,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return result == null ? io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Kind.UNRECOGNIZED : result;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.newwidget.Kind kind = 10;</code>
        * @param value The kind to set.
        * @return This builder for chaining.
        */
@@ -1957,7 +1957,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.schemaregistry.rules.Kind kind = 10;</code>
+       * <code>.io.confluent.kafka.schemaregistry.rules.newwidget.Kind kind = 10;</code>
        * @return This builder for chaining.
        */
       public Builder clearKind() {
@@ -2091,7 +2091,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
           io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder> piiArrayBuilder_;
 
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public java.util.List<io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> getPiiArrayList() {
         if (piiArrayBuilder_ == null) {
@@ -2101,7 +2101,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public int getPiiArrayCount() {
         if (piiArrayBuilder_ == null) {
@@ -2111,7 +2111,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiArray(int index) {
         if (piiArrayBuilder_ == null) {
@@ -2121,7 +2121,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public Builder setPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii value) {
@@ -2138,7 +2138,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public Builder setPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder builderForValue) {
@@ -2152,7 +2152,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public Builder addPiiArray(io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii value) {
         if (piiArrayBuilder_ == null) {
@@ -2168,7 +2168,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public Builder addPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii value) {
@@ -2185,7 +2185,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public Builder addPiiArray(
           io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder builderForValue) {
@@ -2199,7 +2199,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public Builder addPiiArray(
           int index, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder builderForValue) {
@@ -2213,7 +2213,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public Builder addAllPiiArray(
           java.lang.Iterable<? extends io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> values) {
@@ -2228,7 +2228,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public Builder clearPiiArray() {
         if (piiArrayBuilder_ == null) {
@@ -2241,7 +2241,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public Builder removePiiArray(int index) {
         if (piiArrayBuilder_ == null) {
@@ -2254,14 +2254,14 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder getPiiArrayBuilder(
           int index) {
         return getPiiArrayFieldBuilder().getBuilder(index);
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder getPiiArrayOrBuilder(
           int index) {
@@ -2271,7 +2271,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public java.util.List<? extends io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder> 
            getPiiArrayOrBuilderList() {
@@ -2282,14 +2282,14 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         }
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder addPiiArrayBuilder() {
         return getPiiArrayFieldBuilder().addBuilder(
             io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.getDefaultInstance());
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder addPiiArrayBuilder(
           int index) {
@@ -2297,7 +2297,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
             index, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.getDefaultInstance());
       }
       /**
-       * <code>repeated .io.confluent.kafka.schemaregistry.rules.Pii pii_array = 12;</code>
+       * <code>repeated .io.confluent.kafka.schemaregistry.rules.newwidget.Pii pii_array = 12;</code>
        */
       public java.util.List<io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder> 
            getPiiArrayBuilderList() {
@@ -2354,7 +2354,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return internalGetPiiMap().ensureBuilderMap().size();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
        */
       @java.lang.Override
       public boolean containsPiiMap(
@@ -2371,14 +2371,14 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return getPiiMapMap();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
        */
       @java.lang.Override
       public java.util.Map<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> getPiiMapMap() {
         return internalGetPiiMap().getImmutableMap();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
        */
       @java.lang.Override
       public /* nullable */
@@ -2391,7 +2391,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return map.containsKey(key) ? piiMapConverter.build(map.get(key)) : defaultValue;
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
        */
       @java.lang.Override
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii getPiiMapOrThrow(
@@ -2409,7 +2409,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
        */
       public Builder removePiiMap(
           java.lang.String key) {
@@ -2428,7 +2428,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return internalGetMutablePiiMap().ensureMessageMap();
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
        */
       public Builder putPiiMap(
           java.lang.String key,
@@ -2441,7 +2441,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
        */
       public Builder putAllPiiMap(
           java.util.Map<java.lang.String, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii> values) {
@@ -2456,7 +2456,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         return this;
       }
       /**
-       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.Pii&gt; pii_map = 13;</code>
+       * <code>map&lt;string, .io.confluent.kafka.schemaregistry.rules.newwidget.Pii&gt; pii_map = 13;</code>
        */
       public io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder putPiiMapBuilderIfAbsent(
           java.lang.String key) {
@@ -2549,10 +2549,10 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:io.confluent.kafka.schemaregistry.rules.NewWidget)
+      // @@protoc_insertion_point(builder_scope:io.confluent.kafka.schemaregistry.rules.newwidget.NewWidget)
     }
 
-    // @@protoc_insertion_point(class_scope:io.confluent.kafka.schemaregistry.rules.NewWidget)
+    // @@protoc_insertion_point(class_scope:io.confluent.kafka.schemaregistry.rules.newwidget.NewWidget)
     private static final io.confluent.kafka.schemaregistry.rules.NewWidgetProto.NewWidget DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.confluent.kafka.schemaregistry.rules.NewWidgetProto.NewWidget();
@@ -2601,7 +2601,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
   }
 
   public interface PiiOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:io.confluent.kafka.schemaregistry.rules.Pii)
+      // @@protoc_insertion_point(interface_extends:io.confluent.kafka.schemaregistry.rules.newwidget.Pii)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -2617,11 +2617,11 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
         getPiiBytes();
   }
   /**
-   * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.Pii}
+   * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.newwidget.Pii}
    */
   public static final class Pii extends
       com.google.protobuf.GeneratedMessageV3 implements
-      // @@protoc_insertion_point(message_implements:io.confluent.kafka.schemaregistry.rules.Pii)
+      // @@protoc_insertion_point(message_implements:io.confluent.kafka.schemaregistry.rules.newwidget.Pii)
       PiiOrBuilder {
   private static final long serialVersionUID = 0L;
     // Use Pii.newBuilder() to construct.
@@ -2641,13 +2641,13 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
 
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_Pii_descriptor;
+      return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_Pii_descriptor;
     }
 
     @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_Pii_fieldAccessorTable
+      return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_Pii_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.class, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder.class);
     }
@@ -2848,21 +2848,21 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
       return builder;
     }
     /**
-     * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.Pii}
+     * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.newwidget.Pii}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:io.confluent.kafka.schemaregistry.rules.Pii)
+        // @@protoc_insertion_point(builder_implements:io.confluent.kafka.schemaregistry.rules.newwidget.Pii)
         io.confluent.kafka.schemaregistry.rules.NewWidgetProto.PiiOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_Pii_descriptor;
+        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_Pii_descriptor;
       }
 
       @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_Pii_fieldAccessorTable
+        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_Pii_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.class, io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii.Builder.class);
       }
@@ -2888,7 +2888,7 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
       @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_Pii_descriptor;
+        return io.confluent.kafka.schemaregistry.rules.NewWidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_Pii_descriptor;
       }
 
       @java.lang.Override
@@ -3101,10 +3101,10 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:io.confluent.kafka.schemaregistry.rules.Pii)
+      // @@protoc_insertion_point(builder_scope:io.confluent.kafka.schemaregistry.rules.newwidget.Pii)
     }
 
-    // @@protoc_insertion_point(class_scope:io.confluent.kafka.schemaregistry.rules.Pii)
+    // @@protoc_insertion_point(class_scope:io.confluent.kafka.schemaregistry.rules.newwidget.Pii)
     private static final io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii();
@@ -3153,20 +3153,20 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
   }
 
   private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_descriptor;
+    internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-      internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_fieldAccessorTable;
+      internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_PiiMapEntry_descriptor;
+    internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_PiiMapEntry_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-      internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_PiiMapEntry_fieldAccessorTable;
+      internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_PiiMapEntry_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_io_confluent_kafka_schemaregistry_rules_Pii_descriptor;
+    internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_Pii_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-      internal_static_io_confluent_kafka_schemaregistry_rules_Pii_fieldAccessorTable;
+      internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_Pii_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -3176,46 +3176,47 @@ io.confluent.kafka.schemaregistry.rules.NewWidgetProto.Pii defaultValue) {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\017NewWidget.proto\022\'io.confluent.kafka.sc" +
-      "hemaregistry.rules\"\375\003\n\tNewWidget\022\014\n\004name" +
-      "\030\001 \001(\t\022\020\n\010lastName\030\002 \001(\t\022\020\n\010fullName\030\003 \001" +
-      "(\t\022\017\n\007mybytes\030\004 \001(\014\022\r\n\005myint\030\005 \001(\005\022\016\n\006my" +
-      "long\030\006 \001(\003\022\017\n\007myfloat\030\007 \001(\002\022\020\n\010mydouble\030" +
-      "\010 \001(\001\022\021\n\tmyboolean\030\t \001(\010\022;\n\004kind\030\n \001(\0162-" +
-      ".io.confluent.kafka.schemaregistry.rules" +
-      ".Kind\022\013\n\003ssn\030\013 \003(\t\022?\n\tpii_array\030\014 \003(\0132,." +
-      "io.confluent.kafka.schemaregistry.rules." +
-      "Pii\022O\n\007pii_map\030\r \003(\0132>.io.confluent.kafk" +
-      "a.schemaregistry.rules.NewWidget.PiiMapE" +
-      "ntry\022\016\n\006height\030\016 \001(\005\022\017\n\007version\030\017 \001(\005\032[\n" +
-      "\013PiiMapEntry\022\013\n\003key\030\001 \001(\t\022;\n\005value\030\002 \001(\013" +
-      "2,.io.confluent.kafka.schemaregistry.rul" +
-      "es.Pii:\0028\001\"\022\n\003Pii\022\013\n\003pii\030\001 \001(\t*\"\n\004Kind\022\010" +
-      "\n\004ZERO\020\000\022\007\n\003ONE\020\001\022\007\n\003TWO\020\002B;\n\'io.conflue" +
-      "nt.kafka.schemaregistry.rulesB\016NewWidget" +
-      "ProtoP\000b\006proto3"
+      "\n\017NewWidget.proto\0221io.confluent.kafka.sc" +
+      "hemaregistry.rules.newwidget\"\245\004\n\tNewWidg" +
+      "et\022\014\n\004name\030\001 \001(\t\022\020\n\010lastName\030\002 \001(\t\022\020\n\010fu" +
+      "llName\030\003 \001(\t\022\017\n\007mybytes\030\004 \001(\014\022\r\n\005myint\030\005" +
+      " \001(\005\022\016\n\006mylong\030\006 \001(\003\022\017\n\007myfloat\030\007 \001(\002\022\020\n" +
+      "\010mydouble\030\010 \001(\001\022\021\n\tmyboolean\030\t \001(\010\022E\n\004ki" +
+      "nd\030\n \001(\01627.io.confluent.kafka.schemaregi" +
+      "stry.rules.newwidget.Kind\022\013\n\003ssn\030\013 \003(\t\022I" +
+      "\n\tpii_array\030\014 \003(\01326.io.confluent.kafka.s" +
+      "chemaregistry.rules.newwidget.Pii\022Y\n\007pii" +
+      "_map\030\r \003(\0132H.io.confluent.kafka.schemare" +
+      "gistry.rules.newwidget.NewWidget.PiiMapE" +
+      "ntry\022\016\n\006height\030\016 \001(\005\022\017\n\007version\030\017 \001(\005\032e\n" +
+      "\013PiiMapEntry\022\013\n\003key\030\001 \001(\t\022E\n\005value\030\002 \001(\013" +
+      "26.io.confluent.kafka.schemaregistry.rul" +
+      "es.newwidget.Pii:\0028\001\"\022\n\003Pii\022\013\n\003pii\030\001 \001(\t" +
+      "*\"\n\004Kind\022\010\n\004ZERO\020\000\022\007\n\003ONE\020\001\022\007\n\003TWO\020\002B;\n\'" +
+      "io.confluent.kafka.schemaregistry.rulesB" +
+      "\016NewWidgetProtoP\000b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         });
-    internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_descriptor =
+    internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_descriptor =
       getDescriptor().getMessageTypes().get(0);
-    internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_fieldAccessorTable = new
+    internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_descriptor,
+        internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_descriptor,
         new java.lang.String[] { "Name", "LastName", "FullName", "Mybytes", "Myint", "Mylong", "Myfloat", "Mydouble", "Myboolean", "Kind", "Ssn", "PiiArray", "PiiMap", "Height", "Version", });
-    internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_PiiMapEntry_descriptor =
-      internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_descriptor.getNestedTypes().get(0);
-    internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_PiiMapEntry_fieldAccessorTable = new
+    internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_PiiMapEntry_descriptor =
+      internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_descriptor.getNestedTypes().get(0);
+    internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_PiiMapEntry_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_io_confluent_kafka_schemaregistry_rules_NewWidget_PiiMapEntry_descriptor,
+        internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_NewWidget_PiiMapEntry_descriptor,
         new java.lang.String[] { "Key", "Value", });
-    internal_static_io_confluent_kafka_schemaregistry_rules_Pii_descriptor =
+    internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_Pii_descriptor =
       getDescriptor().getMessageTypes().get(1);
-    internal_static_io_confluent_kafka_schemaregistry_rules_Pii_fieldAccessorTable = new
+    internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_Pii_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_io_confluent_kafka_schemaregistry_rules_Pii_descriptor,
+        internal_static_io_confluent_kafka_schemaregistry_rules_newwidget_Pii_descriptor,
         new java.lang.String[] { "Pii", });
   }
 
