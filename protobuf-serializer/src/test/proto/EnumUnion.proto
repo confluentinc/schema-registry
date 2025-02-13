@@ -1,15 +1,12 @@
 syntax = "proto3";
 
+import "NestedTestProto.proto";
+
 package io.confluent.kafka.serializers.protobuf.test;
 
 option java_package = "io.confluent.kafka.serializers.protobuf.test";
 option java_outer_classname = "EnumUnionOuter";
 option java_multiple_files = false;
-
-enum Status {
-    ACTIVE = 0;
-    INACTIVE = 1;
-}
 
 message EnumUnion {
     oneof some_val {
