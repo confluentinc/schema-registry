@@ -3,7 +3,7 @@ syntax = "proto3";
 import "confluent/meta.proto";
 import "Pii.proto";
 
-package io.confluent.kafka.schemaregistry.rules;
+package io.confluent.kafka.schemaregistry.rules.widgetref;
 
 option java_package = "io.confluent.kafka.schemaregistry.rules";
 option java_outer_classname = "WidgetWithRefProto";

@@ -48,7 +48,7 @@ message FooBar {
 }
 
 extend google.protobuf.MessageOptions {
-  optional FooBar my_message_option = 50001;
+  optional FooBar my_message_option = 50099;
 }
 
 extend FooBar {
