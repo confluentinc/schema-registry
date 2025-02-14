@@ -1,12 +1,23 @@
 name: schema-registry
 lang: java
-lang_version: 11
+lang_version: 17
 codeowners:
   enable: true
 semaphore:
   enable: true
   pipeline_type: cp
   nano_version: true
+  pr_ci_gating:
+    enable: true
+    project_name: schema-registry
+  status_level: block
+  branches:
+    - master
+    - main
+    - /^\d+\.\d+\.x$/
+    - /^gh-readonly-queue.*/
+    - /^cc-sr-v0\..+/
+    - /^cc-sc-v0\..+/
   execution_time_limit: {"hours": 2}
   downstream_projects: ["kafka-rest", "ksql", "confluent-security-plugins", "kafka-connect-replicator", "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
 sonarqube:
@@ -31,4 +42,3 @@ code_artifact:
     - maven-snapshots/maven/io.confluent/kafka-schema-*
     - maven-snapshots/maven/io.confluent/kafka-avro-serializer
     - maven-snapshots/maven/io.confluent/jacoco-aggregate-schema-registry
-    - pypi-internal/pypi//confluent-ci-tools
