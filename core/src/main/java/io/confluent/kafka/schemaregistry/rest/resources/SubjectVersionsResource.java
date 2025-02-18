@@ -72,6 +72,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Path("/subjects/{subject}/versions")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -251,7 +252,11 @@ public class SubjectVersionsResource {
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
-      @PathParam("version") String version) {
+      @PathParam("version") String version,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
     Schema schema = getSchemaByVersion(subject, version, "", true, null);
     if (schema == null) {
@@ -269,7 +274,12 @@ public class SubjectVersionsResource {
         + version
         + " from the schema registry";
     try {
-      return schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
+      limit = schemaRegistry.normalizeSchemaLimit(limit);
+      List<Integer> schemas = schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
+      return schemas.stream()
+        .skip(offset)
+        .limit(limit)
+        .collect(Collectors.toList());
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
