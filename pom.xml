@@ -98,14 +98,15 @@
         <jsonata-version>2.4.5</jsonata-version>
         <json-schema.version>1.14.5</json-schema.version>
         <json-skema.version>0.19.0</json-skema.version>
-        <kcache.version>4.0.11</kcache.version>
+        <kcache.version>5.2.0</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
-        <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
+        <protobuf.version>4.29.3</protobuf.version>
+        <protobuf.maven.plugin.version>2.10.3</protobuf.maven.plugin.version>
         <okio.version>3.4.0</okio.version>
         <tink.version>1.15.0</tink.version>
         <tink.aws.kms.version>1.10.1</tink.aws.kms.version>
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
-        <wire.version>4.9.7</wire.version>
+        <wire.version>5.1.0</wire.version>
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.7.3-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
@@ -511,26 +512,24 @@
                     <version>${exec-maven-plugin.version}</version>
                 </plugin>
                 <plugin>
-                    <groupId>com.github.os72</groupId>
-                    <artifactId>protoc-jar-maven-plugin</artifactId>
-                    <version>${protoc.jar.maven.plugin.version}</version>
+                    <groupId>io.github.ascopes</groupId>
+                    <artifactId>protobuf-maven-plugin</artifactId>
+                    <version>${protobuf.maven.plugin.version}</version>
+
+                    <configuration>
+                        <protocVersion>${protobuf.version}</protocVersion>
+                        <outputDirectory>src/test/java</outputDirectory>
+                        <sourceDirectories>
+                            <include>src/test/proto</include>
+                        </sourceDirectories>
+                        <embedSourcesInClassOutputs>true</embedSourcesInClassOutputs>
+                    </configuration>
+
                     <executions>
                         <execution>
-                            <phase>generate-test-sources</phase>
                             <goals>
-                                <goal>run</goal>
+                                <goal>generate-test</goal>
                             </goals>
-                            <configuration>
-                                <protocArtifact>com.google.protobuf:protoc:${protobuf.version}</protocArtifact>
-                                <protocVersion>${protobuf.version}</protocVersion>
-                                <includeStdTypes>true</includeStdTypes>
-                                <includeMavenTypes>direct</includeMavenTypes>
-                                <addSources>none</addSources>
-                                <outputDirectory>src/test/java</outputDirectory>
-                                <inputDirectories>
-                                    <include>src/test/proto</include>
-                                </inputDirectories>
-                            </configuration>
                         </execution>
                     </executions>
                 </plugin>

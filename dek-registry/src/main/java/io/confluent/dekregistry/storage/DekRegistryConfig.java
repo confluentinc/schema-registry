@@ -40,6 +40,14 @@ public class DekRegistryConfig extends SchemaRegistryConfig {
   protected static final String DEK_REGISTRY_TOPIC_DEFAULT = "_dek_registry_keys";
   protected static final int DEK_REGISTRY_MAX_KEYS_DEFAULT = 10000;
 
+  protected static final String DEK_REGISTRY_SEARCH_DEFAULT_LIMIT_CONFIG =
+          "dek.registry.search.default.limit";
+  protected static final int DEK_REGISTRY_SEARCH_DEFAULT_LIMIT_DEFAULT = 10000;
+
+  protected static final String DEK_REGISTRY_SEARCH_MAX_LIMIT_CONFIG =
+          "dek.registry.search.max.limit";
+  protected static final int DEK_REGISTRY_SEARCH_MAX_LIMIT_DEFAULT = 10000;
+
   protected static final String DEK_REGISTRY_TOPIC_DOC =
       "The topic used to persist keys for the dek registry.";
   protected static final String DEK_REGISTRY_MAX_KEYS_DOC =
@@ -47,6 +55,10 @@ public class DekRegistryConfig extends SchemaRegistryConfig {
   protected static final String DEK_REGISTRY_UPDATE_HANDLERS_DOC =
       "A list of classes to use as CacheUpdateHandler. Implementing the interface "
           + "<code>CacheUpdateHandler</code> allows you to handle Kafka cache update events.";
+  protected static final String DEK_REGISTRY_SEARCH_DEFAULT_LIMIT_DOC =
+      "The default limit for dek searches.";
+  protected static final String DEK_REGISTRY_SEARCH_MAX_LIMIT_DOC =
+      "The max limit for dek searches.";
 
   private static final ConfigDef serverConfig;
 
@@ -56,6 +68,11 @@ public class DekRegistryConfig extends SchemaRegistryConfig {
             HIGH, DEK_REGISTRY_TOPIC_DOC)
         .define(DEK_REGISTRY_MAX_KEYS_CONFIG, INT, DEK_REGISTRY_MAX_KEYS_DEFAULT,
             LOW, DEK_REGISTRY_MAX_KEYS_DOC)
+        .define(DEK_REGISTRY_SEARCH_DEFAULT_LIMIT_CONFIG, INT,
+                DEK_REGISTRY_SEARCH_DEFAULT_LIMIT_DEFAULT,
+                LOW, DEK_REGISTRY_SEARCH_DEFAULT_LIMIT_DOC)
+        .define(DEK_REGISTRY_SEARCH_MAX_LIMIT_CONFIG, INT, DEK_REGISTRY_SEARCH_MAX_LIMIT_DEFAULT,
+                LOW, DEK_REGISTRY_SEARCH_MAX_LIMIT_DOC)
         .define(DEK_REGISTRY_UPDATE_HANDLERS_CONFIG, ConfigDef.Type.LIST, "",
             LOW, DEK_REGISTRY_UPDATE_HANDLERS_DOC);
   }

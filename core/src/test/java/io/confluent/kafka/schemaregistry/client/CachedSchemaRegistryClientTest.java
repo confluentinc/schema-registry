@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.client;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import java.time.Duration;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -31,7 +32,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
 import java.util.ArrayList;
@@ -41,6 +42,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.CONTEXT_NAME_STRATEGY;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertThrows;
 
 public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
@@ -104,7 +106,7 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
     int i = 0;
     while (i < numMessages) {
-      ConsumerRecords<String, Object> records = consumer.poll(1000);
+      ConsumerRecords<String, Object> records = consumer.poll(Duration.ofMillis(1000));
       for (ConsumerRecord<String, Object> record : records) {
         recordList.add(record.value());
         i++;
@@ -274,22 +276,24 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     assertArrayEquals(objects, recordList.toArray());
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testAvroNewProducerUsingInvalidContextStrategy() {
-    String topic = "testAvro";
-    IndexedRecord avroRecord = createAvroRecord();
-    Object[] objects = new Object[]
-        {avroRecord, true, 130, 345L, 1.23f, 2.34d, "abc", "def".getBytes()};
-    Properties producerProps = createNewProducerProps();
-    producerProps.put(CONTEXT_NAME_STRATEGY, InvalidContextNameStrategy.class.getName());
-    KafkaProducer producer = createNewProducer(producerProps);
-    newProduce(producer, topic, objects);
+    assertThrows(IllegalArgumentException.class, () -> {
+      String topic = "testAvro";
+      IndexedRecord avroRecord = createAvroRecord();
+      Object[] objects = new Object[]
+          {avroRecord, true, 130, 345L, 1.23f, 2.34d, "abc", "def".getBytes()};
+      Properties producerProps = createNewProducerProps();
+      producerProps.put(CONTEXT_NAME_STRATEGY, InvalidContextNameStrategy.class.getName());
+      KafkaProducer producer = createNewProducer(producerProps);
+      newProduce(producer, topic, objects);
 
-    Properties consumerProps = createConsumerProps();
-    consumerProps.put(CONTEXT_NAME_STRATEGY, InvalidContextNameStrategy.class.getName());
-    Consumer<String, Object> consumer = createConsumer(consumerProps);
-    ArrayList<Object> recordList = consume(consumer, topic, objects.length);
-    assertArrayEquals(objects, recordList.toArray());
+      Properties consumerProps = createConsumerProps();
+      consumerProps.put(CONTEXT_NAME_STRATEGY, InvalidContextNameStrategy.class.getName());
+      Consumer<String, Object> consumer = createConsumer(consumerProps);
+      ArrayList<Object> recordList = consume(consumer, topic, objects.length);
+      assertArrayEquals(objects, recordList.toArray());
+    });
   }
 
   public static class CustomContextNameStrategy implements ContextNameStrategy {
