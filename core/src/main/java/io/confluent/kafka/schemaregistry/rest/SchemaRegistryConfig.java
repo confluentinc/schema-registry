@@ -220,6 +220,20 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final int SCHEMA_SEARCH_MAX_LIMIT_DEFAULT = 1000;
 
   /**
+   * <code>subject.version.search.default.limit</code>
+   */
+  public static final String SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG =
+          "subject.version.search.default.limit";
+  public static final int SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
+  /**
+   * <code>subject.version.search.max.limit</code>
+   */
+  public static final String SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG =
+          "subject.version.search.max.limit";
+  public static final int SUBJECT_VERSION_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
+  /**
    * <code>context.search.default.limit</code>
    */
   public static final String CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG = "context.search.default.limit";
@@ -405,6 +419,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "The default limit for context searches.";
   protected static final String CONTEXT_SEARCH_MAX_LIMIT_DOC =
       "The max limit for context searches.";
+  protected static final String SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DOC =
+      "The default limit for subject version searches.";
+  protected static final String SUBJECT_VERSION_SEARCH_MAX_LIMIT_DOC =
+      "The max limit for subject version searches.";
   protected static final String SUBJECT_SEARCH_DEFAULT_LIMIT_DOC =
       "The default limit for subject searches.";
   protected static final String SUBJECT_SEARCH_MAX_LIMIT_DOC =
@@ -637,6 +655,14 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
         SCHEMA_SEARCH_MAX_LIMIT_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_SEARCH_MAX_LIMIT_DOC
+    )
+    .define(SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DOC
+    )
+    .define(SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SUBJECT_VERSION_SEARCH_MAX_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, SUBJECT_VERSION_SEARCH_MAX_LIMIT_DOC
     )
     .define(SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
             SUBJECT_SEARCH_DEFAULT_LIMIT_DEFAULT,
