@@ -129,14 +129,13 @@ public class HcVaultKmsClient implements KmsClient {
   /**
    * Loads default Vault config.
    *
-   * <p>Token and timeouts can be loaded from environment variables.
+   * <p>Token and timeouts can be loaded from environment variables.</p>
    *
    * <ul>
    *     <li>Vault Token read from "VAULT_TOKEN" environment variable</li>
    *     <li>Open Timeout read from "VAULT_OPEN_TIMEOUT" environment variable</li>
    *     <li>Read Timeout read from "VAULT_READ_TIMEOUT" environment variable</li>
    * </ul>
-   * </p>
    */
   @Override
   public KmsClient withDefaultCredentials() throws GeneralSecurityException {

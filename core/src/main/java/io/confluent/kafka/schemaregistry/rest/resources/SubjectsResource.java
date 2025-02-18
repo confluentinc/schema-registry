@@ -40,6 +40,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +62,8 @@ import javax.ws.rs.core.HttpHeaders;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Path("/subjects")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -229,6 +232,10 @@ public class SubjectsResource {
       @DefaultValue(QualifiedSubject.CONTEXT_WILDCARD)
       @Parameter(description = "Subject name prefix")
       @QueryParam("subjectPrefix") String subjectPrefix,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit,
       @Parameter(description = "Whether to look up deleted subjects")
       @QueryParam("deleted") boolean lookupDeletedSubjects,
       @Parameter(description = "Whether to return deleted subjects only")
@@ -242,8 +249,15 @@ public class SubjectsResource {
       filter = LookupFilter.INCLUDE_DELETED;
     }
     try {
-      return schemaRegistry.listSubjectsWithPrefix(
-          subjectPrefix != null ? subjectPrefix : QualifiedSubject.CONTEXT_WILDCARD, filter);
+      Set<String> subjects = schemaRegistry.listSubjectsWithPrefix(
+              subjectPrefix != null ? subjectPrefix : QualifiedSubject.CONTEXT_WILDCARD, filter);
+      Stream<String> stream = subjects.stream();
+
+      limit = schemaRegistry.normalizeSubjectLimit(limit);
+      return stream
+        .skip(offset)
+        .limit(limit)
+        .collect(Collectors.toCollection(LinkedHashSet::new)); // preserve order
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {

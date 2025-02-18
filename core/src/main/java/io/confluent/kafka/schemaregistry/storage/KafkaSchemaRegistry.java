@@ -149,9 +149,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final Mode defaultMode;
   private final int kafkaStoreTimeoutMs;
   private final int initTimeout;
+  private final boolean initWaitForReader;
   private final int kafkaStoreMaxRetries;
-  private final int searchDefaultLimit;
-  private final int searchMaxLimit;
+  private final int schemaSearchDefaultLimit;
+  private final int schemaSearchMaxLimit;
+  private final int subjectSearchDefaultLimit;
+  private final int subjectSearchMaxLimit;
   private final boolean delayLeaderElection;
   private final boolean allowModeChanges;
   private final boolean enableStoreHealthCheck;
@@ -206,6 +209,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
+    this.initWaitForReader =
+        config.getBoolean(SchemaRegistryConfig.KAFKASTORE_INIT_WAIT_FOR_READER_CONFIG);
     this.kafkaStoreMaxRetries =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_MAX_RETRIES_CONFIG);
     this.serializer = serializer;
@@ -222,9 +227,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
                 TimeUnit.SECONDS)
         .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
-    this.searchDefaultLimit =
-        config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
-    this.searchMaxLimit = config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_MAX_LIMIT_CONFIG);
+    this.schemaSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.schemaSearchMaxLimit = config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_MAX_LIMIT_CONFIG);
+    this.subjectSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.subjectSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_MAX_LIMIT_CONFIG);
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
@@ -533,12 +542,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           // The new leader may not know the exact last offset in the Kafka log. So, mark the
           // last offset invalid here
           kafkaStore.markLastWrittenOffsetInvalid();
-          //ensure the new leader catches up with the offsets before it gets nextid and assigns
-          // leader
-          try {
-            kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
-          } catch (StoreException e) {
-            throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
+          if (initWaitForReader) {
+            //ensure the new leader catches up with the offsets before it gets nextid and assigns
+            // leader
+            try {
+              kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
+            } catch (StoreException e) {
+              throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
+            }
           }
           idGenerator.init();
         }
@@ -594,12 +605,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return providers.get(schemaType);
   }
 
-  public int normalizeLimit(int suppliedLimit) {
-    int limit = searchDefaultLimit;
-    if (suppliedLimit > 0 && suppliedLimit <= searchMaxLimit) {
+  public int normalizeLimit(int suppliedLimit, int defaultLimit, int maxLimit) {
+    int limit = defaultLimit;
+    if (suppliedLimit > 0 && suppliedLimit <= maxLimit) {
       limit = suppliedLimit;
     }
     return limit;
+  }
+
+  public int normalizeSchemaLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, schemaSearchDefaultLimit, schemaSearchMaxLimit);
+  }
+
+  public int normalizeSubjectLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, subjectSearchDefaultLimit, subjectSearchMaxLimit);
   }
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
@@ -2127,14 +2146,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public void close() throws IOException {
     log.info("Shutting down schema registry");
-    kafkaStore.close();
-    metadataEncoder.close();
     if (leaderElector != null) {
       leaderElector.close();
     }
     if (leaderRestService != null) {
       leaderRestService.close();
     }
+    kafkaStore.close();
+    metadataEncoder.close();
   }
 
   public void updateConfig(String subject, Config config)
