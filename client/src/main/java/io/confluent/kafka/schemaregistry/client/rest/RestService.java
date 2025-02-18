@@ -1246,6 +1246,17 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public List<String> getAllContextsWithPagination(int limit, int offset)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/contexts");
+    builder.queryParam("limit", limit);
+    builder.queryParam("offset", offset);
+    String path = builder.build().toString();
+    List<String> response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
+            ALL_CONTEXTS_RESPONSE_TYPE);
+    return response;
+  }
+
   public List<String> getAllSubjects()
       throws IOException, RestClientException {
     return getAllSubjects(DEFAULT_REQUEST_PROPERTIES);
