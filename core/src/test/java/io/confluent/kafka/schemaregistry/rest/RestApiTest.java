@@ -923,6 +923,9 @@ public class RestApiTest extends ClusterTestHarness {
     refs = restApp.restClient.getReferencedBy(subject, 1);
     assertTrue(refs.isEmpty());
 
+    refs = restApp.restClient.getReferencedByWithPagination(subject, 1, 0, 1);
+    assertTrue(refs.isEmpty());
+
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion
             (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
