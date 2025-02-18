@@ -25,6 +25,7 @@ import com.google.common.base.Charsets;
 import com.google.common.io.CharStreams;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
@@ -126,6 +127,9 @@ public class RestService implements Closeable, Configurable {
       };
   private static final TypeReference<List<SubjectVersion>> GET_VERSIONS_RESPONSE_TYPE =
       new TypeReference<List<SubjectVersion>>() {
+      };
+  private static final TypeReference<List<ContextId>> GET_IDS_RESPONSE_TYPE =
+      new TypeReference<List<ContextId>>() {
       };
   private static final TypeReference<CompatibilityCheckResponse>
       COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE =
@@ -360,7 +364,7 @@ public class RestService implements Closeable, Configurable {
     }
   }
 
-  private HttpURLConnection buildConnection(URL url, String method, Map<String,
+  protected HttpURLConnection buildConnection(URL url, String method, Map<String,
                                             String> requestProperties)
       throws IOException {
     HttpURLConnection connection = null;
@@ -997,7 +1001,7 @@ public class RestService implements Closeable, Configurable {
       throws IOException, RestClientException {
     return getId(requestProperties, id, subject, null, findTags, fetchMaxId);
   }
-  
+
   public SchemaString getId(Map<String, String> requestProperties,
       int id, String subject, String format, Set<String> findTags, boolean fetchMaxId)
       throws IOException, RestClientException {
@@ -1194,6 +1198,19 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public List<Integer> getReferencedByWithPagination(String subject,
+                                                     int version, int offset, int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/referencedby");
+    builder.queryParam("offset", offset);
+    builder.queryParam("limit", limit);
+    String path = builder.build(subject, version).toString();
+
+    List<Integer> response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
+            GET_REFERENCED_BY_RESPONSE_TYPE);
+    return response;
+  }
+
   public List<Integer> getAllVersions(String subject)
       throws IOException, RestClientException {
     return getAllVersions(DEFAULT_REQUEST_PROPERTIES, subject);
@@ -1227,6 +1244,27 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public List<Integer> getAllSubjectVersionsWithPagination(String subject, int offset, int limit)
+          throws IOException, RestClientException {
+    return getAllSubjectVersionsWithPagination(DEFAULT_REQUEST_PROPERTIES, subject, offset, limit);
+  }
+
+  public List<Integer> getAllSubjectVersionsWithPagination(Map<String, String> requestProperties,
+                                                          String subject,
+                                                          int offset, int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions");
+    builder.queryParam("deleted", false);
+    builder.queryParam("deletedOnly", false);
+    builder.queryParam("offset", offset);
+    builder.queryParam("limit", limit);
+    String path = builder.build(subject).toString();
+
+    List<Integer> response = httpRequest(path, "GET", null, requestProperties,
+            ALL_VERSIONS_RESPONSE_TYPE);
+    return response;
+  }
+
   public List<Integer> getDeletedOnlyVersions(String subject)
       throws IOException, RestClientException {
     return getAllVersions(DEFAULT_REQUEST_PROPERTIES, subject, false, true);
@@ -1243,6 +1281,17 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build().toString();
     List<String> response = httpRequest(path, "GET", null, requestProperties,
         ALL_CONTEXTS_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<String> getAllContextsWithPagination(int offset, int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/contexts");
+    builder.queryParam("offset", offset);
+    builder.queryParam("limit", limit);
+    String path = builder.build().toString();
+    List<String> response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
+            ALL_CONTEXTS_RESPONSE_TYPE);
     return response;
   }
 
@@ -1399,6 +1448,39 @@ public class RestService implements Closeable, Configurable {
 
     List<SubjectVersion> response = httpRequest(path, "GET", null, requestProperties,
         GET_VERSIONS_RESPONSE_TYPE);
+
+    return response;
+  }
+
+  public SchemaString getByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    return getByGuid(DEFAULT_REQUEST_PROPERTIES, guid, format);
+  }
+
+  public SchemaString getByGuid(Map<String, String> requestProperties, String guid, String format)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/guids/{guid}");
+    if (format != null) {
+      builder.queryParam("format", format);
+    }
+    String path = builder.build(guid).toString();
+
+    SchemaString response = httpRequest(path, "GET", null, requestProperties,
+        GET_SCHEMA_BY_ID_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<ContextId> getAllContextIds(String guid) throws IOException, RestClientException {
+    return getAllContextIds(DEFAULT_REQUEST_PROPERTIES, guid);
+  }
+
+  public List<ContextId> getAllContextIds(Map<String, String> requestProperties, String guid)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/guids/{guid}/ids");
+    String path = builder.build(guid).toString();
+
+    List<ContextId> response = httpRequest(path, "GET", null, requestProperties,
+        GET_IDS_RESPONSE_TYPE);
 
     return response;
   }

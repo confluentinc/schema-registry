@@ -41,6 +41,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetExcep
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
+import io.confluent.kafka.schemaregistry.storage.MD5;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
@@ -72,6 +73,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Path("/subjects/{subject}/versions")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -167,6 +169,7 @@ public class SubjectVersionsResource {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
         schema.setSchema(parsedSchema.formattedString(format));
       }
+      schema.setGuid(MD5.ofSchema(schema).toString());
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
@@ -251,7 +254,11 @@ public class SubjectVersionsResource {
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
-      @PathParam("version") String version) {
+      @PathParam("version") String version,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
     Schema schema = getSchemaByVersion(subject, version, "", true, null);
     if (schema == null) {
@@ -269,7 +276,12 @@ public class SubjectVersionsResource {
         + version
         + " from the schema registry";
     try {
-      return schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
+      limit = schemaRegistry.normalizeSchemaReferencedByLimit(limit);
+      List<Integer> ids = schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
+      return ids.stream()
+        .skip(offset)
+        .limit(limit)
+        .collect(Collectors.toList());
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -308,7 +320,11 @@ public class SubjectVersionsResource {
       @Parameter(description = "Whether to include deleted schemas")
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Whether to return deleted schemas only")
-      @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema) {
+      @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
@@ -347,7 +363,12 @@ public class SubjectVersionsResource {
       SchemaKey schema = resultSchemas.next();
       allVersions.add(schema.getVersion());
     }
-    return allVersions;
+
+    limit = schemaRegistry.normalizeSubjectVersionLimit(limit);
+    return allVersions.stream()
+            .skip(offset)
+            .limit(limit)
+            .collect(Collectors.toList());
   }
 
   @POST
@@ -438,6 +459,7 @@ public class SubjectVersionsResource {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
         result.setSchema(parsedSchema.formattedString(format));
       }
+      result.setGuid(MD5.ofSchema(result).toString());
       registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
