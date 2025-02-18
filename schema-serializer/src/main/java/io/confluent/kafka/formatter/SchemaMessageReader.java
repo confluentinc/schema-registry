@@ -21,12 +21,14 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
+import java.io.InputStream;
 import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import kafka.common.MessageReader;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
@@ -57,14 +59,14 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import org.apache.kafka.tools.api.RecordReader;
 
-public abstract class SchemaMessageReader<T> implements MessageReader {
+public abstract class SchemaMessageReader<T> implements RecordReader {
 
   public static final String VALUE_SCHEMA = "value.schema";
   public static final String KEY_SCHEMA = "key.schema";
 
   private String topic = null;
-  private BufferedReader reader = null;
   private Boolean parseKey = false;
   private String keySeparator = "\t";
   private boolean parseHeaders = false;
@@ -91,7 +93,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
    */
   public SchemaMessageReader(
       String url, ParsedSchema keySchema, ParsedSchema valueSchema,
-      String topic, boolean parseKey, BufferedReader reader,
+      String topic, boolean parseKey,
       boolean normalizeSchema, boolean autoRegister, boolean useLatest
   ) {
     this.keySchema = keySchema;
@@ -100,7 +102,6 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     this.keySubject = topic != null ? topic + "-key" : null;
     this.valueSubject = topic != null ? topic + "-value" : null;
     this.parseKey = parseKey;
-    this.reader = reader;
     this.serializer = createSerializer(null);
     Map<String, Object> configs = new HashMap<>();
     configs.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, url);
@@ -113,7 +114,13 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   protected abstract SchemaMessageSerializer<T> createSerializer(Serializer keySerializer);
 
   @Override
-  public void init(java.io.InputStream inputStream, Properties props) {
+  public void configure(Map<String, ?> configs) {
+    Properties props = new Properties();
+    props.putAll(configs);
+    init(props);
+  }
+
+  public void init(Properties props) {
     topic = props.getProperty("topic");
     if (topic == null) {
       throw new ConfigException("Missing topic!");
@@ -165,7 +172,6 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       throw new KafkaException("null.marker and headers.key.separator may not be equal");
     }
 
-    reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
     String url = props.getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
@@ -370,54 +376,59 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
   }
 
   @Override
-  public ProducerRecord<byte[], byte[]> readMessage() {
-    try {
-      String line = reader.readLine();
-      if (line == null) {
-        return null;
-      }
-
-      String headersString = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter");
-      int headersOffset = headersString == null
-          ? 0
-          : headersString.length() + headersDelimiter.length();
-      Headers headers = new RecordHeaders();
-      if (headersString != null && !headersString.equals(nullMarker)) {
-        splitHeaders(headersString, line).forEach(
-            header -> headers.add(header.getKey(), header.getValue()));
-      }
-
-      String keyString = parse(parseKey, line, headersOffset, keySeparator, "key separator");
-      int keyOffset = keyString == null ? 0 : keyString.length() + keySeparator.length();
-      byte[] serializedKey = null;
-      if (keyString != null && !keyString.equals(nullMarker)) {
-        if (serializer.getKeySerializer() != null) {
-          serializedKey = serializeNonSchemaKey(headers, keyString);
-        } else {
-          T key = readFrom(keyString, keySchema);
-          serializedKey = serializer.serialize(keySubject, topic, true, headers, key, keySchema);
+  public Iterator<ProducerRecord<byte[], byte[]>> readRecords(InputStream inputStream) {
+    List<ProducerRecord<byte[], byte[]>> records = new ArrayList<>();
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+      while (true) {
+        String line = reader.readLine();
+        if (line == null) {
+          break;
         }
+
+        String headersString = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter");
+        int headersOffset = headersString == null
+            ? 0
+            : headersString.length() + headersDelimiter.length();
+        Headers headers = new RecordHeaders();
+        if (headersString != null && !headersString.equals(nullMarker)) {
+          splitHeaders(headersString, line).forEach(
+              header -> headers.add(header.getKey(), header.getValue()));
+        }
+
+        String keyString = parse(parseKey, line, headersOffset, keySeparator, "key separator");
+        int keyOffset = keyString == null ? 0 : keyString.length() + keySeparator.length();
+        byte[] serializedKey = null;
+        if (keyString != null && !keyString.equals(nullMarker)) {
+          if (serializer.getKeySerializer() != null) {
+            serializedKey = serializeNonSchemaKey(headers, keyString);
+          } else {
+            T key = readFrom(keyString, keySchema);
+            serializedKey = serializer.serialize(keySubject, topic, true, headers, key, keySchema);
+          }
+        }
+
+        String valueString = line.substring(headersOffset + keyOffset);
+        byte[] serializedValue = null;
+        if (valueString != null && !valueString.equals(nullMarker)) {
+          T value = readFrom(valueString, valueSchema);
+          serializedValue = serializer.serialize(valueSubject, topic, false, headers,
+              value, valueSchema);
+        }
+
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+            topic,
+            null,
+            serializedKey,
+            serializedValue,
+            headers);
+
+        records.add(record);
       }
-
-      String valueString = line.substring(headersOffset + keyOffset);
-      byte[] serializedValue = null;
-      if (valueString != null && !valueString.equals(nullMarker)) {
-        T value = readFrom(valueString, valueSchema);
-        serializedValue = serializer.serialize(valueSubject, topic, false, headers,
-            value, valueSchema);
-      }
-
-      ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
-          topic,
-          null,
-          serializedKey,
-          serializedValue,
-          headers);
-
-      return record;
     } catch (IOException e) {
       throw new KafkaException("Error reading from input", e);
     }
+    return records.iterator();
   }
 
   private String parse(
@@ -495,3 +506,4 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
 
   protected abstract SchemaProvider getProvider();
 }
+
