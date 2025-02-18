@@ -105,6 +105,15 @@ public class RestApiTest extends ClusterTestHarness {
         Collections.singletonList(DEFAULT_CONTEXT),
         restApp.restClient.getAllContexts());
 
+    // test getAllContexts with pagination
+    assertEquals("Getting all contexts with offset=0 limit=1 should return default context",
+        Collections.singletonList(DEFAULT_CONTEXT),
+        restApp.restClient.getAllContextsWithPagination(0,1));
+    assertEquals("Getting all contexts with offset=1 limit=1 should return empty list",
+        Collections.emptyList(),
+        restApp.restClient.getAllContextsWithPagination(1,1));
+
+
     // test getAllSubjects with no existing data
     assertEquals("Getting all subjects should return empty",
                  allSubjects,
@@ -149,6 +158,16 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Getting all versions from subject2 should match all registered versions",
                  allVersionsInSubject2,
                  restApp.restClient.getAllVersions(subject2));
+
+    // test getAllVersions with pagination offset=0, limit=1 should return first registered subject version
+    assertEquals("Getting all versions from subject2 with pagination offset=0, limit=1 should return first registered subject version",
+            ImmutableList.of(allVersionsInSubject2.get(0)),
+            restApp.restClient.getAllSubjectVersionsWithPagination(subject2, 0, 1));
+
+    // test getAllVersions with pagination offset=1, limit=1 should return first registered subject version
+    assertEquals("Getting all versions from subject2 with pagination offset=1, limit=1 should return first registered subject version",
+            ImmutableList.of(allVersionsInSubject2.get(1)),
+            restApp.restClient.getAllSubjectVersionsWithPagination(subject2, 1, 1));
 
     // test getAllSubjects with existing data
     assertEquals("Getting all subjects should match all registered subjects",
@@ -885,6 +904,9 @@ public class RestApiTest extends ClusterTestHarness {
         schemaString.getReferences());
 
     List<Integer> refs = restApp.restClient.getReferencedBy(subject, 1);
+    assertEquals(parentId, refs.get(0).intValue());
+    // test getReferences with pagination offset=0 limit=1
+    refs = restApp.restClient.getReferencedByWithPagination(subject, 1, 0, 1);
     assertEquals(parentId, refs.get(0).intValue());
 
     ns.MyRecord myrecord = new ns.MyRecord();
