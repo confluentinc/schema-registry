@@ -1204,10 +1204,21 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(associatedSubjects.size(), 1);
     assertEquals(Collections.singletonList(subject1), associatedSubjects);
 
+    associatedSubjects = restApp.restClient.getAllSubjectsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, false, 1, 1);
+    assertEquals(associatedSubjects.size(), 0);
+    assertEquals(Collections.emptyList(), associatedSubjects);
+
     associatedSubjects = restApp.restClient.getAllSubjectsById(
         RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true);
     assertEquals(associatedSubjects.size(), 2);
     assertEquals(Arrays.asList(subject1, subject2), associatedSubjects);
+
+    associatedSubjects = restApp.restClient.getAllSubjectsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true, 1, 0);
+    assertEquals(associatedSubjects.size(), 1);
+    assertEquals(Collections.singletonList(subject1), associatedSubjects);
+
   }
 
   @Test
