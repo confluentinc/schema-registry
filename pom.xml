@@ -109,7 +109,7 @@
         <io.confluent.schema-registry.version>7.4.9-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.17.0</commons.lang3.version>
-        <commons.validator.version>1.7</commons.validator.version>
+        <commons.validator.version>1.9.0</commons.validator.version>
     </properties>
 
     <repositories>
