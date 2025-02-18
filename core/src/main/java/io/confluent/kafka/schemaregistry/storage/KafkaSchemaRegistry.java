@@ -154,6 +154,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final int schemaSearchDefaultLimit;
   private final int schemaSearchMaxLimit;
   private final int subjectSearchDefaultLimit;
+  private final int contextSearchMaxLimit;
+  private final int contextSearchDefaultLimit;
   private final int subjectSearchMaxLimit;
   private final boolean delayLeaderElection;
   private final boolean allowModeChanges;
@@ -227,6 +229,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
                 TimeUnit.SECONDS)
         .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
+    this.contextSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.contextSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.CONTEXT_SEARCH_MAX_LIMIT_CONFIG);
     this.schemaSearchDefaultLimit =
             config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
     this.schemaSearchMaxLimit = config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_MAX_LIMIT_CONFIG);
@@ -619,6 +625,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public int normalizeSubjectLimit(int suppliedLimit) {
     return normalizeLimit(suppliedLimit, subjectSearchDefaultLimit, subjectSearchMaxLimit);
+  }
+
+  public int normalizeContextLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, contextSearchDefaultLimit, contextSearchMaxLimit);
   }
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
