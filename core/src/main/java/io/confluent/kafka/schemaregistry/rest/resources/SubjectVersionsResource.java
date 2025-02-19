@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import com.google.common.collect.Streams;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
@@ -318,13 +319,16 @@ public class SubjectVersionsResource {
       @Parameter(description = "Whether to include deleted schemas")
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Whether to return deleted schemas only")
-      @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema) {
+      @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     // check if subject exists. If not, throw 404
     Iterator<SchemaKey> resultSchemas;
-    List<Integer> allVersions = new ArrayList<>();
     String errorMessage = "Error while validating that subject "
                           + subject
                           + " exists in the registry";
@@ -353,11 +357,13 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    while (resultSchemas.hasNext()) {
-      SchemaKey schema = resultSchemas.next();
-      allVersions.add(schema.getVersion());
-    }
-    return allVersions;
+
+    limit = schemaRegistry.normalizeSubjectVersionLimit(limit);
+    return Streams.stream(resultSchemas)
+            .skip(offset)
+            .limit(limit)
+            .map(SchemaKey::getVersion)
+            .collect(Collectors.toList());
   }
 
   @POST
