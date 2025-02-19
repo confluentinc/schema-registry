@@ -313,6 +313,40 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue);
      * @return The version.
      */
     int getVersion();
+
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+     * @return Whether the oneofMessage field is set.
+     */
+    boolean hasOneofMessage();
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+     * @return The oneofMessage.
+     */
+    io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii getOneofMessage();
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+     */
+    io.confluent.kafka.schemaregistry.rules.WidgetProto.PiiOrBuilder getOneofMessageOrBuilder();
+
+    /**
+     * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+     * @return Whether the oneofString field is set.
+     */
+    boolean hasOneofString();
+    /**
+     * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+     * @return The oneofString.
+     */
+    java.lang.String getOneofString();
+    /**
+     * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+     * @return The bytes for oneofString.
+     */
+    com.google.protobuf.ByteString
+        getOneofStringBytes();
+
+    io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget.PiiOneofCase getPiiOneofCase();
   }
   /**
    * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.widget.Widget}
@@ -367,6 +401,48 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue);
       return io.confluent.kafka.schemaregistry.rules.WidgetProto.internal_static_io_confluent_kafka_schemaregistry_rules_widget_Widget_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget.class, io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget.Builder.class);
+    }
+
+    private int piiOneofCase_ = 0;
+    @SuppressWarnings("serial")
+    private java.lang.Object piiOneof_;
+    public enum PiiOneofCase
+        implements com.google.protobuf.Internal.EnumLite,
+            com.google.protobuf.AbstractMessage.InternalOneOfEnum {
+      ONEOF_MESSAGE(16),
+      ONEOF_STRING(17),
+      PIIONEOF_NOT_SET(0);
+      private final int value;
+      private PiiOneofCase(int value) {
+        this.value = value;
+      }
+      /**
+       * @param value The number of the enum to look for.
+       * @return The enum associated with the given number.
+       * @deprecated Use {@link #forNumber(int)} instead.
+       */
+      @java.lang.Deprecated
+      public static PiiOneofCase valueOf(int value) {
+        return forNumber(value);
+      }
+
+      public static PiiOneofCase forNumber(int value) {
+        switch (value) {
+          case 16: return ONEOF_MESSAGE;
+          case 17: return ONEOF_STRING;
+          case 0: return PIIONEOF_NOT_SET;
+          default: return null;
+        }
+      }
+      public int getNumber() {
+        return this.value;
+      }
+    };
+
+    public PiiOneofCase
+    getPiiOneofCase() {
+      return PiiOneofCase.forNumber(
+          piiOneofCase_);
     }
 
     public static final int NAME_FIELD_NUMBER = 1;
@@ -749,6 +825,89 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
       return version_;
     }
 
+    public static final int ONEOF_MESSAGE_FIELD_NUMBER = 16;
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+     * @return Whether the oneofMessage field is set.
+     */
+    @java.lang.Override
+    public boolean hasOneofMessage() {
+      return piiOneofCase_ == 16;
+    }
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+     * @return The oneofMessage.
+     */
+    @java.lang.Override
+    public io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii getOneofMessage() {
+      if (piiOneofCase_ == 16) {
+         return (io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii) piiOneof_;
+      }
+      return io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.getDefaultInstance();
+    }
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+     */
+    @java.lang.Override
+    public io.confluent.kafka.schemaregistry.rules.WidgetProto.PiiOrBuilder getOneofMessageOrBuilder() {
+      if (piiOneofCase_ == 16) {
+         return (io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii) piiOneof_;
+      }
+      return io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.getDefaultInstance();
+    }
+
+    public static final int ONEOF_STRING_FIELD_NUMBER = 17;
+    /**
+     * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+     * @return Whether the oneofString field is set.
+     */
+    public boolean hasOneofString() {
+      return piiOneofCase_ == 17;
+    }
+    /**
+     * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+     * @return The oneofString.
+     */
+    public java.lang.String getOneofString() {
+      java.lang.Object ref = "";
+      if (piiOneofCase_ == 17) {
+        ref = piiOneof_;
+      }
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        if (piiOneofCase_ == 17) {
+          piiOneof_ = s;
+        }
+        return s;
+      }
+    }
+    /**
+     * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+     * @return The bytes for oneofString.
+     */
+    public com.google.protobuf.ByteString
+        getOneofStringBytes() {
+      java.lang.Object ref = "";
+      if (piiOneofCase_ == 17) {
+        ref = piiOneof_;
+      }
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        if (piiOneofCase_ == 17) {
+          piiOneof_ = b;
+        }
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
     private byte memoizedIsInitialized = -1;
     @java.lang.Override
     public final boolean isInitialized() {
@@ -810,6 +969,12 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
       }
       if (version_ != 0) {
         output.writeInt32(15, version_);
+      }
+      if (piiOneofCase_ == 16) {
+        output.writeMessage(16, (io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii) piiOneof_);
+      }
+      if (piiOneofCase_ == 17) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 17, piiOneof_);
       }
       getUnknownFields().writeTo(output);
     }
@@ -887,6 +1052,13 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(15, version_);
       }
+      if (piiOneofCase_ == 16) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(16, (io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii) piiOneof_);
+      }
+      if (piiOneofCase_ == 17) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(17, piiOneof_);
+      }
       size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
@@ -933,6 +1105,19 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
           != other.getSize()) return false;
       if (getVersion()
           != other.getVersion()) return false;
+      if (!getPiiOneofCase().equals(other.getPiiOneofCase())) return false;
+      switch (piiOneofCase_) {
+        case 16:
+          if (!getOneofMessage()
+              .equals(other.getOneofMessage())) return false;
+          break;
+        case 17:
+          if (!getOneofString()
+              .equals(other.getOneofString())) return false;
+          break;
+        case 0:
+        default:
+      }
       if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
@@ -984,6 +1169,18 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
       hash = (53 * hash) + getSize();
       hash = (37 * hash) + VERSION_FIELD_NUMBER;
       hash = (53 * hash) + getVersion();
+      switch (piiOneofCase_) {
+        case 16:
+          hash = (37 * hash) + ONEOF_MESSAGE_FIELD_NUMBER;
+          hash = (53 * hash) + getOneofMessage().hashCode();
+          break;
+        case 17:
+          hash = (37 * hash) + ONEOF_STRING_FIELD_NUMBER;
+          hash = (53 * hash) + getOneofString().hashCode();
+          break;
+        case 0:
+        default:
+      }
       hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -1159,6 +1356,11 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
         internalGetMutablePiiMap().clear();
         size_ = 0;
         version_ = 0;
+        if (oneofMessageBuilder_ != null) {
+          oneofMessageBuilder_.clear();
+        }
+        piiOneofCase_ = 0;
+        piiOneof_ = null;
         return this;
       }
 
@@ -1187,6 +1389,7 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
         io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget result = new io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget(this);
         buildPartialRepeatedFields(result);
         if (bitField0_ != 0) { buildPartial0(result); }
+        buildPartialOneofs(result);
         onBuilt();
         return result;
       }
@@ -1247,6 +1450,15 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
         }
         if (((from_bitField0_ & 0x00004000) != 0)) {
           result.version_ = version_;
+        }
+      }
+
+      private void buildPartialOneofs(io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget result) {
+        result.piiOneofCase_ = piiOneofCase_;
+        result.piiOneof_ = this.piiOneof_;
+        if (piiOneofCase_ == 16 &&
+            oneofMessageBuilder_ != null) {
+          result.piiOneof_ = oneofMessageBuilder_.build();
         }
       }
 
@@ -1375,6 +1587,21 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
         if (other.getVersion() != 0) {
           setVersion(other.getVersion());
         }
+        switch (other.getPiiOneofCase()) {
+          case ONEOF_MESSAGE: {
+            mergeOneofMessage(other.getOneofMessage());
+            break;
+          }
+          case ONEOF_STRING: {
+            piiOneofCase_ = 17;
+            piiOneof_ = other.piiOneof_;
+            onChanged();
+            break;
+          }
+          case PIIONEOF_NOT_SET: {
+            break;
+          }
+        }
         this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
@@ -1489,6 +1716,19 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
                 bitField0_ |= 0x00004000;
                 break;
               } // case 120
+              case 130: {
+                input.readMessage(
+                    getOneofMessageFieldBuilder().getBuilder(),
+                    extensionRegistry);
+                piiOneofCase_ = 16;
+                break;
+              } // case 130
+              case 138: {
+                java.lang.String s = input.readStringRequireUtf8();
+                piiOneofCase_ = 17;
+                piiOneof_ = s;
+                break;
+              } // case 138
               default: {
                 if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                   done = true; // was an endgroup tag
@@ -1504,6 +1744,21 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
         } // finally
         return this;
       }
+      private int piiOneofCase_ = 0;
+      private java.lang.Object piiOneof_;
+      public PiiOneofCase
+          getPiiOneofCase() {
+        return PiiOneofCase.forNumber(
+            piiOneofCase_);
+      }
+
+      public Builder clearPiiOneof() {
+        piiOneofCase_ = 0;
+        piiOneof_ = null;
+        onChanged();
+        return this;
+      }
+
       private int bitField0_;
 
       private java.lang.Object name_ = "";
@@ -2536,6 +2791,241 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
         onChanged();
         return this;
       }
+
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii, io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.Builder, io.confluent.kafka.schemaregistry.rules.WidgetProto.PiiOrBuilder> oneofMessageBuilder_;
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+       * @return Whether the oneofMessage field is set.
+       */
+      @java.lang.Override
+      public boolean hasOneofMessage() {
+        return piiOneofCase_ == 16;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+       * @return The oneofMessage.
+       */
+      @java.lang.Override
+      public io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii getOneofMessage() {
+        if (oneofMessageBuilder_ == null) {
+          if (piiOneofCase_ == 16) {
+            return (io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii) piiOneof_;
+          }
+          return io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.getDefaultInstance();
+        } else {
+          if (piiOneofCase_ == 16) {
+            return oneofMessageBuilder_.getMessage();
+          }
+          return io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.getDefaultInstance();
+        }
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+       */
+      public Builder setOneofMessage(io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii value) {
+        if (oneofMessageBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          piiOneof_ = value;
+          onChanged();
+        } else {
+          oneofMessageBuilder_.setMessage(value);
+        }
+        piiOneofCase_ = 16;
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+       */
+      public Builder setOneofMessage(
+          io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.Builder builderForValue) {
+        if (oneofMessageBuilder_ == null) {
+          piiOneof_ = builderForValue.build();
+          onChanged();
+        } else {
+          oneofMessageBuilder_.setMessage(builderForValue.build());
+        }
+        piiOneofCase_ = 16;
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+       */
+      public Builder mergeOneofMessage(io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii value) {
+        if (oneofMessageBuilder_ == null) {
+          if (piiOneofCase_ == 16 &&
+              piiOneof_ != io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.getDefaultInstance()) {
+            piiOneof_ = io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.newBuilder((io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii) piiOneof_)
+                .mergeFrom(value).buildPartial();
+          } else {
+            piiOneof_ = value;
+          }
+          onChanged();
+        } else {
+          if (piiOneofCase_ == 16) {
+            oneofMessageBuilder_.mergeFrom(value);
+          } else {
+            oneofMessageBuilder_.setMessage(value);
+          }
+        }
+        piiOneofCase_ = 16;
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+       */
+      public Builder clearOneofMessage() {
+        if (oneofMessageBuilder_ == null) {
+          if (piiOneofCase_ == 16) {
+            piiOneofCase_ = 0;
+            piiOneof_ = null;
+            onChanged();
+          }
+        } else {
+          if (piiOneofCase_ == 16) {
+            piiOneofCase_ = 0;
+            piiOneof_ = null;
+          }
+          oneofMessageBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+       */
+      public io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.Builder getOneofMessageBuilder() {
+        return getOneofMessageFieldBuilder().getBuilder();
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+       */
+      @java.lang.Override
+      public io.confluent.kafka.schemaregistry.rules.WidgetProto.PiiOrBuilder getOneofMessageOrBuilder() {
+        if ((piiOneofCase_ == 16) && (oneofMessageBuilder_ != null)) {
+          return oneofMessageBuilder_.getMessageOrBuilder();
+        } else {
+          if (piiOneofCase_ == 16) {
+            return (io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii) piiOneof_;
+          }
+          return io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.getDefaultInstance();
+        }
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.widget.Pii oneof_message = 16;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii, io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.Builder, io.confluent.kafka.schemaregistry.rules.WidgetProto.PiiOrBuilder> 
+          getOneofMessageFieldBuilder() {
+        if (oneofMessageBuilder_ == null) {
+          if (!(piiOneofCase_ == 16)) {
+            piiOneof_ = io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.getDefaultInstance();
+          }
+          oneofMessageBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii, io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii.Builder, io.confluent.kafka.schemaregistry.rules.WidgetProto.PiiOrBuilder>(
+                  (io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii) piiOneof_,
+                  getParentForChildren(),
+                  isClean());
+          piiOneof_ = null;
+        }
+        piiOneofCase_ = 16;
+        onChanged();
+        return oneofMessageBuilder_;
+      }
+
+      /**
+       * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+       * @return Whether the oneofString field is set.
+       */
+      @java.lang.Override
+      public boolean hasOneofString() {
+        return piiOneofCase_ == 17;
+      }
+      /**
+       * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+       * @return The oneofString.
+       */
+      @java.lang.Override
+      public java.lang.String getOneofString() {
+        java.lang.Object ref = "";
+        if (piiOneofCase_ == 17) {
+          ref = piiOneof_;
+        }
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          if (piiOneofCase_ == 17) {
+            piiOneof_ = s;
+          }
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+       * @return The bytes for oneofString.
+       */
+      @java.lang.Override
+      public com.google.protobuf.ByteString
+          getOneofStringBytes() {
+        java.lang.Object ref = "";
+        if (piiOneofCase_ == 17) {
+          ref = piiOneof_;
+        }
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          if (piiOneofCase_ == 17) {
+            piiOneof_ = b;
+          }
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+       * @param value The oneofString to set.
+       * @return This builder for chaining.
+       */
+      public Builder setOneofString(
+          java.lang.String value) {
+        if (value == null) { throw new NullPointerException(); }
+        piiOneofCase_ = 17;
+        piiOneof_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearOneofString() {
+        if (piiOneofCase_ == 17) {
+          piiOneofCase_ = 0;
+          piiOneof_ = null;
+          onChanged();
+        }
+        return this;
+      }
+      /**
+       * <code>string oneof_string = 17 [(.confluent.field_meta) = { ... }</code>
+       * @param value The bytes for oneofString to set.
+       * @return This builder for chaining.
+       */
+      public Builder setOneofStringBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        checkByteStringIsUtf8(value);
+        piiOneofCase_ = 17;
+        piiOneof_ = value;
+        onChanged();
+        return this;
+      }
       @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -3178,7 +3668,7 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
     java.lang.String[] descriptorData = {
       "\n\014Widget.proto\022.io.confluent.kafka.schem" +
       "aregistry.rules.widget\032\024confluent/meta.p" +
-      "roto\"\266\004\n\006Widget\022\036\n\004name\030\001 \001(\tB\020\202D\r\032\003PII\032" +
+      "roto\"\263\005\n\006Widget\022\036\n\004name\030\001 \001(\tB\020\202D\r\032\003PII\032" +
       "\006PUBLIC\022\020\n\010lastName\030\002 \001(\t\022\020\n\010fullName\030\003 " +
       "\001(\t\022\017\n\007mybytes\030\004 \001(\014\022\r\n\005myint\030\005 \001(\005\022\016\n\006m" +
       "ylong\030\006 \001(\003\022\017\n\007myfloat\030\007 \001(\002\022\020\n\010mydouble" +
@@ -3189,13 +3679,16 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
       "kafka.schemaregistry.rules.widget.Pii\022S\n" +
       "\007pii_map\030\r \003(\0132B.io.confluent.kafka.sche" +
       "maregistry.rules.widget.Widget.PiiMapEnt" +
-      "ry\022\014\n\004size\030\016 \001(\005\022\017\n\007version\030\017 \001(\005\032b\n\013Pii" +
-      "MapEntry\022\013\n\003key\030\001 \001(\t\022B\n\005value\030\002 \001(\01323.i" +
-      "o.confluent.kafka.schemaregistry.rules.w" +
-      "idget.Pii:\0028\001\"\034\n\003Pii\022\025\n\003pii\030\001 \001(\tB\010\202D\005\032\003" +
-      "PII*\"\n\004Kind\022\010\n\004ZERO\020\000\022\007\n\003ONE\020\001\022\007\n\003TWO\020\002B" +
-      "8\n\'io.confluent.kafka.schemaregistry.rul" +
-      "esB\013WidgetProtoP\000b\006proto3"
+      "ry\022\014\n\004size\030\016 \001(\005\022\017\n\007version\030\017 \001(\005\022L\n\rone" +
+      "of_message\030\020 \001(\01323.io.confluent.kafka.sc" +
+      "hemaregistry.rules.widget.PiiH\000\022 \n\014oneof" +
+      "_string\030\021 \001(\tB\010\202D\005\032\003PIIH\000\032b\n\013PiiMapEntry" +
+      "\022\013\n\003key\030\001 \001(\t\022B\n\005value\030\002 \001(\01323.io.conflu" +
+      "ent.kafka.schemaregistry.rules.widget.Pi" +
+      "i:\0028\001B\013\n\tpii_oneof\"\034\n\003Pii\022\025\n\003pii\030\001 \001(\tB\010" +
+      "\202D\005\032\003PII*\"\n\004Kind\022\010\n\004ZERO\020\000\022\007\n\003ONE\020\001\022\007\n\003T" +
+      "WO\020\002B8\n\'io.confluent.kafka.schemaregistr" +
+      "y.rulesB\013WidgetProtoP\000b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -3207,7 +3700,7 @@ io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii defaultValue) {
     internal_static_io_confluent_kafka_schemaregistry_rules_widget_Widget_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_io_confluent_kafka_schemaregistry_rules_widget_Widget_descriptor,
-        new java.lang.String[] { "Name", "LastName", "FullName", "Mybytes", "Myint", "Mylong", "Myfloat", "Mydouble", "Myboolean", "Kind", "Ssn", "PiiArray", "PiiMap", "Size", "Version", });
+        new java.lang.String[] { "Name", "LastName", "FullName", "Mybytes", "Myint", "Mylong", "Myfloat", "Mydouble", "Myboolean", "Kind", "Ssn", "PiiArray", "PiiMap", "Size", "Version", "OneofMessage", "OneofString", "PiiOneof", });
     internal_static_io_confluent_kafka_schemaregistry_rules_widget_Widget_PiiMapEntry_descriptor =
       internal_static_io_confluent_kafka_schemaregistry_rules_widget_Widget_descriptor.getNestedTypes().get(0);
     internal_static_io_confluent_kafka_schemaregistry_rules_widget_Widget_PiiMapEntry_fieldAccessorTable = new

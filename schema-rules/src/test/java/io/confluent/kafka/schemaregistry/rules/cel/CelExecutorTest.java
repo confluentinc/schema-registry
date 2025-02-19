@@ -1449,6 +1449,7 @@ public class CelExecutorTest {
         .putPiiMap("key1", WidgetProto.Pii.newBuilder().setPii("345").build())
         .putPiiMap("key2", WidgetProto.Pii.newBuilder().setPii("678").build())
         .setSize(123)
+        .setOneofString("oneof")
         .build();
     ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
     Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
@@ -1501,6 +1502,11 @@ public class CelExecutorTest {
         "Returned object does not match",
         ImmutableList.of("345-suffix", "678-suffix"),
         ssnMapValues
+    );
+    assertEquals(
+        "Returned object does not match",
+        "oneof-suffix",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("oneof_string"))
     );
   }
 
