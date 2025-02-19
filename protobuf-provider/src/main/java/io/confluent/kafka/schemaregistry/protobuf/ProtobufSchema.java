@@ -2712,6 +2712,10 @@ public class ProtobufSchema implements ParsedSchema {
             message, fd.getFullName(), fd.getName(), getType(fd),
             getInlineTags(schemaFd)) // use schema-based fd which has the tags
         ) {
+          // skip oneof fields that are not set
+          if (fd.getContainingOneof() != null && !copy.hasField(fd)) {
+            continue;
+          }
           Object value = copy.getField(fd); // we can't use the schema-based fd
           Descriptor d = desc;
           if (schemaFd.getType() == Type.MESSAGE) {

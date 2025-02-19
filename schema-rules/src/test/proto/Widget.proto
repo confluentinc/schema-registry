@@ -24,6 +24,10 @@ message Widget {
     map<string, Pii> pii_map = 13;
     int32 size = 14;
     int32 version = 15;
+    oneof pii_oneof {
+        Pii oneof_message = 16;
+        string oneof_string = 17 [(.confluent.field_meta).tags = "PII"];
+    }
 }
 
 message Pii {
