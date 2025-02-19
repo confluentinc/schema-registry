@@ -1442,6 +1442,10 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(Arrays.asList(1,2), restApp.restClient.getAllVersions(
             RestService.DEFAULT_REQUEST_PROPERTIES,
             subject, true));
+    // test with pagination
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersionsWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES,
+            subject, true, 0, 1));
     //soft delete again
     try {
       restApp.restClient
