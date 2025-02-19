@@ -37,6 +37,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -208,7 +209,11 @@ public class SchemasResource {
       @Parameter(description = "Filters results by the respective subject")
       @QueryParam("subject") String subject,
       @Parameter(description = "Whether to include subjects where the schema was deleted")
-      @QueryParam("deleted") boolean lookupDeletedSchema) {
+      @QueryParam("deleted") boolean lookupDeletedSchema,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
     Set<String> subjects;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
         + id + " from the schema registry";
@@ -225,8 +230,11 @@ public class SchemasResource {
     if (subjects == null) {
       throw Errors.schemaNotFoundException();
     }
-
-    return subjects;
+    limit = schemaRegistry.normalizeSubjectLimit(limit);
+    return subjects.stream()
+            .skip(offset)
+            .limit(limit)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
   }
 
   @GET
@@ -257,7 +265,11 @@ public class SchemasResource {
       @Parameter(description = "Filters results by the respective subject")
       @QueryParam("subject") String subject,
       @Parameter(description = "Whether to include subject versions where the schema was deleted")
-      @QueryParam("deleted") boolean lookupDeletedSchema) {
+      @QueryParam("deleted") boolean lookupDeletedSchema,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
     List<SubjectVersion> versions;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
                           + id + " from the schema registry";
@@ -274,8 +286,11 @@ public class SchemasResource {
     if (versions == null) {
       throw Errors.schemaNotFoundException();
     }
-
-    return versions;
+    limit = schemaRegistry.normalizeSubjectVersionLimit(limit);
+    return versions.stream()
+      .skip(offset)
+      .limit(limit)
+      .collect(Collectors.toList());
   }
 
   @GET
