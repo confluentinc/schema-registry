@@ -108,6 +108,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     return restService.listKeks(subjectPrefix, lookupDeleted);
   }
 
+  public List<String> listKeksWithPagination(List<String> subjectPrefix, boolean lookupDeleted,
+                                             int offset, int limit)
+          throws IOException, RestClientException {
+    return restService.listKeksWithPagination(subjectPrefix, lookupDeleted, offset, limit);
+  }
+
   @Override
   public Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException {
@@ -128,6 +134,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   public List<String> listDeks(String kekName, boolean lookupDeleted)
       throws IOException, RestClientException {
     return restService.listDeks(kekName, lookupDeleted);
+  }
+
+  public List<String> listDeksWithPagination(String kekName, boolean lookupDeleted,
+                                             int offset, int limit)
+          throws IOException, RestClientException {
+    return restService.listDeksWithPagination(kekName, lookupDeleted, offset, limit);
   }
 
   @Override
