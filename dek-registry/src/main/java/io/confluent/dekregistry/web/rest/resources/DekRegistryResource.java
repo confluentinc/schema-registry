@@ -54,11 +54,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
@@ -110,8 +112,17 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Subject name prefix")
       @QueryParam("subjectPrefix") List<String> subjectPrefix,
       @Parameter(description = "Whether to include deleted keys")
-      @QueryParam("deleted") boolean lookupDeleted) {
-    return dekRegistry.getKekNames(subjectPrefix, lookupDeleted);
+      @QueryParam("deleted") boolean lookupDeleted,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
+    limit = dekRegistry.normalizeKekLimit(limit);
+    List<String> kekNames = dekRegistry.getKekNames(subjectPrefix, lookupDeleted);
+    return kekNames.stream()
+      .skip(offset)
+      .limit(limit)
+      .collect(Collectors.toList());
   }
 
   @GET
@@ -155,7 +166,11 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Name of the kek", required = true)
       @PathParam("name") String kekName,
       @Parameter(description = "Whether to include deleted keys")
-      @QueryParam("deleted") boolean lookupDeleted) {
+      @QueryParam("deleted") boolean lookupDeleted,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
     checkName(kekName);
 
@@ -163,7 +178,12 @@ public class DekRegistryResource extends SchemaRegistryResource {
     if (key == null) {
       throw DekRegistryErrors.keyNotFoundException(kekName);
     }
-    return dekRegistry.getDekSubjects(kekName, lookupDeleted);
+    limit = dekRegistry.normalizeDekSubjectLimit(limit);
+    List<String> dekSubjects = dekRegistry.getDekSubjects(kekName, lookupDeleted);
+    return dekSubjects.stream()
+      .skip(offset)
+      .limit(limit)
+      .collect(Collectors.toList());
   }
 
   @GET
@@ -229,7 +249,11 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Algorithm of the dek")
       @QueryParam("algorithm") DekFormat algorithm,
       @Parameter(description = "Whether to include deleted keys")
-      @QueryParam("deleted") boolean lookupDeleted) {
+      @QueryParam("deleted") boolean lookupDeleted,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
     checkName(kekName);
     checkSubject(subject);
@@ -238,7 +262,13 @@ public class DekRegistryResource extends SchemaRegistryResource {
     if (kek == null) {
       throw DekRegistryErrors.keyNotFoundException(kekName);
     }
-    return dekRegistry.getDekVersions(kekName, subject, algorithm, lookupDeleted);
+    limit = dekRegistry.normalizeDekVersionLimit(limit);
+    List<Integer> dekVersions = dekRegistry.getDekVersions(
+            kekName, subject, algorithm, lookupDeleted);
+    return dekVersions.stream()
+      .skip(offset)
+      .limit(limit)
+      .collect(Collectors.toList());
   }
 
   @GET
