@@ -149,6 +149,14 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     return restService.listDekVersions(kekName, subject, algorithm, lookupDeleted);
   }
 
+  public List<Integer> listDekVersionsWithPagination(String kekName, String subject,
+                                                     DekFormat algorithm, boolean lookupDeleted,
+                                                     int offset, int limit)
+          throws IOException, RestClientException {
+    return restService.listDekVersionsWithPagination(
+            kekName, subject, algorithm, lookupDeleted, offset, limit);
+  }
+
   @Override
   public Dek getDek(String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
