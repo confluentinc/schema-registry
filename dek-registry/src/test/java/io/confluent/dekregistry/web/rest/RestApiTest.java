@@ -298,6 +298,12 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1, 2), versions);
 
+    versions = client.listDekVersionsWithPagination(kekName, subject2, null, false, 0, 1);
+    assertEquals(ImmutableList.of(1), versions);
+
+    versions = client.listDekVersionsWithPagination(kekName, subject2, null, false, 1, 1);
+    assertEquals(ImmutableList.of(2), versions);
+
     List<String> kekNames = client.listKeks(Collections.singletonList(subject), false);
     assertEquals(ImmutableList.of(kekName), kekNames);
 

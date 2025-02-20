@@ -132,6 +132,8 @@ public class DekRegistry implements Closeable {
   private final int kekSearchMaxLimit;
   private final int dekSubjectSearchDefaultLimit;
   private final int dekSubjectSearchMaxLimit;
+  private final int dekVersionSearchDefaultLimit;
+  private final int dekVersionSearchMaxLimit;
   // visible for testing
   final Cache<EncryptionKeyId, EncryptionKey> keys;
   private final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
@@ -162,6 +164,10 @@ public class DekRegistry implements Closeable {
               config.getInt(DekRegistryConfig.DEK_SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG);
       this.dekSubjectSearchMaxLimit =
               config.getInt(DekRegistryConfig.DEK_SUBJECT_SEARCH_MAX_LIMIT_CONFIG);
+      this.dekVersionSearchDefaultLimit =
+              config.getInt(DekRegistryConfig.DEK_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG);
+      this.dekVersionSearchMaxLimit =
+              config.getInt(DekRegistryConfig.DEK_VERSION_SEARCH_MAX_LIMIT_CONFIG);
     } catch (RestConfigException e) {
       throw new IllegalArgumentException("Could not instantiate DekRegistry", e);
     }
@@ -1226,6 +1232,10 @@ public class DekRegistry implements Closeable {
 
   public int normalizeDekSubjectLimit(int suppliedLimit) {
     return normalizeLimit(suppliedLimit, dekSubjectSearchDefaultLimit, dekSubjectSearchMaxLimit);
+  }
+
+  public int normalizeDekVersionLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, dekVersionSearchDefaultLimit, dekVersionSearchMaxLimit);
   }
 
   @PreDestroy

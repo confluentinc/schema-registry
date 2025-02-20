@@ -101,9 +101,9 @@ public class DekRegistryRestService extends RestService implements Configurable 
       for (String prefix : subjectPrefix) {
         builder = builder.queryParam("subjectPrefix", prefix);
       }
-      builder.queryParam("offset", offset);
-      builder.queryParam("limit", limit);
     }
+    builder.queryParam("offset", offset);
+    builder.queryParam("limit", limit);
     String path = builder.build().toString();
 
     return httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, STRINGS_TYPE);
@@ -167,6 +167,22 @@ public class DekRegistryRestService extends RestService implements Configurable 
     String path = builder.build(kekName, subject).toString();
 
     return httpRequest(path, "GET", null, requestProperties, INTEGERS_TYPE);
+  }
+
+  public List<Integer> listDekVersionsWithPagination(String kekName, String subject,
+                                                     DekFormat algorithm,
+                                                     boolean lookupDeleted, int offset, int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}/versions")
+            .queryParam("deleted", lookupDeleted);
+    if (algorithm != null) {
+      builder = builder.queryParam("algorithm", algorithm.name());
+    }
+    builder = builder.queryParam("offset", offset);
+    builder = builder.queryParam("limit", limit);
+    String path = builder.build(kekName, subject).toString();
+
+    return httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, INTEGERS_TYPE);
   }
 
   public Dek getDek(String name, String subject, boolean lookupDeleted)
