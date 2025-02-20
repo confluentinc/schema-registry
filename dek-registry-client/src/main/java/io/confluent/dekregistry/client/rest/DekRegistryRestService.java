@@ -138,6 +138,18 @@ public class DekRegistryRestService extends RestService implements Configurable 
     return httpRequest(path, "GET", null, requestProperties, STRINGS_TYPE);
   }
 
+  public List<String> listDeksWithPagination(String kekName, boolean lookupDeleted,
+                                             int offset, int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks")
+            .queryParam("deleted", lookupDeleted);
+    builder = builder.queryParam("offset", offset);
+    builder = builder.queryParam("limit", limit);
+    String path = builder.build(kekName).toString();
+
+    return httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, STRINGS_TYPE);
+  }
+
   public List<Integer> listDekVersions(String kekName, String subject,
       DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {

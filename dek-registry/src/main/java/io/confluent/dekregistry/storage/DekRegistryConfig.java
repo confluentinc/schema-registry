@@ -46,6 +46,14 @@ public class DekRegistryConfig extends SchemaRegistryConfig {
   protected static final String KEK_SEARCH_MAX_LIMIT_CONFIG = "kek.search.max.limit";
   protected static final int KEK_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
 
+  protected static final String DEK_SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG =
+      "dek.subject.search.default.limit";
+  protected static final int DEK_SUBJECT_SEARCH_DEFAULT_LIMIT = Integer.MAX_VALUE;
+
+  protected static final String DEK_SUBJECT_SEARCH_MAX_LIMIT_CONFIG =
+      "dek.subject.search.max.limit";
+  protected static final int DEK_SUBJECT_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
   protected static final String DEK_REGISTRY_TOPIC_DOC =
       "The topic used to persist keys for the dek registry.";
   protected static final String DEK_REGISTRY_MAX_KEYS_DOC =
@@ -57,6 +65,10 @@ public class DekRegistryConfig extends SchemaRegistryConfig {
       "The default limit for kek searches.";
   protected static final String KEK_SEARCH_MAX_LIMIT_DOC =
       "The max limit for kek searches.";
+  protected static final String DEK_SUBJECT_SEARCH_DEFAULT_LIMIT_DOC =
+      "The default limit for dek subject searches.";
+  protected static final String DEK_SUBJECT_SEARCH_MAX_LIMIT_DOC =
+      "The max limit for dek subject searches.";
 
   private static final ConfigDef serverConfig;
 
@@ -69,7 +81,11 @@ public class DekRegistryConfig extends SchemaRegistryConfig {
         .define(KEK_SEARCH_DEFAULT_LIMIT_CONFIG, INT, KEK_SEARCH_DEFAULT_LIMIT_DEFAULT,
             LOW, KEK_SEARCH_DEFAULT_LIMIT_DOC)
         .define(KEK_SEARCH_MAX_LIMIT_CONFIG, INT, KEK_SEARCH_MAX_LIMIT_DEFAULT,
-                LOW, KEK_SEARCH_MAX_LIMIT_DOC)
+            LOW, KEK_SEARCH_MAX_LIMIT_DOC)
+        .define(DEK_SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG, INT, DEK_SUBJECT_SEARCH_DEFAULT_LIMIT,
+            LOW, DEK_SUBJECT_SEARCH_DEFAULT_LIMIT_DOC)
+        .define(DEK_SUBJECT_SEARCH_MAX_LIMIT_CONFIG, INT, DEK_SUBJECT_SEARCH_MAX_LIMIT_DEFAULT,
+            LOW, DEK_SUBJECT_SEARCH_MAX_LIMIT_DOC)
         .define(DEK_REGISTRY_UPDATE_HANDLERS_CONFIG, ConfigDef.Type.LIST, "",
             LOW, DEK_REGISTRY_UPDATE_HANDLERS_DOC);
   }
