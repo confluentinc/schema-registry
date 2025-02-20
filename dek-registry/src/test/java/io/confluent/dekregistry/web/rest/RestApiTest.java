@@ -304,6 +304,12 @@ public class RestApiTest extends ClusterTestHarness {
     kekNames = client.listKeks(Collections.singletonList(subject2), false);
     assertEquals(ImmutableList.of(kekName), kekNames);
 
+    kekNames = client.listKeksWithPagination(Collections.singletonList(subject2), false, 0, 1);
+    assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeksWithPagination(Collections.singletonList(subject2), false, 1, 1);
+    assertEquals(Collections.emptyList(), kekNames);
+
     try {
       client.deleteKek(headers, kekName, false);
       fail();
