@@ -7,6 +7,12 @@ semaphore:
   enable: true
   pipeline_type: cp
   nano_version: true
+  branches:
+    - master
+    - main
+    - /^\d+\.\d+\.x$/
+    - /^gh-readonly-queue.*/
+    - /^cc-sr-v0\..+/ # cc-sr-v0.2.414-7.7.2.62-x
   execution_time_limit: {"hours": 2}
   downstream_projects: ["kafka-rest", "ksql", "confluent-security-plugins", "kafka-connect-replicator", "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
 sonarqube:

@@ -36,7 +36,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
-import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -360,7 +359,7 @@ public class RestService implements Closeable, Configurable {
     }
   }
 
-  private HttpURLConnection buildConnection(URL url, String method, Map<String,
+  protected HttpURLConnection buildConnection(URL url, String method, Map<String,
                                             String> requestProperties)
       throws IOException {
     HttpURLConnection connection = null;
@@ -373,7 +372,7 @@ public class RestService implements Closeable, Configurable {
     connection.setConnectTimeout(this.httpConnectTimeoutMs);
     connection.setReadTimeout(this.httpReadTimeoutMs);
 
-    setupSsl(connection, url);
+    setupSsl(connection);
     connection.setRequestMethod(method);
     setAuthRequestHeaders(connection);
     setCustomHeaders(connection);
@@ -390,14 +389,9 @@ public class RestService implements Closeable, Configurable {
     return connection;
   }
 
-  private void setupSsl(HttpURLConnection connection, URL url) {
-    if (connection instanceof HttpsURLConnection) {
-      SSLSocketFactory configuredSslSocketFactory = sslSocketFactory;
-      if (configuredSslSocketFactory == null) {
-        configuredSslSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory();
-      }
-      ((HttpsURLConnection) connection).setSSLSocketFactory(
-              new HostSslSocketFactory(configuredSslSocketFactory, url.getHost()));
+  private void setupSsl(HttpURLConnection connection) {
+    if (connection instanceof HttpsURLConnection && sslSocketFactory != null) {
+      ((HttpsURLConnection) connection).setSSLSocketFactory(sslSocketFactory);
       if (hostnameVerifier != null) {
         ((HttpsURLConnection) connection).setHostnameVerifier(hostnameVerifier);
       }
