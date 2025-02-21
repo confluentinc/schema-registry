@@ -103,7 +103,7 @@
         <protobuf.version>4.29.3</protobuf.version>
         <protobuf.maven.plugin.version>2.10.3</protobuf.maven.plugin.version>
         <okio.version>3.4.0</okio.version>
-        <tink.version>1.15.0</tink.version>
+        <tink.version>1.16.0</tink.version>
         <tink.aws.kms.version>1.10.1</tink.aws.kms.version>
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
         <wire.version>5.1.0</wire.version>
