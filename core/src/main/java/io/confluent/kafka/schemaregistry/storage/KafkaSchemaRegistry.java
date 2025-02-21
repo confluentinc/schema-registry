@@ -155,7 +155,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   private final int kafkaStoreMaxRetries;
   private final int schemaSearchDefaultLimit;
   private final int schemaSearchMaxLimit;
+  private final int subjectVersionSearchDefaultLimit;
+  private final int subjectVersionSearchMaxLimit;
   private final int subjectSearchDefaultLimit;
+  private final int contextSearchMaxLimit;
+  private final int contextSearchDefaultLimit;
   private final int subjectSearchMaxLimit;
   private final boolean delayLeaderElection;
   private final boolean allowModeChanges;
@@ -230,9 +234,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
                 TimeUnit.SECONDS)
         .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
+    this.contextSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.contextSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.CONTEXT_SEARCH_MAX_LIMIT_CONFIG);
     this.schemaSearchDefaultLimit =
             config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
     this.schemaSearchMaxLimit = config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_MAX_LIMIT_CONFIG);
+    this.subjectVersionSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.subjectVersionSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG);
     this.subjectSearchDefaultLimit =
             config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG);
     this.subjectSearchMaxLimit =
@@ -622,6 +634,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   public int normalizeSubjectLimit(int suppliedLimit) {
     return normalizeLimit(suppliedLimit, subjectSearchDefaultLimit, subjectSearchMaxLimit);
+  }
+
+  public int normalizeContextLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, contextSearchDefaultLimit, contextSearchMaxLimit);
+  }
+
+  public int normalizeSubjectVersionLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit,
+            subjectVersionSearchDefaultLimit, subjectVersionSearchMaxLimit);
   }
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
