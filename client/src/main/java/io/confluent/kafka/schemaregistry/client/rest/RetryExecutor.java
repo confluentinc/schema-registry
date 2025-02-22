@@ -47,39 +47,34 @@ public class RetryExecutor {
   }
 
   public <T> T retry(Callable<T> callable) throws RestClientException, IOException {
-    T result = null;
     for (int i = 0; i < maxRetries + 1; i++) {
-      boolean retry = false;
       try {
-        result = callable.call();
+        return callable.call();
       } catch (RestClientException e) {
-        if (i < maxRetries && RestService.isRetriable(e)) {
-          retry = true;
-        } else {
+        if (i >= maxRetries || !RestService.isRetriable(e)) {
           throw e;
         }
       } catch (IOException e) {
-        if (i < maxRetries) {
-          retry = true;
-        } else {
+        if (i >= maxRetries) {
           throw e;
         }
       } catch (Exception e) {
-        throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
+        throw (e instanceof RuntimeException) ? (RuntimeException) e : new RuntimeException(e);
       }
-      if (!retry) {
-        break;
-      }
-      long delayMs = computeDelayBeforeNextRetry(i).toMillis();
-      if (delayMs > 0) {
-        try {
-          Thread.sleep(delayMs);
-        } catch (InterruptedException e) {
-          // ignore
-        }
+      sleepBeforeRetry(i);
+    }
+    return null;
+  }
+
+  private void sleepBeforeRetry(int attempt) {
+    long delayMs = computeDelayBeforeNextRetry(attempt).toMillis();
+    if (delayMs > 0) {
+      try {
+        Thread.sleep(delayMs);
+      } catch (InterruptedException ignored) {
+        // ignore
       }
     }
-    return result;
   }
 
   protected Duration computeDelayBeforeNextRetry(int retriesAttempted) {
