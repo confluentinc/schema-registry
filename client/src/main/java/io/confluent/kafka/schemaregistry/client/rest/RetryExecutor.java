@@ -59,7 +59,11 @@ public class RetryExecutor {
           throw e;
         }
       } catch (IOException e) {
-        throw e;
+        if (i < maxRetries) {
+          retry = true;
+        } else {
+          throw e;
+        }
       } catch (Exception e) {
         throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
       }
