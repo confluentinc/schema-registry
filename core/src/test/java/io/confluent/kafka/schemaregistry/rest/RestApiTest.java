@@ -111,14 +111,18 @@ public class RestApiTest extends ClusterTestHarness {
     );
 
     // test getAllContextsWithPagination limit=1 offset=0
-    assertEquals("Getting all subjects should return default context",
-            Collections.singletonList(DEFAULT_CONTEXT),
-            restApp.restClient.getAllContextsWithPagination(1, 0));
+    assertEquals(
+        Collections.singletonList(DEFAULT_CONTEXT),
+        restApp.restClient.getAllContextsWithPagination(1, 0),
+        "Getting all subjects should return default context"
+    );
 
     // test getAllContextsWithPagination limit=1 offset=0
-    assertEquals("Getting all subjects should return default context",
-            Collections.emptyList(),
-            restApp.restClient.getAllContextsWithPagination(1, 1));
+    assertEquals(
+        Collections.emptyList(),
+        restApp.restClient.getAllContextsWithPagination(1, 1),
+        "Getting all subjects should return default context"
+    );
 
     // test getAllSubjects with no existing data
     assertEquals(
