@@ -733,12 +733,16 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ImmutableList.Builder<String> imports = ImmutableList.builder();
     ImmutableList.Builder<String> publicImports = ImmutableList.builder();
+    ImmutableList.Builder<String> weakImports = ImmutableList.builder();
     List<String> dependencyList = file.getDependencyList();
     Set<Integer> publicDependencyList = new HashSet<>(file.getPublicDependencyList());
+    Set<Integer> weakDependencyList = new HashSet<>(file.getWeakDependencyList());
     for (int i = 0; i < dependencyList.size(); i++) {
       String depName = dependencyList.get(i);
       if (publicDependencyList.contains(i)) {
         publicImports.add(depName);
+      } else if (weakDependencyList.contains(i)) {
+        weakImports.add(depName);
       } else {
         imports.add(depName);
       }
@@ -840,6 +844,7 @@ public class ProtobufSchema implements ParsedSchema {
         syntax,
         imports.build(),
         publicImports.build(),
+        weakImports.build(),
         types.build(),
         services.build(),
         extendElements.build(),
