@@ -157,7 +157,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   private final int kafkaStoreMaxRetries;
   private final int schemaSearchDefaultLimit;
   private final int schemaSearchMaxLimit;
+  private final int subjectVersionSearchDefaultLimit;
+  private final int subjectVersionSearchMaxLimit;
   private final int subjectSearchDefaultLimit;
+  private final int contextSearchMaxLimit;
+  private final int contextSearchDefaultLimit;
   private final int subjectSearchMaxLimit;
   private final boolean delayLeaderElection;
   private final boolean allowModeChanges;
@@ -232,9 +236,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
                 TimeUnit.SECONDS)
         .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
+    this.contextSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.contextSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.CONTEXT_SEARCH_MAX_LIMIT_CONFIG);
     this.schemaSearchDefaultLimit =
             config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
     this.schemaSearchMaxLimit = config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_MAX_LIMIT_CONFIG);
+    this.subjectVersionSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.subjectVersionSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG);
     this.subjectSearchDefaultLimit =
             config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG);
     this.subjectSearchMaxLimit =
@@ -626,6 +638,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     return normalizeLimit(suppliedLimit, subjectSearchDefaultLimit, subjectSearchMaxLimit);
   }
 
+  public int normalizeContextLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, contextSearchDefaultLimit, contextSearchMaxLimit);
+  }
+
+  public int normalizeSubjectVersionLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit,
+            subjectVersionSearchDefaultLimit, subjectVersionSearchMaxLimit);
+  }
+
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
       throws SchemaRegistryException {
     try {
@@ -896,7 +917,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   }
 
   private boolean maybeSetMetadataRuleSet(
-      Config config, Schema schema, Schema previousSchema, int newVersion) {
+      Config config, Schema schema, Schema previousSchema, Integer newVersion) {
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata specificMetadata = null;
     if (schema.getMetadata() != null) {
       specificMetadata = schema.getMetadata();
@@ -925,7 +946,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
     // Set confluent:version if passed in version is not 0,
     // or update confluent:version if it already exists in the metadata
-    if (schema.getVersion() != 0 || getConfluentVersion(mergedMetadata) != null) {
+    if (newVersion != null
+        && (schema.getVersion() != 0 || getConfluentVersion(mergedMetadata) != null)) {
       mergedMetadata = Metadata.setConfluentVersion(mergedMetadata, newVersion);
     }
 
@@ -953,7 +975,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         && !request.doPropagateSchemaTags()
         && !config.hasDefaultsOrOverrides()) {
       Schema existingSchema = lookUpSchemaUnderSubject(
-          subject, schema, normalize, false, isLatestVersion);
+          config, subject, schema, normalize, false, isLatestVersion);
       if (existingSchema != null) {
         if (schema.getVersion() == 0 || isLatestVersion) {
           if (schema.getId() == null
@@ -1271,18 +1293,39 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public Schema lookUpSchemaUnderSubject(
       String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
-    return lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema, false);
+    if (schema == null) {
+      return null;
+    }
+    Config config = getConfigInScope(subject);
+    Schema existingSchema = lookUpSchemaUnderSubject(
+        config, subject, schema, normalize, lookupDeletedSchema, false);
+    if (existingSchema != null) {
+      return existingSchema;
+    }
+    Schema prev = getLatestVersion(subject);
+    if (prev == null) {
+      return null;
+    }
+    Schema next = schema.copy();
+    // If a previous schema is available, possibly populate the new schema with the
+    // metadata and rule set and perform another lookup.
+    // This mimics the additional lookup during schema registration.
+    maybeSetMetadataRuleSet(config, next, prev, null);
+    if (next.equals(schema)) {
+      return null;
+    }
+    return lookUpSchemaUnderSubject(
+        config, subject, next, normalize, lookupDeletedSchema, false);
   }
 
   private Schema lookUpSchemaUnderSubject(
-      String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema,
+      Config config, String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema,
       boolean lookupLatestOnly)
       throws SchemaRegistryException {
     try {
       // Pass a copy of the schema so the original is not modified during normalization
       // to ensure that invalid defaults are not dropped since default validation is disabled
       Schema newSchema = schema != null ? schema.copy() : null;
-      Config config = getConfigInScope(subject);
       ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, false, normalize);
       if (parsedSchema != null && !lookupLatestOnly) {
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(newSchema);

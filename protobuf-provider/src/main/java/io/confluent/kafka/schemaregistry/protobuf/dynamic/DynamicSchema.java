@@ -573,15 +573,6 @@ public class DynamicSchema {
     }
 
     // Note: added
-    public Builder setPhpGenericServices(boolean phpGenericServices) {
-      FileOptions.Builder optionsBuilder =
-          DescriptorProtos.FileOptions.newBuilder();
-      optionsBuilder.setPhpGenericServices(phpGenericServices);
-      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
-      return this;
-    }
-
-    // Note: added
     public Builder setDeprecated(boolean isDeprecated) {
       FileOptions.Builder optionsBuilder =
           DescriptorProtos.FileOptions.newBuilder();

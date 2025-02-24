@@ -110,6 +110,20 @@ public class RestApiTest extends ClusterTestHarness {
         "Getting all subjects should return default context"
     );
 
+    // test getAllContextsWithPagination limit=1 offset=0
+    assertEquals(
+        Collections.singletonList(DEFAULT_CONTEXT),
+        restApp.restClient.getAllContextsWithPagination(1, 0),
+        "Getting all subjects should return default context"
+    );
+
+    // test getAllContextsWithPagination limit=1 offset=0
+    assertEquals(
+        Collections.emptyList(),
+        restApp.restClient.getAllContextsWithPagination(1, 1),
+        "Getting all subjects should return default context"
+    );
+
     // test getAllSubjects with no existing data
     assertEquals(
         allSubjects,
@@ -1027,6 +1041,9 @@ public class RestApiTest extends ClusterTestHarness {
     refs = restApp.restClient.getReferencedBy(subject, 1);
     assertTrue(refs.isEmpty());
 
+    refs = restApp.restClient.getReferencedByWithPagination(subject, 1, 0, 1);
+    assertTrue(refs.isEmpty());
+
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion
             (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
@@ -1332,10 +1349,21 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(associatedSubjects.size(), 1);
     assertEquals(Collections.singletonList(subject1), associatedSubjects);
 
+    associatedSubjects = restApp.restClient.getAllSubjectsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, false, 1, 1);
+    assertEquals(associatedSubjects.size(), 0);
+    assertEquals(Collections.emptyList(), associatedSubjects);
+
     associatedSubjects = restApp.restClient.getAllSubjectsById(
         RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true);
     assertEquals(associatedSubjects.size(), 2);
     assertEquals(Arrays.asList(subject1, subject2), associatedSubjects);
+
+    associatedSubjects = restApp.restClient.getAllSubjectsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true, 1, 0);
+    assertEquals(associatedSubjects.size(), 1);
+    assertEquals(Collections.singletonList(subject1), associatedSubjects);
+
   }
 
   @Test
@@ -1377,10 +1405,19 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(associatedSubjects.size(), 1);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
 
+    associatedSubjects = restApp.restClient.getAllVersionsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, false, 1, 1);
+    assertEquals(associatedSubjects.size(), 0);
+
     associatedSubjects = restApp.restClient.getAllVersionsById(
         RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true);
     assertEquals(associatedSubjects.size(), 2);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
+
+    associatedSubjects = restApp.restClient.getAllVersionsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true, 1, 1);
+    assertEquals(associatedSubjects.size(), 1);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
   }
 
@@ -1568,6 +1605,10 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(Arrays.asList(1,2), restApp.restClient.getAllVersions(
             RestService.DEFAULT_REQUEST_PROPERTIES,
             subject, true));
+    // test with pagination
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersionsWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES,
+            subject, true, 0, 1));
     //soft delete again
     try {
       restApp.restClient
