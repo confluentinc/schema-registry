@@ -9,12 +9,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+
+import java.util.*;
+
 import org.junit.Before;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import static org.junit.Assert.*;
 
@@ -36,8 +35,10 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
         schemaRegistry.init();
 
         client = new LocalSchemaRegistryClient(schemaRegistry);
-        Metadata metadata = new Metadata(null, Map.of("key1", "value1"), null);
-        client.register("subject1", new AvroSchema("{\"type\":\"record\",\"name\":\"myrecord1\", \"fields\":[{\"type\":\"string\",\"name\":\"f1\"}]}", List.of(),  new HashMap<String, String>(), metadata, null, 2, true));
+        Map<String, String> map = new HashMap<>();
+        map.put("key1", "value1");
+        Metadata metadata = new Metadata(null, map, null);
+        client.register("subject1", new AvroSchema("{\"type\":\"record\",\"name\":\"myrecord1\", \"fields\":[{\"type\":\"string\",\"name\":\"f1\"}]}", Collections.emptyList(),  new HashMap<String, String>(), metadata, null, 2, true));
         client.register("subject2", new AvroSchema("{\"type\":\"record\",\"name\":\"myrecord2\",\"fields\":[{\"type\":\"string\",\"name\":\"f1\"}]}"));
     }
 
