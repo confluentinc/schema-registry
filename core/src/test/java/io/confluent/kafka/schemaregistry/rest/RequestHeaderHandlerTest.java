@@ -147,6 +147,27 @@ public class RequestHeaderHandlerTest {
   }
 
   @Test
+  public void testAddXForwardedPortToRequest() {
+    MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
+    when(request.getLocalPort()).thenReturn(8080);
+    RequestHeaderHandler requestHeaderHandler = new RequestHeaderHandler();
+
+    // Forwarded request
+    when(request.getHeader(X_FORWARD_HEADER)).thenReturn(null);
+    requestHeaderHandler.addXForwardedPortToRequest(mutableRequest, request);
+    String callerPort = mutableRequest.getHeader(RequestHeaderHandler.X_FORWARDED_PORT_HEADER);
+    Assert.assertEquals("8080", callerPort);
+
+    // Not forwarded request
+    when(request.getHeader(X_FORWARD_HEADER)).thenReturn("true");
+    when(request.getLocalPort()).thenReturn(9090);
+    requestHeaderHandler.addXForwardedPortToRequest(mutableRequest, request);
+    callerPort = mutableRequest.getHeader(RequestHeaderHandler.X_FORWARDED_PORT_HEADER);
+    Assert.assertEquals("8080", callerPort);
+  }
+
+
+  @Test
   public void testGetRequestIdWith1RequestId() {
     // A single non-blank request id should be taken as is
     String requestId = requestHeaderHandler.getRequestId(Collections.singletonList("request-ID-1234"));
