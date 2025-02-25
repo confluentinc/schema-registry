@@ -1473,5 +1473,21 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     request1.setRuleSet(null);
     Schema s = restApp.restClient.lookUpSubjectVersion(request1, subject, false, false);
     assertEquals(expectedIdSchema1, s.getId().intValue());
+
+    Rule r1 = new Rule("foo", null, null, RuleMode.READ, "IGNORE", null, null, null, null, null, false);
+    rules = ImmutableList.of(r1);
+    ruleSet = new RuleSet(null, rules);
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest();
+    request2.setRuleSet(ruleSet);
+
+    // Register a rule set w/o a schema
+    int expectedIdSchema2 = 2;
+    assertEquals(
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(request2, subject, false).getId());
+
+    // Lookup the schema w/o the rule set
+    s = restApp.restClient.lookUpSubjectVersion(request1, subject, false, false);
+    assertEquals(expectedIdSchema2, s.getId().intValue());
   }
 }
