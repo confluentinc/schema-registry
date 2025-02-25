@@ -34,6 +34,7 @@ import static io.confluent.kafka.schemaregistry.client.rest.RestService.X_FORWAR
 public class RequestHeaderHandler extends HandlerWrapper {
   public static final String X_REQUEST_ID_HEADER = "X-Request-ID";
   public static final String X_FORWARDED_FOR_HEADER = "X-Forwarded-For";
+  public static final String X_FORWARDED_PORT_HEADER = "X-Forwarded-Port";
 
   @Override
   public void handle(String target,
@@ -45,6 +46,7 @@ public class RequestHeaderHandler extends HandlerWrapper {
     MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
     addXRequestIdToRequest(baseRequest, mutableRequest, response);
     addXForwardedForToRequest(mutableRequest, request);
+    addXForwardedPortToRequest(mutableRequest, request);
 
     // Call the next handler in the chain
     super.handle(target, baseRequest, mutableRequest, response);
@@ -68,6 +70,15 @@ public class RequestHeaderHandler extends HandlerWrapper {
     if (mutableRequest.getHeader(X_FORWARD_HEADER) == null
         && mutableRequest.getHeader(X_FORWARDED_FOR_HEADER) == null) {
       mutableRequest.putHeader(X_FORWARDED_FOR_HEADER, request.getRemoteAddr());
+    }
+  }
+
+  protected void addXForwardedPortToRequest(MutableHttpServletRequest mutableRequest,
+                                            HttpServletRequest request) {
+    // Do not propagate on leader call, or it would override follower port
+    if (mutableRequest.getHeader(X_FORWARD_HEADER) == null
+        && mutableRequest.getHeader(X_FORWARDED_PORT_HEADER) == null) {
+      mutableRequest.putHeader(X_FORWARDED_PORT_HEADER, String.valueOf(request.getLocalPort()));
     }
   }
 
