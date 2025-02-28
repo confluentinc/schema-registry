@@ -99,7 +99,7 @@
         <json-schema.version>1.14.5</json-schema.version>
         <json-skema.version>0.20.0</json-skema.version>
         <kcache.version>5.2.0</kcache.version>
-        <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
+        <proto-google-common-protos.version>2.53.0</proto-google-common-protos.version>
         <protobuf.version>4.29.3</protobuf.version>
         <protobuf.maven.plugin.version>2.10.3</protobuf.maven.plugin.version>
         <okio.version>3.4.0</okio.version>
@@ -259,7 +259,7 @@
             <dependency>
                 <groupId>com.hubspot.jackson</groupId>
                 <artifactId>jackson-datatype-protobuf</artifactId>
-                <version>0.9.13</version>
+                <version>0.9.17</version>
             </dependency>
             <dependency>
                 <groupId>com.github.erosb</groupId>
