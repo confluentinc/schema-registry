@@ -39,12 +39,12 @@ public class Dek {
   private final int version;
   private final DekFormat algorithm;
   private final String encryptedKeyMaterial;
-  private String keyMaterial;
+  private volatile String keyMaterial;
   private final Long timestamp;
   private final Boolean deleted;
 
-  private byte[] encryptedKeyMaterialBytes;
-  private byte[] keyMaterialBytes;
+  private volatile byte[] encryptedKeyMaterialBytes;
+  private volatile byte[] keyMaterialBytes;
 
   @JsonCreator
   public Dek(
@@ -133,8 +133,12 @@ public class Dek {
       return null;
     }
     if (encryptedKeyMaterialBytes == null) {
-      encryptedKeyMaterialBytes =
-          Base64.getDecoder().decode(encryptedKeyMaterial.getBytes(StandardCharsets.UTF_8));
+      synchronized (this) {
+        if (encryptedKeyMaterialBytes == null) {
+          encryptedKeyMaterialBytes =
+              Base64.getDecoder().decode(encryptedKeyMaterial.getBytes(StandardCharsets.UTF_8));
+        }
+      }
     }
     return encryptedKeyMaterialBytes;
   }
@@ -145,8 +149,12 @@ public class Dek {
       return null;
     }
     if (keyMaterialBytes == null) {
-      keyMaterialBytes =
-          Base64.getDecoder().decode(keyMaterial.getBytes(StandardCharsets.UTF_8));
+      synchronized (this) {
+        if (keyMaterialBytes == null) {
+          keyMaterialBytes =
+              Base64.getDecoder().decode(keyMaterial.getBytes(StandardCharsets.UTF_8));
+        }
+      }
     }
     return keyMaterialBytes;
   }
