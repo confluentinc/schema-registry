@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -34,14 +35,14 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Properties;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MockSchemaRegistryClientTest extends ClusterTestHarness {
 
@@ -81,7 +82,7 @@ public class MockSchemaRegistryClientTest extends ClusterTestHarness {
 
     int i = 0;
     while (i < numMessages) {
-      ConsumerRecords<String, Object> records = consumer.poll(1000);
+      ConsumerRecords<String, Object> records = consumer.poll(Duration.ofMillis(1000));
       for (ConsumerRecord<String, Object> record : records) {
         recordList.add(record.value());
         i++;

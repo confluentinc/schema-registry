@@ -17,15 +17,13 @@ package io.confluent.kafka.schemaregistry.storage;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
 
@@ -34,16 +32,6 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
   }
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreReaderThreadTest.class);
-
-  @Before
-  public void setup() {
-  }
-
-  @After
-  public void teardown() {
-    log.debug("Shutting down");
-  }
-
 
   @Test
   public void testWaitUntilOffset() throws Exception {
