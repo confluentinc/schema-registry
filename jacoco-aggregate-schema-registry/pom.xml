@@ -28,6 +28,11 @@
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
+            <artifactId>dek-registry</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-serializer</artifactId>
             <version>${project.version}</version>
         </dependency>
