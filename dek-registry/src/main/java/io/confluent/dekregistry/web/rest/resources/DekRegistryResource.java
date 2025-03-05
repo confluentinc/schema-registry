@@ -86,7 +86,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
   private static final Logger log = LoggerFactory.getLogger(DekRegistryResource.class);
 
-  public static final int NAME_MAX_LENGTH = 64;
+  public static final int NAME_MAX_LENGTH = 256;
 
   private final DekRegistry dekRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
