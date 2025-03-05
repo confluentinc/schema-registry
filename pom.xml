@@ -218,6 +218,11 @@
                         <groupId>org.jetbrains.kotlin</groupId>
                         <artifactId>kotlin-stdlib</artifactId>
                     </exclusion>
+                    <!-- Not used and requires Java 17 -->
+                    <exclusion>
+                        <groupId>com.palantir.javapoet</groupId>
+                        <artifactId>javapoet</artifactId>
+                    </exclusion>
                 </exclusions>
             </dependency>
             <dependency>
