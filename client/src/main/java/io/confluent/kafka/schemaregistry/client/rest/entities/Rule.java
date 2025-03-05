@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 @Schema(description = "Rule")
 public class Rule {
 
-  public static final int NAME_MAX_LENGTH = 64;
+  public static final int NAME_MAX_LENGTH = 256;
 
   private final String name;
   private final String doc;
