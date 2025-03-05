@@ -284,12 +284,12 @@
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
-                <artifactId>aws-sdk</artifactId>
+                <artifactId>aws-core</artifactId>
                 <version>${aws.sdk.version}</version>
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
-                <artifactId>core-sdk</artifactId>
+                <artifactId>sdk-core</artifactId>
                 <version>${aws.sdk.version}</version>
             </dependency>
             <dependency>
