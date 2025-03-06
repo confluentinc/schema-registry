@@ -112,13 +112,13 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
     @Test
     public void testGetSchemaBySubjectAndId() throws Exception {
         // Schema 1.
-        ParsedSchema s1 = client.getSchemaBySubjectAndId("subjetc1", id1);
+        ParsedSchema s1 = client.getSchemaBySubjectAndId("subject1", id1);
         assertNotNull(s1);
         assertEquals("myrecord1", s1.name());
         assertEquals("AVRO", s1.schemaType());
         assertEquals("value1", s1.metadata().getProperties().get("key1"));
         // Schema 2.
-        ParsedSchema s2 = client.getSchemaBySubjectAndId("subjetc2", id2);
+        ParsedSchema s2 = client.getSchemaBySubjectAndId("subject2", id2);
         assertNotNull(s2);
         assertEquals("myrecord2", s2.name());
         assertEquals("AVRO", s2.schemaType());
