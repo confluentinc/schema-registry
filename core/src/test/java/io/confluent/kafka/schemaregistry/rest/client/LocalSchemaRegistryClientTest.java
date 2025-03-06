@@ -33,6 +33,9 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
     private Metadata metadata = new Metadata(null, new HashMap<String, String>(){{put("key1", "value1");}}, null);
     private AvroSchema schema1 = new AvroSchema("{\"type\":\"record\",\"name\":\"myrecord1\", \"fields\":[{\"type\":\"string\",\"name\":\"f1\"}]}", Collections.emptyList(),  new HashMap<String, String>(), metadata, null, 2, true);
     private AvroSchema schema2 = new AvroSchema("{\"type\":\"record\",\"name\":\"myrecord2\",\"fields\":[{\"type\":\"string\",\"name\":\"f1\"}]}");
+    // Qualified subject names.
+    private static final String SUBJECT1 = ":.context1:subject1";
+    private static final String SUBJECT2 = ":.context2:subject2";
 
     private int id1;
     private int id2;
@@ -50,20 +53,20 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
         schemaRegistry.init();
 
         client = new LocalSchemaRegistryClient(schemaRegistry);
-        id1 = client.register("subject1", schema1);
-        id2 = client.register("subject2", schema2);
+        id1 = client.register(SUBJECT1, schema1);
+        id2 = client.register(SUBJECT2, schema2);
     }
 
     @Test (expected = RestInvalidSchemaException.class)
     public void testRegister_InvalidVersion() throws RestClientException, IOException {
         // Version is not one more than previous version
-        id1 = client.register("subject1", schema1, 100, -1);
+        id1 = client.register(SUBJECT1, schema1, 100, -1);
     }
 
     @Test
     public void testParseSchema() {
         Schema schema = new Schema(
-                "subject1",
+                SUBJECT1,
                 -1,
                 -1,
                 AvroSchema.TYPE,
@@ -79,7 +82,7 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
     @Test
     public void testGetSchemas() throws Exception {
         // Matches 1 schema.
-        List<ParsedSchema> schemas = client.getSchemas("subject1", false, true);
+        List<ParsedSchema> schemas = client.getSchemas(SUBJECT1, false, true);
         assertNotNull(schemas);
         assertEquals(1, schemas.size());
         ParsedSchema schema = schemas.get(0);
@@ -87,8 +90,8 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
         assertEquals("myrecord1", schema.name());
 
         // Matches multiple schemas.
-        schemas = client.getSchemas("subject", false, true);
-        assertEquals(2, schemas.size());
+        schemas = client.getSchemas(":.context1:subject", false, true);
+        assertEquals(1, schemas.size());
 
         // Matches 0 schema.
         schemas = client.getSchemas("subject123", false, true);
@@ -98,7 +101,7 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
     @Test
     public void testGetAllVersions() throws Exception {
         // Matches 1 schema.
-        List<Integer> versions = client.getAllVersions("subject1");
+        List<Integer> versions = client.getAllVersions(SUBJECT1);
         assertEquals(1, versions.size());
         assertEquals(1, versions.get(0).intValue());
     }
@@ -112,13 +115,15 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
     @Test
     public void testGetSchemaBySubjectAndId() throws Exception {
         // Schema 1.
-        ParsedSchema s1 = client.getSchemaBySubjectAndId("subjetc1", id1);
+        // Note: there is a fallback lookup logic in which the subject  is not used:
+        // https://github.com/confluentinc/schema-registry/blob/master/core/src/main/java/io/confluent/kafka/schemaregistry/storage/KafkaSchemaRegistry.java#L1800-L1802
+        ParsedSchema s1 = client.getSchemaBySubjectAndId(SUBJECT1, id1);
         assertNotNull(s1);
         assertEquals("myrecord1", s1.name());
         assertEquals("AVRO", s1.schemaType());
         assertEquals("value1", s1.metadata().getProperties().get("key1"));
         // Schema 2.
-        ParsedSchema s2 = client.getSchemaBySubjectAndId("subjetc2", id2);
+        ParsedSchema s2 = client.getSchemaBySubjectAndId(SUBJECT2, id2);
         assertNotNull(s2);
         assertEquals("myrecord2", s2.name());
         assertEquals("AVRO", s2.schemaType());
@@ -126,10 +131,10 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
 
     @Test
     public void testGetSchemaMetadata() throws Exception {
-        SchemaMetadata sm = client.getSchemaMetadata("subject1", 1,true);
+        SchemaMetadata sm = client.getSchemaMetadata(SUBJECT1, 1,true);
         assertNotNull(sm);
         assertEquals("AVRO", sm.getSchemaType());
-        assertEquals("subject1", sm.getSubject());
+        assertEquals(SUBJECT1, sm.getSubject());
         assertEquals(1, sm.getVersion());
         Metadata m = sm.getMetadata();
         assertEquals(1, m.getProperties().size());
@@ -138,8 +143,8 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
 
     @Test
     public void testGetConfig() throws Exception {
-        client.updateConfig("subject1", new Config("FULL"));
-        Config config = client.getConfig("subject1");
+        client.updateConfig(SUBJECT1, new Config("FULL"));
+        Config config = client.getConfig(SUBJECT1);
         assertEquals("FULL", config.getCompatibilityLevel());
     }
 
@@ -147,50 +152,50 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
     public void testUpdateConfig() throws Exception {
         // Update the config.
         Config config = new Config("FULL");
-        client.updateConfig("subject1", config);
-        assertEquals("FULL", client.getConfig("subject1").getCompatibilityLevel());
+        client.updateConfig(SUBJECT1, config);
+        assertEquals("FULL", client.getConfig(SUBJECT1).getCompatibilityLevel());
     }
 
     @Test(expected = RestNotFoundException.class)
     public void testDeleteConfig() throws Exception {
         Config config = new Config("FULL");
-        client.updateConfig("subject1", config);
-        assertEquals("FULL", client.getConfig("subject1").getCompatibilityLevel());
-        client.deleteConfig("subject1");
+        client.updateConfig(SUBJECT1, config);
+        assertEquals("FULL", client.getConfig(SUBJECT1).getCompatibilityLevel());
+        client.deleteConfig(SUBJECT1);
         // Should throw RestNotFoundException exception.
-        client.getConfig("subject1");
+        client.getConfig(SUBJECT1);
     }
 
     @Test
     public void testSetMode() throws Exception {
-        assertEquals("READONLY", client.setMode("READONLY", "subject1", false));
-        assertEquals("READONLY", client.getMode("subject1"));
+        assertEquals("READONLY", client.setMode("READONLY", SUBJECT1, false));
+        assertEquals("READONLY", client.getMode(SUBJECT1));
     }
 
     @Test (expected = RestOperationNotPermittedException.class)
     public void testSetMode_NotPermitted() throws Exception {
         // Can't set to IMPORT mode as there is an existing schema.
-        assertEquals("IMPORT", client.setMode("IMPORT", "subject1", false));
+        assertEquals("IMPORT", client.setMode("IMPORT", SUBJECT1, false));
     }
 
     @Test
     public void testDeleteSubject() throws Exception {
-        List<Integer> deletedVersions = client.deleteSubject("subject1", false);
+        List<Integer> deletedVersions = client.deleteSubject(SUBJECT1, false);
         assertEquals(1, deletedVersions.size());
         assertEquals(1, deletedVersions.get(0).intValue());
     }
 
     @Test
     public void testGetVersion() throws Exception {
-        assertEquals(1, client.getVersion("subject1", schema1));
-        assertEquals(1, client.getVersion("subject2", schema2));
+        assertEquals(1, client.getVersion(SUBJECT1, schema1));
+        assertEquals(1, client.getVersion(SUBJECT2, schema2));
     }
 
     @Test
     public void testGetByVersion() throws Exception {
-        Schema s1 = client.getByVersion("subject1", 1, false);
+        Schema s1 = client.getByVersion(SUBJECT1, 1, false);
         assertEquals(id1, s1.getId().intValue());
-        Schema s2 = client.getByVersion("subject2", 1, false);
+        Schema s2 = client.getByVersion(SUBJECT2, 1, false);
         assertEquals(id2, s2.getId().intValue());
     }
 }
