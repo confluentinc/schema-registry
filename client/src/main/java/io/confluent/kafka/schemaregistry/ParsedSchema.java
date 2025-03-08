@@ -17,8 +17,6 @@
 package io.confluent.kafka.schemaregistry;
 
 import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.canLookupIgnoringVersion;
-import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.getConfluentVersion;
-import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.hasLatestVersion;
 import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.replaceLatestVersion;
 
 import com.fasterxml.jackson.databind.JsonNode;
