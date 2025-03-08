@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry;
 
 import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.canLookupIgnoringVersion;
 import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.getConfluentVersion;
-import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.hasLatestVersion;
 import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.replaceLatestVersion;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -330,12 +329,11 @@ public interface ParsedSchema {
     // for the one of the schemas possibly having a confluent:version.
     String schemaVer = getConfluentVersion(metadata());
     String prevVer = getConfluentVersion(prev.metadata());
-    if (schemaVer != null || prevVer != null
-        || hasLatestVersion(this.references())
-        || hasLatestVersion(prev.references())) {
-      boolean areRefsEquivalent = replaceLatestVersion(references(), fetcher)
-          .equals(replaceLatestVersion(prev.references(), fetcher));
-      return areRefsEquivalent && canLookupIgnoringVersion(this, prev);
+    boolean nonEmptyRefsEquivalent = !references().isEmpty()
+        && replaceLatestVersion(references(), fetcher).equals(
+            replaceLatestVersion(prev.references(), fetcher));
+    if (schemaVer != null || prevVer != null || nonEmptyRefsEquivalent) {
+      return canLookupIgnoringVersion(this, prev);
     }
     return false;
   }
