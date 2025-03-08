@@ -2209,6 +2209,11 @@ public class RestApiTest extends ClusterTestHarness {
     // Register schema with version -1
     request.setVersion(-1);
     request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 1, subject);
+
+    // Register schema with version 2
+    request.setVersion(2);
+    request.setMetadata(null);
     registerAndVerifySchema(restApp.restClient, request, 2, subject);
 
     // Register schema with version -1
