@@ -1320,8 +1320,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           Schema prev = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
           if (prev != null
               && parsedSchema != null
-              && (MD5.ofSchema(schema).equals(MD5.ofSchema(prev))
-              || parsedSchema.canLookup(parseSchema(prev), this))) {
+              && parsedSchema.canLookup(parseSchema(prev), this)) {
             // This handles the case where a schema is sent with all references resolved
             // or without confluent:version
             return prev;
