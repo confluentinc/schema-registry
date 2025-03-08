@@ -452,11 +452,11 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.setMode(mode).getMode());
 
     int expectedIdSchema1 = 100;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_WITH_DECIMAL,
         restApp.restClient.getVersion(subject, 1).getSchema());
 
@@ -466,11 +466,11 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // register equivalent schema with different id
     expectedIdSchema1 = 200;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject2, 1, expectedIdSchema1));
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_WITH_DECIMAL,
         restApp.restClient.getVersion(subject2, 1).getSchema());
 
