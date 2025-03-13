@@ -6,7 +6,6 @@ package io.confluent.kafka.schemaregistry.rest;
 
 
 import org.eclipse.jetty.server.Request;
-import org.glassfish.jersey.internal.inject.Custom;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -23,11 +22,11 @@ import java.util.UUID;
 
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.MDC;
 
 import static io.confluent.kafka.schemaregistry.client.rest.RestService.X_FORWARD_HEADER;
-import static io.confluent.kafka.schemaregistry.rest.RequestHeaderHandler.X_FORWARDED_FOR_HEADER;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
@@ -135,15 +134,15 @@ public class RequestHeaderHandlerTest {
     RequestHeaderHandler requestHeaderHandler = new RequestHeaderHandler();
 
     // Forwarded request
-    when(request.getHeader(X_FORWARD_HEADER)).thenReturn(null);
-    requestHeaderHandler.addXForwardedForToRequest(mutableRequest, request);
+    when(baseRequest.getHeader(X_FORWARD_HEADER)).thenReturn(null);
+    requestHeaderHandler.addXForwardedForToRequest(baseRequest, mutableRequest, request);
     String callerIp = mutableRequest.getHeader(RequestHeaderHandler.X_FORWARDED_FOR_HEADER);
     Assert.assertEquals("127.0.0.1", callerIp);
 
     // Not forwarded request
-    when(request.getHeader(X_FORWARD_HEADER)).thenReturn("true");
-    when(request.getRemoteAddr()).thenReturn("should_not_use");
-    requestHeaderHandler.addXForwardedForToRequest(mutableRequest, request);
+    when(baseRequest.getHeader(X_FORWARD_HEADER)).thenReturn("true");
+    Mockito.lenient().when(request.getRemoteAddr()).thenReturn("should_not_use");
+    requestHeaderHandler.addXForwardedForToRequest(baseRequest, mutableRequest, request);
     callerIp = mutableRequest.getHeader(RequestHeaderHandler.X_FORWARDED_FOR_HEADER);
     Assert.assertEquals("127.0.0.1", callerIp);
   }
@@ -154,7 +153,7 @@ public class RequestHeaderHandlerTest {
     when(request.getRemoteAddr()).thenReturn("127.0.0.1");
     mutableRequest.putHeader(RequestHeaderHandler.X_FORWARDED_FOR_HEADER, "value");
 
-    requestHeaderHandler.addXForwardedForToRequest(mutableRequest, request);
+    requestHeaderHandler.addXForwardedForToRequest(baseRequest, mutableRequest, request);
     String callerIp = mutableRequest.getHeader(RequestHeaderHandler.X_FORWARDED_FOR_HEADER);
     Assert.assertEquals("127.0.0.1", callerIp);
   }

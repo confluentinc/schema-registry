@@ -47,7 +47,7 @@ public class RequestHeaderHandler extends HandlerWrapper {
     MDC.clear();
     MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
     addXRequestIdToRequest(baseRequest, mutableRequest, response);
-    addXForwardedForToRequest(mutableRequest, request);
+    addXForwardedForToRequest(baseRequest, mutableRequest, request);
 
     // Call the next handler in the chain
     super.handle(target, baseRequest, mutableRequest, response);
@@ -65,10 +65,11 @@ public class RequestHeaderHandler extends HandlerWrapper {
     MDC.put("requestId", requestId);
   }
 
-  protected void addXForwardedForToRequest(MutableHttpServletRequest mutableRequest,
+  protected void addXForwardedForToRequest(Request baseRequest,
+                                           MutableHttpServletRequest mutableRequest,
                                            HttpServletRequest request) {
     // Do not propagate on leader call, or it would override follower IP
-    if (mutableRequest.getHeader(X_FORWARD_HEADER) == null) {
+    if (baseRequest.getHeader(X_FORWARD_HEADER) == null) {
       mutableRequest.putHeader(X_FORWARDED_FOR_HEADER, request.getRemoteAddr());
     }
     log.info("Forwarded for header in RequestHeaderHandler: {}",
