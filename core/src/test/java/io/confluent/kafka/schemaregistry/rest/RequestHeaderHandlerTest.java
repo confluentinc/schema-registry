@@ -6,6 +6,7 @@ package io.confluent.kafka.schemaregistry.rest;
 
 
 import org.eclipse.jetty.server.Request;
+import org.glassfish.jersey.internal.inject.Custom;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -26,6 +27,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.MDC;
 
 import static io.confluent.kafka.schemaregistry.client.rest.RestService.X_FORWARD_HEADER;
+import static io.confluent.kafka.schemaregistry.rest.RequestHeaderHandler.X_FORWARDED_FOR_HEADER;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
@@ -143,6 +145,17 @@ public class RequestHeaderHandlerTest {
     when(request.getRemoteAddr()).thenReturn("should_not_use");
     requestHeaderHandler.addXForwardedForToRequest(mutableRequest, request);
     callerIp = mutableRequest.getHeader(RequestHeaderHandler.X_FORWARDED_FOR_HEADER);
+    Assert.assertEquals("127.0.0.1", callerIp);
+  }
+
+  @Test
+  public void testAddXForwardedForToRequestOverridesHeader() {
+    MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
+    when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+    mutableRequest.putHeader(RequestHeaderHandler.X_FORWARDED_FOR_HEADER, "value");
+
+    requestHeaderHandler.addXForwardedForToRequest(mutableRequest, request);
+    String callerIp = mutableRequest.getHeader(RequestHeaderHandler.X_FORWARDED_FOR_HEADER);
     Assert.assertEquals("127.0.0.1", callerIp);
   }
 
