@@ -136,6 +136,7 @@ public final class MockSchemaRegistry {
     }
   }
 
+  //This test should be updated after https://confluentinc.atlassian.net/browse/DGS-19986 finished.
   public static String validateAndMaybeGetMockScope(final String baseUrl) {
     final List<String> mockScopes = new LinkedList<>();
     List<String> urls = parseBaseUrl(baseUrl);
