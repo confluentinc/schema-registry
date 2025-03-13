@@ -141,7 +141,7 @@ public class RequestHeaderHandlerTest {
 
     // Not forwarded request
     when(baseRequest.getHeader(X_FORWARD_HEADER)).thenReturn("true");
-    Mockito.lenient().when(request.getRemoteAddr()).thenReturn("should_not_use");
+    Mockito.lenient().when(request.getRemoteAddr()).thenReturn("192.168.1.10");
     requestHeaderHandler.addXForwardedForToRequest(baseRequest, mutableRequest, request);
     callerIp = mutableRequest.getHeader(RequestHeaderHandler.X_FORWARDED_FOR_HEADER);
     Assert.assertEquals("127.0.0.1", callerIp);
@@ -151,7 +151,7 @@ public class RequestHeaderHandlerTest {
   public void testAddXForwardedForToRequestOverridesHeader() {
     MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
     when(request.getRemoteAddr()).thenReturn("127.0.0.1");
-    mutableRequest.putHeader(RequestHeaderHandler.X_FORWARDED_FOR_HEADER, "value");
+    mutableRequest.putHeader(RequestHeaderHandler.X_FORWARDED_FOR_HEADER, "192.168.1.10");
 
     requestHeaderHandler.addXForwardedForToRequest(baseRequest, mutableRequest, request);
     String callerIp = mutableRequest.getHeader(RequestHeaderHandler.X_FORWARDED_FOR_HEADER);
