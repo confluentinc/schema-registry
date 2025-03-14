@@ -317,7 +317,8 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
         getRuleSet() == null ? null : getRuleSet().toRuleSetEntity(),
         getSchema(),
         null,
-        getTimestamp()
+        getTimestamp(),
+        isDeleted()
     );
   }
 }
