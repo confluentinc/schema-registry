@@ -45,7 +45,7 @@ public class FieldRedactionExecutor extends FieldRuleExecutor {
     return transform;
   }
 
-  public class FieldRedactionExecutorTransform implements FieldTransform {
+  public static class FieldRedactionExecutorTransform implements FieldTransform {
 
     @Override
     public Object transform(RuleContext ctx, FieldContext fieldCtx, Object fieldValue)
