@@ -208,11 +208,13 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaString schemaString = restApp.restClient.getId(
         RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, null, null, false);
     assertNotNull(schemaString.getTimestamp());
+    assertFalse(schemaString.getDeleted());
 
     SchemaString schemaString2 = restApp.restClient.getByGuid(
         RestService.DEFAULT_REQUEST_PROPERTIES, schemaString.getGuid(), null);
     assertEquals(schemaString.getGuid(), schemaString2.getGuid());
     assertNotNull(schemaString.getTimestamp());
+    assertFalse(schemaString.getDeleted());
 
     List<ContextId> contextId = restApp.restClient.getAllContextIds(
         RestService.DEFAULT_REQUEST_PROPERTIES, schemaString.getGuid());
@@ -1516,6 +1518,10 @@ public class RestApiTest extends ClusterTestHarness {
     );
 
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+
+    Schema schema = restApp.restClient.getVersion(subject, 2, true);
+    assertEquals((Integer) 2, schema.getVersion());
+    assertTrue(schema.getDeleted());
 
     try {
       restApp.restClient.getVersion(subject, 2);
