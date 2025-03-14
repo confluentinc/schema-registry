@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import org.apache.kafka.common.config.ConfigException;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -133,5 +134,34 @@ public final class MockSchemaRegistry {
     } else {
       return mockScopes.get(0);
     }
+  }
+
+  //This test should be updated after https://confluentinc.atlassian.net/browse/DGS-19986 finished.
+  public static String validateAndMaybeGetMockScope(final String baseUrl) {
+    final List<String> mockScopes = new LinkedList<>();
+    List<String> urls = parseBaseUrl(baseUrl);
+    for (final String url : urls) {
+      if (url.startsWith(MOCK_URL_PREFIX)) {
+        mockScopes.add(url.substring(MOCK_URL_PREFIX.length()));
+      }
+    }
+
+    if (mockScopes.isEmpty()) {
+      return null;
+    } else if (urls.size() > mockScopes.size()) {
+      throw new ConfigException(
+              "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
+      );
+    } else {
+      return mockScopes.get(0);
+    }
+  }
+
+  private static List<String> parseBaseUrl(String baseUrl) {
+    List<String> baseUrls = Arrays.asList(baseUrl.split("\\s*,\\s*"));
+    if (baseUrls.isEmpty()) {
+      throw new IllegalArgumentException("Missing required schema registry url list");
+    }
+    return baseUrls;
   }
 }

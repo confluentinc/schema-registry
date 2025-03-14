@@ -42,4 +42,24 @@ public class SchemaRegistryClientFactory {
       );
     }
   }
+
+  public static SchemaRegistryClient newClient(
+          String baseUrl,
+          int cacheCapacity,
+          List<SchemaProvider> providers,
+          Map<String, ?> configs,
+          Map<String, String> httpHeaders) {
+    String mockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(baseUrl);
+    if (mockScope != null) {
+      return MockSchemaRegistry.getClientForScope(mockScope, providers);
+    } else {
+      return new CachedSchemaRegistryClient(
+              baseUrl,
+              cacheCapacity,
+              providers,
+              configs,
+              httpHeaders
+      );
+    }
+  }
 }
