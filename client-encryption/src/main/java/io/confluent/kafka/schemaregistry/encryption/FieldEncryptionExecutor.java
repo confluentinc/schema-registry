@@ -390,17 +390,15 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
           encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
         }
         Integer newVersion = isExpired ? dek.getVersion() + 1 : null;
-        DekId newDekId = new DekId(kekName, ctx.subject(), newVersion,
-            cryptor.getDekFormat(), isRead);
-        // encryptedDek may be passed as null if kek is shared
-        dek = storeDekToRegistry(newDekId, encryptedDek);
-        if (dek == null) {
-          // Handle conflicts (409)
-          // Use the original version, which should be null or LATEST_VERSION
-          dek = retrieveDekFromRegistry(dekId);
-        }
-        if (dek == null) {
-          throw new RuleException("No dek found for " + kekName + " during produce");
+        try {
+          dek = createDek(dekId, newVersion, encryptedDek);
+        } catch (RuleException e) {
+          if (dek == null) {
+            throw e;
+          }
+          log.warn("Failed to create dek for " + kekName + ", subject " + ctx.subject()
+              + ", version " + newVersion + ", using existing dek with version "
+              + dek.getVersion());
         }
       }
       if (dek.getKeyMaterialBytes() == null) {
@@ -411,6 +409,23 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         dek.setKeyMaterial(rawDek);
       }
       return dek;
+    }
+
+    private Dek createDek(DekId dekId, Integer newVersion, byte[] encryptedDek)
+        throws RuleException {
+      DekId newDekId = new DekId(dekId.getKekName(), dekId.getSubject(), newVersion,
+          dekId.getDekFormat(), dekId.isLookupDeleted());
+      // encryptedDek may be passed as null if kek is shared
+      Dek dek = storeDekToRegistry(newDekId, encryptedDek);
+      if (dek == null) {
+        // Handle conflicts (409)
+        // Use the original version, which should be null or LATEST_VERSION
+        dek = retrieveDekFromRegistry(dekId);
+      }
+      if (dek != null) {
+        return dek;
+      }
+      throw new RuleException("No dek found for " + kekName + " during produce");
     }
 
     private boolean isExpired(RuleContext ctx, Dek dek) {
