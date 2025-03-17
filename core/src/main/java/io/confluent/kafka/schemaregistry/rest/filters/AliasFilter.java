@@ -15,12 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.rest.filters;
 
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.TENANT_DELIMITER;
-
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -120,6 +118,13 @@ public class AliasFilter implements ContainerRequestFilter {
     if (subject.isEmpty()) {
       return subject;
     }
+    String tenant = schemaRegistry.tenant();
+    String originalSubject = subject;
+    boolean isQualified = QualifiedSubject.isQualified(tenant, originalSubject);
+    if (!isQualified) {
+      subject = QualifiedSubject.createFromUnqualified(tenant, originalSubject)
+          .toQualifiedSubject();
+    }
     Config config = null;
     try {
       config = schemaRegistry.getConfig(URLDecoder.decode(subject, "UTF-8"));
@@ -127,16 +132,15 @@ public class AliasFilter implements ContainerRequestFilter {
       // fall through
     }
     if (config == null) {
-      return subject;
+      return originalSubject;
     }
     String alias = config.getAlias();
     if (alias != null && !alias.isEmpty()) {
-      if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
-        alias = schemaRegistry.tenant() + TENANT_DELIMITER + alias;
-      }
-      return alias;
+      QualifiedSubject qualAlias =
+          QualifiedSubject.qualifySubjectWithParent(tenant, subject, alias, true);
+      return isQualified ? qualAlias.toQualifiedSubject() : qualAlias.toUnqualifiedSubject();
     } else {
-      return subject;
+      return originalSubject;
     }
   }
 }
