@@ -422,10 +422,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         // Use the original version, which should be null or LATEST_VERSION
         dek = retrieveDekFromRegistry(dekId);
       }
-      if (dek != null) {
-        return dek;
+      if (dek == null) {
+        throw new RuleException("No dek found for " + kekName + " during produce");
       }
-      throw new RuleException("No dek found for " + kekName + " during produce");
+      return dek;
     }
 
     private boolean isExpired(RuleContext ctx, Dek dek) {
