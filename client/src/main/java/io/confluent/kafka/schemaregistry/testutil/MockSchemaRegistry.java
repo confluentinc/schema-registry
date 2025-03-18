@@ -76,10 +76,10 @@ public final class MockSchemaRegistry {
    * Get a client for a mocked Schema Registry. The {@code scope} represents a particular registry,
    * so operations on one scope will never affect another.
    *
-   * @param scopes Identifies a logically independent Schema Registry instance. It's similar to a List of
-   *              schema registry URLs, in that two different Schema Registry deployments have two
-   *              different URLs, except that these registries are only mocked, so they have no
-   *              actual URL.
+   * @param scopes Identifies a logically independent Schema Registry instance. It's similar to a
+   *              List of schema registry URLs, in that two different Schema Registry deployments
+   *              have two different URLs, except that these registries are only mocked, so they
+   *              have no actual URL.
    * @param providers A list of schema providers.
    * @return A client for the specified scope.
    */
