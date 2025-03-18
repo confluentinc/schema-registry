@@ -29,9 +29,9 @@ public class SchemaRegistryClientFactory {
       List<SchemaProvider> providers,
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
-    List<String> mockScopes = MockSchemaRegistry.validateAndMaybeGetMockScope(baseUrls);
-    if (mockScopes != null) {
-      return MockSchemaRegistry.getClientForScope(mockScopes, providers);
+    String mockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(baseUrls);
+    if (mockScope != null) {
+      return MockSchemaRegistry.getClientForScope(mockScope, providers);
     } else {
       return new CachedSchemaRegistryClient(
           baseUrls,
