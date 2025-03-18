@@ -44,17 +44,17 @@ public class SchemaRegistryClientFactory {
   }
 
   public static SchemaRegistryClient newClient(
-          String baseUrl,
+          String baseUrls,
           int cacheCapacity,
           List<SchemaProvider> providers,
           Map<String, ?> configs,
           Map<String, String> httpHeaders) {
-    List<String> mockScopes = MockSchemaRegistry.validateAndMaybeGetMockScope(baseUrl);
+    List<String> mockScopes = MockSchemaRegistry.validateAndMaybeGetMockScope(baseUrls);
     if (mockScopes != null) {
       return MockSchemaRegistry.getClientForScope(mockScopes, providers);
     } else {
       return new CachedSchemaRegistryClient(
-              baseUrl,
+              baseUrls,
               cacheCapacity,
               providers,
               configs,
