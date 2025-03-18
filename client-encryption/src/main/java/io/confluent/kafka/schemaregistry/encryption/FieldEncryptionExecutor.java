@@ -423,7 +423,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         dek = retrieveDekFromRegistry(dekId);
       }
       if (dek == null) {
-        throw new RuleException("No dek found for " + kekName + " during produce");
+        throw new RuleException("No dek found for " + dekId.getKekName() + " during produce");
       }
       return dek;
     }
