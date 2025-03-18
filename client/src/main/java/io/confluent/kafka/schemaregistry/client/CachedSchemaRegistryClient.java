@@ -173,12 +173,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   public CachedSchemaRegistryClient(
-          String baseUrl,
+          String baseUrls,
           int cacheCapacity,
           List<SchemaProvider> providers,
           Map<String, ?> originals,
           Map<String, String> httpHeaders) {
-    this(new RestService(baseUrl), cacheCapacity, providers, originals, httpHeaders);
+    this(new RestService(baseUrls), cacheCapacity, providers, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
