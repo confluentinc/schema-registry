@@ -134,9 +134,9 @@ public final class MockSchemaRegistry {
     }
   }
 
-  public static List<String> validateAndMaybeGetMockScope(final String baseUrl) {
+  public static List<String> validateAndMaybeGetMockScope(final String baseUrls) {
     final List<String> mockScopes = new LinkedList<>();
-    List<String> urls = parseBaseUrl(baseUrl);
+    List<String> urls = parseBaseUrl(baseUrls);
     for (final String url : urls) {
       if (url.startsWith(MOCK_URL_PREFIX)) {
         mockScopes.add(url.substring(MOCK_URL_PREFIX.length()));
@@ -154,11 +154,11 @@ public final class MockSchemaRegistry {
     }
   }
 
-  private static List<String> parseBaseUrl(String baseUrl) {
-    List<String> baseUrls = Arrays.asList(baseUrl.split("\\s*,\\s*"));
-    if (baseUrls.isEmpty()) {
+  private static List<String> parseBaseUrl(String baseUrls) {
+    List<String> urls = Arrays.asList(baseUrls.split("\\s*,\\s*"));
+    if (urls.isEmpty()) {
       throw new IllegalArgumentException("Missing required schema registry url list");
     }
-    return baseUrls;
+    return urls;
   }
 }
