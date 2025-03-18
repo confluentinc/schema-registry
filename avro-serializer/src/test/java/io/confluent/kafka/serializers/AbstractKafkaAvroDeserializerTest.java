@@ -187,7 +187,7 @@ public class AbstractKafkaAvroDeserializerTest {
 
     Assert.assertNull(kafkaAvroSerializer.schemaRegistry);
   }
-  
+
   @Test
   public void testMixedUrlsAreRejected() {
     final KafkaAvroSerializer kafkaAvroSerializer = new KafkaAvroSerializer();
