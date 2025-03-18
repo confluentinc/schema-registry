@@ -397,8 +397,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
             throw e;
           }
           log.warn("Failed to create dek for " + kekName + ", subject " + ctx.subject()
-              + ", version " + newVersion + ", using existing dek with version "
-              + dek.getVersion());
+              + ", version " + newVersion + ", using existing dek");
         }
       }
       if (dek.getKeyMaterialBytes() == null) {
