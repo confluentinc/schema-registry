@@ -397,8 +397,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
             throw e;
           }
           log.warn("Failed to create dek for " + kekName + ", subject " + ctx.subject()
-              + ", version " + newVersion + ", using existing dek with version "
-              + dek.getVersion());
+              + ", version " + newVersion + ", using existing dek");
         }
       }
       if (dek.getKeyMaterialBytes() == null) {
@@ -422,10 +421,10 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         // Use the original version, which should be null or LATEST_VERSION
         dek = retrieveDekFromRegistry(dekId);
       }
-      if (dek != null) {
-        return dek;
+      if (dek == null) {
+        throw new RuleException("No dek found for " + dekId.getKekName() + " during produce");
       }
-      throw new RuleException("No dek found for " + kekName + " during produce");
+      return dek;
     }
 
     private boolean isExpired(RuleContext ctx, Dek dek) {
