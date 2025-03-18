@@ -76,21 +76,23 @@ public final class MockSchemaRegistry {
    * Get a client for a mocked Schema Registry. The {@code scope} represents a particular registry,
    * so operations on one scope will never affect another.
    *
-   * @param scope Identifies a logically independent Schema Registry instance. It's similar to a
-   *              schema registry URL, in that two different Schema Registry deployments have two
+   * @param scopes Identifies a logically independent Schema Registry instance. It's similar to a List of
+   *              schema registry URLs, in that two different Schema Registry deployments have two
    *              different URLs, except that these registries are only mocked, so they have no
    *              actual URL.
    * @param providers A list of schema providers.
    * @return A client for the specified scope.
    */
-  public static SchemaRegistryClient getClientForScope(final String scope,
+  public static SchemaRegistryClient getClientForScope(final List<String> scopes,
                                                        List<SchemaProvider> providers) {
     synchronized (SCOPED_CLIENTS) {
-      if (!SCOPED_CLIENTS.containsKey(scope)) {
-        SCOPED_CLIENTS.put(scope, new MockSchemaRegistryClient(providers));
+      for (String scope : scopes) {
+        if (!SCOPED_CLIENTS.containsKey(scope)) {
+          SCOPED_CLIENTS.put(scope, new MockSchemaRegistryClient(providers));
+        }
       }
     }
-    return SCOPED_CLIENTS.get(scope);
+    return SCOPED_CLIENTS.get(scopes.get(0));
   }
 
   /**
@@ -113,7 +115,7 @@ public final class MockSchemaRegistry {
     }
   }
 
-  public static String validateAndMaybeGetMockScope(final List<String> urls) {
+  public static List<String> validateAndMaybeGetMockScope(final List<String> urls) {
     final List<String> mockScopes = new LinkedList<>();
     for (final String url : urls) {
       if (url.startsWith(MOCK_URL_PREFIX)) {
@@ -123,21 +125,16 @@ public final class MockSchemaRegistry {
 
     if (mockScopes.isEmpty()) {
       return null;
-    } else if (mockScopes.size() > 1) {
-      throw new ConfigException(
-              "Only one mock scope is permitted for 'schema.registry.url'. Got: " + urls
-      );
     } else if (urls.size() > mockScopes.size()) {
       throw new ConfigException(
               "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
       );
     } else {
-      return mockScopes.get(0);
+      return mockScopes;
     }
   }
 
-  //This test should be updated after https://confluentinc.atlassian.net/browse/DGS-19986 finished.
-  public static String validateAndMaybeGetMockScope(final String baseUrl) {
+  public static List<String> validateAndMaybeGetMockScope(final String baseUrl) {
     final List<String> mockScopes = new LinkedList<>();
     List<String> urls = parseBaseUrl(baseUrl);
     for (final String url : urls) {
@@ -153,7 +150,7 @@ public final class MockSchemaRegistry {
               "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
       );
     } else {
-      return mockScopes.get(0);
+      return mockScopes;
     }
   }
 

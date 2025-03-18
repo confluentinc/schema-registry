@@ -29,9 +29,9 @@ public class SchemaRegistryClientFactory {
       List<SchemaProvider> providers,
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
-    String mockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(baseUrls);
-    if (mockScope != null) {
-      return MockSchemaRegistry.getClientForScope(mockScope, providers);
+    List<String> mockScopes = MockSchemaRegistry.validateAndMaybeGetMockScope(baseUrls);
+    if (mockScopes != null) {
+      return MockSchemaRegistry.getClientForScope(mockScopes, providers);
     } else {
       return new CachedSchemaRegistryClient(
           baseUrls,
@@ -49,9 +49,9 @@ public class SchemaRegistryClientFactory {
           List<SchemaProvider> providers,
           Map<String, ?> configs,
           Map<String, String> httpHeaders) {
-    String mockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(baseUrl);
-    if (mockScope != null) {
-      return MockSchemaRegistry.getClientForScope(mockScope, providers);
+    List<String> mockScopes = MockSchemaRegistry.validateAndMaybeGetMockScope(baseUrl);
+    if (mockScopes != null) {
+      return MockSchemaRegistry.getClientForScope(mockScopes, providers);
     } else {
       return new CachedSchemaRegistryClient(
               baseUrl,
