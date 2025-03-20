@@ -17,9 +17,9 @@ package io.confluent.kafka.schemaregistry.rest.exceptions;
 
 
 
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.ext.WriterInterceptor;
-import javax.ws.rs.ext.WriterInterceptorContext;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.ext.WriterInterceptor;
+import jakarta.ws.rs.ext.WriterInterceptorContext;
 import java.io.IOException;
 import org.eclipse.jetty.io.EofException;
 import org.slf4j.Logger;
