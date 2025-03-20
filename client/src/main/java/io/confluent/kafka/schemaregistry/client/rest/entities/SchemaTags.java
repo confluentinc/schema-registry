@@ -24,6 +24,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -95,5 +96,10 @@ public class SchemaTags {
         + "schemaEntity=" + schemaEntity
         + ", tags=" + tags
         + '}';
+  }
+
+  public SchemaTags copy() {
+    List<String> copiedTags = tags != null ? new ArrayList<>(tags) : null;
+    return new SchemaTags(schemaEntity, copiedTags);
   }
 }

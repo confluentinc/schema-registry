@@ -220,4 +220,8 @@ public class Metadata {
       return set;
     }
   }
+
+  public Metadata copy() {
+    return new Metadata(tags, properties, sensitive);
+  }
 }
