@@ -357,15 +357,15 @@ public class Schema implements Comparable<Schema> {
 
   @Override
   public String toString() {
-    return "{subject=" + this.subject + "," +
-                    "version=" + this.version + "," +
-                    "id=" + this.id + "," +
-                    "schemaType=" + this.schemaType + "," +
-                    "references=" + this.references + "," +
-                    "metadata=" + this.metadata + "," +
-                    "ruleSet=" + this.ruleSet + "," +
-                    "schema=" + this.schema + "," +
-                    "schemaTags=" + this.schemaTags + "}";
+    return "{subject=" + this.subject + ","
+               + "version=" + this.version + ","
+               + "id=" + this.id + ","
+               + "schemaType=" + this.schemaType + ","
+               + "references=" + this.references + ","
+               + "metadata=" + this.metadata + ","
+               + "ruleSet=" + this.ruleSet + ","
+               + "schema=" + this.schema + ","
+               + "schemaTags=" + this.schemaTags + "}";
   }
 
   @Override
