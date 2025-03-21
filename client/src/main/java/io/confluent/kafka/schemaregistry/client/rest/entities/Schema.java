@@ -32,6 +32,7 @@ import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -201,13 +202,19 @@ public class Schema implements Comparable<Schema> {
   }
 
   public Schema copy() {
-    return new Schema(
-        subject, version, id, schemaType, references, metadata, ruleSet, schema, schemaTags);
+    return copy(version, id);
   }
 
   public Schema copy(Integer version, Integer id) {
-    return new Schema(
-        subject, version, id, schemaType, references, metadata, ruleSet, schema, schemaTags);
+    // Deep copy the references list if it's not null
+    List<SchemaReference> referencesCopy = references != null
+                                               ? references.stream()
+                                                     .map(SchemaReference::copy)
+                                                     .collect(Collectors.toList())
+                                               : null;
+
+    return new Schema(subject, version, id, schemaType, referencesCopy, metadata, ruleSet, schema,
+        schemaTags);
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC, example = SUBJECT_EXAMPLE)
@@ -337,17 +344,15 @@ public class Schema implements Comparable<Schema> {
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{subject=" + this.subject + ",");
-    sb.append("version=" + this.version + ",");
-    sb.append("id=" + this.id + ",");
-    sb.append("schemaType=" + this.schemaType + ",");
-    sb.append("references=" + this.references + ",");
-    sb.append("metadata=" + this.metadata + ",");
-    sb.append("ruleSet=" + this.ruleSet + ",");
-    sb.append("schema=" + this.schema + ",");
-    sb.append("schemaTags=" + this.schemaTags + "}");
-    return sb.toString();
+    return "{subject=" + this.subject + ","
+               + "version=" + this.version + ","
+               + "id=" + this.id + ","
+               + "schemaType=" + this.schemaType + ","
+               + "references=" + this.references + ","
+               + "metadata=" + this.metadata + ","
+               + "ruleSet=" + this.ruleSet + ","
+               + "schema=" + this.schema + ","
+               + "schemaTags=" + this.schemaTags + "}";
   }
 
   @Override
