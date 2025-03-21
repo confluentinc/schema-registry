@@ -214,20 +214,8 @@ public class Schema implements Comparable<Schema> {
                                                                      .collect(Collectors.toList()))
                                                : null;
 
-    // Deep copy the metadata map if it's not null
-    Metadata metadataCopy = metadata != null
-                                ? metadata.copy()
-                                : null;
-
-    // Deep copy the schema tags if it's not null
-    List<SchemaTags> schemaTagsCopy = schemaTags != null
-                                          ? new ArrayList<>(schemaTags.stream()
-                                                                .map(SchemaTags::copy)
-                                                                .collect(Collectors.toList()))
-                                          : null;
-
-    return new Schema(subject, version, id, schemaType, referencesCopy, metadataCopy, ruleSet,
-        schema, schemaTagsCopy);
+    return new Schema(subject, version, id, schemaType, referencesCopy, metadata, ruleSet, schema,
+        schemaTags);
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC, example = SUBJECT_EXAMPLE)
