@@ -31,6 +31,7 @@ import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -238,14 +239,19 @@ public class Schema implements Comparable<Schema> {
   }
 
   public Schema copy() {
-    return new Schema(
-        subject, version, id, guid, schemaType, references, metadata,
-        ruleSet, schema, schemaTags, timestamp, deleted);
+    return copy(version, id);
   }
 
   public Schema copy(Integer version, Integer id) {
+    // Deep copy the references list if it's not null
+    List<SchemaReference> referencesCopy = references != null
+                                               ? references.stream()
+                                                     .map(SchemaReference::copy)
+                                                     .collect(Collectors.toList())
+                                               : null;
+
     return new Schema(
-        subject, version, id, guid, schemaType, references, metadata,
+        subject, version, id, guid, schemaType, referencesCopy, metadata,
         ruleSet, schema, schemaTags, timestamp, deleted);
   }
 
@@ -406,20 +412,17 @@ public class Schema implements Comparable<Schema> {
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{subject=" + this.subject + ",");
-    sb.append("version=" + this.version + ",");
-    sb.append("id=" + this.id + ",");
-    sb.append("guid=" + this.guid + ",");
-    sb.append("schemaType=" + this.schemaType + ",");
-    sb.append("references=" + this.references + ",");
-    sb.append("metadata=" + this.metadata + ",");
-    sb.append("ruleSet=" + this.ruleSet + ",");
-    sb.append("schema=" + this.schema + ",");
-    sb.append("schemaTags=" + this.schemaTags + ",");
-    sb.append("ts=" + this.timestamp + ",");
-    sb.append("deleted=" + this.deleted + "}");
-    return sb.toString();
+    return "{subject=" + this.subject + ","
+               + "version=" + this.version + ","
+               + "id=" + this.id + ","
+               + "schemaType=" + this.schemaType + ","
+               + "references=" + this.references + ","
+               + "metadata=" + this.metadata + ","
+               + "ruleSet=" + this.ruleSet + ","
+               + "schema=" + this.schema + ","
+               + "schemaTags=" + this.schemaTags + ","
+               + "ts=" + this.timestamp + ","
+               + "deleted=" + this.deleted + "}";
   }
 
   @Override
