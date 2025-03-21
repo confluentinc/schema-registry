@@ -64,8 +64,6 @@ public class MutableHttpServletRequestTest {
     List<String> headerNamesList;
 
     // Mock no header return values from HttpServletRequest
-    when(httpServletRequest.getHeader("header-key-0")).thenReturn(null);
-    when(httpServletRequest.getHeaders("header-key-0")).thenReturn(Collections.emptyEnumeration());
     when(httpServletRequest.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
 
     // Add a "header-key-0" header

@@ -20,11 +20,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 
 import java.util.Base64;
 import java.util.Objects;
@@ -186,7 +184,6 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   }
 
   @JsonProperty("schemaType")
-  @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
     return this.schemaType;
   }
@@ -311,13 +308,17 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
         getSubject(),
         getVersion(),
         getId(),
+        null,
         getSchemaType(),
         getReferences() == null ? null : getReferences().stream()
             .map(SchemaReference::toRefEntity)
             .collect(Collectors.toList()),
         getMetadata() == null ? null : getMetadata().toMetadataEntity(),
         getRuleSet() == null ? null : getRuleSet().toRuleSetEntity(),
-        getSchema()
+        getSchema(),
+        null,
+        getTimestamp(),
+        isDeleted()
     );
   }
 }

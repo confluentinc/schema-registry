@@ -31,8 +31,10 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Arrays;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -331,6 +333,34 @@ public class KafkaAvroSerializerTest {
     bytes = avroSerializer.serialize(topic, new Utf8("abc"));
     assertEquals("abc", avroDeserializer.deserialize(topic, bytes));
     assertEquals("abc", avroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerPrimitiveArrays() {
+    final Map<String, List<?>> arrays = ImmutableMap.of(
+        "{\"type\": \"array\", \"items\": \"boolean\"}", ImmutableList.of(true, false),
+        "{\"type\": \"array\", \"items\": \"int\"}", ImmutableList.of(1, 2),
+        "{\"type\": \"array\", \"items\": \"long\"}", ImmutableList.of(1L, 2L),
+        "{\"type\": \"array\", \"items\": \"double\"}", ImmutableList.of(1.1, 2.2),
+        "{\"type\": \"array\", \"items\": \"string\"}", ImmutableList.of("string", "elements!")
+    );
+
+    int index = 0;
+    for (Map.Entry<String, List<?>> entry : arrays.entrySet()) {
+      String schema = entry.getKey();
+      List<?> input = entry.getValue();
+      final List<String> expected = input.stream()
+          .map(Object::toString)
+          .collect(Collectors.toList());
+      AvroSchema avroSchema = new AvroSchema(schema);
+      GenericData.Array<?> array = new GenericData.Array<>(avroSchema.rawSchema(), input);
+      byte[] bytes = avroSerializer.serialize(topic + "_" + index, array);
+      Object object = avroDeserializer.deserialize(topic + "_" + index, bytes);
+      List<String> result = ((List<?>) object).stream()
+          .map(Object::toString)
+          .collect(Collectors.toList());
+      assertEquals(expected, result);
+    }
   }
 
   @Test(expected = SerializationException.class)
