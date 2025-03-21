@@ -134,4 +134,8 @@ public class SchemaReference implements Comparable<SchemaReference> {
       md.update(ByteBuffer.allocate(4).putInt(version).array());
     }
   }
+
+  public SchemaReference copy() {
+    return new SchemaReference(name, subject, version);
+  }
 }
