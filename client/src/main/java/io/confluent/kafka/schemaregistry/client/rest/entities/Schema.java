@@ -209,9 +209,9 @@ public class Schema implements Comparable<Schema> {
   public Schema copy(Integer version, Integer id) {
     // Deep copy the references list if it's not null
     List<SchemaReference> referencesCopy = references != null
-                                               ? new ArrayList<>(references.stream()
-                                                                     .map(SchemaReference::copy)
-                                                                     .collect(Collectors.toList()))
+                                               ? references.stream()
+                                                     .map(SchemaReference::copy)
+                                                     .collect(Collectors.toList())
                                                : null;
 
     return new Schema(subject, version, id, schemaType, referencesCopy, metadata, ruleSet, schema,
