@@ -54,8 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -80,7 +79,7 @@ public class RestApiTest extends ClusterTestHarness {
     return props;
   }
 
-  @Before
+  @Override
   public void setUp() throws Exception {
     super.setUp();
     fakeTicker = new FakeTicker();
