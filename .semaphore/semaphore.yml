@@ -25,11 +25,7 @@ global_job_config:
     commands:
       - checkout
       - sem-version java 11
-      # - export JDK_11_HOME=$(sem-version java 11)
-      # - echo "JDK_11_HOME: $JDK_11_HOME"
       - sem-version java 17
-      # - export JDK_17_HOME=$(sem-version java 17)
-      # - echo "JDK_17_HOME: $JDK_17_HOME"
       - . cache-maven restore
 
 blocks:
@@ -45,6 +41,8 @@ blocks:
             - . sem-pint -c
             - ci-tools ci-update-version
             - cp .semaphore/toolchains.xml ~/.m2/toolchains.xml
+            - export "JDK_11_HOME=/home/semaphore/.jenv/versions/11/bin/java"
+            - export "JDK_17_HOME=/home/semaphore/.jenv/versions/17/bin/java"
             - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode --no-transfer-progress clean verify install dependency:analyze validate
             - . cache-maven store
       epilogue:
