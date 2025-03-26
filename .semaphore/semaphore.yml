@@ -25,11 +25,11 @@ global_job_config:
     commands:
       - checkout
       - sem-version java 11
-      - export JDK_11_HOME=$(/usr/libexec/java_home -v 11)
-      - echo "JDK_11_HOME: $JDK_11_HOME"
+      # - export JDK_11_HOME=$(sem-version java 11)
+      # - echo "JDK_11_HOME: $JDK_11_HOME"
       - sem-version java 17
-      - export JDK_17_HOME=$(/usr/libexec/java_home -v 17)
-      - echo "JDK_17_HOME: $JDK_17_HOME"
+      # - export JDK_17_HOME=$(sem-version java 17)
+      # - echo "JDK_17_HOME: $JDK_17_HOME"
       - . cache-maven restore
 
 blocks:
