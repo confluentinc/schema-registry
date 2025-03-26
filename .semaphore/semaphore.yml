@@ -24,7 +24,12 @@ global_job_config:
   prologue:
     commands:
       - checkout
+      - sem-version java 11
+      - export JDK_11_HOME=$(/usr/libexec/java_home -v 11)
+      - echo "JDK_11_HOME: $JDK_11_HOME"
       - sem-version java 17
+      - export JDK_17_HOME=$(/usr/libexec/java_home -v 17)
+      - echo "JDK_17_HOME: $JDK_17_HOME"
       - . cache-maven restore
 
 blocks:
@@ -39,6 +44,7 @@ blocks:
           commands:
             - . sem-pint -c
             - ci-tools ci-update-version
+            - cp .semaphore/toolchains.xml ~/.m2/toolchains.xml
             - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode --no-transfer-progress clean verify install dependency:analyze validate
             - . cache-maven store
       epilogue:
@@ -58,6 +64,7 @@ blocks:
           commands:
             - ci-tools ci-update-version
             - ci-tools ci-push-tag
+            - cp .semaphore/toolchains.xml ~/.m2/toolchains.xml
             - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode -DaltDeploymentRepository=confluent-codeartifact-internal::default::https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven-snapshots/
               -DrepositoryId=confluent-codeartifact-internal deploy -DskipTests
   - name: CP Jar Build CI Gating
@@ -104,7 +111,7 @@ after_pipeline:
       - name: SonarQube
         commands:
           - checkout
-          - sem-version java 11
+          - sem-version java 17
           - artifact pull workflow target
           - emit-sonarqube-data --run_only_sonar_scan
       - name: Trigger downstream projects
