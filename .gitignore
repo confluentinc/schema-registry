@@ -26,3 +26,6 @@ nohup.out
 
 # jenv version
 .java-version
+
+# VSCode
+.vscode/

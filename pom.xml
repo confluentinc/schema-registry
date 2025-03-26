@@ -543,23 +543,17 @@
                         </execution>
                     </executions>
                 </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.1</version>
-                    <configuration>
-                        <release>${jdk.version}</release>
-                    </configuration>
-                </plugin>
-                <plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-toolchains-plugin</artifactId>
-                    <version>3.1</version>
+                    <version>3.1.0</version>
                     <executions>
                         <execution>
                             <goals>
                                 <goal>toolchain</goal>
-                                <goal>display</goal>
                             </goals>
                         </execution>
                     </executions>
@@ -571,9 +565,15 @@
                         </toolchains>
                     </configuration>
                 </plugin>
-            </plugins>
-        </pluginManagement>
-        <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.1</version>
+                    <configuration>
+                        <source>${jdk.version}</source>
+                        <target>${jdk.version}</target>
+                    </configuration>
+                </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
