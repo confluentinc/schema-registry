@@ -10,6 +10,10 @@
         <version>8.0.0-0</version>
     </parent>
 
+    <properties>
+        <jdk.version>11</jdk.version>
+    </properties>
+
     <licenses>
         <license>
             <name>Apache License 2.0</name>
@@ -75,6 +79,10 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-toolchains-plugin</artifactId>
+            </plugin>
             <plugin>
                 <groupId>io.confluent</groupId>
                 <artifactId>kafka-connect-maven-plugin</artifactId>
