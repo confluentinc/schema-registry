@@ -9,6 +9,10 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
+    <properties>
+        <jdk.version>11</jdk.version>
+    </properties>
+
     <licenses>
         <license>
             <name>Confluent Community License</name>

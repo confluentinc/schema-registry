@@ -26,6 +26,10 @@
     <packaging>jar</packaging>
     <name>kafka-protobuf-serializer</name>
 
+    <properties>
+        <jdk.version>11</jdk.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.kafka</groupId>

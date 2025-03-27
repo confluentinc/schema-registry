@@ -26,6 +26,10 @@
     <packaging>jar</packaging>
     <name>kafka-protobuf-types</name>
 
+    <properties>
+        <jdk.version>11</jdk.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.google.protobuf</groupId>

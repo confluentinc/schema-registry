@@ -22,6 +22,10 @@
     <packaging>jar</packaging>
     <name>kafka-streams-json-schema-serde</name>
 
+    <properties>
+        <jdk.version>11</jdk.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.confluent</groupId>
@@ -46,5 +50,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
 </project>
