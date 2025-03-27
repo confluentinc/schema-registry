@@ -10,6 +10,7 @@ import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.entities.ErrorMessage;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -101,7 +102,7 @@ public class ContextFilter implements ContainerRequestFilter {
       }
 
       if (subjectPathFound) {
-        if (!uriPathStr.startsWith(CONTEXT_PREFIX) && !uriPathStr.startsWith(CONTEXT_WILDCARD)) {
+        if (!startsWithContext(uriPathStr)) {
           modifiedUriPathStr = QualifiedSubject.normalizeContext(context) + uriPathStr;
         }
 
@@ -158,7 +159,7 @@ public class ContextFilter implements ContainerRequestFilter {
       if (subject == null) {
         subject = "";
       }
-      if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
+      if (!startsWithContext(subject)) {
         subject = QualifiedSubject.normalizeContext(context) + subject;
         builder.replaceQueryParam("subject", subject);
       }
@@ -170,7 +171,7 @@ public class ContextFilter implements ContainerRequestFilter {
       }
       Object[] newSubjectPrefixes = subjectPrefixes.stream()
           .map(prefix -> {
-            if (!prefix.startsWith(CONTEXT_PREFIX) && !prefix.startsWith(CONTEXT_WILDCARD)) {
+            if (!startsWithContext(prefix)) {
               return QualifiedSubject.normalizeContext(context) + prefix;
             }
             return prefix;
@@ -178,6 +179,15 @@ public class ContextFilter implements ContainerRequestFilter {
           .toArray();
       builder.replaceQueryParam("subjectPrefix", newSubjectPrefixes);
     }
+  }
+
+  private static boolean startsWithContext(String path) {
+    try {
+      path = URLDecoder.decode(path, "UTF-8");
+    } catch (Exception e) {
+      // ignore
+    }
+    return path.startsWith(CONTEXT_PREFIX) || path.startsWith(CONTEXT_WILDCARD);
   }
 
   public static String getErrorResponse(Response.Status status,
