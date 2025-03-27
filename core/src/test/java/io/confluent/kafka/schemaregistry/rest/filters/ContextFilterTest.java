@@ -113,6 +113,26 @@ public class ContextFilterTest {
   }
 
   @Test
+  public void testContextAlreadyExists() {
+    String path = "/contexts/.test-ctx/subjects/:.test-ctx:test-subject/versions";
+    Assert.assertEquals(
+        "Subject must be prefixed",
+        "/subjects/:.test-ctx:test-subject/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testUriWithEncodedContext() {
+    String path = "/contexts/.test-ctx/subjects/%3A.test-ctx%3Atest-subject/versions";
+    Assert.assertEquals(
+        "Subject must be prefixed",
+        "/subjects/%3A.test-ctx%3Atest-subject/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getRawPath()
+    );
+  }
+
+  @Test
   public void testUriWithEncodedSlash() {
     String path = "/contexts/.test-ctx/subjects/slash%2Fin%2Fmiddle/";
     Assert.assertEquals(
