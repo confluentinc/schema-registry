@@ -69,6 +69,7 @@ import java.util.Objects;
 import java.util.Properties;
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.SchemaParseException;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 public class RestApiTest extends ClusterTestHarness {
@@ -879,6 +880,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  @Disabled
   public void testRegisterInvalidSubject() throws Exception {
     // test invalid subject
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);

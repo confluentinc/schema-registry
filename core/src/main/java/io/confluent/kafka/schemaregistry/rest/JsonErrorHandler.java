@@ -17,8 +17,10 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.IOException;
 import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
+import java.util.List;
 import org.eclipse.jetty.http.HttpMethod;
 import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.jetty.http.MimeTypes.Type;
@@ -38,9 +40,15 @@ public class JsonErrorHandler extends ErrorHandler {
       return true;
     }
 
-    response.getHeaders().put(Type.APPLICATION_JSON.getContentTypeField(StandardCharsets.UTF_8));
-
     return super.handle(request, response, callback);
+  }
+
+  @Override
+  protected boolean generateAcceptableResponse(Request request, Response response,
+      Callback callback, String contentType, List<Charset> charsets, int code,
+      String message, Throwable cause) throws IOException {
+    return super.generateAcceptableResponse(request, response, callback,
+        Type.APPLICATION_JSON.asString(), charsets, code, message, cause);
   }
 
   @Override

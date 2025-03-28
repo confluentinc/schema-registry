@@ -61,7 +61,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   @Override
   protected void configurePreResourceHandling(ServletContextHandler context) {
     super.configurePreResourceHandling(context);
-    context.setErrorHandler(new JsonErrorHandler());
+    server.setErrorHandler(new JsonErrorHandler());
     // This handler runs before first Session, Security or ServletHandler
     context.insertHandler(new RequestHeaderHandler());
   }
