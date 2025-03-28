@@ -82,36 +82,36 @@
     </modules>
 
     <properties>
-        <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
-        <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
-        <exec-maven-plugin.version>1.2.1</exec-maven-plugin.version>
+        <apache.directory.server.version>2.0.0.AM27</apache.directory.server.version>
+        <apache.directory.api.version>1.0.3</apache.directory.api.version>
+        <exec-maven-plugin.version>1.6.0</exec-maven-plugin.version>
         <podam.version>7.2.11.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
-        <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
-        <kotlin.version>1.9.10</kotlin.version>
-        <antlr.version>4.13.1</antlr.version>
-        <aws.sdk.version>2.30.33</aws.sdk.version>
-        <azure.sdk.version>4.9.2</azure.sdk.version>
+        <kafka.connect.maven.plugin.version>0.12.0</kafka.connect.maven.plugin.version>
+        <kotlin.version>1.9.25</kotlin.version>
+        <antlr.version>4.13.2</antlr.version>
+        <aws.sdk.version>2.31.10</aws.sdk.version>
+        <azure.sdk.version>4.9.4</azure.sdk.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.5.1</cel-version>
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.5.1</jsonata-version>
         <json-schema.version>1.14.5</json-schema.version>
-        <json-skema.version>0.20.0</json-skema.version>
-        <kcache.version>5.2.0</kcache.version>
-        <proto-google-common-protos.version>2.53.0</proto-google-common-protos.version>
-        <protobuf.version>4.29.3</protobuf.version>
-        <protobuf.maven.plugin.version>2.10.3</protobuf.maven.plugin.version>
-        <okio.version>3.4.0</okio.version>
+        <json-skema.version>0.21.0</json-skema.version>
+        <kcache.version>5.2.1</kcache.version>
+        <proto-google-common-protos.version>2.54.1</proto-google-common-protos.version>
+        <protobuf.version>4.30.2</protobuf.version>
+        <protobuf.maven.plugin.version>2.13.1</protobuf.maven.plugin.version>
+        <okio.version>3.10.2</okio.version>
         <tink.version>1.17.0</tink.version>
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
-        <wire.version>5.3.0</wire.version>
-        <swagger.version>2.1.10</swagger.version>
-        <io.confluent.schema-registry.version>8.0.0-0</io.confluent.schema-registry.version>
-        <commons.compress.version>1.26.1</commons.compress.version>
+        <wire.version>5.3.1</wire.version>
+        <swagger.version>2.2.29</swagger.version>
+        <io.confluent.schema-registry.version>8.0.0-628</io.confluent.schema-registry.version>
+        <commons.compress.version>1.27.1</commons.compress.version>
         <commons.lang3.version>3.17.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
-        <snappy.version>1.1.10.5</snappy.version>
+        <snappy.version>1.1.10.7</snappy.version>
     </properties>
 
     <repositories>
@@ -181,7 +181,7 @@
             <dependency>
                 <groupId>com.netflix.governator</groupId>
                 <artifactId>governator-core</artifactId>
-                <version>1.17.10</version>
+                <version>1.17.13</version>
             </dependency>
             <dependency>
                 <groupId>com.google.protobuf</groupId>
@@ -340,7 +340,7 @@
             <dependency>
                 <groupId>info.picocli</groupId>
                 <artifactId>picocli</artifactId>
-                <version>4.7.5</version>
+                <version>4.7.6</version>
             </dependency>
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
@@ -484,7 +484,7 @@
             <dependency>
                 <groupId>javax.xml.ws</groupId>
                 <artifactId>jaxws-api</artifactId>
-                <version>2.3.0</version>
+                <version>2.3.1</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -584,7 +584,7 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.8</version>
+                <version>0.8.12</version>
                 <executions>
                     <execution>
                         <id>prepare-agent</id>
