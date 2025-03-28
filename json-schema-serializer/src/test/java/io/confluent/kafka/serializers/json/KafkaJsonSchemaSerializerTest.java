@@ -38,8 +38,12 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
+
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.junit.Test;
 
 import javax.validation.constraints.Min;
@@ -52,9 +56,15 @@ import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import org.mockito.Mockito;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doThrow;
 
 public class KafkaJsonSchemaSerializerTest {
 
@@ -152,19 +162,73 @@ public class KafkaJsonSchemaSerializerTest {
     assertEquals("abc", deserializer.deserialize(topic, bytes));
   }
 
-  @Test(expected = InvalidConfigurationException.class)
-  public void testKafkaJsonSchemaSerializerWithoutConfigure() {
+  @Test
+  public void testKafkaJsonSchemaSerializerExceptionHandler() throws IOException, RestClientException {
     KafkaJsonSchemaSerializer unconfiguredSerializer = new KafkaJsonSchemaSerializer();
     User user = new User();
-    unconfiguredSerializer.serialize("foo", user);
+    assertThrows(InvalidConfigurationException.class, () -> unconfiguredSerializer.serialize("foo", user));
+    SchemaRegistryClient mockClient = Mockito.spy(SchemaRegistryClient.class);
+    KafkaJsonSchemaSerializer serializer = new KafkaJsonSchemaSerializer<>(mockClient, new HashMap(config));
+
+    doThrow(new RestClientException("err", 429, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
+    assertThrows(ThrottlingQuotaExceededException.class, () -> serializer.serialize("foo", user));
+
+    doThrow(new RestClientException("err", 408, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
+    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", user));
+
+    doThrow(new RestClientException("err", 503, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
+    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", user));
+
+    doThrow(new RestClientException("err", 504, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
+    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", user));
+
+    doThrow(new RestClientException("err", 500, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
+    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", user));
+
+    doThrow(new RestClientException("err", 502, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
+    assertThrows(DisconnectException.class, () -> serializer.serialize("foo", user));
+
+    doThrow(new RestClientException("err", 501, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
+    assertThrows(SerializationException.class, () -> serializer.serialize("foo", user));
   }
 
-  @Test(expected = InvalidConfigurationException.class)
-  public void testKafkaJsonSchemaDeserializerWithoutConfigure() {
+  @Test
+  public void testKafkaJsonSchemaDeserializerExceptionHandler() throws RestClientException, IOException {
     KafkaJsonSchemaDeserializer unconfiguredSerializer = new KafkaJsonSchemaDeserializer();
-    byte[] randomBytes = "foo".getBytes();
-    unconfiguredSerializer.deserialize("foo", randomBytes);
+    Map<String, Object> message = new HashMap<>();
+    message.put("foo", "bar");
+    message.put("baz", new BigDecimal("354.99"));
+
+    byte[] randomBytes = serializer.serialize("foo", message);
+    assertThrows(InvalidConfigurationException.class, () -> unconfiguredSerializer.deserialize("foo", randomBytes));
+
+
+    SchemaRegistryClient mockClient = Mockito.spy(SchemaRegistryClient.class);
+    KafkaJsonSchemaDeserializer deserializer = new KafkaJsonSchemaDeserializer<>(mockClient, new HashMap(config));
+
+    doThrow(new RestClientException("err", 429, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
+    assertThrows(ThrottlingQuotaExceededException.class, () -> deserializer.deserialize("foo", randomBytes));
+
+    doThrow(new RestClientException("err", 408, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
+    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", randomBytes));
+
+    doThrow(new RestClientException("err", 503, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
+    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", randomBytes));
+
+    doThrow(new RestClientException("err", 504, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
+    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", randomBytes));
+
+    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
+    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", randomBytes));
+
+    doThrow(new RestClientException("err", 502, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
+    assertThrows(DisconnectException.class, () -> deserializer.deserialize("foo", randomBytes));
+
+    doThrow(new RestClientException("err", 501, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
+    assertThrows(SerializationException.class, () -> deserializer.deserialize("foo", randomBytes));
   }
+
+
 
   @Test
   public void serializeNull() {
