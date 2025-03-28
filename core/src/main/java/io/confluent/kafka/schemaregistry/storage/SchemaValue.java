@@ -26,8 +26,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 
 import java.util.Base64;
 import java.util.Objects;
-import javax.validation.constraints.NotEmpty;
-import javax.validation.constraints.Min;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Min;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
