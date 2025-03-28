@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.confluent</groupId>
     <artifactId>kafka-schema-registry-parent</artifactId>
-    <version>8.0.0-0</version>
+    <version>8.0.0-628</version>
   </parent>
 
   <artifactId>kafka-schema-registry-benchmark</artifactId>
@@ -17,9 +17,9 @@
     <!-- note: when updating jhm version, look to remove `-processing` switch from javac lint below.
          ref: https://bugs.openjdk.java.net/browse/JDK-8216275
     -->
-    <maven.plugins.version>3.0.0-M1</maven.plugins.version>
-    <junit.version>4.13.1</junit.version>
-    <jmh.version>1.21</jmh.version>
+    <maven.plugins.version>3.1.4</maven.plugins.version>
+    <junit.version>4.13.2</junit.version>
+    <jmh.version>1.37</jmh.version>
   </properties>
 
   <dependencies>
@@ -104,7 +104,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>2.0</version>
+        <version>2.4.3</version>
         <executions>
           <execution>
             <phase>package</phase>

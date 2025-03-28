@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>8.0.0-0</version>
+        <version>8.0.0-628</version>
     </parent>
 
     <licenses>
@@ -82,7 +82,7 @@
             <plugin>
                 <groupId>io.confluent</groupId>
                 <artifactId>kafka-connect-maven-plugin</artifactId>
-                <version>0.11.0</version>
+                <version>0.12.0</version>
                 <executions>
                     <execution>
                         <goals>
