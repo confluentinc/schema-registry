@@ -69,7 +69,6 @@ import java.util.Objects;
 import java.util.Properties;
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.SchemaParseException;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 public class RestApiTest extends ClusterTestHarness {
@@ -880,21 +879,18 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
-  @Disabled
   public void testRegisterInvalidSubject() throws Exception {
     // test invalid subject
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     String subject = "\rbad\nsubject\t";
     try {
       TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
-      fail("Registering invalid subject should fail with "
-          + RestInvalidSubjectException.ERROR_CODE
-          + " (invalid subject)");
+      fail("Registering invalid subject should fail with 400");
     } catch (RestClientException e) {
       // this is expected.
       assertEquals(
-          RestInvalidSubjectException.ERROR_CODE,
-          e.getErrorCode(),
+          400,
+          e.getStatus(),
           "Invalid subject shouldn't be registered"
       );
     }

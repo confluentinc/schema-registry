@@ -177,7 +177,7 @@ public abstract class ClusterTestHarness {
         schemaRegistryPort = choosePort();
       Properties schemaRegistryProps = getSchemaRegistryProperties();
       schemaRegistryProps.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
-                                                                     "://0.0.0.0:"
+                                                                     "://localhost:"
                                                                      + schemaRegistryPort);
       schemaRegistryProps.put(SchemaRegistryConfig.MODE_MUTABILITY, true);
       setupRestApp(schemaRegistryProps);
