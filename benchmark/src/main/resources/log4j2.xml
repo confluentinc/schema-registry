@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<Configuration name="Log4j2">
+    <Appenders>
+        <Console name="stdout" target="SYSTEM_OUT">
+            <PatternLayout pattern="[%d] %v1Level %m (%c:%L)%n" />
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Root level="INFO">
+            <AppenderRef ref="stdout" />
+        </Root>
+        <Logger name="org.apache.kafka.streams.StreamsConfig" level="WARN" />
+        <Logger name="io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerConfig"
+            level="WARN" />
+        <Logger name="org.apache.kafka.clients.consumer.ConsumerConfig" level="WARN" />
+        <Logger name="org.apache.kafka.clients.admin.AdminClientConfig" level="WARN" />
+        <Logger name="org.apache.kafka.streams.state.internals.RocksDBTimestampedStore" level="WARN" />
+        <Logger name="io.confluent.connect.protobuf.ProtobufDataConfig" level="WARN" />
+        <Logger name="io.confluent.kafka.serializers.KafkaJsonDeserializerConfig" level="WARN" />
+        <Logger name="org.apache.kafka.streams.KafkaStreams" level="WARN" />
+        <Logger name="io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializerConfig"
+            level="WARN" />
+        <Logger name="kafka.server.KafkaConfig" level="WARN" />
+        <Logger name="org.reflections" level="ERROR" />
+        <Logger name="org.apache.kafka.connect.json.JsonConverterConfig" level="WARN" />
+        <Logger name="io.confluent.connect.protobuf.ProtobufConverterConfig" level="WARN" />
+        <Logger name="io.confluent.connect.json.JsonSchemaConverterConfig" level="WARN" />
+        <Logger name="io.confluent.kafka.serializers.KafkaAvroSerializerConfig" level="WARN" />
+        <Logger name="io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig"
+            level="WARN" />
+        <Logger name="org.apache.kafka.streams.processor.internals.StreamThread" level="WARN" />
+        <Logger name="org.apache.kafka.clients.producer.ProducerConfig" level="WARN" />
+        <Logger name="io.confluent.connect.avro.AvroConverterConfig" level="WARN" />
+        <Logger name="io.confluent.kafka.serializers.KafkaAvroDeserializerConfig" level="WARN" />
+        <Logger name="org.apache.kafka.common.utils.AppInfoParser" level="WARN" />
+        <Logger name="io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerConfig"
+            level="WARN" />
+        <Logger name="io.confluent.connect.json.JsonSchemaDataConfig" level="WARN" />
+        <Logger name="io.confluent.connect.avro.AvroDataConfig" level="WARN" />
+        <Logger name="io.confluent.kafka.serializers.KafkaJsonSerializerConfig" level="WARN" />
+    </Loggers>
+</Configuration>

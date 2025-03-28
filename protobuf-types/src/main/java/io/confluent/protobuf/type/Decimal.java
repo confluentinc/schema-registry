@@ -62,7 +62,7 @@ private static final long serialVersionUID = 0L;
   private int precision_ = 0;
   /**
    * <pre>
-   * The precision
+   * The precision (zero indicates unlimited precision)
    * </pre>
    *
    * <code>uint32 precision = 2;</code>
@@ -474,7 +474,7 @@ private static final long serialVersionUID = 0L;
     private int precision_ ;
     /**
      * <pre>
-     * The precision
+     * The precision (zero indicates unlimited precision)
      * </pre>
      *
      * <code>uint32 precision = 2;</code>
@@ -486,7 +486,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The precision
+     * The precision (zero indicates unlimited precision)
      * </pre>
      *
      * <code>uint32 precision = 2;</code>
@@ -502,7 +502,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The precision
+     * The precision (zero indicates unlimited precision)
      * </pre>
      *
      * <code>uint32 precision = 2;</code>
