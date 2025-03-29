@@ -165,6 +165,12 @@ public class RestApiSslTest extends ClusterTestHarness {
     } catch (Exception e) {
       throw new RuntimeException("Exception creation SSL properties ", e);
     }
+
+    // Use localhost instead of 0.0.0.0 to avoid 400 Invalid SNI
+    props.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
+        "://localhost:"
+        + schemaRegistryPort);
+
     return props;
   }
 
