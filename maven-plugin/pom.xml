@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>8.0.0-0</version>
+        <version>8.0.0-628</version>
     </parent>
 
     <licenses>
@@ -23,14 +23,14 @@
     <name>maven-plugin</name>
 
     <properties>
-        <maven-plugin.version>3.13.1</maven-plugin.version>
+        <maven-plugin.version>3.15.1</maven-plugin.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-plugin-api</artifactId>
-            <version>3.8.1</version>
+            <version>3.9.9</version>
         </dependency>
         <dependency>
             <groupId>org.apache.maven.plugin-tools</groupId>
