@@ -51,7 +51,6 @@ public class RestApiSslTest extends ClusterTestHarness {
 
   @Test
   public void testRegisterWithClientSecurity() throws Exception {
-
     setupHostNameVerifier();
 
     String subject = "testSubject";
