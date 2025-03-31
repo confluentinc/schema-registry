@@ -44,7 +44,6 @@ public class PrincipalLoggingFilter implements Filter {
                        FilterChain filterChain) throws IOException, ServletException {
     HttpServletRequest req = (HttpServletRequest) request;
     Principal principal = req.getUserPrincipal();
-    String principalId = null;
 
     if (principal != null) {
       log.info("User Principal: {}", principal.getName());
