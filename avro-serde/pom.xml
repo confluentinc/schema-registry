@@ -22,6 +22,10 @@
     <packaging>jar</packaging>
     <name>kafka-streams-avro-serde</name>
 
+    <properties>
+        <jdk.version>11</jdk.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.confluent</groupId>
