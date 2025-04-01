@@ -51,7 +51,7 @@ public class PrincipalLoggingFilter implements Filter {
       log.info("No User Principal found for the request.");
     }
 
-    filterChain.doFilter(request, servletResponse); // what does this line do?
+    filterChain.doFilter(request, servletResponse);
   }
 
   @Override
