@@ -84,6 +84,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import io.confluent.kafka.schemaregistry.utils.PrincipalContext;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
@@ -658,6 +659,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         schema = new Schema(subject, version, schema.getId(), newSchema);
       }
 
+      String schemaHash = MD5.ofSchema(schema).toHexString();
+      String principal = PrincipalContext.getPrincipal();
+      logResourceAssociation(schemaHash, principal);
+
       return register(subject, schema, normalize, request.doPropagateSchemaTags());
     } catch (IllegalArgumentException e) {
       throw new InvalidSchemaException(e);
@@ -1145,6 +1150,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       } else {
         kafkaStore.put(key, null);
       }
+      String schemaHash = MD5.ofSchema(schema).toHexString();
+      String principal = PrincipalContext.getPrincipal();
+      logResourceAssociation(schemaHash, principal);
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
     } catch (StoreException e) {
@@ -1715,6 +1723,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (schemaValue != null && (!schemaValue.isDeleted() || returnDeletedSchema)) {
         schema = toSchemaEntity(schemaValue);
       }
+      if (schema != null) {
+        String schemaHash = MD5.ofSchema(schema).toHexString();
+        String principal = PrincipalContext.getPrincipal();
+        logResourceAssociation(schemaHash, principal);
+      }
       return schema;
     }
   }
@@ -1887,6 +1900,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (schema == null) {
         return null;
       }
+      String schemaHash = MD5.ofSchema(schema).toHexString();
+      String principal = PrincipalContext.getPrincipal();
+      logResourceAssociation(schemaHash, principal);
 
       SchemaIdAndSubjects schemaIdAndSubjects =
           this.lookupCache.schemaIdAndSubjects(toSchemaEntity(schema));
@@ -2624,6 +2640,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       default:
         return false;
     }
+  }
+
+  private void logResourceAssociation(String schemaHash, String principal) {
+    log.info("Resource association log - (Principal, schemaHash): ({}, {})", principal, schemaHash);
   }
 
   @Override
