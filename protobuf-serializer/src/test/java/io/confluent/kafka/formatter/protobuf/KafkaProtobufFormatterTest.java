@@ -18,6 +18,7 @@ package io.confluent.kafka.formatter.protobuf;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
+import java.io.InputStream;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
@@ -26,14 +27,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.util.Optional;
 import java.util.Properties;
 
-import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
@@ -85,19 +84,18 @@ public class KafkaProtobufFormatterTest {
     formatter.init(props);
 
     String inputJson = "{\"name\":\"myname\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     ProtobufMessageReader protobufReader =
-        new ProtobufMessageReader(url, null, recordSchema, "topic1", false, reader,
+        new ProtobufMessageReader(url, null, recordSchema, "topic1", false,
             false, true, false);
-    ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = protobufReader.readRecords(is).next();
 
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+        null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -111,19 +109,18 @@ public class KafkaProtobufFormatterTest {
     formatter.init(props);
 
     String inputJson = "{\"c1\":\"SPADES\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     ProtobufMessageReader protobufReader =
-        new ProtobufMessageReader(url, null, enumSchema, "topic1", false, reader,
+        new ProtobufMessageReader(url, null, enumSchema, "topic1", false,
             false, true, false);
-    ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = protobufReader.readRecords(is).next();
 
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+        null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -137,19 +134,18 @@ public class KafkaProtobufFormatterTest {
     formatter.init(props);
 
     String inputJson = "{\"first_field\":\"first\",\"second_field\":\"second\"}\n";
-    BufferedReader reader =
-            new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     ProtobufMessageReader protobufReader =
-            new ProtobufMessageReader(url, null, snakeCaseSchema, "topic1", false, reader,
+            new ProtobufMessageReader(url, null, snakeCaseSchema, "topic1", false,
                     false, true, false);
-    ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = protobufReader.readRecords(is).next();
 
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-            "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-            null, serializedValue);
+            "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+            null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -164,20 +160,19 @@ public class KafkaProtobufFormatterTest {
     formatter.init(props);
 
     String inputJson = "{\"key\":10}\t{\"name\":\"myname\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     ProtobufMessageReader protobufReader =
-        new ProtobufMessageReader(url, keySchema, recordSchema, "topic1", true, reader,
+        new ProtobufMessageReader(url, keySchema, recordSchema, "topic1", true,
             false, true, false);
-    ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = protobufReader.readRecords(is).next();
 
     byte[] serializedKey = message.key();
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length,
-        serializedValue.length, serializedKey, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, serializedKey.length,
+        serializedValue.length, serializedKey, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -207,19 +202,18 @@ public class KafkaProtobufFormatterTest {
     formatter.init(props);
 
     String inputJson = "{\"full_name\":\"myname\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     ProtobufMessageReader protobufReader =
-        new ProtobufMessageReader(url, null, recordSchema.copy("User2"), "topic1", false, reader,
+        new ProtobufMessageReader(url, null, recordSchema.copy("User2"), "topic1", false,
             false, true, false);
-    ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = protobufReader.readRecords(is).next();
 
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+        null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -231,13 +225,12 @@ public class KafkaProtobufFormatterTest {
   @Test
   public void testInvalidFormat() {
     String inputJson = "{\"invalid-field-name\":\"myname\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     ProtobufMessageReader protobufReader =
-        new ProtobufMessageReader(url, null, recordSchema, "topic1", false, reader,
+        new ProtobufMessageReader(url, null, recordSchema, "topic1", false,
             false, true, false);
     try {
-      protobufReader.readMessage();
+      protobufReader.readRecords(is).next();
       fail("Registering an invalid schema should fail");
     } catch (SerializationException e) {
       assertTrue("The cause of the exception should be protobuf",

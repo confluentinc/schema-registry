@@ -27,6 +27,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.KafkaException;
@@ -151,7 +152,8 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           time,
           true,
           new ApiVersions(),
-          logContext);
+          logContext,
+          MetadataRecoveryStrategy.NONE);
 
       this.client = new ConsumerNetworkClient(
           logContext,
@@ -242,7 +244,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
       switch (assignment.error()) {
         case SchemaRegistryProtocol.Assignment.NO_ERROR:
           if (assignment.leaderIdentity() == null) {
-            log.error(
+            log.warn(
                 "No leader eligible schema registry instances joined the schema registry group. "
                 + "Rebalancing was successful and this instance can serve reads, but no writes "
                 + "can be processed."
