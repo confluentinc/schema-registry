@@ -658,6 +658,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         schema = new Schema(subject, version, schema.getId(), newSchema);
       }
 
+      String schemaHash = MD5.ofSchema(schema).toHexString();
+      log.info("Attempting to register schema with hash: {}", schemaHash);
+
       return register(subject, schema, normalize, request.doPropagateSchemaTags());
     } catch (IllegalArgumentException e) {
       throw new InvalidSchemaException(e);
@@ -1145,6 +1148,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       } else {
         kafkaStore.put(key, null);
       }
+      String schemaHash = MD5.ofSchema(schema).toHexString();
+      log.info("Deleting schema version of schema with hash: {}", schemaHash);
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
     } catch (StoreException e) {
@@ -1715,6 +1720,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (schemaValue != null && (!schemaValue.isDeleted() || returnDeletedSchema)) {
         schema = toSchemaEntity(schemaValue);
       }
+      if (schema != null) {
+        String schemaHash = MD5.ofSchema(schema).toHexString();
+        log.info("Reading schema with hash: {}", schemaHash);
+      }
       return schema;
     }
   }
@@ -1887,6 +1896,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (schema == null) {
         return null;
       }
+      String schemaHash = MD5.ofSchema(schema).toHexString();
+      log.info("Schema hash for schema being read: {}", schemaHash);
 
       SchemaIdAndSubjects schemaIdAndSubjects =
           this.lookupCache.schemaIdAndSubjects(toSchemaEntity(schema));
