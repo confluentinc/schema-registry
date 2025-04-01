@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.security.Principal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import io.confluent.kafka.schemaregistry.utils.PrincipalContext;
 
 /**
 * This class is a servlet filter that logs the user principal for each incoming request to 
@@ -47,11 +48,17 @@ public class PrincipalLoggingFilter implements Filter {
 
     if (principal != null) {
       log.info("User Principal: {}", principal.getName());
+      PrincipalContext.setPrincipal(principal.getName());
     } else {
       log.info("No User Principal found for the request.");
+      PrincipalContext.clear();
     }
 
-    filterChain.doFilter(request, servletResponse);
+    try {
+      filterChain.doFilter(request, servletResponse);
+    } finally {
+      PrincipalContext.clear(); // Clear the principal after the request is processed
+    }
   }
 
   @Override
