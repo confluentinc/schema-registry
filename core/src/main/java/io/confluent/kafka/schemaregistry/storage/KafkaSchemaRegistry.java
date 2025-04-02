@@ -659,9 +659,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         schema = new Schema(subject, version, schema.getId(), newSchema);
       }
 
-      String schemaHash = MD5.ofSchema(schema).toHexString();
-      String principal = PrincipalContext.getPrincipal();
-      logResourceAssociation(schemaHash, principal);
+      logResourceAssociation(schema);
 
       return register(subject, schema, normalize, request.doPropagateSchemaTags());
     } catch (IllegalArgumentException e) {
@@ -1150,9 +1148,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       } else {
         kafkaStore.put(key, null);
       }
-      String schemaHash = MD5.ofSchema(schema).toHexString();
-      String principal = PrincipalContext.getPrincipal();
-      logResourceAssociation(schemaHash, principal);
+      logResourceAssociation(schema);
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
     } catch (StoreException e) {
@@ -1306,6 +1302,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     if (schema == null) {
       return null;
     }
+    logResourceAssociation(schema);
     Config config = getConfigInScope(subject);
     Schema existingSchema = lookUpSchemaUnderSubject(
         config, subject, schema, normalize, lookupDeletedSchema, false);
@@ -1724,9 +1721,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         schema = toSchemaEntity(schemaValue);
       }
       if (schema != null) {
-        String schemaHash = MD5.ofSchema(schema).toHexString();
-        String principal = PrincipalContext.getPrincipal();
-        logResourceAssociation(schemaHash, principal);
+        logResourceAssociation(schema);
       }
       return schema;
     }
@@ -1900,9 +1895,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (schema == null) {
         return null;
       }
-      String schemaHash = MD5.ofSchema(schema).toHexString();
-      String principal = PrincipalContext.getPrincipal();
-      logResourceAssociation(schemaHash, principal);
+      logResourceAssociation(toSchemaEntity(schema));
 
       SchemaIdAndSubjects schemaIdAndSubjects =
           this.lookupCache.schemaIdAndSubjects(toSchemaEntity(schema));
@@ -2642,7 +2635,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private void logResourceAssociation(String schemaHash, String principal) {
+  private void logResourceAssociation(Schema schema) {
+    String schemaHash = MD5.ofSchema(schema).toHexString();
+    String principal = PrincipalContext.getPrincipal();
     log.info("Resource association log - (Principal, schemaHash): ({}, {})", principal, schemaHash);
   }
 
