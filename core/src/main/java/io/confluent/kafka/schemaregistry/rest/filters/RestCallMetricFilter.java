@@ -17,9 +17,9 @@ package io.confluent.kafka.schemaregistry.rest.filters;
 
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 
-import javax.ws.rs.container.ContainerRequestContext;
-import javax.ws.rs.container.ContainerResponseContext;
-import javax.ws.rs.container.ContainerResponseFilter;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ContainerResponseContext;
+import jakarta.ws.rs.container.ContainerResponseFilter;
 import java.io.IOException;
 
 public class RestCallMetricFilter implements ContainerResponseFilter {
