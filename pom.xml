@@ -112,6 +112,7 @@
         <commons.lang3.version>3.17.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
         <snappy.version>1.1.10.5</snappy.version>
+        <log4j.version>2.24.3</log4j.version>
     </properties>
 
     <repositories>
