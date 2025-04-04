@@ -94,7 +94,7 @@
         <azure.sdk.version>4.9.2</azure.sdk.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.5.1</cel-version>
-        <guice.version>5.1.0</guice.version>
+        <guice.version>7.0.0</guice.version>
         <jsonata-version>2.5.1</jsonata-version>
         <json-schema.version>1.14.5</json-schema.version>
         <json-skema.version>0.20.0</json-skema.version>
