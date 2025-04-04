@@ -57,6 +57,7 @@ public class MetricsContainer {
   public static final String METRIC_NAME_API_FAILURE_COUNT = "api-failure-count";
   public static final String METRIC_NAME_REGISTERED_COUNT = "registered-count";
   public static final String METRIC_NAME_DELETED_COUNT = "deleted-count";
+  public static final String METRIC_NAME_TOMBSTONED_COUNT = "tombstoned-count";
   public static final String METRIC_NAME_AVRO_SCHEMAS_CREATED = "avro-schemas-created";
   public static final String METRIC_NAME_AVRO_SCHEMAS_DELETED = "avro-schemas-deleted";
   public static final String METRIC_NAME_JSON_SCHEMAS_CREATED = "json-schemas-created";
@@ -73,6 +74,7 @@ public class MetricsContainer {
 
   private final SchemaRegistryMetric schemasCreated;
   private final SchemaRegistryMetric schemasDeleted;
+  private final SchemaRegistryMetric schemasTombstoned;
   private final SchemaRegistryMetric customSchemaProviders;
   private final SchemaRegistryMetric apiCallsSuccess;
   private final SchemaRegistryMetric apiCallsFailure;
@@ -126,6 +128,9 @@ public class MetricsContainer {
     this.schemasCreated = createMetric(METRIC_NAME_REGISTERED_COUNT, "Number of registered schemas",
             new CumulativeCount());
     this.schemasDeleted = createMetric(METRIC_NAME_DELETED_COUNT, "Number of deleted schemas",
+            new CumulativeCount());
+    this.schemasTombstoned = createMetric(METRIC_NAME_TOMBSTONED_COUNT,
+            "Number of tombstoned schemas",
             new CumulativeCount());
 
     this.avroSchemasCreated = createMetric(METRIC_NAME_AVRO_SCHEMAS_CREATED,
@@ -214,6 +219,10 @@ public class MetricsContainer {
 
   public SchemaRegistryMetric getSchemasDeleted(String type) {
     return getSchemaTypeMetric(type, false);
+  }
+
+  public SchemaRegistryMetric getSchemasTombstoned() {
+    return schemasTombstoned;
   }
 
   private SchemaRegistryMetric getSchemaTypeMetric(String type, boolean isRegister) {
