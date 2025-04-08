@@ -2,7 +2,7 @@
 <Configuration name="Log4j2">
     <Appenders>
         <Console name="stdout" target="SYSTEM_OUT">
-            <PatternLayout pattern="[%d] %v1Level %m (%c:%L)%n" />
+            <PatternLayout pattern="[%d] %p %m (%c:%L)%n" />
         </Console>
     </Appenders>
     <Loggers>
