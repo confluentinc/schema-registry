@@ -1,16 +1,16 @@
 <?xml version="1.0"?>
 <Configuration name="Log4j2">
     <Appenders>
-        <RollingFile name="file" fileName="/schema-registry.log"
-            filePattern="/schema-registry.log.%i">
-            <PatternLayout pattern="[%d] %v1Level %m (%c)%n" />
+        <RollingFile name="file" fileName="${sys:schema-registry.log.dir}/schema-registry.log"
+            filePattern="${sys:schema-registry.log.dir}/schema-registry.log.%i">
+            <PatternLayout pattern="[%d] %p %m (%c:%L)%n" />
             <Policies>
-                <SizeBasedTriggeringPolicy size="10485760" />
+                <SizeBasedTriggeringPolicy size="100MB" />
             </Policies>
-            <DefaultRolloverStrategy max="1" fileIndex="min" />
+            <DefaultRolloverStrategy max="10" fileIndex="min" />
         </RollingFile>
         <Console name="stdout" target="SYSTEM_OUT">
-            <PatternLayout pattern="[%d] %v1Level %m (%c:%L)%n" />
+            <PatternLayout pattern="[%d] %p %m (%c:%L)%n" />
         </Console>
     </Appenders>
     <Loggers>
