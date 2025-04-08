@@ -352,6 +352,12 @@ public class DekRegistryResource extends SchemaRegistryResource {
       throw DekRegistryErrors.invalidOrMissingKeyInfo("kmsType");
     }
 
+    try {
+      request.validate();
+    } catch (Exception e) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo("kmsKeyId");
+    }
+
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, getSchemaRegistry().config().whitelistHeaders());
 
