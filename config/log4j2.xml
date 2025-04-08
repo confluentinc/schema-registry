@@ -3,14 +3,14 @@
     <Appenders>
         <RollingFile name="file" fileName="/schema-registry.log"
             filePattern="/schema-registry.log.%i">
-            <PatternLayout pattern="[%d] %v1Level %m (%c)%n" />
+            <PatternLayout pattern="[%d] %p %m (%c:%L)%n" />
             <Policies>
                 <SizeBasedTriggeringPolicy size="10485760" />
             </Policies>
             <DefaultRolloverStrategy max="1" fileIndex="min" />
         </RollingFile>
         <Console name="stdout" target="SYSTEM_OUT">
-            <PatternLayout pattern="[%d] %v1Level %m (%c:%L)%n" />
+            <PatternLayout pattern="[%d] %p %m (%c:%L)%n" />
         </Console>
     </Appenders>
     <Loggers>
