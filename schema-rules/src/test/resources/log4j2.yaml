@@ -10,4 +10,4 @@ Configuration:
     Root:
       level: INFO
       AppenderRef:
-        - ref: stdout 
+        - ref: stdout

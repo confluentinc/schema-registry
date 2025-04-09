@@ -36,4 +36,4 @@ Configuration:
       - name: org.apache.kafka
         level: ERROR
         AppenderRef:
-          - ref: stdout 
+          - ref: stdout

@@ -81,4 +81,4 @@ Configuration:
       
       # Disable logging from reflections warning for connect classpath scans
       - name: org.reflections
-        level: ERROR 
+        level: ERROR

@@ -25,4 +25,4 @@ Configuration:
     Root:
       level: TRACE
       AppenderRef:
-        - ref: stdout 
+        - ref: stdout
