@@ -158,6 +158,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException;
 
+  default ParsedSchema getSchemaByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public default List<ParsedSchema> getSchemas(
       String subjectPrefix,
       boolean lookupDeletedSchema,
@@ -305,6 +310,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   int getId(String subject, ParsedSchema schema) throws IOException, RestClientException;
 
   default int getId(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default RegisterSchemaResponse getIdWithResponse(
+      String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
