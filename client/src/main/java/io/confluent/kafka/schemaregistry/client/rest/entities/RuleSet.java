@@ -62,6 +62,11 @@ public class RuleSet {
     return domainRules;
   }
 
+  public boolean isEmpty() {
+    return (migrationRules == null || migrationRules.isEmpty())
+        && (domainRules == null || domainRules.isEmpty());
+  }
+
   public boolean hasRules(RuleMode mode) {
     switch (mode) {
       case UPGRADE:
