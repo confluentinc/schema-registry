@@ -113,8 +113,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected SchemaRegistryClient schemaRegistry;
   protected Ticker ticker = Ticker.systemTicker();
   protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
-  protected Object keySubjectNameStrategy = new TopicNameStrategy();
-  protected Object valueSubjectNameStrategy = new TopicNameStrategy();
+  protected SubjectNameStrategy keySubjectNameStrategy = new TopicNameStrategy();
+  protected SubjectNameStrategy valueSubjectNameStrategy = new TopicNameStrategy();
   protected Cache<SubjectSchema, ExtendedSchema> latestVersions;
   protected Cache<String, ExtendedSchema> latestWithMetadata;
   protected boolean useSchemaReflection;
@@ -474,14 +474,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
    * Get the subject name for the given topic and value type.
    */
   protected String getSubjectName(String topic, boolean isKey, Object value, ParsedSchema schema) {
-    Object subjectNameStrategy = subjectNameStrategy(isKey);
-    String subject;
-    if (subjectNameStrategy instanceof SubjectNameStrategy) {
-      subject = ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
-    } else {
-      subject = ((io.confluent.kafka.serializers.subject.SubjectNameStrategy) subjectNameStrategy)
-          .getSubjectName(topic, isKey, value);
-    }
+    SubjectNameStrategy subjectNameStrategy = subjectNameStrategy(isKey);
+    String subject = subjectNameStrategy.subjectName(topic, isKey, schema);
     return getContextName(topic, subject);
   }
 
@@ -501,22 +495,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   protected boolean strategyUsesSchema(boolean isKey) {
-    Object subjectNameStrategy = subjectNameStrategy(isKey);
-    if (subjectNameStrategy instanceof SubjectNameStrategy) {
-      return ((SubjectNameStrategy) subjectNameStrategy).usesSchema();
-    } else {
-      return false;
-    }
+    SubjectNameStrategy subjectNameStrategy = subjectNameStrategy(isKey);
+    return subjectNameStrategy.usesSchema();
   }
 
-  protected boolean isDeprecatedSubjectNameStrategy(boolean isKey) {
-    Object subjectNameStrategy = subjectNameStrategy(isKey);
-    return !(
-        subjectNameStrategy
-            instanceof io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy);
-  }
-
-  private Object subjectNameStrategy(boolean isKey) {
+  private SubjectNameStrategy subjectNameStrategy(boolean isKey) {
     return isKey ? keySubjectNameStrategy : valueSubjectNameStrategy;
   }
 
