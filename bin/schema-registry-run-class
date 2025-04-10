@@ -54,12 +54,12 @@ fi
 if [ -z "$SCHEMA_REGISTRY_LOG4J_OPTS" ]; then
   # Test for files from dev -> packages so this will work as expected in dev if you have packages
   # installed
-  if [ -e "$base_dir/config/log4j2.xml" ]; then # Dev environment
-    LOG4J_DIR="$base_dir/config/log4j2.xml"
-  elif [ -e "$base_dir/etc/schema-registry/log4j2.xml" ]; then # Simple zip file layout
-    LOG4J_DIR="$base_dir/etc/schema-registry/log4j2.xml"
-  elif [ -e "/etc/schema-registry/log4j2.xml" ]; then # Normal install layout
-    LOG4J_DIR="/etc/schema-registry/log4j2.xml"
+  if [ -e "$base_dir/config/log4j2.yaml" ]; then # Dev environment
+    LOG4J_DIR="$base_dir/config/log4j2.yaml"
+  elif [ -e "$base_dir/etc/schema-registry/log4j2.yaml" ]; then # Simple zip file layout
+    LOG4J_DIR="$base_dir/etc/schema-registry/log4j2.yaml"
+  elif [ -e "/etc/schema-registry/log4j2.yaml" ]; then # Normal install layout
+    LOG4J_DIR="/etc/schema-registry/log4j2.yaml"
   fi
 
     # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
