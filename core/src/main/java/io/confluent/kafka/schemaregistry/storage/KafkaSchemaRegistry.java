@@ -89,6 +89,7 @@ import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -100,6 +101,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -2635,9 +2637,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private void logResourceAssociation(Schema schema, String operation) {
-    String schemaHash = SHA256.ofSchema(schema).toHexString();
+    MD5 md5 = MD5.ofSchema(schema);
+    ByteBuffer byteBuffer = ByteBuffer.wrap(md5.bytes());
+    long high = byteBuffer.getLong();
+    long low = byteBuffer.getLong();
+    UUID uuid = new UUID(high, low);
     log.info("Resource association log - (tenant, schemaHash, operation): ({}, {}, {})", 
-        tenant(), schemaHash, operation);
+        tenant(), uuid.toString(), operation);
   }
 
   @Override
