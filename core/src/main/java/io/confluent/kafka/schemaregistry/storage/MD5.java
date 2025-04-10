@@ -81,4 +81,16 @@ public class MD5 {
     MD5 otherMd5 = (MD5) o;
     return Arrays.equals(this.md5, otherMd5.md5);
   }
+
+  public String toHexString() {
+    StringBuilder hexString = new StringBuilder();
+    for (byte b : md5) {
+      String hex = Integer.toHexString(0xFF & b);
+      if (hex.length() == 1) {
+        hexString.append('0');
+      }
+      hexString.append(hex);
+    }
+    return hexString.toString();
+  }
 }
