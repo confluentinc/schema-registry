@@ -202,12 +202,12 @@ public abstract class SchemaMessageReader<T> implements RecordReader {
                     props, false);
 
     valueSchema = getSchema(serializer.getSchemaRegistryClient(), props, false);
-    final Object valueSubjectNameStrategy = config.valueSubjectNameStrategy();
+    final SubjectNameStrategy valueSubjectNameStrategy = config.valueSubjectNameStrategy();
     valueSubject = getSubjectName(valueSubjectNameStrategy, topic, false, valueSchema);
 
     if (needsKeySchema()) {
       keySchema = getSchema(serializer.getSchemaRegistryClient(), props, true);
-      final Object keySubjectNameStrategy = config.keySubjectNameStrategy();
+      final SubjectNameStrategy keySubjectNameStrategy = config.keySubjectNameStrategy();
       keySubject = getSubjectName(keySubjectNameStrategy, topic, true, keySchema);
     }
   }
@@ -245,18 +245,9 @@ public abstract class SchemaMessageReader<T> implements RecordReader {
   /**
    * @see AbstractKafkaSchemaSerDe#getSubjectName(String, boolean, Object, ParsedSchema)
    */
-  private String getSubjectName(Object subjectNameStrategy, String topic, boolean isKey,
-                                ParsedSchema schema) {
-    if (subjectNameStrategy instanceof SubjectNameStrategy) {
-      return ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
-    } else {
-      // We don't have an instance of an object, only a schema, so we can't provide the necessary
-      // params to the deprecated strategy.
-      throw new RuntimeException("Classes extending deprecated "
-              + io.confluent.kafka.serializers.subject.SubjectNameStrategy.class.getCanonicalName()
-              + " are not supported. Use classes extending "
-              + SubjectNameStrategy.class.getCanonicalName() + " instead.");
-    }
+  private String getSubjectName(SubjectNameStrategy subjectNameStrategy,
+                                String topic, boolean isKey, ParsedSchema schema) {
+    return subjectNameStrategy.subjectName(topic, isKey, schema);
   }
 
   protected ParsedSchema parseSchema(
