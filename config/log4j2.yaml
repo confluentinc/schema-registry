@@ -20,7 +20,7 @@ Configuration:
         pattern: "[%d] %p %m (%c:%L)%n"
   Loggers:
     Root:
-      level: DEBUG
+      level: INFO
       AppenderRef:
         - ref: file
         - ref: stdout
