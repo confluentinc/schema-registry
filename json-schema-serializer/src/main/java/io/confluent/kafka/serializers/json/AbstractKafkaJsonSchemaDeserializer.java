@@ -45,7 +45,6 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
-import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
@@ -288,9 +287,6 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       String topic, boolean isKey, int id, String subject, JsonSchema schema, Object value
   ) throws IOException, RestClientException {
     Integer version = null;
-    if (isDeprecatedSubjectNameStrategy(isKey)) {
-      subject = getSubjectName(topic, isKey, value, schema);
-    }
     JsonSchema subjectSchema = (JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
     Metadata metadata = subjectSchema.metadata();
     if (metadata != null) {
@@ -303,17 +299,13 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   private String subjectName(String topic, boolean isKey, JsonSchema schemaFromRegistry) {
-    return isDeprecatedSubjectNameStrategy(isKey)
-           ? null
-           : getSubjectName(topic, isKey, null, schemaFromRegistry);
+    return getSubjectName(topic, isKey, null, schemaFromRegistry);
   }
 
   private JsonSchema schemaForDeserialize(
       int id, JsonSchema schemaFromRegistry, String subject, boolean isKey
   ) throws IOException, RestClientException {
-    return isDeprecatedSubjectNameStrategy(isKey)
-           ? JsonSchemaUtils.copyOf(schemaFromRegistry)
-           : (JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+    return (JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
 
   protected JsonSchemaAndValue deserializeWithSchemaAndVersion(
