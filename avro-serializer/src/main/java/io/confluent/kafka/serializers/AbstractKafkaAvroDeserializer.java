@@ -191,9 +191,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                                 Object result) {
     try {
       Integer version = null;
-      if (isDeprecatedSubjectNameStrategy(isKey)) {
-        subject = getSubjectName(topic, isKey, result, schema);
-      }
       AvroSchema subjectSchema = (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
       Metadata metadata = subjectSchema.metadata();
       if (metadata != null) {
@@ -224,9 +221,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   private String subjectName(String topic, boolean isKey, AvroSchema schemaFromRegistry) {
-    return isDeprecatedSubjectNameStrategy(isKey)
-        ? null
-        : getSubjectName(topic, isKey, null, schemaFromRegistry);
+    return getSubjectName(topic, isKey, null, schemaFromRegistry);
   }
 
   /**
@@ -417,9 +412,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
     AvroSchema schemaForDeserialize() {
       try {
-        return isDeprecatedSubjectNameStrategy(isKey)
-            ? AvroSchemaUtils.copyOf(schemaFromRegistry())
-            : (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(getSubject(), schemaId);
+        return (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(getSubject(), schemaId);
       } catch (InterruptedIOException e) {
         String errorMessage = "Error retrieving Avro "
             + getSchemaType(isKey)

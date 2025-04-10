@@ -460,11 +460,11 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     return this.getConfiguredInstance(CONTEXT_NAME_STRATEGY, ContextNameStrategy.class);
   }
 
-  public Object keySubjectNameStrategy() {
+  public SubjectNameStrategy keySubjectNameStrategy() {
     return subjectNameStrategyInstance(KEY_SUBJECT_NAME_STRATEGY);
   }
 
-  public Object valueSubjectNameStrategy() {
+  public SubjectNameStrategy valueSubjectNameStrategy() {
     return subjectNameStrategyInstance(VALUE_SUBJECT_NAME_STRATEGY);
   }
 
@@ -477,12 +477,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .collect(Collectors.toMap(Map.Entry::getKey, entry -> Objects.toString(entry.getValue())));
   }
 
-  private Object subjectNameStrategyInstance(String config) {
-    Class subjectNameStrategyClass = this.getClass(config);
-    Class deprecatedClass = io.confluent.kafka.serializers.subject.SubjectNameStrategy.class;
-    if (deprecatedClass.isAssignableFrom(subjectNameStrategyClass)) {
-      return this.getConfiguredInstance(config, deprecatedClass);
-    }
+  private SubjectNameStrategy subjectNameStrategyInstance(String config) {
     return this.getConfiguredInstance(config, SubjectNameStrategy.class);
   }
 
