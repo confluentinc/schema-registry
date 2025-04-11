@@ -44,7 +44,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
@@ -274,9 +273,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       String topic, boolean isKey, int id, String subject, ProtobufSchema schema, Object value
   ) throws IOException, RestClientException {
     Integer version = null;
-    if (isDeprecatedSubjectNameStrategy(isKey)) {
-      subject = getSubjectName(topic, isKey, value, schema);
-    }
     ProtobufSchema subjectSchema =
         (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
     Metadata metadata = subjectSchema.metadata();
@@ -290,17 +286,13 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   }
 
   private String subjectName(String topic, boolean isKey, ProtobufSchema schemaFromRegistry) {
-    return isDeprecatedSubjectNameStrategy(isKey)
-           ? null
-           : getSubjectName(topic, isKey, null, schemaFromRegistry);
+    return getSubjectName(topic, isKey, null, schemaFromRegistry);
   }
 
   private ProtobufSchema schemaForDeserialize(
       int id, ProtobufSchema schemaFromRegistry, String subject, boolean isKey
   ) throws IOException, RestClientException {
-    return isDeprecatedSubjectNameStrategy(isKey)
-           ? ProtobufSchemaUtils.copyOf(schemaFromRegistry)
-           : (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+    return (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
 
   protected ProtobufSchemaAndValue deserializeWithSchemaAndVersion(
