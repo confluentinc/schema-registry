@@ -89,6 +89,7 @@ import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -100,6 +101,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -825,7 +827,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           }
         }
         kafkaStore.put(schemaKey, schemaValue);
-
+        logSchemaOp(schema, "REGISTER");
         return modifiedSchema
             ? schema
             : new Schema(subject, schema.getId());
@@ -1134,6 +1136,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         schemaValue.setDeleted(true);
         metadataEncoder.encodeMetadata(schemaValue);
         kafkaStore.put(key, schemaValue);
+        logSchemaOp(schema, "DELETE");
         if (!getAllVersions(subject, LookupFilter.DEFAULT).hasNext()) {
           if (getMode(subject) != null) {
             deleteMode(subject);
@@ -1259,6 +1262,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     Schema matchingSchema =
         lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema);
     if (matchingSchema != null) {
+      logSchemaOp(matchingSchema, "READ");
       return matchingSchema;
     }
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
@@ -1281,6 +1285,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           // ignore
         }
         if (matchingSchema != null) {
+          logSchemaOp(matchingSchema, "READ");
           return matchingSchema;
         }
       }
@@ -1383,6 +1388,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     for (SchemaKey schemaKey : allVersions) {
       Schema schema = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
       if (schema != null) {
+        logSchemaOp(schema, "READ");
         if (schema.getMetadata() != null) {
           Map<String, String> props = schema.getMetadata().getProperties();
           if (props != null && props.entrySet().containsAll(metadata.entrySet())) {
@@ -1674,6 +1680,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       returnDeletedSchema) throws SchemaRegistryException {
     Schema schema = get(subject, version, returnDeletedSchema);
     if (schema != null) {
+      logSchemaOp(schema, "READ");
       return schema;
     }
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
@@ -1689,6 +1696,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
         schema = get(qualSub.toQualifiedSubject(), version, returnDeletedSchema);
         if (schema != null) {
+          logSchemaOp(schema, "READ");
           return schema;
         }
       }
@@ -1745,6 +1753,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           + " store", e);
     }
     Schema schemaEntity = toSchemaEntity(schema);
+    logSchemaOp(schemaEntity, "READ");
     SchemaString schemaString = new SchemaString(schemaEntity);
     if (format != null && !format.trim().isEmpty()) {
       ParsedSchema parsedSchema = parseSchema(schemaEntity, false, false);
@@ -1887,6 +1896,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (schema == null) {
         return null;
       }
+      logSchemaOp(toSchemaEntity(schema), "READ");
 
       SchemaIdAndSubjects schemaIdAndSubjects =
           this.lookupCache.schemaIdAndSubjects(toSchemaEntity(schema));
@@ -2623,6 +2633,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         return isDeleted;
       default:
         return false;
+    }
+  }
+
+  private void logSchemaOp(Schema schema, String operation) {
+    try {
+      MD5 md5 = MD5.ofSchema(schema);
+      ByteBuffer byteBuffer = ByteBuffer.wrap(md5.bytes());
+      long high = byteBuffer.getLong();
+      long low = byteBuffer.getLong();
+      UUID uuid = new UUID(high, low);
+      log.info("Resource association log - (tenant, schemaHash, operation): ({}, {}, {})", 
+          tenant(), uuid.toString(), operation);
+    } catch (Exception e) {
+      log.warn("Error occurred while logging schema operation", e);
     }
   }
 
