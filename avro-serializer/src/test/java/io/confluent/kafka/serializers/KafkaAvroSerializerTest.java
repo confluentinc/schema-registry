@@ -86,8 +86,9 @@ public class KafkaAvroSerializerTest {
     defaultConfig = createSerializerConfig();
     schemaRegistry = new MockSchemaRegistryClient();
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(defaultConfig));
-    avroDeserializer = new KafkaAvroDeserializer(schemaRegistry);
-    avroDecoder = new KafkaAvroDecoder(schemaRegistry, new VerifiableProperties(defaultConfig));
+    Properties deserializerConfig = createDeserializerConfig();
+    avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, new HashMap(deserializerConfig));
+    avroDecoder = new KafkaAvroDecoder(schemaRegistry, new VerifiableProperties(deserializerConfig));
     topic = "test";
 
     HashMap<String, String> specificDeserializerProps = new HashMap<String, String>();
@@ -97,7 +98,7 @@ public class KafkaAvroSerializerTest {
     specificDeserializerProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
     specificAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, specificDeserializerProps);
 
-    Properties specificDecoderProps = new Properties();
+    Properties specificDecoderProps = createDeserializerConfig();
     specificDecoderProps.setProperty(
         KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     specificDecoderProps.setProperty(
@@ -113,7 +114,7 @@ public class KafkaAvroSerializerTest {
     reflectionAvroSerializer = new KafkaAvroSerializer(schemaRegistry, reflectionProps);
     reflectionAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, reflectionProps);
 
-    Properties reflectionDecoderProps = new Properties();
+    Properties reflectionDecoderProps = createDeserializerConfig();
     reflectionDecoderProps.setProperty(
             KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     reflectionDecoderProps.setProperty(
@@ -130,6 +131,13 @@ public class KafkaAvroSerializerTest {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     return serializerConfig;
+  }
+
+  protected Properties createDeserializerConfig() {
+    Properties deserializerConfig = new Properties();
+    deserializerConfig.setProperty(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    return deserializerConfig;
   }
 
   private Schema createUserSchema() {
