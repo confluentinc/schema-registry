@@ -35,14 +35,17 @@ import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfigException;
+import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.resource.ResourceCollection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.servlet.DispatcherType;
 import javax.ws.rs.core.Configurable;
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -59,6 +62,10 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   @Override
   protected void configurePreResourceHandling(ServletContextHandler context) {
     super.configurePreResourceHandling(context);
+    PrincipalLoggingFilter principalLoggingFilter = new PrincipalLoggingFilter();
+    FilterHolder filterHolder = new FilterHolder(principalLoggingFilter);
+    filterHolder.setName("PrincipalLoggingFilter");
+    context.addFilter(filterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
     context.setErrorHandler(new JsonErrorHandler());
     // This handler runs before first Session, Security or ServletHandler
     context.insertHandler(new RequestHeaderHandler());
