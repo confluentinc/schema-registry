@@ -16,7 +16,10 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.BACKWARD;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
+import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD_TRANSITIVE;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
+import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
+import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -45,6 +48,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
@@ -661,6 +665,78 @@ public class RestApiTest extends ClusterTestHarness {
         restApp.restClient
             .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true)
             .getCompatibilityLevel());
+  }
+
+  @Test
+  public void testDefaultContextConfigAndMode() throws Exception {
+    String defaultContext = ":.:";
+
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(FORWARD.name());
+    assertEquals(
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, null));
+
+    assertEquals(
+        FORWARD.name,
+        restApp.restClient
+            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, defaultContext, true)
+            .getCompatibilityLevel()
+    );
+
+    configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(FORWARD_TRANSITIVE.name());
+    assertEquals(
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, defaultContext));
+
+    assertEquals(
+        FORWARD_TRANSITIVE.name,
+        restApp.restClient
+            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true)
+            .getCompatibilityLevel()
+    );
+
+    restApp.restClient.deleteConfig(defaultContext);
+
+    assertEquals(
+        NONE.name,
+        restApp.restClient
+            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true)
+            .getCompatibilityLevel()
+    );
+
+    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
+    modeUpdateRequest.setMode(IMPORT.name());
+    assertEquals(
+        modeUpdateRequest,
+        restApp.restClient.setMode(IMPORT.name(), null));
+
+    assertEquals(
+        IMPORT.name(),
+        restApp.restClient
+            .getMode(defaultContext, true)
+            .getMode()
+    );
+
+    modeUpdateRequest = new ModeUpdateRequest();
+    modeUpdateRequest.setMode(READONLY.name());
+    assertEquals(
+        modeUpdateRequest,
+        restApp.restClient.setMode(READONLY.name(), defaultContext));
+
+    assertEquals(
+        READONLY.name(),
+        restApp.restClient
+            .getMode(null, true)
+            .getMode()
+    );
+
+    // We don't support deleting the mode for the default context
+    assertThrows(
+        RestClientException.class,
+        () -> restApp.restClient.deleteSubjectMode(defaultContext)
+    );
   }
 
   @Test
