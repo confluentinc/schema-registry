@@ -680,7 +680,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(
         FORWARD.name,
         restApp.restClient
-            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, ":.:", true)
+            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, defaultContext, true)
             .getCompatibilityLevel()
     );
 
@@ -715,7 +715,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(
         IMPORT.name(),
         restApp.restClient
-            .getMode(":.:", true)
+            .getMode(defaultContext, true)
             .getMode()
     );
 
