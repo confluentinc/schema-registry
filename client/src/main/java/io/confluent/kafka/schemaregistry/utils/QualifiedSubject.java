@@ -257,7 +257,6 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static boolean isDefaultContext(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
-    // For backward compatibility, we allow an empty subject
     return qs == null || (qs.getContext().equals(DEFAULT_CONTEXT) && qs.getSubject().isEmpty());
   }
 
