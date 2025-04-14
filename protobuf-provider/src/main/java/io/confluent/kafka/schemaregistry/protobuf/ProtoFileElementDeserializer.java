@@ -101,6 +101,7 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
       Syntax.valueOf(node.get("syntax").asText()),
       Arrays.asList(mapper.convertValue(node.get("imports"), String[].class)),
       Arrays.asList(mapper.convertValue(node.get("publicImports"), String[].class)),
+      Arrays.asList(mapper.convertValue(node.get("weakImports"), String[].class)),
       typeElementBuilder.build(),
       serviceElementBuilder.build(),
       extendElementBuilder.build(),
