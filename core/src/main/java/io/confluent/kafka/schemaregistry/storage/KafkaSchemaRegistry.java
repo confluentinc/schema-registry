@@ -1896,10 +1896,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (schema == null) {
         return null;
       }
-      logSchemaOp(toSchemaEntity(schema), "READ");
+      Schema schemaEntity = toSchemaEntity(schema);
+      logSchemaOp(schemaEntity, "READ");
 
       SchemaIdAndSubjects schemaIdAndSubjects =
-          this.lookupCache.schemaIdAndSubjects(toSchemaEntity(schema));
+          this.lookupCache.schemaIdAndSubjects(schemaEntity);
       if (schemaIdAndSubjects == null) {
         return null;
       }
