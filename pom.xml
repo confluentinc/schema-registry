@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[8.0.0-0, 8.0.1-0)</version>
+        <version>8.0.0-0</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
@@ -113,7 +113,6 @@
         <commons.validator.version>1.9.0</commons.validator.version>
         <snappy.version>1.1.10.5</snappy.version>
         <log4j.version>2.24.3</log4j.version>
-        <client.jdk.version>11</client.jdk.version>
     </properties>
 
     <repositories>
@@ -552,6 +551,14 @@
             </plugins>
         </pluginManagement>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <inherited>true</inherited>
+                <configuration>
+                    <release>${java.version}</release>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
