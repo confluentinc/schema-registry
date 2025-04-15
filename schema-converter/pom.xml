@@ -35,15 +35,4 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <release>${client.jdk.version}</release>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>
