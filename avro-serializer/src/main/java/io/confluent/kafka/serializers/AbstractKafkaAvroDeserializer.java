@@ -22,6 +22,8 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.List;
@@ -151,6 +153,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return deserialize(null, isKey, payload, specificAvroReaderSchema);
   }
 
+  protected Object deserialize(Headers headers, byte[] payload) throws SerializationException {
+    return deserialize(null, isKey, headers, payload, specificAvroReaderSchema);
+  }
+
   /**
    * Just like single-parameter version but accepts an Avro schema to use for reading
    *
@@ -160,6 +166,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    */
   protected Object deserialize(byte[] payload, Schema readerSchema) throws SerializationException {
     return deserialize(null, isKey, payload, readerSchema);
+  }
+
+  protected Object deserialize(
+      Headers headers, byte[] payload, Schema readerSchema) throws SerializationException {
+    return deserialize(null, isKey, headers, payload, readerSchema);
   }
 
   protected Object deserialize(String topic, Boolean isKey, byte[] payload, Schema readerSchema)
@@ -185,13 +196,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   private Integer schemaVersion(String topic,
                                 boolean isKey,
-                                int id,
+                                SchemaId id,
                                 String subject,
                                 AvroSchema schema,
                                 Object result) {
     try {
       Integer version = null;
-      AvroSchema subjectSchema = (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+      AvroSchema subjectSchema = (AvroSchema) getSchemaBySchemaId(subject, id);
       Metadata metadata = subjectSchema.metadata();
       if (metadata != null) {
         version = metadata.getConfluentVersionNumber();
@@ -373,7 +384,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     private final Headers headers;
     private final byte[] payload;
     private final ByteBuffer buffer;
-    private final int schemaId;
+    private final SchemaId schemaId;
 
     DeserializationContext(
         final String topic, final Boolean isKey, Headers headers, final byte[] payload) {
@@ -381,15 +392,21 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       this.isKey = isKey;
       this.headers = headers;
       this.payload = payload;
-      this.buffer = getByteBuffer(payload);
-      this.schemaId = buffer.getInt();
+      SchemaId schemaId = new SchemaId(AvroSchema.TYPE);
+      try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
+        this.buffer = schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
+        this.schemaId = schemaId;
+      } catch (IOException e) {
+        throw new SerializationException(
+            "Error deserializing Avro message for id " + schemaId, e);
+      }
     }
 
     AvroSchema schemaFromRegistry() {
       try {
         String subjectName = isKey == null || strategyUsesSchema(isKey)
             ? getContext() : getSubject();
-        return (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subjectName, schemaId);
+        return (AvroSchema) getSchemaBySchemaId(subjectName, schemaId);
       } catch (InterruptedIOException e) {
         String errorMessage = "Error retrieving Avro "
             + getSchemaType(isKey)
@@ -412,7 +429,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
     AvroSchema schemaForDeserialize() {
       try {
-        return (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(getSubject(), schemaId);
+        return (AvroSchema) getSchemaBySchemaId(getSubject(), schemaId);
       } catch (InterruptedIOException e) {
         String errorMessage = "Error retrieving Avro "
             + getSchemaType(isKey)
@@ -451,7 +468,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
 
-    int getSchemaId() {
+    SchemaId getSchemaId() {
       return schemaId;
     }
 
@@ -491,7 +508,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         } else {
           reader = getDatumReader(writerSchema, readerSchema);
         }
-        int length = buffer.limit() - 1 - idSize;
+        int length = buffer.remaining();
         Object result;
         if (writerSchema.getType().equals(Schema.Type.BYTES)) {
           byte[] bytes = new byte[length];
