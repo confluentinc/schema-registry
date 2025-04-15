@@ -113,7 +113,11 @@ public class ModeResource {
       throw Errors.invalidSubjectException(subject);
     }
 
-    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      subject = null;
+    } else {
+      subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    }
 
     io.confluent.kafka.schemaregistry.storage.Mode mode;
     try {
@@ -169,7 +173,11 @@ public class ModeResource {
       @Parameter(description = "Whether to return the global mode if subject mode not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
-    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      subject = null;
+    } else {
+      subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    }
 
     try {
       io.confluent.kafka.schemaregistry.storage.Mode mode = defaultToGlobal
@@ -255,6 +263,10 @@ public class ModeResource {
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.debug("Deleting mode for subject {}", subject);
+
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      throw Errors.invalidSubjectException(subject);
+    }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
