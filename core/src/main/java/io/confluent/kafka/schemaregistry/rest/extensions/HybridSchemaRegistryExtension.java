@@ -21,17 +21,20 @@ import io.confluent.kafka.schemaregistry.rest.handler.HybridSRRequestForwardHand
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import jakarta.ws.rs.core.Configurable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
 
 public class HybridSchemaRegistryExtension implements SchemaRegistryResourceExtension {
+  private static final Logger LOG = LoggerFactory.getLogger(HybridSchemaRegistryExtension.class);
 
   KafkaSchemaRegistry schemaRegistry;
   @Override
   public void register(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig, SchemaRegistry schemaRegistry) throws SchemaRegistryException {
+    LOG.debug("adding HybridSRRequestForwardHandler");
     this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
-
     this.schemaRegistry.addCustomHandler(List.of(new HybridSRRequestForwardHandler()));
   }
 

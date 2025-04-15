@@ -22,10 +22,10 @@ public class HybridSRRequestForwardHandler extends SchemaRegistryHandler {
 
   @Override
   public void init(SchemaRegistryConfig schemaRegistryConfig, SchemaRegistry schemaRegistry) {
-
+    throw new UnsupportedOperationException();
   }
 
   boolean initialized() {
-    return true;
+    return false;
   }
 }
