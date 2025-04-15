@@ -279,7 +279,7 @@
             <dependency>
                 <groupId>io.yokota</groupId>
                 <artifactId>mbknor-jackson-jsonschema-java8</artifactId>
-                <version>1.0.39.2</version>
+                <version>1.0.39.3</version>
             </dependency>
             <dependency>
                 <groupId>org.antlr</groupId>
