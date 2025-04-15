@@ -70,6 +70,6 @@ public class HybridSchemaRegistryExtensionTest extends ClusterTestHarness {
     List<SchemaRegistryHandler> customHandlers = schemaRegistry.getCustomHandler();
     assertFalse(customHandlers.stream()
                     .anyMatch(handler -> handler instanceof HybridSRRequestForwardHandler),
-            "HybridSRRequestForwardHandler should be in custom handlers");
+            "HybridSRRequestForwardHandler should not be in custom handlers");
   }
 } 
