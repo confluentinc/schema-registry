@@ -77,6 +77,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
+import io.confluent.kafka.schemaregistry.rest.handler.SchemaRegistryHandler;
 import io.confluent.kafka.schemaregistry.rest.handlers.CompositeUpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
@@ -122,6 +123,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Time;
+import org.eclipse.jetty.server.Handler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -140,6 +142,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       + " conflicts with the reserved field %s.";
   private final SchemaRegistryConfig config;
   private final List<SchemaRegistryResourceExtension> resourceExtensions;
+  private final List<SchemaRegistryHandler> customHandler;
   private final Map<String, Object> props;
   private final LoadingCache<RawSchema, ParsedSchema> schemaCache;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
@@ -194,6 +197,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         config.definedResourceExtensionConfigName(),
         SchemaRegistryResourceExtension.class);
     this.props = new ConcurrentHashMap<>();
+    this.customHandler = new ArrayList<>();
     Boolean leaderEligibility = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     if (leaderEligibility == null) {
       leaderEligibility = config.getBoolean(SchemaRegistryConfig.LEADER_ELIGIBILITY);
@@ -339,6 +343,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   public List<SchemaRegistryResourceExtension> getResourceExtensions() {
     return resourceExtensions;
+  }
+
+  public List<SchemaRegistryHandler> getCustomHandler() {
+    return customHandler;
+  }
+
+  public void addCustomHandler(List<SchemaRegistryHandler> handler) {
+    customHandler.addAll(handler);
   }
 
   protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache() {
