@@ -94,7 +94,7 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
       );
     }
 
-    configure(deserializerConfig(props), type);
+    configure(config, type);
   }
 
   @Override
