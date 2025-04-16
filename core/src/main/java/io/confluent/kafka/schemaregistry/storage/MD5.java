@@ -57,13 +57,6 @@ public class MD5 {
     return new MD5(bytes);
   }
 
-  public static void main(String[] args) {
-    MD5 md5 = MD5.fromString("6da336d8-f1d3-0f98-4c47-d03ee8a14af1");
-    System.out.println(md5);
-    md5 = MD5.fromString("6da336d8f1d30f984c47d03ee8a14af1");
-    System.out.println(md5);
-  }
-
   public byte[] bytes() {
     return md5;
   }
