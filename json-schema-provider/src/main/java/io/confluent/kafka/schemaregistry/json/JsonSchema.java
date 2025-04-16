@@ -801,6 +801,9 @@ public class JsonSchema implements ParsedSchema {
             getType(propertySchema), getInlineTags(propertySchema))) {
           PropertyAccessor propertyAccessor =
               getPropertyAccessor(ctx, message, propertyName);
+          if (propertyAccessor == null) {
+            return message;
+          }
           Object value = propertyAccessor.getPropertyValue();
           Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
           if (ctx.rule().getKind() == RuleKind.CONDITION) {
@@ -1134,6 +1137,9 @@ public class JsonSchema implements ParsedSchema {
     } else {
       BeanPropertyWriter getter = getBeanGetter(ctx, message, propertyName);
       SettableBeanProperty setter = getBeanSetter(ctx, message, propertyName);
+      if (getter == null || setter == null) {
+        return null;
+      }
       return new PropertyAccessor() {
         @Override
         public Object getPropertyValue() {
