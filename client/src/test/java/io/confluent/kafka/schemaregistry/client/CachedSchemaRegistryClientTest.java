@@ -264,6 +264,33 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testGuidCache() throws Exception {
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(ID_25));
+
+    // Expect only one call to getId (the rest should hit the cache)
+
+    SchemaString result = new SchemaString(SCHEMA_STR_0);
+    String guid = new Schema(null, null, null, result).getGuid();
+    expect(restService.getByGuid(guid, null)).andReturn(result);
+
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaByGuid(guid, null)).rawSchema()
+    );
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaByGuid(guid, null)).rawSchema()
+    ); // hit the cache
+
+    verify(restService);
+  }
+
+  @Test
   public void testVersionCache() throws Exception {
     int version = 7;
 
