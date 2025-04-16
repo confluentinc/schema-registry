@@ -26,6 +26,10 @@
     <packaging>jar</packaging>
     <name>dek-registry-client</name>
 
+    <properties>
+        <java.version>11</java.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.confluent</groupId>
@@ -71,5 +75,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
 </project>
