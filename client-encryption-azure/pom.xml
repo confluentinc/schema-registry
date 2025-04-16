@@ -22,6 +22,10 @@
     <packaging>jar</packaging>
     <name>kafka-schema-registry-client-encryption-azure</name>
 
+    <properties>
+        <java.version>11</java.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.confluent</groupId>
@@ -152,16 +156,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <release>${client.java.version}</release>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>
