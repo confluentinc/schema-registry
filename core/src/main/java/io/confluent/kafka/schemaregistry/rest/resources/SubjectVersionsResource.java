@@ -42,7 +42,6 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetExcep
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
-import io.confluent.kafka.schemaregistry.storage.MD5;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
@@ -170,7 +169,6 @@ public class SubjectVersionsResource {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
         schema.setSchema(parsedSchema.formattedString(format));
       }
-      schema.setGuid(MD5.ofSchema(schema).toString());
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
@@ -456,7 +454,6 @@ public class SubjectVersionsResource {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
         result.setSchema(parsedSchema.formattedString(format));
       }
-      result.setGuid(MD5.ofSchema(result).toString());
       registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);

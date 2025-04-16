@@ -26,11 +26,14 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -290,12 +293,21 @@ public class Schema implements Comparable<Schema> {
 
   @JsonProperty("guid")
   public String getGuid() {
+    if (guid == null) {
+      try {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        updateHash(md);
+        byte[] md5 = md.digest();
+        ByteBuffer byteBuffer = ByteBuffer.wrap(md5);
+        long high = byteBuffer.getLong();
+        long low = byteBuffer.getLong();
+        UUID uuid = new UUID(high, low);
+        guid = uuid.toString();
+      } catch (NoSuchAlgorithmException e) {
+        throw new RuntimeException(e);
+      }
+    }
     return guid;
-  }
-
-  @JsonProperty("guid")
-  public void setGuid(String guid) {
-    this.guid = guid;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = TYPE_DESC, example = TYPE_EXAMPLE)
