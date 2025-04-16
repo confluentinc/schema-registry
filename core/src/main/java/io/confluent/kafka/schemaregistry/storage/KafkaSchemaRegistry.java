@@ -259,6 +259,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     this.metadataEncoder = new MetadataEncoderService(this);
     this.ruleSetHandler = new RuleSetHandler();
     this.time = config.getTime();
+    this.customHandler = new ArrayList<>();
   }
 
   @VisibleForTesting
