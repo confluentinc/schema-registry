@@ -31,8 +31,11 @@ public class HybridSchemaRegistryExtension implements SchemaRegistryResourceExte
   private static final Logger LOG = LoggerFactory.getLogger(HybridSchemaRegistryExtension.class);
 
   KafkaSchemaRegistry schemaRegistry;
+  
   @Override
-  public void register(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig, SchemaRegistry schemaRegistry) throws SchemaRegistryException {
+  public void register(Configurable<?> config,
+                       SchemaRegistryConfig schemaRegistryConfig,
+                       SchemaRegistry schemaRegistry) throws SchemaRegistryException {
     LOG.debug("adding HybridSRRequestForwardHandler");
     this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
     this.schemaRegistry.addCustomHandler(List.of(new HybridSRRequestForwardHandler()));
