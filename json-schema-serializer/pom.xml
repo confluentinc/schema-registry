@@ -26,6 +26,10 @@
     <packaging>jar</packaging>
     <name>kafka-json-schema-serializer</name>
 
+    <properties>
+        <java.version>11</java.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.kafka</groupId>
@@ -69,5 +73,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
 </project>
