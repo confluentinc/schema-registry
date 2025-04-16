@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceE
 import io.confluent.kafka.schemaregistry.rest.filters.AliasFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.ContextFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.RestCallMetricFilter;
+import io.confluent.kafka.schemaregistry.rest.handler.SchemaRegistryHandler;
 import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ConfigResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ContextsResource;
@@ -64,6 +65,16 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     context.setErrorHandler(new JsonErrorHandler());
     // This handler runs before first Session, Security or ServletHandler
     context.insertHandler(new RequestHeaderHandler());
+    List<SchemaRegistryHandler> schemaRegistryCustomHandlers =
+            schemaRegistry.getCustomHandler();
+    if (schemaRegistryCustomHandlers != null) {
+      for (SchemaRegistryHandler
+              schemaRegistryCustomHandler : schemaRegistryCustomHandlers) {
+        schemaRegistryCustomHandler.init(getConfiguration(), schemaRegistry);
+        context.insertHandler(schemaRegistryCustomHandler);
+      }
+    }
+
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
