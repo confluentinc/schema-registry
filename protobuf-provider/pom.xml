@@ -26,6 +26,10 @@
     <packaging>jar</packaging>
     <name>kafka-protobuf-provider</name>
 
+    <properties>
+        <java.version>11</java.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.kafka</groupId>
