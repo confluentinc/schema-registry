@@ -38,6 +38,7 @@ import io.confluent.rest.RestConfigException;
 import java.util.Arrays;
 import java.util.Collection;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
+import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.resource.ResourceFactory;
 import org.slf4j.Logger;
@@ -64,6 +65,14 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     context.setErrorHandler(new JsonErrorHandler());
     // This handler runs before first Session, Security or ServletHandler
     context.insertHandler(new RequestHeaderHandler());
+    List<Handler.Singleton> schemaRegistryCustomHandlers =
+            schemaRegistry.getCustomHandler();
+    if (schemaRegistryCustomHandlers != null) {
+      for (Handler.Singleton
+              schemaRegistryCustomHandler : schemaRegistryCustomHandlers) {
+        context.insertHandler(schemaRegistryCustomHandler);
+      }
+    }
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
