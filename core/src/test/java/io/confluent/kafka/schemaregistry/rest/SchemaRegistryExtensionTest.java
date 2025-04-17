@@ -40,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class SchemaRegistryExtensionTest extends ClusterTestHarness {
+  private static final String SUBJECT = "testSubject";
 
   public SchemaRegistryExtensionTest() {
     super(1, true, CompatibilityLevel.BACKWARD.name);
@@ -47,7 +48,6 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
 
   @Test
   public void testAllowResource() throws Exception {
-    String subject = "testSubject";
 
     String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
         + "\"name\":\"myrecord\","
@@ -56,7 +56,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(schemaString1, subject),
+        restApp.restClient.registerSchema(schemaString1, SUBJECT),
         "Registering should succeed"
     );
 
@@ -64,10 +64,8 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
 
   @Test
   public void tesRejectResource() throws Exception {
-    String subject = "testSubject";
-
     try {
-      restApp.restClient.getLatestVersion(subject);
+      restApp.restClient.getLatestVersion(SUBJECT);
       fail("Getting all versions from non-existing subject1 should fail with 401");
     } catch (RestClientException rce) {
       assertEquals(
@@ -81,7 +79,6 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
 
   @Test
   public void testExtensionAddedHandler() throws Exception {
-    String subject = "testSubject";
     KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) restApp.schemaRegistry();
     Assert.assertEquals(kafkaSchemaRegistry.getCustomHandler().size(), 1);
 
@@ -89,7 +86,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
             + "\"name\":\"myrecord\","
             + "\"fields\":"
             + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-    restApp.restClient.registerSchema(schemaString1, subject);
+    restApp.restClient.registerSchema(schemaString1, SUBJECT);
     // verify extension added handler and it worked
     Assert.assertEquals(kafkaSchemaRegistry.getCustomHandler().size(), 2);
 
@@ -131,7 +128,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
 
     @Override
     public void close() {
-
+      // testing method, no need to implement
     }
   }
 
@@ -157,7 +154,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
 
     @Override
     public void close() {
-
+      // testing method, no need to implement
     }
   }
 }
