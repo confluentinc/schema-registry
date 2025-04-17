@@ -145,6 +145,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
       kafkaSchemaRegistry.addCustomHandler(new Handler.Wrapper() {
         @Override
         public boolean handle(Request request, org.eclipse.jetty.server.Response response, Callback callback) throws Exception {
+          // adding another handler so we can assert handler is indeed added into the handler chain based on number of handler
           kafkaSchemaRegistry.addCustomHandler(new Handler.Wrapper());
           super.handle(request, response, callback);
           return true;
