@@ -54,7 +54,7 @@ public class SchemaId {
   public SchemaId(String schemaType, Integer id, String guid) {
     this.schemaType = schemaType;
     this.id = id;
-    this.guid = UUID.fromString(guid);
+    this.guid = guid != null ? UUID.fromString(guid) : null;
   }
 
   public ByteBuffer fromBytes(ByteBuffer buffer) {
