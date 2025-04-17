@@ -82,13 +82,14 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   @Test
   public void testExtensionAddedHandler() throws Exception {
     String subject = "testSubject";
+    KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) restApp.schemaRegistry();
+    Assert.assertEquals(kafkaSchemaRegistry.getCustomHandler().size(), 1);
 
     String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
             + "\"name\":\"myrecord\","
             + "\"fields\":"
             + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
     restApp.restClient.registerSchema(schemaString1, subject);
-    KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) restApp.schemaRegistry();
     // verify extension added handler and it worked
     Assert.assertEquals(kafkaSchemaRegistry.getCustomHandler().size(), 2);
 
