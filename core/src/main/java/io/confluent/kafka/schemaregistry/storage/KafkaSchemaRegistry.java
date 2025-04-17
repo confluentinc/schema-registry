@@ -122,6 +122,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Time;
+import org.eclipse.jetty.server.Handler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -140,6 +141,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       + " conflicts with the reserved field %s.";
   private final SchemaRegistryConfig config;
   private final List<SchemaRegistryResourceExtension> resourceExtensions;
+  private final List<Handler.Singleton> customHandler;
+
   private final Map<String, Object> props;
   private final LoadingCache<RawSchema, ParsedSchema> schemaCache;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
@@ -259,6 +262,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     this.metadataEncoder = new MetadataEncoderService(this);
     this.ruleSetHandler = new RuleSetHandler();
     this.time = config.getTime();
+    this.customHandler = new ArrayList<>();
   }
 
   @VisibleForTesting
@@ -2762,6 +2766,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public void onTruststoreCreated(KeyStore truststore) {
     metricsContainer.emitCertificateExpirationMetric(
         truststore, metricsContainer.getCertificateExpirationTruststore());
+  }
+
+  public List<Handler.Singleton> getCustomHandler() {
+    return customHandler;
+  }
+
+  public void addCustomHandler(Handler.Singleton handler) {
+    customHandler.add(handler);
+  }
+
+  public void removeCustomHandler(Handler.Singleton handler) {
+    customHandler.remove(handler);
   }
 
   private static class RawSchema {
