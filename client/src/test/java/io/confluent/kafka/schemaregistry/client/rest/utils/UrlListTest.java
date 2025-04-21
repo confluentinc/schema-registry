@@ -31,8 +31,6 @@ public class UrlListTest {
     UrlList urls = new UrlList(Arrays.asList(url1, url2));
     assertEquals(2, urls.size());
 
-    if (urls.current().equals(url2)) urls.fail(url2);
-
     assertEquals(url1, urls.current());
 
     urls.fail(url1);
@@ -44,7 +42,5 @@ public class UrlListTest {
     urls.fail(url2);
     assertEquals(url1, urls.current());
   }
-
-
 
 }

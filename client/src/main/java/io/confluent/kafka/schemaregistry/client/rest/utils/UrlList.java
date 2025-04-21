@@ -19,7 +19,6 @@ package io.confluent.kafka.schemaregistry.client.rest.utils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -30,8 +29,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class UrlList {
 
-  private final Random random = new Random();
-
   private final AtomicInteger index;
   private final List<String> urls;
 
@@ -41,7 +38,7 @@ public class UrlList {
     }
 
     this.urls = new ArrayList<String>(urls);
-    this.index = new AtomicInteger(random.nextInt(urls.size()));
+    this.index = new AtomicInteger(0);
   }
 
   public UrlList(String url) {
