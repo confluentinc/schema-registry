@@ -90,7 +90,6 @@
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.9.10</kotlin.version>
         <antlr.version>4.13.1</antlr.version>
-        <aws.sdk.version>2.21.44</aws.sdk.version>
         <azure.sdk.version>4.9.2</azure.sdk.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.4.5</cel-version>
@@ -297,22 +296,22 @@
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>aws-core</artifactId>
-                <version>${aws.sdk.version}</version>
+                <version>${aws-java-sdk-v2.version}</version>
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>sdk-core</artifactId>
-                <version>${aws.sdk.version}</version>
+                <version>${aws-java-sdk-v2.version}</version>
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>kms</artifactId>
-                <version>${aws.sdk.version}</version>
+                <version>${aws-java-sdk-v2.version}</version>
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>sts</artifactId>
-                <version>${aws.sdk.version}</version>
+                <version>${aws-java-sdk-v2.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.crypto.tink</groupId>
