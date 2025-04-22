@@ -740,6 +740,7 @@ public class AvroSchemaUtils {
 
     // The following methods override methods that use position instead of name
 
+    @Override
     public void setField(Object record, String name, int position, Object value) {
       if (record instanceof GenericRecord) {
         ((GenericRecord) record).put(name, value);
@@ -748,6 +749,7 @@ public class AvroSchemaUtils {
       }
     }
 
+    @Override
     public Object getField(Object record, String name, int position) {
       if (record instanceof GenericRecord) {
         return ((GenericRecord) record).get(name);
@@ -758,6 +760,7 @@ public class AvroSchemaUtils {
 
     // The following methods override all methods that rely on logical conversions
 
+    @Override
     public Collection<Conversion<?>> getConversions() {
       if (this.delegate != null) {
         return this.delegate.getConversions();
@@ -766,6 +769,7 @@ public class AvroSchemaUtils {
       }
     }
 
+    @Override
     public void addLogicalTypeConversion(Conversion<?> conversion) {
       if (this.delegate != null) {
         this.delegate.addLogicalTypeConversion(conversion);
@@ -774,6 +778,7 @@ public class AvroSchemaUtils {
       }
     }
 
+    @Override
     public <T> Conversion<T> getConversionByClass(Class<T> datumClass) {
       if (this.delegate != null) {
         return this.delegate.getConversionByClass(datumClass);
@@ -782,6 +787,7 @@ public class AvroSchemaUtils {
       }
     }
 
+    @Override
     public <T> Conversion<T> getConversionByClass(Class<T> datumClass, LogicalType logicalType) {
       if (this.delegate != null) {
         return this.delegate.getConversionByClass(datumClass, logicalType);
@@ -790,6 +796,7 @@ public class AvroSchemaUtils {
       }
     }
 
+    @Override
     public <T> Conversion<T> getConversionFor(LogicalType logicalType) {
       if (this.delegate != null) {
         return this.delegate.getConversionFor(logicalType);
@@ -798,6 +805,7 @@ public class AvroSchemaUtils {
       }
     }
 
+    @Override
     public int resolveUnion(Schema union, Object datum) {
       if (this.delegate != null) {
         return this.delegate.resolveUnion(union, datum);
