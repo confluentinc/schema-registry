@@ -307,7 +307,7 @@ public class RestService implements Closeable, Configurable {
     String requestData = requestBodyData == null
                          ? "null"
                          : new String(requestBodyData, StandardCharsets.UTF_8);
-    log.debug(format("Sending %s with input %s to %s",
+    log.info(format("Sending %s with input %s to %s",
                             method, requestData,
                             requestUrl));
 
@@ -430,6 +430,7 @@ public class RestService implements Closeable, Configurable {
     }
     for (int i = 0, n = baseUrls.size(); i < n; i++) {
       String baseUrl = baseUrls.current();
+      log.info("Sending request to URL at index " + baseUrls.index.get());
       String requestUrl = buildRequestUrl(baseUrl, path);
       try {
         return retryExecutor.retry(() -> sendHttpRequest(requestUrl,

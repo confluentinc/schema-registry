@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -30,9 +33,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class UrlList {
 
+  Logger log = LoggerFactory.getLogger(UrlList.class);
+
   private final Random random = new Random();
 
-  private final AtomicInteger index;
+  public final AtomicInteger index;
   private final List<String> urls;
 
   public UrlList(List<String> urls) {
@@ -42,6 +47,8 @@ public class UrlList {
 
     this.urls = new ArrayList<String>(urls);
     this.index = new AtomicInteger(random.nextInt(urls.size()));
+
+     log.info("Created url list: {}, index: {}", urls, index.get());
   }
 
   public UrlList(String url) {
@@ -58,7 +65,9 @@ public class UrlList {
    * @return the url
    */
   public String current() {
-    return urls.get(index.get());
+    int currentIndex = index.get();
+    log.info("Returning current URL at index {}: {}", currentIndex, urls.get(currentIndex));
+    return urls.get(currentIndex);
   }
 
   /**
