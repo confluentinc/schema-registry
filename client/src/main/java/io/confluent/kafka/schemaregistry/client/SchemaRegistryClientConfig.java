@@ -63,7 +63,7 @@ public class SchemaRegistryClientConfig {
 
   // Randomizing the index of the starting URL can help with load balancing if many clients
   // are using a shared configuration. Default is false
-  public static final String RANDOMIZE_STARTING_URL = "url.randomize";
+  public static final String RANDOMIZE_STARTING_URL = "schema.registry.url.randomize";
 
   //OAuth AUTHORIZATION SERVER related configs
   public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL = "bearer.auth.issuer.endpoint.url";
