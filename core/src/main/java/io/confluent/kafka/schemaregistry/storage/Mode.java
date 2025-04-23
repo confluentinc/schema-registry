@@ -19,5 +19,6 @@ public enum Mode {
   READWRITE,
   READONLY,
   READONLY_OVERRIDE,
-  IMPORT
+  IMPORT,
+  FORWARD
 }
