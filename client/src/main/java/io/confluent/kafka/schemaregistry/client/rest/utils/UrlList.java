@@ -30,27 +30,26 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class UrlList {
 
+  private final Random random = new Random();
+
   private final AtomicInteger index;
   private final List<String> urls;
 
   public UrlList(List<String> urls) {
-    this(urls, true);
-  }
-
-  public UrlList(List<String> urls, boolean randomizeStartingIndex) {
     if (urls == null || urls.isEmpty()) {
       throw new IllegalArgumentException("Expected at least one URL to be passed in constructor");
     }
 
     this.urls = new ArrayList<>(urls);
-
-    // Randomizing the starting index can help with load balancing if many clients
-    // are using the same configuration.
-    this.index = new AtomicInteger(randomizeStartingIndex ? new Random().nextInt(urls.size()) : 0);
+    this.index = new AtomicInteger(0);
   }
 
   public UrlList(String url) {
     this(Collections.singletonList(url));
+  }
+
+  public void randomizeIndex() {
+    this.index.set(random.nextInt(urls.size()));
   }
 
   public List<String> urls() {
