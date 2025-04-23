@@ -35,6 +35,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
@@ -274,13 +275,21 @@ public class RestServiceTest {
   }
 
   @Test
-  public void testRandomize() {
+  public void testRandomizeUrls() {
+    // test with boolean
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.RANDOMIZE_STARTING_URL, true);
     UrlList baseUrlSpy = Mockito.spy(new UrlList(Arrays.asList("http://localhost:8080", "http://localhost:8081")));
     RestService restService = new RestService(baseUrlSpy);
     RestService restServiceSpy = spy(restService);
+    restServiceSpy.configure(configs);
+    verify(baseUrlSpy).randomizeIndex();
 
-    Map<String, Object> configs = new HashMap<>();
-    configs.put("schema.registry.url.randomize", true);
+    // test with string
+    configs.put(SchemaRegistryClientConfig.RANDOMIZE_STARTING_URL, "true");
+    baseUrlSpy = Mockito.spy(new UrlList(Arrays.asList("http://localhost:8080", "http://localhost:8081")));
+    restService = new RestService(baseUrlSpy);
+    restServiceSpy = spy(restService);
     restServiceSpy.configure(configs);
     verify(baseUrlSpy).randomizeIndex();
   }

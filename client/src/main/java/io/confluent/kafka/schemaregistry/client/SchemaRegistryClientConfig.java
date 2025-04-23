@@ -61,9 +61,8 @@ public class SchemaRegistryClientConfig {
   public static final String MISSING_VERSION_CACHE_TTL_CONFIG = "missing.version.cache.ttl.sec";
   public static final String MISSING_SCHEMA_CACHE_TTL_CONFIG = "missing.schema.cache.ttl.sec";
 
-  // Randomizing the index of the starting URL can help with load balancing if many clients
-  // are using a shared configuration. Default is false
-  public static final String RANDOMIZE_STARTING_URL = "schema.registry.url.randomize";
+  public static final String RANDOMIZE_STARTING_URL = "url.randomize";
+  public static final boolean RANDOMIZE_STARTING_URL_DEFAULT = false;
 
   //OAuth AUTHORIZATION SERVER related configs
   public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL = "bearer.auth.issuer.endpoint.url";
@@ -236,8 +235,14 @@ public class SchemaRegistryClientConfig {
   }
 
   public static boolean getRandomizeStartingUrl(Map<String, ?> configs) {
-    return configs != null && configs.containsKey(RANDOMIZE_STARTING_URL)
-        ? (Boolean) configs.get(RANDOMIZE_STARTING_URL)
-        : false;
+    if (configs != null && configs.containsKey(RANDOMIZE_STARTING_URL)) {
+      Object randomizeStartingUrlVal
+          = configs.get(RANDOMIZE_STARTING_URL);
+      return randomizeStartingUrlVal instanceof String
+          ? Boolean.parseBoolean((String) randomizeStartingUrlVal)
+          : (Boolean) randomizeStartingUrlVal;
+    } else {
+      return RANDOMIZE_STARTING_URL_DEFAULT;
+    }
   }
 }
