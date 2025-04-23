@@ -62,8 +62,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final boolean SCHEMA_REGISTRY_URL_RANDOMIZE_DEFAULT =
       SchemaRegistryClientConfig.URL_RANDOMIZE_DEFAULT;
   public static final String SCHEMA_REGISTRY_URL_RANDOMIZE_DOC =
-      "Whether to randomize the starting index of the schema registry URL list. This can help with" +
-          " load balancing if many schema registry clients are using a shared configuration.";
+      "Whether to randomize the starting index of the schema registry URL list. This can help with"
+          + " load balancing if many schema registry clients are using a shared configuration.";
 
   public static final String MAX_SCHEMAS_PER_SUBJECT_CONFIG = "max.schemas.per.subject";
   public static final int MAX_SCHEMAS_PER_SUBJECT_DEFAULT = 1000;
