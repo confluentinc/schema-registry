@@ -126,6 +126,14 @@ public class ModeResource {
     } catch (IllegalArgumentException e) {
       throw new RestInvalidModeException();
     }
+
+    if (mode == io.confluent.kafka.schemaregistry.storage.Mode.FORWARD) {
+      if (subject != null) {
+        throw new RestInvalidModeException("Forward mode only supported on global level");
+      }
+    }
+
+
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());

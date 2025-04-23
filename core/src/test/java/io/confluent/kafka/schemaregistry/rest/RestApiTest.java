@@ -387,7 +387,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(1, id1, "1st schema registered in first context should have id 1");
 
     String subject2 = ":.ctx:testSubject";
-    String avroSchema2 = avroSchemas.get(1);
+    String avroSchema2 = avroSchemas.get(0);
 
     int id2 = restApp.restClient.registerSchema(avroSchema2, subject2);
     assertEquals(1, id2, "2nd schema registered in second context should have id 1");
