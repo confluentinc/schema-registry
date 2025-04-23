@@ -45,6 +45,4 @@ public class UrlListTest {
     assertEquals(url1, urls.current());
   }
 
-
-
 }
