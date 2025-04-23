@@ -234,7 +234,7 @@ public class SchemaRegistryClientConfig {
         .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
   }
 
-  public static boolean getRandomizeStartingUrl(Map<String, ?> configs) {
+  public static boolean getUrlRandomize(Map<String, ?> configs) {
     if (configs != null && configs.containsKey(URL_RANDOMIZE)) {
       Object randomizeStartingUrlVal
           = configs.get(URL_RANDOMIZE);
