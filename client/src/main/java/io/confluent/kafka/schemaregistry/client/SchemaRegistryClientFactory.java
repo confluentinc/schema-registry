@@ -17,6 +17,8 @@
 package io.confluent.kafka.schemaregistry.client;
 
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import java.util.List;
 import java.util.Map;
@@ -29,12 +31,25 @@ public class SchemaRegistryClientFactory {
       List<SchemaProvider> providers,
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
-    String mockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(baseUrls);
+    return newClient(new UrlList(baseUrls),
+        cacheCapacity,
+        providers,
+        configs,
+        httpHeaders);
+  }
+
+  public static SchemaRegistryClient newClient(
+      UrlList baseUrls,
+      int cacheCapacity,
+      List<SchemaProvider> providers,
+      Map<String, ?> configs,
+      Map<String, String> httpHeaders) {
+    String mockScope = MockSchemaRegistry.validateAndMaybeGetMockScope(baseUrls.urls());
     if (mockScope != null) {
       return MockSchemaRegistry.getClientForScope(mockScope, providers);
     } else {
       return new CachedSchemaRegistryClient(
-          baseUrls,
+          new RestService(baseUrls),
           cacheCapacity,
           providers,
           configs,
