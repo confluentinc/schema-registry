@@ -18,7 +18,9 @@ package io.confluent.kafka.schemaregistry.client.rest.utils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -33,16 +35,23 @@ public class UrlList {
   private final List<String> urls;
 
   public UrlList(List<String> urls) {
+    this(urls, true);
+  }
+
+  public UrlList(List<String> urls, boolean randomizeStartingIndex) {
     if (urls == null || urls.isEmpty()) {
       throw new IllegalArgumentException("Expected at least one URL to be passed in constructor");
     }
 
-    this.urls = new ArrayList<String>(urls);
-    this.index = new AtomicInteger(0);
+    this.urls = new ArrayList<>(urls);
+
+    // Randomizing the starting index can help with load balancing if many clients
+    // are using the same configuration.
+    this.index = new AtomicInteger(randomizeStartingIndex ? new Random().nextInt(urls.size()) : 0);
   }
 
   public UrlList(String url) {
-    this(Arrays.asList(url));
+    this(Collections.singletonList(url));
   }
 
   public List<String> urls() {
