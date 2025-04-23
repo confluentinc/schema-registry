@@ -5,6 +5,7 @@ import com.google.crypto.tink.KmsClient;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.KeyType;
+import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
 import io.confluent.dekregistry.metrics.MetricsManager;
 import io.confluent.dekregistry.testutil.TestKmsDriver;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
@@ -113,6 +114,37 @@ public class DekRegistryTest extends ClusterTestHarness {
         assertEquals("value2", kek.getKmsProps().get("property2"));
         assertEquals("Test Documentation", kek.getDoc());
         assertFalse(kek.isDeleted());
+    }
+
+    @Test
+    public void testClearKekDoc() throws SchemaRegistryException  {
+        kek = dekRegistry.getKek("kekName1",false);
+
+        UpdateKekRequest request = new UpdateKekRequest();
+        request.setDoc(Optional.empty());
+
+        kek = dekRegistry.putKek("kekName1", request);
+        assertNotNull(kek);
+        assertFalse(kek.isDeleted());
+        assertEquals("kekName1", kek.getName());
+        assertEquals("test-kms", kek.getKmsType());
+        assertEquals("kmsId", kek.getKmsKeyId());
+        assertEquals("value1", kek.getKmsProps().get("property1"));
+        assertEquals("value2", kek.getKmsProps().get("property2"));
+        assertNull(kek.getDoc());
+
+        request = new UpdateKekRequest();
+        request.setDoc(Optional.of("Test Documentation"));
+
+        kek = dekRegistry.putKek("kekName1", request);
+        assertNotNull(kek);
+        assertFalse(kek.isDeleted());
+        assertEquals("kekName1", kek.getName());
+        assertEquals("test-kms", kek.getKmsType());
+        assertEquals("kmsId", kek.getKmsKeyId());
+        assertEquals("value1", kek.getKmsProps().get("property1"));
+        assertEquals("value2", kek.getKmsProps().get("property2"));
+        assertEquals("Test Documentation", kek.getDoc());
     }
 
     @Test
