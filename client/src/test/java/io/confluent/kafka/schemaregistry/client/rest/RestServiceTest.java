@@ -25,7 +25,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,7 +33,6 @@ import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
@@ -99,7 +97,6 @@ public class RestServiceTest {
 
     doReturn(url).when(restServiceSpy).url(anyString());
     when(url.openConnection()).thenReturn(httpURLConnection);
-    when(httpURLConnection.getURL()).thenReturn(url);
     when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_OK);
 
     when(httpURLConnection.getInputStream()).thenReturn(inputStream);
@@ -276,6 +273,17 @@ public class RestServiceTest {
     assertEquals(8080, inetAddress.getPort());
   }
 
+  @Test
+  public void testRandomize() {
+    UrlList baseUrlSpy = Mockito.spy(new UrlList(Arrays.asList("http://localhost:8080", "http://localhost:8081")));
+    RestService restService = new RestService(baseUrlSpy);
+    RestService restServiceSpy = spy(restService);
+
+    Map<String, Object> configs = new HashMap<>();
+    configs.put("url.randomize", true);
+    restServiceSpy.configure(configs);
+    verify(baseUrlSpy).randomizeIndex();
+  }
 
   @Test
   public void testExceptionRetry() throws Exception {
