@@ -280,7 +280,7 @@ public class RestServiceTest {
     RestService restServiceSpy = spy(restService);
 
     Map<String, Object> configs = new HashMap<>();
-    configs.put("randomize.starting.url", true);
+    configs.put("url.randomize", true);
     restServiceSpy.configure(configs);
     verify(baseUrlSpy).randomizeIndex();
   }
