@@ -57,6 +57,14 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       + "'mock://my-scope-name' corresponds to "
       + "'MockSchemaRegistry.getClientForScope(\"my-scope-name\")'.";
 
+  public static final String SCHEMA_REGISTRY_URL_RANDOMIZE_CONFIG =
+      "schema.registry.url.randomize";
+  public static final boolean SCHEMA_REGISTRY_URL_RANDOMIZE_DEFAULT =
+      SchemaRegistryClientConfig.URL_RANDOMIZE_DEFAULT;
+  public static final String SCHEMA_REGISTRY_URL_RANDOMIZE_DOC =
+      "Whether to randomize the starting index of the schema registry URL list. This can help with"
+          + " load balancing if many schema registry clients are using a shared configuration.";
+
   public static final String MAX_SCHEMAS_PER_SUBJECT_CONFIG = "max.schemas.per.subject";
   public static final int MAX_SCHEMAS_PER_SUBJECT_DEFAULT = 1000;
   public static final String MAX_SCHEMAS_PER_SUBJECT_DOC =
@@ -298,6 +306,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     ConfigDef configDef = new ConfigDef()
         .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
                 Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
+        .define(SCHEMA_REGISTRY_URL_RANDOMIZE_CONFIG, Type.BOOLEAN,
+                SCHEMA_REGISTRY_URL_RANDOMIZE_DEFAULT,
+                Importance.LOW, SCHEMA_REGISTRY_URL_RANDOMIZE_DOC)
         .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
                 Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
         .define(NORMALIZE_SCHEMAS, Type.BOOLEAN, NORMALIZE_SCHEMAS_DEFAULT,
