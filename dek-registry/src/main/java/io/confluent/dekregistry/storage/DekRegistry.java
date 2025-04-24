@@ -640,7 +640,7 @@ public class DekRegistry implements Closeable {
     key = (DataEncryptionKey) keys.get(keyId);
     if (kek.isShared()) {
       Mode mode = schemaRegistry.getModeInScope(request.getSubject());
-      if (mode != Mode.IMPORT && mode != Mode.FORWARD) {
+      if (!mode.isImportMode()) {
         key = generateRawDek(kek, key);
       }
     }

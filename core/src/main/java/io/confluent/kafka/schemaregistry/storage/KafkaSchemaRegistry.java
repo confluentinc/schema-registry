@@ -725,7 +725,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       Config config = getConfigInScope(subject);
       Mode mode = getModeInScope(subject);
 
-      if (mode != Mode.IMPORT && mode != Mode.FORWARD) {
+      if (mode.isImportMode()) {
         maybePopulateFromPrevious(
             config, schema, undeletedVersions, newVersion, propagateSchemaTags);
       }
@@ -768,7 +768,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
       boolean isCompatible = true;
       List<String> compatibilityErrorLogs = new ArrayList<>();
-      if (mode != Mode.IMPORT && mode != Mode.FORWARD) {
+      if (mode.isImportMode()) {
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
         compatibilityErrorLogs.addAll(isCompatibleWithPrevious(config,
@@ -792,7 +792,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
         } else if (newVersion != schema.getVersion()
-                && mode != Mode.IMPORT && mode != Mode.FORWARD) {
+                && mode.isImportMode()) {
           throw new InvalidSchemaException("Version is not one more than previous version");
         }
 
@@ -860,8 +860,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
 
     if (schema.getId() >= 0) {
-      if (getModeInScope(subject) != Mode.IMPORT
-              && getModeInScope(subject) != Mode.FORWARD) {
+
+      if (!getModeInScope(subject).isImportMode()) {
         throw new OperationNotPermittedException("Subject "
                 + subject + " is not in import or forward mode");
       }
@@ -1614,8 +1614,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
                                                        boolean normalize)
           throws InvalidSchemaException {
     try {
-      if (getModeInScope(schema.getSubject()) != Mode.IMPORT
-              && getModeInScope(schema.getSubject()) != Mode.FORWARD) {
+      Mode mode = getModeInScope(schema.getSubject());
+      if (!mode.isImportMode()) {
         parsedSchema.validate(isSchemaFieldValidationEnabled(config));
       }
       if (normalize) {
