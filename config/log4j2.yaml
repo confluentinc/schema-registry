@@ -25,10 +25,6 @@ Configuration:
         - ref: file
         - ref: stdout
     Logger:
-      - name: org.apache.zookeeper
-        level: ERROR
-        AppenderRef:
-          - ref: stdout
       - name: kafka
         level: ERROR
         AppenderRef:
