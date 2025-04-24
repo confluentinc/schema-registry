@@ -29,10 +29,6 @@ Configuration:
         level: ERROR
         AppenderRef:
           - ref: stdout
-      - name: org.apache.zookeeper
-        level: ERROR
-        AppenderRef:
-          - ref: stdout
       - name: io.confluent
         level: DEBUG
         AppenderRef:
