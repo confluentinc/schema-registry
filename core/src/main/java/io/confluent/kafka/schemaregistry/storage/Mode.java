@@ -21,7 +21,7 @@ public enum Mode {
   READONLY_OVERRIDE,
   IMPORT,
   FORWARD;
-  public boolean isImportMode() {
+  public boolean isImportOrForwardMode() {
     return this == IMPORT || this == FORWARD;
   }
 }
