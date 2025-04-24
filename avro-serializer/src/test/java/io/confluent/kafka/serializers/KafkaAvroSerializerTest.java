@@ -150,6 +150,18 @@ public class KafkaAvroSerializerTest {
     return schema;
   }
 
+  private Schema createExtendUserSchema2() {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
+        "\"name\": \"User\"," +
+        "\"fields\": [" +
+        "{\"name\": \"age\", \"type\": [\"null\", \"int\"]}," +
+        "{\"name\": \"name\", \"type\": \"string\"} " +
+        "]}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(userSchema);
+    return schema;
+  }
+
   private IndexedRecord createExtendUserRecordWithNullField() {
     Schema schema = createExtendUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
@@ -1360,6 +1372,31 @@ public class KafkaAvroSerializerTest {
     IndexedRecord record1 = createBalanceRecord();
     byte[] bytes1 = avroSerializer.serialize(topic, record1);
     assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerEvolveGenericRecordUseLatest()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+            false,
+            KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+            true
+    );
+
+    avroSerializer.configure(configs, false);
+    schemaRegistry.register(topic + "-value", new AvroSchema(createExtendUserSchema2()));
+    avroDeserializer.configure(configs, false);
+
+    GenericRecord record1 = new GenericData.Record(createExtendUserSchema());
+    record1.put("name", "test");
+    record1.put("age", 3);
+    byte[] bytes1 = avroSerializer.serialize(topic, record1);
+    GenericRecord record2 = (GenericRecord) avroDeserializer.deserialize(topic, bytes1);
+    assertEquals("test", record2.get("name").toString());
+    assertEquals(3, record2.get("age"));
   }
 
   @Test
