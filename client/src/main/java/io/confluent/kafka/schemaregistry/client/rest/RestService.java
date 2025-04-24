@@ -265,6 +265,10 @@ public class RestService implements Closeable, Configurable {
     if (isValidProxyConfig(proxyHost, proxyPort)) {
       setProxy(proxyHost, proxyPort);
     }
+
+    if (SchemaRegistryClientConfig.getUrlRandomize(configs)) {
+      baseUrls.randomizeIndex();
+    }
   }
 
   private static boolean isNonEmpty(String s) {
