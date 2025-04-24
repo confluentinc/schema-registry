@@ -16,10 +16,6 @@ Configuration:
         level: ERROR
         AppenderRef:
           - ref: stdout
-      - name: org.apache.zookeeper
-        level: ERROR
-        AppenderRef:
-          - ref: stdout
       - name: org.apache.directory
         level: ERROR
         AppenderRef:
