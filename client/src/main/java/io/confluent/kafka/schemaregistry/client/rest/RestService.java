@@ -830,8 +830,7 @@ public class RestService implements Closeable, Configurable {
 
   public ModeUpdateRequest setMode(String mode, String subject, boolean force)
       throws IOException, RestClientException {
-    ModeUpdateRequest request = new ModeUpdateRequest();
-    request.setMode(mode);
+    ModeUpdateRequest request = new ModeUpdateRequest(Optional.ofNullable(mode));
     return setMode(DEFAULT_REQUEST_PROPERTIES, request, subject, force);
   }
 
