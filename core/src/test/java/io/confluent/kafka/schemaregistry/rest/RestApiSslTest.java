@@ -16,13 +16,13 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import org.apache.avro.Schema;
 import org.apache.kafka.common.config.types.Password;
-import org.junit.Test;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
@@ -36,21 +36,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RestApiSslTest extends ClusterTestHarness {
 
   Properties props = new Properties();
 
   public RestApiSslTest() {
-    super(1, true, AvroCompatibilityLevel.BACKWARD.name);
+    super(1, true, CompatibilityLevel.BACKWARD.name);
   }
 
 
   @Test
   public void testRegisterWithClientSecurity() throws Exception {
-
     setupHostNameVerifier();
 
     String subject = "testSubject";
@@ -89,9 +89,9 @@ public class RestApiSslTest extends ClusterTestHarness {
     CachedSchemaRegistryClient schemaRegistryClient = new CachedSchemaRegistryClient(restApp.restClient, 10, clientsslConfigs);
 
     assertEquals(
-        "Registering should succeed",
         expectedIdSchema1,
-        schemaRegistryClient.register(subject, schema)
+        schemaRegistryClient.register(subject, new AvroSchema(schema)),
+        "Registering should succeed"
     );
 
   }
@@ -133,9 +133,9 @@ public class RestApiSslTest extends ClusterTestHarness {
     CachedSchemaRegistryClient schemaRegistryClient = new CachedSchemaRegistryClient(restApp.restClient, 10, clientsslConfigs);
 
     assertEquals(
-        "Registering should succeed",
         expectedIdSchema1,
-        schemaRegistryClient.register(subject, schema)
+        schemaRegistryClient.register(subject, new AvroSchema(schema)),
+        "Registering should succeed"
     );
 
   }
@@ -165,6 +165,12 @@ public class RestApiSslTest extends ClusterTestHarness {
     } catch (Exception e) {
       throw new RuntimeException("Exception creation SSL properties ", e);
     }
+
+    // Use localhost instead of 0.0.0.0 to avoid 400 Invalid SNI
+    props.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
+        "://localhost:"
+        + schemaRegistryPort);
+
     return props;
   }
 

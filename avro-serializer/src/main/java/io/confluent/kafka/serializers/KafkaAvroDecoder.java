@@ -17,10 +17,11 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import kafka.serializer.Decoder;
 import kafka.utils.VerifiableProperties;
 
 import org.apache.avro.Schema;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.tools.api.Decoder;
 
 public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements Decoder<Object> {
 
@@ -51,5 +52,16 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
    */
   public Object fromBytes(byte[] bytes, Schema readerSchema) {
     return deserialize(bytes, readerSchema);
+  }
+
+  public Object fromBytes(Headers headers, byte[] bytes) {
+    return deserialize(headers, bytes);
+  }
+
+  /**
+   * Pass a reader schema to get an Avro projection
+   */
+  public Object fromBytes(Headers headers, byte[] bytes, Schema readerSchema) {
+    return deserialize(headers, bytes, readerSchema);
   }
 }
