@@ -31,6 +31,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
@@ -409,7 +411,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       throw new RestInvalidCompatibilityException();
     }
     try {
-      schemaRegistry.updateConfig(subject, config);
+      return schemaRegistry.updateConfig(subject, new ConfigUpdateRequest(config));
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -417,7 +419,6 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Failed to update compatibility level", e);
     }
-    return config;
   }
 
   @Override
@@ -470,15 +471,17 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
-    Mode m;
     try {
-      m = Enum.valueOf(Mode.class,
-          mode.toUpperCase(Locale.ROOT));
+      if (mode != null) {
+        Enum.valueOf(Mode.class,
+            mode.toUpperCase(Locale.ROOT));
+      }
     } catch (IllegalArgumentException e) {
       throw new RestInvalidModeException();
     }
     try {
-      schemaRegistry.setMode(subject, m, force);
+      ModeUpdateRequest request = new ModeUpdateRequest(Optional.ofNullable(mode));
+      schemaRegistry.setMode(subject, request, force);
     } catch (ReferenceExistsException e) {
       throw Errors.referenceExistsException(e.getMessage());
     } catch (OperationNotPermittedException e) {
@@ -490,7 +493,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while updating the mode", e);
     }
-    return m.name();
+    return mode;
   }
 
   @Override

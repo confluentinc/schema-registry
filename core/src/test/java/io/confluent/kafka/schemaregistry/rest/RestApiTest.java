@@ -808,8 +808,7 @@ public class RestApiTest extends ClusterTestHarness {
             .getCompatibilityLevel()
     );
 
-    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
-    modeUpdateRequest.setMode(IMPORT.name());
+    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest(IMPORT.name());
     assertEquals(
         modeUpdateRequest,
         restApp.restClient.setMode(IMPORT.name(), null));
@@ -821,8 +820,7 @@ public class RestApiTest extends ClusterTestHarness {
             .getMode()
     );
 
-    modeUpdateRequest = new ModeUpdateRequest();
-    modeUpdateRequest.setMode(READONLY.name());
+    modeUpdateRequest = new ModeUpdateRequest(READONLY.name());
     assertEquals(
         modeUpdateRequest,
         restApp.restClient.setMode(READONLY.name(), defaultContext));
