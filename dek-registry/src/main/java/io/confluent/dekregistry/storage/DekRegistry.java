@@ -758,11 +758,11 @@ public class DekRegistry implements Closeable {
     if (key == null || key.isDeleted()) {
       return null;
     }
-    SortedMap<String, String> kmsProps = request.getKmsProps() != null
-        ? new TreeMap<>(request.getKmsProps())
+    SortedMap<String, String> kmsProps = request.getOptionalKmsProps() != null
+        ? (request.getOptionalKmsProps().isPresent() ? new TreeMap<>(request.getKmsProps()) : null)
         : key.getKmsProps();
-    String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
-    boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
+    String doc = request.getOptionalDoc() != null ? request.getDoc() : key.getDoc();
+    boolean shared = request.isOptionalShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
         key.getKmsKeyId(), kmsProps, doc, shared, false);
     if (newKey.isEquivalent(key)) {

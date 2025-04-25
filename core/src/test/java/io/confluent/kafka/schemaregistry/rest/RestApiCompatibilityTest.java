@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE;
@@ -442,6 +443,31 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         expectedIdSchema3,
         restApp.restClient.registerSchema(request3, subject, false).getId(),
         "Registering should succeed"
+    );
+  }
+
+  @Test
+  public void testClearCompatibilityGroup() throws Exception {
+    String subject = "testSubject";
+
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setCompatibilityGroup("application.version");
+    config.setValidateFields(true);
+    // add compatibility group
+    assertEquals(
+        config,
+        restApp.restClient.updateConfig(config, null)
+    );
+
+    ConfigUpdateRequest expectedConfig = new ConfigUpdateRequest();
+    expectedConfig.setValidateFields(true);
+
+    ConfigUpdateRequest newConfig = new ConfigUpdateRequest();
+    newConfig.setCompatibilityGroup(Optional.empty());
+    // clear compatibility group
+    assertEquals(
+        expectedConfig,
+        restApp.restClient.updateConfig(newConfig, null)
     );
   }
 

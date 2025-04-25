@@ -491,8 +491,7 @@ public class CachedSchemaRegistryClientTest {
 
     reset(restService);
 
-    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
-    modeUpdateRequest.setMode(mode);
+    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest(mode);
     expect(restService.setMode(eq(mode))).andReturn(modeUpdateRequest);
 
     replay(restService);
